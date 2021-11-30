@@ -955,6 +955,7 @@ class AndorCam3(model.DigitalCamera):
         rates_str = self.GetEnumStringImplemented(u"PixelReadoutRate")
         for i in range(len(rates_str)):
             if not self.isEnumIndexAvailable(u"PixelReadoutRate", i):
+                logging.debug("ReadoutRate %s not available", rates_str[i])
                 rates_str[i] = None
         rates = [int(r.rstrip(u" MHz")) if r else 1e100 for r in rates_str]
         idx_rate = util.index_closest(frequency / 1e6, rates)
@@ -1281,6 +1282,7 @@ class AndorCam3(model.DigitalCamera):
     re_spagc = {r"1[12].*[Hh]igh\s+well": 20,
                 r"1[12].*[Ll]ow\s+noise": 1,
                 r"16.*[Ll]ow\s+noise": 1.1,
+                r"16.*[Hh]igh\s+dynamic": 1.1,
                 }
     def _getGains(self):
         """
@@ -1297,6 +1299,9 @@ class AndorCam3(model.DigitalCamera):
             # "11-bit (high well capacity)" -> 20x
             # "11-bit (low noise)" -> 1x
             # "16-bit (low noise & high well capacity)" -> 1.1x
+            # Sona:
+            # "12-bit (low noise)" -> 20x
+            # "16-bit (high dynamic range)" -> 1.1x
             av_gains = self.GetEnumStringImplemented(u"SimplePreAmpGainControl")
             logging.debug("Available gains: %s", av_gains)
             for idx, gs in enumerate(av_gains):
@@ -1306,6 +1311,8 @@ class AndorCam3(model.DigitalCamera):
                     if re.match(pattern, gs):
                         gains[gain] = gs
                         self._gain_to_idx[gain] = idx
+                else:
+                    logging.warning("Unhandled gain %s", gs)
         except ATError:
             return {1}
 
@@ -1402,17 +1409,24 @@ class AndorCam3(model.DigitalCamera):
             else:
                 self.SetEnumString(u"TriggerMode", u"Internal")
 
-        readout_rate = self.readoutRate.value
-        if prev_rorate != readout_rate:
-            readout_rate = self._applyReadoutRate(readout_rate)
-            self.readoutRate.value = readout_rate # in case it's updated
-            self._metadata[model.MD_READOUT_TIME] = 1 / readout_rate  # s
-            logging.debug("Updating readout rate to %g MHz", readout_rate / 1e6)
-
         gain = self.gain.value
         if prev_gain != gain:
             logging.debug("Updating gain")
             self._applyGain(gain)
+            prev_rorate = None  # Force setting it again
+
+        # Some camera have the readout rate dependent on the gain, so it must
+        # be after the gain
+        readout_rate = self.readoutRate.value
+        if prev_rorate != readout_rate:
+            req_readout_rate = readout_rate
+            readout_rate = self._applyReadoutRate(readout_rate)
+            if not util.almost_equal(readout_rate, req_readout_rate):
+                logging.warning("Failed to select readout rate %s, falling back to %s",
+                                req_readout_rate, readout_rate)
+            self.readoutRate.value = readout_rate  # in case it's updated
+            self._metadata[model.MD_READOUT_TIME] = 1 / readout_rate  # s
+            logging.debug("Updating readout rate to %g MHz", readout_rate / 1e6)
 
         if prev_exp != self._exp_time:
             self._exp_time = self._applyExposureTime(self._exp_time)
@@ -1462,7 +1476,9 @@ class AndorCam3(model.DigitalCamera):
         """
         image_size = self.GetInt(u"ImageSizeBytes")
         # The buffer might be bigger than AOIStride * AOIHeight if there is metadata
-        assert image_size >= (size[0] * size[1] * size[2])
+        if image_size < (size[0] * size[1] * size[2]):
+            raise IOError("Expected image of %s (= %d bytes), but SDK expects only %d bytes" %
+                          (size, size[0] * size[1] * size[2], image_size))
 
         # allocating directly a numpy array doesn't work if there is metadata:
         # ndbuffer = numpy.empty(shape=(stride / 2, size[1]), dtype="uint16")
