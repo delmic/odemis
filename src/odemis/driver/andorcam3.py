@@ -860,8 +860,11 @@ class AndorCam3(model.DigitalCamera):
             if self.isWritable(u"TemperatureControl"):
                 logging.debug("Matching %f°C among: %s + %f", temp, tmps_str, TEMP_NO_COOLING)
                 tmp_idx = util.index_closest(temp, tmps + [TEMP_NO_COOLING])
-                self.SetEnumIndex(u"TemperatureControl", tmp_idx)
-                temp = tmps[tmp_idx]
+                if tmp_idx == len(tmps):
+                    temp = TEMP_NO_COOLING
+                else:
+                    self.SetEnumIndex(u"TemperatureControl", tmp_idx)
+                    temp = tmps[tmp_idx]
             else:
                 if not util.almost_equal(temp, TEMP_NO_COOLING):
                     # Just read-back the current (fixed) temperature
