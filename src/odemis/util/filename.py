@@ -29,6 +29,8 @@ import os
 import re
 import time
 
+from datetime import datetime, timedelta
+
 
 def guess_pattern(fn):
     """
@@ -82,33 +84,25 @@ def guess_pattern(fn):
     year_ptn = '%s' % time.strftime('%Y')
     fn_ptn = re.sub(year_ptn, "{year}", fn_ptn)
 
-    # Detect time h-min-s
-    time_ptn = '[0-2][0-9][0-5][0-9][0-5][0-9]'
-    fn_ptn = re.sub(time_ptn, "{timelng}", fn_ptn)
+    # Detect time, it must be within 5 min of the current time, to reduce risks of collision
+    now = datetime.now()
+    for name_ptn, time_ptn_re, time_ptn_strp in [
+        ("{timelng}", "[0-2][0-9][0-5][0-9][0-5][0-9]", "%H%M%S"),
+        ("{timelng_colon}", "[0-2][0-9]:[0-5][0-9]:[0-5][0-9]", "%H:%M:%S"),
+        ("{timelng_hyphen}", "[0-2][0-9]-[0-5][0-9]-[0-5][0-9]", "%H-%M-%S"),
+        # We used to support timeshrt without separation and with hyphen, but they
+        # too easily collided with other meanings for the users, so we dropped them.
+        ("{timeshrt_colon}", "[0-2][0-9]:[0-5][0-9]", "%H:%M")
+        ]:
+        m = re.search(time_ptn_re, fn_ptn)
+        if m:
+            time_match = m.group()
+            # Use the current date, with the provided time
+            time_found = datetime.combine(now.date(), datetime.strptime(time_match, time_ptn_strp).time())
 
-    time_ptn = '[0-2][0-9]:[0-5][0-9]:[0-5][0-9]'
-    fn_ptn = re.sub(time_ptn, "{timelng_colon}", fn_ptn)
-
-    time_ptn = '[0-2][0-9]-[0-5][0-9]-[0-5][0-9]'
-    fn_ptn = re.sub(time_ptn, "{timelng_hyphen}", fn_ptn)
-
-    # Detect time h-min
-    time_ptn = '[0-2][0-9]:[0-5][0-9]'
-    fn_ptn = re.sub(time_ptn, "{timeshrt_colon}", fn_ptn)
-
-    # Don't allow separation of short time by hyphen, causes problems with some names
-
-    # If 4-digit number corresponds to time in an interval of +- 15 min
-    # around the current time, recognize it as time pattern, otherwise
-    # assume it's a counter.
-    time_ptn = '[0-2][0-9][0-5][0-9]'
-    if re.search('[0-2][0-9][0-5][0-9]', fn_ptn):
-        h = int(re.search('[0-2][0-9][0-5][0-9]', fn_ptn).group()[:2])
-        m = int(re.search('[0-2][0-9][0-5][0-9]', fn_ptn).group()[2:])
-        t_s = h * 3600 + m * 60
-        cur_t_s = int(time.strftime('%H')) * 3600 + int(time.strftime('%M')) * 60
-        if cur_t_s - 900 < t_s < cur_t_s + 900:
-            fn_ptn = re.sub(time_ptn, "{timeshrt}", fn_ptn)
+            if abs(time_found - now) < timedelta(minutes=5):
+                # That's a real match => change the pattern
+                fn_ptn = fn_ptn[0:m.start()] + name_ptn + fn_ptn[m.end():]
 
     # Detect count
     cnt_ptn = r'\d{1,5}'
@@ -126,8 +120,6 @@ def guess_pattern(fn):
     # specified and no count, add seconds to make filename unique
     # Doesn't behave properly if user enters terms with curly braces like {{cnt}}.
     if '{cnt}' not in fn_ptn:
-        if '{timeshrt}' in fn_ptn:
-            fn_ptn = re.sub('{timeshrt}', '{timelng}', fn_ptn)
         if '{timeshrt_colon}' in fn_ptn:
             fn_ptn = re.sub('{timeshrt_colon}', '{timelng_colon}', fn_ptn)
         elif ("{timelng}" in fn_ptn or
@@ -174,7 +166,6 @@ def create_filename(path, ptn, ext, count="001"):
                           timelng=time.strftime("%H%M%S"),
                           timelng_colon=time.strftime("%H:%M:%S"),
                           timelng_hyphen=time.strftime("%H-%M-%S"),
-                          timeshrt=time.strftime("%H%M"),
                           timeshrt_colon=time.strftime("%H:%M"),
                           timeshrt_hyphen=time.strftime("%H-%M"),
                           cnt='%s' % count)
