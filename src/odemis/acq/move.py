@@ -456,8 +456,9 @@ def _doCryoSwitchAlignPosition(future, align, target):
                 run_reference(future, align)
 
             # Add the sub moves to perform the loading move
-            sub_moves.append((align, filter_dict({'y'}, target_pos[LOADING])))
-            sub_moves.append((align, filter_dict({'x', 'z'}, target_pos[LOADING])))
+            # NB: moving Z axis downward first so when aligner Y move (
+            # compensating 3DOF Y&Z) upwards it doesn't hit the 5DOF
+            sub_moves = [{'x'}, {'z'}, {'y'}]
 
         elif target in (ALIGNMENT, IMAGING):
             if current_label is UNKNOWN:
@@ -465,14 +466,14 @@ def _doCryoSwitchAlignPosition(future, align, target):
                     target_name))
 
             # Add the sub moves to perform the imaging/alignment move
-            sub_moves.append((align, filter_dict({'x', 'z'}, target_pos[target])))
-            sub_moves.append((align, filter_dict({'y'}, target_pos[target])))
+            # Moving Y axis first downwards so Z move upwards it doesn't hit the 5DOF stage
+            sub_moves = [{'y'}, {'z'}, {'x'}]
         else:
             raise ValueError("Unknown target value %s." % target)
 
         logging.info("Starting aligner movement from {} -> {}...".format(current_name, target_name))
-        for component, sub_move in sub_moves:
-            run_sub_move(future, component, sub_move)
+        for sub_move in sub_moves:
+            run_sub_move(future, align, filter_dict(sub_move, target_pos[target]))
     except CancelledError:
         logging.info("_doCryoSwitchAlignPosition cancelled.")
     except Exception:
