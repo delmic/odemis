@@ -1195,7 +1195,10 @@ class MC_5DOF(model.Actuator):
         pos_deactive_after_ref (bool): if True, will move to the deactive position
             defined in metadata after referencing
         """
-        self.core = MC_5DOF_DLL() if locator != "fake" else FakeMC_5DOF_DLL()
+        if locator != "fake":
+            self.core = MC_5DOF_DLL()
+        else:
+            self.core = FakeMC_5DOF_DLL(axes)
         # Not to be mistaken with axes which is a simple public view
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
@@ -1783,7 +1786,7 @@ class FakeMC_5DOF_DLL(object):
     Fake TrGlide DLL for simulator
     """
 
-    def __init__(self):
+    def __init__(self, axes=None):
         self.pose = SA_MC_Pose()
         self.target = SA_MC_Pose()
         self.properties = {
@@ -1798,7 +1801,6 @@ class FakeMC_5DOF_DLL(object):
         self._pivot = SA_MC_Vec3()
 
         # Specify ranges
-        # Make sure these ranges mirroring the simulator ranges (ie on the yaml file)
         self._range = {
             'x': (-1.6e-2, 1.6e-2),
             'y': (-1.5e-2, 1.5e-2),
@@ -1807,6 +1809,11 @@ class FakeMC_5DOF_DLL(object):
             'ry': (0, 0),
             'rz': (-28, 28),
         }
+        if axes:
+            # adjust internal range with the requested one
+            for a, ad in axes.items():
+                orig_rng = self._range[a]
+                self._range[a] = (min(orig_rng[0], ad['range'][0]), max(orig_rng[1], ad['range'][1]))
 
         self.stopping = threading.Event()
 
@@ -3162,9 +3169,7 @@ class MCS2(model.Actuator):
                         # TODO: Raise some error here
 
                 # if referenced, move to the safe position (if requested)
-                all_axes_referenced = all(
-                    self.referenced._value[a] for a in self._axis_map.keys()
-                )
+                all_axes_referenced = all(self.referenced._value[a] for a in self._axis_map)
 
                 if self._pos_deactive_after_ref and all_axes_referenced:
                     try:
