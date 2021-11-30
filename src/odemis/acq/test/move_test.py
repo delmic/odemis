@@ -345,7 +345,7 @@ class TestCryoMove(unittest.TestCase):
         # 1. Move to imaging position
         cryoSwitchSamplePosition(IMAGING).result()
         # 2. Move the stage linear axes to their max range + move rx from 0
-        self.focus.moveAbs(self.focus_deactive).result()
+        cryoSwitchAlignPosition(LOADING).result()
         self.stage.moveAbs({'x': self.stage.axes['x'].range[1], 'y': self.stage.axes['y'].range[1], 'z': self.stage.axes['z'].range[1], 'rx': 0.15}).result()
         # 3. Move to loading where the ordered submoves would start from rx/rx, resulting in an invalid move
         # exception if it's not handled
