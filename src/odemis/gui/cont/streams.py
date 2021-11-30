@@ -955,7 +955,7 @@ class StreamController(object):
         r = self.stream_panel.add_dye_emission_ctrl(band, readonly, center_wl_color)
         lbl_ctrl, value_ctrl, self._lbl_em_peak, self._btn_emission = r
 
-        if isinstance(em, basestring) and em != fluo.PASS_THROUGH:
+        if isinstance(em, basestring) and em != model.BAND_PASS_THROUGH:
             if not readonly:
                 logging.error("Emission band is a string (%s), but not readonly", em)
             return
