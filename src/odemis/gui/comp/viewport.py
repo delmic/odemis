@@ -425,12 +425,7 @@ class MicroscopeViewport(ViewPort):
 
     @call_in_wx_main
     def _on_view_mpp(self, mpp):
-        fov = self.get_fov_from_mpp()
-        if fov:
-            self.view.fov.value = fov
-        buf_fov = self.get_buffer_fov_from_mpp()
-        if buf_fov:
-            self.view.fov_buffer.value = buf_fov
+        self._set_fov_from_mpp()
 
         if self.bottom_legend:
             self.bottom_legend.scale_win.SetMPP(mpp)
@@ -613,7 +608,7 @@ class MicroscopeViewport(ViewPort):
 
     def get_buffer_fov_from_mpp(self):
         """
-        Return the field of view of the canvas
+        Return the field of view of the buffer (which is larger than the canvas)
         :return: (None or float,float) Field width and height in meters
         """
         return self._get_fov_from_mpp(self.canvas.buffer_size)
@@ -647,9 +642,12 @@ class MicroscopeViewport(ViewPort):
         return (tuple of float): the FoV set
         """
         fov = self.get_fov_from_mpp()
-        if fov is not None and self.view:
-            self.view.fov.value = fov
-            self.view.fov_buffer.value = self.get_buffer_fov_from_mpp()
+        if self.view:
+            if fov:
+                self.view.fov.value = fov
+            buf_fov = self.get_buffer_fov_from_mpp()
+            if buf_fov:
+                self.view.fov_buffer.value = buf_fov
 
         return fov
 
