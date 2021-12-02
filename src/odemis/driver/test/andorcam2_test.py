@@ -42,7 +42,8 @@ CLASS_SIM = andorcam2.FakeAndorCam2
 CLASS = andorcam2.AndorCam2
 
 KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
-              emgains=[[10e6, 1, 50], [1e6, 1, 150]])
+              # emgains=[[10e6, 1, 50], [1e6, 1, 150]]
+              )
 KWARGS_SIM = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
                   emgains=[[10e6, 1, 50], [1e6, 1, 150]],
                   image="andorcam2-fake-clara.tiff")
@@ -89,7 +90,8 @@ class TestAndorCam2(VirtualTestCam, unittest.TestCase):
 #@skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
-    Test the synchronizedOn(Event) interface
+    Test the synchronizedOn(Event) interface.
+    If the test is using the simulator, that's using the legacy method start/stop.
     """
     camera_type = CLASS
     camera_kwargs = KWARGS

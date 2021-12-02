@@ -45,7 +45,7 @@ GEN_START = "S"  # Start acquisition
 GEN_STOP = "E"  # Don't acquire image anymore
 GEN_TERM = "T"  # Stop the generator
 GEN_UNSYNC = "U"  # Synchronisation stopped
-# There are also floats, which are trigger messages
+# There are also floats, which are used to indicate a trigger (containing the time the trigger was sent)
 
 # Type of software trigger to use
 TRIG_NONE = 0  # Continuous acquisition
@@ -199,7 +199,7 @@ class AndorCapabilities(Structure):
     TRIGGERMODE_INTERNAL = 1
     TRIGGERMODE_EXTERNAL = 2
     TRIGGERMODE_EXTERNAL_FVB_EM = 4
-    TRIGGERMODE_CONTINUOUS = 8
+    TRIGGERMODE_CONTINUOUS = 8  # Supports software trigger
     TRIGGERMODE_EXTERNALSTART = 16
     TRIGGERMODE_EXTERNALEXPOSURE = 32
     TRIGGERMODE_INVERTED = 0x40
@@ -298,12 +298,12 @@ class AndorV2DLL(CDLL):
     AM_VIDEO = 5  # aka "run til abort"
 
     # Trigger modes, for SetTriggerMode() and IsTriggerModeAvailable()
-    TM_INTERNAL = 0
-    TM_EXTERNAL = 1
+    TM_INTERNAL = 0  # No trigger
+    TM_EXTERNAL = 1  # Standard hardware trigger (TTL input)
     TM_EXTERNALSTART = 6
     TM_EXTERNALEXPOSURE = 7
     TM_EXTERNAL_FVB_EM = 9
-    TM_SOFTWARE = 10
+    TM_SOFTWARE = 10  # Trigger sent via USB, via SendSoftwareTrigger()
     TM_EXTERNAL_CHARGESHIFTING = 12
 
     @staticmethod
@@ -562,11 +562,12 @@ class AndorCam2(model.DigitalCamera):
         self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
 
         # If SW trigger not supported by the camera, a slower acquisition trigger
-        # procedure will be used when DataFlow is synchronized.
+        # procedure (TRIG_FAKE) will be used when DataFlow is synchronized.
         self._supports_soft_trigger = False
 
         # setup everything best (fixed)
-        self._prev_settings = [None, None, None, None, None]  # image, exposure, readout, gain, shutter per
+        # image (6 ints), exposure, readout, gain, shutter, synchronized
+        self._prev_settings = [None, None, None, None, None, None]
         self._setStaticSettings()
         self._shape = resolution + (2 ** self._getMaxBPP(),)
 
@@ -779,12 +780,13 @@ class AndorCam2(model.DigitalCamera):
 
         self._acq_thread = None  # Thread or None
         # Queue to control the acquisition thread
-        self._genmsg = queue.Queue()  # GEN_*
+        self._genmsg = queue.Queue()  # GEN_* or float
         # Queue of all synchronization events received (typically max len 1)
         # This is in case the client sends multiple triggers before one image
         # is received.
         self._old_triggers = []
-        self._num_no_gc = 0  # how many times the gc was skipped
+        self._synchronized = False  # True if the acquisition must wait for an Event trigger
+        self._num_no_gc = 0  # how many times the garbage collector was skipped
 
         # For temporary stopping the acquisition (kludge for the andorshrk
         # SR303i which cannot communicate during acquisition)
@@ -794,7 +796,8 @@ class AndorCam2(model.DigitalCamera):
         self.request_hw = []
 
         self.data = AndorCam2DataFlow(self)
-        # Convenience event for the user to connect and fire
+        # Convenience event for the user to connect and fire. It also a way to
+        # indicate that the DataFlow supports synchronization.
         self.softwareTrigger = model.Event()
 
         logging.debug("Camera component ready to use.")
@@ -862,8 +865,6 @@ class AndorCam2(model.DigitalCamera):
             self.atcore.SetFrameTransferMode(1)
             logging.debug("Frame transfer mode selected")
 
-        self.atcore.SetTriggerMode(AndorV2DLL.TM_INTERNAL)
-
         if caps.TriggerModes & AndorCapabilities.TRIGGERMODE_CONTINUOUS:
             logging.debug("Camera supports software trigger")
             self._supports_soft_trigger = True
@@ -876,6 +877,7 @@ class AndorCam2(model.DigitalCamera):
         # sometimes causes GetAcquisitionTimings() to block. It seems like a
         # bug in the driver, but at least, it works.
         self.atcore.SetKineticCycleTime(0) # don't wait between acquisitions
+
 
     # low level methods, wrapper to the actual SDK functions
     # they do not ensure the actual camera is selected, you have to call select()
@@ -924,6 +926,12 @@ class AndorCam2(model.DigitalCamera):
                               "Please disconnect and then reconnect the camera "
                               "to the computer.")
             else:
+                # Try to leave the camera in good term (they are very picky)
+                try:
+                    self.atcore.FreeInternalMemory()
+                    self.Shutdown()
+                except AndorV2Error as ex:
+                    logging.warning("Failed to shutdown non-used camera: %s", ex)
                 raise
 
         logging.info("Initialisation completed.")
@@ -974,7 +982,7 @@ class AndorCam2(model.DigitalCamera):
         logging.info("Reinitialisation successful")
 
         # put back the settings
-        self._prev_settings = [None, None, None, None, None]
+        self._prev_settings = [None, None, None, None, None, None]
         self._setStaticSettings()
         self._setTargetTemperature(self.targetTemperature.value, force=True)
         self._setFanSpeed(self.fanSpeed.value, force=True)
@@ -1052,13 +1060,13 @@ class AndorCam2(model.DigitalCamera):
     def IsTriggerModeAvailable(self, tmode):
         """
         Check if a trigger mode is supported
-        tmode (AndorV2DLL.TM_*): the type of trigger mode
+        tmode (AndorV2DLL.TM_*): the trigger mode
         return (bool): True if the given trigger mode is supported (with the current hardware settings)
         """
         try:
             self.atcore.IsTriggerModeAvailable(tmode)
         except AndorV2Error as ex:  # DRV_NOT_INITIALIZED or DRV_INVALID_MODE
-            logging.warning("Trigger mode %s not supported in current settings, falling back to slow implementation: %s",
+            logging.warning("Trigger mode %s not supported with current settings, falling back to slow implementation: %s",
                             tmode, ex)
             return False
 
@@ -1778,17 +1786,19 @@ class AndorCam2(model.DigitalCamera):
         """
         new_image_settings = self._binning + self._image_rect
         new_settings = [new_image_settings, self._exposure_time,
-                        self._readout_rate, self._gain, self._shutter_period]
+                        self._readout_rate, self._gain, self._shutter_period,
+                        self._synchronized]
         return new_settings != self._prev_settings
 
     def _configure_trigger_mode(self, synchronized):
         """
         Configure the camera for the given type of synchronization
-        synchronized (bool): True if synchronized acqusition, False if continuous.
+        synchronized (bool): True if synchronized acquisition, False if continuous.
         return TRIG_*: type of trigger implementation to use
         """
         if synchronized:
             if self._supports_soft_trigger:
+                self.atcore.SetAcquisitionMode(AndorV2DLL.AM_VIDEO)  # SW trigger only work in this "continuous" mode
                 # Software trigger mode
                 # Even if the camera supports SW trigger mode in general, some
                 # of the current settings might prevent it.
@@ -1817,20 +1827,21 @@ class AndorCam2(model.DigitalCamera):
 
         return trigger_mode
 
-    def _update_settings(self, synchronized):
+    def _update_settings(self):
         """
         Commits the settings to the camera. Only the settings which have been
         modified are updated.
-        Note: acquisition_lock must be taken, and acquisition must _not_ going on.
-        return: 
-            res (int, int): resolution of the image to be acquired
-            duration (float): expected time per frame
+        Note: the acquisition must _not_ going on.
+        return:
+            res (int, int): resolution of the image to be acquired in X and Y (px, px)
+            duration (float): expected time per frame (s)
             trigger_mode (TRIG_*):  type of trigger implementation to use
         """
         (prev_image_settings, prev_exp_time, prev_readout_rate,
-         prev_gain, prev_shut) = self._prev_settings
+         prev_gain, prev_shut, prev_sync) = self._prev_settings
 
-        # Acquisition mode should be done first, because some settings (eg, exp)
+        synchronized = self._synchronized
+        # Acquisition mode should be done first, because some settings (eg, exposure time)
         # are reset after changing it.
         trigger_mode = self._configure_trigger_mode(synchronized)
 
@@ -1943,9 +1954,8 @@ class AndorCam2(model.DigitalCamera):
                 self.SetShutter(1, 0, self._shutter_cltime, self._shutter_optime)  # mode 0 = auto
             else:
                 self.SetShutter(1, 1, 0, 0)
-                # The shutter times limits the minimum exposure time
-                # => force setting exp time, in case shutter was active before
-                # prev_exp_time = None
+                # Note that the shutter times limits the minimum exposure time
+                # => always try again setting exp time, in case shutter was active before
 
         # Exposure time should always be reset (after changing the acquisition mode)
         self.atcore.SetExposureTime(c_float(self._exposure_time))
@@ -1961,15 +1971,15 @@ class AndorCam2(model.DigitalCamera):
 
         # The documentation indicates that software trigger is not compatible with
         # "some settings", so check one last time that it's really possible to use
-        # software trigger.
-        if trigger_mode == TRIG_SW and not self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE):
-            # _configure_trigger_mode() will detected that it's not supported
-            # and will pick TRIG_FAKE
+        # software trigger. Or alternatively, maybe the previous settings didn't
+        # allow software trigger, but the new ones do.
+        if synchronized and (trigger_mode == TRIG_SW) != self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE):
+            logging.debug("Reconfiguring trigger mode as its availability has changed")
             trigger_mode = self._configure_trigger_mode(synchronized)
-            assert trigger_mode == TRIG_FAKE
 
         self._prev_settings = [new_image_settings, self._exposure_time,
-                               self._readout_rate, self._gain, self._shutter_period]
+                               self._readout_rate, self._gain, self._shutter_period,
+                               synchronized]
         return im_res, duration, trigger_mode
 
     def _allocate_buffer(self, size):
@@ -1992,6 +2002,10 @@ class AndorCam2(model.DigitalCamera):
 
     # Acquisition methods
     def start_generate(self):
+        """
+        Starts the image acquisition
+        The image are sent via the .data DataFlow
+        """
         self._genmsg.put(GEN_START)
         if not self._acq_thread or not self._acq_thread.is_alive():
             logging.info("Starting acquisition thread")
@@ -2000,14 +2014,19 @@ class AndorCam2(model.DigitalCamera):
             self._acq_thread.start()
 
     def stop_generate(self):
+        """
+        Stop the image acquisition
+        """
         self._genmsg.put(GEN_STOP)
 
     def set_trigger(self, sync):
         """
+        Specify of the acquisition should be synchronized or not.
         sync (bool): True if should be triggered
         """
+        self._synchronized = sync
         if sync:
-            logging.debug("Now set to software trigger")
+            logging.debug("Acquisition now set to synchronized mode")
         else:
             # Just to make sure to not wait forever for it
             logging.debug("Sending unsynchronisation event")
@@ -2018,6 +2037,7 @@ class AndorCam2(model.DigitalCamera):
         """
         Called by the Event when it is triggered
         """
+        # Send a float (containing the current time) to indicate a trigger
         self._genmsg.put(time.time())
 
     # The acquisition is based on a FSM that roughly looks like this:
@@ -2051,6 +2071,7 @@ class AndorCam2(model.DigitalCamera):
         Note: it expects that the acquisition is stopped.
         raise TerminationRequested: if a terminate message was received
         """
+        self._old_triggers = []  # discard left-over triggers from previous acquisition
         while True:
             msg = self._get_acq_msg(block=True)
             if msg == GEN_TERM:
@@ -2058,12 +2079,12 @@ class AndorCam2(model.DigitalCamera):
             elif msg == GEN_START:
                 return
 
-            # Duplicate Stop or trigger
+            # Either a (duplicated) Stop or a trigger => we don't care
             logging.debug("Skipped message %s as acquisition is stopped", msg)
 
     def _acq_should_stop(self):
         """
-        Indicate whether the acquisition should now stop or can keep running.
+        Indicate whether the acquisition should stop now or can keep running.
         Non blocking.
         Note: it expects that the acquisition is running.
         return (bool): True if needs to stop, False if can continue
@@ -2081,6 +2102,7 @@ class AndorCam2(model.DigitalCamera):
             elif msg == GEN_TERM:
                 raise TerminationRequested()
             elif isinstance(msg, float):  # trigger
+                # The trigger arrived too early, let's keep it for later
                 self._old_triggers.insert(0, msg)
             else:  # Anything else shouldn't really happen
                 logging.warning("Skipped message %s as acquisition is waiting for trigger", msg)
@@ -2088,8 +2110,8 @@ class AndorCam2(model.DigitalCamera):
     def _acq_wait_trigger(self):
         """
         Block until a trigger is received, or a stop message.
-        Note: it expects that the acquisition is running.
-        If the acquisition is not synchronised, it will immediately return
+        Note: it expects that the acquisition is running. Also, if some triggers
+        were previously received, it'll use immediately the oldest one.
         return (bool): True if needs to stop, False if a trigger is received
         raise TerminationRequested: if a terminate message was received
         """
@@ -2105,9 +2127,10 @@ class AndorCam2(model.DigitalCamera):
                     raise TerminationRequested()
                 elif msg == GEN_STOP:
                     return True
-                elif msg == GEN_UNSYNC or isinstance(msg, float):  # trigger
+                elif msg == GEN_UNSYNC or isinstance(msg, float):  # float = trigger
+                    # Trick to handle the DataFlow being unsynchronized while we
+                    # are waiting for trigger: we simulate a trigger by using GEN_UNSYNC
                     trigger = msg
-                    # TODO: send a trigger to the camera?
                     break
                 else: # Anything else shouldn't really happen
                     logging.warning("Skipped message %s as acquisition is waiting for trigger", msg)
@@ -2120,9 +2143,9 @@ class AndorCam2(model.DigitalCamera):
 
     def _acq_wait_data(self, timeout):
         """
-        Block until a data is received, or a stop message.
+        Block until a data (ie, an image) is received, or a stop message.
         Note: it expects that the acquisition is running.
-        timeout (0<float): how long to wait to check
+        timeout (0<float): how long to wait for new data (s)
         return (bool): True if needs to stop, False if data is ready
         raise TerminationRequested: if a terminate message was received
         """
@@ -2148,11 +2171,11 @@ class AndorCam2(model.DigitalCamera):
 
     def _acquire(self):
         """
-        Acquisition thread
-        Managed via the ._genmsg Queue
+        Acquisition thread. Runs all the time, until receive a GEN_TERM message.
+        Managed via the ._genmsg Queue, by passing GEN_* messages.
         """
         try:
-            self.select()
+            self.select()  # Make sure we are using the right camera
             has_hw_lock = False
 
             while True: # Waiting/Acquiring loop
@@ -2161,42 +2184,37 @@ class AndorCam2(model.DigitalCamera):
 
                 # Preparation & acquisition loop (until stop requested)
                 logging.debug("Preparing acquisition")
-                self._old_triggers = []  # discard all old triggers
-                synchronized = None
-                need_reconfig = True
+                need_reconfig = True  # Always reconfigure when new acquisition starts
                 failures = 0
-                while True:
+                while True:  # Acquire one image
                     if self.request_hw: # TODO: check if we still need this code.
-                        need_reconfig = True # ensure we'll release the hw_lock a bit
-
-                    new_synchronized = self.data._sync_event is not None
-                    if new_synchronized != synchronized:
-                        need_reconfig = True
-                    synchronized = new_synchronized
+                        need_reconfig = True  # ensure we'll release the hw_lock for a little while
 
                     # Before every image, check that the camera is ready for
                     # acquisition, with the current settings (in case they were
                     # changed during the previous frame).
                     if need_reconfig or self._need_update_settings():
-                        # Stop the acquisition (if already running)
+                        # Stop the acquisition (if already running, typically because settings changes)
                         try:
                             if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
                                 self.atcore.AbortAcquisition()
                                 if has_hw_lock:
                                     self.hw_lock.release()
                                     has_hw_lock = False
-                                time.sleep(0.1)
+                                time.sleep(0.1)  # give a bit of time to abort acquisition
                         except AndorV2Error as ex:
                             # it was already aborted
-                            if ex.errno != 20073: # DRV_IDLE
+                            if ex.errno != 20073:  # DRV_IDLE == already aborted == not a big deal
                                 raise
 
-                        im_res, duration, trigger_mode = self._update_settings(synchronized)
+                        im_res, duration, trigger_mode = self._update_settings()
                         if not has_hw_lock:
                             self.hw_lock.acquire()
                             has_hw_lock = True
-                        if not synchronized:
+                        if trigger_mode != TRIG_FAKE:  # TRIG_FAKE uses StartAcquisition to simulate trigger
                             self.atcore.StartAcquisition()
+
+                        need_reconfig = False
 
                     if trigger_mode == TRIG_NONE:
                         # No synchronisation -> just check it shouldn't stop
@@ -2218,16 +2236,16 @@ class AndorCam2(model.DigitalCamera):
                         # Trigger received => start the acquisition
                         self.atcore.StartAcquisition()
 
-                    # Acquire the images
+                    # Allocate memory to store the coming image
                     metadata = dict(self._metadata)  # duplicate
                     tstart = time.time()
-                    twait = duration + 1  # Give a big margin for timeout
+                    twait = duration + 1  # s, give a margin for timeout
                     metadata[model.MD_ACQ_DATE] = tstart  # time at the beginning
                     cbuffer = self._allocate_buffer(im_res)
                     array = self._buffer_as_array(cbuffer, im_res, metadata)
 
-                    # We have a bit of time waiting for the image to come...
-                    # Force the GC to free non-used buffers.
+                    # We have a bit of time waiting for the image...
+                    # Let's take the opportunity to free non-used buffers.
                     self._gc_while_waiting(duration)
 
                     try:
@@ -2246,14 +2264,13 @@ class AndorCam2(model.DigitalCamera):
                         failures += 1
                         if failures >= 5:
                             raise
-                        # This sometimes happen with 20024 (DRV_NO_NEW_DATA) or
-                        # 20067 (DRV_P2INVALID) on GetMostRecentImage16()
+                        # Common failures are 20024 (DRV_NO_NEW_DATA) or
+                        # 20067 (DRV_P2INVALID) during GetMostRecentImage16()
                         try:
-                            self.atcore.CancelWait()
                             if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
                                 self.atcore.AbortAcquisition()  # Need to stop acquisition to read temperature
-                            temp = self.GetTemperature()
-                        except AndorV2Error:
+                            temp = self.GetTemperature()  # Best way to check the connection and status
+                        except AndorV2Error:  # Probably something really wrong the connection
                             temp = None
                         # -999°C means the camera is gone
                         if temp == -999:
@@ -2263,7 +2280,7 @@ class AndorCam2(model.DigitalCamera):
                             time.sleep(0.1)
                             logging.warning("trying again to acquire image after error %s", ex)
                         need_reconfig = True
-                        continue
+                        continue  # Go back to beginning of acquisition loop
                     else:
                         failures = 0
 
@@ -2281,14 +2298,16 @@ class AndorCam2(model.DigitalCamera):
 
             if has_hw_lock:
                 self.hw_lock.release()
+                has_hw_lock = False
 
         except TerminationRequested:
             logging.debug("Acquisition thread requested to terminate")
         except Exception:
             logging.exception("Failure in acquisition thread")
 
-        # Clean up everything
+        # Clean up everything (especially in case of exception)
 
+        # Stop if acquisition is still active
         if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
             try:
                 self.atcore.AbortAcquisition()
@@ -2300,7 +2319,6 @@ class AndorCam2(model.DigitalCamera):
             self.hw_lock.release()
 
         self.atcore.FreeInternalMemory()  # TODO not sure it's needed
-        gc.collect()
         self._gc_while_waiting(None)
 
         logging.debug("Acquisition thread ended")
@@ -2308,14 +2326,14 @@ class AndorCam2(model.DigitalCamera):
     def _gc_while_waiting(self, max_time=None):
         """
         May or may not run the garbage collector.
-        max_time (float or None): maximum time it's allow to take.
+        max_time (float or None): maximum time it's allow to take. (s)
             If None, consider we can always run it.
         """
         self._num_no_gc += 1
         gen = 2  # That's all generations
 
         if max_time is not None:
-            # No need if we already run
+            # Skip if we've already run the GC recently
             if self._num_no_gc < MAX_GC_SKIP:
                 return
             logging.debug("num_gc = %s", self._num_no_gc)
@@ -2331,7 +2349,7 @@ class AndorCam2(model.DigitalCamera):
 
     def terminate(self):
         """
-        Must be called at the end of the usage
+        Must be called at the end of the usage of the Camera instance
         """
         if self._acq_thread:
             self.stop_generate()
@@ -2492,7 +2510,7 @@ class AndorCam2DataFlow(model.DataFlow):
     def start_generate(self):
         comp = self.component()
         if comp is None:
-            # camera has been deleted, it's all fine, we'll be GC'd soon
+            # Camera has been deleted, it's all fine, this DataFlow be gone soon too
             return
 
         comp.start_generate()
@@ -2500,6 +2518,7 @@ class AndorCam2DataFlow(model.DataFlow):
     def stop_generate(self):
         comp = self.component()
         if comp is None:
+            # Camera has been deleted, it's all fine, this DataFlow be gone soon too
             return
 
         comp.stop_generate()
@@ -2509,6 +2528,7 @@ class AndorCam2DataFlow(model.DataFlow):
         Synchronize the acquisition on the given event. Every time the event is
           triggered, the DataFlow will start a new acquisition.
         Behaviour is unspecified if the acquisition is already running.
+        (Currently it will automatically switch on the next image)
         event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         The DataFlow can be synchronize only with one Event at a time.
@@ -2527,12 +2547,12 @@ class AndorCam2DataFlow(model.DataFlow):
         self._sync_event = event
         if self._sync_event:
             # if the df is synchronized, the subscribers probably don't want to
-            # skip some data
+            # skip some data => disable discarding data
             self._prev_max_discard = self._max_discard
             self.max_discard = 0
             comp.set_trigger(True)
             self._sync_event.subscribe(comp)
-        else:
+        else:  # Non synchronized
             comp.set_trigger(False)
 
 # Only for testing/simulation purpose
@@ -2580,7 +2600,6 @@ class FakeAndorV2DLL(object):
         self.targetTemperature = -100
         self.status = AndorV2DLL.DRV_IDLE
         self.readmode = AndorV2DLL.RM_IMAGE
-        # TODO: allow to enable/disable TM_SOFTWARE
         self._supported_triggers = {AndorV2DLL.TM_INTERNAL}
         if sw_trigger:
             self._supported_triggers.add(AndorV2DLL.TM_SOFTWARE)
@@ -2683,7 +2702,7 @@ class FakeAndorV2DLL(object):
         caps.CameraType = AndorCapabilities.CAMERATYPE_CLARA
         caps.ReadModes = (AndorCapabilities.READMODE_SUBIMAGE
                           )
-        # Only add TRIGGERMODE_CONTINUOUS if sw trigger supported
+        # Only add TRIGGERMODE_CONTINUOUS if SW trigger supported
         if AndorV2DLL.TM_SOFTWARE in self._supported_triggers:
             caps.TriggerModes = AndorCapabilities.TRIGGERMODE_CONTINUOUS
 
@@ -2906,14 +2925,14 @@ class FakeAndorV2DLL(object):
         if _val(mode) > 12:
             raise AndorV2Error(20066, "Argument out of bounds")
         if _val(mode) not in self._supported_triggers:
-            raise AndorV2Error(AndorV2DLL.DRV_INVALID_MODE, "DRV_INVALID_MODE")
+            raise AndorV2Error(20078, "DRV_INVALID_MODE")
         self._trigger_mode = mode
 
     def IsTriggerModeAvailable(self, mode):
         if _val(mode) > 12:
             raise AndorV2Error(20066, "Argument out of bounds")
         if _val(mode) not in self._supported_triggers:
-            raise AndorV2Error(AndorV2DLL.DRV_INVALID_MODE, "DRV_INVALID_MODE")
+            raise AndorV2Error(20078, "DRV_INVALID_MODE")
 
     def SendSoftwareTrigger(self):
         self._swTrigger.set()
@@ -2952,6 +2971,9 @@ class FakeAndorV2DLL(object):
         kinetic.value = accumulate.value + self.kinetic
 
     def _begin_exposure(self):
+        """
+        Notes the beginning of an frame exposure
+        """
         duration = self.exposure + self._getReadout()
         self.acq_end = time.time() + duration
 #         if random.randint(0, 10) == 0:  # DEBUG to simulate connection issues

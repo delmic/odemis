@@ -651,9 +651,10 @@ class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
 
         time.sleep(0.1)
 
-    def test_trigger_removal(self):
+    def test_synchronization_removal(self):
         """
-        Check that when the synchronisation is removed, the acquisition continues
+        Check that when the synchronisation is removed, the acquisition continues,
+        without waiting for an event anymore.
         """
         if not hasattr(self.ccd, "softwareTrigger"):
             self.skipTest("Camera doesn't support software trigger")
@@ -664,40 +665,66 @@ class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
         readout = numpy.prod(self.ccd_size) / self.ccd.readoutRate.value
         duration = exp + readout  # approximate time for one frame
 
-        numbert = 6
-        self.ccd_left = numbert
+        number_acq = 6  # total number of images to acquire
+        self.ccd_left = number_acq  # unsubscribe after receiving
 
+        # Start with software trigger
         self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
         self.ccd.data.subscribe(self.receive_ccd_image)
 
-        try:
-            # Get one image
-            self.got_image.clear()
-            self.ccd.softwareTrigger.notify()
-            gi = self.got_image.wait(duration + 10)
-            self.assertTrue(gi, "image not received after %g s" % (duration + 10))
+        # Get one image
+        self.got_image.clear()  # Reset the image event
+        self.ccd.softwareTrigger.notify()
+        # wait for the image to be received
+        gi = self.got_image.wait(duration + 10)
+        self.assertTrue(gi, "image not received after %g s" % (duration + 10))
 
-            # make sure it's waiting
-            time.sleep(0.1)
-            self.ccd.data.synchronizedOn(None)
+        # make sure it's waiting
+        time.sleep(0.1)
+        self.ccd.data.synchronizedOn(None)  # No more synchronized
 
-            # Check we receive the other images
-            for i in range(1, numbert):
-                try:
-                    self._data.get(timeout=duration + 10)
-                except queue.Empty:
-                    self.fail("No data %d received after %s s" % (i, duration))
+        # Check we now receive the next images without sending an event
+        for i in range(1, number_acq):
+            try:
+                self._data.get(timeout=duration + 10)
+            except queue.Empty:
+                self.fail("No data %d received after %s s" % (i, duration))
 
-        finally:
-            self.ccd.data.unsubscribe(self.receive_ccd_image)
+        # Should now be automatically unsubscribed
 
         # check we can still get data normally
         d = self.ccd.data.get()
 
+        # Now do the opposite: first acquire continuously and then add a synchronization
+        self._data = queue.Queue()  # Reset the queue
+        self.ccd_left = number_acq  # unsubscribe after receiving
+
+        self.ccd.data.subscribe(self.receive_ccd_image)
+        # Check we now receive the next images without sending an event
+        for i in range(2):
+            try:
+                self._data.get(timeout=duration + 10)
+            except queue.Empty:
+                self.fail("No data %d received after %s s" % (i, duration))
+
+        # Now synchronized
+        # Note that it's hard to know when the synchronization switched, so we
+        # don't know how many triggers need to be sent. At most number_acq - 2.
+        self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
+        for i in range(2, number_acq):
+            self.ccd.softwareTrigger.notify()
+            try:
+                self._data.get(timeout=duration + 10)
+            except queue.Empty:
+                self.fail("No data %d received after %s s" % (i, duration))
+
+        self.assertEqual(self.ccd_left, 0)
+        self.ccd.data.synchronizedOn(None)
+
     def test_cropped_data(self):
         """
-        check the synchronization of CCD prevents it from generating images as
-        long as no event is received.
+        check the synchronization of CCD, while the image area is cropped.
+        Some Andorcam2 cameras have special behaviour in such case.
         """
         if not hasattr(self.ccd, "softwareTrigger"):
             self.skipTest("Camera doesn't support software trigger")
@@ -705,12 +732,12 @@ class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
         self.ccd_size = (self.ccd.shape[0] // 2, self.ccd.shape[1] // 2)
         if (self.ccd.resolution.range[0][0] > self.ccd_size[0] or
             self.ccd.resolution.range[0][1] > self.ccd_size[1]):
-            # cannot divide the size by 2? Then it probably doesn't support AOI
+            # cannot divide the size by 2? Then it probably doesn't support cropping
             self.skipTest("Camera doesn't support area of interest")
 
         self.ccd.resolution.value = self.ccd_size
         if self.ccd.resolution.value == self.ccd.shape[:2]:
-            # cannot divide the size by 2? Then it probably doesn't support AOI
+            # cannot divide the size by 2? Then it probably doesn't support cropping
             self.skipTest("Camera doesn't support area of interest")
 
         self.ccd.exposureTime.value = self.ccd.exposureTime.clip(50e-3)  # s
@@ -719,14 +746,14 @@ class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
         readout = numpy.prod(self.ccd_size) / self.ccd.readoutRate.value
         duration = exp + readout  # approximate time for one frame
 
-        numbert = 6
-        self.ccd_left = numbert
+        number_acq = 6
+        self.ccd_left = number_acq  # unsubscribe after receiving
 
         self.ccd.data.subscribe(self.receive_ccd_image)
         self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
 
         # Wait for the image
-        for i in range(numbert):
+        for i in range(number_acq):
             self.got_image.clear()
             self.ccd.softwareTrigger.notify()
             # wait for the image to be received
@@ -734,7 +761,7 @@ class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
             self.assertTrue(gi, "image not received after %g s" % (duration + 10))
             time.sleep(i * 0.1)  # wait a bit to simulate some processing
 
-        self.ccd.data.unsubscribe(self.receive_ccd_image)
+        self.ccd.data.unsubscribe(self.receive_ccd_image)  # Just to be sure
         self.ccd.data.synchronizedOn(None)
 
     def receive_sem_data(self, dataflow, image):
