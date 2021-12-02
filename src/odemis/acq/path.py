@@ -568,7 +568,7 @@ class OpticalPathManager(object):
                     continue
                 if not hasattr(comp, "axes") or not isinstance(comp.axes, dict):
                     continue
-                if isinstance(pos, tuple):  # lens-switch
+                if isinstance(pos, tuple):  # several ways to find the position
                     for position in pos:
                         if isinstance(position, str) and position.startswith("MD:"):
                             try:

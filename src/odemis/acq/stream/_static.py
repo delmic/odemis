@@ -627,7 +627,7 @@ class StaticSpectrumStream(StaticStream):
                 # cached list of theta stamps for each position in the theta dimension
                 theta_list, unit_theta = spectrum.get_angle_range(image)
                 # Converts radians to degrees and removes NaN values from the theta list
-                self._thetal_px_values = [math.degrees(theta) for theta in theta_list]
+                self._thetal_px_values = [theta for theta in theta_list if not math.isnan(theta)]
                 min_theta, max_theta = min(self._thetal_px_values), max(self._thetal_px_values)
 
                 # Allows the selection of theta as any value within the range, and the
@@ -677,10 +677,10 @@ class StaticSpectrumStream(StaticStream):
 
         if "acq_type" not in kwargs:
             if image.shape[0] > 1 and image.shape[1] > 1:
-                if model.MD_TIME_LIST in image.metadata:
-                    kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
-                else:  # MD_THETA_LIST is present
+                if model.MD_THETA_LIST in image.metadata:
                     kwargs["acq_type"] = model.MD_AT_EK
+                else:  # MD_THETA_LIST is present
+                    kwargs["acq_type"] = model.MD_AT_TEMPSPECTRUM
             elif image.shape[0] > 1:
                 kwargs["acq_type"] = model.MD_AT_SPECTRUM
             elif image.shape[1] > 1:

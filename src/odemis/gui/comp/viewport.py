@@ -1689,22 +1689,21 @@ class ThetaViewport(NavigablePlotViewport):
             else:
                 wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
 
-            # If there is a known period, lock the horizontal range by default
-            # and use the period as initial range
-            if hasattr(self._stream, "windowPeriod"):
-                self.hrange_lock.value = True
-                self.hrange.value = (-self._stream.windowPeriod.value, 0)
-
     def _on_new_data(self, data):
+        """Called when a new data is available.
+        data: 1D numpy array, with possibly metadata MD_THETA_LIST, a list of theta values, of the
+        same length
+        """
         if data is not None and data.size:
-            angle_range, _ = spectrum.get_angle_range(data)
-            unit_x = "°"
-            # Converts radians to degrees & removes NaN values
-            angles = [math.degrees(angle) for angle in angle_range if not math.isnan(angle)]
+            angle_range, unit_a = spectrum.get_angle_range(data)
 
-            range_x = min(angles), max(angles)
+            if unit_a == "rad":
+                unit_a = "°"
+                angle_range = [math.degrees(angle) for angle in angle_range]  # Converts radians to degrees
+
+            range_x = min(angle_range), max(angle_range)
             if not self.hrange_lock.value or self.hrange.value is None:
-                display_xrange = util.find_plot_content(angles, data)
+                display_xrange = util.find_plot_content(angle_range, data)
             else:
                 display_xrange = self.hrange.value
 
@@ -1721,11 +1720,11 @@ class ThetaViewport(NavigablePlotViewport):
             else:
                 display_yrange = self.vrange.value
 
-            self.canvas.set_1d_data(angles, data, unit_x=unit_x, range_x=range_x, range_y=range_y,
+            self.canvas.set_1d_data(angle_range, data, unit_x=unit_a, range_x=range_x, range_y=range_y,
                                     display_xrange=display_xrange, display_yrange=display_yrange)
             self.hrange.value = display_xrange
             self.vrange.value = display_yrange
-            self.bottom_legend.unit = unit_x
+            self.bottom_legend.unit = unit_a
 
         else:
             self.clear()
@@ -1936,8 +1935,8 @@ class AngularSpectrumViewport(TwoDViewPort):
         if self._stream:
             if hasattr(self._stream, "selected_wavelength"):
                 self._stream.selected_wavelength.value = pos[0]
-            if hasattr(self._stream, "selected_angle"):
-                self._stream.selected_angle.value = pos[1]
+            if hasattr(self._stream, "selected_angle") and self._stream.selected_angle.unit == "rad":
+                self._stream.selected_angle.value = math.radians(pos[1])  # radians
 
     def setView(self, view, tab_data):
         super(AngularSpectrumViewport, self).setView(view, tab_data)
@@ -1950,22 +1949,23 @@ class AngularSpectrumViewport(TwoDViewPort):
 
         if hasattr(stream, "selected_angle") and hasattr(stream, "selected_wavelength"):
             pos = self.canvas.markline_overlay.val
-            pos.value = (stream.selected_wavelength.value, stream.selected_angle.value)
+            pos.value = (stream.selected_wavelength.value, math.degrees(stream.selected_angle.value))  # (nm, degrees)
 
     def _on_new_data(self, data):
         if data is not None and data.size:
             wl, unit_x = spectrum.get_spectrum_range(data)
             spectrum_range = (min(wl), max(wl))
 
-            angles, _ = spectrum.get_angle_range(data)
-            unit_y = "°"
-            angles = [math.degrees(angle) for angle in angles if not math.isnan(angle)]  # Converts radians to degrees
+            angles, unit_a = spectrum.get_angle_range(data)
+            if unit_a == "rad":
+                unit_a = "°"
+                angles = [math.degrees(angle) for angle in angles]  # Converts radians to degrees
 
             angle_range = (max(angles), min(angles))  # inverted, to show the highest value at the bottom
-            self.canvas.set_2d_data(data, unit_x, unit_y, spectrum_range, angle_range)
+            self.canvas.set_2d_data(data, unit_x, unit_a, spectrum_range, angle_range)
 
             self.bottom_legend.unit = unit_x
-            self.left_legend.unit = unit_y
+            self.left_legend.unit = unit_a
             self.bottom_legend.range = wl
             self.left_legend.range = angle_range
         else:

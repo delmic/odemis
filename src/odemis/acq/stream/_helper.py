@@ -1107,11 +1107,15 @@ class AngularSpectrumSettingsStream(PolarizedCCDSettingsStream):
         try:
             hw_choices = detector.binning.choices
             h_choices = {b for b in {1, 2, 4, 8, 16} if any(hb[0] == b for hb in hw_choices)}
-            self.spectrum_binning = model.VigilantAttribute(1, choices=h_choices)
+            self.spectrum_binning = model.VAEnumerated(1, choices=h_choices)
+            v_choices = {b for b in {1, 2, 4, 8, 16} if any(hb[1] == b for hb in hw_choices)}
+            self.angular_binning = model.VAEnumerated(1, choices=v_choices)
         except AttributeError:
             logging.info("The VA of the detector.binning doesn't support .choices")
             try:
                 hw_range = detector.binning.range
+                self.spectrum_binning = model.VAEnumerated(1, choices={1, 2, 4, 8, 16})
+                self.angular_binning = model.VAEnumerated(1, choices={1, 2, 4, 8, 16})
             except AttributeError:
                 logging.info("The VA of the detector.binning doesn't support .range so instantiate read-only VAs "
                              "for both horizontal and vertical binning")
@@ -1160,7 +1164,9 @@ class AngularSpectrumSettingsStream(PolarizedCCDSettingsStream):
 
         # Sets POS and PIXEL_SIZE from the e-beam (which is in spot mode). Useful when taking snapshots.
         epxs = self.emitter.pixelSize.value
-        data.metadata[model.MD_PIXEL_SIZE] = epxs
+        # TODO: we cannot override the pixel size here cos we still need it when we extract the MD_THETA_LIST
+        # during the acquisition.
+        # data.metadata[model.MD_PIXEL_SIZE] = epxs
         emd = self.emitter.getMetadata()
         pos = emd.get(model.MD_POS, (0, 0))
         trans = self.emitter.translation.value

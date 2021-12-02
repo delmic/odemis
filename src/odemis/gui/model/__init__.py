@@ -161,6 +161,7 @@ class MainGUIData(object):
         "align": "aligner",
         "fiber-aligner": "fibaligner",
         "lens-mover": "lens_mover",  # lens1 of SPARCv2
+        "lens-switch": "lens_switch",  # lens2 of SPARCv2. Supports EK if has FAV_POS_ACTIVE
         "spec-selector": "spec_sel",
         "pcd-selector": "pcd_sel",
         "chamber": "chamber",
@@ -231,6 +232,7 @@ class MainGUIData(object):
         self.spec_ded_focus = None  # focus on spectrograph dedicated (SPARCv2)
         self.monochromator = None  # 0D detector behind the spectrograph
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
+        self.lens_switch = None  # actuator to align the lens2 (SPARCv2)
         self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)
         self.pcd_sel = None  # actuator to activate the path to the probe current
         self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
@@ -427,6 +429,18 @@ class MainGUIData(object):
         else:
             raise LookupError("Failed to find tab %s among %d defined tabs" %
                               (name, len(self.tab.choices)))
+
+    def isAngularSpectrumSupported(self):
+        """
+        Detects whether the SPARC supports Angular Spectrum acquisition.
+        It only makes sense on SPARCv2. "Simple/old" systems didn't support it.
+        If lens-switch has MD_FAV_POS_ACTIVE, it's a sign that it's supported.
+        return (bool): True if the SPARC supports EK imaging
+        """
+        if not self.ccds or not self.lens_switch:
+            return False
+        md = self.lens_switch.getMetadata()
+        return (model.MD_FAV_POS_ACTIVE in md)
 
 
 class MicroscopyGUIData(with_metaclass(ABCMeta, object)):

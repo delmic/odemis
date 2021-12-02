@@ -2567,7 +2567,7 @@ class SparcStreamsController(StreamBarController):
         if main_data.streak_ccd:
             self.add_action("Temporal spectrum", self.addTemporalSpectrum)
 
-        if main_data.ccd:
+        if main_data.isAngularSpectrumSupported():
             self.add_action("AR Spectrum", self.addAngularSpectrum)
 
         if main_data.monochromator:

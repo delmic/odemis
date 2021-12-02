@@ -29,9 +29,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import math
-
 import numpy
-
 from odemis import model
 from builtins import range
 
@@ -180,12 +178,13 @@ def get_time_range(data):
 
 
 def get_angle_range(data):
-    """ Returns the list of theta values, if exists, in radians.
+    """ Returns the list of theta values.
 
     :param data: (model.DataArray of shape A...): the DataArray with metadata
         MD_THETA_LIST
 
-    :return: (list of numbers or None), unit string:
+    :returns a list of numbers or None and the unit string. The unit is either "rad" if metadata exists,
+    or "px" if metadata is missing.
     """
 
     try:

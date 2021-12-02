@@ -1452,9 +1452,10 @@ def theta_to_export_data(proj, raw, vp=None):
         spec = proj.image.value
         if spec is None:
             raise LookupError("No pixel selected to pick a theta")
-        angle_range, _ = spectrum.get_angle_range(spec)
-        unit = "°"
-        angles = [math.degrees(angle) for angle in angle_range if not math.isnan(angle)]  # Converts radians to degrees
+        angle_range, unit_a = spectrum.get_angle_range(spec)
+        if unit_a == "rad":
+            unit_a = "°"
+            angle_range = [math.degrees(angle) for angle in angle_range]  # Converts radians to degrees
 
         # Draw spectrum bar plot
         fill_colour = BAR_PLOT_COLOUR
@@ -1468,17 +1469,17 @@ def theta_to_export_data(proj, raw, vp=None):
             # Limit to the displayed ranges
             range_x = vp.hrange.value
             range_y = vp.vrange.value
-            angles, spec = clip_data_window(range_x, range_y, angles, spec)
+            angle_range, spec = clip_data_window(range_x, range_y, angle_range, spec)
         else:
             # calculate data characteristics
-            min_x = min(angles)
-            max_x = max(angles)
+            min_x = min(angle_range)
+            max_x = max(angle_range)
             min_y = min(spec)
             max_y = max(spec)
             range_x = (min_x, max_x)
             range_y = (min_y, max_y)
 
-        data = list(zip(angles, spec))
+        data = list(zip(angle_range, spec))
         bar_plot(ctx, data, range_x, range_y, client_size, fill_colour)
 
         # Differentiate the scale bar colour so the user later on
@@ -1489,12 +1490,12 @@ def theta_to_export_data(proj, raw, vp=None):
         tick_spacing = client_size[0] // 4
         font_size = client_size[0] * SPEC_FONT_SIZE
         scale_x_draw = draw_scale(range_x, (client_size[0], SPEC_SCALE_HEIGHT), wx.HORIZONTAL,
-                              tick_spacing, text_colour, unit, font_size, "Angle")
+                              tick_spacing, text_colour, unit_a, font_size, "Angle")
         data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
 
         # Draw top horizontal scale legend
         scale_x_draw = draw_scale(range_x, (client_size[0], SMALL_SCALE_WIDTH), wx.HORIZONTAL,
-                              tick_spacing, text_colour, unit, font_size, None,
+                              tick_spacing, text_colour, unit_a, font_size, None,
                               mirror=True)
         data_with_legend = numpy.append(scale_x_draw, data_with_legend, axis=0)
 
@@ -1608,9 +1609,10 @@ def angular_spectrum_to_export_data(proj, raw):
         if spec is None:
             raise LookupError("No pixel selected to pick an angular-spectrum")
         spectrum_range, wl_unit = spectrum.get_spectrum_range(spec)
-        angle_range, _ = spectrum.get_angle_range(spec)
-        angle_unit = "°"
-        angle_range = [math.degrees(angle) for angle in angle_range if not math.isnan(angle)]  # Convert radians to degrees
+        angle_range, unit_a = spectrum.get_angle_range(spec)
+        if unit_a == "rad":
+            unit_a = "°"
+            angle_range = [math.degrees(angle) for angle in angle_range]  # Convert radians to degrees
 
         return _draw_image_graph(spec,
                                  size=(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE),
@@ -1618,7 +1620,7 @@ def angular_spectrum_to_export_data(proj, raw):
                                  xunit=wl_unit,
                                  xtitle="Wavelength",
                                  yrange=angle_range,
-                                 yunit=angle_unit,
+                                 yunit=unit_a,
                                  ytitle="Angle",
                                  )
 

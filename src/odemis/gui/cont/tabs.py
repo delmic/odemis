@@ -1325,30 +1325,32 @@ class SparcAcquisitionTab(Tab):
               }),
         ])
 
-        # depending on HW choose which viewport should be connected to a stream
-        # Note: for now either streak camera HW or monochromator HW is added as a viewport
-        # TODO: for now only time correlator HW or streak cam HW handled
-        # So far there is no system having both HW available
-
-        if main_data.streak_ccd or self.viewport is TemporalSpectrumViewport:
-            if main_data.monochromator:
-                logging.warning("Streak camera and monochromator HW present, but"
-                                "only streak camera viewport will be displayed.")
+        # Depending on HW choose which viewport should initialized. We don't initialize viewports
+        # which will never be needed.
+        # For the 2x2 view, we need at least 4 viewports, so in case we don't have enough viewports,
+        # we fill it up by default with a monochromator viewport
+        if main_data.streak_ccd:
             vpv[viewports[3]] = {
                 "name": "Temporal Spectrum",
                 "stream_classes": TemporalSpectrumStream,
             }
-        elif main_data.ccd or self.viewport is AngularSpectrumViewport:
+            viewport_br = panel.vp_sparc_ts
+        if main_data.isAngularSpectrumSupported():
             vpv[viewports[5]] = {
                 "name": "AR Spectrum",
                 "stream_classes": AngularSpectrumStream,
             }
-
-        else:
+            viewport_br = panel.vp_sparc_as
+        if main_data.monochromator or len(vpv) < 4:
             vpv[viewports[4]] = {
                 "name": "Monochromator",
                 "stream_classes": (MonochromatorSettingsStream, ScannedTemporalSettingsStream),
             }
+            viewport_br = panel.vp_sparc_br
+
+        # Hide the viewports which are not at the bottom-right at init
+        for vp in (panel.vp_sparc_ts, panel.vp_sparc_as, panel.vp_sparc_br):
+            vp.Shown = vp is viewport_br
 
         # Add connection to SEM hFoV if possible
         if main_data.ebeamControlsMag:
@@ -1373,14 +1375,8 @@ class SparcAcquisitionTab(Tab):
                 (panel.vp_sparc_bl, panel.lbl_sparc_view_bl)),
             (
                 panel.btn_sparc_view_br,
-                (panel.vp_sparc_br, panel.lbl_sparc_view_br)),  # default is now monochromator
+                (viewport_br, panel.lbl_sparc_view_br)),
         ])
-
-        # overwrite the view buttons
-        if main_data.streak_ccd or self.viewport is TemporalSpectrumViewport:
-            buttons[panel.btn_sparc_view_br] = (panel.vp_sparc_ts, panel.lbl_sparc_view_br)
-        if main_data.ccd or self.viewport is AngularSpectrumViewport:
-            buttons[panel.btn_sparc_view_br] = (panel.vp_sparc_as, panel.lbl_sparc_view_br)
 
         self._view_selector = viewcont.ViewButtonController(tab_data, panel, buttons, viewports)
 
@@ -1501,20 +1497,22 @@ class SparcAcquisitionTab(Tab):
         time a new stream is playing. Playing stream becomes the first in the list.
         It picks the last playing stream between the TemporalSpectrumStream and the AngularSpectrumStream.
         """
+        # Check if there is one of the stream that matters
+        for s in streams:
+            if isinstance(s, TemporalSpectrumStream):
+                br_view = self.panel.vp_sparc_ts.view
+                break
+            elif isinstance(s, AngularSpectrumStream):
+                br_view = self.panel.vp_sparc_as.view
+                break
+            elif isinstance(s, (MonochromatorSettingsStream, ScannedTemporalSettingsStream)):  # Monochromator/Time-correlator
+                br_view = self.panel.vp_sparc_br.view
+                break
+        else:  # No need to care
+            return
 
-        def updateViewport(streams):
-            """ Return the last playing stream between Temporal Spectrum and Angular Spectrum"""
-            for s in streams:
-                if isinstance(s, TemporalSpectrumStream):
-                    return TemporalSpectrumViewport
-                elif isinstance(s, AngularSpectrumStream):
-                    return AngularSpectrumViewport
-                # in case neither Temporal Spectrum or Angular Spectrum is present
-                if streams.index(s) == len(streams) - 1:
-                    return None
-
-        self.viewport = updateViewport(streams)
-
+        # Switch the last view to the most fitting one
+        self.tab_data_model.visible_views.value[3] = br_view
 
     def on_tool_change(self, tool):
         """ Ensure spot position is always defined when using the spot """

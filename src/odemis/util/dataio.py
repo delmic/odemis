@@ -57,14 +57,13 @@ def data_to_static_streams(data):
         if acqtype == model.MD_AT_ANCHOR or d.metadata.get(model.MD_DESCRIPTION) == "Anchor region":
             continue
 
-        if MD_TIME_LIST in d.metadata:
-            dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
-            ti = dims.find("T")  # -1 if not found
-            thetai = -1
-        else:
+        dims = d.metadata.get(model.MD_DIMS, "CTZYX"[-d.ndim::])
+        ti = dims.find("T")  # -1 if not found
+
+        if MD_THETA_LIST in d.metadata:
             dims = d.metadata.get(model.MD_DIMS, "CAZYX"[-d.ndim::])
-            thetai = dims.find("A")  # -1 if not found
-            ti = -1
+            ti = dims.find("A")  # -1 if not found
+
         pxs = d.metadata.get(model.MD_PIXEL_SIZE)
         ci = dims.find("C")  # -1 if not found
         if ((MD_WL_LIST in d.metadata and (ci >= 0 and d.shape[ci] > 1)) or
@@ -74,7 +73,7 @@ def data_to_static_streams(data):
                 # Streak camera data. Create a temporal spectrum
                 name = d.metadata.get(model.MD_DESCRIPTION, "Temporal Spectrum")
                 klass = stream.StaticSpectrumStream
-            elif MD_THETA_LIST in d.metadata and (thetai >= 0 and d.shape[thetai] > 1):
+            elif MD_THETA_LIST in d.metadata and (ti >= 0 and d.shape[ti] > 1):
                 name = d.metadata.get(model.MD_DESCRIPTION, "AR Spectrum")
                 klass = stream.StaticSpectrumStream
             else:

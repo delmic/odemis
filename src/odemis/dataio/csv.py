@@ -140,12 +140,14 @@ def export(filename, data):
             spectrum_range = [s * 1e9 for s in spectrum_range]
             unit_c = "nm"
 
-        angle_range, _ = spectrum.get_angle_range(data)
-        unit_a = "°"
-        angles = [math.degrees(theta) for theta in angle_range if not math.isnan(theta)]  # Convert radians to degrees
+        angle_range, unit_a = spectrum.get_angle_range(data)
+        if unit_a == "rad":
+            unit_a = "°"
+            angle_range = [math.degrees(theta) for theta in angle_range]  # Convert radians to degrees
+            assert len(angle_range) == len(data)
 
-        headers = ["angle(" + unit_a + ")\\wavelength(" + unit_c + ")"] + spectrum_range
-        rows = [(t,) + tuple(d) for t, d in zip(angles, data)]
+            headers = ["angle(" + unit_a + ")\\wavelength(" + unit_c + ")"] + spectrum_range
+            rows = [(t,) + tuple(d) for t, d in zip(angle_range, data)]
 
         with open(filename, 'w') as fd:
             csv_writer = csv.writer(fd)

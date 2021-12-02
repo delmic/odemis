@@ -672,8 +672,8 @@ def ExtractThetaList(data):
     # Theoretically, the values are within the range [90, 90] for φ = 90° and φ = 180°, given that the slit is
     # close and focused on the center of the mirror. For displaying reasons, we display the angles from
     # negative (for φ = 180°) to positive (for φ = 90°) angle values.
-    theta_neg = numpy.negative(theta[:holeval])
-    theta_pos = theta[holeval::]
+    theta_neg = -theta[:holeval]
+    theta_pos = theta[holeval:]
     theta = numpy.concatenate((theta_neg, theta_pos), axis=0)
 
     # Uses the precomputed mask to set NaN to the positions that cannot be read from the detector.

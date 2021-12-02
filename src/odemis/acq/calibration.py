@@ -367,9 +367,10 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
 
 
 def remove_nan(x, y):
-    """Removes NaN values from the angle list and updates the spectrum to have the same length"""
-    filtered = [(xv, yv) for xv, yv in zip(x, y) if not math.isnan(xv)]
-    return [math.degrees(f[0]) for f in filtered], [math.degrees(f[1]) for f in filtered]
+    """Removes NaN values from the angle list and updates the spectrum to have the same length."""
+    x = numpy.array(x)
+    not_nan_mask = ~ numpy.isnan(x)
+    return x[not_nan_mask], y[not_nan_mask]
 
 
 def write_trigger_delay_csv(filename, trig_delays):

@@ -164,6 +164,7 @@ class ViewPortController(object):
         finally:
             wx.CallAfter(parent.Thaw)
 
+    @call_in_wx_main
     def _on_visible_views(self, visible_views):
         """ This method is called when the visible views in the data model change """
 

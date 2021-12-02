@@ -717,7 +717,7 @@ class TestHDF5IO(unittest.TestCase):
                      model.MD_BINNING: (1, 1),  # px, px
                      model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
                      model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(sizes[1][-1])],
-                     model.MD_THETA_LIST: [math.degrees(i) for i in range(sizes[1][-2])],
+                     model.MD_THETA_LIST: numpy.linspace(-1.5, 1.4, sizes[1][-2]),
                      model.MD_OUT_WL: "pass-through",
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_INTEGRATION_COUNT: 1,
@@ -778,7 +778,7 @@ class TestHDF5IO(unittest.TestCase):
                 self.assertEqual(im.metadata[model.MD_WL_LIST], wl)
             if model.MD_THETA_LIST in md:
                 thetal = md[model.MD_THETA_LIST]
-                self.assertListEqual(im.metadata[model.MD_THETA_LIST], thetal)
+                numpy.testing.assert_almost_equal(im.metadata[model.MD_THETA_LIST], thetal)
             if model.MD_INTEGRATION_COUNT in md:
                 self.assertEqual(im.metadata[model.MD_INTEGRATION_COUNT], md[model.MD_INTEGRATION_COUNT])
 
