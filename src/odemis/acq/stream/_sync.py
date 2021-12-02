@@ -1258,8 +1258,13 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
             leech_nimg, leech_time_pimg = self._startLeeches(img_time, tot_num, shape)
 
-            n = 0  # number of images acquired so far
+            logging.debug("Scanning resolution is %s and scale %s",
+                          self._emitter.resolution.value,
+                          self._emitter.scale.value)
 
+            last_ccd_update = 0
+            start_t = time.time()
+            n = 0  # number of images acquired so far
             for pol_idx, pol_pos in enumerate(pos_polarizations):
                 if pol_pos is not None:
                     logging.debug("Acquiring with the polarization position %s", pol_pos)
@@ -1292,9 +1297,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     self._emitter.translation.value = cptrans
                     logging.debug("E-beam spot after drift correction: %s",
                                   self._emitter.translation.value)
-                    logging.debug("Scanning resolution is %s and scale %s",
-                                  self._emitter.resolution.value,
-                                  self._emitter.scale.value)
 
                     # time left for leeches
                     leech_time_left = (tot_num - n + 1) * leech_time_pimg
@@ -1311,10 +1313,15 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         self._acquireImage(n, px_idx, img_time, sem_time, sub_pxs,
                                            tot_num, leech_nimg, extra_time, future)
                         # Live update the setting stream with the new data
-                        try:
-                            self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
-                        except Exception:
-                            logging.exception("Failed to update CCD live view")
+                        # When there is integration, we always pass the data, as
+                        # the number of images received matters.
+                        if integration_count > 1 or time.time() > last_ccd_update + self._live_update_period:
+                            try:
+                                self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
+                            except Exception:
+                                logging.exception("Failed to update CCD live view")
+                            last_ccd_update = time.time()
+
                         # integrate the acquired images one after another
                         for stream_idx, das in enumerate(self._acq_data):
                             if self._img_intor[stream_idx] is None:
@@ -1332,6 +1339,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     self._img_intor = [None for _ in self._streams]
                     self._acq_data = [[] for _ in self._streams]  # delete acq_data to use less RAM
+
+            dur = time.time() - start_t
+            logging.info("Acquisition completed in %g s -> %g s/frame", dur, dur / n)
 
             # acquisition done!
             for s, sub in zip(self._streams, self._subscribers):
