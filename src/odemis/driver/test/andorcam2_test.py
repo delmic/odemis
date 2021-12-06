@@ -42,7 +42,7 @@ CLASS_SIM = andorcam2.FakeAndorCam2
 CLASS = andorcam2.AndorCam2
 
 KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
-              # emgains=[[10e6, 1, 50], [1e6, 1, 150]]
+              # emgains=[[10e6, 1, 50], [1e6, 1, 150]]  # For EM-CCDs
               )
 KWARGS_SIM = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
                   emgains=[[10e6, 1, 50], [1e6, 1, 150]],

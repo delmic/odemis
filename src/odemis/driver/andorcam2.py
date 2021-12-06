@@ -796,7 +796,7 @@ class AndorCam2(model.DigitalCamera):
         self.request_hw = []
 
         self.data = AndorCam2DataFlow(self)
-        # Convenience event for the user to connect and fire. It also a way to
+        # Convenience event for the user to connect and fire. It is also a way to
         # indicate that the DataFlow supports synchronization.
         self.softwareTrigger = model.Event()
 
@@ -2021,7 +2021,7 @@ class AndorCam2(model.DigitalCamera):
 
     def set_trigger(self, sync):
         """
-        Specify of the acquisition should be synchronized or not.
+        Specify if the acquisition should be synchronized or not.
         sync (bool): True if should be triggered
         """
         self._synchronized = sync
@@ -2111,7 +2111,7 @@ class AndorCam2(model.DigitalCamera):
         """
         Block until a trigger is received, or a stop message.
         Note: it expects that the acquisition is running. Also, if some triggers
-        were previously received, it'll use immediately the oldest one.
+        were recently received, it'll use the oldest once first.
         return (bool): True if needs to stop, False if a trigger is received
         raise TerminationRequested: if a terminate message was received
         """
@@ -2510,7 +2510,7 @@ class AndorCam2DataFlow(model.DataFlow):
     def start_generate(self):
         comp = self.component()
         if comp is None:
-            # Camera has been deleted, it's all fine, this DataFlow be gone soon too
+            # Camera has been deleted, it's all fine, this DataFlow will be gone soon too
             return
 
         comp.start_generate()
@@ -2518,7 +2518,7 @@ class AndorCam2DataFlow(model.DataFlow):
     def stop_generate(self):
         comp = self.component()
         if comp is None:
-            # Camera has been deleted, it's all fine, this DataFlow be gone soon too
+            # Camera has been deleted, it's all fine, this DataFlow will be gone soon too
             return
 
         comp.stop_generate()
@@ -2528,7 +2528,7 @@ class AndorCam2DataFlow(model.DataFlow):
         Synchronize the acquisition on the given event. Every time the event is
           triggered, the DataFlow will start a new acquisition.
         Behaviour is unspecified if the acquisition is already running.
-        (Currently it will automatically switch on the next image)
+        (Currently it will automatically be adjusted after the current image)
         event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         The DataFlow can be synchronize only with one Event at a time.
