@@ -31,7 +31,7 @@ from unittest.case import skip
 
 from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchronized
 
-
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
@@ -41,12 +41,14 @@ TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
 CLASS_SIM = andorcam2.FakeAndorCam2
 CLASS = andorcam2.AndorCam2
 
+KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
+              # emgains=[[10e6, 1, 50], [1e6, 1, 150]]  # For EM-CCDs
+              )
 KWARGS_SIM = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
                   emgains=[[10e6, 1, 50], [1e6, 1, 150]],
                   image="andorcam2-fake-clara.tiff")
-#                  image="andorcam2-fake-spots.h5")
-KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
-              emgains=[[10e6, 1, 50], [1e6, 1, 150]])
+KWARGS_SIM_SW_TRIG = KWARGS_SIM.copy()
+KWARGS_SIM_SW_TRIG["sw_trigger"] = True
 
 if TEST_NOHW:
     CLASS = CLASS_SIM
@@ -88,13 +90,20 @@ class TestAndorCam2(VirtualTestCam, unittest.TestCase):
 #@skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
-    Test the synchronizedOn(Event) interface, using the fake SEM
+    Test the synchronizedOn(Event) interface.
+    If the test is using the simulator, that's using the legacy method start/stop.
     """
     camera_type = CLASS
     camera_kwargs = KWARGS
 
 
+class TestSynchronizedSimSWTrigger(VirtualTestSynchronized, unittest.TestCase):
+    """
+    Test the synchronizedOn(Event) interface, using the fake camera with software trigger
+    """
+    camera_type = CLASS_SIM
+    camera_kwargs = KWARGS_SIM_SW_TRIG
+
+
 if __name__ == '__main__':
     unittest.main()
-
-# vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
