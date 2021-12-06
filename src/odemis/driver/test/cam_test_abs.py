@@ -137,6 +137,11 @@ class VirtualTestCam(with_metaclass(ABCMeta, object)):
 
         ttemp = self.camera.targetTemperature.value
         self.assertTrue(-300 < ttemp < 100)
+        self.camera.targetTemperature.value = self.camera.targetTemperature.range[1]
+        self.assertEqual(self.camera.targetTemperature.value, self.camera.targetTemperature.range[1])
+
+        time.sleep(0.1)
+
         self.camera.targetTemperature.value = self.camera.targetTemperature.range[0]
         self.assertEqual(self.camera.targetTemperature.value, self.camera.targetTemperature.range[0])
 
