@@ -456,8 +456,9 @@ def _doCryoSwitchAlignPosition(future, align, target):
                 run_reference(future, align)
 
             # Add the sub moves to perform the loading move
-            sub_moves.append((align, filter_dict({'y'}, target_pos[LOADING])))
-            sub_moves.append((align, filter_dict({'x', 'z'}, target_pos[LOADING])))
+            # NB: moving Z axis downward first so when aligner Y move (
+            # compensating 3DOF Y&Z) upwards it doesn't hit the 5DOF
+            sub_moves = [{'x'}, {'z'}, {'y'}]
 
         elif target in (ALIGNMENT, IMAGING):
             if current_label is UNKNOWN:
@@ -465,14 +466,14 @@ def _doCryoSwitchAlignPosition(future, align, target):
                     target_name))
 
             # Add the sub moves to perform the imaging/alignment move
-            sub_moves.append((align, filter_dict({'x', 'z'}, target_pos[target])))
-            sub_moves.append((align, filter_dict({'y'}, target_pos[target])))
+            # Moving Y axis first downwards so Z move upwards it doesn't hit the 5DOF stage
+            sub_moves = [{'y'}, {'z'}, {'x'}]
         else:
             raise ValueError("Unknown target value %s." % target)
 
         logging.info("Starting aligner movement from {} -> {}...".format(current_name, target_name))
-        for component, sub_move in sub_moves:
-            run_sub_move(future, component, sub_move)
+        for sub_move in sub_moves:
+            run_sub_move(future, align, filter_dict(sub_move, target_pos[target]))
     except CancelledError:
         logging.info("_doCryoSwitchAlignPosition cancelled.")
     except Exception:
@@ -540,10 +541,8 @@ def _doCryoSwitchSamplePosition(future, target):
                 if not required_axes.issubset(stage_position.keys()):
                     raise ValueError("Stage %s metadata does not have all required axes %s." % (list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
             current_pos = stage.position.value
-            # To hold the ordered sub moves list
-            sub_moves = []
-            # To hold the sub moves to run if the ordered sub moves failed
-            fallback_submoves = []
+            # To hold the sub moves to run if normal ordering failed
+            fallback_submoves = [{'x', 'y', 'z'}, {'rx', 'rz'}]
 
             current_label = getCurrentPositionLabel(current_pos, stage)
             current_name = POSITION_NAMES[current_label]
@@ -561,18 +560,22 @@ def _doCryoSwitchSamplePosition(future, target):
                     cryoSwitchAlignPosition(LOADING).result()
                     run_reference(future, stage)
 
-                fallback_submoves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos[LOADING])))
-                fallback_submoves.append((stage, filter_dict({'rx', 'rz'}, target_pos[LOADING])))
                 # Add the sub moves to perform the loading move
-                sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos[LOADING])))
                 if current_label is UNKNOWN and not stage_referenced:
                     # After referencing the stage could move near the maximum axes range,
                     # and moving single axes may result in an invalid/reachable position error,
-                    # so all axes will moved together for this special case.
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos[LOADING])))
+                    # so all linear axes will be moved together for this special case.
+                    sub_moves = [{'x', 'y', 'z'}, {'rx', 'rz'}]
                 else:
-                    sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos[LOADING])))
-                    sub_moves.append((stage, filter_dict({'z'}, target_pos[LOADING])))
+                    # Notes on the movement on the typical case:
+                    # - Moving each linear axis separately to be easily trackable by the user from the chamber cam.
+                    # - Moving X first is a way to move it to a safe position, as it's not affected by the rx
+                    # (and rz is typically always 0). Moreover, X is the largest move, and so it'll be
+                    # "around" the loading position.
+                    # - The X/Y/Z movement is in the Rx referential. So if the rx is tilted (eg, we are in IMAGING),
+                    # and Y/Z are far from the pivot point, we have a good chance of hitting something.
+                    # Moving along X should always be safe (as Rx is not affected by this axis position).
+                    sub_moves = [{'x'}, {'y'}, {'z'}, {'rx', 'rz'}]
 
             elif target in (ALIGNMENT, IMAGING, SEM_IMAGING, COATING):
                 if current_label is LOADING:
@@ -582,17 +585,16 @@ def _doCryoSwitchSamplePosition(future, target):
                 elif current_label is UNKNOWN:
                     raise ValueError(f"Unable to move to {target_name} while current position is unknown.")
 
-                fallback_submoves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos[target])))
-                fallback_submoves.append((stage, filter_dict({'rx', 'rz'}, target_pos[target])))
-                # Add the sub moves to perform the imaging/coating move
+                # Add the sub moves to perform the imaging/coating/alignment/sem_imaging moves
+                # Essentially the same/reverse as for going to LOADING: do the small movements first near
+                # the loading position, and end with the large x move to get close to the pole-piece.
+                # TODO: test if coating position needs a different ordering
                 if current_label == LOADING:
-                    # As moving from loading position requires re-referencing the stage, move all axes together to
-                    # prevent invalid/reachable position error
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos[target])))
+                    # As moving from loading position requires re-referencing the stage, move linked axes (y & z)
+                    # together to prevent invalid/reachable position error
+                    sub_moves = [{'y', 'z'}, {'rx', 'rz'}, {'x'}]
                 else:
-                    sub_moves.append((stage, filter_dict({'z'}, target_pos[target])))
-                    sub_moves.append((stage, filter_dict({'x', 'y'}, target_pos[target])))
-                sub_moves.append((stage, filter_dict({'rx', 'rz'}, target_pos[target])))
+                    sub_moves = [{'z'}, {'y'}, {'rx', 'rz'}, {'x'}]
             else:
                 raise ValueError(f"Unsupported move to target {target_name}")
 
@@ -601,18 +603,20 @@ def _doCryoSwitchSamplePosition(future, target):
                 # Park aligner to safe position before any movement
                 if not _isNearPosition(align.position.value, align_deactive, align.axes):
                     cryoSwitchAlignPosition(LOADING).result()
-                for component, sub_move in sub_moves:
-                    logging.debug("Moving %s to %s.", component.name, sub_move)
-                    run_sub_move(future, component, sub_move)
+                for sub_move in sub_moves:
+                    sub_move_dict = filter_dict(sub_move, target_pos[target])
+                    logging.debug("Moving %s to %s.", stage.name, sub_move_dict)
+                    run_sub_move(future, stage, sub_move_dict)
                 if target in (IMAGING, ALIGNMENT):
                     cryoSwitchAlignPosition(target).result()
             except IndexError:
                 # In case the required movement is invalid/unreachable with the smaract 5dof stage
                 # Move all linear axes first then rotational ones using the fallback_submoves
                 logging.debug("This move {} is unreachable, trying to move all axes at once...".format(sub_move))
-                for component, sub_move in fallback_submoves:
-                    logging.debug("Moving %s to %s.", component.name, sub_move)
-                    run_sub_move(future, component, sub_move)
+                for sub_move in fallback_submoves:
+                    sub_move_dict = filter_dict(sub_move, target_pos[target])
+                    logging.debug("Moving %s to %s.", stage.name, sub_move)
+                    run_sub_move(future, stage, sub_move_dict)
 
         elif role == "meteor":
             # get the focus and stage components 
