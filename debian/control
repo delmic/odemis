@@ -24,7 +24,7 @@ Depends: ${shlibs:Depends},
          ${python3:Depends},
          ${sphinxdoc:Depends},
          odemis-doc,
-         cgroup-bin,
+         cgroup-tools,
 # just to take screenshots during bug report
          graphicsmagick,
 # currently authbind is only needed for the auto probing of nfpm driver

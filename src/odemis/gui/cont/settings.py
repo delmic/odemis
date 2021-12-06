@@ -810,7 +810,7 @@ class MirrorSettingsController(SettingsBarController):
         self.panel_center = SettingsPanel(self.panel.pnl_mode_btns)
         self.panel_center.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
         self.panel.pnl_mode_btns.GetSizer().Add(self.panel_center, 1, border=5,
-                                            flag=wx.LEFT | wx.RIGHT | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+                                            flag=wx.LEFT | wx.RIGHT | wx.EXPAND)
 
         entry_mirrorPosition = create_setting_entry(self.panel_center, "Mirror type",
                                                     mirror_lens.configuration,
@@ -852,7 +852,7 @@ class StreakCamAlignSettingsController(SettingsBarController):
         self.panel_streak = SettingsPanel(self.panel.pnl_streak)
         self.panel_streak.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
         self.panel.pnl_streak.GetSizer().Add(self.panel_streak, 1, border=5,
-                                             flag=wx.BOTTOM | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL)
+                                             flag=wx.BOTTOM | wx.EXPAND)
 
         entry_timeRange = create_setting_entry(self.panel_streak, "Time range",
                                                self.streak_unit.timeRange,

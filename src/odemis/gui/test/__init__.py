@@ -112,13 +112,13 @@ class GuiTestApp(wx.App):
 
             for item in menu_bar.GetMenu(0).GetMenuItems():
 
-                if item.Label == "Inspect":
+                if item.ItemLabelText == "Inspect":
                     def inspect(event):
                         from wx.lib import inspection
                         inspection.InspectionTool().Show()
 
                     self.test_frame.Bind(wx.EVT_MENU, inspect, id=item.GetId())
-                elif item.Label == "Quit":
+                elif item.ItemLabelText == "Quit":
                     def close(event):
                         self.test_frame.Close()
 
