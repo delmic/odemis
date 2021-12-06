@@ -1133,10 +1133,15 @@ class Scanner(model.Emitter):
             unit=voltage_info["unit"],
             setter=self._setVoltage
         )
+
+        blanker_choices = {True: 'blanked', False: 'unblanked'}
+        if has_detector:
+            blanker_choices[None] = 'auto'
+
         self.blanker = model.VAEnumerated(
-            None,
+            None if has_detector else self.parent.beam_is_blanked(),
             setter=self._setBlanker,
-            choices={True: 'blanked', False: 'unblanked', None: 'auto'})
+            choices=blanker_choices)
 
         spotsize_info = self.parent.spotsize_info()
         self.spotSize = model.FloatContinuous(
