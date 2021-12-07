@@ -1089,7 +1089,7 @@ def draw_scale(value_range, client_size, orientation, tick_spacing,
         else:
             max_width = max(max_width, lbl_width)
             lpos = pos + (lbl_height // 2)
-            lpos = max(min(lpos, client_size[1]), 2)
+            lpos = max(min(lpos, client_size[1]), lbl_height)
 
             if abs(prev_lpos - lpos) > 20 or i == 0 or i == len(tick_list):
                 if mirror:
