@@ -474,7 +474,6 @@ class VigilantAttributeProxy(VigilantAttributeBase, Pyro4.Proxy):
                                         self._global_name)
                         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
                     self._commands.send(b"STOP")
-                    self._thread.join(1)
                 self._commands.close()
             # self._ctx.term()
         except Exception:
