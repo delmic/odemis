@@ -651,25 +651,28 @@ class ConvertStage(model.Actuator):
                 logging.info("Axes %s of dependency are missing from .speed, so not providing it",
                              set(axes) - speed_axes)
 
+    def _get_rot_matrix(self, invert=False):
+        rotation = self._metadata[model.MD_ROTATION_COR]
+        if invert:
+            rotation *= -1
+
+        return numpy.array(
+                     [[math.cos(rotation), -math.sin(rotation)],
+                      [math.sin(rotation), math.cos(rotation)]])
+
     def _updateConversion(self):
         translation = self._metadata[model.MD_POS_COR]
-        rotation = self._metadata[model.MD_ROTATION_COR]
         scale = self._metadata[model.MD_PIXEL_SIZE_COR]
         # Rotation * scaling for convert back/forth between exposed and dep
-        self._Mtodep = numpy.array(
-                     [[math.cos(rotation) * scale[0], -math.sin(rotation) * scale[0]],
-                      [math.sin(rotation) * scale[1], math.cos(rotation) * scale[1]]])
-
-        self._Mfromdep = numpy.array(
-                     [[math.cos(-rotation) / scale[0], -math.sin(-rotation) / scale[1]],
-                      [math.sin(-rotation) / scale[0], math.cos(-rotation) / scale[1]]])
+        self._Mtodep = self._get_rot_matrix() * scale
+        self._Mfromdep = self._get_rot_matrix(invert=True) / scale
 
         # Offset between origins of the coordinate systems
-        self._O = numpy.array([translation[0], translation[1]], dtype=numpy.float)
+        self._O = numpy.array([t for t in translation], dtype=numpy.float)
 
     def _convertPosFromdep(self, pos_dep, absolute=True):
         # Object lens position vector
-        Q = numpy.array([pos_dep[0], pos_dep[1]], dtype=numpy.float)
+        Q = numpy.array([po for po in pos_dep], dtype=numpy.float)
         # Transform to coordinates in the reference frame of the sample stage
         p = self._Mfromdep.dot(Q)
         if absolute:
@@ -678,7 +681,7 @@ class ConvertStage(model.Actuator):
 
     def _convertPosTodep(self, pos, absolute=True):
         # Sample stage position vector
-        P = numpy.array([pos[0], pos[1]], dtype=numpy.float)
+        P = numpy.array([po for po in pos], dtype=numpy.float)
         if absolute:
             P += self._O
         # Transform to coordinates in the reference frame of the objective stage
@@ -716,27 +719,31 @@ class ConvertStage(model.Actuator):
         """
         update the referenced VA
         """
-        refd = {}  # str (axes name) -> boolean (is referenced)
-        for ax, ad in self._axes_dep.items():
-            if ad in dep_refd:
-                refd[ax] = dep_refd[ad]
+        refd = {
+            ax: dep_refd[ad] for ax, ad in self._axes_dep.items() if ad in dep_refd
+        }
 
         self.referenced._set_value(refd, force_write=True)
+
+    def _get_pos_vector(self, pos_val, absolute=True):
+        """ Convert position dict into dependant axes position dict"""
+        if absolute:
+            cpos = self.position.value
+            vpos = pos_val.get("x", cpos["x"]), pos_val.get("y", cpos["y"])
+        else:
+            vpos = pos_val.get("x", 0), pos_val.get("y", 0)
+        vpos_dep = self._convertPosTodep(vpos, absolute=absolute)
+        return {self._axes_dep["x"]: vpos_dep[0], self._axes_dep["y"]: vpos_dep[1]}
 
     @isasync
     def moveRel(self, shift, **kwargs):
         """
         **kwargs: Mostly there to support "update" argument
         """
-        # shift is a vector, so relative conversion
-        vshift = shift.get("x", 0), shift.get("y", 0)
-        vshift_dep = self._convertPosTodep(vshift, absolute=False)
-
-        shift_dep = {self._axes_dep["x"]: vshift_dep[0],
-                       self._axes_dep["y"]: vshift_dep[1]}
+        # pos_val is a vector, so relative conversion
+        shift_dep = self._get_pos_vector(shift, absolute=False)
         logging.debug("converted relative move from %s to %s", shift, shift_dep)
-        f = self._dependency.moveRel(shift_dep, **kwargs)
-        return f
+        return self._dependency.moveRel(shift_dep, **kwargs)
 
     @isasync
     def moveAbs(self, pos, **kwargs):
@@ -744,15 +751,9 @@ class ConvertStage(model.Actuator):
         **kwargs: Mostly there to support "update" argument
         """
         # pos is a position, so absolute conversion
-        cpos = self.position.value
-        vpos = pos.get("x", cpos["x"]), pos.get("y", cpos["y"])
-        vpos_dep = self._convertPosTodep(vpos)
-
-        pos_dep = {self._axes_dep["x"]: vpos_dep[0],
-                     self._axes_dep["y"]: vpos_dep[1]}
+        pos_dep = self._get_pos_vector(pos)
         logging.debug("converted absolute move from %s to %s", pos, pos_dep)
-        f = self._dependency.moveAbs(pos_dep, **kwargs)
-        return f
+        return self._dependency.moveAbs(pos_dep, **kwargs)
 
     def stop(self, axes=None):
         self._dependency.stop()
