@@ -642,7 +642,10 @@ class LocalizationTab(Tab):
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
         :param pos: (dict str->float or None) updated position of the stage
         """
-        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[IMAGING, FM_IMAGING, SEM_IMAGING])
+        if self.main_data.role == "enzel":
+            guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[IMAGING])
+        elif self.main_data.role == "meteor":
+            guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[FM_IMAGING, SEM_IMAGING])
 
     def _on_stream_update(self, updated):
         """
@@ -2426,6 +2429,7 @@ class CryoChamberTab(Tab):
             self._end_pos = self._start_pos
             # Show current position of the stage via the progress bar
             self._stage.position.subscribe(self._update_progress_bar, init=False)
+            self._stage.position.subscribe(self._on_stage_pos)
             # get the stage and its meta data
             stage_metadata = self._stage.getMetadata()
             try:
@@ -2728,7 +2732,8 @@ class CryoChamberTab(Tab):
             self._enable_movement_controls()
             self._control_warning_msg()
         elif self._role == 'enzel':
-            pass
+            # We want to keep advanced panel enabled/disabled on stage position
+            self._enable_movement_controls(check_advanced=False)
 
     def _control_warning_msg(self):
         # show/hide the warning msg
@@ -2774,17 +2779,17 @@ class CryoChamberTab(Tab):
             self.position_btns[SEM_IMAGING].SetValue(current_pos_label == SEM_IMAGING)
             self.position_btns[FM_IMAGING].SetValue(current_pos_label == FM_IMAGING)
 
-    def _enable_movement_controls(self):
+    def _enable_movement_controls(self, check_advanced=True):
         """
         Enable/disable chamber move controls (position and stage) based on current move
-        :param cancelled: (bool) if the move is cancelled
         """
         # Get current movement (including unknown and on the path)
         self._current_position = getCurrentPositionLabel(self._stage.position.value, self._stage)
-        # Enable stage advanced controls on milling, only for enzel
-        if self._role == 'enzel':
-            self._enable_advanced_controls(True) if self._current_position is MILLING else self._enable_advanced_controls(False)
         self._enable_position_controls(self._current_position)
+        # Enable stage advanced controls on sem imaging
+        if self._role == 'enzel' and check_advanced:
+            self._enable_advanced_controls(True) if self._current_position is SEM_IMAGING else self._enable_advanced_controls(
+            False)
 
     def _enable_position_controls(self, current_position=None):
         """
