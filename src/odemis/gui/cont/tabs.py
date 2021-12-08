@@ -2432,10 +2432,7 @@ class CryoChamberTab(Tab):
             self._stage.position.subscribe(self._on_stage_pos)
             # get the stage and its meta data
             stage_metadata = self._stage.getMetadata()
-            try:
-                self.ion_to_sample = stage_metadata[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
-            except KeyError:
-                raise ValueError('The stage is missing an ION_BEAM_TO_SAMPLE_ANGLE metadata.')
+
             # Define axis connector to link milling angle to UI float ctrl
             self.milling_connector = AxisConnector('rx', self._stage, panel.ctrl_rx, pos_2_ctrl=self._milling_angle_changed,
                                                 ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
