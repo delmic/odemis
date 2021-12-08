@@ -2460,6 +2460,21 @@ class CryoChamberTab(Tab):
                                 self.panel.stage_align_btn_m_aligner_y: ("y", -1),
                                 self.panel.stage_align_btn_p_aligner_z: ("z", 1),
                                 self.panel.stage_align_btn_m_aligner_z: ("z", -1)}
+            self.btn_toggle_icons = {
+                self.panel.btn_switch_loading: ["icon/ico_eject_orange.png", "icon/ico_eject_green.png"],
+                self.panel.btn_switch_imaging: ["icon/ico_imaging_orange.png", "icon/ico_imaging_green.png"],
+                self.panel.btn_switch_zero_tilt_imaging: ["icon/ico_sem_orange.png", "icon/ico_sem_green.png"],
+                self.panel.btn_switch_align: ["icon/ico_lens_orange.png", "icon/ico_lens_green.png"],
+                self.panel.btn_switch_coating: ["icon/ico_coating_orange.png", "icon/ico_coating_green.png"]}
+            # Check stage FAV positions in its metadata, and store them in respect to their movement
+            if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
+                raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE and FAV_POS_COATING metadata.')
+            self.target_position_metadata = {LOADING: stage_metadata[model.MD_FAV_POS_DEACTIVE],
+                                             IMAGING: stage_metadata[model.MD_FAV_POS_ACTIVE],
+                                             ALIGNMENT: stage_metadata[model.MD_FAV_POS_ALIGN],
+                                             SEM_IMAGING: stage_metadata[model.MD_FAV_POS_SEM_IMAGING],
+                                             COATING: stage_metadata[model.MD_FAV_POS_COATING], }
+
             # hide meteor buttons
             panel.btn_switch_sem_imaging.Hide()
             panel.btn_switch_fm_imaging.Hide()
@@ -2475,9 +2490,6 @@ class CryoChamberTab(Tab):
                                                                         ctrl_2_va=self._btn_show_advaned_toggled,
                                                                         va_2_ctrl=self._on_show_advanced)
 
-            self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
-                              MILLING: self.panel.btn_switch_milling, COATING: self.panel.btn_switch_coating}
-
             # Check stage FAV positions in its metadata, and store them in respect to their movement
             if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
                 raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE and FAV_POS_COATING metadata.')
@@ -2485,15 +2497,11 @@ class CryoChamberTab(Tab):
                                             IMAGING: stage_metadata[model.MD_FAV_POS_ACTIVE],
                                             COATING: stage_metadata[model.MD_FAV_POS_COATING], }
 
-            self.btn_toggle_icons = {
-            self.panel.btn_switch_loading: ["icon/ico_eject_orange.png", "icon/ico_eject_green.png"],
-            self.panel.btn_switch_imaging: ["icon/ico_imaging_orange.png", "icon/ico_imaging_green.png"],
-            self.panel.btn_switch_milling: ["icon/ico_milling_orange.png", "icon/ico_milling_green.png"],
-            self.panel.btn_switch_coating: ["icon/ico_coating_orange.png", "icon/ico_coating_green.png"]}
             # Event binding for tab controls
             panel.btn_switch_loading.Bind(wx.EVT_BUTTON, self._on_switch_btn)
             panel.btn_switch_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-            panel.btn_switch_milling.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.btn_switch_zero_tilt_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            panel.btn_switch_align.Bind(wx.EVT_BUTTON, self._on_switch_btn)
             panel.btn_switch_coating.Bind(wx.EVT_BUTTON, self._on_switch_btn)
             panel.stage_align_btn_p_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
             panel.stage_align_btn_m_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
@@ -2506,7 +2514,7 @@ class CryoChamberTab(Tab):
             # Determine and show current position of the stage
             self._current_position, self._target_position = None, None
             self._enable_movement_controls()
-            if self._current_position in self.position_btns.keys():
+            if self._current_position in self.position_btns:
                 pos_button = next(button for pos, button in self.position_btns.items() if pos == self._current_position)
                 self._toggle_switch_buttons(pos_button)
             self._show_warning_msg(None)
@@ -2550,8 +2558,8 @@ class CryoChamberTab(Tab):
             # hide some of enzel widgets
             panel.btn_switch_loading.Hide()
             panel.btn_switch_imaging.Hide()
-            panel.btn_switch_milling.Hide()
             panel.btn_switch_coating.Hide()
+            panel.btn_switch_align.Hide()
             panel.lbl_milling_angle.Hide()
             panel.btn_switch_advanced.Hide()
             panel.ctrl_rx.Hide()
@@ -2754,12 +2762,12 @@ class CryoChamberTab(Tab):
         if self._target_position is not None:
             current_label = POSITION_NAMES[self._current_position]
             target_label = POSITION_NAMES[self._target_position]
-            txt_warning = "Stage stopped between {} and {} positions".format(current_label, target_label)
-            # self._show_warning_msg(txt_warning)
             self._tab_panel.Layout()
             self._target_position = None
             self._current_position = None
-            return txt_warning
+            return "Stage stopped between {} and {} positions".format(
+                current_label, target_label
+            )
 
     def _toggle_switch_buttons(self, currently_pressed=None):
         """
@@ -2785,8 +2793,7 @@ class CryoChamberTab(Tab):
         self._enable_position_controls(self._current_position)
         # Enable stage advanced controls on sem imaging
         if self._role == 'enzel' and check_advanced:
-            self._enable_advanced_controls(True) if self._current_position is SEM_IMAGING else self._enable_advanced_controls(
-            False)
+            self._enable_advanced_controls(self._current_position == SEM_IMAGING)
 
     def _enable_position_controls(self, current_position=None):
         """
@@ -2794,12 +2801,13 @@ class CryoChamberTab(Tab):
         """
         if self._role == 'enzel':
             # Define which button to disable in respect to the current move
-            disable_buttons = {LOADING: MILLING, IMAGING: None, MILLING: COATING, COATING: MILLING, LOADING_PATH: MILLING}
+            disable_buttons = {LOADING: (), IMAGING: (), ALIGNMENT: (COATING, SEM_IMAGING), COATING: (ALIGNMENT, SEM_IMAGING),
+                               SEM_IMAGING: (COATING,), LOADING_PATH: (ALIGNMENT, COATING, SEM_IMAGING)}
             for movement, button in self.position_btns.items():
                 if current_position == UNKNOWN:
                     # Only enable loading button when the move is unknown
                     button.Enable() if movement == LOADING else button.Disable()
-                elif movement == disable_buttons[current_position]:
+                elif movement in disable_buttons[current_position]:
                     button.Disable()
                 else:
                     button.Enable()
@@ -2986,9 +2994,11 @@ class CryoChamberTab(Tab):
         if self._role == 'enzel':
             # target_position metadata has the end positions for all movements except milling
             if self._target_position in self.target_position_metadata.keys():
-                if current_position is LOADING:
-                    if not self._display_insertion_stick_warning_msg():
-                        return
+                if (
+                    current_position is LOADING
+                    and not self._display_insertion_stick_warning_msg()
+                ):
+                    return
                 self._end_pos = self.target_position_metadata[self._target_position]
 
         elif self._role == 'meteor':
@@ -2996,10 +3006,13 @@ class CryoChamberTab(Tab):
             self._end_pos = getTargetPosition(self._target_position, self._stage)
             if not self._end_pos:
                 return
-            if (self._target_position in [FM_IMAGING, SEM_IMAGING] and
-                 current_position in [LOADING, SEM_IMAGING, FM_IMAGING]):
-                if not self._display_meteor_pos_warning_msg(self._end_pos):
-                    return
+            if (
+                self._target_position in [FM_IMAGING, SEM_IMAGING]
+                and current_position in [LOADING, SEM_IMAGING, FM_IMAGING]
+                and not self._display_meteor_pos_warning_msg(self._end_pos)
+
+            ):
+                return
         return cryoSwitchSamplePosition(self._target_position)
 
     def _display_insertion_stick_warning_msg(self):
