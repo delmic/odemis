@@ -73,8 +73,8 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
     ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream, FIBStream
-from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, MILLING, LOADING_PATH, getCurrentGridLabel, FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, \
-    POSITION_NAMES
+from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel,\
+    FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, POSITION_NAMES
 from odemis.acq.move import cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
@@ -2433,24 +2433,22 @@ class CryoChamberTab(Tab):
             except KeyError:
                 raise ValueError('The stage is missing an ION_BEAM_TO_SAMPLE_ANGLE metadata.')
             # Define axis connector to link milling angle to UI float ctrl
-            self.milling_connector = AxisConnector('rx', self._stage, panel.ctrl_milling, pos_2_ctrl=self._milling_angle_changed,
+            self.milling_connector = AxisConnector('rx', self._stage, panel.ctrl_rx, pos_2_ctrl=self._milling_angle_changed,
                                                 ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
             # Set the milling angle range according to rx axis range
             try:
                 rx_range = self._stage.axes['rx'].range
+                panel.ctrl_rx.SetValueRange(*(math.degrees(r) for r in rx_range))
+                # Default value for milling angle, will be used to store the angle value out of milling position
+                rx_value = self._stage.position.value['rx']
+                self.panel.ctrl_rx.Value = readable_str(math.degrees(rx_value), unit="°", sig=3)
             except KeyError:
                 raise ValueError('The stage is missing an rx axis.')
-            milling_range = [-(self.ion_to_sample - a) for a in rx_range]
-            # sort milling range in case ion_to_sample made range values flip
-            actual_rng = sorted(milling_range)
-            ctrl_rng = max(actual_rng[0], MILLING_ANGLE_RANGE[0]), min(actual_rng[1], MILLING_ANGLE_RANGE[1])
-            if not ctrl_rng[0] <= DEFAULT_MILLING_ANGLE <= ctrl_rng[1]:
-                raise ValueError("Default milling angle %s should be within calculated milling range %s" % (DEFAULT_MILLING_ANGLE, ctrl_rng))
-            panel.ctrl_milling.SetValueRange(*(math.degrees(r) for r in ctrl_rng))
-            # Default value for milling angle, will be used to store the angle value out of milling position
-            self._prev_milling_angle = DEFAULT_MILLING_ANGLE
-            self.panel.ctrl_milling.Value = readable_str(math.degrees(DEFAULT_MILLING_ANGLE), unit="°", sig=3)
-            panel.ctrl_milling.Bind(wx.EVT_CHAR, panel.ctrl_milling.on_char)
+            panel.ctrl_rx.Bind(wx.EVT_CHAR, panel.ctrl_rx.on_char)
+
+            self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
+                                  ALIGNMENT: self.panel.btn_switch_align, COATING: self.panel.btn_switch_coating,
+                                  SEM_IMAGING: self.panel.btn_switch_zero_tilt_imaging}
             if not {model.MD_POS_ACTIVE_RANGE}.issubset(stage_metadata):
                 raise ValueError('The stage is missing POS_ACTIVE_RANGE.')
             if not {'x', 'y', 'z'}.issubset(stage_metadata[model.MD_POS_ACTIVE_RANGE]):
@@ -2555,7 +2553,7 @@ class CryoChamberTab(Tab):
             panel.btn_switch_coating.Hide()
             panel.lbl_milling_angle.Hide()
             panel.btn_switch_advanced.Hide()
-            panel.ctrl_milling.Hide()
+            panel.ctrl_rx.Hide()
             panel.pnl_advanced_align.Hide()
             # Event binding for tab controls
             panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
@@ -2827,7 +2825,7 @@ class CryoChamberTab(Tab):
         """
         Enable/disable stage advanced controls
         """
-        self.panel.ctrl_milling.Enable(enable)
+        self.panel.ctrl_rx.Enable(enable)
         self.panel.stage_align_slider_aligner.Enable(enable)
         for button in self.btn_aligner_axes.keys():
             button.Enable(enable)
@@ -2867,14 +2865,8 @@ class CryoChamberTab(Tab):
         Updates the milling control with the changed angle position.
         :param pos: (float) value of rx
        """
-        # Update the milling control only during milling
-        if self._current_position is MILLING and self._target_position is None:
-            # Only update when change from former value is significant
-            if pos - (self._prev_milling_angle + self.ion_to_sample) <= 1e-3:
-                return
-            # Milling angle, as opposed to FIB and Rx angles, is presented to the user as a positive value to avoid confusion (hence the minus sign here)
-            milling_value = -math.degrees(self.ion_to_sample - pos)
-            self.panel.ctrl_milling.Value = readable_str(milling_value, unit="°", sig=3)
+        rx_value = math.degrees(pos)
+        self.panel.ctrl_rx.Value = readable_str(rx_value, unit="°", sig=3)
 
     def _milling_ctrl_changed(self):
         """
@@ -2882,14 +2874,9 @@ class CryoChamberTab(Tab):
         Used to return the correct rx angle value.
         :return: (float or None) The calculated rx angle from the milling ctrl
         """
-        milling_angle = self._get_milling_angle_value()
-        if milling_angle is None:
+        rx_angle = self._get_milling_angle_value()
+        if rx_angle is None:
             return
-        # Store current milling angle (in case the stage moved out of milling)
-        # TODO: Check if milling angle to be stored is not the same as imaging rx
-        self._prev_milling_angle = milling_angle
-        # Note that the self.ion_to_sample angle is MINUS 38.0 degrees, and for milling the Rx value is always also negative
-        rx_angle = self.ion_to_sample + milling_angle
         return rx_angle
 
     def _get_milling_angle_value(self):
@@ -2899,7 +2886,7 @@ class CryoChamberTab(Tab):
         """
         try:
             # Read the angle value from the ctrl and convert its value to radians
-            angle_value, _, _ = decompose_si_prefix(self.panel.ctrl_milling.Value, unit="°")
+            angle_value, _, _ = decompose_si_prefix(self.panel.ctrl_rx.Value, unit="°")
             angle_value = math.radians(float(angle_value))
             return angle_value
         except ValueError as error:
