@@ -1607,8 +1607,9 @@ class FastEMAcquiController(object):
         for p in self._tab_data_model.projects.value:
             ppath = os.path.join(self.path, p.name.value)  # <acquisition date>/<project name>
             for roa in p.roas.value:
-                f = fastem.acquire(roa, ppath, self._main_data_model.multibeam, self._main_data_model.descanner,
-                                   self._main_data_model.mppc, self._main_data_model.stage)
+                f = fastem.acquire(roa, ppath, self._main_data_model.ebeam, self._main_data_model.multibeam,
+                                   self._main_data_model.descanner, self._main_data_model.mppc,
+                                   self._main_data_model.stage)
                 t = roa.estimate_acquisition_time()
                 fs[f] = t
 
