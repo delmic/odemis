@@ -1872,7 +1872,7 @@ def __init_resources():
                 </XRCED>
               </object>
               <option>1</option>
-              <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+              <flag>wxTOP|wxEXPAND</flag>
               <border>5</border>
             </object>
             <object class="sizeritem">
@@ -4618,7 +4618,7 @@ def __init_resources():
 													</object>
 													<vgap>0</vgap>
 													<hgap>5</hgap>
-													<flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
+													<flag>wxBOTTOM|wxEXPAND</flag>
 												</object>
 												<fg>#E5E5E5</fg>
 												<bg>#333333</bg>
@@ -4639,7 +4639,7 @@ def __init_resources():
 										<border>10</border>
 										<flag>wxALIGN_CENTRE</flag>
 									</object>
-									<flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
+									<flag>wxBOTTOM|wxEXPAND</flag>
 									<border>5</border>
 								</object>
 							</object>
@@ -6877,7 +6877,7 @@ def __init_resources():
                                   </XRCED>
                                 </object>
                                 <option>1</option>
-                                <flag>wxBOTTOM|wxRIGHT|wxEXPAND|wxALIGN_BOTTOM</flag>
+                                <flag>wxBOTTOM|wxRIGHT|wxEXPAND</flag>
                                 <border>10</border>
                               </object>
                               <object class="sizeritem">
