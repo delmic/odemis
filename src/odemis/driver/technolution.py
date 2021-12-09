@@ -598,7 +598,7 @@ class EBeamScanner(model.Emitter):
         self._shape = self.resolution.range[1]
         # TODO: Dwell time is currently set at a maximum of 40 micro seconds because we cannot calibrate as long as
         #  1e-4 seconds. This is because we are limited to 4000 calibration setpoints.
-        self.dwellTime = model.FloatContinuous(4e-7, (4e-7, 4e-5), unit='s')
+        self.dwellTime = model.FloatContinuous(4e-7, (4e-7, 4e-5), unit='s', setter=self._setDwellTime)
         self.pixelSize = model.TupleContinuous((4e-9, 4e-9), range=((1e-9, 1e-9), (1e-3, 1e-3)), unit='m',
                                                setter=self._setPixelSize)
         # direction of the executed scan
@@ -764,19 +764,34 @@ class EBeamScanner(model.Emitter):
         step_size_in_volts = tuple((scan_gain_volts - scan_offset_volts) / (resolution - 1))
         return step_size_in_volts
 
-    def _setPixelSize(self, pixelSize):
+    def _setDwellTime(self, dwell_time):
         """
-        Setter for the pixel size which ensures only square pixel size are entered
+        Sets the dwell time per pixel (ebeam position) in seconds. Updates the metadata on the component accordingly.
 
-        :param pixelSize (tuple):
-        :return (tuple):
+        :param dwell_time (float): The requested dwell time in seconds.
+        :return (float): The set dwell time in seconds.
         """
-        if pixelSize[0] == pixelSize[1]:
-            return pixelSize
-        else:
-            logging.warning("Non-square pixel size entered, only square pixel sizes are supported. "
-                            "Width of pixel size is used as height.")
-            return pixelSize[0], pixelSize[0]
+
+        self._metadata[model.MD_DWELL_TIME] = dwell_time
+
+        return dwell_time
+
+    def _setPixelSize(self, pixel_size):
+        """
+        Sets the pixel size in x and y in meter. Enforces square pixels based on the x value.
+        Updates the metadata on the component accordingly.
+
+        :param pixel_size (float, float): The requested pixel size in x and y in meter.
+        :return (float, float): The set pixel size in x and y in meter.
+        """
+        if pixel_size[0] != pixel_size[1]:
+            logging.warning("Non-square pixel size of %s - converting to square value of %s.",
+                            pixel_size, (pixel_size[0], pixel_size[0]))
+            pixel_size = (pixel_size[0], pixel_size[0])
+
+        self._metadata[model.MD_PIXEL_SIZE] = pixel_size
+
+        return pixel_size
 
     def _setScanDelay(self, scanDelay):
         """
