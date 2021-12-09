@@ -70,7 +70,7 @@ HW_SETTINGS_CONFIG = {
                 "scale": "log",
                 "range": (0.001, 60.0),  # Good for fluorescence microscopy
                 "type": "float",
-                "accuracy": 2,
+                "accuracy": 3,
             }),
             ("binning", {
                 "control_type": odemis.gui.CONTROL_RADIO,
@@ -182,7 +182,7 @@ HW_SETTINGS_CONFIG = {
                 "range": (1e-9, 1),
                 "scale": "log",
                 "type": "float",
-                "accuracy": 2,
+                "accuracy": 3,
                 "event": wx.EVT_SCROLL_CHANGED
             }),
             ("scale", {
@@ -233,7 +233,7 @@ HW_SETTINGS_CONFIG = {
                 "range": (1e-9, 10),
                 "scale": "log",
                 "type": "float",
-                "accuracy": 2,
+                "accuracy": 3,
                 "event": wx.EVT_SCROLL_CHANGED
             }),
             ("scale", {
@@ -274,7 +274,7 @@ HW_SETTINGS_CONFIG = {
                 "scale": "log",
                 "range": (0.001, 60.0),  # Good for fluorescence microscopy
                 "type": "float",
-                "accuracy": 2,
+                "accuracy": 3,
             }),
             ("binning", {
                 "control_type": odemis.gui.CONTROL_RADIO,
@@ -379,7 +379,7 @@ HW_SETTINGS_CONFIG = {
                 "scale": "log",
                 "range": (1e-6, 500.0),
                 "type": "float",
-                "accuracy": 2,
+                "accuracy": 3,
             }),
             ("binning", {
                 "control_type": odemis.gui.CONTROL_RADIO,
@@ -736,7 +736,7 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
                 "type": "float",
-                "accuracy": 2,
+                "accuracy": 3,
                 "tooltip": u"Readout camera exposure time.",
             }),
             ("integrationCounts", {
@@ -792,7 +792,7 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
                 "scale": "log",
                 "type": "float",
-                "accuracy": 2,
+                "accuracy": 3,
                 "tooltip": u"Optical detector (CCD) exposure time.",
             }),
             ("integrationCounts", {
