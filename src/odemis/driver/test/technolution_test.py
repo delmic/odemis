@@ -474,9 +474,13 @@ class TestEBeamScanner(unittest.TestCase):
 
         self.EBeamScanner.dwellTime.value = 0.9 * max_dwellTime
         self.assertEqual(self.EBeamScanner.dwellTime.value, 0.9 * max_dwellTime)
+        # check dwell time on VA is same as on metadata on component
+        self.assertEqual(self.EBeamScanner.getMetadata()[model.MD_DWELL_TIME], self.EBeamScanner.dwellTime.value)
 
         self.EBeamScanner.dwellTime.value = min_dwellTime
         self.assertEqual(self.EBeamScanner.dwellTime.value, min_dwellTime)
+        # check dwell time on VA is same as on metadata on component
+        self.assertEqual(self.EBeamScanner.getMetadata()[model.MD_DWELL_TIME], self.EBeamScanner.dwellTime.value)
 
         # Check if VA refuses to set limits outside allowed range
         with self.assertRaises(IndexError):
@@ -503,10 +507,14 @@ class TestEBeamScanner(unittest.TestCase):
         # Check if small pixelSize values are allowed
         self.EBeamScanner.pixelSize.value = (min_pixelSize * 1.2, min_pixelSize * 1.2)
         self.assertEqual(self.EBeamScanner.pixelSize.value, (min_pixelSize * 1.2, min_pixelSize * 1.2))
+        # check pixel size on VA is same as on metadata on component
+        self.assertEqual(self.EBeamScanner.getMetadata()[model.MD_DWELL_TIME], self.EBeamScanner.dwellTime.value)
 
         # Check if big pixelSize values are allowed
         self.EBeamScanner.pixelSize.value = (max_pixelSize * 0.8, max_pixelSize * 0.8)
         self.assertEqual(self.EBeamScanner.pixelSize.value, (max_pixelSize * 0.8, max_pixelSize * 0.8))
+        # check pixel size on VA is same as on metadata on component
+        self.assertEqual(self.EBeamScanner.getMetadata()[model.MD_PIXEL_SIZE], self.EBeamScanner.pixelSize.value)
 
         # Check if VA refuses to set limits outside allowed range
         with self.assertRaises(IndexError):
