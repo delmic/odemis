@@ -50,7 +50,7 @@ import numpy
 from scipy.linalg.lapack import get_lapack_funcs
 from scipy.linalg.misc import LinAlgError
 
-__all__ = ['qrp', 'tri_inv']
+__all__ = ['qrp', 'qlp', 'tri_inv']
 
 
 # Duplicate from scipy.linalg.misc
@@ -145,3 +145,17 @@ def qrp(a, mode='reduced'):
     q[:, mask] *= -1.
     r[mask, :] *= -1.
     return q, r
+
+
+def qlp(a, mode='reduced'):
+    """
+    Compute the ql factorization of a matrix.
+
+    Factor the matrix `a` as *ql*, where `q` is orthonormal and `l` is
+    lower-triangular. The diagonal entries of `l` are nonnegative.
+
+    For documentation see numpy.linalg.qr
+
+    """
+    q, r = qrp(numpy.flip(a), mode)
+    return numpy.flip(q), numpy.flip(r)

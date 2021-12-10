@@ -52,149 +52,34 @@ The code can be extended to include weighted estimations and/or to support
    (Vol. 2). Spie Press.
 
 """
+from __future__ import annotations
 
-from __future__ import division
-
+import math
 from abc import ABCMeta, abstractmethod
-from future.utils import with_metaclass
-import numbers
+from typing import List, Optional, Tuple, Type, TypeVar, Union
+
 import numpy
-import scipy.optimize
-import warnings
+import scipy.linalg
 from numpy.linalg import LinAlgError
-from odemis.util.linalg import qrp, tri_inv
+from odemis.util.linalg import qlp, qrp
+
+T = TypeVar("T", bound="GeometricTransform")
+
+__all__ = [
+    "to_physical_space",
+    "to_pixel_index",
+    "AffineTransform",
+    "ScalingTransform",
+    "SimilarityTransform",
+    "RigidTransform",
+]
 
 
-def _assertRotationMatrix(matrix):
-    """
-    Check if a matrix is a rotation matrix.
-
-    Parameters
-    ----------
-    matrix : array_like
-        The matrix to check.
-
-    Raises
-    ------
-    LinAlgError
-        If the supplied matrix is not a rotation matrix.
-
-    """
-    if matrix.ndim != 2:
-        raise LinAlgError('%d-dimensional array given. Array must be '
-                          'two-dimensional' % matrix.ndim)
-    m, n = matrix.shape
-    if m != n:
-        raise LinAlgError('Array must be square')
-    if not numpy.allclose(numpy.dot(matrix.T, matrix), numpy.eye(n)):
-        raise LinAlgError('Matrix is not orthogonal')
-    if not numpy.allclose(numpy.linalg.det(matrix), 1.0):
-        raise LinAlgError('Matrix is not a proper rotation matrix')
-
-
-def _rotation_matrix_from_angle(angle):
-    """
-    Returns the 2x2 rotation matrix for a given angle.
-
-    Parameters
-    ----------
-    angle : float
-        Rotation angle in radians.
-
-    Returns
-    -------
-    matrix : 2x2 array
-        Rotation matrix.
-
-    Examples
-    --------
-    >>> _rotation_matrix_from_angle(numpy.pi / 2.)
-    array([[ 0., -1.],
-           [ 1.,  0.]])
-
-    """
-    ct = numpy.cos(angle)
-    st = numpy.sin(angle)
-    return numpy.array([(ct, -st),
-                        (st, ct)])
-
-
-def _rotation_matrix_to_angle(matrix):
-    """
-    Returns the angle for a given 2x2 rotation matrix.
-
-    Parameters
-    ----------
-    matrix : 2x2 array
-        Rotation matrix.
-
-    Returns
-    ------
-    angle : float
-        Rotation angle in radians.
-
-    Raises
-    ------
-    LinAlgError
-        If the supplied matrix is not a rotation matrix.
-    NotImplementedError
-        If the supplied matrix is not of size 2x2.
-
-    Examples
-    --------
-    >>> matrix = numpy.array([(0., -1.), (1., 0.)])
-    >>> _rotation_matrix_to_angle(matrix)
-    1.5707963267948966
-
-    """
-    _assertRotationMatrix(matrix)
-    if matrix.shape != (2, 2):
-        raise NotImplementedError('Can only handle 2x2 matrices')
-    return numpy.arctan2(matrix[1, 0], matrix[0, 0])
-
-
-def _optimal_rotation(x, y):
-    """
-    Returns the optimal rotation matrix between two zero mean point sets,
-    such that |Rx-y|^2 is minimized.
-
-    Parameters
-    ----------
-    x : list of tuples
-        List of coordinates with zero mean in the source frame of reference.
-    y : list of tuples
-        List of coordinates with zero mean in the destination frame of
-        reference.
-
-    Returns
-    -------
-    matrix : 2x2 array
-        Rotation matrix.
-
-    Raises
-    ------
-    AssertionError
-        If either the source or destination point set is not zero mean.
-
-    Examples
-    --------
-    >>> x = [(1., 0.), (-1., 0.)]
-    >>> y = [(0., 2.), (0., -2.)]
-    >>> _optimal_rotation(x, y)
-    array([[ 0., -1.],
-           [ 1.,  0.]])
-
-    """
-    assert numpy.allclose(numpy.average(x, axis=0), numpy.zeros(2))
-    assert numpy.allclose(numpy.average(y, axis=0), numpy.zeros(2))
-    H = numpy.dot(numpy.transpose(x), y)
-    U, _, V = numpy.linalg.svd(H, full_matrices=False)  # H = USV (not V')
-    if numpy.linalg.det(U) * numpy.linalg.det(V) < 0.0:
-        U[:, -1] = -U[:, -1]
-    return numpy.dot(V.T, U.T)
-
-
-def to_physical_space(ji, shape=None, pixel_size=None):
+def to_physical_space(
+    ji: Union[Tuple[float, float], List[Tuple[float, float]], numpy.ndarray],
+    shape: Optional[Tuple[int, int]] = None,
+    pixel_size: Optional[Union[float, Tuple[float, float]]] = None,
+) -> numpy.ndarray:
     """
     Converts an image pixel index into a coordinate in physical space.
 
@@ -278,7 +163,7 @@ def to_physical_space(ji, shape=None, pixel_size=None):
         raise ValueError("Indices must be 2-dimensional.")
 
     xy = numpy.empty(ji.shape, dtype=float)
-    xy[..., 0] = ji[..., 1]   # map column-index `i` to x-axis
+    xy[..., 0] = ji[..., 1]  # map column-index `i` to x-axis
     xy[..., 1] = -ji[..., 0]  # map row-index `j` to y-axis
 
     if shape:
@@ -293,7 +178,11 @@ def to_physical_space(ji, shape=None, pixel_size=None):
     return xy
 
 
-def to_pixel_index(xy, shape=None, pixel_size=None):
+def to_pixel_index(
+    xy: Union[Tuple[float, float], List[Tuple[float, float]], numpy.ndarray],
+    shape: Optional[Tuple[int, int]] = None,
+    pixel_size: Optional[Union[float, Tuple[float, float]]] = None,
+) -> numpy.ndarray:
     """
     Converts a coordinate in physical space into an image pixel index.
 
@@ -352,7 +241,7 @@ def to_pixel_index(xy, shape=None, pixel_size=None):
 
     ji = numpy.empty(xy.shape, dtype=float)
     ji[..., 0] = -xy[..., 1]  # map y-axis to row-index `j`
-    ji[..., 1] = xy[..., 0]   # map x-axis to column-index `i`
+    ji[..., 1] = xy[..., 0]  # map x-axis to column-index `i`
 
     if shape:
         n, m = shape
@@ -362,64 +251,525 @@ def to_pixel_index(xy, shape=None, pixel_size=None):
     return ji
 
 
-class GeometricTransform(with_metaclass(ABCMeta, object)):
-    """Base class for geometric transformations."""
+def _assert_is_rotation_matrix(matrix: numpy.ndarray) -> None:
+    """
+    Check if a matrix is a rotation matrix.
 
-    def __init__(self, matrix=None, **kwargs):
+    Parameters
+    ----------
+    matrix : ndarray
+        The matrix to check.
+
+    Raises
+    ------
+    LinAlgError
+        If the supplied matrix is not a rotation matrix.
+
+    """
+    if matrix.ndim != 2:
+        raise LinAlgError(
+            "%d-dimensional array given. Array must be two-dimensional" % matrix.ndim
+        )
+    m, n = matrix.shape
+    if m != n:
+        raise LinAlgError("Array must be square")
+    if not numpy.allclose(numpy.dot(matrix.T, matrix), numpy.eye(n)):
+        raise LinAlgError("Matrix is not orthogonal")
+    if not numpy.allclose(numpy.linalg.det(matrix), 1.0):
+        raise LinAlgError("Matrix is not a proper rotation matrix")
+
+
+def _rotation_matrix_from_angle(angle: float) -> numpy.ndarray:
+    """
+    Returns the 2x2 rotation matrix for a given angle.
+
+    Parameters
+    ----------
+    angle : float
+        Rotation angle in radians.
+
+    Returns
+    -------
+    matrix : 2x2 array
+        Rotation matrix.
+
+    Examples
+    --------
+    >>> _rotation_matrix_from_angle(numpy.pi / 2.)
+    array([[ 0., -1.],
+           [ 1.,  0.]])
+
+    """
+    ct = numpy.cos(angle)
+    st = numpy.sin(angle)
+    return numpy.array([(ct, -st), (st, ct)])
+
+
+def _rotation_matrix_to_angle(matrix: numpy.ndarray) -> float:
+    """
+    Returns the angle for a given 2x2 rotation matrix.
+
+    Parameters
+    ----------
+    matrix : 2x2 array
+        Rotation matrix.
+
+    Returns
+    ------
+    angle : float
+        Rotation angle in radians.
+
+    Raises
+    ------
+    LinAlgError
+        If the supplied matrix is not a rotation matrix.
+    NotImplementedError
+        If the supplied matrix is not of size 2x2.
+
+    Examples
+    --------
+    >>> matrix = numpy.array([(0., -1.), (1., 0.)])
+    >>> _rotation_matrix_to_angle(matrix)
+    1.5707963267948966
+
+    """
+    _assert_is_rotation_matrix(matrix)
+    if matrix.shape != (2, 2):
+        raise NotImplementedError("Can only handle 2x2 matrices")
+    return math.atan2(matrix[1, 0], matrix[0, 0])
+
+
+def _ldlt_decomposition(a: numpy.ndarray) -> Tuple[numpy.ndarray, numpy.ndarray]:
+    """
+    LDLT decomposition of a positive definite matrix.
+
+    Return the decomposition `L * D * L.T` of the positive definite matrix `a`,
+    where `L` is a unit lower triangular matrix, and `D` is a diagonal matrix
+    with positive elements.
+
+    NOTE: No checking is performed to verify whether `a` is symmetric or not.
+          Only the lower triangular and diagonal elements of `a` are used.
+
+    Parameters
+    ----------
+    a : ndarray
+        Symmetric, positive definite input matrix.
+
+    Returns
+    -------
+    lu : ndarray
+        The unit lower triangular outer factor of the factorization.
+    d : ndarray
+        The diagonal multiplier of the factorization.
+
+    Raises
+    ------
+    LinAlgError
+        If the decomposition fails, for example, if `a` is not positive
+        definite.
+
+    """
+    c = numpy.linalg.cholesky(a)
+    s = numpy.diagonal(c)
+    lu = c / s
+    d = numpy.square(s)
+    return lu, d
+
+
+def _transformation_matrix_from_implicit(
+    scale: float, rotation: float, squeeze: float, shear: float
+) -> numpy.ndarray:
+    """
+    Return the transformation matrix given the implicit parameters.
+
+    Parameters
+    ----------
+    scale : float, positive
+        Isotropic scale factor.
+    rotation : float
+        Roation angle in counter-clockwise direction as radians.
+    squeeze : float, positive
+        Anisotropic scale factor.
+    shear : float
+        Shear factor.
+
+    Returns
+    -------
+    matrix : ndarray
+        The transformation matrix.
+
+    """
+    if scale <= 0:
+        raise ValueError("The scale factor should be positive.")
+    if squeeze <= 0:
+        raise ValueError("The squeeze factor should be positive.")
+    R = _rotation_matrix_from_angle(rotation)
+    L = numpy.array([(1, 0), (shear, 1)], dtype=float)
+    D = numpy.array([squeeze, 1.0 / squeeze], dtype=float)
+    return scale * R @ (L * D) @ L.T  # type: ignore
+
+
+def _transformation_matrix_to_implicit(
+    matrix: numpy.ndarray,
+) -> Tuple[float, float, float, float]:
+    """
+    Return the implicit parameters given a transformation matrix.
+
+    Parameters
+    ----------
+    matrix : ndarray
+        The transformation matrix.
+
+    Returns
+    -------
+    scale : float, positive
+        Isotropic scale factor.
+    rotation : float
+        Roation angle in counter-clockwise direction as radians.
+    squeeze : float, positive
+        Anisotropic scale factor.
+    shear : float
+        Shear factor.
+
+    """
+    R, S3 = scipy.linalg.polar(matrix)
+    if not numpy.allclose(numpy.linalg.det(R), 1.0):
+        raise ValueError("Matrix is not a proper rotation matrix")
+    rotation = _rotation_matrix_to_angle(R)
+    scale = numpy.sqrt(numpy.linalg.det(S3))
+    lu, d = _ldlt_decomposition(S3 / scale)
+    squeeze = d[0]
+    shear = lu[1, 0]
+    return scale, rotation, squeeze, shear
+
+
+def alt_transformation_matrix_from_implicit(
+    scale: Union[numpy.ndarray, List[float], Tuple[float, float]],
+    rotation: float,
+    shear: float,
+    form: str,
+) -> numpy.ndarray:
+    """
+    Return a transformation matrix given an alternative description of the
+    implicit parameters. This implementation is provided for backwards
+    compatibility. Do not use for new design.
+
+    Returns a matrix of the form `RSL` or `RSU`, where `R` is an orthogonal
+    matrix and `S` is a diagonal matrix whose elements represent scale factors
+    along the coordinate axis. Shear is provided by the matrix `L` or `U`,
+    where `L` is a lower and `U` is an upper unitriangular matrix.
+
+    Parameters
+    ----------
+    scale : (sx, sy) as array, list, or tuple
+        x, y scale factors.
+    rotation : float
+        Rotation angle in counter-clockwise direction as radians.
+    shear : float
+        Shear factor.
+    form : {"RSU", "RSL"}
+        Whether the matrix is of the form `RSU` or `RSL`.
+
+    Returns
+    -------
+    matrix : ndarray
+        The transformation matrix.
+
+    """
+    R = _rotation_matrix_from_angle(rotation)
+    S = scale * numpy.eye(2)
+    if form == "RSU":
+        U = numpy.array([(1, shear), (0, 1)])
+        matrix = R @ S @ U
+    elif form == "RSL":
+        L = numpy.array([(1, 0), (shear, 1)])
+        matrix = R @ S @ L
+    else:
+        raise ValueError("`form` must be either 'RSU' or 'RSL'")
+    return matrix
+
+
+def alt_transformation_matrix_to_implicit(
+    matrix: numpy.ndarray, form: str,
+) -> Tuple[numpy.ndarray, float, float]:
+    """
+    Return an alternative description of the implicit parameters given a
+    transformation matrix. This implementation is provided for backwards
+    compatibility. Do not use for new design.
+
+    Parameters
+    ----------
+    matrix : ndarray
+        The transformation matrix.
+    form : {"RSU", "RSL"}
+        Whether the matrix is of the form `RSU` or `RSL`.
+
+    Returns
+    -------
+    scale : (sx, sy) as ndarray
+        x, y scale factors.
+    rotation : float
+        Roation angle in counter-clockwise direction as radians.
+    shear : float
+        Shear factor.
+
+    """
+    if form == "RSU":
+        R, SU = qrp(matrix)
+        scale = numpy.diag(SU)
+        rotation = _rotation_matrix_to_angle(R)
+        shear = SU[0, 1] / SU[0, 0]
+    elif form == "RSL":
+        R, SL = qlp(matrix)
+        scale = numpy.diag(SL)
+        rotation = _rotation_matrix_to_angle(R)
+        shear = SL[1, 0] / SL[1, 1]
+    else:
+        raise ValueError("`form` must be either 'RSU' or 'RSL'")
+    return scale, rotation, shear
+
+
+def _optimal_rotation(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
+    """
+    Returns the optimal rigid transformation matrix between two zero mean point
+    sets, such that |Rx-y|^2 is minimized.
+
+    NOTE: No checking is performed to verify that `x` and `y` have zero mean.
+
+    Parameters
+    ----------
+    x : ndarray
+        Coordinates with zero mean in the source frame of reference.
+    y : ndarray
+        Coordinates with zero mean in the destination frame of reference.
+
+    Returns
+    -------
+    matrix : 2x2 array
+        Rotation matrix.
+
+    Examples
+    --------
+    >>> x = numpy.array([(1., 0.), (-1., 0.)])
+    >>> y = numpy.array([(0., 2.), (0., -2.)])
+    >>> _optimal_rotation(x, y)
+    array([[ 0., -1.],
+           [ 1.,  0.]])
+
+    """
+    H = numpy.empty((2, 2), dtype=float)
+    numpy.matmul(x.T, y, out=H)
+    u, _, vh = numpy.linalg.svd(H, full_matrices=False)  # H = (u * s) @ vh
+    if numpy.linalg.det(u) * numpy.linalg.det(vh) < 0.0:
+        u[:, -1] = -u[:, -1]
+    numpy.matmul(vh.T, u.T, out=H)
+    return H
+
+
+class ImplicitParameter:
+    """
+    Descriptor for implicit parameters. Customizes lookup and storage of a
+    float-type attribute. Implements default value, positivity constraint, and
+    immutable (fixed) value. Must be instantiated as a class variable in
+    another class. For more info on the use of descriptors see [1]_.
+
+    References
+    ----------
+    .. [1] Hettinger, R. Descriptor HowTo Guide,
+           https://docs.python.org/3/howto/descriptor.html
+
+    """
+
+    def __init__(
+        self, default: float, constrained: bool = False, positive: bool = False
+    ) -> None:
+        """
+        Initialize an implicit parameter.
+
+        Parameters
+        ----------
+        default : float
+            The default value provided on attribute lookup if not initialized.
+        constrained : bool
+            If True, the attribute can only be set to the default value.
+        positive : bool
+            If True, the attribute can only be set to a positive value.
+
+        """
+        self.default = default
+        self.constrained = constrained
+        self.positive = positive
+
+    def __set_name__(self, owner: Type[GeometricTransform], name: str) -> None:
+        self.private_name = "_" + name
+
+    def __get__(
+        self,
+        instance: GeometricTransform,
+        owner: Optional[Type[GeometricTransform]] = None,
+    ) -> float:
+        if instance is None:
+            return self
+        return getattr(instance, self.private_name, self.default)  # type: ignore
+
+    def __set__(self, instance: GeometricTransform, value: float) -> None:
+        value = self.default if value is None else value
+        if not isinstance(value, (int, float)):
+            raise TypeError(f"Expected {value!r} to be an int or a float")
+        if not math.isfinite(value):
+            raise ValueError(f"Expected {value!r} to be finite")
+        if self.positive and value <= 0:
+            raise ValueError(f"Expected {value!r} to be positive")
+        if self.constrained:
+            if not math.isclose(value, self.default, rel_tol=1e-05, abs_tol=1e-08):
+                raise ValueError(f"Expected {value!r} to be equal to {self.default!r}")
+        else:
+            setattr(instance, self.private_name, value)
+            instance._matrix = None  # invalidate cache
+
+
+class GeometricTransform(metaclass=ABCMeta):
+    """
+    Base class for geometric transformations.
+
+    The transformation can either be descibed as a matrix multiplication using
+    the _explicit_ parameter `matrix`, or alternatively using the _implicit_
+    parameters `scale`, `rotation`, `squeeze`, and `shear`. Different transform
+    types are implemented as a subclass of `GeometricTransform` by imposing a
+    different set of constraints on the implicit parameters. For example, an
+    instance of `RigidTransform` has unit scale, whereas this can be any
+    positive number for a `SimilarityTransform` instance.
+
+    """
+
+    _matrix: Optional[numpy.ndarray] = None
+    scale = ImplicitParameter(1, positive=True)
+    rotation = ImplicitParameter(0)
+    squeeze = ImplicitParameter(1, positive=True)
+    shear = ImplicitParameter(0)
+
+    def __init__(
+        self,
+        matrix: Optional[numpy.ndarray] = None,
+        translation: Optional[numpy.ndarray] = None,
+        **kwargs: Optional[float],
+    ) -> None:
         """
         Basic initialisation helper.
-        Note: if rotation, scale, shear, translation are not passed, the respective
-         attributes will *not* be set. If they are set to None, the attributes will
-         be set to default values.
-        matrix : (2, 2) array, optional
+
+        Parameters
+        ----------
+        matrix : ndarray of shape (2, 2), optional
             Transformation matrix, does not include translation.
-            passing it will set .transformation_matrix
+        translation : ndarray of shape (2,), optional
+            x, y translation parameters.
+        scale : float, optional
+            Scale factor.
         rotation : float, optional
-            Rotation angle in counter-clockwise direction as radians.
-        scale : (sx, sy) as array, list, or tuple, optional
-            x, y scale factors.
+            Rotation angle in counter-clockwise direction in radians.
+        squeeze : float, optional
+            Squeeze factor. Scales the input in one axis by this factor, and in
+            the other axis by its multiplicative inverse.
         shear : float, optional
             Shear factor.
-        translation : (tx, ty) as array, list, or tuple, optional
-            x, y translation parameters.
+
         """
-        params = any(kwargs.get(param) is not None
-                     for param in ("rotation", "scale", "shear"))
-
+        params = any(value is not None for value in kwargs.values())
         if params and matrix is not None:
-            raise ValueError("You cannot specify the transformation matrix "
-                             "and the implicit parameters at the same time.")
+            raise ValueError(
+                "You cannot specify the transformation matrix and the "
+                "implicit parameters at the same time."
+            )
         elif matrix is not None:
-            matrix = numpy.asarray(matrix)
-            if matrix.shape != (2, 2):
-                raise ValueError("Transformation matrix should be 2x2, but got %s" % (matrix,))
-            self.transformation_matrix = matrix
+            self.matrix = matrix
         else:
-            if "rotation" in kwargs:
-                rotation = kwargs.get("rotation")
-                self.rotation = 0 if rotation is None else rotation
-                if not isinstance(self.rotation, numbers.Real):
-                    raise ValueError("Rotation should be a number, but got %s" % (self.rotation,))
+            for name, value in kwargs.items():
+                setattr(self, name, value)
 
-            if "scale" in kwargs:
-                scale = kwargs.get("scale")
-                self.scale = (1, 1) if scale is None else scale
-                if len(self.scale) != 2 or not all(isinstance(a, numbers.Real) for a in self.scale):
-                    raise ValueError("Scale should be 2 floats, but got %s" % (self.scale,))
+        self.translation = (
+            numpy.zeros(2, dtype=float) if translation is None else translation
+        )
 
-            if "shear" in kwargs:
-                shear = kwargs.get("shear")
-                self.shear = 0 if shear is None else shear
-                if not isinstance(self.shear, numbers.Real):
-                    raise ValueError("Shear should be a number, but got %s" % (self.shear,))
+    @property
+    def matrix(self) -> numpy.ndarray:
+        """The 2x2 transformation matrix. Does not include translation."""
+        if self._matrix is None:
+            self._matrix = _transformation_matrix_from_implicit(
+                self.scale, self.rotation, self.squeeze, self.shear
+            )
+        return self._matrix
 
-        if "translation" in kwargs:
-            translation = kwargs.get("translation")
-            self.translation = (0, 0) if translation is None else translation
-            if len(self.translation) != 2 or not all(isinstance(a, numbers.Real) for a in self.translation):
-                raise ValueError("Translation should be 2 floats, but got %s" % (self.translation,))
+    @matrix.setter
+    def matrix(self, matrix: numpy.ndarray) -> None:
+        if matrix.shape != (2, 2):
+            raise ValueError("Transformation matrix should be 2x2, but got %s" % matrix)
+        (
+            self.scale,
+            self.rotation,
+            self.squeeze,
+            self.shear,
+        ) = _transformation_matrix_to_implicit(matrix)
+        self._matrix = matrix
 
-    def apply(self, x):
+    @staticmethod
+    @abstractmethod
+    def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
+        """
+        Returns the optimal transformation matrix between two zero mean point
+        sets, such that |Ax-y|^2 is minimized.
+
+        NOTE: No checking is performed to verify that `x` and `y` have zero
+              mean.
+
+        Parameters
+        ----------
+        x : ndarray
+            Coordinates with zero mean in the source frame of reference.
+        y : ndarray
+            Coordinates with zero mean in the destination frame of reference.
+
+        Returns
+        -------
+        matrix : 2x2 array
+            Rotation matrix.
+
+        """
+        pass
+
+    @classmethod
+    def from_pointset(cls: Type[T], x: numpy.ndarray, y: numpy.ndarray) -> T:
+        """
+        Estimate the transformation from a set of corresponding points.
+
+        Constructor for a GeometricTransform that determines the best
+        coordinate transformation from two point sets `x` and `y` in a
+        least-squares sense.
+
+        Parameters
+        ----------
+        x : (n, 2) array
+            Coordinates in the source reference frame.
+        y : (n, 2) array
+            Coordinates in the destination reference frame. Must be of same
+            dimensions as `x`.
+
+        Returns
+        -------
+        tform : GeometricTransform
+            Optimal coordinate transformation.
+
+        """
+        x = numpy.asarray(x)
+        y = numpy.asarray(y)
+        x0 = numpy.mean(x, axis=0)
+        y0 = numpy.mean(y, axis=0)
+        dx = x - x0
+        dy = y - y0
+        matrix = cls._estimate_matrix(dx, dy)
+        translation = y0 - numpy.matmul(matrix, x0)
+        return cls(matrix=matrix, translation=translation)
+
+    def apply(self, x: numpy.ndarray) -> numpy.ndarray:
         """
         Apply the forward transformation to a (set of) input coordinates.
 
@@ -435,15 +785,28 @@ class GeometricTransform(with_metaclass(ABCMeta, object)):
 
         """
         x = numpy.asarray(x)
-        return numpy.einsum('ik,...k->...i', self.transformation_matrix, x) + self.translation
+        return numpy.einsum("ik,...k->...i", self.matrix, x) + self.translation  # type: ignore
 
-    def __call__(self, x):
-        warnings.warn("__call__ is deprecated, use apply instead",
-                      DeprecationWarning)
-        return self.apply(x)
-    __call__.__doc__ = apply.__doc__
+    def inverse(self) -> GeometricTransform:
+        """
+        Return the inverse transformation.
 
-    def fre(self, x, y):
+        By default the type of the inverse of a GeometricTransform is the same
+        as the GeometricTransform itself. May be overridden by a subclass by
+        setting `self._inverse_type` to the inverse class.
+
+        Returns
+        -------
+        tform : GeometricTransform
+            The inverse transformation.
+
+        """
+        matrix = numpy.linalg.inv(self.matrix)
+        translation = -numpy.matmul(matrix, self.translation)
+        cls = getattr(self, "_inverse_type", type(self))
+        return cls(matrix, translation)
+
+    def fre(self, x: numpy.ndarray, y: numpy.ndarray) -> float:
         """
         Returns the RMS value of the fiducial error registration (FRE).
 
@@ -472,29 +835,250 @@ class GeometricTransform(with_metaclass(ABCMeta, object)):
         x = numpy.asarray(x)
         y = numpy.asarray(y)
         delta = self.apply(x) - y
-        fre = numpy.sqrt(numpy.mean(delta * delta))
+        fre = math.sqrt(numpy.mean(delta * delta))
         return fre
 
-    @abstractmethod
-    def inverse(self):
+
+class AffineTransform(GeometricTransform):
+    """
+    Affine transform
+
+    An affine transformation preserves the straightness of lines, and hence,
+    the planarity of surfaces, and it preserves parallelism, but it allows
+    angles between lines to change.
+
+    The affine transform has the following form:
+
+        x' = sRLDL⸆x + t
+
+    where `s` is a positive scalar representing isotropic scaling, `R` is an
+    orthogonal matrix representing rotation, `L` is a lower triangular matrix
+    with all diagonal elements equal to one and a single off-diagonal non-zero
+    element representing shear, `D` is a diagonal matrix with diagonal entries
+    `k` and `1/k` representing anisotropic scaling where `k` is the squeeze
+    factor, `L⸆` is the matrix transpose of `L`, and `t` is a translation
+    vector. To eliminate improper rotations (reflections) it is required that
+    the determinant of `R` equals 1.
+
+    Parameters
+    ----------
+    matrix : ndarray of shape (2, 2), optional
+        Transformation matrix, does not include translation.
+    translation : ndarray of shape (2,), optional
+        x, y translation parameters.
+    scale : float, optional
+        Scale factor.
+    rotation : float, optional
+        Rotation angle in counter-clockwise direction in radians.
+    squeeze : float, optional
+        Squeeze factor. Scales the input in one axis by this factor, and in the
+        other axis by its multiplicative inverse.
+    shear : float, optional
+        Shear factor.
+
+    Attributes
+    ----------
+    matrix : ndarray of shape (2, 2)
+    translation : ndarray of shape (2,)
+        Translation vector.
+    scale : float
+        Scale factor.
+    rotation : float
+        Rotation angle in radians.
+    squeeze : float
+        Squeeze factor.
+    shear : float
+        Shear factor.
+
+    """
+
+    def __init__(
+        self,
+        matrix: Optional[numpy.ndarray] = None,
+        translation: Optional[numpy.ndarray] = None,
+        *,
+        scale: Optional[float] = None,
+        rotation: Optional[float] = None,
+        squeeze: Optional[float] = None,
+        shear: Optional[float] = None,
+    ) -> None:
+        GeometricTransform.__init__(
+            self,
+            matrix,
+            translation,
+            scale=scale,
+            rotation=rotation,
+            squeeze=squeeze,
+            shear=shear,
+        )
+
+    @staticmethod
+    def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
+        at = numpy.linalg.lstsq(x, y, rcond=0)[0]
+        return numpy.transpose(at)
+
+
+class ScalingTransform(AffineTransform):
+    """
+    Scaling transform.
+
+    A scaling transform is rigid except for scaling. If the scaling is
+    isotropic it is called a similarity transform.
+
+    The scaling transform has the following form:
+
+        x' = sRDx + t
+
+    where `s` is a positive scalar representing isotropic scaling, `R` is an
+    orthogonal matrix representing rotation, `D` is a diagonal matrix with
+    diagonal entries `k` and `1/k` representing anisotropic scaling where `k`
+    is the squeeze factor, and `t` is a translation vector. To eliminate
+    improper rotations (reflections) it is required that the determinant of `R`
+    equals 1.
+
+    NOTE: `RD` is not in general equal to `DR`; so these are two different
+          classes of transformations.
+
+    Parameters
+    ----------
+    matrix : ndarray of shape (2, 2), optional
+        Transformation matrix, does not include translation.
+    translation : ndarray of shape (2,), optional
+        x, y translation parameters.
+    scale : float, optional
+        Scale factor.
+    rotation : float, optional
+        Rotation angle in counter-clockwise direction in radians.
+    squeeze : float, optional
+        Squeeze factor. Scales the input in one axis by this factor, and in the
+        other axis by its multiplicative inverse.
+
+    Attributes
+    ----------
+    matrix : ndarray of shape (2, 2)
+    translation : ndarray of shape (2,)
+        Translation vector.
+    scale : float
+        Scale factor.
+    rotation : float
+        Rotation angle in radians.
+    squeeze : float
+        Squeeze factor.
+    shear : float
+        Shear factor. Always equal to 0.
+
+    """
+
+    _inverse_type = AffineTransform
+    shear = ImplicitParameter(0, constrained=True)
+
+    def __init__(
+        self,
+        matrix: Optional[numpy.ndarray] = None,
+        translation: Optional[numpy.ndarray] = None,
+        *,
+        scale: Optional[float] = None,
+        rotation: Optional[float] = None,
+        squeeze: Optional[float] = None,
+    ) -> None:
+        GeometricTransform.__init__(
+            self, matrix, translation, scale=scale, rotation=rotation, squeeze=squeeze,
+        )
+
+    @staticmethod
+    def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
         """
-        Return the inverse transformation.
+        See GeometricTransform._estimate_matrix() for a more detailed
+        description.
 
-        Returns:
-        --------
-        tform : GeometricTransform
-            The inverse transformation.
+        This implementation uses the closed-form solution obtained from [1]_.
+
+        References
+        ----------
+        .. [1] Škrinjar, O. (2006, July). Point-based registration with known
+               correspondence: Closed form optimal solutions and properties. In
+               International Workshop on Biomedical Image Registration
+               (pp. 315-321). Springer, Berlin, Heidelberg.
 
         """
-        raise NotImplementedError()
+        alpha = numpy.einsum("ij,ik->jk", x, y)
+        beta = numpy.einsum("ij,ij->j", x, x)
+        (a11, a12), (a21, a22) = alpha
+        b1, b2 = beta
+        k1 = numpy.square(a11) / b1 + numpy.square(a22) / b2
+        k2 = numpy.square(a12) / b1 + numpy.square(a21) / b2
+        k3 = 2 * (a11 * a12 / b1 - a21 * a22 / b2)
+        phi = 0.5 * numpy.arctan2(k3, k1 - k2)
+        R = _rotation_matrix_from_angle(phi)
+        scales = numpy.einsum("ij,ji->j", R, alpha) / beta
+        return scales * R
 
-    @property
-    @abstractmethod
-    def transformation_matrix(self):
-        pass
+
+class SimilarityTransform(ScalingTransform):
+    """
+    Similarity transform.
+
+    A similarity transform is rigid except for isotropic scaling.
+
+    The similarity transform has the following form:
+
+        y = sRx + t
+
+    where `s` is a positive scalar representing isotropic scaling, `R` is an
+    orthogonal matrix representing rotation, and `t` is a translation vector.
+    To eliminate improper rotations (reflections) it is required that the
+    determinant of `R` equals 1.
+
+    Parameters
+    ----------
+    matrix : ndarray of shape (2, 2), optional
+        Transformation matrix, does not include translation.
+    translation : ndarray of shape (2,), optional
+        x, y translation parameters.
+    scale : float, optional
+        Scale factor.
+    rotation : float, optional
+        Rotation angle in counter-clockwise direction in radians.
+
+    Attributes
+    ----------
+    matrix : ndarray of shape (2, 2)
+    translation : ndarray of shape (2,)
+        Translation vector.
+    scale : float
+        Scale factor.
+    rotation : float
+        Rotation angle in radians.
+    squeeze : float
+        Squeeze factor. Always equal to 1.
+    shear : float
+        Shear factor. Always equal to 0.
+
+    """
+
+    squeeze = ImplicitParameter(1, constrained=True)
+
+    def __init__(
+        self,
+        matrix: Optional[numpy.ndarray] = None,
+        translation: Optional[numpy.ndarray] = None,
+        *,
+        scale: Optional[float] = None,
+        rotation: Optional[float] = None,
+    ) -> None:
+        GeometricTransform.__init__(
+            self, matrix, translation, scale=scale, rotation=rotation
+        )
+
+    @staticmethod
+    def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
+        R = _optimal_rotation(x, y)
+        s = numpy.einsum("ik,jk,ji", R, x, y) / numpy.einsum("ij,ij", x, x)
+        matrix = s * R
+        return matrix
 
 
-class RigidTransform(GeometricTransform):
+class RigidTransform(SimilarityTransform):
     """
     Rigid transformation.
 
@@ -507,713 +1091,46 @@ class RigidTransform(GeometricTransform):
 
         y = Rx + t
 
-    where `R` is an orthogonal matrix and `t` is a translation vector. To
-    eliminate improper rotations (reflections) it is required that the
-    determinant of `R` equals 1.
-
-    Parameters
-    ----------
-    matrix : (2, 2) array, optional
-        Transformation matrix, does not include translation.
-    rotation : float, optional
-        Rotation angle in counter-clockwise direction as radians.
-    translation : (tx, ty) as array, list, or tuple, optional
-        x, y translation parameters.
-
-    Attributes
-    ----------
-    rotation_matrix
-    transformation_matrix
-    rotation : float
-        Rotation.
-    translation : (2,) array
-        Translation vector.
-
-    """
-
-    def __init__(self, matrix=None, rotation=None, translation=None):
-        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
-                                    translation=translation)
-
-    @classmethod
-    def from_pointset(cls, x, y):
-        """
-        Estimate the transformation from a set of corresponding points.
-
-        Constructor for RigidTransform that determines the best coordinate
-        transformation from two point sets `x` and `y` in a least-squares
-        sense.
-
-        Parameters
-        ----------
-        x : (n, 2) array
-            Coordinates in the source reference frame.
-        y : (n, 2) array
-            Coordinates in the destination reference frame. Must be of same
-            dimensions as `x`.
-
-        Returns
-        -------
-        tform : RigidTransform
-            Optimal coordinate transformation.
-
-        """
-        x = numpy.asarray(x)
-        y = numpy.asarray(y)
-        x0 = numpy.mean(x, axis=0)
-        y0 = numpy.mean(y, axis=0)
-        dx = x - x0
-        dy = y - y0
-        R = _optimal_rotation(dx, dy)
-        t = y0 - numpy.dot(R, x0)
-        return cls(matrix=R, translation=t)
-
-    def inverse(self):
-        """
-        Return the inverse transformation.
-
-        Returns
-        -------
-        tform : RigidTransform
-            The inverse transformation.
-
-        """
-        Rinv = numpy.transpose(self.rotation_matrix)  # R is orthogonal
-        tinv = -numpy.dot(Rinv, self.translation)
-        return self.__class__(matrix=Rinv, translation=tinv)
-
-    @property
-    def rotation_matrix(self):
-        """The 2x2 rotation matrix as calculated from self.rotation."""
-        return _rotation_matrix_from_angle(self.rotation)
-
-    @rotation_matrix.setter
-    def rotation_matrix(self, matrix):
-        self.rotation = _rotation_matrix_to_angle(matrix)
-
-    @property
-    def transformation_matrix(self):
-        """The 2x2 transformation matrix. Does not include translation."""
-        return self.rotation_matrix
-
-    @transformation_matrix.setter
-    def transformation_matrix(self, matrix):
-        self.rotation_matrix = matrix
-
-
-class SimilarityTransform(RigidTransform):
-    """
-    Similarity transform.
-
-    A similarity transform is rigid except for isotropic scaling.
-
-    The similarity transform has the following form:
-
-        y = sRx + t
-
-    where `s` is a positive scalar, `R` is an orthogonal matrix, and `t` is a
-    translation vector. To eliminate improper rotations (reflections) is
+    where `R` is an orthogonal matrix representing rotation, and `t` is a
+    translation vector. To eliminate improper rotations (reflections) it is
     required that the determinant of `R` equals 1.
 
     Parameters
     ----------
-    matrix : (2, 2) array, optional
+    matrix : ndarray of shape (2, 2), optional
         Transformation matrix, does not include translation.
-    rotation : float, optional
-        Rotation angle in counter-clockwise direction as radians.
-    scale : float, optional
-        Scale factor.
-    translation : (tx, ty) as array, list, or tuple, optional
+    translation : ndarray of shape (2,), optional
         x, y translation parameters.
+    rotation : float, optional
+        Rotation angle in counter-clockwise direction in radians.
 
     Attributes
     ----------
-    rotation_matrix
-    transformation_matrix
-    rotation : float
-        Rotation.
+    matrix : ndarray of shape (2, 2)
+    translation : ndarray of shape (2,)
+        Translation vector.
     scale : float
-        Scale factor.
-    translation : (2,) array
-        Translation vector.
-
-    """
-
-    def __init__(self, matrix=None, rotation=None, scale=None, translation=None):
-        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
-                                    translation=translation)
-
-        # It's special as .scale is a single float, instead of 2 floats typically
-        if matrix is not None:
-            if scale is not None:
-                raise ValueError("You cannot specify the transformation matrix "
-                                 "and the implicit parameters at the same time.")
-        else:
-            self.scale = 1 if scale is None else scale
-            if not isinstance(self.scale, numbers.Real):
-                raise ValueError("Scale should be a single number, but got %s" % (self.scale,))
-
-    @classmethod
-    def from_pointset(cls, x, y):
-        """
-        Estimate the transformation from a set of corresponding points.
-
-        Constructor for SimilarityTransform that determines the best coordinate
-        transformation from two point sets `x` and `y` in a least-squares
-        sense.
-
-        Parameters
-        ----------
-        x : (n, 2) array
-            Coordinates in the source reference frame.
-        y : (n, 2) array
-            Coordinates in the destination reference frame. Must be of same
-            dimensions as `x`.
-
-        Returns
-        -------
-        tform : SimilarityTransform
-            Optimal coordinate transformation.
-
-        """
-        x = numpy.asarray(x)
-        y = numpy.asarray(y)
-        x0 = numpy.mean(x, axis=0)
-        y0 = numpy.mean(y, axis=0)
-        dx = x - x0
-        dy = y - y0
-        R = _optimal_rotation(dx, dy)
-        s = numpy.einsum('ik,jk,ji', R, dx, dy) / numpy.einsum('ij,ij', dx, dx)
-        A = s * R
-        t = y0 - numpy.dot(A, x0)
-        return cls(matrix=A, translation=t)
-
-    def inverse(self):
-        """
-        Return the inverse transformation.
-
-        Returns
-        -------
-        tform : SimilarityTransform
-            The inverse transformation.
-
-        """
-        Rinv = numpy.transpose(self.rotation_matrix)  # R is orthogonal
-        sinv = 1. / self.scale
-        Ainv = sinv * Rinv
-        tinv = -numpy.dot(Ainv, self.translation)
-        return self.__class__(matrix=Ainv, translation=tinv)
-
-    @property
-    def transformation_matrix(self):
-        """The 2x2 transformation matrix. Does not include translation."""
-        A = self.scale * self.rotation_matrix
-        return A
-
-    @transformation_matrix.setter
-    def transformation_matrix(self, matrix):
-        s = numpy.sqrt(numpy.linalg.det(matrix))
-        R = matrix / s
-        self.rotation_matrix = R
-        self.scale = s
-
-
-class ScalingTransform(RigidTransform):
-    """
-    Scaling transform.
-
-    A scaling transform is rigid except for scaling. If the scaling is
-    isotropic it is called a similarity transform.
-
-    The scaling transform has the following form:
-
-        y = RSx + t
-
-    where `R` is an orthogonal matrix, `S` is a diagonal matrix whose elements
-    represent scale factors along the coordinate axis, and `t` is a translation
-    vector. To eliminate improper rotations (reflections) it is required that
-    the determinant of `R` equals 1.
-
-    NOTE: `RS` is not in general equal to `SR`; so these are two different
-          classes of transformations.
-
-    Parameters
-    ----------
-    matrix : (2, 2) array, optional
-        Transformation matrix, does not include translation.
-    rotation : float, optional
-        Rotation angle in counter-clockwise direction as radians.
-    scale : (sx, sy) as array, list, or tuple, optional
-        x, y scale factors.
-    translation : (tx, ty) as array, list, or tuple, optional
-        x, y translation parameters.
-
-    Attributes
-    ----------
-    rotation_matrix
-    transformation_matrix
+        Scale factor. Always equal to 1.
     rotation : float
-        Rotation.
-    scale : (sx, sy) as array
-        Scale factors.
-    translation : (2,) array
-        Translation vector.
-
-    """
-
-    def __init__(self, matrix=None, rotation=None, scale=None, translation=None):
-        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
-                                    scale=scale, translation=translation)
-
-    @classmethod
-    def from_pointset(cls, x, y):
-        """
-        Estimate the transformation from a set of corresponding points.
-
-        Constructor for ScalingTransform that determines the best coordinate
-        transformation from two point sets `x` and `y` in a least-squares
-        sense.
-
-        Parameters
-        ----------
-        x : (n, 2) array
-            Coordinates in the source reference frame.
-        y : (n, 2) array
-            Coordinates in the destination reference frame. Must be of same
-            dimensions as `x`.
-
-        Returns
-        -------
-        tform : ScalingTransform
-            Optimal coordinate transformation.
-
-        """
-        x = numpy.asarray(x)
-        y = numpy.asarray(y)
-        x0 = numpy.mean(x, axis=0)
-        y0 = numpy.mean(y, axis=0)
-        dx = x - x0
-        dy = y - y0
-        R = _optimal_rotation(dx, dy)
-        # Use the similarity transform as initial guess to start the search.
-        sx = sy = numpy.einsum('ik,jk,ji', R, dx, dy) / numpy.einsum('ij,ij', dx, dx)
-
-        def _fre(s, x, y):
-            """
-            Return the fiducial registration error (FRE) for a scaling
-            transformation between two zero-mean point sets `x` and `y` with
-            given non-isotropic scaling, and optimal rotation.
-
-            Parameters
-            ----------
-            s : ndarray
-                Non-isotropic scaling, equal to [sx, sy].
-            x : ndarray
-                Zero-mean coordinates in the source reference frame.
-            y : ndarray
-                Zero-mean coordinates in the destination reference frame.
-
-            Returns
-            -------
-            delta : ndarray
-                The fiducial registration error as a flattened array.
-            """
-            # scipy.optimize.leastsq does not support bounds; therefore we
-            # perform the search using the absolute value of the scaling to
-            # ensure s > 0.
-            s = numpy.abs(s)
-            _x = s * x
-            R = _optimal_rotation(_x, y)
-            delta = numpy.einsum('ik,jk->ji', R, _x) - y
-            return delta.ravel()
-
-        # Find the non-isotropic scaling using an optimization search.
-        s, ier = scipy.optimize.leastsq(_fre, x0=(sx, sy), args=(dx, dy))
-        assert ier in (1, 2, 3, 4)
-
-        # Rotation is now the rigid transform of the scaled input
-        R = _optimal_rotation(s * dx, dy)
-        A = R * s
-        t = y0 - numpy.dot(A, x0)
-        return cls(matrix=A, translation=t)
-
-    @property
-    def transformation_matrix(self):
-        """The 2x2 transformation matrix. Does not include translation."""
-        A = self.rotation_matrix * self.scale
-        return A
-
-    @transformation_matrix.setter
-    def transformation_matrix(self, matrix):
-        R, S = qrp(matrix)
-        s = numpy.diag(S)
-        if not numpy.allclose(S, numpy.diag(s)):
-            raise LinAlgError('Array must be diagonal')
-        self.rotation_matrix = R
-        self.scale = s
-
-    def inverse(self):
-        """
-        Return the inverse transformation.
-
-        Returns
-        -------
-        tform : AffineTransform
-            The inverse transformation.
-
-        Note
-        ----
-        The inverse transformation of a scaling transform is an affine
-        transformation.
-
-        """
-        sinv = 1 / numpy.asarray(self.scale)  # S is diagonal
-        Ainv = numpy.transpose(sinv * self.rotation_matrix)
-        tinv = -numpy.dot(Ainv, self.translation)
-        return AffineTransform(matrix=Ainv, translation=tinv)
-
-
-class AffineTransform(RigidTransform):
-    """
-    Affine transform
-
-    An affine transformation preserves the straightness of lines, and hence,
-    the planarity of surfaces, and it preserves parallelism, but it allows
-    angles between lines to change.
-
-    The affine transform has the following form:
-
-        x' = RSLx + t
-
-    where `R` is an orthogonal matrix, `S` is a diagonal matrix whose elements
-    represent scale factors along the coordinate axis, `L` is an upper
-    triangular matrix with all diagonal elements equal to one and a single
-    off-diagonal non-zero element, and `t` is a translation vector. To
-    eliminate improper rotations (reflections) it is required that the
-    determinant of `R` equals 1.
-
-    Parameters
-    ----------
-    matrix : (2, 2) array, optional
-        Transformation matrix, does not include translation.
-    rotation : float, optional
-        Rotation angle in counter-clockwise direction as radians.
-    scale : (sx, sy) as array, list, or tuple, optional
-        x, y scale factors.
-    shear : float, optional
-        Shear factor.
-    translation : (tx, ty) as array, list, or tuple, optional
-        x, y translation parameters.
-
-    Attributes
-    ----------
-    rotation_matrix
-    transformation_matrix
-    rotation : float
-        Rotation.
-    scale : (sx, sy) as array
-        Scale factors.
+        Rotation angle in radians.
+    squeeze : float
+        Squeeze factor. Always equal to 1.
     shear : float
-        Shear factor.
-    translation : (2,) array
-        Translation vector.
+        Shear factor. Always equal to 0.
 
     """
 
-    def __init__(self, matrix=None, rotation=None, scale=None, shear=None,
-                 translation=None):
-        GeometricTransform.__init__(self, matrix=matrix, rotation=rotation,
-                                    scale=scale, shear=shear, translation=translation)
+    scale = ImplicitParameter(1, constrained=True)
 
-    @classmethod
-    def from_pointset(cls, x, y):
-        """
-        Estimate the transformation from a set of corresponding points.
-
-        Constructor for AffineTransform that determines the best coordinate
-        transformation from two point sets `x` and `y` in a least-squares
-        sense.
-
-        Parameters
-        ----------
-        x : (n, 2) array
-            Coordinates in the source reference frame.
-        y : (n, 2) array
-            Coordinates in the destination reference frame. Must be of same
-            dimensions as `x`.
-
-        Returns
-        -------
-        tform : RigidTransform
-            Optimal coordinate transformation.
-
-        """
-        x = numpy.asarray(x)
-        y = numpy.asarray(y)
-        x0 = numpy.mean(x, axis=0)
-        y0 = numpy.mean(y, axis=0)
-        dx = x - x0
-        dy = y - y0
-        R = _optimal_rotation(dx, dy)
-        # Use the similarity transform as initial guess to start the search.
-        sx = sy = numpy.einsum('ik,jk,ji', R, dx, dy) / numpy.einsum('ij,ij', dx, dx)
-
-        def _fre(p, x, y):
-            """
-            Return the fiducial registration error (FRE) for an affine
-            transformation between two zero-mean point sets `x` and `y` with
-            given non-isotropic scaling, shear, and optimal rotation.
-
-            Parameters
-            ----------
-            p : ndarray
-                Non-isotropic scaling and shear, equal to [sx, sy, m].
-            x : ndarray
-                Zero-mean coordinates in the source reference frame.
-            y : ndarray
-                Zero-mean coordinates in the destination reference frame.
-
-            Returns
-            -------
-            delta : ndarray
-                The fiducial registration error as a flattened array.
-            """
-            # scipy.optimize.leastsq does not support bounds; therefore we
-            # perform the search using the absolute value of the scaling to
-            # ensure s > 0.
-            s = numpy.abs(p[0:2])
-            m = p[2]
-            SL = numpy.diag(s)
-            SL[0, 1] = m * s[0]
-            _x = numpy.einsum('ik,jk->ji', SL, x)
-            R = _optimal_rotation(_x, y)
-            delta = numpy.einsum('ik,jk->ji', R, _x) - y
-            return delta.ravel()
-
-        # Find the shear and non-isotropic scaling using an optimization
-        # search.
-        p, ier = scipy.optimize.leastsq(_fre, x0=(sx, sy, 0.), args=(dx, dy))
-        assert ier in (1, 2, 3, 4)
-        s = numpy.abs(p[0:2])
-        m = p[2]
-        SL = numpy.diag(s)
-        SL[0, 1] = m * s[0]
-
-        # Rotation is now the rigid transform of the scaled input
-        _x = numpy.einsum('ik,jk->ji', SL, dx)
-        R = _optimal_rotation(_x, dy)
-        A = numpy.dot(R, SL)
-        t = y0 - numpy.dot(A, x0)
-        return cls(matrix=A, translation=t)
-
-    @property
-    def transformation_matrix(self):
-        """The 2x2 transformation matrix. Does not include translation."""
-        R = self.rotation_matrix
-        S = self.scale * numpy.eye(2)
-        L = numpy.array([(1., self.shear), (0., 1.)])
-        return numpy.dot(numpy.dot(R, S), L)
-
-    @transformation_matrix.setter
-    def transformation_matrix(self, matrix):
-        R, S = qrp(matrix)
-        self.rotation_matrix = R
-        self.scale = numpy.diag(S)
-        self.shear = S[0, 1] / S[0, 0]
-
-    def inverse(self):
-        """
-        Return the inverse transformation.
-
-        Returns
-        -------
-        tform : AffineTransform
-            The inverse transformation.
-
-        """
-        S = self.scale * numpy.eye(2)
-        L = numpy.array([(1., self.shear), (0., 1.)])
-        SL = numpy.dot(S, L)
-        Ainv = numpy.dot(tri_inv(SL), numpy.transpose(self.rotation_matrix))
-        tinv = -numpy.dot(Ainv, self.translation)
-        return self.__class__(matrix=Ainv, translation=tinv)
-
-
-class AnamorphosisTransform(AffineTransform):
-    """
-    AnamorphosisTransform
-
-    The anamorphosis transform is a polynomial model of the distortions in an
-    electron optical system, and is described in more detail in [1].
-
-    The anamorphosis transform has the following form:
-
-        wᵢ = A + B₁ w + B₂ w̄ + C₁ w² + C₂ ww̄ + C₃ w̄² +
-                                       D₁ w²w̄ + D₂ ww̄² + E₁ w³w̄² + E₂ w²w̄³,
-
-    where A, B₁, B₂, C₁, C₂, C₃, D₁, D₂, E₁, and E₂ are the (complex)
-    coefficients of the transform. The in- and output coordinates are the
-    complex numbers w = x + j*y. Note that w̄ is the complex conjugate of w. The
-    coefficients A, B₁, B₂ define an ordinary affine transform, and the other
-    coefficients determine the higher order distortions.
-
-    Parameters
-    ----------
-    coeffs : Transform coefficients as array, list, or tuple; optional.
-        List of transform coefficients: A, B₁, B₂, C₁, C₂, C₃, D₁, D₂, E₁, E₂.
-    rotation : float, optional
-        Rotation angle in counter-clockwise direction as radians.
-    scale : (sx, sy) as array, list, or tuple, optional
-        x, y scale factors.
-    shear : float, optional
-        Shear factor.
-    nlcoeffs : Non-linear transform coefficients as array, list, or tuple;
-               optional.
-        List of non-linear transform coefficients: C₁, C₂, C₃, D₁, D₂, E₁, E₂.
-    translation : (tx, ty) as array, list, or tuple, optional
-        x, y translation parameters.
-
-    Attributes
-    ----------
-    rotation_matrix
-    transformation_matrix
-    rotation : float
-        Rotation.
-    scale : (sx, sy) as array
-        Scale factors.
-    shear : float
-        Shear factor.
-    coeffs : tuple of 7 floats
-        Tuple of transform coefficients.
-    nlcoeffs : tuple
-        Tuple of non-linear transform coefficients.
-    translation : (2,) array
-        Translation vector.
-
-    References
-    ----------
-    .. [1] J. Stopka, "Polynomial fit for Multi-beam distortions", internal
-    note, 2019
-
-    """
-
-    def __init__(self, coeffs=None, rotation=None, scale=None, shear=None,
-                 nlcoeffs=None, translation=None):
-
-        params = any(param is not None
-                     for param in (rotation, scale, shear, nlcoeffs, translation))
-
-        if params and coeffs is not None:
-            raise ValueError("You cannot specify the transformation "
-                             "coefficients and the implicit parameters at the "
-                             "same time.")
-        elif coeffs is not None:
-            self.coeffs = coeffs
-        else:
-            GeometricTransform.__init__(self, rotation=rotation, scale=scale,
-                                        shear=shear, translation=translation)
-            self.nlcoeffs = (0., 0., 0., 0., 0., 0., 0.) if nlcoeffs is None else nlcoeffs
-            if len(self.nlcoeffs) != 7 or not all(isinstance(a, numbers.Real) for a in self.nlcoeffs):
-                raise ValueError("nlcoeffs should be 7 floats, but got %s" % (self.nlcoeffs,))
+    def __init__(
+        self,
+        matrix: Optional[numpy.ndarray] = None,
+        translation: Optional[numpy.ndarray] = None,
+        *,
+        rotation: Optional[float] = None,
+    ) -> None:
+        GeometricTransform.__init__(self, matrix, translation, rotation=rotation)
 
     @staticmethod
-    def _vandermonde(w):
-        """Return the Vandermonde matrix."""
-        # suffix cc denotes complex conjugate
-        wcc = numpy.conj(w)  # w̄
-        w2 = w * w  # w²
-        wabs2 = w * wcc  # ww̄
-        wcc2 = wcc * wcc  # w̄²
-        w2wcc = w * wabs2  # w²w̄
-        wwcc2 = wcc * wabs2  # ww̄²
-        w3wcc2 = wabs2 * w2wcc  # w³w̄²
-        w2wcc3 = wabs2 * wwcc2  # w²w̄³
-        M = numpy.column_stack((numpy.ones_like(w),  # zero order
-                                w, wcc,  # first order
-                                w2, wabs2, wcc2,  # second order
-                                w2wcc, wwcc2,  # third order
-                                w3wcc2, w2wcc3))  # fifth order
-        return M
-
-    def apply(self, x):
-        x = numpy.asarray(x)
-        w = x[..., 0] + 1.0j * x[..., 1]
-
-        M = self._vandermonde(w)
-        v = numpy.dot(M, self.coeffs)
-
-        if x.ndim == 1:
-            return numpy.array((v.real, v.imag))
-        return numpy.column_stack((v.real, v.imag))
-
-    def __call__(self, x):
-        warnings.warn("__call__ is deprecated, use apply instead",
-                      DeprecationWarning)
-        return self.apply(x)
-    __call__.__doc__ = apply.__doc__
-
-    @classmethod
-    def from_pointset(cls, x, y):
-        """
-        Estimate the transformation from a set of corresponding points.
-
-        Constructor for AnamorphosisTransform that determines the best
-        coordinate transformation from two point sets `x` and `y` in a
-        least-squares sense. For more information see [1].
-
-        Parameters
-        ----------
-        x : (n, 2) array
-            Coordinates in the source reference frame.
-        y : (n, 2) array
-            Coordinates in the destination reference frame. Must be of same
-            dimensions as `x`.
-
-        Returns
-        -------
-        tform : AnamorphosisTransform
-            Optimal coordinate transformation.
-
-        References
-        ----------
-        .. [1] J. Stopka, "Polynomial fit for Multi-beam distortions", internal
-        note, 2019
-
-        """
-        x = numpy.asarray(x)
-        y = numpy.asarray(y)
-
-        w = x[:, 0] + 1.0j * x[:, 1]
-        v = y[:, 0] + 1.0j * y[:, 1]
-
-        M = cls._vandermonde(w)
-        coeffs = numpy.linalg.lstsq(M, v)[0]
-        return cls(coeffs=coeffs)
-
-    @property
-    def coeffs(self):
-        tx, ty = self.translation
-        M = self.transformation_matrix
-        p = 0.5 * (M[0, 0] + M[1, 1])
-        q = 0.5 * (M[1, 0] - M[0, 1])
-        r = 0.5 * (M[0, 0] - M[1, 1])
-        s = 0.5 * (M[1, 0] + M[0, 1])
-        a = tx + 1.0j * ty
-        b1 = p + 1.0j * q
-        b2 = r + 1.0j * s
-        c1, c2, c3, d1, d2, e1, e2 = self.nlcoeffs
-        return (a, b1, b2, c1, c2, c3, d1, d2, e1, e2)
-
-    @coeffs.setter
-    def coeffs(self, coeffs):
-        a, b1, b2, c1, c2, c3, d1, d2, e1, e2 = coeffs
-        p, q = (b1.real, b1.imag)
-        r, s = (b2.real, b2.imag)
-        matrix = numpy.array([(p + r, -q + s), (q + s, p - r)])
-        self.transformation_matrix = matrix
-        self.nlcoeffs = (c1, c2, c3, d1, d2, e1, e2)
-        self.translation = (a.real, a.imag)
-
-    def inverse(self):
-        raise NotImplementedError("The inverse of the AnamorphosisTransform "
-                                  "is not an Anamorphosis transform itself.")
+    def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
+        return _optimal_rotation(x, y)
