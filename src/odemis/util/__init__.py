@@ -106,14 +106,8 @@ def almost_equal(a, b, atol=1e-18, rtol=1e-7):
     rtol (float): relative tolerance
     returns (bool): True if a and b are almost equal
     """
-    if a == b:
-        return True
-
-    tol = max(atol, max(abs(a), abs(b)) * rtol)
-    if abs(a - b) <= tol:
-        return True
-
-    return False
+    # Since Python 3.5, there exists an almost equal function
+    return math.isclose(a, b, rel_tol=rtol, abs_tol=atol)
 
 
 def rot_almost_equal(a, b, atol=1e-18, rtol=1e-7):
