@@ -55,15 +55,15 @@ The code can be extended to include weighted estimations and/or to support
 from __future__ import annotations
 
 import math
+from abc import ABCMeta, abstractmethod
+from typing import List, Optional, Tuple, Type, TypeVar, Union
+
 import numpy
 import scipy.linalg
-
-from abc import ABCMeta, abstractmethod
 from numpy.linalg import LinAlgError
-from typing import List, Optional, Tuple, Type, Union
+from odemis.util.linalg import qlp, qrp
 
-from odemis.util.linalg import qrp, qlp
-
+T = TypeVar("T", bound="GeometricTransform")
 
 __all__ = [
     "to_physical_space",
@@ -629,7 +629,18 @@ class ImplicitParameter:
 
 
 class GeometricTransform(metaclass=ABCMeta):
-    """Base class for geometric transformations."""
+    """
+    Base class for geometric transformations.
+
+    The transformation can either be descibed as a matrix multiplication using
+    the _explicit_ parameter `matrix`, or alternatively using the _implicit_
+    parameters `scale`, `rotation`, `squeeze`, and `shear`. Different transform
+    types are implemented as a subclass of `GeometricTransform` by imposing a
+    different set of constraints on the implicit parameters. For example, an
+    instance of `RigidTransform` has unit scale, whereas this can be any
+    positive number for a `SimilarityTransform` instance.
+
+    """
 
     _matrix: Optional[numpy.ndarray] = None
     scale = ImplicitParameter(1, positive=True)
@@ -726,7 +737,7 @@ class GeometricTransform(metaclass=ABCMeta):
         pass
 
     @classmethod
-    def from_pointset(cls, x: numpy.ndarray, y: numpy.ndarray) -> GeometricTransform:
+    def from_pointset(cls: Type[T], x: numpy.ndarray, y: numpy.ndarray) -> T:
         """
         Estimate the transformation from a set of corresponding points.
 
@@ -838,14 +849,16 @@ class AffineTransform(GeometricTransform):
 
     The affine transform has the following form:
 
-        x' = RLDL⸆x + t
+        x' = sRLDL⸆x + t
 
-    where `R` is an orthogonal matrix, `L` is a lower triangular matrix with
-    all diagonal elements equal to one and a single off-diagonal non-zero
-    element, `D` is a diagonal matrix with diagonal entries `k` and `1/k` where
-    `k` is the squeeze factor, and `L⸆` is the matrix transpose of `L`. To
-    eliminate improper rotations (reflections) it is required that the
-    determinant of `R` equals 1.
+    where `s` is a positive scalar representing isotropic scaling, `R` is an
+    orthogonal matrix representing rotation, `L` is a lower triangular matrix
+    with all diagonal elements equal to one and a single off-diagonal non-zero
+    element representing shear, `D` is a diagonal matrix with diagonal entries
+    `k` and `1/k` representing anisotropic scaling where `k` is the squeeze
+    factor, `L⸆` is the matrix transpose of `L`, and `t` is a translation
+    vector. To eliminate improper rotations (reflections) it is required that
+    the determinant of `R` equals 1.
 
     Parameters
     ----------
@@ -914,14 +927,16 @@ class ScalingTransform(AffineTransform):
 
     The scaling transform has the following form:
 
-        y = RSx + t
+        x' = sRDx + t
 
-    where `R` is an orthogonal matrix, `S` is a diagonal matrix whose elements
-    represent scale factors along the coordinate axis, and `t` is a translation
-    vector. To eliminate improper rotations (reflections) it is required that
-    the determinant of `R` equals 1.
+    where `s` is a positive scalar representing isotropic scaling, `R` is an
+    orthogonal matrix representing rotation, `D` is a diagonal matrix with
+    diagonal entries `k` and `1/k` representing anisotropic scaling where `k`
+    is the squeeze factor, and `t` is a translation vector. To eliminate
+    improper rotations (reflections) it is required that the determinant of `R`
+    equals 1.
 
-    NOTE: `RS` is not in general equal to `SR`; so these are two different
+    NOTE: `RD` is not in general equal to `DR`; so these are two different
           classes of transformations.
 
     Parameters
@@ -996,7 +1011,7 @@ class ScalingTransform(AffineTransform):
         phi = 0.5 * numpy.arctan2(k3, k1 - k2)
         R = _rotation_matrix_from_angle(phi)
         scales = numpy.einsum("ij,ji->j", R, alpha) / beta
-        return scales * R  # type: ignore
+        return scales * R
 
 
 class SimilarityTransform(ScalingTransform):
@@ -1009,9 +1024,10 @@ class SimilarityTransform(ScalingTransform):
 
         y = sRx + t
 
-    where `s` is a positive scalar, `R` is an orthogonal matrix, and `t` is a
-    translation vector. To eliminate improper rotations (reflections) is
-    required that the determinant of `R` equals 1.
+    where `s` is a positive scalar representing isotropic scaling, `R` is an
+    orthogonal matrix representing rotation, and `t` is a translation vector.
+    To eliminate improper rotations (reflections) it is required that the
+    determinant of `R` equals 1.
 
     Parameters
     ----------
@@ -1059,7 +1075,7 @@ class SimilarityTransform(ScalingTransform):
         R = _optimal_rotation(x, y)
         s = numpy.einsum("ik,jk,ji", R, x, y) / numpy.einsum("ij,ij", x, x)
         matrix = s * R
-        return matrix  # type: ignore
+        return matrix
 
 
 class RigidTransform(SimilarityTransform):
@@ -1075,9 +1091,9 @@ class RigidTransform(SimilarityTransform):
 
         y = Rx + t
 
-    where `R` is an orthogonal matrix and `t` is a translation vector. To
-    eliminate improper rotations (reflections) it is required that the
-    determinant of `R` equals 1.
+    where `R` is an orthogonal matrix representing rotation, and `t` is a
+    translation vector. To eliminate improper rotations (reflections) it is
+    required that the determinant of `R` equals 1.
 
     Parameters
     ----------
