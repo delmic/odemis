@@ -498,7 +498,6 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
                                           self._global_name)
                         Pyro4.Proxy.__getattr__(self, "unsubscribe")(self._proxy_name)
                     self._commands.send(b"STOP")
-                    self._thread.join(1)
                 self._commands.close()
                 # Not needed: called when garbage-collected and it's dangerous
                 # as it blocks until all connections are closed.
