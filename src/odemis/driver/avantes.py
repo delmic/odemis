@@ -855,6 +855,7 @@ class Spectrometer(model.Detector):
         Note: it expects that the acquisition is running.
         timeout (0<=float): how long to wait to check (use 0 to not wait)
         return (bool): True if needs to stop, False if data is ready
+        raise TimeoutError: if no data received within the specified time
         raise TerminationRequested: if a terminate message was received
         """
         tend = time.time() + timeout
@@ -878,8 +879,8 @@ class Spectrometer(model.Detector):
 
     def _acquire(self):
         """
-        Acquisition thread
-        Managed via the ._genmsg Queue
+        Acquisition thread. Runs all the time, until receive a GEN_TERM message.
+        Managed via the ._genmsg Queue, by passing GEN_* messages.
         """
         npixels = self._shape[0]
 

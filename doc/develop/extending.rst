@@ -45,7 +45,7 @@ Detailed instructions
 ---------------------
 
 Download Ubuntu 18.04 at this address:
-https://ubuntu.com/download/desktop/thank-you?version=18.04.5&architecture=amd64
+https://ubuntu.com/download/desktop/thank-you?version=18.04.6&architecture=amd64
 
 Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-ubuntu-desktop
@@ -59,9 +59,8 @@ Start a terminal (with Ctrl+Alt+T) and type::
     sudo add-apt-repository ppa:delmic-soft/odemis
     sudo apt-get update
     sudo apt-get dist-upgrade
-    sudo apt-get install git imagej vim hdfview meld libtiff-tools gimp \
-     python3-pyro4-delmic odemis fluodb \
-     python3-setuptools python3-sphinx inkscape dia-gnome texlive pngcrush cython3
+    sudo apt-get install odemis git vim meld libtiff-tools gimp \
+     fluodb imagej inkscape pngcrush
     sudo apt-get build-dep odemis
     sudo adduser $(whoami) odemis
     mkdir development
@@ -180,9 +179,9 @@ right-click and select *Git Bash here*. Then type::
 Creating the Odemis environment
 -------------------------------
 
-Install `Anaconda <https://www.anaconda.com/distribution/>`_ with Python 3.x and
+Install `Miniconda <https://docs.conda.io/en/latest/miniconda.html>`_ and
 pick the right architecture for your computer (most likely 64-bit).
-Odemis is validated on Python 3.6, but Anaconda typically comes with a newer version of Python (eg, 3.8)
+Odemis is validated on Python 3.6, but Anaconda typically comes with a newer version of Python (eg, 3.9)
 The following instructions use the fact that Anaconda supports multiple versions of Python 
 simultaneously to install Python 3.6.
 
@@ -231,7 +230,7 @@ If you have access to the Delmic Bitbucket repository, do the following::
    cd ..
    git clone https://<YOUR_NAME>@bitbucket.org/delmic/arpolarimetry.git
    cd arpolarimetry
-   python setup.py
+   python setup.py install
 
 
 Building Odemis Viewer and the installer
