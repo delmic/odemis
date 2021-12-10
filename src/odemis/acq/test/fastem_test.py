@@ -88,7 +88,7 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         # This should be used by the acquisition
         s.dwellTime.value = 1e-6  # s
 
-        # These settings should be overridden by the acquisition
+        # Use random settings and check they are overridden by the overview acquisition
         s.scale.value = (2, 2)
         s.horizontalFoV.value = 20e-6  # m
 
@@ -98,14 +98,16 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         # scintillator5_area = (-0.002, -0.002, 0.002, 0.002)  # l, b, r, t
 
         est_time = fastem.estimateTiledAcquisitionTime(s, self.stage, scintillator5_area)
-        # self.assertGreater(est_time, 10)  # It should take more than 10s! (expect ~5 min)
+        # don't use for DEBUG example
+        self.assertGreater(est_time, 10)  # It should take more than 10s! (expect ~5 min)
         
         before_start_t = time.time()
         f = fastem.acquireTiledArea(s, self.stage, scintillator5_area)
         time.sleep(1)
         start_t, end_t = f.get_progress()
         self.assertGreater(start_t, before_start_t)
-        # self.assertGreater(end_t, time.time() + 10)  # Should report still more than 10s
+        # don't use for DEBUG example
+        self.assertGreater(end_t, time.time() + 10)  # Should report still more than 10s
 
         overview_da = f.result()
         self.assertGreater(overview_da.shape[0], 2000)
@@ -213,6 +215,7 @@ class TestFastEMAcquisition(unittest.TestCase):
             raise unittest.SkipTest("No simulator running or HW present. Skip fastem acquisition tests.")
 
         # get the hardware components
+        cls.scanner = model.getComponent(role='e-beam')
         cls.asm = model.getComponent(role="asm")
         cls.mppc = model.getComponent(role="mppc")
         cls.multibeam = model.getComponent(role="multibeam")
@@ -250,7 +253,7 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.mppc
                                )
         path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_megafield")
-        f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -282,7 +285,7 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.mppc
                                )
         path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_field_indices")
-        f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -312,7 +315,7 @@ class TestFastEMAcquisition(unittest.TestCase):
 
         self.updates = 0  # updated in callback on_progress_update
 
-        f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
@@ -346,7 +349,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         self.updates = 0  # updated in callback on_progress_update
         self.done = False  # updated in callback on_done
 
-        f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
@@ -390,7 +393,7 @@ class TestFastEMAcquisition(unittest.TestCase):
                                )
         path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_stage_move")
 
-        f = fastem.acquire(roa, path_storage, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned

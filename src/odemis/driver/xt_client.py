@@ -1246,8 +1246,9 @@ class Scanner(model.Emitter):
             if voltage != self.accelVoltage.value:
                 self.accelVoltage._value = voltage
                 self.accelVoltage.notify(voltage)
-            blanked = self.parent.beam_is_blanked()
-            if blanked != self.blanker.value:
+            blanked = self.parent.beam_is_blanked()  # blanker status on the HW
+            # if blanker is in auto mode (None), don't care about HW status (self-regulated)
+            if self.blanker.value is not None and blanked != self.blanker.value:
                 self.blanker._value = blanked
                 self.blanker.notify(blanked)
             spot_size = self.parent.get_ebeam_spotsize()
@@ -1339,19 +1340,19 @@ class Scanner(model.Emitter):
         """
         Parameters
         ----------
-        blank (bool): True if the the electron beam should blank, False if it should be unblanked.
+        blank (bool or None): True if the the electron beam should blank, False if it should be unblanked,
+            None if it should be blanked/unblanked automatically. Only useful when using the Detector or the
+            XTTKDetector component. Not useful when operating the SEM in external mode.
 
         Returns
         -------
-        (bool): True if the the electron beam is blanked, False if it is unblanked. See Notes for edge case.
+        (bool or None): True if the the electron beam is blanked, False if it is unblanked. See Notes for edge case,
+            None if it should be blanked/unblanked automatically.
 
-        Notes
-        -----
-        When pausing the stream in XT it will blank the beam and return True for the beam_is_blanked check. It is
-        possible to unblank the beam when the stream is paused. The physical unblanking will then occur when the stream
-        is started, and at that moment beam_is_blanked will return False. It is impossible to check if the beam will
-        be unblanked or blanked when starting the stream.
         """
+        if blank is None:
+            return None
+
         if blank:
             self.parent.blank_beam()
         else:
@@ -1399,12 +1400,14 @@ class Scanner(model.Emitter):
 
     def _setExternal(self, external):
         """
-
-        :param external: bool
-        bool, True if the scan mode should be 'external', False if the scan mode should be different than 'external'.
+        Switching between internal and external control of the SEM.
+        :param external: (bool) True is external, False is full frame mode.
+        :return: (bool) True if the scan mode should be 'external'.
+                        False if the scan mode should be internally controlled by the SEM.
         """
         scan_mode = "external" if external else "full_frame"
         self.parent.set_scan_mode(scan_mode)
+        return external
 
     @isasync
     def applyAutoContrastBrightness(self, detector):

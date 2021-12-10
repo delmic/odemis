@@ -27,6 +27,8 @@ import logging
 import numpy
 from odemis import model, util
 from odemis.acq.align import FindEbeamCenter
+
+from odemis.acq import fastem_conf
 from odemis.model import MD_POS_COR, VigilantAttributeBase, hasVA
 from odemis.util import img, conversion, fluo
 import threading
@@ -646,6 +648,13 @@ class FastEMSEMStream(SEMStream):
         pxs = (self.emitter.pixelSize.value[0] * self.emitter.scale.value[0],
                self.emitter.pixelSize.value[1] * self.emitter.scale.value[1])
         self.pixelSize._set_value(pxs, force_write=True)
+
+    def prepare(self):
+        """
+        In addition to the usual preparation, set the correct scanner configuration.
+        """
+        fastem_conf.configure_scanner(self.emitter, fastem_conf.LIVESTREAM_MODE)
+        return super().prepare()
 
 
 class SpotSEMStream(LiveStream):

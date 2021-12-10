@@ -35,10 +35,8 @@ from odemis.acq import stitching
 from odemis.acq.stitching import REGISTER_IDENTITY
 from odemis.acq.stream import SEMStream
 from odemis.util import TimeoutError
+from odemis.acq import fastem_conf
 
-
-SINGLE_BEAM_ROTATION_DEFAULT = 0  # 0 is typically a good guess (better than multibeam rotation of ~0.0157 rad)
-MULTI_BEAM_ROTATION_DEFAULT = 0
 
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
@@ -167,7 +165,7 @@ class FastEMROC(object):
         # if None -> acquire, if not None, don't acquire again
 
 
-def acquire(roa, path, multibeam, descanner, detector, stage):
+def acquire(roa, path, scanner, multibeam, descanner, detector, stage):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -177,6 +175,7 @@ def acquire(roa, path, multibeam, descanner, detector, stage):
                 path as specified in the component.
                 The ASM will create the directory on the external storage, including the parent directories,
                 if they do not exist.
+    :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
     :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
     :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
     :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
@@ -192,7 +191,7 @@ def acquire(roa, path, multibeam, descanner, detector, stage):
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
-    task = AcquisitionTask(multibeam, descanner, detector, stage, roa, path, f)
+    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, roa, path, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -203,24 +202,15 @@ def acquire(roa, path, multibeam, descanner, detector, stage):
     return f
 
 
-def _configure_multibeam_hw(scanner):
-    md = scanner.getMetadata()
-    if model.MD_MULTI_BEAM_ROTATION in md:
-        scanner.rotation.value = md[model.MD_MULTI_BEAM_ROTATION]
-    else:
-        scanner.rotation.value = MULTI_BEAM_ROTATION_DEFAULT
-        logging.warning("Scanner doesn't have MULTI_BEAM_ROTATION metadata, using %s rad.",
-                        scanner.rotation.value)
-
-
 class AcquisitionTask(object):
     """
     The acquisition task for a single region of acquisition (ROA, megafield).
     An ROA consists of multiple single field images.
     """
 
-    def __init__(self, multibeam, descanner, detector, stage, roa, path, future):
+    def __init__(self, scanner, multibeam, descanner, detector, stage, roa, path, future):
         """
+        :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
         :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
         :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
@@ -236,6 +226,7 @@ class AcquisitionTask(object):
                                                detector.dataContent VA.
                             (Exception or None): Exception raised during the acquisition or None.
         """
+        self._scanner = scanner
         self._multibeam = multibeam
         self._descanner = descanner
         self._detector = detector
@@ -291,6 +282,9 @@ class AcquisitionTask(object):
 
         try:
             logging.debug("Starting megafield acquisition.")
+            # configure the HW settings
+            fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
+
             dataflow.subscribe(self.image_received)
 
             # Acquire the single field images.
@@ -515,44 +509,11 @@ def estimateTiledAcquisitionTime(stream, stage, area):
     return nx * ny * TIME_PER_TILE_1US  # s
 
 
-def _configure_overview_hw(scanner):
-    """
-    Set good parameters an overview acquisition
-    """
-    # Typically, all these settings should have already been set, but better be safe.
-    scanner.multiBeamMode.value = False
-    scanner.external.value = False
-    scanner.blanker.value = None  # Automatic
-    # Disable immersion, to get a larger field of view.
-    # It needs to be done before changing the horizontalFoV, as the range is updated
-    scanner.immersion.value = False
-
-    scanner.horizontalFoV.value = TILE_FOV_X  # m
-
-    # => compute the scale needed in X, use the same one in Y, and then compute the Y resolution.
-    # => set resolution to full FoV, and then adjust
-    scale = scanner.shape[0] / TILE_RES[0]
-    scanner.scale.value = (scale, scale)
-    if scanner.resolution.value != TILE_RES:
-        logging.warning("Unexpected resolution %s on e-beam scanner, expected %s",
-                        scanner.resolution.value, TILE_RES)
-
-    md = scanner.getMetadata()
-    if model.MD_SINGLE_BEAM_ROTATION in md:
-        scanner.rotation.value = md[model.MD_SINGLE_BEAM_ROTATION]
-    else:
-        scanner.rotation.value = SINGLE_BEAM_ROTATION_DEFAULT
-        logging.warning("Scanner doesn't have SINGLE_BEAM_ROTATION metadata, using %s rad.",
-                        scanner.rotation.value)
-    md[model.MD_ROTATION_COR] = -scanner.rotation.value
-    scanner.updateMetadata(md)
-
-
 def _run_overview_acquisition(f, stream, stage, area, live_stream):
     """
     :returns: (DataArray)
     """
-    _configure_overview_hw(stream.emitter)
+    fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE)
 
     # The stage movement precision is quite good (just a few pixels). The stage's
     # position reading is much better, and we can assume it's below a pixel.

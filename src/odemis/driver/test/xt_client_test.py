@@ -276,6 +276,15 @@ class TestMicroscope(unittest.TestCase):
         self.scanner.blanker.value = True
         self.assertTrue(self.scanner.blanker.value)
 
+    def test_autoblanking(self):
+        """Test that scanner automatically blanks after acquisition if the .blanker VA is set to None."""
+        self.scanner.blanker.value = None
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
+        im = self.detector.data.get()
+        self.assertEqual(self.scanner.parent.beam_is_blanked(), True)
+        time.sleep(5)  # give settings updater time to update new blanker value
+        self.assertEqual(self.scanner.blanker.value, None)  # .blanker.value should not change
+
     def test_rotation(self):
         """Test setting the rotation."""
         init_rotation = self.scanner.rotation.value
