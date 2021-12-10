@@ -286,22 +286,16 @@ class SecomStateController(object):
 
             # if there is an overview camera, _and_ it has to be reached via a
             # special "pressure" state => note it down
+            self._overview_pressure = None
             if self._main_data.overview_ccd:
                 for p, pn in pressures.items():
                     if pn == "overview":
                         self._overview_pressure = p
                         break
-                else:
-                    self._overview_pressure = None
 
             self._main_data.chamberState.subscribe(self.on_chamber_state)
             ch_pos = self._main_data.chamber.position
             ch_pos.subscribe(self.on_chamber_pressure, init=True)
-
-            # at init, if chamber is in overview position, start by pumping
-            # (which will indirectly first acquire an image)
-            if ch_pos.value["vacuum"] == self._overview_pressure:
-                self._main_data.chamberState.value = CHAMBER_PUMPING
 
         # disable optical and SEM buttons while there is a preparation process running
         self._main_data.is_preparing.subscribe(self.on_preparation)
@@ -682,9 +676,14 @@ class DelphiStateController(SecomStateController):
         ch_opened = self._main_data.chamber.opened
         ch_opened.subscribe(self.on_door_opened)
 
-        # If starts with the sample fully loaded, check for the calibration now
+        # At init, depending on the position of the sample loader, we can do a
+        # few things:
+        # * if in overview position, start by pumping (which will indirectly first acquire an image)
+        # * if in SEM position, check for the calibration immediately
         ch_pos = self._main_data.chamber.position
-        if ch_pos.value["vacuum"] == self._vacuum_pressure:
+        if ch_pos.value["vacuum"] == self._overview_pressure:
+            self._main_data.chamberState.value = CHAMBER_PUMPING
+        elif ch_pos.value["vacuum"] == self._vacuum_pressure:
             # If it's loaded, the sample holder is registered for sure, and the
             # calibration should have already been done. Otherwise request
             # ejecting the sample holder
