@@ -32,6 +32,7 @@ from concurrent.futures import CancelledError
 from decorator import decorator
 from functools import wraps
 import inspect
+import itertools
 import logging
 import math
 import numpy
@@ -39,13 +40,24 @@ import signal
 import sys
 import threading
 import time
+from typing import Iterable, Tuple, TypeVar
 import weakref
 import types
 
 from . import weak
 
+T = TypeVar("T")
+
 
 # helper functions
+def pairwise(iterable: Iterable[T]) -> Iterable[Tuple[T, T]]:
+    "s -> (s0,s1), (s1,s2), (s2, s3), ..."
+    # will be added to itertools in Python 3.10
+    a, b = itertools.tee(iterable)
+    next(b, None)
+    return zip(a, b)
+
+
 def get_best_dtype_for_acc(idtype, count):
     """
     Computes the smallest dtype that allows to integrate the number of inputs without overflowing.

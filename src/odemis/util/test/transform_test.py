@@ -23,24 +23,24 @@ from __future__ import division
 
 import copy
 import inspect
-import numpy
-from numpy.linalg import LinAlgError
 import operator
 import unittest
 
+import numpy
+from numpy.linalg import LinAlgError
 from odemis.util.spot import GridPoints
-
 from odemis.util.transform import (
-    _rotation_matrix_from_angle,
-    _rotation_matrix_to_angle,
-    to_physical_space,
-    to_pixel_index,
     AffineTransform,
+    RigidTransform,
     ScalingTransform,
     SimilarityTransform,
-    RigidTransform,
+    _rotation_matrix_from_angle,
+    _rotation_matrix_to_angle,
+    cartesian_to_polar,
+    polar_to_cartesian,
+    to_physical_space,
+    to_pixel_index,
 )
-
 from transform_known_values import transform_known_values
 
 
@@ -50,6 +50,48 @@ def _angle_diff(x, y):
     the branch cut at the negative x-axis.
     """
     return min(y - x, y - x + 2.0 * numpy.pi, y - x - 2.0 * numpy.pi, key=abs)
+
+
+class PolarCoordinateTransformationTest(unittest.TestCase):
+    """Unit tests for `cartesian_to_polar()` and `polar_to_cartesian()`."""
+
+    def setUp(self):
+        """Ensure reproducible tests."""
+        self._rng = numpy.random.default_rng(12345)
+
+    def test_cartesian_to_polar_known_values(self):
+        """
+        `cartesian_to_polar()` should return known result with known input.
+
+        """
+        xy = numpy.array([(1, 0), (0, 1), (-1, 0), (0, -1)])
+        _rho = numpy.array([1, 1, 1, 1])
+        _theta = numpy.pi * numpy.array([0, 0.5, 1, -0.5])
+        rho, theta = cartesian_to_polar(xy)
+        numpy.testing.assert_array_almost_equal(rho, _rho)
+        numpy.testing.assert_array_almost_equal(theta, _theta)
+
+    def test_polar_to_cartesian_known_values(self):
+        """
+        `polar_to_cartesian()` should return known result with known input.
+
+        """
+        rho = numpy.array([1, 1, 1, 1])
+        theta = numpy.pi * numpy.array([0, 0.5, 1, -0.5])
+        _xy = numpy.array([(1, 0), (0, 1), (-1, 0), (0, -1)])
+        xy = polar_to_cartesian(rho, theta)
+        numpy.testing.assert_array_almost_equal(xy, _xy)
+
+    def test_round_trip(self):
+        """
+        Cartesian coordinates should remain the same when converted to polar
+        coordinates and then back.
+
+        """
+        _xy = self._rng.standard_normal((100, 2))
+        rho, theta = cartesian_to_polar(_xy)
+        xy = polar_to_cartesian(rho, theta)
+        numpy.testing.assert_array_almost_equal(xy, _xy)
 
 
 class PixelIndexCoordinateTransformBase(unittest.TestCase):
