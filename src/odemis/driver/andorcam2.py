@@ -2176,118 +2176,137 @@ class AndorCam2(model.DigitalCamera):
         """
         try:
             self.select()  # Make sure we are using the right camera
-            has_hw_lock = False
-
             while True: # Waiting/Acquiring loop
                 # Wait until we have a start (or terminate) message
                 self._acq_wait_start()
 
-                # Preparation & acquisition loop (until stop requested)
-                logging.debug("Preparing acquisition")
-                need_reconfig = True  # Always reconfigure when new acquisition starts
-                failures = 0
-                while True:  # Acquire one image
-                    if self.request_hw: # TODO: check if we still need this code.
-                        need_reconfig = True  # ensure we'll release the hw_lock for a little while
+                # acquisition loop (until stop requested)
+                self._acquire_images()
 
-                    # Before every image, check that the camera is ready for
-                    # acquisition, with the current settings (in case they were
-                    # changed during the previous frame).
-                    if need_reconfig or self._need_update_settings():
-                        # Stop the acquisition (if already running, typically because settings changes)
-                        try:
-                            if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
-                                self.atcore.AbortAcquisition()
-                                if has_hw_lock:
-                                    self.hw_lock.release()
-                                    has_hw_lock = False
-                                time.sleep(0.1)  # give a bit of time to abort acquisition
-                        except AndorV2Error as ex:
-                            # it was already aborted
-                            if ex.errno != 20073:  # DRV_IDLE == already aborted == not a big deal
-                                raise
+        except TerminationRequested:
+            logging.debug("Acquisition thread requested to terminate")
+        except Exception:
+            logging.exception("Failure in acquisition thread")
 
-                        im_res, duration, trigger_mode = self._update_settings()
-                        if not has_hw_lock:
-                            self.hw_lock.acquire()
-                            has_hw_lock = True
-                        if trigger_mode != TRIG_FAKE:  # TRIG_FAKE uses StartAcquisition to simulate trigger
-                            self.atcore.StartAcquisition()
+        # Clean up everything (especially in case of exception)
+        self.atcore.FreeInternalMemory()  # TODO not sure it's needed
+        self._gc_while_waiting(None)
 
-                        need_reconfig = False
+        logging.debug("Acquisition thread ended")
 
-                    if trigger_mode == TRIG_NONE:
-                        # No synchronisation -> just check it shouldn't stop
-                        if self._acq_should_stop():
-                            logging.debug("Acquisition cancelled")
-                            break
-                    elif trigger_mode == TRIG_SW:
-                        # Wait for trigger
-                        if self._acq_wait_trigger():
-                            # True = Stop requested
-                            break
-                        # Trigger received => start the acquisition
-                        self.atcore.SendSoftwareTrigger()
-                    elif trigger_mode == TRIG_FAKE:
-                        # Wait for trigger
-                        if self._acq_wait_trigger():
-                            # True = Stop requested
-                            break
-                        # Trigger received => start the acquisition
+    def _acquire_images(self):
+        try:
+            logging.debug("Starting acquisition")
+            has_hw_lock = False
+            need_reconfig = True  # Always reconfigure when new acquisition starts
+            failures = 0
+            while True:  # Acquire one image
+                if self.request_hw:  # TODO: check if we still need this code.
+                    need_reconfig = True  # ensure we'll release the hw_lock for a little while
+
+                # Before every image, check that the camera is ready for
+                # acquisition, with the current settings (in case they were
+                # changed during the previous frame).
+                if need_reconfig or self._need_update_settings():
+                    # Stop the acquisition (if already running, typically because settings changes)
+                    try:
+                        if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                            self.atcore.AbortAcquisition()
+                            if has_hw_lock:
+                                self.hw_lock.release()
+                                has_hw_lock = False
+                            time.sleep(0.1)  # give a bit of time to abort acquisition
+                    except AndorV2Error as ex:
+                        # it was already aborted
+                        if ex.errno != 20073:  # DRV_IDLE == already aborted == not a big deal
+                            raise
+
+                    im_res, duration, trigger_mode = self._update_settings()
+                    if not has_hw_lock:
+                        self.hw_lock.acquire()
+                        has_hw_lock = True
+
+                    if trigger_mode != TRIG_FAKE:
+                        # TRIG_NONE: Prepare and keep acquiring images from now on
+                        # TRIG_SW: Prepare and keep acquiring images each time a trigger is received
+                        # TRIG_FAKE: will use StartAcquisition(), in single image mode,
+                        #  at the moment of the acquisition event, to simulate trigger
                         self.atcore.StartAcquisition()
 
-                    # Allocate memory to store the coming image
-                    metadata = dict(self._metadata)  # duplicate
-                    tstart = time.time()
-                    twait = duration + 1  # s, give a margin for timeout
-                    metadata[model.MD_ACQ_DATE] = tstart  # time at the beginning
-                    cbuffer = self._allocate_buffer(im_res)
-                    array = self._buffer_as_array(cbuffer, im_res, metadata)
+                    need_reconfig = False
 
-                    # We have a bit of time waiting for the image...
-                    # Let's take the opportunity to free non-used buffers.
-                    self._gc_while_waiting(duration)
+                if trigger_mode == TRIG_NONE:
+                    # No synchronisation -> just check it shouldn't stop
+                    if self._acq_should_stop():
+                        logging.debug("Acquisition cancelled")
+                        break
+                elif trigger_mode == TRIG_SW:
+                    # Wait for trigger
+                    if self._acq_wait_trigger():
+                        # True = Stop requested
+                        break
+                    # Trigger received => start the acquisition
+                    self.atcore.SendSoftwareTrigger()
+                elif trigger_mode == TRIG_FAKE:
+                    # Wait for trigger
+                    if self._acq_wait_trigger():
+                        # True = Stop requested
+                        break
+                    # Trigger received => start the acquisition
+                    self.atcore.StartAcquisition()
 
+                # Allocate memory to store the coming image
+                metadata = dict(self._metadata)  # duplicate
+                tstart = time.time()
+                twait = duration + 1  # s, give a margin for timeout
+                metadata[model.MD_ACQ_DATE] = tstart  # time at the beginning
+                cbuffer = self._allocate_buffer(im_res)
+                array = self._buffer_as_array(cbuffer, im_res, metadata)
+
+                # We have a bit of time waiting for the image...
+                # Let's take the opportunity to free non-used buffers.
+                self._gc_while_waiting(duration)
+
+                try:
+                    # Wait for the acquisition to be received
+                    logging.debug("Waiting for %g s", twait)
+                    if self._acq_wait_data(twait):
+                        logging.debug("Acquisition cancelled")
+                        break
+
+                    # Get the data
+                    # In case several images have already been received, we discard all but the last one.
+                    self.atcore.GetMostRecentImage16(cbuffer, c_uint32(im_res[0] * im_res[1]))
+
+                except (TimeoutError, AndorV2Error) as ex:
+                    # try again up to 5 times
+                    failures += 1
+                    if failures >= 5:
+                        raise
+                    # Common failures are 20024 (DRV_NO_NEW_DATA) or
+                    # 20067 (DRV_P2INVALID) during GetMostRecentImage16()
                     try:
-                        # Wait for the acquisition to be received
-                        logging.debug("Waiting for %g s", twait)
-                        if self._acq_wait_data(twait):
-                            logging.debug("Acquisition cancelled")
-                            break
-
-                        # Get the data
-                        # In case several images have already been received, we discard all but the last one.
-                        self.atcore.GetMostRecentImage16(cbuffer, c_uint32(im_res[0] * im_res[1]))
-
-                    except (TimeoutError, AndorV2Error) as ex:
-                        # try again up to 5 times
-                        failures += 1
-                        if failures >= 5:
-                            raise
-                        # Common failures are 20024 (DRV_NO_NEW_DATA) or
-                        # 20067 (DRV_P2INVALID) during GetMostRecentImage16()
-                        try:
-                            if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
-                                self.atcore.AbortAcquisition()  # Need to stop acquisition to read temperature
-                            temp = self.GetTemperature()  # Best way to check the connection and status
-                        except AndorV2Error:  # Probably something really wrong the connection
-                            temp = None
-                        # -999°C means the camera is gone
-                        if temp == -999:
-                            logging.error("Camera seems to have disappeared, will try to reinitialise it")
-                            self.Reinitialize()
-                        else:
-                            time.sleep(0.1)
-                            logging.warning("trying again to acquire image after error %s", ex)
-                        need_reconfig = True
-                        continue  # Go back to beginning of acquisition loop
+                        if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
+                            self.atcore.AbortAcquisition()  # Need to stop acquisition to read temperature
+                        temp = self.GetTemperature()  # Best way to check the connection and status
+                    except AndorV2Error:  # Probably something really wrong the connection
+                        temp = None
+                    # -999°C means the camera is gone
+                    if temp == -999:
+                        logging.error("Camera seems to have disappeared, will try to reinitialise it")
+                        self.Reinitialize()
                     else:
-                        failures = 0
+                        time.sleep(0.1)
+                        logging.warning("trying again to acquire image after error %s", ex)
+                    need_reconfig = True
+                    continue  # Go back to beginning of acquisition loop
+                else:
+                    failures = 0
 
-                    logging.debug("image acquired successfully after %g s", time.time() - tstart)
-                    self.data.notify(self._transposeDAToUser(array))
-                    del cbuffer, array
-
+                logging.debug("image acquired successfully after %g s", time.time() - tstart)
+                self.data.notify(self._transposeDAToUser(array))
+                del cbuffer, array
+        finally:
             logging.debug("Stopping acquisition")
             if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
                 try:
@@ -2299,29 +2318,6 @@ class AndorCam2(model.DigitalCamera):
             if has_hw_lock:
                 self.hw_lock.release()
                 has_hw_lock = False
-
-        except TerminationRequested:
-            logging.debug("Acquisition thread requested to terminate")
-        except Exception:
-            logging.exception("Failure in acquisition thread")
-
-        # Clean up everything (especially in case of exception)
-
-        # Stop if acquisition is still active
-        if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
-            try:
-                self.atcore.AbortAcquisition()
-            except AndorV2Error as ex:
-                if ex.errno != 20073:  # DRV_IDLE == already aborted == not a big deal
-                    logging.exception("Failed to stop the acquisition")
-
-        if has_hw_lock:
-            self.hw_lock.release()
-
-        self.atcore.FreeInternalMemory()  # TODO not sure it's needed
-        self._gc_while_waiting(None)
-
-        logging.debug("Acquisition thread ended")
 
     def _gc_while_waiting(self, max_time=None):
         """
