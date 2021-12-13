@@ -411,10 +411,10 @@ def FindGridSpots(image, repetition, spot_size=18, method=GRID_AFFINE):
     # Find the transformation from a grid centered around the origin to the sorted positions.
     if method == GRID_AFFINE:
         transformation = AffineTransform.from_pointset(grid, pos_sorted)
-        scale, rotation, shear = alt_transformation_matrix_to_implicit(AffineTransform.matrix, "RSU")
+        scale, rotation, shear = alt_transformation_matrix_to_implicit(transformation.matrix, "RSU")
     elif method == GRID_SIMILARITY:
         transformation = SimilarityTransform.from_pointset(grid, pos_sorted)
-        scale, rotation, _ = alt_transformation_matrix_to_implicit(AffineTransform.matrix, "RSU")
+        scale, rotation, _ = alt_transformation_matrix_to_implicit(transformation.matrix, "RSU")
         shear = None  # The similarity transform does not have a shear component.
     else:
         raise ValueError("Method: %s is unknown, should be 'affine' or 'similarity'." % method)
