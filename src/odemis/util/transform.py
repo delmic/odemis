@@ -52,8 +52,6 @@ The code can be extended to include weighted estimations and/or to support
    (Vol. 2). Spie Press.
 
 """
-from __future__ import annotations
-
 import math
 from abc import ABCMeta, abstractmethod
 from typing import List, Optional, Tuple, Type, TypeVar, Union
@@ -600,19 +598,22 @@ class ImplicitParameter:
         self.constrained = constrained
         self.positive = positive
 
-    def __set_name__(self, owner: Type[GeometricTransform], name: str) -> None:
+    def __set_name__(self, owner: Type["GeometricTransform"], name: str) -> None:
         self.private_name = "_" + name
 
-    def __get__(
-        self,
-        instance: GeometricTransform,
-        owner: Optional[Type[GeometricTransform]] = None,
-    ) -> float:
+    def __get__(self,
+        instance: Optional["GeometricTransform"],
+        owner: Optional[Type["GeometricTransform"]]=None,
+    ) -> Union[float, "ImplicitParameter"]:
+        """
+        return the value (float) when a instance is passed.
+          If the instance is None (ie, accessed on a class), returns itself.
+        """
         if instance is None:
             return self
-        return getattr(instance, self.private_name, self.default)  # type: ignore
+        return getattr(instance, self.private_name, self.default)
 
-    def __set__(self, instance: GeometricTransform, value: float) -> None:
+    def __set__(self, instance: "GeometricTransform", value: float) -> None:
         value = self.default if value is None else value
         if not isinstance(value, (int, float)):
             raise TypeError(f"Expected {value!r} to be an int or a float")
@@ -787,7 +788,7 @@ class GeometricTransform(metaclass=ABCMeta):
         x = numpy.asarray(x)
         return numpy.einsum("ik,...k->...i", self.matrix, x) + self.translation  # type: ignore
 
-    def inverse(self) -> GeometricTransform:
+    def inverse(self) -> "GeometricTransform":
         """
         Return the inverse transformation.
 
