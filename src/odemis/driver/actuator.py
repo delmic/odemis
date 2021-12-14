@@ -594,6 +594,13 @@ class ConvertStage(model.Actuator):
     the two stages, as for each SEM stage move it is able to perform the
     corresponding “compensate” move in objective lens.
     """
+    def __new__(cls, *args, **kwargs):
+        # Automatically create Convert3DStage object if the number of axes = 3
+        axes = kwargs['axes']
+        if len(axes) == 2:
+            return super(ConvertStage, cls).__new__(cls)
+        elif len(axes) == 3:
+            return super(ConvertStage, cls).__new__(Convert3DStage)
 
     def __init__(self, name, role, dependencies, axes,
                  rotation=0, scale=None, translation=None, **kwargs):
@@ -692,8 +699,7 @@ class ConvertStage(model.Actuator):
         """
         update the position VA when the dep's position is updated
         """
-        vpos_dep = [pos_dep[self._axes_dep["x"]],
-                      pos_dep[self._axes_dep["y"]]]
+        vpos_dep = [pos_dep[self._axes_dep["x"]], pos_dep[self._axes_dep["y"]]]
         vpos = self._convertPosFromdep(vpos_dep)
         # it's read-only, so we change it via _value
         self.position._set_value({"x": vpos[0], "y": vpos[1]}, force_write=True)
@@ -768,7 +774,7 @@ class Convert3DStage(ConvertStage):
     Extends original ConvertStage with an additional axis Z
     """
     def __init__(self, name, role, dependencies, axes,
-                 rotation=(0, 0, 0), scale=None, translation=None, **kwargs):
+                 rotation=(0, 0, 0), scale=(1, 1, 1), translation=(0, 0, 0), **kwargs):
         """
         dependencies (dict str -> actuator): name to objective lens actuator
         axes (list of 3 strings): names of the axes for x, y and z
@@ -782,10 +788,6 @@ class Convert3DStage(ConvertStage):
 
         self._dependency = list(dependencies.values())[0]
         self._axes_dep = {"x": axes[0], "y": axes[1], "z": axes[2]}
-        if scale is None:
-            scale = (1, 1, 1)
-        if translation is None:
-            translation = (0, 0, 0)
         if rotation.count(0) < 2:
             raise ValueError("Convert3DStage allows only one rotation angle to be > 0.")
 
@@ -839,7 +841,8 @@ class Convert3DStage(ConvertStage):
             [1, 0, 0],
             [0, numpy.cos(rx), -numpy.sin(rx)],
             [0, numpy.sin(rx), numpy.cos(rx)]])
-        return numpy.dot(rz_mat, numpy.dot(ry_mat, rx_mat))
+
+        return rz_mat @ ry_mat @ rx_mat
 
     def _updatePosition(self, pos_dep):
         """
