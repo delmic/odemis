@@ -29,9 +29,31 @@ from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
 
 import numpy
+import sys
 
 
-class GraphBase(collections.UserList, metaclass=ABCMeta):
+if sys.version_info < (3, 7, 4):
+    from collections import UserList as _UserList
+
+    class UserList(_UserList):
+        """
+        Backport of bugfix for when using Python v3.7.3 or lower.
+        For more informations see: https://bugs.python.org/issue27639
+
+        """
+
+        def __getitem__(self, i):
+            if isinstance(i, slice):
+                return self.__class__(self.data[i])
+            else:
+                return self.data[i]
+
+
+else:
+    from collections import UserList
+
+
+class GraphBase(UserList, metaclass=ABCMeta):
     """Abstract base class for graphs."""
 
     _item_type = object
