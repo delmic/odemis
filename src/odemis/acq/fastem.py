@@ -33,7 +33,7 @@ import numpy
 from odemis import model, util
 from odemis.acq import stitching
 from odemis.acq.align.spot import FindGridSpots
-from odemis.acq.stitching import REGISTER_IDENTITY
+from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod
 from odemis.acq.stream import SEMStream
 from odemis.util import TimeoutError
 from odemis.acq import fastem_conf
@@ -534,17 +534,10 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
     if live_stream:
         raise NotImplementedError("live_stream not supported")
 
-    # FIXME: if stream has .focuser, the acquireTiledArea will try to refocus from time to time
-    # => temporarily remove it? Or duplicate the stream? Or pass an argument to
-    # acquireTiledArea to disable the autofocusing.
-    # FIXME: if the stream already has an image, it will be used to compute the FoV,
-    # which might be completely wrong. => provide a .guessFoV() on the LiveStream
-    # to guess the FoV on the next image.
     # FIXME: if the stream has .horizontalFoV, it's automatically set to the biggest
     # value, which do not work.
 
-    # To avoid the focuser, and horizontalFoV, and the already present data, we
-    # just create our own SEMStream
+    # To avoid the horizontalFoV, we create our own SEMStream
     sem_stream = SEMStream(stream.name.value + " copy", stream.detector, stream.detector.data, stream.emitter)
 
     est_dur = estimateTiledAcquisitionTime(sem_stream, stage, area)
@@ -587,7 +580,8 @@ def _run_overview_acquisition(f, stream, stage, area, live_stream):
         f.set_progress(start, end)
 
     # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
-    sf = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY)
+    sf = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
+                                    focusing_method=FocusingMethod.NONE)
     # Connect the progress of the underlying future to the main future
     sf.add_update_callback(_pass_future_progress)
     das = sf.result()

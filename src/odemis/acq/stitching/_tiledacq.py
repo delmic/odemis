@@ -22,6 +22,7 @@ from __future__ import division
 from concurrent.futures import CancelledError, TimeoutError
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED
 import copy
+from enum import Enum
 import logging
 import math
 import numpy
@@ -41,16 +42,23 @@ import psutil
 import threading
 import time
 
-
-# TODO: Find a value that works fine with cryo-secom
-# Percentage of the allowed difference of tile focus from good focus
+# TODO: Find a value that works fine with common cases
+# Ratio of the allowed difference of tile focus from good focus
 FOCUS_FIDELITY = 0.3
 # Limit focus range, half the margin will be used on each side of initial focus
-FOCUS_RANGE_MARGIN = 100e-6
+FOCUS_RANGE_MARGIN = 100e-6  # m
 # Indicate the number of tiles to skip during focus adjustment
 SKIP_TILES = 3
 
 MOVE_SPEED_DEFAULT = 100e-6  # m/s
+
+class FocusingMethod(Enum):
+    NONE = 0  # Never auto-focus
+    ALWAYS = 1  # Before every tile
+    # If the previous tile focus level is too far from the original level
+    ON_LOW_FOCUS_LEVEL = 2
+    # Acquisition is done at several zlevels, and they are merged to obtain a focused image
+    MAX_INTENSITY_PROJECTION = 3
 
 
 class TiledAcquisitionTask(object):
@@ -59,9 +67,9 @@ class TiledAcquisitionTask(object):
     """
 
     def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
-                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN):
+                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
         """
-        :param streams: (Stream) the streams to acquire
+        :param streams: (list of Streams) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
         :param area: (float, float, float, float) left, top, right, bottom points of acquisition area
         :param overlap: (float) the amount of overlap between each acquisition
@@ -69,9 +77,13 @@ class TiledAcquisitionTask(object):
             that should be saved as metadata
         :param log_path: (string) directory and filename pattern to save acquired images for debugging
         :param future: (ProgressiveFuture or None) future to track progress, pass None for estimation only
-        :param zlevels: (list(float) or None) focus z positions required zstack acquisition
+        :param zlevels: (list(float) or None) focus z positions required zstack acquisition.
+           Currently, can only be used if focusing_method == MAX_INTENSITY_PROJECTION.
         :param registrar: (REGISTER_*) type of registration method
         :param weaver: (WEAVER_*) type of weaving method
+        :param focusing_method: (FocusingMethod) Defines when will the autofocuser be run.
+           The autofocuser uses the first stream with a .focuser.
+           If MAX_INTENSITY_PROJECTION is used, zlevels must be provided too.
         """
         self._future = future
         self._streams = streams
@@ -87,12 +99,17 @@ class TiledAcquisitionTask(object):
         self._area_size = (width, height)
         self._overlap = overlap
 
+        # TODO: is that really handy? It should be quite easy for the caller to do
+        # and that would avoid all corner cases where the caller actually cares
+        # about the FoV (eg, to get more pixels in the image, or the image get artifacts at large FoV)
         if future:
             # Change the SEM stream horizontalFoV VA to the max if it's found
             for stream in self._streams:
                 if model.hasVA(stream, "horizontalFoV"):
                     # Clip horizontal fov to total area in case it's smaller than max. value
                     stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._area_size))
+            # FIXME: during time/memory estimation, use the range[1] of the VA
+            # to estimate the FoV of the stream
 
         # Get the smallest field of view
         self._sfov = self._guessSmallestFov(streams)
@@ -100,8 +117,10 @@ class TiledAcquisitionTask(object):
 
         (self._nx, self._ny), self._starting_pos = self._getNumberOfTiles()
 
-        # To use in re-focusing acquired images in case they fell out of focus
-        # TODO: make adjust focus optional
+        # To check and adjust the focus in between tiles
+        if not isinstance(focusing_method, FocusingMethod):
+            raise ValueError(f"focusing_method should be of type FocusingMethod, but got {focusing_method}")
+        self._focusing_method = focusing_method
         self._focus_stream = next((sd for sd in self._streams if sd.focuser is not None), None)
         if self._focus_stream:
             # save initial focus value to be used in the AutoFocus function
@@ -112,6 +131,25 @@ class TiledAcquisitionTask(object):
             # Clip values with focuser_range
             self._focus_rng = (max(focus_rng[0], focuser_range[0]), min((focus_rng[1], focuser_range[1])))
             logging.debug("Calculated focus range ={}".format(self._focus_rng))
+
+        if focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION and not zlevels:
+            raise ValueError("MAX_INTENSITY_PROJECTION requires zlevels, but none passed")
+            # Note: we even allow if only one zlevels. It would not do MIP, but
+            # that allows for flexibility where the user explicitly wants to disable
+            # MIP by setting only one zlevel. Same if there is no focuser.
+
+        if zlevels:
+            if self._focus_stream is None:
+                logging.warning("No focuser found in any of the streams, only one acquisition will be performed.")
+            self._zlevels = zlevels
+        else:
+            self._zlevels = []
+
+        if len(self._zlevels) > 1 and focusing_method != FocusingMethod.MAX_INTENSITY_PROJECTION:
+            raise NotImplementedError("Multiple zlevels currently only works with focusing method MAX_INTENSITY_PROJECTION")
+
+        # For "ON_LOW_FOCUS_LEVEL" method: a focus level which is corresponding to a in-focus image.
+        self._good_focus_level = None  # float
 
         # Rough estimate of the stage movement speed, for estimating the extra
         # duration due to movements
@@ -133,13 +171,6 @@ class TiledAcquisitionTask(object):
             self._exporter = dataio.find_fittest_converter(filename)
             self._fn_bs, self._fn_ext = udataio.splitext(filename)
             self._log_dir = os.path.dirname(self._log_path)
-
-        if zlevels:
-            if self._focus_stream is None:
-                logging.warning("No focuser found in any of the streams, only one acquisition will be performed.")
-            self._zlevels = zlevels
-        else:
-            self._zlevels = []
 
         self._registrar = registrar
         self._weaver = weaver
@@ -504,12 +535,19 @@ class TiledAcquisitionTask(object):
         # Save the cube on disk if a log path exists
         if self._log_path:
             self._save_tiles(ix, iy, fm_cube, stream_cube_id=self._streams.index(stream))
-        # Compress the cube into a single image (using maximum intensity projection)
-        mip_image = numpy.amax(fm_cube, axis=0)
-        if self._future._task_state == CANCELLED:
-            raise CancelledError()
-        logging.debug(f"Zstack compression for tile {ix}x{iy}, stream {stream.name} finished.")
-        return DataArray(mip_image, copy.copy(zstack[0].metadata))
+
+        if self._focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION:
+            # Compress the cube into a single image (using maximum intensity projection)
+            mip_image = numpy.amax(fm_cube, axis=0)
+            if self._future._task_state == CANCELLED:
+                raise CancelledError()
+            logging.debug(f"Zstack compression for tile {ix}x{iy}, stream {stream.name} finished.")
+            return DataArray(mip_image, copy.copy(zstack[0].metadata))
+        else:
+            # TODO: support stitched Z-stacks
+            # For now, the init will raise NotImplementedError in such case
+            logging.warning("Zstack returned as-is, while it is not supported")
+            return fm_cube
 
     def _acquireStreamTile(self, i, ix, iy, stream):
         """
@@ -586,40 +624,73 @@ class TiledAcquisitionTask(object):
         return da_list
 
     def _adjustFocus(self, das, i, ix, iy):
-        if i % SKIP_TILES != 0:
-            logging.debug("Skipping focus adjustment..")
+        """
+        das (list of DataArray): the data of each stream which has just been acquired
+        i (int): the acquisition number
+        ix (int): the tile number in x
+        iy (int): the tile number in y
+        return (list of DataArray): the data of each stream, possibly replaced
+          by a new version at a better focus level.
+        """
+        refocus = False
+        # If autofocus explicitly disabled, or MPI => don't do anything
+        if self._focusing_method in (FocusingMethod.NONE, FocusingMethod.MAX_INTENSITY_PROJECTION):
             return das
-        try:
-            current_focus_level = MeasureOpticalFocus(das[self._streams.index(self._focus_stream)])
-        except IndexError:
-            logging.warning("Failed to get image to measure focus on.")
-            return das
-        if i == 0:
-            # Use initial optical focus level to be compared to next tiles
-            # TODO: instead of using the first image, use the best 10% images (excluding outliers)
-            self._good_focus_level = current_focus_level
+        elif self._focusing_method == FocusingMethod.ON_LOW_FOCUS_LEVEL:
+            if i % SKIP_TILES != 0:
+                logging.debug("Skipping focus adjustment..")
+                return das
 
-        # TODO: handle the case of _good_focus_level == 0
-        logging.debug("Current focus level: %s (good = %s)", current_focus_level, self._good_focus_level)
-        # Run autofocus if current focus got worse than permitted deviation
-        if abs(current_focus_level - self._good_focus_level) / self._good_focus_level > FOCUS_FIDELITY:
             try:
-                self._future.running_subf = AutoFocus(self._focus_stream.detector,
-                                                      self._focus_stream.emitter,
-                                                      self._focus_stream.focuser,
-                                                      good_focus=self._good_focus,
-                                                      rng_focus=self._focus_rng,
-                                                      method=MTD_EXHAUSTIVE)
-                self._future.running_subf.result()  # blocks until autofocus is finished
-                if self._future._task_state == CANCELLED:
-                    raise CancelledError()
-            except CancelledError:
-                raise
-            except Exception as ex:
-                logging.exception("Running autofocus failed on image i= %s." % i)
-            else:
-                # Reacquire the out of focus tile (which should be corrected now)
-                das = self._getTileDAs(i, ix, iy)
+                current_focus_level = MeasureOpticalFocus(das[self._streams.index(self._focus_stream)])
+            except IndexError:
+                logging.warning("Failed to get image to measure focus on.")
+                return das
+
+            if i == 0:
+                # Use initial optical focus level to be compared to next tiles
+                # TODO: instead of using the first image, use the best 10% images (excluding outliers)
+                self._good_focus_level = current_focus_level
+                return das
+
+            logging.debug("Current focus level: %s (good = %s)", current_focus_level, self._good_focus_level)
+
+            # Run autofocus if current focus got worse than permitted deviation,
+            # or it was very bad (0) originally.
+            if (self._good_focus_level != 0 and
+                (self._good_focus_level - current_focus_level) / self._good_focus_level < FOCUS_FIDELITY
+               ):
+                return das
+        elif self._focusing_method == FocusingMethod.ALWAYS:
+            pass
+        else:
+            raise ValueError(f"Unexpected focusing method {self._focusing_method}")
+
+        try:
+            self._future.running_subf = AutoFocus(self._focus_stream.detector,
+                                                  self._focus_stream.emitter,
+                                                  self._focus_stream.focuser,
+                                                  good_focus=self._good_focus,
+                                                  rng_focus=self._focus_rng,
+                                                  method=MTD_EXHAUSTIVE)
+            _, focus_pos = self._future.running_subf.result()  # blocks until autofocus is finished
+
+            # Corner case where it started very badly: update the "good focus"
+            # as it's likely going to be better.
+            if self._good_focus_level == 0:
+                self._good_focus_level = focus_pos
+
+            if self._future._task_state == CANCELLED:
+                raise CancelledError()
+        except CancelledError:
+            raise
+        except Exception:
+            logging.exception("Running autofocus failed on image i= %s." % i)
+        else:
+            # Reacquire the out of focus tile (which should be corrected now)
+            logging.debug("Reacquiring tile %dx%d at better focus %f", ix, iy, focus_pos)
+            das = self._getTileDAs(i, ix, iy)
+
         return das
 
     def _stitchTiles(self, da_list):
@@ -680,6 +751,7 @@ class TiledAcquisitionTask(object):
                 raise CancelledError()
         except CancelledError:
             logging.debug("Acquisition cancelled")
+            raise
         except Exception as ex:
             logging.exception("Acquisition failed.")
             self._future.running_subf.cancel()
@@ -694,7 +766,7 @@ class TiledAcquisitionTask(object):
 def estimateTiledAcquisitionTime(*args, **kwargs):
     """
     Estimate the time required to complete a tiled acquisition task
-    Parameters are the same as acquireTiledArea()
+    Parameters are the same as for TiledAcquisitionTask
     :returns: (float) estimated required time
     """
     # Create a tiled acquisition task with future = None
@@ -705,7 +777,7 @@ def estimateTiledAcquisitionTime(*args, **kwargs):
 def estimateTiledAcquisitionMemory(*args, **kwargs):
     """
     Estimate the amount of memory required to complete a tiled acquisition task
-    Parameters are the same as acquireTiledArea()
+    Parameters are the same as for TiledAcquisitionTask
     :returns (bool) True if sufficient memory available, (float) estimated memory
     """
     # Create a tiled acquisition task with future = None
@@ -714,20 +786,13 @@ def estimateTiledAcquisitionMemory(*args, **kwargs):
 
 
 def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
-                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN):
+                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
     """
     Start a tiled acquisition task for the given streams (SEM or FM) in order to
     build a complete view of the TEM grid. Needed tiles are first acquired for
     each stream, then the complete view is created by stitching the tiles.
 
-    :param streams: (Stream) the streams to acquire
-    :param stage: (Actuator) the sample stage to move to the possible tiles locations
-    :param area: (float, float, float, float) left, top, right, bottom points of acquisition area
-    :param overlap: (float) the amount of overlap between each acquisition
-    :param settings_obs: (SettingsObserver or None) class that contains a list of all VAs
-        that should be saved as metadata
-    :param log_path: (string) directory and filename pattern to save acquired images for debugging
-    :param zlevels: (list(float) or None) focus z positions required zstack acquisition
+    Parameters are the same as for TiledAcquisitionTask
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a list of model.DataArray:
@@ -739,7 +804,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     future._task_lock = threading.Lock()
     # Create a tiled acquisition task
     task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
-                                registrar=registrar, weaver=weaver)
+                                registrar=registrar, weaver=weaver, focusing_method=focusing_method)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()

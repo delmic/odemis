@@ -28,14 +28,12 @@ import copy
 import gc
 import logging
 import math
-
 import numpy
-
 from odemis import model, dataio
-from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 from odemis.acq import stream, path, acqmng, stitching
-from odemis.acq.stream import SEMStream, CameraStream, EMStream
+from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, FocusingMethod
 from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
+from odemis.acq.stream import SEMStream, CameraStream, EMStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -49,12 +47,12 @@ from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
 from odemis.gui.util.widgets import ProgressiveFutureConnector, \
     VigilantAttributeConnector
 from odemis.util import rect_intersect, units
+from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 import os.path
 import wx
 
 import odemis.gui.model as guimodel
-from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -873,15 +871,24 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         Must be called in the main GUI thread.
         """
-        if not self.acquiring:
-            streams = self.get_acq_streams()
-            if not streams:
-                acq_time = 0
-            else:
-                acq_time = stitching.estimateTiledAcquisitionTime(streams,
-                                                              self._main_data_model.stage,
-                                                              self.area, self.overlap,
-                                                              zlevels=self._get_zstack_levels())
+        if self.acquiring:
+            return
+
+        if not self.area:
+            logging.debug("Unknown acquisition area, cannot estimate acquisition time")
+            return
+
+        streams = self.get_acq_streams()
+        if not streams:
+            acq_time = 0
+        else:
+            zlevels = self._get_zstack_levels()
+            focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
+            acq_time = stitching.estimateTiledAcquisitionTime(streams,
+                                                          self._main_data_model.stage,
+                                                          self.area, self.overlap,
+                                                          zlevels=zlevels,
+                                                          focusing_method=focus_mtd)
 
         txt = "The estimated acquisition time is {}."
         txt = txt.format(units.readable_time(acq_time))
@@ -1031,12 +1038,15 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
         zlevels = self._get_zstack_levels()
+        focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
         logging.info("Acquisition tiles logged at %s", self.filename_tiles)
         self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
-                                                     log_path=self.filename_tiles, zlevels=zlevels,
-                                                     weaver=WEAVER_COLLAGE_REVERSE)
+                                                     log_path=self.filename_tiles,
+                                                     weaver=WEAVER_COLLAGE_REVERSE,
+                                                     zlevels=zlevels,
+                                                     focusing_method=focus_mtd)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)
