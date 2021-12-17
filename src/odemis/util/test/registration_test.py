@@ -28,7 +28,7 @@ import unittest
 
 import numpy
 import scipy
-from odemis.util import pairwise
+from odemis.util import check_random_state, pairwise
 from odemis.util.graph import WeightedGraph
 from odemis.util.registration import (
     _canonical_matrix_form,
@@ -45,12 +45,12 @@ class BijectiveMatchingTest(unittest.TestCase):
 
     def setUp(self):
         """Ensure reproducible tests."""
-        self._rng = numpy.random.default_rng(12345)
+        self._rng = check_random_state(12345)
 
     def test_trivial(self):
         """Check the trivial case of matching a point set with itself."""
         n = 100
-        src = self._rng.random((n, 2))
+        src = self._rng.random_sample((n, 2))
         correspondences = [(j,) * 2 for j in range(n)]
         out = bijective_matching(src, src)
         self.assertCountEqual(correspondences, out)
@@ -62,7 +62,7 @@ class BijectiveMatchingTest(unittest.TestCase):
                 k = max(n, m)
                 idx = self._rng.permutation(k)
                 correspondences = [(j, i) for j, i in zip(idx, range(m)) if j < n]
-                points = self._rng.random((k, 2))
+                points = self._rng.random_sample((k, 2))
                 src = points[:n]
                 dst = points[idx[:m]]
                 out = bijective_matching(src, dst)
@@ -72,8 +72,8 @@ class BijectiveMatchingTest(unittest.TestCase):
         """Check that the matching has maximum size."""
         for n, m in itertools.product((100, 105), repeat=2):
             with self.subTest(n=n, m=m):
-                src = self._rng.random((n, 2))
-                dst = self._rng.random((m, 2))
+                src = self._rng.random_sample((n, 2))
+                dst = self._rng.random_sample((m, 2))
                 correspondences = bijective_matching(src, dst)
                 self.assertEqual(min(n, m), len(list(correspondences)))
 
@@ -85,8 +85,8 @@ class BijectiveMatchingTest(unittest.TestCase):
         """
         for n, m in itertools.product((100, 105), repeat=2):
             with self.subTest(n=n, m=m):
-                src = self._rng.random((n, 2))
-                dst = self._rng.random((m, 2))
+                src = self._rng.random_sample((n, 2))
+                dst = self._rng.random_sample((m, 2))
                 correspondences = bijective_matching(src, dst)
                 for i in (0, 1):
                     vertices = list(map(operator.itemgetter(i), correspondences))
@@ -100,8 +100,8 @@ class BijectiveMatchingTest(unittest.TestCase):
         """
         for n, m in itertools.product((100, 105), repeat=2):
             with self.subTest(n=n, m=m):
-                src = self._rng.random((n, 2))
-                dst = self._rng.random((m, 2))
+                src = self._rng.random_sample((n, 2))
+                dst = self._rng.random_sample((m, 2))
                 correspondences = bijective_matching(src, dst)
                 distance = [
                     scipy.spatial.distance.euclidean(src[j], dst[i])
@@ -183,7 +183,7 @@ class UnitGridPointsTest(unittest.TestCase):
         numpy.testing.assert_array_almost_equal(ji, _ji)
 
 
-def random_affine_transform(rng=None):
+def random_affine_transform(seed=None):
     """
     Return a randomized affine transform.
 
@@ -198,13 +198,13 @@ def random_affine_transform(rng=None):
         Randomized affine transform.
 
     """
-    rng = numpy.random.default_rng() if rng is None else rng
+    rng = check_random_state(seed)
     params = {
-        "scale": 1 + 0.5 * (2 * rng.random() - 1),
-        "rotation": 0.25 * numpy.pi * (2 * rng.random() - 1),
-        "squeeze": 1 + 0.1 * (2 * rng.random() - 1),
-        "shear": 0.1 * (2 * rng.random() - 1),
-        "translation": (2 * rng.random((2,)) - 1),
+        "scale": 1 + 0.5 * rng.uniform(-1, 1),
+        "rotation": 0.25 * numpy.pi * rng.uniform(-1, 1),
+        "squeeze": 1 + 0.1 * rng.uniform(-1, 1),
+        "shear": 0.1 * rng.uniform(-1, 1),
+        "translation": rng.uniform(-1, 1, (2,)),
     }
     return AffineTransform(**params)
 
@@ -244,7 +244,7 @@ class NearestNeighborGraphTest(unittest.TestCase):
 
     def setUp(self):
         """Ensure reproducible tests."""
-        self._rng = numpy.random.default_rng(12345)
+        self._rng = check_random_state(12345)
 
     def test_full_grid(self):
         """
@@ -297,7 +297,7 @@ class CanonicalMatrixFormTest(unittest.TestCase):
 
     def setUp(self):
         """Ensure reproducible tests."""
-        self._rng = numpy.random.default_rng(12345)
+        self._rng = check_random_state(12345)
 
     def test_identity(self):
         """
@@ -358,7 +358,7 @@ class EstimateMPPOrientationTest(unittest.TestCase):
 
     def setUp(self):
         """Ensure reproducible tests."""
-        self._rng = numpy.random.default_rng(12345)
+        self._rng = check_random_state(12345)
 
     def test_full_grid(self):
         """

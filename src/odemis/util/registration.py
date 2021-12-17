@@ -21,6 +21,41 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 USA.
 
+
+The function `_kpp()` is copied from scipy cluster/vq, which is licensed under
+the following terms and conditions:
+
+    Copyright (c) 2001-2002 Enthought, Inc.  2003-2019, SciPy Developers.
+    All rights reserved.
+
+    Redistribution and use in source and binary forms, with or without
+    modification, are permitted provided that the following conditions
+    are met:
+
+    1. Redistributions of source code must retain the above copyright
+       notice, this list of conditions and the following disclaimer.
+
+    2. Redistributions in binary form must reproduce the above
+       copyright notice, this list of conditions and the following
+       disclaimer in the documentation and/or other materials provided
+       with the distribution.
+
+    3. Neither the name of the copyright holder nor the names of its
+       contributors may be used to endorse or promote products derived
+       from this software without specific prior written permission.
+
+    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
+    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
+    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
+    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
+    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
+    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
+    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
+    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
+    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
+    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+
 """
 import math
 from typing import Iterator, Optional, Tuple, Type, TypeVar
@@ -28,6 +63,7 @@ from typing import Iterator, Optional, Tuple, Type, TypeVar
 import numpy
 import scipy.cluster
 import scipy.spatial
+from odemis.util import check_random_state, rng_integers
 from odemis.util.graph import WeightedGraph
 from odemis.util.spot import find_spot_positions
 from odemis.util.transform import (
@@ -251,6 +287,51 @@ def _canonical_matrix_form(matrix: numpy.ndarray) -> numpy.ndarray:
     return numpy.matmul(matrix, _PERMUTATION_MATRIX[k])
 
 
+# Backporting k-means++ initialisation method for scipy.cluster.vq.kmeans2()
+def _kpp(data, k, rng):
+    """
+    Picks k points in the data based on the kmeans++ method.
+
+    Parameters
+    ----------
+    data : ndarray
+        Expect a rank 1 or 2 array. Rank 1 is assumed to describe 1-D
+        data, rank 2 multidimensional data, in which case one
+        row is one observation.
+    k : int
+        Number of samples to generate.
+    rng : `numpy.random.Generator` or `numpy.random.RandomState`
+        Random number generator.
+
+    Returns
+    -------
+    init : ndarray
+        A 'k' by 'N' containing the initial centroids.
+
+    References
+    ----------
+    .. [1] D. Arthur and S. Vassilvitskii, "k-means++: the advantages of
+       careful seeding", Proceedings of the Eighteenth Annual ACM-SIAM Symposium
+       on Discrete Algorithms, 2007.
+
+    """
+    dims = data.shape[1] if len(data.shape) > 1 else 1
+    init = numpy.ndarray((k, dims))
+
+    for i in range(k):
+        if i == 0:
+            init[i, :] = data[rng_integers(rng, data.shape[0])]
+        else:
+            D2 = scipy.spatial.distance.cdist(
+                init[:i, :], data, metric="sqeuclidean"
+            ).min(axis=0)
+            probs = D2 / D2.sum()
+            cumprobs = probs.cumsum()
+            r = rng.uniform()
+            init[i, :] = data[numpy.searchsorted(cumprobs, r)]
+    return init
+
+
 def _initial_estimate_mpp_orientation(xy: numpy.ndarray) -> AffineTransform:
     """
     Provide an initial estimate for the orientation of a square grid of points.
@@ -281,7 +362,10 @@ def _initial_estimate_mpp_orientation(xy: numpy.ndarray) -> AffineTransform:
     # coordinates to not be impacted by the branch cut at `θ = ±π`.
     rho, theta = cartesian_to_polar(dxy)
     dpq = polar_to_cartesian(rho, 2 * theta)
-    centroid, _ = scipy.cluster.vq.kmeans2(dpq, 2, minit="++")
+    # minit="++" is only available in SciPy v1.2.0 and above
+    rng = check_random_state(None)
+    code_book = _kpp(dpq, 2, rng)
+    centroid, _ = scipy.cluster.vq.kmeans2(dpq, code_book, minit="matrix")
     rho, theta = cartesian_to_polar(centroid)
     dxy = polar_to_cartesian(rho, 0.5 * theta)
 
