@@ -443,15 +443,6 @@ class AxisLegend(wx.Panel):
         else:
             self.lockBtn.SetPosition((self.ClientSize.x - self.ClientSize.x / 2 - 12, 0))
 
-    def on_mouse_enter(self, _=None):
-        if self._orientation == wx.HORIZONTAL:
-            self.SetCursor(wx.Cursor(wx.CURSOR_SIZEWE))
-        else:
-            self.SetCursor(wx.Cursor(wx.CURSOR_SIZENS))
-
-    def on_mouse_leave(self, _=None):
-        self.SetCursor(wx.Cursor(wx.CURSOR_ARROW))
-
     @wxlimit_invocation(0.2)
     def Refresh(self):
         """
