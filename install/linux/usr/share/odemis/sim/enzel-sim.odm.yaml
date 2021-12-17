@@ -242,6 +242,7 @@ ENZEL-Sim: {
          FAV_POS_ACTIVE: {'z': 0.002},  # focus position at init
     },
 }
+
 "Optical Focus": {
   class: actuator.MultiplexActuator,
   role: focus,
@@ -252,9 +253,6 @@ ENZEL-Sim: {
   },
   metadata: {
     FAV_POS_ACTIVE: { 'z': 0.002 }
-  },
-  persistent: {
-    metadata: [ FAV_POS_ACTIVE ],  # Store "good focus" position between run
   },
 }
 
