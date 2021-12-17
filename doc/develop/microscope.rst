@@ -184,6 +184,10 @@ Actuators:
    Lens 1 focuses the incoming collimated light. It has an axis: x.
  * lens-switch: Switches lens 2 between two positions (on: within light path; off: outside of light path).
    Lens 2 is used to further focus the light coming from lens 1. It has an axis: x or rx.
+   If the axis has only two choices, then the SPARC doesn't support Ek imaging.
+   If the axis is linear and has metadata FAV_POS_ACTIVE and FAV_POS_DEACTIVE, it
+   supports Ek imaging. It should then also provide POS_ACTIVE_RANGE to indicate
+   the whole scanning range during Ek scanning.
  * brightlight: Is used to calibrate the position offset between the two detectors, the grating offset and
    the focus (mirror) within the spectrograph.
  * pol-analyzer: It is used to switch the quarter wave plate and the linear polarizer to well
@@ -224,15 +228,18 @@ Actuators:
 
 Detectors:
  * se-detector: Secondary electron detector of the SEM (detector).
- * ccd: the main optical pixelated detector (e.g. ccd/cmos/spectral camera).
- * sp-ccd: the second pixelated detector (e.g. ccd/cmos/spectral camera).
+ * ccd (or ccd0): the main optical pixelated detector (e.g. ccd/cmos/spectral camera).
+ * ccd\ *N* (with *N* going from 1 to 9): another pixelated detector.
+ * sp-ccd: the second pixelated detector (e.g. ccd/cmos/spectral camera). Deprecated, use ccd1.
  * spectrometer: A detector to acquire multiple wavelengths information simultaneously.
    It provides the same interface as a DigitalCamera, but the Y dimension of the shape is 1.
    If the device has actuators, for instance to change the centre wavelength or the orientation
    of the grating turret, they are accessed via the component "spectrograph", which affects this detector.
    Note that in case it's physically a 2D detector, it's possible to access the raw 2D data via the "sp-ccd" detector.
+ * spectrometer\ *M* (with *M* going from 1 to 9): another spectrometer. Not necessarily matching the ccd\ *N* number.
  * spectrometer-integrated: A similar component as the "spectrometer", but corresponding to the "ccd" 2D detector.
- * cl-detector: A cathodoluminescence detector, synchronised with the e-beam.
+   Deprecated, use spectrometer1.
+ * cl-detector: A cathodoluminescence detector, synchronized with the e-beam.
  * monochromator: A detector to acquire one wavelength at a time.
  * overview-ccd: A (optical) view of the whole sample from above.
  * chamber-ccd: A (optical) view of the inside chamber.
@@ -242,6 +249,7 @@ Detectors:
 
 System:
  * lens: Contains parameters concerning the parabolic mirror and the lens system.
+   If it has a polePosition VA, then the microscope is considered supporting Angular Resolved acquisition.
  * power-control: Power supply for the hardware components (e.g., ccd, sp-ccd,
    polarization filters, lens actuators, spectrograph).
 
