@@ -655,7 +655,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._settings_controller = LocalizationSettingsController(
             self,
             self._tab_data_model,
-            highlight_change=True  # also adds a "Reset" context menu
         )
 
         self.zsteps = model.IntContinuous(1, range=(1, 51))
@@ -667,6 +666,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.tiles_nx, self.tiles_number_x, events=wx.EVT_COMMAND_ENTER)
         self._tiles_n_vacy = VigilantAttributeConnector(
             self.tiles_ny, self.tiles_number_y, events=wx.EVT_COMMAND_ENTER)
+
+        self.area = None  # None or 4 floats: left, top, right, bottom positions of the acquisition area (in m)
 
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
@@ -681,9 +682,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # The list of streams ready for acquisition (just used as a cache)
         self._acq_streams = {}
 
-        # Compute the preset values for each preset
+        # Find every settings, and listen to it
         self._orig_entries = get_global_settings_entries(self._settings_controller)
-        self._orig_settings = preset_as_is(self._orig_entries)
         for sc in self.streambar_controller.stream_controllers:
             self._orig_entries += get_local_settings_entries(sc)
 
@@ -733,43 +733,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         zstep = util.readable_str(ZSTEP, unit="m", sig=3)
         self.zstack_slider_step.SetLabel(zstep)
 
-    def update_area_size(self, w, h):
-        """
-        Calculates the requested tiling area size, and updates it on the GUI.
-        w (float): width of the tiling area
-        h (float): height of the tiling area
-        """
-        pos = self._tab_data_model.main.stage.position.value
-        rect_pts = self.get_ROA_rect(w, h, pos, self._tiling_rng)
-        if rect_pts:
-            # Note the area can accept LTRB or LBRT.
-            self.area = rect_pts
-            area_size = util.readable_str(value=(w, h), unit="m", sig=3)
-            self.area_size_txt.SetLabel(area_size)
-            self.update_acquisition_time()
-        else:
-            # there is no intersection
-            self.area_size_txt.SetLabel("Invalid stage position")
-            logging.warning("Couldn't find intersection between stage pos %s and tiling range %s" % (pos, self._tiling_rng))
-
-    @staticmethod
-    def get_ROA_rect(w, h, pos, tiling_rng):
-        """
-        Finds the intersection between the requested tiling area 
-            and the tiling range.
-        w (float): width of the tiling area
-        h (float): height of the tiling area
-        pos (dict -> float): current position of the stage
-        tiling_rng (dict -> list): the tiling range along x and y axes
-        """
-        tl = pos["x"] - w/2, pos["y"] + h/2
-        br = pos["x"] + w/2, pos["y"] - h/2
-        # clip the tiling area, if needed (or find the intersection between the active range and the requested area)
-        # Note: the input is LTRB. The output is LBRT assuming y axis upwards, or LTRB assuming y axis downwards. 
-        rect_pts = rect_intersect((tl[0], tl[1], br[0], br[1]), 
-            (tiling_rng["x"][0], tiling_rng["y"][1], tiling_rng["x"][1], tiling_rng["y"][0]))
-        return rect_pts
-
     def start_listening_to_va(self):
         # Get all the VA's from the stream and subscribe to them for changes.
         for entry in self._orig_entries:
@@ -786,6 +749,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 entry.vigilattr.unsubscribe(self.on_setting_change)
 
         self.zsteps.unsubscribe(self.on_setting_change)
+        self.tiles_nx.unsubscribe(self.on_tiles_number)
+        self.tiles_ny.unsubscribe(self.on_tiles_number)
 
     def duplicate_tab_data_model(self, orig):
         """
@@ -837,6 +802,23 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         streams = self._view.getStreams()
         return streams
 
+    def update_area_size(self):
+        """
+        Calculates the requested tiling area size, based on the tiles number
+        """
+        nx = self.tiles_nx.value
+        ny = self.tiles_ny.value
+        # these formulas for w and h have to match the ones used in the 'stitching' module.
+        w = nx * self.fov[0] * (1 - self.overlap)
+        h = ny * self.fov[1] * (1 - self.overlap)
+
+        pos = self._tab_data_model.main.stage.position.value
+        # Note the area can accept LTRB or LBRT.
+        self.area = self.get_ROA_rect(w, h, pos, self._tiling_rng)
+        if self.area is None:
+            # there is no intersection
+            logging.warning("Couldn't find intersection between stage pos %s and tiling range %s" % (pos, self._tiling_rng))
+
     @wxlimit_invocation(0.1)
     def update_setting_display(self):
         if not self:
@@ -850,11 +832,15 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.gauge_acq.Hide()
             self.Layout()
 
-        self.update_acquisition_time()
+        if self.area is None:
+            self.area_size_txt.SetLabel("Invalid stage position")
+            return
 
-        # update highlight
-        for se, value in self._orig_settings.items():
-            se.highlight(se.vigilattr.value != value)
+        area_size = self.area[2] - self.area[0], self.area[3] - self.area[1]
+        area_size_str = util.readable_str(area_size, unit="m", sig=3)
+        self.area_size_txt.SetLabel(area_size_str)
+
+        self.update_acquisition_time()
 
     def on_streams_changed(self, val):
         """
@@ -869,13 +855,21 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             # smallest fov
             self.fov = (min(f[0] for f in fovs),
                         min(f[1] for f in fovs))
-        self.on_tiles_number()
+
+        self.update_area_size()  # FoV has changed, so area size too
+        self.update_setting_display()
+
+    def on_tiles_number(self, _=None):
+        """
+        Called when the user enters values for the tiles number in the GUI.
+        """
+        self.update_area_size()
         self.update_setting_display()
 
     def on_setting_change(self, _=None):
         self.update_setting_display()
 
-    def update_acquisition_time(self, acq_time=999):
+    def update_acquisition_time(self):
         """
         Must be called in the main GUI thread.
         """
@@ -891,8 +885,32 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         txt = "The estimated acquisition time is {}."
         txt = txt.format(units.readable_time(acq_time))
-
         self.lbl_acqestimate.SetLabel(txt)
+
+    def get_fov(self, s):
+        try:
+            return s.guessFoV()
+        except (NotImplementedError, AttributeError):
+            raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (s,))
+
+    @staticmethod
+    def get_ROA_rect(w, h, pos, tiling_rng):
+        """
+        Finds the intersection between the requested tiling area
+            and the tiling range.
+        w (float): width of the tiling area
+        h (float): height of the tiling area
+        pos (dict -> float): current position of the stage
+        tiling_rng (dict -> list): the tiling range along x and y axes
+        return (None or tuple of 4 floats): None if there is no intersection, or
+          the rectangle representing the intersection
+        """
+        area_req = (pos["x"] - w / 2, pos["y"] + h / 2,
+                    pos["x"] + w / 2, pos["y"] - h / 2)
+        # clip the tiling area, if needed (or find the intersection between the active range and the requested area)
+        # Note: the input is LTRB. The output is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
+        return rect_intersect(area_req,
+            (tiling_rng["x"][0], tiling_rng["y"][1], tiling_rng["x"][1], tiling_rng["y"][0]))
 
     def on_key(self, evt):
         """ Dialog key press handler. """
@@ -948,15 +966,33 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     def _get_zstack_levels(self):
         """
         Calculate the zstack levels from the current focus position and zsteps value
-        :returns (list(float) or None) zstack levels for zstack acquisition
+        :returns (list(float) or None) zstack levels for zstack acquisition.
+          return None if only one zstep is requested.
         """
-        focus_value = self._main_data_model.focus.position.value['z']
-        # Clip zsteps value to allowed range
         zsteps = self.zsteps.value
         if zsteps == 1:
             return None
+
+        # Clip zsteps value to allowed range
+        focus_value = self._main_data_model.focus.position.value['z']
+        focus_range = self._main_data_model.focus.axes['z'].range
+        zmin = focus_value - (zsteps / 2 * ZSTEP)
+        zmax = focus_value + (zsteps / 2 * ZSTEP)
+        if (zmax - zmin) > (focus_range[1] - focus_range[0]):
+            # Corner case: it'd be larger than the entire range => limit to the entire range
+            zmin = focus_range[0]
+            zmax = focus_range[1]
+        if zmax > focus_range[1]:
+            # Too high => shift down
+            zmax -= zmax - focus_range[1]
+            zmin -= zmax - focus_range[1]
+        if zmin < focus_range[0]:
+            # Too low => shift up
+            zmin += focus_range[0] - zmin
+            zmax += focus_range[0] - zmin
+
         # Create focus zlevels from the given zsteps number
-        zlevels = numpy.linspace(focus_value - (zsteps / 2 * ZSTEP), focus_value + (zsteps / 2 * ZSTEP), zsteps).tolist()
+        zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
         return zlevels
 
     def _fit_view_to_area(self):
@@ -1064,22 +1100,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.terminate_listeners()
         self.EndModal(wx.ID_OPEN)
 
-    def on_tiles_number(self, _=None):
-        """
-        Called when the user enters values for the tiles number in the GUI.
-        """
-        nx = self.tiles_nx.value 
-        ny = self.tiles_ny.value 
-        # these formulas for w and h have to match the ones used in the 'stitching' module.
-        w = nx * self.fov[0] * (1 - self.overlap)
-        h = ny * self.fov[1] * (1 - self.overlap)
-        self.update_area_size(w, h)
-
-    def get_fov(self, s):
-        try:
-            return s.guessFoV()
-        except (NotImplementedError, AttributeError):
-            raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (s,))
 
 def ShowAcquisitionFileDialog(parent, filename):
     """
