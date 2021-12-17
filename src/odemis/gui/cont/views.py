@@ -248,6 +248,10 @@ class ViewPortController(object):
             logging.debug("Displaying 2x2 viewport grid")
             self._grid_panel.show_grid_viewports()
 
+        elif layout == model.VIEW_LAYOUT_VERTICAL:
+            logging.debug("Displaying two viewport stacked vertically")
+            self._grid_panel.show_2_vert_stacked_viewports()
+
         elif layout == model.VIEW_LAYOUT_FULLSCREEN:
             raise NotImplementedError()
         else:

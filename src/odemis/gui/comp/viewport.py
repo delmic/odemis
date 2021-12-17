@@ -905,10 +905,16 @@ class ARLiveViewport(LiveViewport):
         self.canvas.remove_world_overlay(self.canvas.mirror_ol)
 
 
-# TODO: rename to something more generic? RawLiveViewport?
 class ARAcquiViewport(ARLiveViewport):
     """
     Same as ARLiveViewport, but without legend
+    """
+    bottom_legend_class = None
+
+
+class RawLiveViewport(LiveViewport):
+    """
+    Same as LiveViewport, but without legend
     """
     bottom_legend_class = None
 

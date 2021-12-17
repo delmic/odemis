@@ -62,6 +62,7 @@ CHAMBER_VENTING = 4  # Pressurizing chamber (set it to request venting)
 VIEW_LAYOUT_ONE = 0  # one big view
 VIEW_LAYOUT_22 = 1  # 2x2 layout
 VIEW_LAYOUT_FULLSCREEN = 2  # Fullscreen view (not yet supported)
+VIEW_LAYOUT_VERTICAL = 3  # 2x1 layout
 
 # The different tools (selectable in the tool bar). First, the "mode" ones:
 TOOL_NONE = 0  # No tool (normal)
@@ -194,6 +195,8 @@ class MainGUIData(object):
         "ebeam-shift": "beamshift",
         "diagnostic-ccd": "ccd",
         "det-rotator": "det_rotator",
+        "se-detector-ion": "ion_sed",
+        "stage-global": "stage_global",
     }
 
     def __init__(self, microscope):
@@ -211,7 +214,7 @@ class MainGUIData(object):
         self.ccd = None
         self.stage = None
         self.scan_stage = None  # fast stage to scan, instead of the ebeam (SPARC)
-        self.stage_bare = None # stage in the chamber referential 
+        self.stage_bare = None # stage in the chamber referential
         self.focus = None  # actuator to change the camera focus
         self.pinhole = None  # actuator to change the pinhole (confocal SECOM)
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
@@ -268,6 +271,8 @@ class MainGUIData(object):
         self.ion_beam = None
         self.beamshift = None  # beam shift deflection controller
         self.det_rotator = None  # detector rotator of the fastem microscope
+        self.ion_sed = None  # detector for the ions of a composited detector component
+        self.stage_global = None  # stage with coordinates converted into a global coordinate system
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)
@@ -1058,6 +1063,15 @@ class SecomAlignGUIData(ActuatorGUIData):
         # For dichotomic mode
         self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
 
+Z_ALIGN = "Z alignment"
+SEM_ALIGN = "SEM alignment"
+FLM_ALIGN = "FLM alignment"
+class EnzelAlignGUIData(ActuatorGUIData):
+    def __init__(self, main):
+        ActuatorGUIData.__init__(self, main)
+        self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_VERTICAL, choices={VIEW_LAYOUT_VERTICAL})
+        self.step_size = model.FloatContinuous(1e-6, range=(50e-9,50e-6), unit="m")
+        self.align_mode = StringEnumerated(Z_ALIGN, choices=set((Z_ALIGN, SEM_ALIGN, FLM_ALIGN)))
 
 class SparcAlignGUIData(ActuatorGUIData):
     def __init__(self, main):

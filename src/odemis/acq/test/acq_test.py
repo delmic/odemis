@@ -23,10 +23,14 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError
 import logging
+from unittest import mock
+
 import numpy
 from odemis import model
 import odemis
 from odemis.acq import acqmng
+from odemis.driver import xt_client
+from odemis.driver.test.xt_client_test import CONFIG_FIB_SEM, CONFIG_FIB_SCANNER, CONFIG_DETECTOR
 from odemis.util import test
 import os
 import time
@@ -70,6 +74,73 @@ class TestNoBackend(unittest.TestCase):
 
     # TODO
     pass
+
+
+class FIBStreamacquisitionTest(unittest.TestCase):
+    """
+    Tests the FIBStream using the XT client.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        # Accept three values for TEST_NOHW
+        # * TEST_NOHW = 1: not connected to anything => skip most of the tests
+        # * TEST_NOHW = sim: xtadapter/server_sim.py running on localhost
+        # * TEST_NOHW = 0 (or anything else): connected to the real hardware
+        TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No hardware available.")
+
+        if TEST_NOHW == "sim":
+            CONFIG_FIB_SEM["address"] = "PYRO:Microscope@localhost:4242"
+
+        cls.microscope = xt_client.SEM(**CONFIG_FIB_SEM)
+
+        for child in cls.microscope.children.value:
+            if child.name == CONFIG_FIB_SCANNER["name"]:
+                cls.fib_scanner = child
+            elif child.name == CONFIG_DETECTOR["name"]:
+                cls.detector = child
+        cls.FIB_stream = stream.FIBStream("test FIB", cls.detector, cls.detector.data, cls.fib_scanner)
+
+    def setUp(self):
+        # Mock the get_latest_image method of the microscope so that the number of calls to the method can be counted.
+        self.mock_get_latest_image = mock.MagicMock(return_value=(self.microscope.get_latest_image("ion2")))
+        self.microscope.get_latest_image = self.mock_get_latest_image
+
+    def test_getSingleFrame(self):
+        """Test acquiring a single frame using the getSingleFrame method of the FIB stream"""
+        image = self.FIB_stream.getSingleFrame()
+        self.assertEqual(image.ndim, 2)
+        # Check that image size is at least 200*200 pixels
+        self.assertGreaterEqual(image.shape[0], 200)
+        self.assertGreaterEqual(image.shape[1], 200)
+        self.assertEqual(self.mock_get_latest_image.call_count, 1)
+
+    def test_single_frame_acquisition_VA(self):
+        """Test the single_frame_acquisiton VA via the FIB stream"""
+        self.FIB_stream.single_frame_acquisition.value = True
+        self.FIB_stream.is_active.value = True
+        start = time.time()
+        while self.FIB_stream.is_active.value and time.time() - start < 120:
+            time.sleep(0.3)
+        time.sleep(2)  # Wait a little extra to make sure no new images are taken accidentally
+        self.assertFalse(self.FIB_stream.is_active.value)
+        self.assertEqual(self.mock_get_latest_image.call_count, 1)
+
+        # Check if acquisition stops automatically when the VA is switched.
+        self.FIB_stream.single_frame_acquisition.value = False
+        self.FIB_stream.is_active.value = True
+        time.sleep(1)  # Wait a little extra to make sure multiple images are taken.
+        self.FIB_stream.single_frame_acquisition.value = True
+        start = time.time()
+        while self.FIB_stream.is_active.value and time.time() - start < 120:
+            time.sleep(0.3)
+        time.sleep(2)  # Wait a little extra to make sure no new images are taken accidentally
+        self.assertFalse(self.FIB_stream.is_active.value)
+        # Check if at least one new frame is taken (should actually be >>2)
+        self.assertGreater(self.mock_get_latest_image.call_count, 2)
+
 
 class SECOMTestCase(unittest.TestCase):
     # We don't need the whole GUI, but still a working backend is nice
