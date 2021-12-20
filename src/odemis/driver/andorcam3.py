@@ -1239,7 +1239,7 @@ class AndorCam3(model.DigitalCamera):
         ranges = (self._bin_to_resrng[0][self._binning[0]],
                   self._bin_to_resrng[1][self._binning[1]])
         size = (max(ranges[0][0], min(size[0], ranges[0][1])),
-                max(ranges[1][0], min(size[1], ranges[0][1])))
+                max(ranges[1][0], min(size[1], ranges[1][1])))
 
         # if the size is odd, actually the translation is -0.5, due to rounding
         trans = self._translation
