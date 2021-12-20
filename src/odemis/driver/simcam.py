@@ -347,7 +347,11 @@ class Camera(model.DigitalCamera):
             ltrb[1] = 0
         elif ltrb[3] > self._img_res[1] - 1:
             ltrb[1] -= ltrb[3] - (self._img_res[1] - 1)
-        assert(ltrb[0] >= 0 and ltrb[1] >= 0)
+
+        ltrb = [round(v) for v in ltrb]  # Smooth out floating point errors
+
+        if not (ltrb[0] >= 0 and ltrb[1] >= 0):
+            raise IndexError(f"Unexpected range {ltrb} with {center}, {trans}, {stage_shift}, {binning} for res {self._img_res}")
 
         # compute each row and column that will be included
         # TODO: Could use something more hardwarish like that:
