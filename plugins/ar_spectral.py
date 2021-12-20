@@ -155,11 +155,16 @@ class SpectralARScanStream(stream.Stream):
         # On Odemis 2.10+, mvs is a list of tuples(future, comp, pos) => only keep the futures
         fs = [m[0] if isinstance(m, tuple) else m for m in mvs]
         # move lens 2 into position
-        for p, n in self._lsw.axes["x"].choices.items():
-            if n == "on":
-                f = self._lsw.moveAbs({"x": p})
-                fs.append(f)
-                break
+        lsw_md = self._lsw.getMetadata()
+        if model.MD_FAV_POS_ACTIVE in lsw_md:  # EK style lens-switch
+            f = self._lsw.moveAbs(lsw_md[model.MD_FAV_POS_ACTIVE])
+            fs.append(f)
+        else:  # Old hacky style lens-switch (cannot be aligned)
+            for p, n in self._lsw.axes["x"].choices.items():
+                if n == "on":
+                    f = self._lsw.moveAbs({"x": p})
+                    fs.append(f)
+                    break
 
         # move big slit into position
         for p, n in self._bigslit.axes["x"].choices.items():
