@@ -526,7 +526,6 @@ class LocalizationTab(Tab):
         view = self.tab_data_model.views.value[0]  # overview map view
         for s in streams:
             s.name.value = "Overview " + s.name.value
-            self.clear_overview_streams(s.name.value)
             self._show_acquired_stream(s, view)
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
             # distinguish between it and other acquired streams
@@ -678,7 +677,6 @@ class LocalizationTab(Tab):
         super(LocalizationTab, self).Show(show)
 
         if not show: # if localization tab is not chosen
-        # pause streams when not displayed
             # pause streams when not displayed
             self._streambar_controller.pauseStreams()
             # stop listening to the focus position
