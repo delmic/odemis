@@ -455,19 +455,21 @@ class PMD401Bus(Actuator):
             # Always log the status
             logging.debug("Device status: %s", status)
             if status[0] & 8:
-                raise PMDError(1, "Communication Error (wrong baudrate, data collision, or buffer overflow)")
+                raise PMDError(1, "Communication Error on axis %s (wrong baudrate, data collision, "
+                                  "or buffer overflow)" % ax)
             elif status[0] & 4:
-                raise PMDError(2, "Encoder error(serial communication or reported error from serial encoder)")
+                raise PMDError(2, "Encoder error on axis %s (serial communication or reported error from "
+                                  "serial encoder)" % ax)
             elif status[0] & 2:
-                raise PMDError(3, "Supply voltage or motor fault was detected.")
+                raise PMDError(3, "Supply voltage or motor fault was detected on axis %s." % ax)
             elif status[0] & 1:
-                raise PMDError(4, "Command timeout occurred or a syntax error was detected when response was not "
-                                  "allowed.")
+                raise PMDError(4, "Command timeout occurred or a syntax error was detected on axis %s when "
+                                  "response was not allowed." % ax)
             elif status[1] & 8:
                 # That's really not a big deal since everything is working fine after power-on, so don't raise an error.
-                logging.debug("Power-on/reset has occurred.")
+                logging.debug("Power-on/reset has occurred and detected on axis %s." % ax)
             elif status[1] & 4:
-                raise PMDError(6, "External limit reached.")
+                raise PMDError(6, "External limit reached, detected on axis %s." % ax)
 
     def _updatePosition(self):
         """
