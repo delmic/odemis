@@ -3345,8 +3345,12 @@ class FakeMCS2_DLL(object):
                 logging.debug("sim MCS2: Rel move channel %d to %d pm" % (ch.value, self._target[ch.value]))
             else:
                 raise IOError("sim move has unknown move mode")
-            dur = abs(self._target[ch.value] - self._move_start_pos[ch.value]) / self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_VELOCITY][ch.value]
-            self._move_finish_time[ch.value] = time.time() + dur
+
+            dur = driver.estimateMoveDuration(abs(self._target[ch.value] - self._move_start_pos[ch.value]),
+                                              self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_VELOCITY][ch.value],
+                                              self.properties[SA_CTLDLL.SA_CTL_PKEY_MOVE_ACCELERATION][ch.value])
+            dur += 0.001  # simulates overhead, and also handles moves with distance == 0
+            self._move_finish_time[ch.value] = self._move_start_time[ch.value] + dur
             logging.debug("Simulating move of %s s", dur)
             self.properties[SA_CTLDLL.SA_CTL_PKEY_CHANNEL_STATE][ch.value] |= SA_CTLDLL.SA_CTL_CH_STATE_BIT_ACTIVELY_MOVING
         else:
