@@ -341,7 +341,7 @@ class TestCanvas(test.GuiTestCase):
         logging.getLogger().setLevel(logging.ERROR)
 
     # @profile
-    def test(self):
+    def test_set_images(self):
         self.app.test_frame.SetSize((500, 500))
         self.app.test_frame.Center()
         self.app.test_frame.Layout()
@@ -359,7 +359,7 @@ class TestCanvas(test.GuiTestCase):
 
         darray_one = generate_img_data(250, 250, 4, color=(255, 0, 0))
         darray_two = generate_img_data(50, 50, 4, color=(0, 0, 255))
-        print(darray_two)
+        # print(darray_two)
 
         images = [
             (darray_one, (0.0, 0.0), (0.0000003, 0.0000003), True, None, 0.1, None, None, 'one'),
@@ -398,7 +398,7 @@ class TestCanvas(test.GuiTestCase):
 
         cnvs.set_images(images)
 
-    def test_nanana(self):
+    def test_drawing(self):
 
         self.app.test_frame.SetSize((500, 500))
         self.app.test_frame.Center()
@@ -406,7 +406,7 @@ class TestCanvas(test.GuiTestCase):
 
         # old_canvas = DraggableCanvas(self.panel)
         tab = self.create_simple_tab_model()
-        mpp = FloatContinuous(10e-6, range=(1e-3, 1), unit="m/px")
+        mpp = FloatContinuous(10e-6, range=(1e-6, 1), unit="m/px")
         tab.focussedView.value.mpp = mpp
 
         view = tab.focussedView.value
@@ -443,56 +443,6 @@ class TestCanvas(test.GuiTestCase):
         canvas.scale = 1
         canvas.update_drawing()
         test.gui_loop(0.1)
-
-    # @unittest.skip("simple")
-    def test_reshape(self):
-
-        darray = generate_img_data(100, 100, 4, 100)
-
-        self.app.test_frame.SetSize((500, 500))
-        self.app.test_frame.Center()
-        self.app.test_frame.Layout()
-
-        tab = self.create_simple_tab_model()
-        mpp = FloatContinuous(2, range=(0, 1), unit="m/px")
-        tab.focussedView.value.mpp = mpp
-
-        view = tab.focussedView.value
-        cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
-
-        cnvs.setView(view, tab)
-        # self.add_control(cnvs, flags=wx.EXPAND, proportion=1)
-        # test.gui_loop()
-        # # Set the mpp again, because the on_size handler will have recalculated it
-        # view.mpp.value = 1
-
-        # images = [(format_rgba_darray(darray), (0.0, 0.0), 2, True)]
-        # cnvs.set_images(images)
-        # cnvs.scale = 1
-        # test.gui_loop()
-
-        # shape = (5, 5, 4)
-        # rgb = numpy.empty(shape, dtype=numpy.uint8)
-        # rgb[::2, ...] = [
-        #             [255, 0, 0, 255],
-        #             [0, 255, 0, 255],
-        #             [255, 255, 0, 255],
-        #             [255, 0, 255, 255],
-        #             [0, 0, 255, 255]
-        #         ][:shape[1]]
-        # rgb[1::2, ...] = [
-        #             [127, 0, 0, 255],
-        #             [0, 127, 0, 255],
-        #             [127, 127, 0, 255],
-        #             [127, 0, 127, 255],
-        #             [0, 0, 127, 255]
-        #         ][:shape[1]]
-
-        # rgb[..., [0, 1, 2, 3]] = rgb[..., [2, 1, 0, 3]]
-        # reshaped_array = DataArray(rgb)
-        # self.assertTrue(reshaped_array == format_rgba_darray(darray))
-
-    # @unittest.skip("simple")
 
 if __name__ == "__main__":
     unittest.main()
