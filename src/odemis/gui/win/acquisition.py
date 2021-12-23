@@ -682,7 +682,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # The list of streams ready for acquisition (just used as a cache)
         self._acq_streams = {}
 
-        # Find every settings, and listen to it
+        # Find every setting, and listen to it
         self._orig_entries = get_global_settings_entries(self._settings_controller)
         for sc in self.streambar_controller.stream_controllers:
             self._orig_entries += get_local_settings_entries(sc)
@@ -814,7 +814,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         pos = self._tab_data_model.main.stage.position.value
         # Note the area can accept LTRB or LBRT.
-        self.area = self.get_ROA_rect(w, h, pos, self._tiling_rng)
+        self.area = self.clip_tiling_area_to_range(w, h, pos, self._tiling_rng)
         if self.area is None:
             # there is no intersection
             logging.warning("Couldn't find intersection between stage pos %s and tiling range %s" % (pos, self._tiling_rng))
@@ -894,21 +894,20 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (s,))
 
     @staticmethod
-    def get_ROA_rect(w, h, pos, tiling_rng):
+    def clip_tiling_area_to_range(w, h, pos, tiling_rng):
         """
-        Finds the intersection between the requested tiling area
-            and the tiling range.
+        Finds the intersection between the requested tiling area and the tiling range.
         w (float): width of the tiling area
         h (float): height of the tiling area
         pos (dict -> float): current position of the stage
-        tiling_rng (dict -> list): the tiling range along x and y axes
+        tiling_rng (dict -> list): the tiling range along x and y axes as
+          (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
         return (None or tuple of 4 floats): None if there is no intersection, or
-          the rectangle representing the intersection
+          the rectangle representing the intersection as (xmin, ymin, xmax, ymax).
         """
-        area_req = (pos["x"] - w / 2, pos["y"] + h / 2,
-                    pos["x"] + w / 2, pos["y"] - h / 2)
+        area_req = (pos["x"] - w / 2, pos["y"] - h / 2,
+                    pos["x"] + w / 2, pos["y"] + h / 2)
         # clip the tiling area, if needed (or find the intersection between the active range and the requested area)
-        # Note: the input is LTRB. The output is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
         return rect_intersect(area_req,
             (tiling_rng["x"][0], tiling_rng["y"][1], tiling_rng["x"][1], tiling_rng["y"][0]))
 
