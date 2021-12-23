@@ -526,7 +526,6 @@ class LocalizationTab(Tab):
         view = self.tab_data_model.views.value[0]  # overview map view
         for s in streams:
             s.name.value = "Overview " + s.name.value
-            self.clear_overview_streams(s.name.value)
             self._show_acquired_stream(s, view)
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
             # distinguish between it and other acquired streams
