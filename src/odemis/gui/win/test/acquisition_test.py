@@ -23,102 +23,85 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import unittest
-import os
-import odemis
 import logging
-from odemis.util import test
-from odemis import model
 from odemis.gui.win.acquisition import OverviewAcquisitionDialog
 
 logging.getLogger().setLevel(logging.DEBUG)
 
-CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 
-class TestgetROARectMethod(unittest.TestCase):
+class TestClipTilingArea(unittest.TestCase):
     """
-    This test case is to test the method get_ROA_rect()
+    This test case is to test the method clip_tiling_area_to_range()
     """
-    @classmethod
-    def setUpClass(cls):
-        test.start_backend(ENZEL_CONFIG)
-
-        # get the stage components
-        cls.stage = model.getComponent(role="stage")
-        cls.stage.reference().result()
-        # cls.stage_bare = model.getComponent(role="stage-bare")
-
-        # get the metadata
-        stage_md = cls.stage.getMetadata()
-        cls.tiling_rng = stage_md[model.MD_POS_ACTIVE_RANGE]
-
-    @classmethod
-    def tearDownClass(cls):
-        pass
-
     def test_clipping_is_performed_same_width_and_height(self):
         # move the stage close to the bottom left corner of the active range (200 micrometers 
-        # # away from the corner in x and y directions).
-        self.stage.moveAbs({"x": self.tiling_rng["x"][0]+200e-6,
-                            "y": self.tiling_rng["y"][0]+200e-6}).result()
+        # away from the corner in x and y directions).
         w = 600e-6
         h = 600e-6
-        rect_pts = OverviewAcquisitionDialog.get_ROA_rect(w, h, self.stage.position.value, self.tiling_rng)
+
+        ovv_rng = {'x': [-1e-3, 1e-3], 'y': [-1.1e-3, 1.1e-3]}
+        pos = {"x": ovv_rng["x"][0] + 200e-6,
+               "y": ovv_rng["y"][0] + 200e-6}
+        rect_pts = OverviewAcquisitionDialog.clip_tiling_area_to_range(w, h, pos, ovv_rng)
         # Note: the return rect_pts is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
         # check if the intersection happened
-        self.assertAlmostEqual(rect_pts[0], self.tiling_rng["x"][0])
-        self.assertAlmostEqual(rect_pts[1], self.tiling_rng["y"][0])
-        self.assertAlmostEqual(rect_pts[2], self.tiling_rng["x"][0] + 200e-6 + w/2)
-        self.assertAlmostEqual(rect_pts[3], self.tiling_rng["y"][0] + 200e-6 + h/2)
+        self.assertAlmostEqual(rect_pts[0], ovv_rng["x"][0])
+        self.assertAlmostEqual(rect_pts[1], ovv_rng["y"][0])
+        self.assertAlmostEqual(rect_pts[2], ovv_rng["x"][0] + 200e-6 + w / 2)
+        self.assertAlmostEqual(rect_pts[3], ovv_rng["y"][0] + 200e-6 + h / 2)
 
     def test_clipping_is_performed_different_width_and_height(self):
         # move the stage close to the bottom left corner of the active range (200 micrometers 
-        # # away from the corner in x and y directions).
-        self.stage.moveAbs({"x": self.tiling_rng["x"][0]+200e-6,
-                            "y": self.tiling_rng["y"][0]+200e-6}).result()
+        # away from the corner in x and y directions).
         w = 700e-6
         h = 600e-6
-        rect_pts = OverviewAcquisitionDialog.get_ROA_rect(w, h, self.stage.position.value, self.tiling_rng)
+
+        ovv_rng = {'x': [-1e-3, 1e-3], 'y': [-1.1e-3, 1.1e-3]}
+        pos = {"x": ovv_rng["x"][0] + 200e-6,
+               "y": ovv_rng["y"][0] + 200e-6}
+        rect_pts = OverviewAcquisitionDialog.clip_tiling_area_to_range(w, h, pos, ovv_rng)
         # Note: the return rect_pts is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
         # check if the intersection happened
-        self.assertAlmostEqual(rect_pts[0], self.tiling_rng["x"][0])
-        self.assertAlmostEqual(rect_pts[1], self.tiling_rng["y"][0])
-        self.assertAlmostEqual(rect_pts[2], self.tiling_rng["x"][0] + 200e-6 + w/2)
-        self.assertAlmostEqual(rect_pts[3], self.tiling_rng["y"][0] + 200e-6 + h/2)
+        self.assertAlmostEqual(rect_pts[0], ovv_rng["x"][0])
+        self.assertAlmostEqual(rect_pts[1], ovv_rng["y"][0])
+        self.assertAlmostEqual(rect_pts[2], ovv_rng["x"][0] + 200e-6 + w / 2)
+        self.assertAlmostEqual(rect_pts[3], ovv_rng["y"][0] + 200e-6 + h / 2)
 
     def test_clipping_is_not_performed_same_width_and_height(self):
         # move the stage to some position away from the edges of the active
         # range so that clipping is not needed (i.e in the middle of the active range).
-        self.stage.moveAbs({"x": (self.tiling_rng["x"][0] + self.tiling_rng["x"][1])/2,
-                            "y": (self.tiling_rng["y"][0] + self.tiling_rng["y"][1])/2}).result()
-        pos = self.stage.position.value
         w = 600e-6
         h = 600e-6
-        rect_pts = OverviewAcquisitionDialog.get_ROA_rect(w, h, pos, self.tiling_rng)
+
+        ovv_rng = {'x': [-1e-3, 1e-3], 'y': [-1.1e-3, 1.1e-3]}
+        pos = {"x": sum(ovv_rng["x"]) / 2,
+               "y": sum(ovv_rng["y"]) / 2}
+        rect_pts = OverviewAcquisitionDialog.clip_tiling_area_to_range(w, h, pos, ovv_rng)
         # Note: the return rect_pts is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
         # check if the intersection area is the same as the tl and br of the requested area.
         # tl and br are found by the current position +/- half of the width and height
-        self.assertAlmostEqual(rect_pts[0], pos["x"] - w/2)
-        self.assertAlmostEqual(rect_pts[1], pos["y"] - h/2)
-        self.assertAlmostEqual(rect_pts[2], pos["x"] + w/2)
-        self.assertAlmostEqual(rect_pts[3], pos["y"] + h/2)
+        self.assertAlmostEqual(rect_pts[0], pos["x"] - w / 2)
+        self.assertAlmostEqual(rect_pts[1], pos["y"] - h / 2)
+        self.assertAlmostEqual(rect_pts[2], pos["x"] + w / 2)
+        self.assertAlmostEqual(rect_pts[3], pos["y"] + h / 2)
 
     def test_clipping_is_not_performed_different_width_and_height(self):
         # move the stage to some position away from the edges of the active
         # range so that clipping is not needed (i.e in the middle of the active range). 
-        self.stage.moveAbs({"x": (self.tiling_rng["x"][0] + self.tiling_rng["x"][1])/2,
-                            "y": (self.tiling_rng["y"][0] + self.tiling_rng["y"][1])/2}).result()
-        pos = self.stage.position.value
         w = 500e-6
         h = 600e-6
-        rect_pts = OverviewAcquisitionDialog.get_ROA_rect(w, h, pos, self.tiling_rng)
+
+        ovv_rng = {'x': [-1e-3, 1e-3], 'y': [-1.1e-3, 1.1e-3]}
+        pos = {"x": sum(ovv_rng["x"]) / 2,
+               "y": sum(ovv_rng["y"]) / 2}
+        rect_pts = OverviewAcquisitionDialog.clip_tiling_area_to_range(w, h, pos, ovv_rng)
         # Note: the return rect_pts is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
         # check if the intersection area is the same as the tl and br of the requested area.
         # tl and br are found by the current position +/- half of the width and height
-        self.assertAlmostEqual(rect_pts[0], pos["x"] - w/2)
-        self.assertAlmostEqual(rect_pts[1], pos["y"] - h/2)
-        self.assertAlmostEqual(rect_pts[2], pos["x"] + w/2)
-        self.assertAlmostEqual(rect_pts[3], pos["y"] + h/2)
+        self.assertAlmostEqual(rect_pts[0], pos["x"] - w / 2)
+        self.assertAlmostEqual(rect_pts[1], pos["y"] - h / 2)
+        self.assertAlmostEqual(rect_pts[2], pos["x"] + w / 2)
+        self.assertAlmostEqual(rect_pts[3], pos["y"] + h / 2)
 
 
 if __name__ == "__main__":
