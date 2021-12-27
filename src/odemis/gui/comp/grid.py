@@ -111,7 +111,7 @@ class ViewportGrid(wx.Panel):
             except AttributeError:
                 # Should never happen, unless it's not really a ViewPort.
                 # If so, let's not go completely bad
-                logging.exception("View has no view")
+                logging.exception("Viewport %s has no .view", v)
                 viewports.append(v)
             if len(viewports) >= 4:
                 break

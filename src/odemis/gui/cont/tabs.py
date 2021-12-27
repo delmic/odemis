@@ -4020,7 +4020,7 @@ class SecomAlignTab(Tab):
         scale_win = ScaleWindow(pnl_sem_toolbar)
         self._on_mpp = guiutil.call_in_wx_main_wrapper(scale_win.SetMPP)  # need to keep ref
         self._sem_view.mpp.subscribe(self._on_mpp, init=True)
-        fa_sizer.Add(scale_win, proportion=3, flag=wx.ALIGN_RIGHT | wx.TOP | wx.LEFT, border=10)
+        fa_sizer.Add(scale_win, proportion=3, flag=wx.TOP | wx.LEFT, border=10)
         fa_sizer.Layout()
 
         if main_data.ccd:
