@@ -601,6 +601,8 @@ class ConvertStage(model.Actuator):
             return super(ConvertStage, cls).__new__(cls)
         elif len(axes) == 3:
             return super(ConvertStage, cls).__new__(Convert3DStage)
+        else:
+            raise ValueError("Incorrect number of axes.")
 
     def __init__(self, name, role, dependencies, axes,
                  rotation=0, scale=None, translation=None, **kwargs):
