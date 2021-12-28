@@ -781,7 +781,7 @@ class Convert3DStage(ConvertStage):
         dependencies (dict str -> actuator): name to objective lens actuator
         axes (list of 3 strings): names of the axes for x, y and z
         scale (None tuple of 3 floats): scale factor from exported to original position
-        rotation (tuple of 3 floats): rotation factor rz, ry, rx (in radians)
+        rotation (tuple of 3 floats): rz, ry, rx (Tait–Bryan) angles using extrinsic rotations (in radians)
         translation (None or tuple of 3 floats): translation offset (in m)
         """
         assert len(axes) == 3
