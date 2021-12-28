@@ -37,6 +37,7 @@ from past.builtins import basestring
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
                           isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, roattribute)
+from odemis.util.transform import RigidTransform
 
 
 class MultiplexActuator(model.Actuator):
@@ -664,10 +665,7 @@ class ConvertStage(model.Actuator):
         rotation = self._metadata[model.MD_ROTATION_COR]
         if invert:
             rotation *= -1
-
-        return numpy.array(
-                     [[math.cos(rotation), -math.sin(rotation)],
-                      [math.sin(rotation), math.cos(rotation)]])
+        return RigidTransform(rotation=rotation).rotation_matrix
 
     def _updateConversion(self):
         translation = self._metadata[model.MD_POS_COR]
