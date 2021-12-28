@@ -220,7 +220,11 @@ class TestFastEMAcquisition(unittest.TestCase):
         cls.mppc = model.getComponent(role="mppc")
         cls.multibeam = model.getComponent(role="multibeam")
         cls.descanner = model.getComponent(role="descanner")
-        cls.stage = model.getComponent(role="stage")  # TODO replace with stage-scan when ROA conversion method available
+        cls.stage = model.getComponent(
+            role="stage")  # TODO replace with stage-scan when ROA conversion method available
+        cls.ccd = model.getComponent(role="diagnostic-ccd")
+        cls.beamshift = model.getComponent(role="ebeam-shift")
+
         cls.stage.reference({"x", "y"}).result()
 
     @classmethod
@@ -253,7 +257,8 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.mppc
                                )
         path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_megafield")
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
+                           self.ccd, self.beamshift, self.lens)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -285,7 +290,8 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.mppc
                                )
         path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_field_indices")
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
+                           self.ccd, self.beamshift, self.lens)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -315,7 +321,8 @@ class TestFastEMAcquisition(unittest.TestCase):
 
         self.updates = 0  # updated in callback on_progress_update
 
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
+                           self.ccd, self.beamshift, self.lens)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
@@ -349,7 +356,8 @@ class TestFastEMAcquisition(unittest.TestCase):
         self.updates = 0  # updated in callback on_progress_update
         self.done = False  # updated in callback on_done
 
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
+                           self.ccd, self.beamshift, self.lens)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
@@ -393,15 +401,16 @@ class TestFastEMAcquisition(unittest.TestCase):
                                )
         path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_stage_move")
 
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage)
+        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
+                           self.ccd, self.beamshift, self.lens)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
 
         # total expected stage movement in x and y during the acquisition
         # half a field to start at center of first field image
-        exp_move_x = res_x/2. * px_size_x + res_x * px_size_x * (x_fields - 1)
-        exp_move_y = res_y/2. * px_size_y + res_y * px_size_y * (y_fields - 1)
+        exp_move_x = res_x / 2. * px_size_x + res_x * px_size_x * (x_fields - 1)
+        exp_move_y = res_y / 2. * px_size_y + res_y * px_size_y * (y_fields - 1)
 
         # TODO these comments are true, when stage is replaced with stage-scan
         # Move in the negative x direction, because the second field should be right of the first.

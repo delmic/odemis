@@ -191,6 +191,8 @@ class MainGUIData(object):
         "descanner": "descanner",
         "mppc": "mppc",
         "ion-beam": "ion_beam",
+        "ebeam-shift": "beamshift",
+        "diagnostic-ccd": "ccd",
     }
 
     def __init__(self, microscope):
@@ -263,6 +265,7 @@ class MainGUIData(object):
         self.descanner = None  # descan mirrors of the fastem microscope
         self.mppc = None  # detector of the fastem microscope
         self.ion_beam = None
+        self.beamshift = None  # beam shift deflection controller
 
         # Lists of detectors
         self.ccds = []  # All the cameras which could be used for AR (SPARC)
