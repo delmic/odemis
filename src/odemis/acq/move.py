@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
+import copy
 import logging
 import threading
 from asyncio import CancelledError
@@ -35,7 +36,7 @@ from odemis.util import executeAsyncTask
 
 MAX_SUBMOVE_DURATION = 60  # s
 
-UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING, GRID_1, GRID_2 = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9
+UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING, GRID_1, GRID_2, THREE_BEAMS = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 POSITION_NAMES = {
     UNKNOWN: "UNKNOWN",
     LOADING: "LOADING",
@@ -47,13 +48,16 @@ POSITION_NAMES = {
     SEM_IMAGING: "SEM IMAGING",
     FM_IMAGING: "FM IMAGING",
     GRID_1: "GRID 1",
-    GRID_2: "GRID 2"
+    GRID_2: "GRID 2",
+    THREE_BEAMS: "THREE BEAMS"
 }
 
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
-SCALING_FACTOR = 0.03 # m (based on fine tuning)
+SCALING_FACTOR = 0.03  # m (based on fine tuning)
+SAFETY_MARGIN_5DOF = 100e-6  # m
+SAFETY_MARGIN_3DOF = 200e-6  # m
 
 
 def getTargetPosition(target_pos_lbl, stage):
@@ -70,7 +74,7 @@ def getTargetPosition(target_pos_lbl, stage):
 
     if target_pos_lbl == LOADING:
         end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
-    elif current_position in [LOADING, SEM_IMAGING]: 
+    elif current_position in [LOADING, SEM_IMAGING]:
         if target_pos_lbl in [SEM_IMAGING, GRID_1]:
             # if at loading, and sem is pressed, choose grid1 by default
             sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
@@ -96,7 +100,7 @@ def getTargetPosition(target_pos_lbl, stage):
             sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
             end_pos = transformFromSEMToMeteor(sem_grid2_pos, stage)
         elif target_pos_lbl == SEM_IMAGING:
-            end_pos = transformFromMeteorToSEM(stage.position.value, stage)                    
+            end_pos = transformFromMeteorToSEM(stage.position.value, stage)
 
     if end_pos is None:
         raise ValueError("Unknown target position {} when in {}".format(
@@ -161,6 +165,8 @@ def _getCurrentEnzelPositionLabel(current_pos, stage):
         current_pos, stage_active_range, {'x', 'y', 'z'}
     ):
         if _isNearPosition(current_pos, {'rx': stage_active['rx']}, {'rx'}):
+            if _isNearPosition(current_pos, {'z': stage_active['z']-SAFETY_MARGIN_5DOF}, {'z'}):
+                return THREE_BEAMS
             return IMAGING
         elif _isNearPosition(current_pos, {'rx': stage_sem_imaging['rx']}, {'rx'}):
             return SEM_IMAGING
@@ -197,8 +203,8 @@ def _getCurrentMeteorPositionLabel(current_pos, stage):
     # meta data of meteor stage positions 
     stage_md = stage.getMetadata()
     stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
-    stage_fm_imaging_rng = stage_md[model.MD_FM_IMAGING_RANGE] 
-    stage_sem_imaging_rng = stage_md[model.MD_SEM_IMAGING_RANGE] 
+    stage_fm_imaging_rng = stage_md[model.MD_FM_IMAGING_RANGE]
+    stage_sem_imaging_rng = stage_md[model.MD_SEM_IMAGING_RANGE]
     # Check the stage is near the loading position
     if _isNearPosition(current_pos, stage_deactive, stage.axes):
         return LOADING
@@ -236,12 +242,16 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
     align_active = align_md[model.MD_FAV_POS_ACTIVE]
     align_alignment = align_md[model.MD_FAV_POS_ALIGN]
+    three_beams = get3beamsSafePos(align_md[model.MD_FAV_POS_ACTIVE], SAFETY_MARGIN_3DOF)
     # If align is not referenced, set position as unknown (to only allow loading position)
     if not all(align.referenced.value.values()):
         return UNKNOWN
 
     if _isNearPosition(current_pos, align_alignment, align.axes):
         return ALIGNMENT
+
+    if _isNearPosition(current_pos, three_beams, align.axes):
+        return THREE_BEAMS
 
     if _isNearPosition(current_pos, align_active, align.axes):
         return IMAGING
@@ -304,7 +314,7 @@ def _getDistance(start, end):
         # map to scalar error
         rot_error = SCALING_FACTOR * abs(numpy.trace(numpy.eye(3) - R_diff))
     return lin_error + rot_error
-    
+
 
 def getRotationMatrix(axis, angle):
     """
@@ -395,6 +405,18 @@ def _isNearPosition(current_pos, target_position, axes):
             return False
     return True
 
+
+def get3beamsSafePos(active_pos, safety_margin):
+    """
+    Get the safe position of 3 beams alignment for either 5dof or 3dof stages
+    :param active_pos: (dict str->float) stage active position
+    :param safety_margin: (float) amount to lower the stage Z axis
+    :return: (dict str->float) safe position for 3 beams alignment
+    """
+    three_beams_pos = copy.copy(active_pos)
+    three_beams_pos['z'] -= safety_margin
+    return three_beams_pos
+
 def cryoSwitchAlignPosition(target):
     """
     Provide the ability to switch between loading, imaging and alignment position, without bumping into anything.
@@ -430,7 +452,8 @@ def _doCryoSwitchAlignPosition(future, align, target):
         align_md = align.getMetadata()
         target_pos = {LOADING: align_md[model.MD_FAV_POS_DEACTIVE],
                       IMAGING: align_md[model.MD_FAV_POS_ACTIVE],
-                      ALIGNMENT: align_md[model.MD_FAV_POS_ALIGN]
+                      ALIGNMENT: align_md[model.MD_FAV_POS_ALIGN],
+                      THREE_BEAMS: get3beamsSafePos(align_md[model.MD_FAV_POS_ACTIVE], SAFETY_MARGIN_3DOF)
                       }
         align_referenced = all(align.referenced.value.values())
         # Fail early when required axes are not found on the positions metadata
@@ -460,7 +483,7 @@ def _doCryoSwitchAlignPosition(future, align, target):
             # compensating 3DOF Y&Z) upwards it doesn't hit the 5DOF
             sub_moves = [{'x'}, {'z'}, {'y'}]
 
-        elif target in (ALIGNMENT, IMAGING):
+        elif target in (ALIGNMENT, IMAGING, THREE_BEAMS):
             if current_label is UNKNOWN:
                 raise ValueError("Unable to move aligner to {} while current position is unknown.".format(
                     target_name))
@@ -527,19 +550,22 @@ def _doCryoSwitchSamplePosition(future, target):
             align = model.getComponent(role='align')
             stage_md = stage.getMetadata()
             align_md = align.getMetadata()
+
             target_pos = {LOADING: stage_md[model.MD_FAV_POS_DEACTIVE],
-                        IMAGING: stage_md[model.MD_FAV_POS_ACTIVE],
-                        COATING: stage_md[model.MD_FAV_POS_COATING],
-                        ALIGNMENT: stage_md[model.MD_FAV_POS_ALIGN],
-                        SEM_IMAGING: stage_md[model.MD_FAV_POS_SEM_IMAGING]
-                        }
+                          IMAGING: stage_md[model.MD_FAV_POS_ACTIVE],
+                          COATING: stage_md[model.MD_FAV_POS_COATING],
+                          ALIGNMENT: stage_md[model.MD_FAV_POS_ALIGN],
+                          SEM_IMAGING: stage_md[model.MD_FAV_POS_SEM_IMAGING],
+                          THREE_BEAMS: get3beamsSafePos(stage_md[model.MD_FAV_POS_ACTIVE], SAFETY_MARGIN_5DOF)
+                          }
             align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
             stage_referenced = all(stage.referenced.value.values())
             # Fail early when required axes are not found on the positions metadata
             required_axes = {'x', 'y', 'z', 'rx', 'rz'}
             for stage_position in target_pos.values():
                 if not required_axes.issubset(stage_position.keys()):
-                    raise ValueError("Stage %s metadata does not have all required axes %s." % (list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
+                    raise ValueError("Stage %s metadata does not have all required axes %s." % (
+                    list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
             current_pos = stage.position.value
             # To hold the sub moves to run if normal ordering failed
             fallback_submoves = [{'x', 'y', 'z'}, {'rx', 'rz'}]
@@ -577,7 +603,7 @@ def _doCryoSwitchSamplePosition(future, target):
                     # Moving along X should always be safe (as Rx is not affected by this axis position).
                     sub_moves = [{'x'}, {'y'}, {'z'}, {'rx', 'rz'}]
 
-            elif target in (ALIGNMENT, IMAGING, SEM_IMAGING, COATING):
+            elif target in (ALIGNMENT, IMAGING, SEM_IMAGING, COATING, THREE_BEAMS):
                 if current_label is LOADING:
                     # Automatically run the referencing procedure as part of the
                     # first step of the movement loading → imaging/coating position
@@ -607,7 +633,7 @@ def _doCryoSwitchSamplePosition(future, target):
                     sub_move_dict = filter_dict(sub_move, target_pos[target])
                     logging.debug("Moving %s to %s.", stage.name, sub_move_dict)
                     run_sub_move(future, stage, sub_move_dict)
-                if target in (IMAGING, ALIGNMENT):
+                if target in (IMAGING, ALIGNMENT, THREE_BEAMS):
                     cryoSwitchAlignPosition(target).result()
             except IndexError:
                 # In case the required movement is invalid/unreachable with the smaract 5dof stage
@@ -688,7 +714,7 @@ def _doCryoSwitchSamplePosition(future, target):
                 raise CancelledError()
             future._task_state = FINISHED
 
-# Note: this transformation consists of translation of along x and y 
+# Note: this transformation consists of translation of along x and y
 # axes, and 7 degrees rotation around rx, and 180 degree rotation around rz.
 # The rotation angles are constant existing in "FM_POS_ACTIVE" metadata,
 # but the translation are calculated based on the current position and some
