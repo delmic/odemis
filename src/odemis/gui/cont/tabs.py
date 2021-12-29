@@ -73,8 +73,9 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
     ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream, FIBStream
-from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel,\
-    FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, POSITION_NAMES
+from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel, \
+    FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, POSITION_NAMES, THREE_BEAMS, \
+    get3beamsSafePos, SAFETY_MARGIN_5DOF
 from odemis.acq.move import cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
@@ -2435,7 +2436,7 @@ class CryoChamberTab(Tab):
                 raise ValueError('The stage is missing an rx axis.')
             panel.ctrl_rx.Bind(wx.EVT_CHAR, panel.ctrl_rx.on_char)
 
-            self.position_btns = {LOADING: self.panel.btn_switch_loading, IMAGING: self.panel.btn_switch_imaging,
+            self.position_btns = {LOADING: self.panel.btn_switch_loading, THREE_BEAMS: self.panel.btn_switch_imaging,
                                   ALIGNMENT: self.panel.btn_switch_align, COATING: self.panel.btn_switch_coating,
                                   SEM_IMAGING: self.panel.btn_switch_zero_tilt_imaging}
             if not {model.MD_POS_ACTIVE_RANGE}.issubset(stage_metadata):
@@ -2461,7 +2462,9 @@ class CryoChamberTab(Tab):
                                              IMAGING: stage_metadata[model.MD_FAV_POS_ACTIVE],
                                              ALIGNMENT: stage_metadata[model.MD_FAV_POS_ALIGN],
                                              SEM_IMAGING: stage_metadata[model.MD_FAV_POS_SEM_IMAGING],
-                                             COATING: stage_metadata[model.MD_FAV_POS_COATING], }
+                                             COATING: stage_metadata[model.MD_FAV_POS_COATING],
+                                             THREE_BEAMS: get3beamsSafePos(stage_metadata[model.MD_FAV_POS_ACTIVE], SAFETY_MARGIN_5DOF)
+                                             }
 
             # hide meteor buttons
             panel.btn_switch_sem_imaging.Hide()
@@ -2789,7 +2792,7 @@ class CryoChamberTab(Tab):
         """
         if self._role == 'enzel':
             # Define which button to disable in respect to the current move
-            disable_buttons = {LOADING: (), IMAGING: (), ALIGNMENT: (COATING, SEM_IMAGING), COATING: (ALIGNMENT, SEM_IMAGING),
+            disable_buttons = {LOADING: (), THREE_BEAMS: (), ALIGNMENT: (COATING, SEM_IMAGING), COATING: (ALIGNMENT, SEM_IMAGING),
                                SEM_IMAGING: (COATING,), LOADING_PATH: (ALIGNMENT, COATING, SEM_IMAGING)}
             for movement, button in self.position_btns.items():
                 if current_position == UNKNOWN:
