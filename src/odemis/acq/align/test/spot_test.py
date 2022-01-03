@@ -201,7 +201,7 @@ class TestFindGridSpots(unittest.TestCase):
         image[54:150:12, 54:150:12] = 1
         spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(image, (8, 8), method=GRID_AFFINE)
         self.assertAlmostEqual(rotation, 0, places=4)
-        self.assertEqual(shear, 0)
+        self.assertAlmostEqual(shear, 0, places=10)
         # create a grid that contains the coordinates of the spots
         xv = numpy.arange(54, 150, 12)
         xx, yy = numpy.meshgrid(xv, xv)
@@ -309,10 +309,10 @@ class TestFindGridSpots(unittest.TestCase):
         filename = os.path.join(TEST_IMAGE_PATH, "multiprobe01.tiff")
         img = tiff.open_data(filename).content[0].getData()
         spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(img, (14, 14))
-        numpy.testing.assert_array_almost_equal(spot_coordinates, grid_spots['spot_coordinates'])
-        numpy.testing.assert_array_almost_equal(translation, grid_spots['translation'], decimal=3)
+        numpy.testing.assert_array_almost_equal(spot_coordinates, grid_spots['spot_coordinates'], decimal=2)
+        numpy.testing.assert_array_almost_equal(translation, grid_spots['translation'], decimal=2)
         numpy.testing.assert_array_almost_equal(scaling, grid_spots['scaling'], decimal=3)
-        self.assertAlmostEqual(rotation, grid_spots['rotation'])
+        self.assertAlmostEqual(rotation, grid_spots['rotation'], places=4)
 
 
 if __name__ == '__main__':
