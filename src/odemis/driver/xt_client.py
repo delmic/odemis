@@ -2518,6 +2518,10 @@ class XTTKDetector(Detector):
                     if self._acq_should_stop():
                         break
 
+                    if hasattr(self._scanner, "blanker"):
+                        if self._scanner.blanker.value is None:
+                            self.parent.unblank_beam()
+
                     # Start a complete scan.
                     try:
                         self.parent.scan_image()
