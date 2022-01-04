@@ -343,7 +343,7 @@ class AcquisitionTask(object):
 
             self.move_stage_to_next_tile()  # move stage to next field image position
 
-            self.correct_beam_shift()  # correct the shift of the beams caused by the paramagnetic field.
+            self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
 
             dataflow.next(field_idx)  # acquire the next field image.
 
@@ -431,12 +431,13 @@ class AcquisitionTask(object):
 
     def correct_beam_shift(self):
         """
-        The stage creates a paramagnetic field. This causes the beams to shift slightly when the stage is moved, and
-        thus the beams shift in between single field acquisitions.
+        The stage creates a parasitic magnetic field. This causes the beams to shift slightly when the stage is moved,
+        and thus the beams shift in between single field acquisitions. Therefore, the single fields cannot be
+        seamlessly concatenated.
 
-        To correct for this we measure the average position of the spots before acquiring the single field.
+        To correct for this we measure the average (center) position of the spots before acquiring the single field.
         We compare this with the good multiprobe position, this is the factory calibrated position where we know the
-        beams are centered on the mppc detector. Using the difference between the current beam positions and the
+        beams are roughly centered on the mppc detector. Using the difference between the current beam positions and the
         good beam positions we calculate in what direction and how much to shift beams, such that they are always
         centered on the mppc detector.
         """
@@ -446,11 +447,12 @@ class AcquisitionTask(object):
         # Find the location of the spots on the diagnostic camera.
         spot_coordinates, *_ = FindGridSpots(ccd_image, (8, 8))
 
-        # Transform the spots from the diagnostic camera coordinate system to a
+        # Transform the spots from the diagnostic camera coordinate system to a right-handed coordinate
         # system with the origin in the bottom left.
         spot_coordinates[:, 1] = ccd_image.shape[1] - spot_coordinates[:, 1]  # [px]
 
-        # Determine the shift of the spots, by subtracting the good multiprobe position from the average spot position.
+        # Determine the shift of the spots, by subtracting the good multiprobe position from the average (center)
+        # spot position.
         good_mp_position = (self._ccd.getMetadata()[model.MD_FAV_POS_ACTIVE]["x"],
                             self._ccd.getMetadata()[model.MD_FAV_POS_ACTIVE]["y"])
         shift = numpy.mean(spot_coordinates, axis=0) - good_mp_position  # [px]
@@ -459,10 +461,10 @@ class AcquisitionTask(object):
         pixel_size = self._ccd.pixelSize.value
         magnification = self._lens.magnification.value
         shift_m = shift * pixel_size / magnification  # [m] pixel size diagnostic camera divided by 40x magnification
-        logging.debug("Beam shift adjustment required due to stage magnetic field (m): {}".format(shift_m))
+        logging.debug("Beam shift adjustment required due to stage magnetic field: {} [m]".format(shift_m))
 
         cur_beam_shift_pos = numpy.array(self._beamshift.shift.value)
-        logging.debug("Current beam shift m: {}".format(self._beamshift.shift.value))
+        logging.debug("Current beam shift: {} [m]".format(self._beamshift.shift.value))
         self._beamshift.shift.value = (cur_beam_shift_pos + shift_m)
 
         logging.debug("New beam shift m: {}".format(self._beamshift.shift.value))
