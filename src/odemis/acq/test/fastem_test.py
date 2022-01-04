@@ -100,7 +100,7 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         est_time = fastem.estimateTiledAcquisitionTime(s, self.stage, scintillator5_area)
         # don't use for DEBUG example
         self.assertGreater(est_time, 10)  # It should take more than 10s! (expect ~5 min)
-        
+
         before_start_t = time.time()
         f = fastem.acquireTiledArea(s, self.stage, scintillator5_area)
         time.sleep(1)
@@ -137,7 +137,8 @@ class TestFastEMROA(unittest.TestCase):
         cls.mppc = model.getComponent(role="mppc")
         cls.multibeam = model.getComponent(role="multibeam")
         cls.descanner = model.getComponent(role="descanner")
-        cls.stage = model.getComponent(role="stage")  # TODO replace with stage-scan when ROA conversion method available
+        cls.stage = model.getComponent(
+            role="stage")  # TODO replace with stage-scan when ROA conversion method available
         cls.stage.reference({"x", "y"}).result()
 
     @classmethod
@@ -145,7 +146,7 @@ class TestFastEMROA(unittest.TestCase):
         pass
 
     def setUp(self):
-        self.descanner.physicalFlybackTime = 250e-6  # TODO why is this necessary??
+        self.descanner.physicalFlybackTime.value = 250e-6  # TODO why is this necessary??
 
     def test_estimate_acquisition_time(self):
         """Check that the estimated time for one ROA (megafield) is calculated correctly."""
@@ -168,7 +169,7 @@ class TestFastEMROA(unittest.TestCase):
                                )
         cell_res = self.mppc.cellCompleteResolution.value
         dwell_time = self.multibeam.dwellTime.value
-        flyback = self.descanner.physicalFlybackTime  # extra time per line scan
+        flyback = self.descanner.physicalFlybackTime.value  # extra time per line scan
 
         # calculate expected roa (megafield) acquisition time
         # (number of pixels per line * dwell time + flyback time) * number of lines * number of cells in x and y
@@ -224,7 +225,10 @@ class TestFastEMAcquisition(unittest.TestCase):
             role="stage")  # TODO replace with stage-scan when ROA conversion method available
         cls.ccd = model.getComponent(role="diagnostic-ccd")
         cls.beamshift = model.getComponent(role="ebeam-shift")
+        cls.lens = model.getComponent(role="lens")
 
+        cls.beamshift.updateMetadata({model.MD_CALIB: cls.scanner.beamShiftTransformationMatrix.value})
+        cls.beamshift.shift.value = (0, 0)
         cls.stage.reference({"x", "y"}).result()
 
     @classmethod

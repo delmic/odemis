@@ -291,7 +291,8 @@ class AcquisitionTask(object):
         dataflow = self._detector.data
 
         try:
-            logging.debug("Starting megafield acquisition.")
+            logging.debug("Starting megafield acquisition of %s by %s fields.",
+                          self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1)
             # configure the HW settings
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
 
@@ -343,7 +344,8 @@ class AcquisitionTask(object):
 
             self.move_stage_to_next_tile()  # move stage to next field image position
 
-            self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
+            if field_idx != (0, 0):
+                self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
 
             dataflow.next(field_idx)  # acquire the next field image.
 
