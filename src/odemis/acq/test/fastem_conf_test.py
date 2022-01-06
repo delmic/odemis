@@ -42,6 +42,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default is HW/simulator testing
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
+# TODO add second simulator which includes asm component and use this one here instead
 FASTEM_CONFIG = CONFIG_PATH + "sim/fastem-sim.odm.yaml"
 
 
