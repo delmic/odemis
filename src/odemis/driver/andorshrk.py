@@ -1366,6 +1366,10 @@ class Shamrock(model.Actuator):
         """
         logging.debug("Current turret: %s", self.GetTurret())
         ngratings = self.GetNumberGratings()
+        if ngratings < 1:
+            logging.warning("No grating found on the current turret %s, it's probably not properly configured",
+                            self.GetTurret())
+
         gchoices = {}
         for g in range(1, ngratings + 1):
             try:
