@@ -58,14 +58,13 @@ class TestFASTEMConfig(unittest.TestCase):
         cls.multibeam = model.getComponent(role="multibeam")
         cls.mppc = model.getComponent(role="mppc")
 
-    def test_configure_scanner(self):
-        """Check that for each available mode, the correct HW settings are set on the respective scanner VAs."""
-
         # change the rotation for single and multibeam mode to check the correct one is selected depending on the mode
-        self.scanner.updateMetadata({model.MD_SINGLE_BEAM_ROTATION: math.radians(5),
-                                     model.MD_MULTI_BEAM_ROTATION: math.radians(10)})
+        cls.scanner.updateMetadata({model.MD_SINGLE_BEAM_ROTATION: math.radians(5),
+                                    model.MD_MULTI_BEAM_ROTATION: math.radians(10)})
 
-        # overview mode
+    def test_configure_scanner_overview(self):
+        """Check that for the overview mode, the correct HW settings are set on the respective scanner VAs."""
+
         fastem_conf.configure_scanner(self.scanner, OVERVIEW_MODE)
 
         self.assertFalse(self.scanner.multiBeamMode.value)
@@ -85,7 +84,9 @@ class TestFASTEMConfig(unittest.TestCase):
         img.mergeMetadata(image.metadata)
         self.assertAlmostEqual(image.metadata[model.MD_ROTATION], 0)
 
-        # live mode
+    def test_configure_scanner_live(self):
+        """Check that for the live mode, the correct HW settings are set on the respective scanner VAs."""
+
         fastem_conf.configure_scanner(self.scanner, LIVESTREAM_MODE)
 
         self.assertFalse(self.scanner.multiBeamMode.value)
@@ -94,7 +95,9 @@ class TestFASTEMConfig(unittest.TestCase):
         self.assertTrue(self.scanner.immersion.value)
         self.assertEqual(self.scanner.rotation.value, math.radians(5))
 
-        # megafield mode
+    def test_configure_scanner_megafield(self):
+        """Check that for megafield mode, the correct HW settings are set on the respective scanner VAs."""
+
         fastem_conf.configure_scanner(self.scanner, MEGAFIELD_MODE)
 
         self.assertTrue(self.scanner.multiBeamMode.value)
