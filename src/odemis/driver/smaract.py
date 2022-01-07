@@ -2623,6 +2623,14 @@ class MCS2(model.Actuator):
 
         self.position = model.VigilantAttribute({}, readonly=True)
 
+        try:
+            self._updatePosition()
+        except SA_CTLError as ex:
+            if ex.errno == SA_CTLDLL.SA_CTL_ERROR_NO_SENSOR_PRESENT:
+                # This happens if the axis is not connected to the controller
+                raise model.HwError("Check the connection between controller and axis: %s" % (ex,))
+            raise
+
         # Indicates moving to a deactive position after referencing.
         self._pos_deactive_after_ref = pos_deactive_after_ref
 
@@ -2645,7 +2653,6 @@ class MCS2(model.Actuator):
 
         self._update_position_timer = RepeatingTimer(1.0, self._updatePosition)
         self._update_position_timer.start()
-        self._updatePosition()
 
         self.speed = VigilantAttribute({}, unit="m/s", readonly=True)
         self._updateSpeed()
@@ -2654,7 +2661,6 @@ class MCS2(model.Actuator):
         self._updateAccel()
 
     def terminate(self):
-        # should be safe to close the device multiple times if terminate is called more than once.
         # should be safe to close the device multiple times if terminate is called more than once.
         if self._executor:
             self.stop()
