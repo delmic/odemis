@@ -99,8 +99,8 @@ class TestFilenameSuggestions(unittest.TestCase):
                 self.assertEqual(create_filename(PATH, ptn[0], ext, ptn[1]), fullfn)
 
         # Assertion takes ~ 1e-4 seconds, so it's safe to assume that the time hasn't changed
-        self.assertEqual(create_filename(PATH, 'test-{cnt}-{timeshrt}', '.0.ome.tiff', '123'),
-                         os.path.join(PATH, 'test-123-%s.0.ome.tiff' % time.strftime('%H%M')))
+        self.assertEqual(create_filename(PATH, 'test-{cnt}-{timeshrt_hyphen}', '.0.ome.tiff', '123'),
+                         os.path.join(PATH, 'test-123-%s.0.ome.tiff' % time.strftime('%H-%M')))
         self.assertEqual(create_filename(PATH, 'test-{cnt}-{timeshrt_colon}', '.0.ome.tiff', '123'),
                          os.path.join(PATH, 'test-123-%s.0.ome.tiff' % time.strftime('%H:%M')))
         self.assertEqual(create_filename(PATH, '{datelng}{timelng}-acquisition', '.tiff', '001'),
@@ -160,7 +160,5 @@ class TestFilenameSuggestions(unittest.TestCase):
         self.assertEqual(make_unique_name('abc-1s-0.5d-1', ['abc-1s-0.5d-1']), 'abc-1s-0.5d-2')
 
 
-
 if __name__ == "__main__":
     unittest.main()
-
