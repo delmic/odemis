@@ -657,19 +657,6 @@ class StreamPanel(wx.Panel):
 
         return sz
 
-    def Destroy(self, *args, **kwargs):
-        """ Delete the widget from the GUI
-
-        """
-
-        # Avoid receiving data after the object is deleted
-        if hasattr(self, "_sld_hist"):
-            self.stream.histogram.unsubscribe(self.on_histogram)
-        if hasattr(self, "_sld_spec"):
-            self.stream.image.unsubscribe(self.on_new_spec_data)
-
-        super(StreamPanel, self).Destroy(*args, **kwargs)
-
     def set_visible(self, visible):
         """ Set the "visible" toggle button of the stream panel """
         self._header.btn_show.SetToggle(visible)
