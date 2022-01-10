@@ -37,6 +37,7 @@ from past.builtins import basestring
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
                           isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, roattribute)
+from odemis.util.transform import RigidTransform
 
 
 class MultiplexActuator(model.Actuator):
@@ -594,6 +595,15 @@ class ConvertStage(model.Actuator):
     the two stages, as for each SEM stage move it is able to perform the
     corresponding “compensate” move in objective lens.
     """
+    def __new__(cls, *args, **kwargs):
+        # Automatically create Convert3DStage object if the number of axes = 3
+        axes = kwargs['axes']
+        if len(axes) == 2:
+            return super(ConvertStage, cls).__new__(cls)
+        elif len(axes) == 3:
+            return super(ConvertStage, cls).__new__(Convert3DStage)
+        else:
+            raise ValueError("Incorrect number of axes.")
 
     def __init__(self, name, role, dependencies, axes,
                  rotation=0, scale=None, translation=None, **kwargs):
@@ -651,25 +661,25 @@ class ConvertStage(model.Actuator):
                 logging.info("Axes %s of dependency are missing from .speed, so not providing it",
                              set(axes) - speed_axes)
 
+    def _get_rot_matrix(self, invert=False):
+        rotation = self._metadata[model.MD_ROTATION_COR]
+        if invert:
+            rotation *= -1
+        return RigidTransform(rotation=rotation).rotation_matrix
+
     def _updateConversion(self):
         translation = self._metadata[model.MD_POS_COR]
-        rotation = self._metadata[model.MD_ROTATION_COR]
         scale = self._metadata[model.MD_PIXEL_SIZE_COR]
         # Rotation * scaling for convert back/forth between exposed and dep
-        self._Mtodep = numpy.array(
-                     [[math.cos(rotation) * scale[0], -math.sin(rotation) * scale[0]],
-                      [math.sin(rotation) * scale[1], math.cos(rotation) * scale[1]]])
-
-        self._Mfromdep = numpy.array(
-                     [[math.cos(-rotation) / scale[0], -math.sin(-rotation) / scale[1]],
-                      [math.sin(-rotation) / scale[0], math.cos(-rotation) / scale[1]]])
+        self._Mtodep = self._get_rot_matrix() * scale
+        self._Mfromdep = self._get_rot_matrix(invert=True) / scale
 
         # Offset between origins of the coordinate systems
-        self._O = numpy.array([translation[0], translation[1]], dtype=numpy.float)
+        self._O = numpy.array(translation, dtype=numpy.float)
 
     def _convertPosFromdep(self, pos_dep, absolute=True):
         # Object lens position vector
-        Q = numpy.array([pos_dep[0], pos_dep[1]], dtype=numpy.float)
+        Q = numpy.array(pos_dep, dtype=numpy.float)
         # Transform to coordinates in the reference frame of the sample stage
         p = self._Mfromdep.dot(Q)
         if absolute:
@@ -678,7 +688,7 @@ class ConvertStage(model.Actuator):
 
     def _convertPosTodep(self, pos, absolute=True):
         # Sample stage position vector
-        P = numpy.array([pos[0], pos[1]], dtype=numpy.float)
+        P = numpy.array(pos, dtype=numpy.float)
         if absolute:
             P += self._O
         # Transform to coordinates in the reference frame of the objective stage
@@ -689,8 +699,7 @@ class ConvertStage(model.Actuator):
         """
         update the position VA when the dep's position is updated
         """
-        vpos_dep = [pos_dep[self._axes_dep["x"]],
-                      pos_dep[self._axes_dep["y"]]]
+        vpos_dep = [pos_dep[self._axes_dep["x"]], pos_dep[self._axes_dep["y"]]]
         vpos = self._convertPosFromdep(vpos_dep)
         # it's read-only, so we change it via _value
         self.position._set_value({"x": vpos[0], "y": vpos[1]}, force_write=True)
@@ -716,27 +725,31 @@ class ConvertStage(model.Actuator):
         """
         update the referenced VA
         """
-        refd = {}  # str (axes name) -> boolean (is referenced)
-        for ax, ad in self._axes_dep.items():
-            if ad in dep_refd:
-                refd[ax] = dep_refd[ad]
+        refd = {
+            ax: dep_refd[ad] for ax, ad in self._axes_dep.items() if ad in dep_refd
+        }
 
         self.referenced._set_value(refd, force_write=True)
+
+    def _get_pos_vector(self, pos_val, absolute=True):
+        """ Convert position dict into dependant axes position dict"""
+        if absolute:
+            cpos = self.position.value
+            vpos = pos_val.get("x", cpos["x"]), pos_val.get("y", cpos["y"])
+        else:
+            vpos = pos_val.get("x", 0), pos_val.get("y", 0)
+        vpos_dep = self._convertPosTodep(vpos, absolute=absolute)
+        return {self._axes_dep["x"]: vpos_dep[0], self._axes_dep["y"]: vpos_dep[1]}
 
     @isasync
     def moveRel(self, shift, **kwargs):
         """
         **kwargs: Mostly there to support "update" argument
         """
-        # shift is a vector, so relative conversion
-        vshift = shift.get("x", 0), shift.get("y", 0)
-        vshift_dep = self._convertPosTodep(vshift, absolute=False)
-
-        shift_dep = {self._axes_dep["x"]: vshift_dep[0],
-                       self._axes_dep["y"]: vshift_dep[1]}
+        # pos_val is a vector, so relative conversion
+        shift_dep = self._get_pos_vector(shift, absolute=False)
         logging.debug("converted relative move from %s to %s", shift, shift_dep)
-        f = self._dependency.moveRel(shift_dep, **kwargs)
-        return f
+        return self._dependency.moveRel(shift_dep, **kwargs)
 
     @isasync
     def moveAbs(self, pos, **kwargs):
@@ -744,25 +757,128 @@ class ConvertStage(model.Actuator):
         **kwargs: Mostly there to support "update" argument
         """
         # pos is a position, so absolute conversion
-        cpos = self.position.value
-        vpos = pos.get("x", cpos["x"]), pos.get("y", cpos["y"])
-        vpos_dep = self._convertPosTodep(vpos)
-
-        pos_dep = {self._axes_dep["x"]: vpos_dep[0],
-                     self._axes_dep["y"]: vpos_dep[1]}
+        pos_dep = self._get_pos_vector(pos)
         logging.debug("converted absolute move from %s to %s", pos, pos_dep)
-        f = self._dependency.moveAbs(pos_dep, **kwargs)
-        return f
+        return self._dependency.moveAbs(pos_dep, **kwargs)
 
     def stop(self, axes=None):
         self._dependency.stop()
 
     @isasync
     def reference(self, axes):
-        dep_axes = set(self._axes_dep[a] for a in axes)
-        f = self._dependency.reference(dep_axes)
-        return f
+        dep_axes = {self._axes_dep[a] for a in axes}
+        return self._dependency.reference(dep_axes)
 
+class Convert3DStage(ConvertStage):
+    """
+    Extends original ConvertStage with an additional axis Z
+    """
+    def __init__(self, name, role, dependencies, axes,
+                 rotation=(0, 0, 0), scale=(1, 1, 1), translation=(0, 0, 0), **kwargs):
+        """
+        dependencies (dict str -> actuator): name to objective lens actuator
+        axes (list of 3 strings): names of the axes for x, y and z
+        scale (None tuple of 3 floats): scale factor from exported to original position
+        rotation (tuple of 3 floats): rz, ry, rx (Tait–Bryan) angles using extrinsic rotations (in radians)
+        translation (None or tuple of 3 floats): translation offset (in m)
+        """
+        assert len(axes) == 3
+        if len(dependencies) != 1:
+            raise ValueError("ConvertStage needs 1 dependency")
+
+        self._dependency = list(dependencies.values())[0]
+        self._axes_dep = {"x": axes[0], "y": axes[1], "z": axes[2]}
+        if rotation.count(0) < 2:
+            raise ValueError("Convert3DStage allows only one rotation angle to be > 0.")
+
+        axes_def = {"x": self._dependency.axes[axes[0]],
+                    "y": self._dependency.axes[axes[1]],
+                    "z": self._dependency.axes[axes[2]]}
+        model.Actuator.__init__(self, name, role, dependencies=dependencies, axes=axes_def, **kwargs)
+
+        self._metadata[model.MD_POS_COR] = translation
+        self._metadata[model.MD_ROTATION_COR] = rotation
+        self._metadata[model.MD_PIXEL_SIZE_COR] = scale
+        self._updateConversion()
+
+        # RO, as to modify it the client must use .moveRel() or .moveAbs()
+        self.position = model.VigilantAttribute({"x": 0, "y": 0, "z": 0},
+                                                unit="m", readonly=True)
+        # it's just a conversion from the dep's position
+        self._dependency.position.subscribe(self._updatePosition, init=True)
+
+        if model.hasVA(self._dependency, "referenced"):
+            self.referenced = model.VigilantAttribute({}, readonly=True)
+            self._dependency.referenced.subscribe(self._updateReferenced, init=True)
+
+        if model.hasVA(self._dependency, "speed"):
+            speed_axes = set(self._dependency.speed.value.keys())
+            if set(axes) <= speed_axes:
+                self.speed = model.VigilantAttribute({}, readonly=True)
+                self._dependency.speed.subscribe(self._updateSpeed, init=True)
+            else:
+                logging.info("Axes %s of dependency are missing from .speed, so not providing it",
+                             set(axes) - speed_axes)
+
+    def _get_rot_matrix(self, invert=False):
+        # Overrides parent class method with rotation matrices for the 3 angles
+        # NB: Rotation is counterclockwise
+        # TODO: handle rotation for the 3 angles at the same time
+        rotation = self._metadata[model.MD_ROTATION_COR]
+        if invert:
+            rotation = tuple(r*-1 for r in rotation)
+        rz, ry, rx = rotation
+
+        rz_mat = numpy.array([
+            [numpy.cos(rz), -numpy.sin(rz), 0],
+            [numpy.sin(rz), numpy.cos(rz), 0],
+            [0, 0, 1]])
+        ry_mat = numpy.array([
+            [numpy.cos(ry), 0, numpy.sin(ry)],
+            [0, 1, 0],
+            [-numpy.sin(ry), 0, numpy.cos(ry)]])
+        rx_mat = numpy.array([
+            [1, 0, 0],
+            [0, numpy.cos(rx), -numpy.sin(rx)],
+            [0, numpy.sin(rx), numpy.cos(rx)]])
+
+        if invert:
+            return rx_mat @ ry_mat @ rz_mat
+
+        return rz_mat @ ry_mat @ rx_mat
+
+    def _updatePosition(self, pos_dep):
+        """
+        update the position VA when the dep's position is updated
+        """
+        vpos_dep = [pos_dep[self._axes_dep["x"]],
+                     pos_dep[self._axes_dep["y"]],
+                    pos_dep[self._axes_dep["z"]]]
+        vpos = self._convertPosFromdep(vpos_dep)
+        # it's read-only, so we change it via _value
+        self.position._set_value({"x": vpos[0], "y": vpos[1], "z": vpos[2]}, force_write=True)
+
+    def _updateSpeed(self, dep_speed):
+        """
+        update the speed VA based on the dependency's speed
+        """
+        # Convert the same way as position, but without origin
+        dep_vec_speed = [dep_speed[self._axes_dep["x"]],
+                         dep_speed[self._axes_dep["y"]],
+                         dep_speed[self._axes_dep["z"]]
+                         ]
+        vec_speed = self._convertPosFromdep(dep_vec_speed, absolute=False)
+        self.speed._set_value({"x": abs(vec_speed[0]), "y": abs(vec_speed[1]), "z": abs(vec_speed[2])}, force_write=True)
+
+    def _get_pos_vector(self, pos_val, absolute=True):
+        # Convert position dict into dependant axes position dict
+        if absolute:
+            cpos = self.position.value
+            vpos = pos_val.get("x", cpos["x"]), pos_val.get("y", cpos["y"]), pos_val.get("z", cpos["z"])
+        else:
+            vpos = pos_val.get("x", 0), pos_val.get("y", 0), pos_val.get("z", 0)
+        vpos_dep = self._convertPosTodep(vpos, absolute=absolute)
+        return {self._axes_dep["x"]: vpos_dep[0], self._axes_dep["y"]: vpos_dep[1], self._axes_dep["z"]: vpos_dep[2]}
 
 class AntiBacklashActuator(model.Actuator):
     """

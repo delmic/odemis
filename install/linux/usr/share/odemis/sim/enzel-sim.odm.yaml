@@ -258,19 +258,18 @@ ENZEL-Sim: {
   },
 }
 
-# Special component to only provide the X/Y axis of the optical lens to align it with the e-beam lens
+# Special component to only provide the X/Y/Z axes of the optical lens to align it with the e-beam lens
 "Objective Aligner": {
-  class: actuator.MultiplexActuator,
+  class: actuator.ConvertStage,
   role: align,
-  affects: [ "Camera" ],
-  dependencies: { "x": "3DOF Stage", "y": "Tilted 3DoF", "z": "Tilted 3DoF" },
-  init: {
-    axes_map: { "x": "x", "y": "x", "z": "y" },
-    # TODO: If the X/Y axes are not aligned with the image axis, swap the axes in the
-    # mapping here + use "inverted", if it's just a matter of 90° rotation. If the
-    # angle is not such a multiple, use ConverterStage.
-    #        inverted: ["x"]
+  dependencies: {
+    "under": "3DOF Stage"
   },
+  init: {
+    axes: [ "x", "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+    rotation: [ 0, 0, -0.4887 ], # rad , -28°
+  },
+  affects: [ "Camera" ],
   metadata: {
     # Default position at init corresponding to (approximately) aligned
     # It must have both x,y and z.
@@ -377,19 +376,6 @@ ENZEL-Sim: {
     # TODO: Check the correct angle sign
     rotation: 0.4887, # rad , 28°
   },
-}
-# Y/Z axes only, as X is as-is
-"Tilted 3DoF": {
-  class: actuator.ConvertStage,
-  role: null,
-  dependencies: {
-    "under": "3DOF Stage"
-  },
-  init: {
-    axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
-    rotation: -0.4887, # rad , -28°
-  },
-  affects: [ "Camera" ],
 }
 "3DOF Stage": {
   class: smaract.MCS2,
