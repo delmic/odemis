@@ -2998,12 +2998,12 @@ class DualChannelPositionSensor(model.HwComponent):
     def _doReference(self, axes, omit_referenced):
         # Reference all stage axes (also those which are not in "axes", e.g. z axis)
         if self.stage:
-            stage_axes = self.stage.axes.keys()
+            stage_axes = set(self.stage.axes.keys())  # turn dict keys into a set, because reference expects a set
             if omit_referenced:
                 # Skip axes which are already referenced or cannot be referenced
                 stage_axes = {ax for ax in stage_axes if not self.stage.referenced.value.get(ax, True)}
             logging.debug("Referencing stage axes %s.", stage_axes)
-            f = self.stage.reference(set(stage_axes))
+            f = self.stage.reference(stage_axes)
             f.result()
 
         # Convert from high-level axes to sensor axes
