@@ -665,7 +665,7 @@ class ConvertStage(model.Actuator):
         rotation = self._metadata[model.MD_ROTATION_COR]
         if invert:
             rotation *= -1
-        return RigidTransform(rotation=rotation).rotation_matrix
+        return RigidTransform(rotation=rotation).matrix
 
     def _updateConversion(self):
         translation = self._metadata[model.MD_POS_COR]
