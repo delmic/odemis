@@ -583,7 +583,14 @@ def _doCryoSwitchSamplePosition(future, target):
                 # Check if stage is not referenced:
                 # park aligner (move it to loading position) then reference the stage
                 if not stage_referenced:
-                    cryoSwitchAlignPosition(LOADING).result()
+                    future._running_subf = cryoSwitchAlignPosition(LOADING)
+                    try:
+                        future._running_subf.result(timeout=60)
+                    except TimeoutError:
+                        future._running_subf.cancel()
+                    if future._task_state == CANCELLED:
+                        logging.info("Cancelling aligner movement...")
+                        raise CancelledError()
                     run_reference(future, stage)
 
                 # Add the sub moves to perform the loading move
@@ -628,13 +635,27 @@ def _doCryoSwitchSamplePosition(future, target):
                 logging.info("Starting sample movement from {} -> {}...".format(current_name, target_name))
                 # Park aligner to safe position before any movement
                 if not _isNearPosition(align.position.value, align_deactive, align.axes):
-                    cryoSwitchAlignPosition(LOADING).result()
+                    future._running_subf = cryoSwitchAlignPosition(LOADING)
+                    try:
+                        future._running_subf.result(timeout=60)
+                    except TimeoutError:
+                        future._running_subf.cancel()
+                    if future._task_state == CANCELLED:
+                        logging.info("Cancelling aligner movement...")
+                        raise CancelledError()
                 for sub_move in sub_moves:
                     sub_move_dict = filter_dict(sub_move, target_pos[target])
                     logging.debug("Moving %s to %s.", stage.name, sub_move_dict)
                     run_sub_move(future, stage, sub_move_dict)
                 if target in (IMAGING, ALIGNMENT, THREE_BEAMS):
-                    cryoSwitchAlignPosition(target).result()
+                    future._running_subf = cryoSwitchAlignPosition(target)
+                    try:
+                        future._running_subf.result(timeout=60)
+                    except TimeoutError:
+                        future._running_subf.cancel()
+                    if future._task_state == CANCELLED:
+                        logging.info("Cancelling aligner movement...")
+                        raise CancelledError()
             except IndexError:
                 # In case the required movement is invalid/unreachable with the smaract 5dof stage
                 # Move all linear axes first then rotational ones using the fallback_submoves

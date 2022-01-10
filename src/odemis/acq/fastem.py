@@ -32,6 +32,7 @@ import numpy
 
 from odemis import model, util
 from odemis.acq import stitching
+from odemis.acq.align.spot import FindGridSpots
 from odemis.acq.stitching import REGISTER_IDENTITY
 from odemis.acq.stream import SEMStream
 from odemis.util import TimeoutError
@@ -165,7 +166,7 @@ class FastEMROC(object):
         # if None -> acquire, if not None, don't acquire again
 
 
-def acquire(roa, path, scanner, multibeam, descanner, detector, stage):
+def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -181,6 +182,9 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage):
     :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
     :param stage: (actuator.ConvertStage) The stage in the corrected scan coordinate system, the x and y axes are
         aligned with the x and y axes of the multiprobe and the multibeam scanner.
+    :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
+    :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
+    :param lens: (static.OpticalLens) Optical lens component.
 
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
@@ -191,7 +195,7 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage):
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
-    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, roa, path, f)
+    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -208,12 +212,15 @@ class AcquisitionTask(object):
     An ROA consists of multiple single field images.
     """
 
-    def __init__(self, scanner, multibeam, descanner, detector, stage, roa, path, future):
+    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
         :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
         :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
+        :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
+        :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
+        :param lens: (static.OpticalLens) Optical lens component.
         :param roa: (FastEMROA) The acquisition region object to be acquired (megafield).
         :param path: (str) Path on the external storage where the image data is stored. Here, it is possible
                     to specify sub-directories (such as acquisition date and project name) additional to the main
@@ -231,6 +238,9 @@ class AcquisitionTask(object):
         self._descanner = descanner
         self._detector = detector
         self._stage = stage
+        self._ccd = ccd
+        self._beamshift = beamshift
+        self._lens = lens
         self._roa = roa  # region of acquisition object
         self._roc = roa.roc  # region of calibration object
         self._path = path  # sub-directories on external storage
@@ -281,7 +291,8 @@ class AcquisitionTask(object):
         dataflow = self._detector.data
 
         try:
-            logging.debug("Starting megafield acquisition.")
+            logging.debug("Starting megafield acquisition of %s by %s fields.",
+                          self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1)
             # configure the HW settings
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
 
@@ -332,6 +343,9 @@ class AcquisitionTask(object):
             logging.debug("Acquiring field with index: %s", field_idx)
 
             self.move_stage_to_next_tile()  # move stage to next field image position
+
+            if field_idx != (0, 0):
+                self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
 
             dataflow.next(field_idx)  # acquire the next field image.
 
@@ -416,6 +430,46 @@ class AcquisitionTask(object):
         except TimeoutError:
             raise TimeoutError("Stage movement to position (%s, %s) timed out after %s s."
                                % (timeout, pos_hor, pos_vert))
+
+    def correct_beam_shift(self):
+        """
+        The stage creates a parasitic magnetic field. This causes the beams to shift slightly when the stage is moved,
+        and thus the beams shift in between single field acquisitions. Therefore, the single fields cannot be
+        seamlessly concatenated.
+
+        To correct for this we measure the average (center) position of the spots before acquiring the single field.
+        We compare this with the good multiprobe position, this is the factory calibrated position where we know the
+        beams are roughly centered on the mppc detector. Using the difference between the current beam positions and the
+        good beam positions we calculate in what direction and how much to shift beams, such that they are always
+        centered on the mppc detector.
+        """
+        # asap=False: wait until new image is acquired (don't read from buffer)
+        ccd_image = self._ccd.data.get(asap=False)
+
+        # Find the location of the spots on the diagnostic camera.
+        spot_coordinates, *_ = FindGridSpots(ccd_image, (8, 8))
+
+        # Transform the spots from the diagnostic camera coordinate system to a right-handed coordinate
+        # system with the origin in the bottom left.
+        spot_coordinates[:, 1] = ccd_image.shape[1] - spot_coordinates[:, 1]  # [px]
+
+        # Determine the shift of the spots, by subtracting the good multiprobe position from the average (center)
+        # spot position.
+        good_mp_position = (self._ccd.getMetadata()[model.MD_FAV_POS_ACTIVE]["x"],
+                            self._ccd.getMetadata()[model.MD_FAV_POS_ACTIVE]["y"])
+        shift = numpy.mean(spot_coordinates, axis=0) - good_mp_position  # [px]
+
+        # Convert the shift from pixels to meters
+        pixel_size = self._ccd.pixelSize.value
+        magnification = self._lens.magnification.value
+        shift_m = shift * pixel_size / magnification  # [m] pixel size diagnostic camera divided by 40x magnification
+        logging.debug("Beam shift adjustment required due to stage magnetic field: {} [m]".format(shift_m))
+
+        cur_beam_shift_pos = numpy.array(self._beamshift.shift.value)
+        logging.debug("Current beam shift: {} [m]".format(self._beamshift.shift.value))
+        self._beamshift.shift.value = (cur_beam_shift_pos + shift_m)
+
+        logging.debug("New beam shift m: {}".format(self._beamshift.shift.value))
 
 
 ########################################################################################################################

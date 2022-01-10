@@ -587,7 +587,7 @@ class EBeamScanner(model.Emitter):
         self._shape = self.resolution.range[1]
         # TODO: Dwell time is currently set at a maximum of 40 micro seconds because we cannot calibrate as long as
         #  1e-4 seconds. This is because we are limited to 4000 calibration setpoints.
-        self.dwellTime = model.FloatContinuous(4e-7, (4e-7, 4e-5), unit='s', setter=self._setDwellTime)
+        self.dwellTime = model.FloatContinuous(5e-6, (4e-7, 4e-5), unit='s', setter=self._setDwellTime)
         self.pixelSize = model.TupleContinuous((4e-9, 4e-9), range=((1e-9, 1e-9), (1e-3, 1e-3)), unit='m',
                                                setter=self._setPixelSize)
         # direction of the executed scan
