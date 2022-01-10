@@ -318,6 +318,9 @@ class AcquisitionTask(object):
             # Remove references to the megafield once the acquisition is finished/cancelled.
             self._fields_remaining.clear()
 
+            # Blank the beam after the acquisition is done. 
+            self._scanner.blanker = True
+
             # Finish the megafield also if an exception was raised, in order to enable a new acquisition.
             logging.debug("Finish megafield acquisition.")
             dataflow.unsubscribe(self.image_received)
@@ -587,4 +590,11 @@ def _run_overview_acquisition(f, stream, stage, area, live_stream):
 
     if len(das) != 1:
         logging.warning("Expected 1 DataArray, but got %d: %r", len(das), das)
+
+    # Switch immersion mode back on, so we can focus the SEM from the TFS GUI.
+    stream.emitter.immersion.value = True
+
+    # FIXME auto blanking not working properly, so force beam blanking after image acquisition for now.
+    stream.emitter.blanker = True
+
     return das[0]
