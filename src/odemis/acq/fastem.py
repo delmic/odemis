@@ -413,11 +413,15 @@ class AcquisitionTask(object):
         rel_move_hor = self.field_idx[0] * px_size[0] * field_res[0]  # in meter
         rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1]  # in meter
 
-        # Move in the negative x direction, because the second field should be right of the first.
-        # Move in positive y direction, because the second field should be bottom of the first.
-        # TODO verify that this results in the images being taken in the correct order (left to right, top to bottom).
-        pos_hor = pos_first_tile[0] - rel_move_hor
-        pos_vert = pos_first_tile[1] + rel_move_vert
+        # With role="stage", move positive in x direction, because the second field should be right of the first,
+        # and move negative in y direction, because the second field should be bottom of the first.
+        pos_hor = pos_first_tile[0] + rel_move_hor
+        pos_vert = pos_first_tile[1] - rel_move_vert
+        # TODO when stage-scan is implemented use commented lines
+        #   With role="stage-scan", move negative in x direction, because the second field should be right of the first,
+        #   and move positive in y direction, because the second field should be bottom of the first.
+        # pos_hor = pos_first_tile[0] - rel_move_hor
+        # pos_vert = pos_first_tile[1] + rel_move_vert
 
         return pos_hor, pos_vert
 
