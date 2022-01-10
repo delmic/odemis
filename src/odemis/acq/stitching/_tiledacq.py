@@ -99,17 +99,14 @@ class TiledAcquisitionTask(object):
         self._area_size = (width, height)
         self._overlap = overlap
 
-        # TODO: is that really handy? It should be quite easy for the caller to do
-        # and that would avoid all corner cases where the caller actually cares
-        # about the FoV (eg, to get more pixels in the image, or the image get artifacts at large FoV)
-        if future:
-            # Change the SEM stream horizontalFoV VA to the max if it's found
-            for stream in self._streams:
-                if model.hasVA(stream, "horizontalFoV"):
-                    # Clip horizontal fov to total area in case it's smaller than max. value
-                    stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._area_size))
-            # FIXME: during time/memory estimation, use the range[1] of the VA
-            # to estimate the FoV of the stream
+        # Note: we used to change the stream horizontalFoV VA to the max, if available (eg, SEM).
+        # However, it's annoying if the caller actually cares about the FoV (eg,
+        # because it wants a large number of pixels, or there are artifacts at
+        # the largest FoV). In addition, it's quite easy to do for the caller anyway.
+        # Something like this:
+        # for stream in self._streams:
+        #     if model.hasVA(stream, "horizontalFoV"):
+        #         stream.horizontalFoV.value = stream.horizontalFoV.clip(max(self._area_size))
 
         # Get the smallest field of view
         self._sfov = self._guessSmallestFov(streams)
