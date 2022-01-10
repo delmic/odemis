@@ -3003,7 +3003,7 @@ class DualChannelPositionSensor(model.HwComponent):
                 # Skip axes which are already referenced or cannot be referenced
                 stage_axes = {ax for ax in stage_axes if not self.stage.referenced.value.get(ax, True)}
             logging.debug("Referencing stage axes %s.", stage_axes)
-            f = self.stage.reference(stage_axes)
+            f = self.stage.reference(set(stage_axes))
             f.result()
 
         # Convert from high-level axes to sensor axes
