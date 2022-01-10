@@ -26,7 +26,8 @@ from odemis.acq.move import (ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRI
                              RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel,
                              cryoSwitchAlignPosition, getCurrentAlignerPositionLabel,
                              _getDistance, SCALING_FACTOR, getRotationMatrix, cryoTiltSample,
-                             cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel)
+                             cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel, get3beamsSafePos,
+                             SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS)
 from odemis.util import test
 import os
 import scipy
@@ -59,9 +60,11 @@ class TestCryoMove(unittest.TestCase):
         cls.stage_coating = cls.stage.getMetadata()[model.MD_FAV_POS_COATING]
         cls.stage_alignment = cls.stage.getMetadata()[model.MD_FAV_POS_ALIGN]
         cls.stage_sem_imaging = cls.stage.getMetadata()[model.MD_FAV_POS_SEM_IMAGING]
+        cls.stage_3beams = get3beamsSafePos(cls.stage.getMetadata()[model.MD_FAV_POS_ACTIVE], SAFETY_MARGIN_5DOF)
         cls.align_deactive = cls.aligner.getMetadata()[model.MD_FAV_POS_DEACTIVE]
         cls.align_alignment = cls.aligner.getMetadata()[model.MD_FAV_POS_ALIGN]
         cls.align_active = cls.aligner.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        cls.align_3beams = get3beamsSafePos(cls.aligner.getMetadata()[model.MD_FAV_POS_ACTIVE], SAFETY_MARGIN_3DOF)
 
         # Make sure the lens is referenced too (small move will only complete after the referencing)
         cls.aligner.moveRelSync({"x": 1e-6})
@@ -109,6 +112,12 @@ class TestCryoMove(unittest.TestCase):
         f = cryoSwitchSamplePosition(ALIGNMENT)
         f.result()
         test.assert_pos_almost_equal(stage.position.value, self.stage_alignment, atol=ATOL_LINEAR_POS, match_all=False)
+
+        # Get the stage to 3beams position
+        f = cryoSwitchSamplePosition(THREE_BEAMS)
+        f.result()
+        test.assert_pos_almost_equal(stage.position.value, self.stage_3beams, atol=ATOL_LINEAR_POS, match_all=False)
+        test.assert_pos_almost_equal(align.position.value, self.align_3beams, atol=ATOL_LINEAR_POS)
 
         # Get the stage to alignment position
         f = cryoSwitchSamplePosition(SEM_IMAGING)

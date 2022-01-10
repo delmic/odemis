@@ -350,7 +350,7 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.btn_switch_grid2 = xrc.XRCCTRL(self, "btn_switch_grid2")
         self.btn_switch_loading = xrc.XRCCTRL(self, "btn_switch_loading")
         self.btn_switch_imaging = xrc.XRCCTRL(self, "btn_switch_imaging")
-        self.btn_switch_align = xrc.XRCCTRL(self, "btn_switch_align")
+        self.btn_switch_zero_tilt_imaging = xrc.XRCCTRL(self, "btn_switch_zero_tilt_imaging")
         self.btn_switch_coating = xrc.XRCCTRL(self, "btn_switch_coating")
         self.gauge_move = xrc.XRCCTRL(self, "gauge_move")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
@@ -358,7 +358,6 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.txt_warning = xrc.XRCCTRL(self, "txt_warning")
         self.btn_switch_advanced = xrc.XRCCTRL(self, "btn_switch_advanced")
         self.pnl_advanced_align = xrc.XRCCTRL(self, "pnl_advanced_align")
-        self.btn_switch_zero_tilt_imaging = xrc.XRCCTRL(self, "btn_switch_zero_tilt_imaging")
         self.lbl_milling_angle = xrc.XRCCTRL(self, "lbl_milling_angle")
         self.ctrl_rx = xrc.XRCCTRL(self, "ctrl_rx")
         self.stage_align_slider_aligner = xrc.XRCCTRL(self, "stage_align_slider_aligner")
@@ -374,6 +373,7 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
         self.stage_align_btn_p_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_z")
         self.stage_align_btn_m_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_z")
+        self.btn_switch_align = xrc.XRCCTRL(self, "btn_switch_align")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_overview_map = xrc.XRCCTRL(self, "vp_overview_map")
 
@@ -4168,22 +4168,22 @@ def __init_resources():
 											<cellpos>0,1</cellpos>
 										</object>
 										<object class="sizeritem">
-											<object class="GraphicRadioButton" name="btn_switch_align">
-												<icon>img_icon_ico_lens_png</icon>
-												<icon_on>img_icon_ico_lens_orange_png</icon_on>
-												<height>48</height>
-												<face_colour>def</face_colour>
-												<label>ALIGNMENT</label>
-												<fg>#1A1A1A</fg>
-												<font>
-													<size>11</size>
-													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-												</font>
-												<style>wxALIGN_CENTRE</style>
-												<XRCED>
-													<assign_var>1</assign_var>
-												</XRCED>
-											</object>
+											<object class="GraphicRadioButton" name="btn_switch_zero_tilt_imaging">
+                                                  <icon>img_icon_ico_sem_png</icon>
+                                                  <icon_on>img_icon_ico_sem_green_png</icon_on>
+                                                  <height>48</height>
+                                                  <face_colour>def</face_colour>
+                                                  <label>SEM IMAGING</label>
+                                                  <fg>#1A1A1A</fg>
+                                                  <font>
+                                                      <size>11</size>
+                                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                                  </font>
+                                                  <style>wxALIGN_CENTRE</style>
+                                                  <XRCED>
+                                                      <assign_var>1</assign_var>
+                                                  </XRCED>
+                                              </object>
 											<flag>wxALL|wxEXPAND</flag>
 											<border>10</border>
 											<cellpos>1,0</cellpos>
@@ -4315,32 +4315,7 @@ def __init_resources():
 												<flag>wxBOTTOM|wxALL</flag>
 												<border>5</border>
 											</object>
-                                            <object class="sizeritem">
-                                               <object class="wxBoxSizer">
-											<orient>wxVERTICAL</orient>
-											<object class="sizeritem">
-                                              <object class="GraphicRadioButton" name="btn_switch_zero_tilt_imaging">
-                                                  <icon>img_icon_ico_sem_png</icon>
-                                                  <icon_on>img_icon_ico_sem_green_png</icon_on>
-                                                  <height>48</height>
-                                                  <face_colour>def</face_colour>
-                                                  <label>SEM IMAGING</label>
-                                                  <fg>#1A1A1A</fg>
-                                                  <font>
-                                                      <size>11</size>
-                                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                                  </font>
-                                                  <style>wxALIGN_CENTRE</style>
-                                                  <XRCED>
-                                                      <assign_var>1</assign_var>
-                                                  </XRCED>
-                                              </object>
-                                            </object>
-                                           </object>
-<!--                                              <flag>wxLEFT</flag>-->
-<!--                                            <border>60</border>-->
-                                                <flag>wxALIGN_CENTRE</flag>
-                                          </object>
+
                                             <object class="sizeritem">
 									<object class="wxBoxSizer">
 										<object class="sizeritem">
@@ -4628,6 +4603,31 @@ def __init_resources():
 												</XRCED>
 												<flag>wxALIGN_CENTRE</flag>
 											</object>
+
+                                            <object class="sizeritem">
+                                               <object class="wxBoxSizer">
+											<orient>wxVERTICAL</orient>
+											<object class="sizeritem">
+                                              <object class="GraphicRadioButton" name="btn_switch_align">
+                                                    <icon>img_icon_ico_lens_png</icon>
+                                                    <icon_on>img_icon_ico_lens_orange_png</icon_on>
+                                                    <height>48</height>
+                                                    <face_colour>def</face_colour>
+                                                    <label>FACTORY ALIGNMENT</label>
+                                                    <fg>#1A1A1A</fg>
+                                                    <font>
+                                                        <size>11</size>
+                                                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                                    </font>
+                                                    <style>wxALIGN_CENTRE</style>
+                                                    <XRCED>
+                                                        <assign_var>1</assign_var>
+                                                    </XRCED>
+                                                </object>
+                                            </object>
+                                           </object>
+                                                <flag>wxALIGN_CENTRE</flag>
+                                          </object>
 											<flag>wxALIGN_CENTRE</flag>
 										</object>
 										<fg>#E5E5E5</fg>
@@ -9953,40 +9953,6 @@ r\xd8-b\xbbI\xe4\xa4U\x1eKE\x8e\x93\x006\x01\xb0g\x9c\xcc\x0d.d\x0e\xbf\
 \xb7\x04\x1b\x87yP\x91\xd3\xef4h\x9f/Kv{\xdf\xa1\xba\xf2\xf0\xe5\xf0!\xb0\
 C`\xf7\xd6\xf5/\x95\xa3c\x16\xe1d\xf0K\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    img_icon_ico_lens_orange_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x1b\x00\x00\x00&\x08\x06\x00\x00\x005\
-0\xe0&\x00\x00\x02\x8bIDATX\xc3\xedWKn\x141\x10}U\xb6\xd3\xc9(\x04\xa1\x01\
-e\x13V\xac\x10\x87\xc8\x02\xb1\xe2&\xac8Rn\x80\x84Xq\x00\xee\x80\x04k\x90\
-\xf8\x081\x88$\xfd\xb1\xd9\xd8\xad7\x85\xbbg"\xcdD,\xb0d\xb9g\xfa\xb9^\xb9\
-\\\xe5~\xf6\xe9\xd5}\x98&\x13\xcf\x00\x90Pos\xb8\xf1\xd9\x9b\x09J\xa3\x1a\
-#\x89&&\x9a#\x13\xb8\x98{\xf9\x9d<Mr\xb9{3\x8a\x99\x1c+\x0eZ\\\x0f`\xa0\
-q`\xb22!\x00h\x00\x1c\xe4g\x9f\xdf\xb1\x91H+Sr\xb2\xe0\x06\x00\x1d\x80\x96\
-\xfa\xb8\xb2\xe2\x9d\xcfD\x8b<6\x99P\xc8HO\xab\xe3y\xde\xe0Z\x00W\xc6\x81\
-\xc8+\x0b\x00\x0e\x01\x1c\xe5n\xc98<\x9b\xc8B~\x87<\xa7\x030\xf0\xca
-\xd9"\x93\x1d\x18#\x91\xe3o\xf6\xcb\xee\x19\xff.!\xed\xca\xcax\xbf\xc6\
-\x10~\xf84\xbc\x0d^\xe0\xb2\x8fgK}V\xd93\xad\xe0\x9efL\x9f\x9dv\x00\xc4\
-\xeeY\xa0\xc4p\xc1\x0bN\x8e\x04M\x18\xb3\x8f=.)\xaf\x13\xb85[\x85\x8cS\xdf\
-Sf\x89S\xa0\x09\xc0\xa2\x19\xcbH+\xc5\xac\x138G\xfb\xa9\\\xd4J$Z)T[Wi\x06\
-\x03\xb2\xc3}\x0c\xa3\xcc\x9c\x1cSG\xd3\x1c\x06\x15{b\x8f+\xd9\xe01n@\xf4\
-\x97=?s\xc6\xed\xbcy\xdcb\xfbO\xb6\xd6\xbe\xad\xe2\xe3~\xc0\xe9\xf2\x8e\
-\xbe\xf3\x0e\xed\xde\xc8\xbe\xae\xd2\xf3\xd5\xef\xf4\xa2\x09\x82\xef\xbf\
-\xe2\xc7\x07\x27\xfaReOd\xc3\x90\xce\x17\x8d\xe0\xf8P\xe0\x1c\x1e\xb5=\x1e\
-\x06\x0f\x88\xec\x81,8\xbc\x17\x91\x27M\x108\xc5\x0f\x00\x9f\xdd\x96K\xbb\
-1\xd9\xbdc\xbd\xf8y\x99\xbe\x0c1\x9d\xaa\xca\x1b\x15\\\xc7\x98\xb6*\xd1\
-\x1b\x93\x89`\xb8\xbb\x90\xd7\xfc_7\xdcb\xea\x0f\x11H\xe9\x1f\xae\xb34#\
-BwJ\x96vL\x98L\x1f\xc9X\xc12@f\x0cm\xf3\xa9\xb1\x84\x89W\x16\x8dd\xded`\
-\xee#\x9aj*\x9a\xc9\xac\\\xd6\x09#\xd1
-\x9e
-\x8ee\xdf\xa8\xa2\x0b\x19\xbf\xe8Y\xa4\xd8,\xaf\x90a\x02W\xc4i\xcfZ\xbf\
-x[\xc4\xe4\xf5\x04\x112\xc6\xea\xc68\x81+:\xbf\xab\x91\x15}\xeeJ(\xce\x96\
-zN\xdes\x98\xd7\x14\xb1\xc1\xf5d\xeb2;\xdf\xdb0v\x95\xcb@0F6],,\xd9\x15\
-G\xc3\xd3\x86\xf6\xd9\x0b&\xf7\x86\xbcve\xf2\x95+SK\x84\xad\x0d#\x83\x98\
-\xd8\x91\xc7\x91\x12\x04FIk%\xdc\x9c \xd5\xd4\xe7\xcb\x9c3\x19\x97*5X\xd3\
-\x9aq\xa2\xaf\x155\x17bM\xf9n:\xc6d\xe6\xe8K\x00\xf0\x07\x90^-\x1b\x01,\
-\xd1\x91\x00\x00\x00\x00IEND\xaeB`\x82'''
-
     img_icon_ico_coating_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -10111,6 +10077,40 @@ X\xa4~R\x05\x06q\xd8\x06\xd1a\x03d\xda9\x030p\xc9\x27 \xf3\x90=\xab\x02\
 .\xe9\x00b\x01Rc\x83\x1f\x88\x17\x00\xf1= \xd6\x80\x86\x0fI\x00\xe4\\\x1d\
  \x0e\x05b.R5#{\x85\x93\x1c\xdb\xe9\x07\x00\x99B\x1c}\x91\xeb\xbc\x86\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
+
+    img_icon_ico_lens_orange_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x1b\x00\x00\x00&\x08\x06\x00\x00\x005\
+0\xe0&\x00\x00\x02\x8bIDATX\xc3\xedWKn\x141\x10}U\xb6\xd3\xc9(\x04\xa1\x01\
+e\x13V\xac\x10\x87\xc8\x02\xb1\xe2&\xac8Rn\x80\x84Xq\x00\xee\x80\x04k\x90\
+\xf8\x081\x88$\xfd\xb1\xd9\xd8\xad7\x85\xbbg"\xcdD,\xb0d\xb9g\xfa\xb9^\xb9\
+\\\xe5~\xf6\xe9\xd5}\x98&\x13\xcf\x00\x90Pos\xb8\xf1\xd9\x9b\x09J\xa3\x1a\
+#\x89&&\x9a#\x13\xb8\x98{\xf9\x9d<Mr\xb9{3\x8a\x99\x1c+\x0eZ\\\x0f`\xa0\
+q`\xb22!\x00h\x00\x1c\xe4g\x9f\xdf\xb1\x91H+Sr\xb2\xe0\x06\x00\x1d\x80\x96\
+\xfa\xb8\xb2\xe2\x9d\xcfD\x8b<6\x99P\xc8HO\xab\xe3y\xde\xe0Z\x00W\xc6\x81\
+\xc8+\x0b\x00\x0e\x01\x1c\xe5n\xc98<\x9b\xc8B~\x87<\xa7\x030\xf0\xca
+\xd9"\x93\x1d\x18#\x91\xe3o\xf6\xcb\xee\x19\xff.!\xed\xca\xcax\xbf\xc6\
+\x10~\xf84\xbc\x0d^\xe0\xb2\x8fgK}V\xd93\xad\xe0\x9efL\x9f\x9dv\x00\xc4\
+\xeeY\xa0\xc4p\xc1\x0bN\x8e\x04M\x18\xb3\x8f=.)\xaf\x13\xb85[\x85\x8cS\xdf\
+Sf\x89S\xa0\x09\xc0\xa2\x19\xcbH+\xc5\xac\x138G\xfb\xa9\\\xd4J$Z)T[Wi\x06\
+\x03\xb2\xc3}\x0c\xa3\xcc\x9c\x1cSG\xd3\x1c\x06\x15{b\x8f+\xd9\xe01n@\xf4\
+\x97=?s\xc6\xed\xbcy\xdcb\xfbO\xb6\xd6\xbe\xad\xe2\xe3~\xc0\xe9\xf2\x8e\
+\xbe\xf3\x0e\xed\xde\xc8\xbe\xae\xd2\xf3\xd5\xef\xf4\xa2\x09\x82\xef\xbf\
+\xe2\xc7\x07\x27\xfaReOd\xc3\x90\xce\x17\x8d\xe0\xf8P\xe0\x1c\x1e\xb5=\x1e\
+\x06\x0f\x88\xec\x81,8\xbc\x17\x91\x27M\x108\xc5\x0f\x00\x9f\xdd\x96K\xbb\
+1\xd9\xbdc\xbd\xf8y\x99\xbe\x0c1\x9d\xaa\xca\x1b\x15\\\xc7\x98\xb6*\xd1\
+\x1b\x93\x89`\xb8\xbb\x90\xd7\xfc_7\xdcb\xea\x0f\x11H\xe9\x1f\xae\xb34#\
+BwJ\x96vL\x98L\x1f\xc9X\xc12@f\x0cm\xf3\xa9\xb1\x84\x89W\x16\x8dd\xded`\
+\xee#\x9aj*\x9a\xc9\xac\\\xd6\x09#\xd1
+\x9e
+\x8ee\xdf\xa8\xa2\x0b\x19\xbf\xe8Y\xa4\xd8,\xaf\x90a\x02W\xc4i\xcfZ\xbf\
+x[\xc4\xe4\xf5\x04\x112\xc6\xea\xc68\x81+:\xbf\xab\x91\x15}\xeeJ(\xce\x96\
+zN\xdes\x98\xd7\x14\xb1\xc1\xf5d\xeb2;\xdf\xdb0v\x95\xcb@0F6],,\xd9\x15\
+G\xc3\xd3\x86\xf6\xd9\x0b&\xf7\x86\xbcve\xf2\x95+SK\x84\xad\x0d#\x83\x98\
+\xd8\x91\xc7\x91\x12\x04FIk%\xdc\x9c \xd5\xd4\xe7\xcb\x9c3\x19\x97*5X\xd3\
+\x9aq\xa2\xaf\x155\x17bM\xf9n:\xc6d\xe6\xe8K\x00\xf0\x07\x90^-\x1b\x01,\
+\xd1\x91\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     img_icon_dialog_info_png = b'''\
 \x89PNG\x0d
@@ -10383,11 +10383,11 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_eject_orange_png', bytearray(img_icon_ico_eject_orange_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_imaging_png', bytearray(img_icon_ico_imaging_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_imaging_orange_png', bytearray(img_icon_ico_imaging_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_lens_orange_png', bytearray(img_icon_ico_lens_orange_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_coating_png', bytearray(img_icon_ico_coating_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_coating_orange_png', bytearray(img_icon_ico_coating_orange_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_warning_png', bytearray(img_icon_dialog_warning_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_arr_down_s_png', bytearray(img_icon_arr_down_s_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_lens_orange_png', bytearray(img_icon_ico_lens_orange_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_info_png', bytearray(img_icon_dialog_info_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_acqui_png', bytearray(img_icon_ico_acqui_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_png', bytearray(img_icon_ico_press_png))
