@@ -39,7 +39,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 # * TEST_NOHW = 1: not connected to anything => skip most of the tests
 # * TEST_NOHW = 0: connected to the real hardware or simulator
 # technolution_asm_simulator/simulator2/run_the_simulator.py
-TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default is HW/simulator testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default is HW/simulator testing
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 # TODO add second simulator which includes asm component and use this one here instead
@@ -107,10 +107,12 @@ class TestFASTEMConfig(unittest.TestCase):
         self.assertTrue(self.scanner.immersion.value)
         self.assertLess(self.scanner.horizontalFoV.value, 0.1e-3)  # should be smaller for megafield than for overview
         self.assertEqual(self.scanner.rotation.value, math.radians(10))
-        
-        # check that rotation correction is 0 for megafield imaging using the ASM/SAM
-        self.assertEqual(self.multibeam.getMetadata().get(model.MD_ROTATION_COR, 0), 0)  # if set to 0 or not existing
-        self.assertEqual(self.multibeam.getMetadata()[model.MD_ROTATION], math.radians(10))  # same as on rotation VA
+
+        # Changes in the rotation on the scanner (e-beam) should be reflected in the MD on the multibeam.
+        # check that rotation correction is 0 or not existing for megafield imaging using the ASM/SAM
+        self.assertEqual(self.multibeam.getMetadata().get(model.MD_ROTATION_COR, 0), 0)
+        # check that rotation is the same as was specified for the scanner (e-beam) for megafield imaging
+        self.assertEqual(self.multibeam.getMetadata()[model.MD_ROTATION], math.radians(10))
 
 
 if __name__ == "__main__":
