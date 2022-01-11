@@ -61,7 +61,7 @@ Depends: python (>= 2.7.1),
          authbind,
          python-zmq (>= 2.1),
          python-pyro4-delmic,
-         cgroup-bin,
+         cgroup-tools,
 # On Linux, uses GObject Interaction to map the GUI to the desktop launcher. It will run if it's not present.
          python-gi,
          python-requests,
