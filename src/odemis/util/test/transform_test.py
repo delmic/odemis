@@ -28,6 +28,7 @@ import unittest
 
 import numpy
 from numpy.linalg import LinAlgError
+from odemis.util import check_random_state
 from odemis.util.spot import GridPoints
 from odemis.util.transform import (
     AffineTransform,
@@ -57,7 +58,7 @@ class PolarCoordinateTransformationTest(unittest.TestCase):
 
     def setUp(self):
         """Ensure reproducible tests."""
-        self._rng = numpy.random.default_rng(12345)
+        self._rng = check_random_state(12345)
 
     def test_cartesian_to_polar_known_values(self):
         """
