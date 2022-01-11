@@ -18,7 +18,7 @@ from __future__ import division
 
 from odemis.acq.stitching._constants import REGISTER_GLOBAL_SHIFT, REGISTER_SHIFT, \
     REGISTER_IDENTITY, WEAVER_MEAN, WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE
-from odemis.acq.stitching._tiledacq import acquireTiledArea, estimateTiledAcquisitionTime, estimateTiledAcquisitionMemory
+from odemis.acq.stitching._tiledacq import acquireTiledArea, estimateTiledAcquisitionTime, estimateTiledAcquisitionMemory, FocusingMethod
 from odemis.acq.stitching._registrar import *
 from odemis.acq.stitching._weaver import *
 from odemis.acq.stitching._simple import register, weave

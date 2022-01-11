@@ -22,13 +22,12 @@ from __future__ import division
 
 from concurrent.futures._base import CancelledError, FINISHED
 import logging
-import numpy
-import odemis
 from odemis import model
+import odemis
 from odemis.acq import stream
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
-    WEAVER_MEAN, acquireTiledArea
+    WEAVER_MEAN, acquireTiledArea, FocusingMethod
 from odemis.acq.stitching._tiledacq import TiledAcquisitionTask
 from odemis.util import test, img
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
@@ -37,6 +36,7 @@ import os
 import time
 import unittest
 
+import numpy
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -45,19 +45,9 @@ ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 
 
 class CRYOSECOMTestCase(unittest.TestCase):
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            test.start_backend(ENZEL_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        test.start_backend(ENZEL_CONFIG)
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
@@ -68,16 +58,18 @@ class CRYOSECOMTestCase(unittest.TestCase):
         cls.focus = model.getComponent(role="focus")
         cls.light_filter = model.getComponent(role="filter")
         cls.stage = model.getComponent(role="stage")
+
         # Make sure the lens is referenced
         cls.focus.reference({'z'}).result()
         # The 5DoF stage is not referenced automatically, so let's do it now
         stage_axes = set(cls.stage.axes.keys())
         cls.stage.reference(stage_axes).result()
-        # Create 1 sem stream and 2 fm streams to be used in testing
+
+        # Create 1 SEM stream (no focus) and 2 FM streams (with focus) to be used in testing
         ss1 = stream.SEMStream("sem1", cls.sed, cls.sed.data, cls.ebeam,
                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
 
-        cls.ccd.exposureTime.value = cls.ccd.exposureTime.range[0]  # go fast
+        cls.ccd.exposureTime.value = 0.1  # s, go fast (but not too fast, to still get some signal)
         fs1 = stream.FluoStream("fluo1", cls.ccd, cls.ccd.data,
                                 cls.light, cls.light_filter, focuser=cls.focus)
         fs1.excitation.value = sorted(fs1.excitation.choices)[0]
@@ -87,16 +79,11 @@ class CRYOSECOMTestCase(unittest.TestCase):
         fs2.excitation.value = sorted(fs2.excitation.choices)[-1]
         cls.sem_streams = [ss1]
         cls.fm_streams = [fs1, fs2]
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
-
+        
     def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
+        # Make sure we start in focus position (easy with the simulator!)
+        focus_active_pos = self.focus.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        self.focus.moveAbsSync(focus_active_pos)
 
     def test_get_number_of_tiles(self):
         """
@@ -287,7 +274,9 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(focus_value - (zsteps / 2 * 1e-6), focus_value + (zsteps / 2 * 1e-6), zsteps).tolist()
 
-        future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap, settings_obs=settings_obs, zlevels=zlevels)
+        future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap,
+                                  settings_obs=settings_obs, zlevels=zlevels,
+                                  focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
         data = future.result()
         self.assertTrue(future.done())
         self.assertEqual(len(data), 2)
@@ -307,9 +296,10 @@ class CRYOSECOMTestCase(unittest.TestCase):
         overlap = 0.2
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
         future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap,
-                                  settings_obs=settings_obs, weaver=WEAVER_COLLAGE_REVERSE)
+                                  settings_obs=settings_obs, weaver=WEAVER_COLLAGE_REVERSE,
+                                  focusing_method=FocusingMethod.ON_LOW_FOCUS_LEVEL)
         data = future.result()
-        self.assertEqual(future._state, FINISHED)
+        self.assertTrue(future.done())
         self.assertEqual(len(data), 2)
         self.assertIsInstance(data[0], model.DataArray)
         self.assertEqual(len(data[0].shape), 2)
@@ -319,10 +309,53 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
         future = acquireTiledArea(self.sem_streams, self.stage, area=area, overlap=overlap)
         data = future.result()
-        self.assertEqual(future._state, FINISHED)
+        self.assertTrue(future.done())
         self.assertEqual(len(data), 1)
         self.assertIsInstance(data[0], model.DataArray)
         self.assertEqual(len(data[0].shape), 2)
+
+    def test_always_focusing_method(self):
+        """
+        Test the focusing methods ALWAYS
+        """
+        settings_obs = SettingsObserver([self.stage])
+        self._focuser_pos = []  # List of focuser positions
+        # Note: we assume it doesn't randomly changes if not explicitly moving,
+        # which is normally correct on the simulator.
+        self.focus.position.subscribe(self._position_listener)
+
+        # With FM streams: focuser should have moved (a lot)
+        fm_fov = compute_camera_fov(self.ccd)
+        # Using "songbird-sim-ccd.h5" in simcam with tile max_res: (260, 348)
+        area = (0, 0, fm_fov[0] * 2, fm_fov[1] * 1.5)  # left, bottom, right, top
+        overlap = 0.2
+        self.stage.moveAbs({'x': 0, 'y': 0}).result()
+        future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap,
+                                  settings_obs=settings_obs, weaver=WEAVER_COLLAGE_REVERSE,
+                                  focusing_method=FocusingMethod.ALWAYS)
+        data = future.result()
+        self.assertEqual(len(data), 2)
+        self.assertIsInstance(data[0], model.DataArray)
+        self.assertEqual(len(data[0].shape), 2)
+        self.assertGreaterEqual(len(self._focuser_pos), 10)  # Typically, it should have moved a lot, like 100x
+
+        # With SEM stream: no focuser, so normal acquisition
+        self._focuser_pos = []  # reset
+        sem_fov = compute_scanner_fov(self.ebeam)
+        area = (0, 0, sem_fov[0] * 2, sem_fov[1] * 1.5)
+        self.stage.moveAbs({'x': 0, 'y': 0}).result()
+        future = acquireTiledArea(self.sem_streams, self.stage, area=area, overlap=overlap,
+                                  settings_obs=settings_obs, weaver=WEAVER_MEAN,
+                                  focusing_method=FocusingMethod.ALWAYS)
+        data = future.result()
+        self.assertTrue(future.done())
+
+        # It shouldn't have moved, so it should be very few positions
+        self.focus.position.unsubscribe(self._position_listener)
+        self.assertLess(len(self._focuser_pos), 2)
+
+    def _position_listener(self, pos):
+        self._focuser_pos.append(pos)
 
     def test_registrar_weaver(self):
 
@@ -331,7 +364,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
         area = (0, 0, sem_fov[0], sem_fov[1])
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
         future = acquireTiledArea(self.sem_streams, self.stage, area=area,
-                                  overlap=overlap, registrar=REGISTER_IDENTITY, weaver=WEAVER_MEAN)
+                                  overlap=overlap, registrar=REGISTER_IDENTITY, weaver=WEAVER_MEAN,
+                                  focusing_method=FocusingMethod.NONE)
         data = future.result()
         self.assertEqual(future._state, FINISHED)
         self.assertEqual(len(data), 1)
