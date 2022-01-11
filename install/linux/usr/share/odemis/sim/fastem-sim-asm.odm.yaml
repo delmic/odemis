@@ -1,50 +1,57 @@
-# Minimal configuration file to start the Fast-EM GUI
+# Prerequisites: Simulators that need to be available
+#- xt adapter simulator: python3 xtadapter/server_sim.py
+#- ASM and SAM simulator by Technolution, started with:
+#  technolution_asm_simulator/simulator2/run_the_simulator.sh
+
 FASTEM-sim: {
     class: Microscope,
     role: mbsem,
-    children: ["MultiBeam Scanner XT", "EBeam Focus", "EBeam Detector",
-               "Chamber", "Sample Stage",
-               "Sample Stage in carrier coordinates",
+    children: ["SEM", "MultiBeam Scanner XT", "EBeam Focus", "EBeam Detector",
+               "Chamber",  # "Chamber Camera", "Chamber Light",
+               "Sample Stage", "Sample Stage in carrier coordinates",
                "Sample Stage in multiprobe coordinates",
                "Stage Fine Position", "Metrology Module",
                "Beam Shift Controller", "Focus Tracker",
+               "ASM", "MultiBeam Scanner", "Mirror Descanner", "MPPC",
                "Detector Rotator", "Optical Objective",
-               "Diagnostic Camera",
+               "Diagnostic Camera",  # "Navigation Camera",
                ],
 }
 
 "SEM": {
-    class: simsem.SimSEM,
-    role: null,
+    class: xt_client.SEM,
+    # TODO remove role when children components are all implemented
+    role: sem-api,
     init: {
-        image: "simsem-fake-output.h5", # any large 16 bit image is fine
+        address: "PYRO:Microscope@localhost:4242",
     },
     children: {
-        scanner: "MultiBeam Scanner XT",
+        mb-scanner: "MultiBeam Scanner XT",
         focus: "EBeam Focus",
-        detector0: "EBeam Detector", # simsem needs detector0 child
+        detector: "EBeam Detector",
+        chamber: "Chamber",
     }
 }
 
 "MultiBeam Scanner XT": {
     # Internal child of SEM, so no class
     role: e-beam,
-    init: {},
-    properties: {
-        dwellTime: 1.e-6, # s
+    init: {
+        hfw_nomag: 0.138, # in Quad view, just useful to match the XT software display
+        channel: "electron1",
     },
     metadata: {
         # Compensation to the pixel size (ie, the FoV) needed to have a good match between
         # stage movement and SEM image *AT LOW MAGNIFICATIONS*.
         # This is useful for the overview image acquisition.
         PIXEL_SIZE_COR: [1.05, 1.05], # ratio
-        SINGLE_BEAM_ROTATION: 0,  # rad
-        MULTI_BEAM_ROTATION: 0.015707963  # rad = 0.9 degrees
+        SINGLE_BEAM_ROTATION: 0.,  # rad; rotation for overview image acquisition
+        MULTI_BEAM_ROTATION: 0.0157,  # rad; rotation for multibeam image acquisition (~0.9°)
     },
     persistent: {
         metadata: [PIXEL_SIZE_COR],
     },
-    #affects: ["MultiBeam Scanner"],  # simulator doesn't have multibeam scanner component
+    affects: ["MultiBeam Scanner"],
 }
 
 "EBeam Focus": {
@@ -52,19 +59,14 @@ FASTEM-sim: {
     role: ebeam-focus,
 }
 
-"EBeam Detector": { # aka ETD or secondary electron detector
+"EBeam Detector": {
     # Internal child of SEM, so no class
     role: se-detector,
-    init: {},
 }
 
-# Allows to change pressure in the chamber, normally via the SEM API
 "Chamber": {
-    class: simulated.Chamber,
+    # Internal child of SEM, so no class
     role: chamber,
-    init: {
-        positions: ["vented", "vacuum"],
-    },
 }
 
 # The stage is moving in the global coordinate system.
@@ -225,6 +227,62 @@ FASTEM-sim: {
     },
 }
 
+# simulated acquisition server module (ASM) connecting to the simulated scanning and acquisition module (SAM),
+# which includes the detector (MPPC)
+# SAM includes ebeam and mirror descanner control
+"ASM": {
+    class: technolution.AcquisitionServer,
+    role: asm,
+    init: {
+        host: "http://localhost:8080/v2",
+        externalStorage: {"host": "localhost",
+                          "username": "ftpuser",
+                          "password": "tails",
+                          "directory": "asm_service"}
+    },
+    children: {"EBeamScanner": "MultiBeam Scanner",
+               "MirrorDescanner": "Mirror Descanner",
+               "MPPC": "MPPC"
+    },
+}
+
+"MultiBeam Scanner": {
+    # Internal child of ASM, so no class
+    role: multibeam,
+    # Default values (overwritten if stored in the persistent storage)
+    persistent: {
+        properties: [scanOffset, scanAmplitude],
+    },
+    metadata: {
+        # Factory calibrations of the scanner amplitude and offset
+        SCAN_OFFSET: [-0.0935, 0.0935],  # [a.u._scan] the start of the sawtooth scanning signal
+        SCAN_AMPLITUDE: [0.187, -0.187],  # [a.u._scan] the amplitude of the sawtooth scanning signal
+    },
+}
+
+"Mirror Descanner": {
+    # Internal child of ASM, so no class
+    role: descanner,
+    # Default values (overwritten if stored in the persistent storage)
+    persistent: {
+        properties: [scanOffset, scanAmplitude],
+    },
+    metadata: {
+        # Factory calibrations of the descanner gain and offset
+        SCAN_OFFSET: [-0.013, -0.119],  # [a.u._descan] start of the sawtooth descanner signal
+        SCAN_AMPLITUDE: [0.0082, -0.0082],  # [a.u._descan] the dynamic amplitude of the sawtooth descanning signal
+    },
+}
+
+"MPPC": {
+    # Internal child of ASM, so no class
+    role: mppc,
+    # Default values (overwritten if stored in the persistent storage)
+    persistent: {
+        properties: [cellDarkOffset, cellDigitalGain, cellTranslation],
+    },
+}
+
 # rotates the IADOM (in-air detector optics module) and thus the mppc
 # via the k-mirror (part of the IADOM)
 # only rotations in the range of [-2pi, 2pi]
@@ -241,9 +299,10 @@ FASTEM-sim: {
         ustepsize: [3.272492347489e-6], # 2 PI / (200 steps/turn * 256 µsteps/step * 75 gear-ratio * 0.5 image rotation per physical rotation)
         unit: ["rad"],
         rng: [[-6.3, 6.3]],  # allow full turn (2 * PI) in either direction
-        inverted: {'rz'},
+        # positive move on rz rotates k-mirror (det-rotator) CCW -> image on diagnostic camera rotates CW
+        inverted: ['rz'],
     },
-    affects: ["Diagnostic Camera"],
+    affects: ["Diagnostic Camera", "MPPC"],
 }
 
 # set the optical path magnification and thus compute the pixel size of the diagnostic camera.
@@ -251,7 +310,7 @@ FASTEM-sim: {
     class: static.OpticalLens,
     role: lens,
     init: {mag: 40}, # ratio, magnifying
-    affects: ["Diagnostic Camera"]
+    affects: ["Diagnostic Camera"],
 }
 
 # diagnostic detector to monitor the multiprobe pattern
@@ -272,3 +331,7 @@ FASTEM-sim: {
         FAV_POS_ACTIVE: {"x": 750, "y": 550}
     },
 }
+
+
+
+

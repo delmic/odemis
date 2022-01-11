@@ -31,19 +31,18 @@ import odemis
 from odemis import model
 from odemis.acq import fastem_conf
 from odemis.acq.fastem_conf import OVERVIEW_MODE, LIVESTREAM_MODE, MEGAFIELD_MODE
-from odemis.util import img
+from odemis.util import img, test
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
-# * TEST_NOHW = 1: not connected to anything => skip most of the tests
-# * TEST_NOHW = 0: connected to the real hardware or simulator
+# * TEST_NOHW = 1: use simulator (asm/sam and xt adapter simulators need to be running)
+# * TEST_NOHW = 0: connected to the real hardware (backend needs to be running)
 # technolution_asm_simulator/simulator2/run_the_simulator.py
 TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default is HW/simulator testing
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-# TODO add second simulator which includes asm component and use this one here instead
-FASTEM_CONFIG = CONFIG_PATH + "sim/fastem-sim.odm.yaml"
+FASTEM_CONFIG = CONFIG_PATH + "sim/fastem-sim-asm.odm.yaml"
 
 
 class TestFASTEMConfig(unittest.TestCase):
@@ -51,8 +50,8 @@ class TestFASTEMConfig(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if TEST_NOHW is True:
-            raise unittest.SkipTest("No simulator running or HW present. Skip fastem acquisition tests.")
+        if TEST_NOHW:
+            test.start_backend(FASTEM_CONFIG)
 
         cls.scanner = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
