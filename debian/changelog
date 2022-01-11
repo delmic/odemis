@@ -1,3 +1,22 @@
+odemis (3.1.7-1) xenial; urgency=medium
+
+  * New version: 3.1.7
+  * Main bug fixes:
+    - When "show pixel value" is selected, the value under the cursor is
+      immediately shown.
+    - merge_RGB plugin detects that the pixel size read in the TIFF is 
+      too large and replaces it by a fallback sane value.
+    - Andorcam 3: improve temperature control
+    - Andorcam 3: fix large horizontal binning not working
+  * Improvements:
+    - Adjustments to make Odemis also work on Ubuntu 20.04.
+    - Andorcam 3: support for Sona cameras
+    - New "AR to CSV" script, to export AR from the command line.
+    - Odemis Viewer now 64 bits
+    - Smaller Odemis Viewer installer
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 11 Jan 2022 17:40:30 +0100
+
 odemis (3.1.6-1) xenial; urgency=medium
 
   * New version: 3.1.6
