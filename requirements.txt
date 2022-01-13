@@ -1,11 +1,10 @@
 Cython>=0.23.5
 decorator>=4.0.9
 future>=0.16.0
-futures>=3.0.5
 h5py>=2.5.0
-libtiff>=0.4.2
+pylibtiff>=0.4.2
 matplotlib>=1.4.3,<3.0
-numpy>=1.11.0,<1.17
+numpy>=1.11.0,<1.18
 opencv>=2.4.11,<4.0
 Pillow>=3.2.0
 pycairo>=1.10.0
@@ -13,7 +12,7 @@ PyInstaller>=3.6
 psutil>=4.3.0
 PyYAML>=3.11
 pyzmq>=15.2.0
-scipy>=0.15.1
-wxPython>=4.0.4
+scipy>=0.15.1,<1.5
+wxPython>=4.0.4,<4.1
 setuptools>=39.2.0
 Pyro4==4.18
