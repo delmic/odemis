@@ -1,5 +1,5 @@
 # Prerequisites: Simulators that need to be available
-#- xt adapter simulator: python3 xtadapter/server_sim.py
+#- xt adapter simulator: python3 xtadapter/server_sim_xttoolkit.py
 #- ASM and SAM simulator by Technolution, started with:
 #  technolution_asm_simulator/simulator2/run_the_simulator.sh
 
