@@ -30,6 +30,14 @@ from concurrent.futures import CancelledError
 
 import numpy
 
+try:
+    from fastem_calibrations import autofocus_multiprobe, image_translation_pre_align, configure_hw
+
+    fastem_calibrations = True
+except ImportError:
+    logging.info("fastem_calibrations package not found")
+    fastem_calibrations = False
+
 from odemis import model, util
 from odemis.acq import stitching
 from odemis.acq.align.spot import FindGridSpots
@@ -37,7 +45,6 @@ from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod
 from odemis.acq.stream import SEMStream
 from odemis.util import TimeoutError
 from odemis.acq import fastem_conf
-
 
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
@@ -166,7 +173,7 @@ class FastEMROC(object):
         # if None -> acquire, if not None, don't acquire again
 
 
-def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens):
+def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, pre_calibrate=False):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -185,6 +192,7 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
     :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
     :param lens: (static.OpticalLens) Optical lens component.
+    :param pre_calibrate: (bool) If True run pre-calibrations before each ROA acquisition.
 
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
@@ -195,7 +203,8 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
-    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, f)
+    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, f,
+                           pre_calibrate=pre_calibrate)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -212,7 +221,8 @@ class AcquisitionTask(object):
     An ROA consists of multiple single field images.
     """
 
-    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, future):
+    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, future,
+                 pre_calibrate=False):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -232,6 +242,7 @@ class AcquisitionTask(object):
                             (model.DataArray): The acquisition data, which depends on the value of the
                                                detector.dataContent VA.
                             (Exception or None): Exception raised during the acquisition or None.
+        :param pre_calibrate: (bool) If True run pre-calibrations before each ROA acquisition.
         """
         self._scanner = scanner
         self._multibeam = multibeam
@@ -245,10 +256,12 @@ class AcquisitionTask(object):
         self._roc = roa.roc  # region of calibration object
         self._path = path  # sub-directories on external storage
         self._future = future
+        self._pre_calibrate = pre_calibrate
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
         self.megafield = {}
         self.field_idx = (0, 0)
+        self._pos_first_tile = None  # only calculate the position of the first tile when `run` is called.
 
         # TODO the .dataContent might need to be set somewhere else in future when using a live stream for
         #  display of thumbnail images -> .dataContent = "thumbnail"
@@ -276,6 +289,15 @@ class AcquisitionTask(object):
         :raise:
             Exception: If it failed before any single field images were acquired or if acquisition was cancelled.
         """
+        # Update the position of the first tile.
+        self._pos_first_tile = self.get_pos_first_tile()
+
+        # Move the stage to the first tile, to ensure the autofocus and image translation pre-align are
+        # done in the correct location and the correct position is stored in the megafield metadata yaml file.
+        self.move_stage_to_next_tile()
+
+        if self._pre_calibrate:
+            self.pre_calibrate()
 
         # set the sub-directories (<acquisition date>/<project name>) and megafield id
         self._detector.filename.value = os.path.join(self._path, self._roa.name.value)
@@ -347,6 +369,8 @@ class AcquisitionTask(object):
 
             self.move_stage_to_next_tile()  # move stage to next field image position
 
+            # Beamshift correction is not necessary on the first field, because the pattern was just centered on the
+            # mppc detector using the image translation pre-alignment.
             if field_idx != (0, 0):
                 self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
 
@@ -372,6 +396,78 @@ class AcquisitionTask(object):
 
         return self.megafield
 
+    def pre_calibrate(self):
+        """
+        Run optical multiprobe autofocus and image translation pre-alignment before the ROA acquisition.
+        The image translation pre-alignment adjusts the descanner.scanOffset VA such that the image of the
+        multiprobe is roughly centered on the mppc detector. This function reads in the ASM configuration
+        and makes sure all values, except the descanner offset, are set back after the calibrations are run.
+
+        NOTE: Canceling is currently not supported.
+
+        """
+        if not fastem_calibrations:
+            raise ModuleNotFoundError("Need fastem_calibrations repository to run pre-calibrations.")
+
+        try:
+            logging.debug("Read initial Hw settings.")
+            asm_config_orig = configure_hw.get_config_asm(self._multibeam, self._descanner, self._detector)
+
+            fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
+
+            # Set the beamshift to zero before adjusting the descanner offset, this ensures that the maximum beamshift
+            # range can be utilized when the pattern is centered on the mppc detector.
+            self._beamshift.shift.value = (0, 0)
+
+            # Autofocus multiprobe ensures the beams are focused at the start of the ROA acquisition.
+            logging.debug("Running optical autofocus before ROA acquisition.")
+            autofocus_multiprobe.run_autofocus(self._scanner,
+                                               self._multibeam,
+                                               self._descanner,
+                                               self._detector,
+                                               self._detector.data,
+                                               self._ccd,
+                                               self._stage)
+
+            configure_hw.configure_asm(self._multibeam,
+                                       self._descanner,
+                                       self._detector,
+                                       self._detector.data,
+                                       asm_config_orig,
+                                       upload=False)
+            # Image translation pre-alignment ensures that the image of the multiprobe is roughly centered on the
+            # mppc detector.
+            logging.debug("Running image translation pre alignment before ROA acquisition.")
+            descanner_offset = image_translation_pre_align.run_image_translation_pre_align(self._scanner,
+                                                                                           self._multibeam,
+                                                                                           self._descanner,
+                                                                                           self._detector,
+                                                                                           self._detector.data,
+                                                                                           self._ccd)
+
+            # Set the descanner offset to the value calibrated with the image translation pre-alignment.
+            asm_config_orig["descanner"]["scanOffset"] = descanner_offset
+            logging.debug(f"Descanner offset set to: {descanner_offset}")
+            # Blank the beam to reduce beam damage on the sample.
+            self._scanner.blanker.value = True
+
+        except Exception as ex:
+            logging.warning("Exception during pre-calibration of the ROA acquisition.",
+                            exc_info=True)
+            raise
+        finally:
+            # Blank the beam after the acquisition is done.
+            self._scanner.blanker.value = True
+            # set back the initial values on the hardware
+            configure_hw.configure_asm(self._multibeam,
+                                       self._descanner,
+                                       self._detector,
+                                       self._detector.data,
+                                       asm_config_orig,
+                                       upload=False)
+
+            logging.debug("Finish pre-calibration.")
+
     def image_received(self, dataflow, data):
         """
         Function called by dataflow when data has been received from the detector.
@@ -396,12 +492,11 @@ class AcquisitionTask(object):
 
         return True
 
-    def get_abs_stage_movement(self):
+    def get_pos_first_tile(self):
         """
-        Based on the field index calculate the stage position where the next tile (field image) should be acquired.
-        The position is always calculated with respect to the first (top/left) tile (field image). The stage position
-        returned is the center of the respective tile.
-        :return: (float, float) The new absolute stage x and y position in meter.
+        Get the stage position of the first tile
+        :param pos_first_tile: (float, float)
+            The (x, y) position of the center of the first tile, in the role='stage' coordinate system.
         """
         px_size = self._multibeam.pixelSize.value
         field_res = self._multibeam.resolution.value
@@ -413,16 +508,28 @@ class AcquisitionTask(object):
         # The position of the stage when acquiring the top/left tile needs to be matching the center of that tile.
         # The stage coordinate system is pointing to the right in the x direction, and upwards in the y direction,
         # therefore add half a field in the x-direction and subtract half a field in the y-direction.
-        pos_first_tile = (xmin_roa + field_res[0]/2 * px_size[0],
-                          ymax_roa - field_res[1]/2 * px_size[1])
+        pos_first_tile = (xmin_roa + field_res[0] / 2 * px_size[0],
+                          ymax_roa - field_res[1] / 2 * px_size[1])
+
+        return pos_first_tile
+
+    def get_abs_stage_movement(self):
+        """
+        Based on the field index calculate the stage position where the next tile (field image) should be acquired.
+        The position is always calculated with respect to the first (top/left) tile (field image). The stage position
+        returned is the center of the respective tile.
+        :return: (float, float) The new absolute stage x and y position in meter.
+        """
+        px_size = self._multibeam.pixelSize.value
+        field_res = self._multibeam.resolution.value
 
         rel_move_hor = self.field_idx[0] * px_size[0] * field_res[0]  # in meter
         rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1]  # in meter
 
         # With role="stage", move positive in x direction, because the second field should be right of the first,
         # and move negative in y direction, because the second field should be bottom of the first.
-        pos_hor = pos_first_tile[0] + rel_move_hor
-        pos_vert = pos_first_tile[1] - rel_move_vert
+        pos_hor = self._pos_first_tile[0] + rel_move_hor
+        pos_vert = self._pos_first_tile[1] - rel_move_vert
         # TODO when stage-scan is implemented use commented lines
         #   With role="stage-scan", move negative in x direction, because the second field should be right of the first,
         #   and move positive in y direction, because the second field should be bottom of the first.
@@ -532,7 +639,8 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
                 if not refd[a]:
                     raise ValueError("Stage axis '%s' is not referenced. Reference it first" % (a,))
             else:
-                logging.warning("Going to use the stage in absolute mode, but it doesn't report %s in .referenced VA", a)
+                logging.warning("Going to use the stage in absolute mode, but it doesn't report %s in .referenced VA",
+                                a)
 
     else:
         logging.warning("Going to use the stage in absolute mode, but it doesn't have .referenced VA")
