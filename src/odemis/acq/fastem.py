@@ -534,9 +534,13 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
     if live_stream:
         raise NotImplementedError("live_stream not supported")
 
-    est_dur = estimateTiledAcquisitionTime(stream, stage, area)
+    # Make a SEMStream copy of the stream, because it is a FastEMSEMStream object, which in its prepare method
+    # overwrites the scanner configuration from overview mode to liveview mode.
+    sem_stream = SEMStream(stream.name.value + " copy", stream.detector, stream.detector.data, stream.emitter)
+
+    est_dur = estimateTiledAcquisitionTime(sem_stream, stage, area)
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
-    _executor.submitf(f, _run_overview_acquisition, f, stream, stage, area, live_stream)
+    _executor.submitf(f, _run_overview_acquisition, f, sem_stream, stage, area, live_stream)
 
     return f
 
