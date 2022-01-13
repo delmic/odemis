@@ -4,7 +4,7 @@ import os
 import subprocess
 import sys
 import odemis
-import traceback
+import logging
 from builtins import input
 
 cpy_command = ["python", "setup.py", "build_ext", "--inplace"]
@@ -14,11 +14,7 @@ nsis_command = [
     "/DPRODUCT_VERSION=" + odemis.get_version_simplified(),
     "setup.nsi"
 ]
-
-# PyInstaller/tkinter might have problems finding init.tcl
-if 'TCL_LIBRARY' not in os.environ or 'TK_LIBRARY' not in os.environ:
-    print("\n* ATTENTION * You might need to set the 'TCL_LIBRARY' and 'TK_LIBRARY' env vars!\n")
-
+sign_command = ["signtool", "sign", "/fd", "SHA256", "/t", "http://timestamp.digicert.com"]
 
 def run_command(cmd, flavor=None):
     if flavor is not None:
@@ -27,14 +23,14 @@ def run_command(cmd, flavor=None):
         subprocess.check_call(cmd)
     except Exception as ex:
         # Don't close terminal after raising Exception
-        traceback.print_exc(ex)
-        input("Press any key to exit.")
-        sys.exit(-1)
+        logging.exception("Failed to call %s", cmd)
+        input("Press any key to return to menu.")
 
 
 def add_size_to_version():
-    with open('dist/version.txt', 'a') as f:
+    with open('dist/version.txt', 'w') as f:
         version = odemis.get_version_simplified()
+        f.write(version + '\n')
         f.write(str(os.path.getsize("dist\OdemisViewer-%s.exe" % version)) + '\n')
 
 
@@ -58,6 +54,12 @@ def build_odemisviewer_inst():
     nsis_cmd = nsis_command[:-1] + info + [nsis_command[-1]]
     return run_command(nsis_cmd, "odemis")
 
+
+def sign_odemisviewer_inst():
+    version = odemis.get_version_simplified()
+    fn_exe = "dist\OdemisViewer-%s.exe" % version
+    return run_command(sign_command + [fn_exe])
+
 # In case the Delphi Viewer should be built, use these functions.
 # def build_delphiviewer_exe():
 #     run_command(cpy_command)
@@ -78,6 +80,7 @@ while True:
     i = input("""
     [1] OdemisViewer Executable
     [2] OdemisViewer Installer
+    [3] Sign Installer
 
     [9] Build everything
 
@@ -95,15 +98,20 @@ while True:
     elif i == 2:
         build_odemisviewer_inst()
         add_size_to_version()
+    elif i == 3:
+        sign_odemisviewer_inst()
+        add_size_to_version()
     elif i == 9:
         build_odemisviewer_exe()
+        # TODO: also sign the view exe?
 #         build_delphiviewer_exe()
         build_odemisviewer_inst()
 #         build_delphiviewer_inst()
+        sign_odemisviewer_inst()
         add_size_to_version()
+        print("\n\nBuild Done.")
     else:
         break
-    print("\n\nBuild Done.")
 
 sys.exit(0)
 
