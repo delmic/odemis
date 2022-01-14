@@ -332,22 +332,22 @@ def intersect(ra, rb):
 
 
 def normalize_rect(rect):
-    """ Ensure that the given rectangle actually is defined by top, left, bottom, right
-    so that top < bottom and left < right.
+    """ Ensure that the given rectangle actually is defined by xmin, ymin, xmax, ymax
+    so that y1 < y2 and x1 < x2.
 
     rect (iterable of 4 floats): x1, y1, x2, y2
-    return (iterable of 4 floats): left, top, right, bottom
+    return (iterable of 4 floats): xmin, ymin, xmax, ymax
 
     """
 
-    l, t, r, b = rect
-    if l > r:
-        l, r = r, l
-    if t > b:
-        t, b = b, t
+    x1, y1, x2, y2 = rect
+    if x1 > x2:
+        x1, x2 = x2, x1
+    if y1 > y2:
+        y1, y2 = y2, y1
 
     # Re-create the result using the same type as the `rect` parameter
-    return type(rect)((l, t, r, b))
+    return type(rect)((x1, y1, x2, y2))
 
 
 def is_point_in_rect(p, rect):
