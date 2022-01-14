@@ -35,7 +35,7 @@ import weakref
 
 from . import _core, _dataflow, _vattributes, _metadata
 from ._core import roattribute
-from odemis.util import inspect_getmembers
+from odemis.util import inspect_getmembers, synthetic
 
 
 class HwError(IOError):
@@ -634,6 +634,10 @@ class DigitalCamera(with_metaclass(ABCMeta, Detector)):
         # To provide some rough idea of the step size when changing focus
         self.depthOfField = _vattributes.FloatContinuous(1e-6, range=(0, 1e9),
                                                          unit="m", readonly=True)
+
+        self.spotSize = _vattributes.FloatContinuous(1, range=(0, 1e9),
+                                                     unit="px", readonly=True)
+
         # To be overridden by a VA
         self.pixelSize = None  # (len(dim)-1 * float) size of a sensor pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
         self.binning = None  # how many CCD pixels are merged (in each dimension) to form one pixel on the image.
@@ -643,29 +647,37 @@ class DigitalCamera(with_metaclass(ABCMeta, Detector)):
     def updateMetadata(self, md):
         Detector.updateMetadata(self, md)
         mdf = self._metadata
-        if self.pixelSize is not None:
-            try:
-                pxs = self.pixelSize.value[0]  # pixel should be square
-                mag = mdf[_metadata.MD_LENS_MAG]
-                na = mdf[_metadata.MD_LENS_NA]
-                ri = mdf[_metadata.MD_LENS_RI]
-                l = 550e-9  # the light wavelength
-                # We could use emission wavelength center for l, but it's mostly
-                # confusing for the user that the focus sensitivity changes when
-                # the observed part changes. So just use 550 nm, which is never
-                # more than 50% wrong.
-                # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
-                dof = (l * ri) / na ** 2 + (ri * pxs) / (mag - na)
-                rng = self.depthOfField.range
-                if rng[0] <= dof <= rng[1]:
-                    self.depthOfField._set_value(dof, force_write=True)
-                else:
-                    logging.warning("Depth of field computed seems incorrect: %f m", dof)
-            except KeyError:
-                # Not enough metadata is present for computing Depth of Field
-                pass
-            except Exception:
-                logging.warning("Failure to update the depth of field", exc_info=True)
+
+        try:
+            pxs = self.pixelSize.value[0]  # pixel should be square
+            mag = mdf[_metadata.MD_LENS_MAG]
+            na = mdf[_metadata.MD_LENS_NA]
+            ri = mdf[_metadata.MD_LENS_RI]
+            l = 550e-9  # the light wavelength
+            # We could use emission wavelength center for l, but it's mostly
+            # confusing for the user that the focus sensitivity changes when
+            # the observed part changes. So just use 550 nm, which is never
+            # more than 50% wrong.
+        except (AttributeError, KeyError):
+            # Not enough metadata is present for computing Depth of Field and spot size.
+            return
+
+        try:
+            # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
+            dof = (l * ri) / na ** 2 + (ri * pxs) / (mag - na)
+            self.depthOfField._set_value(dof, force_write=True)
+        except TypeError:
+            logging.warning("Depth of field computed seems incorrect: %f m", dof)
+        except Exception:
+            logging.warning("Failure to update the depth of field", exc_info=True)
+
+        try:
+            sigma = (mag / pxs) * synthetic.psf_sigma_wffm(ri, na, l)
+            self.spotSize._set_value(sigma, force_write=True)
+        except TypeError:
+            logging.warning("Spot size computed seems incorrect: %f px", sigma)
+        except Exception:
+            logging.warning("Failure to update the spot size", exc_info=True)
 
 
 class Axis(object):
