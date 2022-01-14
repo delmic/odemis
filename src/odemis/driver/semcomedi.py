@@ -338,6 +338,12 @@ class SEMComedi(model.HwComponent):
     # We could create a VA for the board temperature.
 
     def _reset_device(self):
+        """
+        Attempts to recover the DAQ board, if it's in a bad state
+        """
+        # TODO: there seems that there a cases where after reseting the device,
+        # a write command causes ComediError(16) Device or resource busy, but
+        # restarting the backend solves the issue. So we probably can do better.
         logging.info("Resetting device %s", self._device_name)
         try:
             comedi.close(self._device)
@@ -354,6 +360,15 @@ class SEMComedi(model.HwComponent):
         self._reader = Reader(self)
         if not self._test:
             self._writer = Writer(self)
+
+        try:
+            new_ao_subdevice = comedi.find_subdevice_by_type(self._device,
+                                                comedi.SUBD_AO, 0)
+
+            if new_ao_subdevice != self._ao_subdevice:
+                logging.warning("New AO subdevice is %s, while expected %s", new_ao_subdevice, self._ao_subdevice)
+        except Exception:
+            logging.exception("Failed to find AO subdevice")
 
     def _init_calibration(self):
         """
@@ -1694,6 +1709,10 @@ class SEMComedi(model.HwComponent):
                             rdas = self._acquire_counting_detector(detectors)
                         else:
                             rdas = self._acquire_analog_detectors(detectors)
+
+                        if self._scanner.state.value != model.ST_RUNNING:
+                            # We recovered from an error => indicate it's all fine now
+                            self._scanner.state._set_value(model.ST_RUNNING, force_write=True)
                     except CancelledError:
                         # either because must terminate or just need to rest
                         logging.debug("Acquisition was cancelled")
@@ -1705,11 +1724,16 @@ class SEMComedi(model.HwComponent):
                         nfailures += 1
                         if nfailures == 5:
                             logging.exception("Acquisition failed %d times in a row, giving up", nfailures)
+                            self._scanner.state._set_value(
+                                model.HwError("DAQ board non responsive, try restarting the acquisition or power-cycling the computer."),
+                                force_write=True
+                                )
                             return
                         else:
                             logging.exception("Acquisition failed, will retry")
                             time.sleep(0.5)
-                            self._reset_device()
+                            if nfailures > 1:  # At first, don't do anything fancy, just try again
+                                self._reset_device()
                             continue
 
                     nfailures = 0
