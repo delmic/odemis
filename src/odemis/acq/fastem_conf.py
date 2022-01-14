@@ -40,7 +40,10 @@ SCANNER_CONFIG = {
     OVERVIEW_MODE: {
         "multiBeamMode": False,
         "external": False,  # fullframe mode; controlled by SEM itself
-        "blanker": None,  # automatic: unblanked when acquiring; blanked when not acquiring
+        # manual: unblank when acquiring and the beam is blanked after the acquisition. Note that autoblanking does not
+        # work reliably for the XTTKDetector, therefore (contrary to Odemis convention) we need to unblank
+        # the beam here.
+        "blanker": False,
         "immersion": False,  # disable to get a larger field of view
         "horizontalFoV": 1.5e-3,
         "resolution": (1024, 884),  # px
@@ -48,7 +51,10 @@ SCANNER_CONFIG = {
     LIVESTREAM_MODE: {
         "multiBeamMode": False,
         "external": False,  # fullframe mode; controlled by SEM itself
-        "blanker": None,  # automatic: unblanked when acquiring; blanked when not acquiring
+        # manual: unblank when acquiring and the beam is blanked after the acquisition. Note that autoblanking does not
+        # work reliably for the XTTKDetector, therefore (contrary to Odemis convention) we need to unblank
+        # the beam here.
+        "blanker": False,
         "immersion": True,
     },
     MEGAFIELD_MODE: {
