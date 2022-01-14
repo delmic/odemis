@@ -55,9 +55,9 @@ class FastEMROA(object):
         """
         :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
                      the external storage.
-        :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box
-                            coordinates of the ROA in [m]. The coordinates are in the sample carrier coordinate
-                            system, which corresponds to the component with role='stage'.
+        :param coordinates: (float, float, float, float) xmin, ymin, xmax, ymax
+                            Bounding box coordinates of the ROA in [m]. The coordinates are in the sample carrier
+                            coordinate system, which corresponds to the component with role='stage'.
         :param roc: (FastEMROC) Corresponding region of calibration (ROC).
         :param asm: (technolution.AcquisitionServer) The acquisition server module component.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -86,9 +86,9 @@ class FastEMROA(object):
     def on_coordinates(self, coordinates):
         """Recalculate the field indices when the coordinates of the region of acquisition (ROA) have changed
         (e.g. resize, moving).
-        :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
-                            ROA in [m]. The coordinates are in the sample carrier coordinate system, which
-                            corresponds to the component with role='stage'.
+        :param coordinates: (float, float, float, float) xmin, ymin, xmax, ymax
+                            Bounding box coordinates of the ROA in [m]. The coordinates are in the sample carrier
+                            coordinate system, which corresponds to the component with role='stage'.
         """
         self.field_indices = self._calculate_field_indices()
 
@@ -399,16 +399,22 @@ class AcquisitionTask(object):
     def get_abs_stage_movement(self):
         """
         Based on the field index calculate the stage position where the next tile (field image) should be acquired.
-        The position is always calculated with respect to the top/left tile (field image). The stage position returned
-        is the center of the respective tile.
+        The position is always calculated with respect to the first (top/left) tile (field image). The stage position
+        returned is the center of the respective tile.
         :return: (float, float) The new absolute stage x and y position in meter.
         """
         px_size = self._multibeam.pixelSize.value
         field_res = self._multibeam.resolution.value
-        pos_orig = self._roa.coordinates.value[:2]  # position of top/left corner of the ROA
 
-        # The position of the stage when acquiring the top/left tile needs to be matching the center of the tile.
-        pos_first_tile = (pos_orig[0] - field_res[0]/2. * px_size[0], pos_orig[1] + field_res[1]/2. * px_size[1])
+        # Get the coordinate of the top left of the ROA, this corresponds to the (xmin, ymax) coordinate in the
+        # role=stage coordinate system.
+        xmin_roa, _, _, ymax_roa = self._roa.coordinates.value
+
+        # The position of the stage when acquiring the top/left tile needs to be matching the center of that tile.
+        # The stage coordinate system is pointing to the right in the x direction, and upwards in the y direction,
+        # therefore add half a field in the x-direction and subtract half a field in the y-direction.
+        pos_first_tile = (xmin_roa + field_res[0]/2. * px_size[0],
+                          ymax_roa - field_res[1]/2. * px_size[1])
 
         rel_move_hor = self.field_idx[0] * px_size[0] * field_res[0]  # in meter
         rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1]  # in meter
