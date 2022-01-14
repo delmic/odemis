@@ -76,6 +76,7 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_localization = xrc.XRCCTRL(self, "btn_tab_localization")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
+        self.btn_tab_fastem_chamber = xrc.XRCCTRL(self, "btn_tab_fastem_chamber")
         self.btn_tab_fastem_overview = xrc.XRCCTRL(self, "btn_tab_fastem_overview")
         self.btn_tab_fastem_acqui = xrc.XRCCTRL(self, "btn_tab_fastem_acqui")
         self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
@@ -1200,6 +1201,24 @@ def __init_resources():
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>ACQUISITION</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_fastem_chamber">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>CHAMBER</label>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
