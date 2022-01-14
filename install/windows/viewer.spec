@@ -136,6 +136,14 @@ def get_libtiff_imports():
     h_file = libtiff.libtiff_ctypes.tiff_h_name
     return ["libtiff.%s" % (h_file,)]
 
+def get_scipy_special_imports():
+    try:
+        # From scipy 1.5.0, this module is not automatically picked up
+        import scipy.special.cython_special
+    except ImportError:
+        return []
+    return ['scipy.special.cython_special']
+
 def get_version():
     """ Write the current version of Odemis to a txt file and tell PyInstaller where to find it """
     import odemis
@@ -205,10 +213,18 @@ a = Analysis(
     hiddenimports=[
         'cairo',
         'odemis.acq.align.keypoint',  # Not used in standard, but could be used by plugins
-    ] + get_dataio_imports() + get_wx_imports() + get_libtiff_imports() + get_queue_imports(),
+    ] + get_dataio_imports() + get_wx_imports() + get_libtiff_imports() + get_queue_imports() + get_scipy_special_imports(),
     hookspath=[],
+    # TODO: With pyinstaller 4.7+, this should allow to only package the backend needed
+    # (and in particular avoid packaging Qt4 and Qt5)
+#    hooksconfig = {
+#        "matplotlib": {
+#            "backends": ["Agg"],
+#        },
+#    },
+    # For now, we explicitly remove the dependencies picked up due to matplotlib's backends
+    excludes=["PyQt5", "PyQt4"],
     runtime_hooks=[],
-    excludes=[],
     win_no_prefer_redirects=False,
     win_private_assemblies=False,
     cipher=block_cipher

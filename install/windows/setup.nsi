@@ -58,7 +58,8 @@ SetCompressorDictSize 64
 
 Name "${PRODUCT_NAME} ${PRODUCT_VERSION}"
 OutFile "dist/${PRODUCT_NAME}-${PRODUCT_VERSION}.exe"
-InstallDir "$PROGRAMFILES\${PRODUCT_NAME}"
+; Use PROGRAMFILES32 if it's a 32 bits exe
+InstallDir "$PROGRAMFILES64\${PRODUCT_NAME}"
 InstallDirRegKey HKLM "${PRODUCT_DIR_REGKEY}" ""
 ShowInstDetails show
 ShowUnInstDetails show

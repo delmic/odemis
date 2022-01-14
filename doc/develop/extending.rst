@@ -190,22 +190,26 @@ Setup
 Open the *Anaconda prompt* and type::
 
    cd Documents\odemis
-   conda create -y --name odemisdev python==3.6.12
+   conda create -y --name odemisdev python==3.6.15
    conda activate odemisdev
    conda config --append channels conda-forge
-   conda install --name odemisdev --file requirements-py3.txt
-   conda develop src
+   conda install --name odemisdev --file requirements-conda.txt
+   echo %cd%\src\ > %userprofile%\miniconda3\envs\odemisdev\lib\site-packages\odemis.pth
    pip install https://github.com/delmic/Pyro4/archive/master.zip
 
+..
+   Note: `conda develop src` is nicer than `echo ...`, but it needs conda-build to
+   be installed, which requires a lot more dependencies. On miniconda, it's not
+   installed by default.
+
 Download, install `Build Tools for Visual Studio 2019 <https://www.visualstudio.com/downloads/#build-tools-for-visual-studio-2019>`_,
-and pick the "Visual C++ build tools".
+and pick the "Visual C++ build tools". Install also the pre-selected options.
+
+..
+   Note that previously, one had to install pylibtiff via pip: `pip install libtiff`
 
 Final steps
 """""""""""
-You can finally install pylibtiff, in the same terminal, by typing::
-
-   pip install libtiff
-
 Some parts of Odemis are written with Cython, for optimization reasons. This step
 is optional. To build these modules on Windows run::
 
@@ -218,7 +222,6 @@ Run Odemis with::
    python src\odemis\gui\main.py --standalone --log-level 2
    # or
    python install\windows\odemis_viewer.py
-
 
 
 Installing arpolarimetry
@@ -238,6 +241,9 @@ Building Odemis Viewer and the installer
 
 Install `NSIS <https://nsis.sourceforge.io/Download>`_.
 
+Download the latest version of the `KillProc NSIS plugin <http://nsis.sourceforge.net/KillProc_plug-in>`_.
+Unzip it, and place the ``KillProc.dll`` in ``C:\\Program Files (x86)\\NSIS\\Plugins\\x86-unicode\``.
+
 Open the *Anaconda prompt* and make sure you are in the Odemis folder,
 with the *odemisdev* Python environment::
 
@@ -250,11 +256,17 @@ To build just the viewer executable::
 
 To build the installer::
 
-   "C:\Program Files (x86)\NSIS\makensis" setup.nsi
+   "C:\Program Files (x86)\NSIS\makensis" install\windows\setup.nsi
+
+..
+   Note: it actually needs extra /D options to work. see the build.py
 
 As a shortcut to build everything::
 
    python install\windows\build.py
+
+Note that this script also allows to sign the executable. For this, you'll need
+a special signing dongle, with a signing certificate.
 
 
 Setting up a data analysis environment on Windows
@@ -268,7 +280,7 @@ relatively straight-forward way.
 Installing Odemis Viewer
 ------------------------
 
-This is an optional step, which allows you to open and analyse acquisitions files
+This is an optional step, which allows you to open and analyze acquisitions files
 straight into the same graphical interface as the acquisition software.
 
 Download the Odemis viewer from https://www.delmic.com/en/products/clem-solutions/secom. 
@@ -289,10 +301,10 @@ for conda version 4.9.2. In case you have an older version make sure that you up
 through the Anaconda prompt before proceeding to the next steps.
 
 Anaconda typically comes with a newer version of Python (eg, 3.8). It's crucial to create a new environment
-with the python version (3.6.12) on which Odemis has been well tested.
+with the python version (3.6.15) on which Odemis has been well tested.
 
 #. To create a new conda environment, named odemis, open the Anaconda command prompt and type:
-   ``conda create -n odemis python=3.6.12``.
+   ``conda create -n odemis python=3.6.15``.
    
 #. Note that the new 'odemis' environment should be activated in order to do the
    following steps. To activate the environment type ``conda activate odemis``.
@@ -314,7 +326,7 @@ with the python version (3.6.12) on which Odemis has been well tested.
     cd Documents\Odemis
     conda activate odemis
     conda config --append channels conda-forge
-    conda install --name odemis --file requirements-py3.txt
+    conda install --name odemis --file requirements-conda.txt
     conda develop src   
    
 #. To use this new conda python environment follow the instructions of 
