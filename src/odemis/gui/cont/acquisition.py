@@ -39,14 +39,15 @@ from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.gui import conf, FG_COLOUR_BUTTON
-from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, TemporalSpectrumSettingsStream, FluoStream, StaticStream, FastEMOverviewStream, BrightfieldStream
+from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
+    TemporalSpectrumSettingsStream, FluoStream, StaticStream, FastEMOverviewStream, BrightfieldStream
 from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
 from odemis.gui.util import img, get_picture_folder, call_in_wx_main, \
-    wxlimit_invocation, get_home_folder
+    wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator, VigilantAttributeConnector
 from odemis.gui.win.acquisition import AcquisitionDialog, OverviewAcquisitionDialog, \
     ShowAcquisitionFileDialog
@@ -85,7 +86,7 @@ class SnapshotController(object):
 
         self._main_data_model = main_data
         self._main_frame = main_frame
-        self._anim_thread = None # for snapshot animation
+        self._anim_thread = None  # for snapshot animation
 
         # For snapshot animation find the names of the active (=connected)
         # screens it's slow, so do it only at init (=expect not to change screen
@@ -95,9 +96,10 @@ class SnapshotController(object):
         # Link snapshot menu to snapshot action
         self._main_frame.Bind(wx.EVT_MENU, self.start_snapshot_viewport, id=self._main_frame.menu_item_snapshot.GetId())
 
-        self._main_frame.Bind(wx.EVT_MENU, self.start_snapshot_as_viewport, id=self._main_frame.menu_item_snapshot_as.GetId())
+        self._main_frame.Bind(wx.EVT_MENU, self.start_snapshot_as_viewport,
+                              id=self._main_frame.menu_item_snapshot_as.GetId())
 
-        self._prev_streams = None # To unsubscribe afterwards
+        self._prev_streams = None  # To unsubscribe afterwards
         self._main_data_model.tab.subscribe(self.on_tab_change, init=True)
 
     def on_tab_change(self, tab):
@@ -180,7 +182,7 @@ class SnapshotController(object):
             streams = tab_data_model.streams.value
             if not streams:
                 logging.info("Failed to take snapshot, no stream in tab %s",
-                                tab.name)
+                             tab.name)
                 return
 
             if anim:
@@ -266,7 +268,7 @@ class SnapshotController(object):
         duration (float): duration in seconds of the animation.
         """
         assert (0 < duration)
-        brightness_orig = 1.0 # TODO: read the previous brightness
+        brightness_orig = 1.0  # TODO: read the previous brightness
 
         # start with very bright and slowly decrease to 1.0
         try:
@@ -274,7 +276,7 @@ class SnapshotController(object):
             start = time.time()
             end = start + duration
             self.set_output_brightness(self._outputs, brightness_max)
-            time.sleep(0.1) # first is a bit longer
+            time.sleep(0.1)  # first is a bit longer
             now = time.time()
             while now <= end:
                 # it should decrease quickly at the beginning and slowly at the
@@ -282,7 +284,7 @@ class SnapshotController(object):
                 pos = (now - start) / duration
                 brightness = 1 / (1 / brightness_max + (1 - 1 / brightness_max) * pos)
                 self.set_output_brightness(self._outputs, brightness)
-                time.sleep(0.05) # ensure not to use too much CPU
+                time.sleep(0.05)  # ensure not to use too much CPU
                 now = time.time()
         except subprocess.CalledProcessError:
             logging.info("Failed to run snapshot animation.")
@@ -375,7 +377,7 @@ class SecomAcquiController(object):
     def _roa_is_valid(self):
         roa_valid = True
         if hasattr(self._tab_data_model, "roa") and self._main_data_model.time_correlator is not None and \
-            any(isinstance(s, ScannedTCSettingsStream) for s in self._tab_data_model.streams.value):
+                any(isinstance(s, ScannedTCSettingsStream) for s in self._tab_data_model.streams.value):
             roa_valid = self._tab_data_model.roa.value != UNDEFINED_ROI
 
         return roa_valid
@@ -457,10 +459,12 @@ class SecomAcquiController(object):
             main_data.tab.value = tab
             tab.load_data(acq_dialog.last_saved_file)
 
+
 # constants for the acquisition future state of the cryo-secom
 ST_FINISHED = "FINISHED"
 ST_FAILED = "FAILED"
 ST_CANCELED = "CANCELED"
+
 
 class CryoAcquiController(object):
     """
@@ -585,7 +589,7 @@ class CryoAcquiController(object):
             label=self._panel.txt_cryosecom_left_time,
             full=False,
         )
-        
+
         self._acq_future.add_done_callback(self._on_acquisition_done)
         self._panel.Layout()
 
@@ -714,7 +718,7 @@ class CryoAcquiController(object):
         # Note: the reverse order is needed in case 2 or more streams are deleted 
         # at the same time. Because, when an entry in array is deleted, the other
         # entries shift leftwards. So iterating from left to right would lead to skipping
-        # some entires required to delete, and deleting other entires. Therefore,
+        # some entries required to delete, and deleting other entries. Therefore,
         # iterating from right to left is chosen. 
         for i in range(self._panel.streams_chk_list.GetCount() - 1, -1, -1):
             item_stream = self._panel.streams_chk_list.GetClientData(i)
@@ -767,10 +771,10 @@ class CryoAcquiController(object):
         Updates the estimated time
         required for acquisition
         """
-        if not self._zStackActive.value: # if no zstack 
+        if not self._zStackActive.value:  # if no zstack
             acq_time = acqmng.estimateTime(self._acquiStreams.value)
 
-        else: # if zstack 
+        else:  # if zstack
             acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
 
         acq_time = math.ceil(acq_time)
@@ -835,7 +839,7 @@ class CryoAcquiController(object):
         self._zlevels = {}
         for s in self._acquiStreams.value:
             # the other possible streams are SEM which are generally not wanted by the user to be zstacked  
-            if isinstance(s, (FluoStream, BrightfieldStream)):  
+            if isinstance(s, (FluoStream, BrightfieldStream)):
                 levels = generate_zlevels(
                     self._tab_data.main.focus,
                     [self._tab_data.zMin.value, self._tab_data.zMax.value],
@@ -865,18 +869,18 @@ class CryoAcquiController(object):
             item = self._panel.streams_chk_list.GetClientData(i)
             # the user checked new item
             if (
-                self._panel.streams_chk_list.IsChecked(i)
-                and item not in self._acquiStreams.value
+                    self._panel.streams_chk_list.IsChecked(i)
+                    and item not in self._acquiStreams.value
             ):
                 self._acquiStreams.value.append(item)
 
             # the user unchecked item
             elif (
-                not self._panel.streams_chk_list.IsChecked(i)
-                and item in self._acquiStreams.value
+                    not self._panel.streams_chk_list.IsChecked(i)
+                    and item in self._acquiStreams.value
             ):
                 self._acquiStreams.value.remove(item)
-        
+
         # update the zlevels dictionary
         self._on_zstack()
         self._update_acquisition_time()
@@ -1081,7 +1085,7 @@ class SparcAcquiController(object):
         self._roa = tab_data.semStream.roi
 
         # Listen to change of streams to update the acquisition time
-        self._prev_streams = set() # set of streams already listened to
+        self._prev_streams = set()  # set of streams already listened to
         tab_data.streams.subscribe(self._onStreams, init=True)
         # also listen to .semStream, which is not in .streams
         for va in self._get_settings_vas(tab_data.semStream):
@@ -1104,7 +1108,7 @@ class SparcAcquiController(object):
         Find all the VAs of a stream which can potentially affect the acquisition time
         return (set of VAs)
         """
-        nvas = model.getVAs(stream) # name -> va
+        nvas = model.getVAs(stream)  # name -> va
         vas = set()
         # remove some VAs known to not affect the acquisition time
         for n, va in nvas.items():
@@ -1157,7 +1161,7 @@ class SparcAcquiController(object):
         """
         Called whenever a VA which might affect the acquisition is modified
         """
-        self.update_acquisition_time() # to update the message
+        self.update_acquisition_time()  # to update the message
 
     def update_fn_suggestion(self):
         """
@@ -1183,7 +1187,7 @@ class SparcAcquiController(object):
             self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
             logging.debug("Generated filename pattern '%s'", self.conf.fn_ptn)
 
-    @wxlimit_invocation(1) # max 1/s
+    @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
         if self._ellipsis_animator:
             # cancel if there is an ellipsis animator updating the status message
@@ -1290,14 +1294,14 @@ class SparcAcquiController(object):
                 isinstance(s, TemporalSpectrumSettingsStream)):
                 has_temporal = True
 
-        #  ADD the the overlay (live_update) in the SEM window which displays the SEM measurements of the current
+        #  ADD the overlay (live_update) in the SEM window which displays the SEM measurements of the current
         #  acquisition if a  stream is added and acquisition is started.
         for v in self._tab_data_model.visible_views.value:
             if hasattr(v, "stream_classes") and isinstance(self._tab_data_model.semStream, v.stream_classes):
                 v.addStream(self._tab_data_model.semStream)
 
         if (self.conf.last_format == 'TIFF' or self.conf.last_format == 'Serialized TIFF') and has_temporal:
-            raise NotImplementedError("Cannot save temporal data in %s format, data format must be HDF5." \
+            raise NotImplementedError("Cannot save temporal data in %s format, data format must be HDF5."
                                       % self.conf.last_format)
 
         self._pause_streams()
@@ -1382,7 +1386,7 @@ class SparcAcquiController(object):
             logging.error("Acquisition failed (after %d streams): %s",
                           len(data), exp)
 
-        #  REMOVE the the overlay (live_update) in the SEM window which displays the SEM measurements of the current
+        #  REMOVE the overlay (live_update) in the SEM window which displays the SEM measurements of the current
         #  acquisition if a  stream is added and acquisition is started.
         for v in self._tab_data_model.visible_views.value:
             if hasattr(v, "removeStream"):
@@ -1744,7 +1748,8 @@ class FastEMOverviewAcquiController(object):
                 sz = self._tab_data_model.main.scintillator_size
                 coords = (center[0] - sz[0] / 2, center[1] - sz[1] / 2,
                           center[0] + sz[0] / 2, center[1] + sz[1] / 2)
-                acq_time += fastem.estimateTiledAcquisitionTime(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
+                acq_time += fastem.estimateTiledAcquisitionTime(self._tab_data_model.streams.value[0],
+                                                                self._main_data_model.stage, coords)
 
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
@@ -1801,7 +1806,8 @@ class FastEMOverviewAcquiController(object):
                       center[0] + sz[0] / 2, center[1] + sz[1] / 2)
             try:
                 f = fastem.acquireTiledArea(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
-                t = fastem.estimateTiledAcquisitionTime(self._tab_data_model.streams.value[0], self._main_data_model.stage, coords)
+                t = fastem.estimateTiledAcquisitionTime(self._tab_data_model.streams.value[0],
+                                                        self._main_data_model.stage, coords)
             except Exception:
                 logging.exception("Failed to start overview acquisition")
                 # Try acquiring the other
@@ -1917,7 +1923,7 @@ class FineAlignController(object):
         """
         # Don't enable during "acquisition", as we don't want to allow fine
         # alignment during auto centering. When button is "cancel", the tool
-        # doesn't change so it's never disabled.
+        # doesn't change, so it's never disabled.
         acquiring = self._main_data_model.is_acquiring.value
         # Only allow fine alignment when spot mode is on (so that the exposure
         # time has /some chances/ to represent the needed dwell time)
@@ -1937,7 +1943,7 @@ class FineAlignController(object):
         if self._tab_data_model.tool.value == guimod.TOOL_SPOT:
             dt = self._main_data_model.fineAlignDwellTime.value
             t = align.find_overlay.estimateOverlayTime(dt, self.OVRL_REPETITION)
-            t = math.ceil(t) # round a bit pessimistic
+            t = math.ceil(t)  # round a bit pessimistic
             txt = u"~ %s" % units.readable_time(t, full=False)
         else:
             txt = u""
@@ -2064,7 +2070,7 @@ class FineAlignController(object):
             if (not abs(rot_deg) < 10 or  # Rotation < 10°
                 not 0.9 < opt_scale < 1.1 or  # Optical mag < 10%
                 not abs(shear) < 0.3 or  # Shear < 30%
-                any(not 0.9 < v < 1.1 for v in scaling_xy) # SEM ratio diff < 10%
+                any(not 0.9 < v < 1.1 for v in scaling_xy)  # SEM ratio diff < 10%
                ):
                 # Special warning in case of wrong magnification
                 if not 0.9 < opt_scale < 1.1 and model.hasVA(main_data.lens, "magnification"):
@@ -2074,9 +2080,10 @@ class FineAlignController(object):
                                     "Check that the lens magnification and the SEM magnification are correctly set.",
                                     measured_mag, lens_mag)
                 else:  # Generic warning
-                    logging.warning(u"The fine alignment values are very large, try on a different place on the sample. "
-                                    u"mag correction: %f, rotation: %f°, shear: %f, X/Y scale: %f/%f",
-                                    opt_scale, rot_deg, shear, scaling_xy[0], scaling_xy[1])
+                    logging.warning(
+                        u"The fine alignment values are very large, try on a different place on the sample. "
+                        u"mag correction: %f, rotation: %f°, shear: %f, X/Y scale: %f/%f",
+                        opt_scale, rot_deg, shear, scaling_xy[0], scaling_xy[1])
 
                 title = "Fine alignment probably incorrect"
                 lvl = logging.WARNING
@@ -2155,7 +2162,7 @@ class AutoCenterController(object):
 
         et = self._main_data_model.ccd.exposureTime.value
         t = align.spot.estimateAlignmentTime(et)
-        t = math.ceil(t) # round a bit pessimistic
+        t = math.ceil(t)  # round a bit pessimistic
         txt = u"~ %s" % units.readable_time(t, full=False)
         self._tab_panel.lbl_auto_center.Label = txt
 
@@ -2217,7 +2224,7 @@ class AutoCenterController(object):
         self._tab_panel.gauge_auto_center.Show()
         self._sizer.Layout()
         self._acf_connector = ProgressiveFutureConnector(f,
-                                            self._tab_panel.gauge_auto_center)
+                                                         self._tab_panel.gauge_auto_center)
 
         f.add_done_callback(self._on_ac_done)
 
@@ -2238,7 +2245,7 @@ class AutoCenterController(object):
         logging.debug("End of auto centering procedure")
         main_data = self._main_data_model
         try:
-            dist = future.result() # returns distance to center
+            dist = future.result()  # returns distance to center
         except CancelledError:
             self._tab_panel.lbl_auto_center.Label = "Cancelled"
         except Exception as exp:
