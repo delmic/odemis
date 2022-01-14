@@ -808,19 +808,35 @@ class FeatureOverviewViewport(MicroscopeViewport):
 
 
 class FastEMAcquisitionViewport(MicroscopeViewport):
-    """ MicroscopeViewport with specialized FastEMCanvas. """
+    """
+    Viewport for the FASTEM acquisition. The stage position is indicated
+    by a crosshair. Moving the stage is disabled in this viewport (no
+    dragging and also no double clicking). A background overlay represents
+    the sample carrier.
+    """
 
     canvas_class = miccanvas.FastEMAcquisitionCanvas
+
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+
+        # Disable moving stage by dragging
+        self.canvas.abilities.discard(CAN_MOVE_STAGE)
 
     def setView(self, view, tab_data):
         super().setView(view, tab_data)
         self.canvas.add_background_overlay(self._tab_data_model.main.background)
 
+        # Show a crosshair where the stage is
+        cpol = CurrentPosCrossHairOverlay(self.canvas)
+        cpol.active.value = True
+        self.canvas.add_world_overlay(cpol)
+
 
 class FastEMOverviewViewport(LiveViewport):
     """
-    Viewport for the FastEM overview: moves stage by double-clicking and
-    background overlay representing the sample carrier.
+    Viewport for the FASTEM overview. The stage stage can be moved via double-clicking.
+    A background overlay represents the sample carrier.
     """
 
     canvas_class = miccanvas.FastEMAcquisitionCanvas
