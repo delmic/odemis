@@ -308,7 +308,7 @@ class TestFindGridSpots(unittest.TestCase):
         grid_spots = numpy.load(os.path.join(TEST_IMAGE_PATH, "multiprobe01_grid_spots.npz"))
         filename = os.path.join(TEST_IMAGE_PATH, "multiprobe01.tiff")
         img = tiff.open_data(filename).content[0].getData()
-        spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(img, (14, 14))
+        spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(img, (8, 8))
         numpy.testing.assert_array_almost_equal(spot_coordinates, grid_spots['spot_coordinates'], decimal=2)
         numpy.testing.assert_array_almost_equal(translation, grid_spots['translation'], decimal=2)
         numpy.testing.assert_array_almost_equal(scaling, grid_spots['scaling'], decimal=3)
