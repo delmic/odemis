@@ -152,14 +152,14 @@ class ChamberButtonController(HardwareButtonController):
             self.btn.SetIcon(self._btn_icons['working'])
         elif state == CHAMBER_VACUUM:
             self.btn.SetIcon(self._btn_icons['vacuum'])
-            self.btn.SetLabel("UNLOAD")
+            self.btn.SetLabel("LOADED")
             # In case the GUI is launched with the chamber pump turned on already, we need to
             # toggle the button by code.
             self.btn.SetToggle(True)
         elif state in {CHAMBER_VENTED, CHAMBER_UNKNOWN}:
             self.btn.SetIcon(self._btn_icons['normal'])
             self.btn.SetToggle(False)
-            self.btn.SetLabel("LOAD")  # Extra spaces are needed for alignment
+            self.btn.SetLabel("UNLOADED")  # Extra spaces are needed for alignment
         else:
             logging.error("Unknown chamber state %d", state)
 
