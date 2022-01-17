@@ -34,7 +34,7 @@ extensions = ['sphinx.ext.autodoc',
               'sphinx.ext.todo',
               #'sphinx.ext.mathjax', # we don't _need_ it and it annoyingly requires a file from the web
               'sphinx.ext.viewcode',
-              'license']
+             ]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
