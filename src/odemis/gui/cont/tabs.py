@@ -1746,6 +1746,7 @@ class FastEMAcquisitionTab(Tab):
         vpv = collections.OrderedDict([
             (vp,
              {"name": "Acquisition",
+              "stage": main_data.stage,  # add to show crosshair
               "cls": guimod.StreamView,
               "stream_classes": EMStream,
               }),
