@@ -41,7 +41,8 @@ from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POL
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import img
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
-    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase, SEL_MODE_NONE
+    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase, SEL_MODE_NONE, \
+    SEL_MODE_DRAG
 from odemis.gui.comp.overlay.view import CenteredLineOverlay
 from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE, TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
@@ -3049,8 +3050,30 @@ class FastEMROAOverlay(FastEMSelectOverlay):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """ Draw the selection as a rectangle. Exactly the same as parent function except that
-         it has an adaptive line width (wider if the overlay is active). """
+         it has an adaptive line width (wider if the overlay is active) and it always shows the
+         size label of the selected rectangle. """
         line_width = 5 if self.active.value else 2
+
+        # show size label if ROA is selected
+        if self.active.value:
+            # Important: We need to use the physical positions, in order to draw
+            # everything at the right scale.
+            offset = self.cnvs.get_half_buffer_size()
+            b_start_pos = self.cnvs.phys_to_buffer(self.p_start_pos, offset)
+            b_end_pos = self.cnvs.phys_to_buffer(self.p_end_pos, offset)
+            b_start_pos, b_end_pos = self._normalize_rect(b_start_pos, b_end_pos)
+
+            w, h = (abs(s - e) for s, e in zip(self.p_start_pos, self.p_end_pos))
+            w = units.readable_str(w, 'm', sig=2)
+            h = units.readable_str(h, 'm', sig=2)
+            size_lbl = u"{} x {}".format(w, h)
+
+            pos = Vec(b_end_pos.x - 8, b_end_pos.y + 5)
+
+            self.position_label.pos = pos
+            self.position_label.text = size_lbl
+            self._write_labels(ctx)
+
         super(FastEMROAOverlay, self).draw(ctx, shift, scale, line_width, dash=True)
 
 
