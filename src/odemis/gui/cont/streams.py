@@ -3084,9 +3084,9 @@ class FastEMStreamsController(StreamBarController):
                 canvas.view.addStream(s)
 
 
-# Blue, red, green, cyan, yellow, purple, magenta
-FASTEM_PROJECT_COLOURS = ["#0000ff", "#ff0000", "#00ff00", "#00ffff", "#ffff00", "#ff00ff",
-                          "#ff00bf"]
+# Blue, green, cyan, yellow, purple, magenta, red
+FASTEM_PROJECT_COLOURS = ["#0000ff", "#00ff00", "#00ffff", "#ffff00", "#ff00ff",
+                          "#ff00bf", "#ff0000"]
 
 
 class FastEMProjectBarController(object):
