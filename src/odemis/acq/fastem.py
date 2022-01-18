@@ -406,15 +406,15 @@ class AcquisitionTask(object):
         px_size = self._multibeam.pixelSize.value
         field_res = self._multibeam.resolution.value
 
-        # Get the coordinate of the top left of the ROA, this corresponds to the (xmin, ymax) coordinate in the
-        # role=stage coordinate system.
+        # Get the coordinate of the top left corner of the ROA, this corresponds to the (xmin, ymax) coordinate in the
+        # role='stage' coordinate system.
         xmin_roa, _, _, ymax_roa = self._roa.coordinates.value
 
         # The position of the stage when acquiring the top/left tile needs to be matching the center of that tile.
         # The stage coordinate system is pointing to the right in the x direction, and upwards in the y direction,
         # therefore add half a field in the x-direction and subtract half a field in the y-direction.
-        pos_first_tile = (xmin_roa + field_res[0]/2. * px_size[0],
-                          ymax_roa - field_res[1]/2. * px_size[1])
+        pos_first_tile = (xmin_roa + field_res[0]/2 * px_size[0],
+                          ymax_roa - field_res[1]/2 * px_size[1])
 
         rel_move_hor = self.field_idx[0] * px_size[0] * field_res[0]  # in meter
         rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1]  # in meter

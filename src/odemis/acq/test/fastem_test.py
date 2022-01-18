@@ -473,45 +473,66 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             cls.lens = model.getComponent(role="lens")
 
     def test_get_abs_stage_movement(self):
-        """Test the correct initial and final stage position is returned for ROAs of different field sizes."""
+        """
+        Test the correct stage positions are returned for the corner fields of
+        ROAs consisting of a varying number of single fields.
+        """
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
 
-        # Loop over different x and y field sizes.
+        # Loop over different ROA sizes by varying the number of fields in x and y.
         for x_fields, y_fields in zip((1, 2, 40, 34, 5), (1, 22, 43, 104, 25)):
             # The coordinates of the ROA in meters.
             xmin, ymin, xmax, ymax = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)
             coordinates = (xmin, ymin, xmax, ymax)  # in m
 
-            # Create an ROC, because it is needed to initialize the ROA.
-            roc = fastem.FastEMROC("roc_name", coordinates=(0, 0, 1, 1))
-
             # Create an ROA with the coordinates of the field.
             roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
-            roa = fastem.FastEMROA(roa_name, coordinates, roc,
+            roa = fastem.FastEMROA(roa_name, coordinates, None,
                                    self.asm, self.multibeam, self.descanner,
-                                   self.mppc
-                                   )
+                                   self.mppc)
 
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
                                           roa, path=None, future=None)
 
-            # Verify the stage position of the first field is half a field to
-            # the bottom right of the top left of the ROA.
+            # Verify that compared to the top left corner of the ROA, the stage
+            # position is located half a field to the bottom right.
             task.field_idx = (0, 0)  # (0, 0) is the index of the first field
+
+            # In the role='stage' coordinate system the x-axis points to the right and y-axis to the top.
             expected_position = (xmin + res_x / 2 * px_size_x,
-                                 ymax - res_x / 2 * px_size_y)
-            actual_position = task.get_abs_stage_movement()
+                                 ymax - res_x / 2 * px_size_y)  # [m]
+            actual_position = task.get_abs_stage_movement()  # [m]
             numpy.testing.assert_allclose(actual_position, expected_position)
 
-            # Verify the stage position of the last field is half a field to
-            # the top left of the bottom right of the ROA.
+            # Verify that compared to the bottom right corner of the ROA, the stage
+            # position is located half a field to the top left.
             task.field_idx = (x_fields - 1, y_fields - 1)  # index of the last field
+
+            # In the role='stage' coordinate system the x-axis points to the right and y-axis to the top.
             expected_position = (xmax - res_x / 2 * px_size_x,
-                                 ymin + res_x / 2 * px_size_y)
-            actual_position = task.get_abs_stage_movement()
+                                 ymin + res_x / 2 * px_size_y)  # [m]
+            actual_position = task.get_abs_stage_movement()  # [m]
+            numpy.testing.assert_allclose(actual_position, expected_position)
+
+            # Verify that compared to the top right corner of the ROA, the stage
+            # position is located half a field to the bottom left.
+            task.field_idx = (x_fields - 1, 0)  # index of the last field in x and first field in y
+            expected_position = (xmax - res_x / 2 * px_size_x,
+                                 ymax - res_x / 2 * px_size_y)  # [m]
+            actual_position = task.get_abs_stage_movement()  # [m]
+            numpy.testing.assert_allclose(actual_position, expected_position)
+
+            # Verify that compared to the bottom left corner of the ROA, the stage
+            # position is located half a field to the top right.
+            task.field_idx = (0, y_fields - 1)  # index of the first field in x and the last field in y
+
+            # In the role='stage' coordinate system the x-axis points to the right and y-axis to the top.
+            expected_position = (xmin + res_x / 2 * px_size_x,
+                                 ymin + res_x / 2 * px_size_y)  # [m]
+            actual_position = task.get_abs_stage_movement()  # [m]
             numpy.testing.assert_allclose(actual_position, expected_position)
 
 
