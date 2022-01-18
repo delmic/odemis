@@ -41,8 +41,7 @@ from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POL
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import img
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
-    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase, SEL_MODE_NONE, \
-    SEL_MODE_DRAG
+    PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase, SEL_MODE_NONE
 from odemis.gui.comp.overlay.view import CenteredLineOverlay
 from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE, TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
@@ -3055,7 +3054,7 @@ class FastEMROAOverlay(FastEMSelectOverlay):
         line_width = 5 if self.active.value else 2
 
         # show size label if ROA is selected
-        if self.active.value:
+        if self.p_start_pos and self.p_end_pos and self.active.value:
             # Important: We need to use the physical positions, in order to draw
             # everything at the right scale.
             offset = self.cnvs.get_half_buffer_size()
@@ -3072,7 +3071,8 @@ class FastEMROAOverlay(FastEMSelectOverlay):
 
             self.position_label.pos = pos
             self.position_label.text = size_lbl
-            self.position_label.colour = self.colour  # same color as ROA
+            self.position_label.colour = (1, 1, 1)  # label white
+            self.position_label.background = (0.6, 0.6, 0.6)  # background grey
             self._write_labels(ctx)
 
         super(FastEMROAOverlay, self).draw(ctx, shift, scale, line_width, dash=True)
