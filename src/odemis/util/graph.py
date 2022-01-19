@@ -25,12 +25,11 @@ USA.
 """
 import collections
 import itertools
+import sys
 from abc import ABCMeta, abstractmethod
 from typing import Any, Dict, Iterator, List, Optional, Sequence, Set, Tuple, Union
 
 import numpy
-import sys
-
 
 if sys.version_info < (3, 7, 4):
     from collections import UserList as _UserList
@@ -63,6 +62,23 @@ class GraphBase(UserList, metaclass=ABCMeta):
         n_or_initlist: Optional[Union[int, Sequence[Any]]] = None,
         directed: bool = True,
     ) -> None:
+        """
+        Initializer for GraphBase.
+
+        Parameters
+        ----------
+        n_or_initlist : int or sequence, optional
+            If `None` (default) initializes a graph of zero order and zero size
+            (i.e. no vertices and no edges). If int, initializes a graph of
+            order `n_or_initlist` and zero size. Otherwise initialize the graph
+            using the sequence `n_or_initlist`.
+        directed : bool
+            If `False` the graph is undirected and symmetry of the adjacency
+            matrix is enforced when adding or removing edges. For undirected
+            graphs this means that `j in graph[i]` is True if and only if
+            `i in graph[j]`.
+
+        """
         self._directed = directed
         if n_or_initlist is None:
             super().__init__()
@@ -203,14 +219,12 @@ class GraphBase(UserList, metaclass=ABCMeta):
 
 class WeightedGraph(GraphBase):
     """
-    represented as a list of dicts.
+    Weighted graph represented as a list of dicts.
 
-    Each list item is a dictionary of which
-    the keys are the vertices to which the vertex represented by that list
-    item is connected to. The dictionary values contain the edge weights.
-    For example, `graph[0]` is the set of `(neighbor, distance)` pairs of
-    vertex 0. The graph is undirected, which means that `j in graph[i]` is
-    true if and only if `i in graph[j]`.
+    Each list item describes the set of neighbors of a particular vertex and
+    their associated weights. For example, `graph[j]` is a dictionary of which
+    the keys form the set of neighbors of vertex `j` and the values contain the
+    edge weights.
 
     """
 
@@ -235,14 +249,10 @@ class WeightedGraph(GraphBase):
 
 class UnweightedGraph(GraphBase):
     """
-    represented as a list of sets.
+    Unweighted graph represented as a list of sets.
 
-    Each list item is a dictionary of which
-    the keys are the vertices to which the vertex represented by that list
-    item is connected to. The dictionary values contain the edge weights.
-    For example, `graph[0]` is the set of `(neighbor, distance)` pairs of
-    vertex 0. The graph is undirected, which means that `j in graph[i]` is
-    true if and only if `i in graph[j]`.
+    Each list item describes the set of neighbors of a particular vertex in the
+    graph. For example, `graph[j]` is the set of neighbors of vertex `j`.
 
     """
 
@@ -261,4 +271,5 @@ class UnweightedGraph(GraphBase):
             self.data[i].remove(j)
 
     def get_edge_weight(self, edge: Tuple[int, int]) -> float:
+        # Always return an edge weight of 1 for an unweighted graph
         return 1

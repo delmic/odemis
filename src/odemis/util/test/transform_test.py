@@ -28,7 +28,7 @@ import unittest
 
 import numpy
 from numpy.linalg import LinAlgError
-from odemis.util import check_random_state
+from odemis.util.random import check_random_state
 from odemis.util.spot import GridPoints
 from odemis.util.transform import (
     AffineTransform,

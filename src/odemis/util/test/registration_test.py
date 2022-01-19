@@ -28,8 +28,9 @@ import unittest
 
 import numpy
 import scipy
-from odemis.util import check_random_state, pairwise
+from odemis.util import pairwise
 from odemis.util.graph import WeightedGraph
+from odemis.util.random import check_random_state
 from odemis.util.registration import (
     _canonical_matrix_form,
     bijective_matching,

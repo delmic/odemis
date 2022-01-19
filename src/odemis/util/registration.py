@@ -63,10 +63,10 @@ from typing import Iterator, Optional, Tuple, Type, TypeVar
 import numpy
 import scipy.cluster
 import scipy.spatial
-from odemis.util import check_random_state, rng_integers
 from odemis.util.graph import WeightedGraph
+from odemis.util.random import check_random_state, rng_integers
 from odemis.util.spot import find_spot_positions
-from odemis.util.transform import (
+from odemis.util.transform import (  # noqa: F401
     AffineTransform,
     GeometricTransform,
     _transformation_matrix_to_implicit,
@@ -160,7 +160,8 @@ def bijective_matching(
 
 def unit_gridpoints(shape: Tuple[int, int], *, mode: str) -> numpy.ndarray:
     """
-    Returns an ordered array of coordinates of a square grid with unit spacing.
+    Returns an ordered array of coordinates of a square grid with unit spacing
+    centered around zero.
 
     This function returns a row-major ordered array of coordinates of a square
     grid of points with unit spacing. The coordinates are returned either in
@@ -209,7 +210,9 @@ def nearest_neighbor_graph(xy: numpy.ndarray) -> WeightedGraph:
     Returns
     -------
     graph : WeightedGraph
-        Undirected weighted simple graph of 4-connected nearest neighbors.
+        Undirected weighted simple graph of 4-connected nearest neighbors. For
+        points located on the edge of the grid only 3 nearest neighbors are
+        returned, and for the corners only 2.
 
     """
     # Find the closest 4 neighbors (excluding itself) for each point.
