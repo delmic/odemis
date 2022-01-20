@@ -69,7 +69,7 @@ class TestFASTEMConfig(unittest.TestCase):
 
         self.assertFalse(self.scanner.multiBeamMode.value)
         self.assertFalse(self.scanner.external.value)
-        self.assertIsNone(self.scanner.blanker.value)
+        self.assertFalse(self.scanner.blanker.value)
         self.assertFalse(self.scanner.immersion.value)
         self.assertGreater(self.scanner.horizontalFoV.value, 1.e-3)  # should be big FoV for overview
         self.assertEqual(self.scanner.rotation.value, math.radians(5))
@@ -91,7 +91,7 @@ class TestFASTEMConfig(unittest.TestCase):
 
         self.assertFalse(self.scanner.multiBeamMode.value)
         self.assertFalse(self.scanner.external.value)
-        self.assertIsNone(self.scanner.blanker.value)
+        self.assertFalse(self.scanner.blanker.value)
         self.assertTrue(self.scanner.immersion.value)
         self.assertEqual(self.scanner.rotation.value, math.radians(5))
 
