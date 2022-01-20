@@ -163,16 +163,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         # Reclaim some memory
         self._images_cache = []
 
-    # Ability manipulation
-
-    def disable_zoom(self):
-        self.abilities.remove(CAN_ZOOM)
-
-    def enable_zoom(self):
-        self.abilities.add(CAN_ZOOM)
-
-    # END Ability manipulation
-
     def setView(self, view, tab_data):
         """
         Set the view that this canvas is displaying/representing
