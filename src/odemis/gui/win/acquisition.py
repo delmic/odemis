@@ -830,6 +830,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.gauge_acq.Hide()
             self.Layout()
 
+        # Disable acquisition button if no area
+        self.btn_secom_acquire.Enable(self.area is not None)
+
         if self.area is None:
             self.area_size_txt.SetLabel("Invalid stage position")
             return
@@ -1002,6 +1005,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         return zlevels
 
     def _fit_view_to_area(self):
+        if self.area is None:
+            logging.warning("Unknown area, cannot fit view")
+            return
+
         center = ((self.area[0] + self.area[2]) / 2,
                   (self.area[1] + self.area[3]) / 2)
         self._view.view_pos.value = center
