@@ -40,6 +40,7 @@ from odemis import model, util
 from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui import img
+from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixin, DragMixin, \
     PixelDataMixin, SEL_MODE_EDIT, SEL_MODE_CREATE, EDIT_MODE_BOX, EDIT_MODE_POINT, SpotModeBase, SEL_MODE_NONE
 from odemis.gui.comp.overlay.view import CenteredLineOverlay
@@ -197,7 +198,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
         """
         Handle double click:
         If it's under a feature: move the stage to the feature position,
-        otherwise, move the stage to the selected position
+        otherwise, move the stage to the selected position.
+        Note: if the canvas doesn't allow drag, move to a random position is not
+        allowed, *but* move to a feature is still allowed.
         """
         if self.active:
             v_pos = evt.Position
@@ -208,8 +211,11 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 self.cnvs.view.moveStageTo((pos[0], pos[1]))
                 self.tab_data.main.currentFeature.value = feature
             else:
-                # Move to selected point
-                StagePointSelectOverlay.on_dbl_click(self, evt)
+                # Move to selected point (if normally allowed to move)
+                if CAN_DRAG in self.cnvs.abilities:
+                    StagePointSelectOverlay.on_dbl_click(self, evt)
+                else:
+                    super().on_dbl_click(self, evt)
         else:
             super().on_dbl_click(self, evt)
 
