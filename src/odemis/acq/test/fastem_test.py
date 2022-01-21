@@ -146,9 +146,6 @@ class TestFastEMROA(unittest.TestCase):
     def tearDownClass(cls):
         pass
 
-    def setUp(self):
-        self.descanner.physicalFlybackTime.value = 250e-6  # TODO why is this necessary??
-
     def test_estimate_acquisition_time(self):
         """Check that the estimated time for one ROA (megafield) is calculated correctly."""
         # Use float for number of fields, in order to not end up with additional fields scanned and thus an

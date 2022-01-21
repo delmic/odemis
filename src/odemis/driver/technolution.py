@@ -893,7 +893,7 @@ class MirrorDescanner(model.Emitter):
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # physical time for the mirror descanner to perform a flyback (moving back to start of a line scan)
-        self.physicalFlybackTime = model.FloatContinuous(250e-6, range=(0, 1e-3), unit='s')
+        self.physicalFlybackTime = model.FloatContinuous(150e-6, range=(0, 1e-3), unit='s')
 
     def getXAcqSetpoints(self):
         """
