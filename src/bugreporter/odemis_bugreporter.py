@@ -594,7 +594,11 @@ class BugreporterFrame(wx.Frame):
     def _on_report_sent(self, future):
         try:
             future.result()
-            wx.CallAfter(self._on_report_sent_successful)
+            # CallAfter doesn't work properly with the notifications for some
+            # unknown reason: the message almost immediately disappears. This
+            # doesn't happen with CallLater().
+            # wx.CallAfter(self._on_report_sent_successful)
+            wx.CallLater(0, self._on_report_sent_successful)
         except Exception as e:
             logging.exception("osTicket upload failed: %s", e)
             wx.CallAfter(self.open_failed_upload_dlg)
@@ -634,13 +638,15 @@ class BugreporterFrame(wx.Frame):
 
     def open_failed_upload_dlg(self):
         """
-        Ask the user to user wetransfer in case the upload to osticket failed.
+        Ask the user to use the website in case the upload to osticket failed.
         """
-        txt = ('The bug-report could not be uploaded to osticket. Please finish the report ' +
-               'by filling in the form on https://support.delmic.com and attaching the report ' +
-               'file "%s" on the Desktop.\n\n' % self.bugreporter.zip_fn +
-               'After closing this window, the form will automatically open in your web browser.')
-        dlg = wx.MessageDialog(self, txt, '', wx.OK)
+        txt = ('The bug-report could not be uploaded to osticket. Please finish the report '
+               'by filling in the form on https://support.delmic.com and attaching the ZIP '
+               'file "%s" on the Desktop.\n\n'
+               'Alternatively, you can send the file to support@delmic.com .\n\n'
+               'After closing this window, the form will automatically open in your web browser.' %
+               self.bugreporter.zip_fn)
+        dlg = wx.MessageDialog(self, txt, 'Automatic report upload unsuccessful', wx.OK)
         val = dlg.ShowModal()
         dlg.Show()
         if val == wx.ID_OK:
