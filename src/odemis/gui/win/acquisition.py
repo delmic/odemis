@@ -702,7 +702,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
         self.Bind(wx.EVT_CLOSE, self.on_close)
-        # on_streams_changed is compatible because it doesn't use the args
 
         # Set parameters for tiled acq
         self.overlap = 0.2
@@ -725,7 +724,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         for s in streams:
             self._view.addStream(s)
 
-        # To update the estimated time when streams are removed/added
+        # To update the estimated time & area when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed, init=True)
 
         zstep = util.readable_str(ZSTEP, unit="m", sig=3)
@@ -804,6 +803,16 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         Calculates the requested tiling area size, based on the tiles number
         """
+        # get smallest fov
+        fovs = [self.get_fov(s) for s in self.get_acq_streams()]
+        if not fovs:
+            # fall back to a small fov (default)
+            self.fov = DEFAULT_FOV
+        else:
+            # smallest fov
+            self.fov = (min(f[0] for f in fovs),
+                        min(f[1] for f in fovs))
+
         nx = self.tiles_nx.value
         ny = self.tiles_ny.value
         # these formulas for w and h have to match the ones used in the 'stitching' module.
@@ -830,6 +839,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.gauge_acq.Hide()
             self.Layout()
 
+        # Some settings can affect the FoV. Also, adding/removing the stream with
+        # the smallest FoV would also affect the area.
+        self.update_area_size()
+
         # Disable acquisition button if no area
         self.btn_secom_acquire.Enable(self.area is not None)
 
@@ -843,28 +856,16 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.update_acquisition_time()
 
-    def on_streams_changed(self, val):
+    def on_streams_changed(self, _=None):
         """
         When the list of streams to acquire has changed
         """
-        # get smallest fov
-        fovs = [self.get_fov(s) for s in self.get_acq_streams()]
-        if not fovs:
-            # fall back to a small fov (default)
-            self.fov = DEFAULT_FOV
-        else:
-            # smallest fov
-            self.fov = (min(f[0] for f in fovs),
-                        min(f[1] for f in fovs))
-
-        self.update_area_size()  # FoV has changed, so area size too
         self.update_setting_display()
 
     def on_tiles_number(self, _=None):
         """
         Called when the user enters values for the tiles number in the GUI.
         """
-        self.update_area_size()
         self.update_setting_display()
 
     def on_setting_change(self, _=None):
@@ -1031,9 +1032,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.btn_secom_acquire.Disable()
 
-        # disable estimation time updates during acquisition
-        self._view.lastUpdate.unsubscribe(self.on_streams_changed)
-
         # Freeze all the settings so that it's not possible to change anything
         self._pause_settings()
 
@@ -1083,9 +1081,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._resume_settings()
 
         self.acquiring = False
-
-        # re-enable estimation time updates
-        self._view.lastUpdate.subscribe(self.on_streams_changed)
 
         self.acq_future = None  # To avoid holding the ref in memory
         self._acq_future_connector = None
