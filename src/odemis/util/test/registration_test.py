@@ -34,7 +34,7 @@ from odemis.util.random import check_random_state
 from odemis.util.registration import (
     _canonical_matrix_form,
     bijective_matching,
-    estimate_mpp_orientation,
+    estimate_grid_orientation,
     nearest_neighbor_graph,
     unit_gridpoints,
 )
@@ -354,8 +354,8 @@ class CanonicalMatrixFormTest(unittest.TestCase):
                 self.assertAlmostEqual(delta - n * 0.5 * numpy.pi, 0)
 
 
-class EstimateMPPOrientationTest(unittest.TestCase):
-    """Unittest for `estimate_mpp_orientation()`."""
+class EstimateGridOrientationTest(unittest.TestCase):
+    """Unittest for `estimate_grid_orientation()`."""
 
     def setUp(self):
         """Ensure reproducible tests."""
@@ -363,18 +363,18 @@ class EstimateMPPOrientationTest(unittest.TestCase):
 
     def test_full_grid(self):
         """
-        `estimate_mpp_orientation()` should return the expected AffineTransform
-        for a full grid.
+        `estimate_grid_orientation()` should return the expected
+        AffineTransform for a full grid.
 
         """
-        for shape in itertools.product((5, 8), repeat=2):
+        for shape in [(5, 5), (8, 8)]:
             for i in range(50):
                 with self.subTest(shape=shape, i=i):
                     n, m = shape
                     shuffle = self._rng.permutation(n * m)
                     tform = random_affine_transform(self._rng)
                     xy = tform.apply(unit_gridpoints(shape, mode="xy")[shuffle])
-                    out = estimate_mpp_orientation(xy, shape, AffineTransform)
+                    out = estimate_grid_orientation(xy, shape, AffineTransform)
                     for name in ("matrix", "translation"):
                         numpy.testing.assert_array_almost_equal(
                             getattr(tform, name), getattr(out, name)
@@ -382,18 +382,18 @@ class EstimateMPPOrientationTest(unittest.TestCase):
 
     def test_incomplete_grid(self):
         """
-        `estimate_mpp_orientation()` should return the expected AffineTransform
-        for a grid with one point missing.
+        `estimate_grid_orientation()` should return the expected
+        AffineTransform for a grid with one point missing.
 
         """
-        for shape in itertools.product((5, 8), repeat=2):
+        for shape in [(5, 5), (8, 8)]:
             for i in range(50):
                 with self.subTest(shape=shape, i=i):
                     n, m = shape
                     shuffle = self._rng.permutation(n * m)
                     tform = random_affine_transform(self._rng)
                     xy = tform.apply(unit_gridpoints(shape, mode="xy")[shuffle])[:-1]
-                    out = estimate_mpp_orientation(xy, shape, AffineTransform)
+                    out = estimate_grid_orientation(xy, shape, AffineTransform)
                     for name in ("matrix", "translation"):
                         numpy.testing.assert_array_almost_equal(
                             getattr(tform, name), getattr(out, name)

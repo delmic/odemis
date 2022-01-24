@@ -335,7 +335,7 @@ def _kpp(data, k, rng):
     return init
 
 
-def _initial_estimate_mpp_orientation(xy: numpy.ndarray) -> AffineTransform:
+def _initial_estimate_grid_orientation(xy: numpy.ndarray) -> AffineTransform:
     """
     Provide an initial estimate for the orientation of a square grid of points.
 
@@ -385,7 +385,7 @@ def _initial_estimate_mpp_orientation(xy: numpy.ndarray) -> AffineTransform:
     return AffineTransform(matrix, translation)
 
 
-def estimate_mpp_orientation(
+def estimate_grid_orientation(
     xy: numpy.ndarray, shape: Tuple[int, int], transform_type: Type[T]
 ) -> T:
     """
@@ -396,7 +396,8 @@ def estimate_mpp_orientation(
     xy : ndarray of shape (n, 2)
         Array with the determined coordinates of the grid points.
     shape : tuple of two ints
-        The shape of the grid given as a tuple `(height, width)`.
+        The shape of the grid given as a tuple `(height, width)`. Current
+        implementation only supports grids of points with `height == width`.
     transform_type : GeometricTransform
         The transform class to use for estimating the orientation.
 
@@ -406,14 +407,18 @@ def estimate_mpp_orientation(
         The orientation of the pattern.
 
     """
-    tform = _initial_estimate_mpp_orientation(xy)
+    if shape[0] != shape[1]:
+        raise NotImplementedError(
+            "Only grids with `shape[0] == shape[1]` are supported."
+        )
+    tform = _initial_estimate_grid_orientation(xy)
     grid = unit_gridpoints(shape, mode="xy")
     correspondences = bijective_matching(tform.apply(grid), xy)
     a, b = zip(*correspondences)
     return transform_type.from_pointset(grid[a, ...], xy[b, ...])
 
 
-def estimate_mpp_orientation_from_img(
+def estimate_grid_orientation_from_img(
     image: numpy.ndarray,
     shape: Tuple[int, int],
     transform_type: Type[T],
@@ -456,4 +461,4 @@ def estimate_mpp_orientation_from_img(
         num_spots = None
     ji = find_spot_positions(image, sigma, threshold_abs, threshold_rel, num_spots)
     xy = to_physical_space(ji, image.shape)
-    return estimate_mpp_orientation(xy, shape, transform_type)
+    return estimate_grid_orientation(xy, shape, transform_type)
