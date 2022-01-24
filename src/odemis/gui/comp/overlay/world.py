@@ -3072,7 +3072,7 @@ class FastEMROAOverlay(FastEMSelectOverlay):
             self.position_label.pos = pos
             self.position_label.text = size_lbl
             self.position_label.colour = (1, 1, 1)  # label white
-            self.position_label.background = (0.6, 0.6, 0.6)  # background grey
+            self.position_label.background = (0.7, 0.7, 0.7, 0.8)  # background grey
             self._write_labels(ctx)
 
         super(FastEMROAOverlay, self).draw(ctx, shift, scale, line_width, dash=True)

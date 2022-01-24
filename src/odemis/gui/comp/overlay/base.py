@@ -241,7 +241,10 @@ class Label(object):
         if self.background:
             margin_x = 6  # margins for better representation of background
             margin_y = 10
-            ctx.set_source_rgba(*(self.background + (self.opacity,)))
+            if len(self.colour) == 4:
+                ctx.set_source_rgba(*self.background[:-1], self.background[-1] * self.opacity)
+            else:
+                ctx.set_source_rgba(*self.background)
             rect = (x - margin_x/2, y + margin_y/2, self.text_size[0] + margin_x, -self.text_size[1] - margin_y)
             ctx.rectangle(*rect)
             ctx.fill()
