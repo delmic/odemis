@@ -176,7 +176,16 @@ class GraphBase(UserList, metaclass=ABCMeta):
                     visited[t].add(s)
 
     def remove_triangles(self) -> None:
-        """Remove all triangles (3-cycles) from the graph."""
+        """
+        Removes all triangles (3-cycles) from the graph.
+
+        Triangles are removed by deleting the least amount of edges from the
+        graph. This is done using a greedy algorithm where edges that are
+        contained in more than one triangle are removed first. If two edges are
+        contained in the same amount of triangles, the edge that has the
+        largest edge weight (distance) is removed first.
+
+        """
         triangles = set(self.iter_triangles())
         if not triangles:
             return  # Quick return if possible
