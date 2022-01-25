@@ -24,26 +24,25 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Various helper functions that have a generic usefulness
 # Warning: do not put anything that has dependencies on non default python modules
 
-from __future__ import absolute_import, division
+from __future__ import division, absolute_import
 
+import queue
 import collections
+from concurrent.futures import CancelledError
+from decorator import decorator
+from functools import wraps
 import inspect
 import itertools
 import logging
 import math
-import queue
+import numpy
 import signal
 import sys
 import threading
 import time
-import types
 import weakref
-from concurrent.futures import CancelledError
-from functools import wraps
+import types
 from typing import Iterable, Tuple, TypeVar
-
-import numpy
-from decorator import decorator
 
 from . import weak
 

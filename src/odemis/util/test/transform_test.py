@@ -23,24 +23,24 @@ from __future__ import division
 
 import copy
 import inspect
+import numpy
+from numpy.linalg import LinAlgError
 import operator
 import unittest
 
-import numpy
-from numpy.linalg import LinAlgError
 from odemis.util.random import check_random_state
 from odemis.util.spot import GridPoints
 from odemis.util.transform import (
-    AffineTransform,
-    RigidTransform,
-    ScalingTransform,
-    SimilarityTransform,
     _rotation_matrix_from_angle,
     _rotation_matrix_to_angle,
     cartesian_to_polar,
     polar_to_cartesian,
     to_physical_space,
     to_pixel_index,
+    AffineTransform,
+    ScalingTransform,
+    SimilarityTransform,
+    RigidTransform,
 )
 from transform_known_values import transform_known_values
 
