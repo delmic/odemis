@@ -375,10 +375,10 @@ class EstimateGridOrientationTest(unittest.TestCase):
                     tform = random_affine_transform(self._rng)
                     xy = tform.apply(unit_gridpoints(shape, mode="xy")[shuffle])
                     out = estimate_grid_orientation(xy, shape, AffineTransform)
-                    for name in ("matrix", "translation"):
-                        numpy.testing.assert_array_almost_equal(
-                            getattr(tform, name), getattr(out, name)
-                        )
+                    numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
+                    numpy.testing.assert_array_almost_equal(
+                        tform.translation, out.translation
+                    )
 
     def test_incomplete_grid(self):
         """
@@ -394,10 +394,10 @@ class EstimateGridOrientationTest(unittest.TestCase):
                     tform = random_affine_transform(self._rng)
                     xy = tform.apply(unit_gridpoints(shape, mode="xy")[shuffle])[:-1]
                     out = estimate_grid_orientation(xy, shape, AffineTransform)
-                    for name in ("matrix", "translation"):
-                        numpy.testing.assert_array_almost_equal(
-                            getattr(tform, name), getattr(out, name)
-                        )
+                    numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
+                    numpy.testing.assert_array_almost_equal(
+                        tform.translation, out.translation
+                    )
 
 
 if __name__ == "__main__":

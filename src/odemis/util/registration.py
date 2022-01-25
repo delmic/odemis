@@ -133,6 +133,9 @@ def bijective_matching(
     """
     Matching of two un-ordered point sets to determine their correspondences.
 
+    This function can be used as the matching step in the iterative closest
+    point (ICP) algorithm.
+
     Parameters
     ----------
     src : ndarray
@@ -403,7 +406,7 @@ def estimate_grid_orientation(
 
     Returns
     -------
-    tform : GeometricTransform
+    tform : instance of `transform_type`
         The orientation of the pattern.
 
     """
@@ -453,6 +456,11 @@ def estimate_grid_orientation_from_img(
         `num_spots = shape[0] * shape[1]` as default when set to `None`. Set
         `num_spots = 0` to not impose a maximum. Note that this behavior is
         different from odemis.util.spot.find_spot_position().
+
+    Returns
+    -------
+    tform : instance of `transform_type`
+        The orientation of the pattern.
 
     """
     if num_spots is None:
