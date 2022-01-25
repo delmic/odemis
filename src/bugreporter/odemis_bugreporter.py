@@ -638,13 +638,13 @@ class BugreporterFrame(wx.Frame):
 
     def open_failed_upload_dlg(self):
         """
-        Ask the user to use the website in case the upload to osticket failed.
+        Ask the user to use the website in case the upload to osTicket failed.
         """
-        txt = ('The bug-report could not be uploaded to osticket. Please finish the report '
+        txt = ('The bug-report could not be uploaded. Please send the report '
                'by filling in the form on https://support.delmic.com and attaching the ZIP '
-               'file "%s" on the Desktop.\n\n'
+               'file "%s", found on the Desktop.\n\n'
                'Alternatively, you can send the file to support@delmic.com .\n\n'
-               'After closing this window, the form will automatically open in your web browser.' %
+               'After closing this window, the form will be automatically opened in your web browser.' %
                self.bugreporter.zip_fn)
         dlg = wx.MessageDialog(self, txt, 'Automatic report upload unsuccessful', wx.OK)
         val = dlg.ShowModal()
