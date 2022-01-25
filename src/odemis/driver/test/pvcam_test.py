@@ -44,6 +44,15 @@ class StaticTestPVCam(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = CONFIG_PVCAM
 
+    @classmethod
+    def setUpClass(cls):
+        if TEST_NOHW:
+            # Technically, we don't need the hardware, but at least the lipvcam is needed,
+            # and it's not available on 64 bits.
+            raise unittest.SkipTest("No simulator available")
+        super().setUpClass()
+
+
 # Inheritance order is important for setUp, tearDown
 #@skip("simple")
 class TestPVCam(VirtualTestCam, unittest.TestCase):
@@ -55,18 +64,9 @@ class TestPVCam(VirtualTestCam, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not TEST_NOHW:
-            super(TestPVCam, cls).setUpClass()
-
-    @classmethod
-    def tearDownClass(cls):
-        if not TEST_NOHW:
-            super(TestPVCam, cls).tearDownClass()
-
-    def setUp(self):
         if TEST_NOHW:
-            self.skipTest("No simulator available")
-        super(TestPVCam, self).setUp()
+            raise unittest.SkipTest("No simulator available")
+        super().setUpClass()
 
 
 #@skip("simple")
@@ -79,18 +79,9 @@ class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if not TEST_NOHW:
-            super(TestPVCam, cls).setUpClass()
-
-    @classmethod
-    def tearDownClass(cls):
-        if not TEST_NOHW:
-            super(TestPVCam, cls).tearDownClass()
-
-    def setUp(self):
         if TEST_NOHW:
-            self.skipTest("No simulator available")
-        super(TestPVCam, self).setUp()
+            raise unittest.SkipTest("No simulator available")
+        super().setUpClass()
 
 
 if __name__ == '__main__':
