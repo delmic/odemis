@@ -64,6 +64,8 @@ from odemis.util.linalg import qlp, qrp
 T = TypeVar("T", bound="GeometricTransform")
 
 __all__ = [
+    "cartesian_to_polar",
+    "polar_to_cartesian",
     "to_physical_space",
     "to_pixel_index",
     "AffineTransform",
@@ -71,6 +73,51 @@ __all__ = [
     "SimilarityTransform",
     "RigidTransform",
 ]
+
+
+def cartesian_to_polar(xy: numpy.ndarray) -> Tuple[numpy.ndarray, numpy.ndarray]:
+    """
+    Transform Cartesian coordinates to polar coordinates.
+
+    Parameters
+    ----------
+    xy : ndarray
+        Cartesian coordinates.
+
+    Returns
+    -------
+    rho : ndarray
+        Radial coordinates.
+    theta : ndarray
+        Angular coordinates.
+
+    """
+    xy = numpy.asarray(xy)
+    rho = numpy.hypot(xy[..., 0], xy[..., 1])
+    theta = numpy.arctan2(xy[..., 1], xy[..., 0])
+    return rho, theta
+
+
+def polar_to_cartesian(rho: numpy.ndarray, theta: numpy.ndarray) -> numpy.ndarray:
+    """
+    Transform polar coordinates to Cartesian coordinates.
+
+    Parameters
+    ----------
+    rho : ndarray
+        Radial coordinates.
+    theta : ndarray
+        Angular coordinates.
+
+    Returns
+    -------
+    xy : ndarray
+        Cartesian coordinates.
+
+    """
+    x = rho * numpy.cos(theta)
+    y = rho * numpy.sin(theta)
+    return numpy.stack((x, y), axis=-1)
 
 
 def to_physical_space(
