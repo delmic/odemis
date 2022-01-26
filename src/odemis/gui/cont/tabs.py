@@ -2552,6 +2552,7 @@ class CryoChamberTab(Tab):
             panel.btn_switch_imaging.Hide()
             panel.btn_switch_coating.Hide()
             panel.btn_switch_align.Hide()
+            panel.btn_switch_zero_tilt_imaging.Hide()
             panel.lbl_milling_angle.Hide()
             panel.btn_switch_advanced.Hide()
             panel.ctrl_rx.Hide()

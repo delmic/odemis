@@ -2029,3 +2029,8 @@ class FeatureOverviewView(FeatureView):
         self.show_crosshair.value = False
         self.mpp.value = 10e-6
         self.mpp.range = (1e-10, 1)
+
+    def _on_stage_pos(self, pos):
+        # we DON'T want to recenter the viewports whenever the stage moves
+        # (contrarily to the standard MicroscopeView/FeatureView)
+        pass
