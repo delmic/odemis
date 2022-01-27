@@ -34,6 +34,7 @@ from concurrent import futures
 from concurrent.futures._base import CancelledError
 import logging
 import math
+from functools import partial
 
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
@@ -1813,7 +1814,7 @@ class FastEMOverviewAcquiController(object):
                 # Try acquiring the other
                 continue
 
-            f.add_done_callback(lambda f: self.on_acquisition_done(f, num=num))
+            f.add_done_callback(partial(self.on_acquisition_done, num=num))
             acq_futures[f] = t
 
         if acq_futures:
