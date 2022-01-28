@@ -34,6 +34,7 @@ from unittest.mock import Mock
 import numpy
 
 import odemis
+from fastem_calibrations import configure_hw
 from odemis import model
 from odemis.acq import fastem, stream
 from odemis.util import test, img
@@ -41,7 +42,7 @@ from odemis.util import test, img
 # * TEST_NOHW = 1: not connected to anything => skip most of the tests
 # * TEST_NOHW = 0: connected to the real hardware or simulator
 # technolution_asm_simulator/simulator2/run_the_simulator.py
-TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default is HW/simulator testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default is HW/simulator testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -165,6 +166,7 @@ class TestFastEMROA(unittest.TestCase):
                                self.descanner,
                                self.mppc
                                )
+
         cell_res = self.mppc.cellCompleteResolution.value
         dwell_time = self.multibeam.dwellTime.value
         flyback = self.descanner.physicalFlybackTime.value  # extra time per line scan
@@ -291,6 +293,7 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.descanner,
                                self.mppc
                                )
+
         path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_field_indices")
         f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
                            self.ccd, self.beamshift, self.lens)
@@ -494,6 +497,9 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                           self.beamshift, self.lens,
                                           roa, path=None, future=None)
 
+            # Set the _pos_first_tile, which would normally be set in the run function.
+            task._pos_first_tile = task.get_pos_first_tile()
+
             # Verify that compared to the top left corner of the ROA, the stage
             # position is located half a field to the bottom right.
             task.field_idx = (0, 0)  # (0, 0) is the index of the first field
@@ -502,7 +508,9 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             expected_position = (xmin + res_x / 2 * px_size_x,
                                  ymax - res_x / 2 * px_size_y)  # [m]
             actual_position = task.get_abs_stage_movement()  # [m]
+            actual_position_first_tile = task.get_pos_first_tile()  # [m]
             numpy.testing.assert_allclose(actual_position, expected_position)
+            numpy.testing.assert_allclose(actual_position, actual_position_first_tile)
 
             # Verify that compared to the bottom right corner of the ROA, the stage
             # position is located half a field to the top left.
@@ -531,6 +539,76 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                  ymin + res_x / 2 * px_size_y)  # [m]
             actual_position = task.get_abs_stage_movement()  # [m]
             numpy.testing.assert_allclose(actual_position, expected_position)
+
+    def test_pre_calibrate(self):
+        """
+        Test the ASM settings are unchanged after running the pre-calibrations, except the descanner scan offset.
+        """
+        res_x, res_y = self.multibeam.resolution.value  # single field size
+        px_size_x, px_size_y = self.multibeam.pixelSize.value
+
+        x_fields = 5
+        y_fields = 8
+
+        # The coordinates of the ROA in meters.
+        xmin, ymin, xmax, ymax = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)
+        coordinates = (xmin, ymin, xmax, ymax)  # in m
+
+        # Create an ROA with the coordinates of the field.
+        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa = fastem.FastEMROA(roa_name, coordinates, None,
+                               self.asm, self.multibeam, self.descanner,
+                               self.mppc)
+
+        task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
+                                      self.mppc, self.stage, self.ccd,
+                                      self.beamshift, self.lens,
+                                      roa, path=None, future=None, pre_calibrate=True)
+
+        self.descanner.updateMetadata({model.MD_SCAN_GAIN: (5000, 5000)})
+
+        asm_config_orig = configure_hw.get_config_asm(self.multibeam, self.descanner, self.mppc)
+        exception = task.pre_calibrate()
+        asm_config_current = configure_hw.get_config_asm(self.multibeam, self.descanner, self.mppc)
+        self.assertIsNone(exception)
+
+        # Verify that all settings, except the descanner scan offset, stay the same after running the pre-calibrations.
+        for component, settings in asm_config_current.items():
+            for va, value in settings.items():
+                if va == 'scanOffset' and component == 'descanner':
+                    # image translation pre-alignment changes the descanner offset, therefore it has changed.
+                    continue
+                self.assertEqual(asm_config_orig[component][va], value)
+
+    def test_get_pos_first_tile(self):
+        """Test that the position of the first tile is calculated correctly for a varying number of fields."""
+        res_x, res_y = self.multibeam.resolution.value  # single field size
+        px_size_x, px_size_y = self.multibeam.pixelSize.value
+
+        # Loop over different ROA sizes by varying the number of fields in x and y.
+        for x_fields, y_fields in zip((1, 2, 40, 34, 5), (1, 22, 43, 104, 25)):
+            # The coordinates of the ROA in meters.
+            xmin, ymin, xmax, ymax = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)
+            coordinates = (xmin, ymin, xmax, ymax)  # in m
+
+            # Create an ROA with the coordinates of the field.
+            roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+            roa = fastem.FastEMROA(roa_name, coordinates, None,
+                                   self.asm, self.multibeam, self.descanner,
+                                   self.mppc)
+
+            task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
+                                          self.mppc, self.stage, self.ccd,
+                                          self.beamshift, self.lens,
+                                          roa, path=None, future=None)
+
+            pos_first_tile_actual = task.get_pos_first_tile()
+
+            # The position of the first tile is expected to be to the center position of the top left corner tile
+            # of the ROA.
+            pos_first_tile_expected = (xmin + res_x / 2 * px_size_x,
+                                       ymax - res_y / 2 * px_size_y)
+            self.assertEqual(pos_first_tile_actual, pos_first_tile_expected)
 
 
 if __name__ == "__main__":
