@@ -54,7 +54,7 @@ import wx
 
 class TimelapsePlugin(Plugin):
     name = "Timelapse"
-    __version__ = "2.1"
+    __version__ = "2.2"
     __author__ = u"Éric Piel"
     __license__ = "Public domain"
 
@@ -99,7 +99,7 @@ class TimelapsePlugin(Plugin):
         self.numberOfAcquisitions.subscribe(self._update_exp_dur)
 
         # On SECOM/DELPHI, propose to only acquire the SEM at the end
-        if microscope.role in ("secom", "delphi"):
+        if microscope.role in ("secom", "delphi", "enzel"):
             self.vaconf["semOnlyOnLast"]["control_type"] = odemis.gui.CONTROL_CHECK
 
         self._dlg = None
@@ -186,6 +186,9 @@ class TimelapsePlugin(Plugin):
         tab_data = self.main_app.main_data.tab.value.tab_data_model
         if hasattr(tab_data, "acquisitionStreams"):
             acq_st = tab_data.acquisitionStreams
+            if isinstance(acq_st, model.VigilantAttribute):  # On ENZEL/METEOR, acquisitionStreams is a ListVA (instead of a set)
+                acq_st = acq_st.value
+
             # Discard the acquisition streams which are not visible
             ss = []
             for acs in acq_st:
@@ -209,9 +212,11 @@ class TimelapsePlugin(Plugin):
     def start(self):
         # Fail if the live tab is not selected
         tab = self.main_app.main_data.tab.value
-        if tab.name not in ("secom_live", "sparc_acqui"):
+        if tab.name not in ("secom_live", "sparc_acqui", "cryosecom-localization"):
+            available_tabs = self.main_app.main_data.tab.choices.values()
+            exp_tab_name = "localization" if "cryosecom-localization" in available_tabs else "acquisition"
             box = wx.MessageDialog(self.main_app.main_frame,
-                       "Timelapse acquisition must be done from the acquisition stream.",
+                       "Timelapse acquisition must be done from the %s tab." % (exp_tab_name,),
                        "Timelapse acquisition not possible", wx.OK | wx.ICON_STOP)
             box.ShowModal()
             box.Destroy()
