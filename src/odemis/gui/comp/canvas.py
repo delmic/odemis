@@ -1598,7 +1598,7 @@ class DraggableCanvas(BitmapCanvas):
         if CAN_DRAG in self.abilities and key in self._key_to_move:
             move = self._key_to_move[key]
             if evt.ShiftDown(): # softer
-                move = tuple(s / 8 for s in move)
+                move = tuple(s * 0.1 for s in move)
 
             # convert HFW ratio to pixels
             hfw_px = self.ClientSize.x
@@ -1608,8 +1608,11 @@ class DraggableCanvas(BitmapCanvas):
                 return
 
             self.shift_view(move_px)
-        else:
-            super(DraggableCanvas, self).on_char(evt)
+
+            # Return (without "skipping" the event) to indicate the event has been handled
+            return
+
+        super(DraggableCanvas, self).on_char(evt)
 
     def shift_view(self, shift):
         """ Moves the position of the view by a delta

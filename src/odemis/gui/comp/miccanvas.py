@@ -704,12 +704,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Powermate knob rotation processor """
 
         if CAN_FOCUS in self.abilities:
-            # Stop the clear timer if one is running
-            if self.focus_timer is not None:
-                self.focus_timer.Stop()
-
-            if not self._focus_overlay:
-                self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
+            self._show_focus_overlay_timed()
 
             change = evt.step_value * 2  # magic constant that feels fast enough
             if evt.ShiftDown():
@@ -717,13 +712,25 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
             self.on_extra_axis_move(1, change)
 
-            # Set a timer to clear the overlay in x seconds
-            self.focus_timer = wx.CallLater(5000, self._clear_knob_focus)
-
         super(DblMicroscopeCanvas, self).on_knob_rotate(evt)
 
-    def _clear_knob_focus(self):
-        """ Clear the focus overlay after the knob focus timer has ran out """
+    def _show_focus_overlay_timed(self):
+        """
+        Show the focus overlay for a brief time (5s).
+        If it's already shown, extends the duration it is shown.
+        """
+        # Stop the clear timer if one is running
+        if self.focus_timer is not None:
+            self.focus_timer.Stop()
+
+        if not self._focus_overlay:
+            self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
+
+        # Set a timer to clear the overlay in x seconds
+        self.focus_timer = wx.CallLater(5000, self._hide_focus_overlay)
+
+    def _hide_focus_overlay(self):
+        """ Clear the focus overlay after the focus timer has ran out """
         if self._focus_overlay:
             self._focus_overlay.clear_shift()
         self.focus_timer = None
@@ -739,7 +746,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         change = evt.GetWheelRotation() / evt.GetWheelDelta()
         if evt.ShiftDown():
-            change *= 0.2  # softer
+            change *= 0.1  # softer
 
         if evt.CmdDown():  # = Ctrl on Linux/Win or Cmd on Mac
             ratio = self.view.merge_ratio.value + (change * 0.1)
@@ -752,23 +759,43 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         super(DblMicroscopeCanvas, self).on_wheel(evt)
 
+    _key_to_zoom = {
+        ord("+"): 1,  # scale, => FoV x 2
+        ord("="): 1,  # On US keyboards, = is the same key as +, but without shift
+        ord("-"):-1,  # scale, => FoV / 2
+        ord("_"):-1,  # On US keyboards, _ is the same key as -, but with shift
+    }
+
+    _key_to_focus = {
+        wx.WXK_PAGEUP: 10,  # px
+        wx.WXK_PAGEDOWN:-10,  # px
+    }
+
     def on_char(self, evt):
         """ Process a key stroke """
 
-        if CAN_ZOOM in self.abilities:
-            key = evt.GetKeyCode()
-            change = 1
-
+        ukey = evt.GetUnicodeKey()
+        if CAN_ZOOM in self.abilities and ukey in self._key_to_zoom:
+            change = self._key_to_zoom[ukey]
             if evt.ShiftDown():
                 block_on_zero = True
-                change *= 0.2  # softer
+                change *= 0.1  # softer
             else:
                 block_on_zero = False
 
-            if key == ord("+"):
-                self.Zoom(change, block_on_zero)
-            elif key == ord("-"):
-                self.Zoom(-change, block_on_zero)
+            self.Zoom(change, block_on_zero)
+            return
+
+        key = evt.GetKeyCode()
+        if CAN_FOCUS in self.abilities and key in self._key_to_focus:
+            self._show_focus_overlay_timed()
+
+            change = self._key_to_focus[key]
+            if evt.ShiftDown():
+                change *= 0.1  # softer
+
+            self.on_extra_axis_move(1, change)
+            return
 
         super(DblMicroscopeCanvas, self).on_char(evt)
 
