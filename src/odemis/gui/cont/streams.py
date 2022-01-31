@@ -632,6 +632,7 @@ class StreamController(object):
         # that there is no data, but the button worked fine.
         md_frame = self.stream_panel.create_text_frame(u"Metadata of %s" % self.stream.name.value, text)
         md_frame.ShowModal()
+        md_frame.Destroy()
 
     # Panel state methods
 
