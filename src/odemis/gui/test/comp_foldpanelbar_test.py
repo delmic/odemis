@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import unittest
-
 import wx
 
 import odemis.gui.comp.foldpanelbar as fpb
@@ -236,6 +235,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
     def test_foldpanel_manipulation(self):
 
         appfpb = self.app.test_frame.fpb
+        self.app.test_frame.SetSize((400, 400))
+        self.app.test_frame.Layout()
         fpb_height = appfpb.BestSize.GetHeight()
 
         # Add an extra fold panel
@@ -259,7 +260,7 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(appfpb.has_vert_scrollbar(), False)
         self.assertEqual(appfpb.has_horz_scrollbar(), False)
 
-        for i in range(6):
+        for i in range(16):
             new_panel.add_item(wx.StaticText(new_panel, new_panel.GetId(), "ADDED LABEL %d" % i))
 
         test.gui_loop(0.1)
@@ -268,13 +269,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(appfpb.has_vert_scrollbar(), True)
         self.assertEqual(appfpb.has_horz_scrollbar(), False)
 
-        new_panel.add_item(wx.StaticText(new_panel, new_panel.GetId(), "ADDED LABEL"))
-        new_panel.add_item(wx.StaticText(new_panel, new_panel.GetId(), "ADDED LABEL"))
-
-        test.gui_loop(0.1)
-
-        # 10 Child windows in the new panel
-        self.assertEqual(len(new_panel._container.GetChildren()), 9)
+        # 1 + 16 child windows in the new panel
+        self.assertEqual(len(new_panel._container.GetChildren()), 17)
 
         # 4 fold panels total in the bar
         self.assertEqual(len(appfpb.GetChildren()), 4)
@@ -302,24 +298,11 @@ class FoldPanelBarTestCase(test.GuiTestCase):
 
         new_labels = []
 
-        # Normally, 5 children
-        for dummy in range(5):
+        # Add 16 more children
+        for dummy in range(16):
             item = wx.StaticText(top_panel, top_panel.GetId(), "ADDED LABEL")
             top_panel.add_item(item)
             new_labels.append(item)
-
-        test.gui_loop(0.1)
-
-        # No scrollbar yet, but almost full (normally)
-        self.assertEqual(appfpb.has_vert_scrollbar(), False, false_pos_warn)
-        self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
-
-        test.gui_loop(0.1)
-
-        # One last "drop" to make the scrollbar appear
-        item = wx.StaticText(top_panel, top_panel.GetId(), "ADDED LABEL")
-        top_panel.add_item(item)
-        new_labels.append(item)
 
         test.gui_loop(0.1)
 
@@ -327,8 +310,8 @@ class FoldPanelBarTestCase(test.GuiTestCase):
         self.assertEqual(appfpb.has_vert_scrollbar(), True, false_pos_warn)
         self.assertEqual(appfpb.has_horz_scrollbar(), False, false_pos_warn)
 
-        # Count children of the top fold panel: 2 labels and 5 added labels: 7 total
-        self.assertEqual(len(top_panel._container.GetChildren()), 8)
+        # Count children of the top fold panel: 2 labels and 16 added labels: 18 total
+        self.assertEqual(len(top_panel._container.GetChildren()), 18)
 
         new_labels.reverse()
         for label in new_labels:
