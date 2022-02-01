@@ -204,6 +204,8 @@ class ViewPortController(object):
                 self._toolbar.enable_button(model.TOOL_ACT_ZOOM_FIT, can_fit)
 
         for vp in self._viewports:
+            if vp is viewport:
+                continue
             vp.SetFocus(False)
             vp.Refresh()
         viewport.SetFocus(True)
