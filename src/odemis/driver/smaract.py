@@ -1813,7 +1813,7 @@ class FakeMC_5DOF_DLL(object):
             # adjust internal range with the requested one
             for a, ad in axes.items():
                 orig_rng = self._range[a]
-                self._range[a] = (min(orig_rng[0], ad['range'][0]), max(orig_rng[1], ad['range'][1]))
+                self._range[a] = (max(orig_rng[0], ad['range'][0]), min(orig_rng[1], ad['range'][1]))
 
         self.stopping = threading.Event()
 
