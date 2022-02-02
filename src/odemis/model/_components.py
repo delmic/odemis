@@ -635,6 +635,11 @@ class DigitalCamera(with_metaclass(ABCMeta, Detector)):
         self.depthOfField = _vattributes.FloatContinuous(1e-6, range=(0, 1e9),
                                                          unit="m", readonly=True)
 
+        # Microscope spot size. This is equivalent to the standard deviation of
+        # the Gaussian approximation of a fluorescence microscope point spread
+        # function, measured in no. of pixels of the camera. This value can be
+        # used as a characteristic size parameter when filtering an image prior
+        # to spot detection.
         self.spotSize = _vattributes.FloatContinuous(1, range=(0, 1e9),
                                                      unit="px", readonly=True)
 
