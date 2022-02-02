@@ -34,7 +34,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 # arguments used for the creation of basic components
 CONFIG = {"name": "Lakeshore Test",
@@ -122,4 +122,3 @@ class TestLakeshore(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

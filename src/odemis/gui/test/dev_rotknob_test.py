@@ -32,7 +32,7 @@ from odemis.gui.evt import EVT_KNOB_ROTATE
 import odemis.gui.test as test
 
 # Export TEST_NOHW=1 to indicate no hardware present is not a failure
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 test.goto_manual()
 

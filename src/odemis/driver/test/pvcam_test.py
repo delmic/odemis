@@ -33,7 +33,7 @@ from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchr
 logging.getLogger().setLevel(logging.DEBUG)
 
 # Export TEST_NOHW=1 to prevent using the real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 CLASS = pvcam.PVCam
 # device can also be "rspiusb", but 0 is more generic
@@ -116,4 +116,3 @@ if __name__ == '__main__':
 #
 #p._setStaticSettings()
 #p.Reinitialize()
-
