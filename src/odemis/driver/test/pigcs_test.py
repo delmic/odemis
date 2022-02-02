@@ -41,7 +41,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 if os.name == "nt":
     PORT = "COM1"
@@ -725,4 +725,3 @@ if __name__ == "__main__":
 #MVR 1 1.0
 #MAC END
 #MAC START NA
-

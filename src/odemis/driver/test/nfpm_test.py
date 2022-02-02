@@ -30,7 +30,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 CLASS = nfpm.PM8742
 KWARGS = dict(name="test", role="fiber-align", address="autoip",
@@ -317,4 +317,3 @@ class TestActuator(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

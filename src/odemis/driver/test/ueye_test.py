@@ -36,7 +36,7 @@ from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchr
 logging.getLogger().setLevel(logging.DEBUG)
 
 # Export TEST_NOHW=1 to prevent using the real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 CLASS = ueye.Camera
 KWARGS = dict(name="camera", role="ccd", device=None, transp=[2, -1])
@@ -101,5 +101,3 @@ class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-
-

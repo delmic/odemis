@@ -39,7 +39,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 # * TEST_NOHW = 1: use simulator (asm/sam and xt adapter simulators need to be running)
 # * TEST_NOHW = 0: connected to the real hardware (backend needs to be running)
 # technolution_asm_simulator/simulator2/run_the_simulator.py
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default is HW testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default is HW testing
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 FASTEM_CONFIG = CONFIG_PATH + "sim/fastem-sim-asm.odm.yaml"

@@ -29,7 +29,7 @@ logger = logging.getLogger().setLevel(logging.DEBUG)
 # Test using the hardware
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 CLASS = blinkstick.WhiteLed
 KWARGS = dict(name="test", role="light", max_power=1.0, inversed=True)

@@ -32,7 +32,7 @@ CLASS = tlaptmf.MFF
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 KWARGS_SIM = dict(name="test", role="switch", port="/dev/fake", axis="r",
                   inverted=["r"], positions=[[0, "off"], [1, "on"]])

@@ -27,7 +27,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 if TEST_NOHW:
     MXXPORTS = "/dev/fakeone"  # TODO: no simulator

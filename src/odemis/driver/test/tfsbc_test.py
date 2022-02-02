@@ -29,7 +29,7 @@ import logging
 import os
 import time
 
-TEST_NOHW = (os.environ.get("TEST_NOHW", 0) != 0)  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -140,4 +140,3 @@ class TestBeamShiftController(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-
