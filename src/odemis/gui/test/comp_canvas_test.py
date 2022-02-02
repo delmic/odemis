@@ -24,6 +24,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
+import math
+
 import numpy
 from odemis import model
 from odemis.acq.stream import RGBStream
@@ -489,6 +491,11 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         self.view.addStream(stream1)
         self.view.addStream(stream2)
 
+        # Ensure the merge ratio of the images is 0.5
+        ratio = 0.5
+        self.view.merge_ratio.value = ratio
+        self.assertEqual(ratio, self.view.merge_ratio.value)
+
         test.gui_loop(0.5)
 
         self.canvas.shift_view((-200.5, 199.5))
@@ -497,21 +504,22 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
 
         result_im = get_image_from_buffer(self.canvas)
         px2 = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
-        # center pixel, 1/3 green, 2/3 blue
-        self.assertEqual(px2, (0, 76, 179))
+        # the center pixel should be half green and half blue
+        self.assertEqual(px2, (0, math.ceil(255 / 2), math.floor(255 / 2)))
         px2 = get_rgb(result_im, result_im.Width // 2 - 30, result_im.Height // 2 - 30)
-        # background of the images, 1/3 green, 2/3 red
-        self.assertEqual(px2, (179, 76, 0))
+        # (-30, -30) pixels away from the center, the background of the images,
+        # should be half green and half red
+        self.assertEqual(px2, (math.floor(255 / 2), math.ceil(255 / 2), 0))
 
         self.view.mpp.value = mpp
 
         shift = (63, 63)
         self.canvas.shift_view(shift)
 
-        # merge the images
-        ratio = 0.5
+        # change the merge ratio of the images, take 1/3 of the first image and 2/3 of the second
+        ratio = 1 / 3
         self.view.merge_ratio.value = ratio
-        # self.assertEqual(ratio, self.view.merge_ratio.value)
+        self.assertEqual(ratio, self.view.merge_ratio.value)
 
         # it's supposed to update in less than 0.5s
         test.gui_loop(0.5)
@@ -519,21 +527,21 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         result_im = get_image_from_buffer(self.canvas)
         px = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
         # center pixel, now pointing to the background of the larger squares
-        # half red, half green
-        self.assertEqual(px, (127, 128, 0))
+        # 2/3 red, 1/3 green
+        self.assertEqual(px, (255 * 2/3, 255 / 3, 0))
 
         # copy the buffer into a nice image here
         result_im = get_image_from_buffer(self.canvas)
 
         px1 = get_rgb(result_im, result_im.Width // 2 + shift[0], result_im.Height // 2 + shift[1])
-        self.assertEqual(px1, (0, 128, 127))  # Ratio is at 0.5, so 255 becomes 128
+        self.assertEqual(px1, (0, 255 / 3, 255 * 2/3))
 
         px2 = get_rgb(result_im,
                       result_im.Width // 2 + 200 + shift[0],
                       result_im.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 0))
 
-        # remove first picture
+        # remove first picture with a green background, only the red image with blue center is left
         self.view.removeStream(stream1)
         test.gui_loop(0.5)
 
@@ -592,27 +600,33 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         im2.metadata[model.MD_DIMS] = "YXC"
         stream2 = RGBStream("s2", im2)
 
-        self.view.addStream(stream1)
-        self.view.addStream(stream2)
+        self.view.addStream(stream1)  # completely green background and a larger image than stream2
+        self.view.addStream(stream2)  # red background with blue square at the center
+
+        # Ensure the merge ratio of the images is 0.5
+        ratio = 0.5
+        self.view.merge_ratio.value = ratio
+        self.assertEqual(ratio, self.view.merge_ratio.value)
 
         self.canvas.shift_view((-200.5, 199.5))
         test.gui_loop(0.5)
 
         result_im = get_image_from_buffer(self.canvas)
         px2 = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
-        # center pixel, 2/3 green, 1/3 blue. The green image is the largest image
-        self.assertEqual(px2, (0, 179, 76))
+        # the center pixel should be half green and half blue
+        self.assertEqual(px2, (0, math.floor(255 / 2), math.ceil(255 / 2)))
         px2 = get_rgb(result_im, result_im.Width // 2 - 30, result_im.Height // 2 - 30)
-        # background of the images, 2/3 green, 1/3 red
-        self.assertEqual(px2, (76, 179, 0))
+        # (-30, -30) pixels away from the center, the background of the images,
+        # should be half green and half red
+        self.assertEqual(px2, (math.ceil(255 / 2), math.floor(255 / 2), 0))
 
         self.view.mpp.value = mpp
 
         shift = (63, 63)
         self.canvas.shift_view(shift)
 
-        # merge the images
-        ratio = 0.5
+        # change the merge ratio of the images, take 1/3 of the first image and 2/3 of the second
+        ratio = 1 / 3
         self.view.merge_ratio.value = ratio
         self.assertEqual(ratio, self.view.merge_ratio.value)
 
@@ -621,14 +635,17 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         result_im = get_image_from_buffer(self.canvas)
         px = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
         # center pixel, now pointing to the background of the larger squares
-        # half red, half green
-        self.assertEqual(px, (128, 127, 0))
+        # 1/3 red, 2/3 green
+        self.assertEqual(px, (255 / 3, 255 * 2 / 3, 0))
 
         # copy the buffer into a nice image here
         result_im = get_image_from_buffer(self.canvas)
 
+        # because the canvas is shifted, getting the rgb value of the new center + shift
+        # should be the old center rgb value.
         px1 = get_rgb(result_im, result_im.Width // 2 + shift[0], result_im.Height // 2 + shift[1])
-        self.assertEqual(px1, (0, 127, 128))  # Ratio is at 0.5, so 255 becomes 128
+        # the pixel should point to the old center values, 2/3 green and 1/3 blue
+        self.assertEqual(px1, (0, 255 * 2 / 3, 255 / 3))
 
         px2 = get_rgb(result_im,
                       result_im.Width // 2 + 200 + shift[0],
@@ -657,9 +674,10 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         # result_im.SaveFile('tmp4.bmp', wx.BITMAP_TYPE_BMP)
         self.canvas.fit_view_to_content(recenter=True)
         # only .mpp changes, but the image keeps centered
-        exp_mpp = (mpp * im2.shape[0]) / self.canvas.ClientSize[0]
-        # TODO: check the precision
-        self.assertAlmostEqual(exp_mpp, self.view.mpp.value)  # ,6
+        exp_mpp = (mpp * im2.shape[1]) / self.canvas.ClientSize[1]
+        # The expected mpp is around 5e-6 m/px, therefore the default of checking
+        # 7 places does not test the required precision.
+        self.assertAlmostEqual(exp_mpp, self.view.mpp.value, places=16)
         numpy.testing.assert_almost_equal(init_pos, self.view.view_pos.value)
         test.gui_loop(0.5)
 
@@ -738,11 +756,12 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         result_im = get_image_from_buffer(self.canvas)
         # result_im.SaveFile('big.bmp', wx.BITMAP_TYPE_BMP)
         px2 = get_rgb(result_im, result_im.Width // 2, result_im.Height // 2)
-        # center pixel, 1/3 green, 2/3 blue. The red image is the largest image
-        self.assertEqual(px2, (0, 76, 179))
+        # center pixel, half green, half blue. The red image is the largest image
+        self.assertEqual(px2, (0, math.ceil(255 / 2), math.floor(255 / 2)))
         px2 = get_rgb(result_im, result_im.Width // 2 - 30, result_im.Height // 2 - 30)
-        # background of the images, 1/3 green, 2/3 red
-        self.assertEqual(px2, (179, 76, 0))
+        # background of the images, half green, half red
+        self.assertEqual(px2, (math.floor(255 / 2), math.ceil(255 / 2), 0))
+
 
 if __name__ == "__main__":
     unittest.main()
