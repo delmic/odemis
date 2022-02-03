@@ -639,7 +639,8 @@ class DigitalCamera(with_metaclass(ABCMeta, Detector)):
         # the Gaussian approximation of a fluorescence microscope point spread
         # function, measured in number of pixels of the camera. This value can
         # be used as a characteristic size parameter when filtering an image
-        # prior to spot detection.
+        # prior to spot detection. To convert this to the FWHM diameter of a
+        # spot multiply by `2 * sqrt(log(4)) ≈ 2.3548`
         self.spotSize = _vattributes.FloatContinuous(1, range=(0, 1e9),
                                                      unit="px", readonly=True)
 
