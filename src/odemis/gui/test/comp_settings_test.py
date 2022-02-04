@@ -64,7 +64,8 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.settings_panel.add_readonly_field("No value")
         self.settings_panel.add_readonly_field("No select", "!@#$^%$#%", False)
         self.settings_panel.add_readonly_field("Can select", ":) :) :)")
-        self.assertEqual(len(self.settings_panel.GetChildren()), 6)
+        # There are 7 children, because each add_readonly_field adds 2 children and set_default_message adds 1 child.
+        self.assertEqual(len(self.settings_panel.GetChildren()), 7)
         gui_loop(0.5)
 
     def test_divider(self):
@@ -72,7 +73,8 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.settings_panel.add_readonly_field("Above the divider")
         self.settings_panel.add_divider()
         self.settings_panel.add_readonly_field("Below the divider")
-        self.assertEqual(len(self.settings_panel.GetChildren()), 3)
+        # There are 5 children, because each add_readonly_field adds 2 children and add_divider adds 1 child.
+        self.assertEqual(len(self.settings_panel.GetChildren()), 5)
         gui_loop(0.5)
 
     def test_add_text_field(self):
@@ -80,6 +82,7 @@ class SettingsPanelTestCase(test.GuiTestCase):
         self.settings_panel.add_text_field("Read only", "value", True)
         self.settings_panel.add_divider()
         self.settings_panel.add_text_field("Writable", "other value")
+        # There are 5 children, because each add_text_field adds 2 children and add_divider adds 1 child.
         self.assertEqual(len(self.settings_panel.GetChildren()), 5)
         gui_loop(0.5)
 
