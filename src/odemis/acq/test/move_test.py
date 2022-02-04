@@ -41,7 +41,7 @@ ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 
 
-class TestCryoMove(unittest.TestCase):
+class TestEnzelMove(unittest.TestCase):
     """
     Test cryoSwitchSamplePosition and cryoTiltSample functions
     """
@@ -256,7 +256,7 @@ class TestCryoMove(unittest.TestCase):
         pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
         self.assertTrue(pos_label in (LOADING_PATH, UNKNOWN))
         # Move to loading position
-        self.test_move_aligner_to_target(LOADING)
+        self.check_move_aligner_to_target(LOADING)
 
         # Move to imaging position and cancel the movement before reaching there
         f = cryoSwitchAlignPosition(IMAGING)
@@ -283,15 +283,15 @@ class TestCryoMove(unittest.TestCase):
 
         # Move to alignment position
         cryoSwitchAlignPosition(LOADING).result()
-        self.test_move_aligner_to_target(ALIGNMENT)
+        self.check_move_aligner_to_target(ALIGNMENT)
 
         # from alignment to loading
         cryoSwitchAlignPosition(LOADING).result()
 
         # Move to imaging position
-        self.test_move_aligner_to_target(IMAGING)
+        self.check_move_aligner_to_target(IMAGING)
 
-    def test_move_aligner_to_target(self, target):
+    def check_move_aligner_to_target(self, target):
         f = cryoSwitchAlignPosition(target)
         f.result()
         pos_label = getCurrentAlignerPositionLabel(self.aligner.position.value, self.aligner)
