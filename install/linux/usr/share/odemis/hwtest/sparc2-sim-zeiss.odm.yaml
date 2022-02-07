@@ -76,8 +76,7 @@ SPARC2: {
 # Y -> AO 1
 # Ground -> AO GND
 "SEM E-beam": {
-    # Internal child of SEM ExtXY, so no class
-    creator: "SEM Scan Interface",
+    # Internal child of SEM Scan Interface, so no class
     role: null,
     init: {
         channels: [0, 1],
@@ -124,17 +123,17 @@ SPARC2: {
     creator: "SEM via API",
     role: null,
     init: {
-        hfw_nomag: 0.114,  # m, theoretical HFW if mag == 1x, TODO: depends on the voltages
+        hfw_nomag: 0.114,  # m, theoretical HFW if mag == 1x
     },
 }
 
 "EBeam Focus": {
-    # Internal child of SUIPSEM, so no class
+    # Internal child of zeiss.SEM, so no class
     role: ebeam-focus,
 }
 
 "Sample Stage": {
-    # Internal child of SUIPSEM, so no class
+    # Internal child of zeiss.SEM, so no class
     role: stage,
     affects: ["SEM E-beam full"],
     init: {
