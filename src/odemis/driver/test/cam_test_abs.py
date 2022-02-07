@@ -742,11 +742,20 @@ class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
             except queue.Empty:
                 self.fail("No data %d received after %s s" % (i, duration))
 
-        # Now synchronized
-        # Note that it's hard to know when the synchronization switched, so we
-        # don't know how many triggers need to be sent. At most number_acq - 2.
+        # Now synchronized => Acquisition should be halted
+        # Note that there might have been a couple of extra images received, and
+        # that's fine. It just a sign that the test case went a little slower than
+        # the camera frame rate.
         self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
-        for i in range(2, number_acq):
+
+        time.sleep(0.2)
+        after_sync_left = self.ccd_left
+        time.sleep(1)
+        self.assertEqual(after_sync_left, self.ccd_left)
+        self._data = queue.Queue()  # Reset the queue
+
+        # Let's start again
+        for i in range(self.ccd_left):
             self.ccd.softwareTrigger.notify()
             try:
                 self._data.get(timeout=duration + 10)
