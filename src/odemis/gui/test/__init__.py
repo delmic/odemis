@@ -223,7 +223,7 @@ class GuiTestCase(unittest.TestCase):
     def create_cryo_tab_model(self):
         main = gmodel.MainGUIData(None)  # no microscope backend
         # add role, features and currentFeature directly
-        main.role = "cryo"
+        main.role = "enzel"
         main.features = omodel.ListVA()
         main.currentFeature = omodel.VigilantAttribute(None)
         tab = gmodel.CryoGUIData(main)
