@@ -983,9 +983,9 @@ class DichotomyOverlay(base.ViewOverlay):
 
         # Change the cursor into a hand if the quadrant being hovered over
         # can be selected. Use the default cursor otherwise
-        if idx >= self.max_len:
+        if idx is None:
             self.cnvs.reset_dynamic_cursor()
-            idx, quad = (None, None)
+            idx, quad = None, None
         else:
             self.cnvs.set_dynamic_cursor(wx.CURSOR_HAND)
 
