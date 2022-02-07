@@ -635,14 +635,16 @@ class DigitalCamera(with_metaclass(ABCMeta, Detector)):
         self.depthOfField = _vattributes.FloatContinuous(1e-6, range=(0, 1e9),
                                                          unit="m", readonly=True)
 
-        # Microscope spot size. This is equivalent to the standard deviation of
-        # the Gaussian approximation of a fluorescence microscope point spread
-        # function, measured in number of pixels of the camera. This value can
-        # be used as a characteristic size parameter when filtering an image
-        # prior to spot detection. To convert this to the FWHM diameter of a
-        # spot multiply by `2 * sqrt(log(4)) ≈ 2.3548`
-        self.spotSize = _vattributes.FloatContinuous(1, range=(0, 1e9),
-                                                     unit="px", readonly=True)
+        # Size of the microscope's point spread function in pixels. This is
+        # equivalent to the standard deviation of the Gaussian approximation of
+        # a fluorescence microscope point spread function, measured in number
+        # of pixels of the camera. This value can be used as a characteristic
+        # size parameter when filtering an image prior to spot detection. To
+        # convert this to the full-width-half-maximum (FWHM) diameter of a spot
+        # multiply by `2 * sqrt(log(4)) ≈ 2.3548`
+        self.pointSpreadFunctionSize = _vattributes.FloatContinuous(
+            1, range=(0, 1e9), unit="px", readonly=True
+        )
 
         # To be overridden by a VA
         self.pixelSize = None  # (len(dim)-1 * float) size of a sensor pixel (in meters). More precisely it should be the average distance between the centres of two pixels.
@@ -655,7 +657,9 @@ class DigitalCamera(with_metaclass(ABCMeta, Detector)):
         mdf = self._metadata
 
         try:
-            pxs = self.pixelSize.value[0]  # pixel should be square
+            # NOTE: MD_PIXEL_SIZE changes with binning, whereas self.pixelSize is fixed.
+            pxs_sensor = self.pixelSize.value[0]  # pixel should be square
+            pxs_sample = mdf[_metadata.MD_PIXEL_SIZE][0]  # includes magnification and binning
             mag = mdf[_metadata.MD_LENS_MAG]
             na = mdf[_metadata.MD_LENS_NA]
             ri = mdf[_metadata.MD_LENS_RI]
@@ -670,18 +674,20 @@ class DigitalCamera(with_metaclass(ABCMeta, Detector)):
 
         try:
             # from https://www.microscopyu.com/articles/formulas/formulasfielddepth.html
-            dof = (l * ri) / na ** 2 + (ri * pxs) / (mag - na)
-            self.depthOfField._set_value(dof, force_write=True)
-        except TypeError:
-            logging.warning("Depth of field computed seems incorrect: %f m", dof)
+            dof = (l * ri) / na ** 2 + (ri * pxs_sensor) / (mag - na)
+            try:
+                self.depthOfField._set_value(dof, force_write=True)
+            except (IndexError, TypeError):
+                logging.warning("Depth of field computed seems incorrect: %f m", dof)
         except Exception:
             logging.warning("Failure to update the depth of field", exc_info=True)
 
         try:
-            sigma = (mag / pxs) * synthetic.psf_sigma_wffm(ri, na, l)
-            self.spotSize._set_value(sigma, force_write=True)
-        except TypeError:
-            logging.warning("Spot size computed seems incorrect: %f px", sigma)
+            sigma = synthetic.psf_sigma_wffm(ri, na, l) / pxs_sample
+            try:
+                self.pointSpreadFunctionSize._set_value(sigma, force_write=True)
+            except (IndexError, TypeError):
+                logging.warning("Spot size computed seems incorrect: %f px", sigma)
         except Exception:
             logging.warning("Failure to update the spot size", exc_info=True)
 
