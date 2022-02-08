@@ -14,7 +14,8 @@ FASTEM-sim: {
                "Beam Shift Controller", "Focus Tracker",
                "ASM", "MultiBeam Scanner", "Mirror Descanner", "MPPC",
                "Detector Rotator", "Optical Objective",
-               "Diagnostic Camera",  # "Navigation Camera",
+               "Diagnostic Camera", "DiagnosticCam Focus",
+               # "Navigation Camera",
                ],
 }
 
@@ -147,7 +148,7 @@ FASTEM-sim: {
       # X/Y: position of the scintillators
       # Z: useful range for the (auto) focus
       POS_ACTIVE_RANGE: {"x": [-25.e-3, 25.e-3], "y": [-25.e-3, 25.e-3], "z": [-85.e-6, 5.e-6]}, # m, min/max
-      FAV_POS_ACTIVE: {"z": -63.e-6}  # [m] Estimate for good focus position
+      FAV_POS_ACTIVE: {"z": -63.e-6}  # [m] Estimate for good focus position - autofocus starts here to search
     },
     affects: ["Diagnostic Camera", "MultiBeam Scanner XT", "MultiBeam Scanner", "MPPC"]
 }
@@ -326,12 +327,24 @@ FASTEM-sim: {
         exposureTime: 0.005, # s
     },
     metadata: {
-        # Factory calibration position in diagnostic camera pixels, where the multiprobe is visible on the diagnostic
-        # camera and the mppc detector.
-        FAV_POS_ACTIVE: {"x": 750, "y": 550}
+        # x and y: Factory calibration position in diagnostic camera pixels, where the multiprobe is visible on
+        # the diagnostic camera and the mppc detector.
+        # z: Estimate for good focus position for stage; choose different from stage metadata
+        # to better simulate the auto focusing procedure. Note: ONLY needed for simulator.
+        FAV_POS_ACTIVE: {"x": 750,  # [px_dc] good multiprobe position
+                         "y": 550,  # [px_dc] good multiprobe position
+                         "z": -43.e-6}  # [m] position of stage where the multiprobe is displayed in focus
     },
+    children: {focus: "DiagnosticCam Focus"}
 }
 
-
-
+"DiagnosticCam Focus": {
+    class: actuator.MultiplexActuator,
+    role: diagnostic-cam-focus,
+#    affects: ["SimCam"],
+    children: {"z": "Sample Stage in carrier coordinates"},
+    init: {
+        axes_map: {"z": "z"}
+    },
+}
 
