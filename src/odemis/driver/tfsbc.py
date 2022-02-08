@@ -160,12 +160,14 @@ class BeamShiftController(model.HwComponent):
     through the MD_CALIB metadata (a 4x2 tuple, 4x (float, float), xlower, xupper, ylower, yupper).
     """
 
-    def __init__(self, name, role, port=None, serialnum=None, **kwargs):
+    def __init__(self, name, role, port=None, serialnum=None, dependencies=None, **kwargs):
         """
         :param port (str): (e.g. "/dev/ttyUSB0") or pattern for port ("/dev/ttyUSB*"),
             "/dev/fake" will start the simulator
         :param serialnum (str): serial number of RS485 adapter
-        The connection can be specified by either port or serialnum, it's not needed to provide both.
+            The connection can be specified by either port or serialnum, it's not needed to provide both.
+        :param dependencies (dict str -> scanner):
+            scanner component -> name of the xt multibeam scanner component.
         """
         # .hwVersion, .swVersion not available
         model.HwComponent.__init__(self, name, role, **kwargs)
@@ -182,6 +184,9 @@ class BeamShiftController(model.HwComponent):
         self.shift = model.TupleContinuous((0, 0), range=((-1, -1), (1, 1)),
                                            cls=(int, float), unit="m",
                                            setter=self._setShift)
+
+        if dependencies:
+            self.updateMetadata({model.MD_CALIB: dependencies["scanner"].beamShiftTransformationMatrix.value})
 
     def _findDevice(self, port=None, serialnum=None):
         """
