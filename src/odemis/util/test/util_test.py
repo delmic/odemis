@@ -24,14 +24,12 @@ from __future__ import division, print_function
 from functools import partial
 import os
 import odemis
-from odemis import model
-from odemis.util import test, driver
+from odemis import model, util
 import logging
-from odemis import util
+import math
 from odemis.model import CancellableFuture
 from odemis.util import limit_invocation, TimeoutError, executeAsyncTask, \
-    perpendicular_distance, to_str_escape
-from odemis.util import timeout
+    perpendicular_distance, to_str_escape, test, driver, timeout
 import time
 import unittest
 import weakref
@@ -146,6 +144,46 @@ class AlmostEqualTestCase(unittest.TestCase):
                   }
         for i, eo in in_exp.items():
             o = util.almost_equal(*i)
+            self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
+
+    def test_rot_simple(self):
+        in_exp = {(0., 0): True,
+                  (-5, -5.): True,
+                  (1., 1. - 1e-9): True,
+                  (1., 1. - 1e-3): False,
+                  (1., 1. + 1e-3): False,
+                  (2 * math.pi, 6.28): False,
+                  (2 * math.pi, 4 * math.pi): True,
+                  (3 * math.pi, 5 * math.pi): True,
+                  (-2 * math.pi, 4 * math.pi): True,
+                  }
+        for i, eo in in_exp.items():
+            o = util.rot_almost_equal(*i)
+            self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
+
+    def test_rot_atol(self):
+        in_exp = {(0.1, 0, 0.2): True,
+                  (2 * math.pi, 6.28, 0.01): True,
+                  (2 * math.pi + 1e-6, 4 * math.pi, 10e-6): True,
+                  (3 * math.pi + 1e-6, 5 * math.pi, 10e-6): True,
+                  (-2 * math.pi - 1e-6, 4 * math.pi, 10e-6): True,
+                  (-2 * math.pi - 20e-6, 4 * math.pi, 10e-6): False,
+                  }
+        for i, eo in in_exp.items():
+            o = util.rot_almost_equal(*i)
+            self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
+
+    def test_rot_rtol(self):
+        in_exp = {(0.1, 0.11, 0.2): True,
+                  (0.1, 0.11, 0.01): False,
+                  (-0.1, -0.11, 0.01): False,
+                  (2 * math.pi, 6.28, 0.1): False,  # values very close from 0
+                  (3 * math.pi + 1e-6, 5 * math.pi, 0.01): True,  # values very far from 0
+                  (2001 * math.pi + 1e-6, 5 * math.pi, 0.01): True,
+                  (2000 * math.pi + 1e-6, 5 * math.pi, 0.01): False,
+                  }
+        for i, eo in in_exp.items():
+            o = util.rot_almost_equal(i[0], i[1], rtol=i[2])
             self.assertEqual(o, eo, "Failed to get correct output for %s" % (i,))
 
 
