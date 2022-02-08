@@ -23,7 +23,7 @@ from typing import Optional, Tuple
 import cv2
 import numpy
 import scipy.signal
-from odemis import model
+from odemis import model, util
 from odemis.util import img
 from odemis.util.peak_local_max import peak_local_max
 from odemis.util.transform import to_physical_space
@@ -482,7 +482,7 @@ def EstimateLatticeConstant(pos):
 
     # The angle between the two directions should be close to 90 degrees.
     alpha = numpy.math.atan2(numpy.linalg.norm(numpy.cross(*lattice_constants)), numpy.dot(*lattice_constants))
-    if abs(alpha - math.pi / 2) > math.radians(2.5):
+    if not util.rot_almost_equal(alpha, math.pi / 2, math.radians(2.5)):
         logging.warning('Estimated lattice angle differs from 90 degrees by '
                         'more than 2.5 degrees. Input data could be wrong')
     if numpy.linalg.det(lattice_constants) < 0.:

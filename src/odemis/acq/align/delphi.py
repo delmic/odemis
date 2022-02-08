@@ -29,7 +29,7 @@ import logging
 import math
 from numpy import array, linalg
 import numpy
-from odemis import model
+from odemis import model, util
 from odemis.acq.align import transform, spot, autofocus, FindOverlay
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
 from odemis.acq.drift import MeasureShift
@@ -522,8 +522,7 @@ def _DoDelphiCalibration(future, main_data):
             raise IOError("Unexpected scaling values calculated during"
                           " fine alignment: %s", iscale)
         irot = -trans_md[model.MD_ROTATION_COR] % (2 * math.pi)
-        irot_abs = abs((irot + math.pi) % (2 * math.pi) - math.pi)
-        if irot_abs > math.radians(10):
+        if not util.rot_almost_equal(irot, 0, atol=math.radians(10)):
             raise IOError("Unexpected rotation value calculated during"
                           " fine alignment: %s", irot)
         ishear = skew_md[model.MD_SHEAR_COR]
