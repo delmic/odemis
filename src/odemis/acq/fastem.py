@@ -5,7 +5,7 @@ Created on 19 Apr 2021
 
 @author: Philip Winkler, Éric Piel, Thera Pals, Sabrina Rossberger
 
-Copyright © 2021 Philip Winkler, Delmic
+Copyright © 2021-2022 Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -187,8 +187,10 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
     :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
     :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
     :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
-    :param stage: (actuator.ConvertStage) The stage in the corrected scan coordinate system, the x and y axes are
-        aligned with the x and y axes of the multiprobe and the multibeam scanner.
+    :param stage: (actuator.ConvertStage) The stage in the sample carrier coordinate system. The x and y axes are
+        aligned with the x and y axes of the ebeam scanner.
+        FIXME use: The stage in the corrected scan coordinate system, the x and y axes are
+            aligned with the x and y axes of the multiprobe and the multibeam scanner.
     :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
     :param lens: (static.OpticalLens) Optical lens component.
@@ -228,6 +230,10 @@ class AcquisitionTask(object):
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
         :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
         :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
+        :param stage: (actuator.ConvertStage) The stage in the sample carrier coordinate system. The x and y axes are
+            aligned with the x and y axes of the ebeam scanner.
+            FIXME use: The stage in the corrected scan coordinate system, the x and y axes are
+                aligned with the x and y axes of the multiprobe and the multibeam scanner.
         :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
         :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
         :param lens: (static.OpticalLens) Optical lens component.
@@ -593,34 +599,30 @@ class AcquisitionTask(object):
 
 
 ########################################################################################################################
-# Overview acquisition
+# Overview image acquisition
 
 # Fixed settings
-# We use a "legacy" resolution in XT, because has the advantage of having a more
-# square aspect ratio, compared to new resolutions like  1536 x 1024.
-TILE_RES = (1024, 884)  # px
-# Maximum FoV without seeing the pole-piece (with T1, immersion off).
-# Possibly, using the ETD could allow a slightly wider FoV.
-TILE_FOV_X = 1.5e-3  # m
-
 STAGE_PRECISION = 1e-6  # m, how far the stage may go from the requested position
-
-# Observed time it takes to acquire a tile with 1µs dwell time, for time estimation
-TIME_PER_TILE_1US = 4.7  # s/tile
 
 
 def acquireTiledArea(stream, stage, area, live_stream=None):
     """
-    :param stream: (SEMStream) Stream used for the acquisition.
-     It must have the detector and emitter connected to the TFS XT client detector and scanner.
-     It should be in focus.
-     It must NOT have the following local VAs: horizontalFoV. resolution, scale
-      (because the VAs of the hardware will be changed directly, and so they shouldn’t be changed by the stream).
-    :param stage: (Actuator). It should have axes "x" and "y", which should already be referenced.
-    :param area: (float, float, float, float) minx, miny, maxx, maxy:  coordinates of the overview region
-    :param live_stream: (StaticStream or None): StaticStream to be updated with
-       each tile acquired, to build up live the whole acquisition. NOT SUPPORTED YET.
-    : return: (ProgressiveFuture), acquisition future. It returns the complete DataArray.
+    Start an overview acquisition task for a given area.
+
+    :param stream: (SEMStream) The stream used for the acquisition.
+        It must have the detector and emitter connected to the TFS XT client detector and scanner.
+        It should be in focus.
+        It must NOT have the following local VAs: horizontalFoV, resolution, scale
+        (because the VAs of the hardware will be changed directly, and so they should not be changed by the stream).
+    :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
+        The x and y axes are aligned with the x and y axes of the ebeam scanner. Axes should already be referenced.
+    :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region
+        in the sample carrier coordinate system.
+    :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
+        to build up live the whole acquisition. NOT SUPPORTED YET.
+
+    :return: (ProgressiveFuture) Acquisition future object, NOT SUPPORTED YET which can be cancelled.
+             It returns the complete DataArray.
     """
     # Check the parameters
     if len(area) != 4:
@@ -654,30 +656,70 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
 
     est_dur = estimateTiledAcquisitionTime(sem_stream, stage, area)
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
+
+    # Connect the future to the task and run it in a thread.
+    # _run_overview_acquisition is executed by the executor and runs as soon as no other task is executed
     _executor.submitf(f, _run_overview_acquisition, f, sem_stream, stage, area, live_stream)
 
     return f
 
 
 def estimateTiledAcquisitionTime(stream, stage, area):
-    # TODO: fix function to limit the acquisition area so that the FoV is taken into account.
-    # t_estim = estimateTiledAcquisitionTime(stream, stage, area, overlap=0)
+    """
+    Estimate the time needed to acquire a full overview image. Calculate the
+    number of tiles needed for the requested area based on set dwell time and
+    resolution (number of pixels).
 
-    # For now, it's just simpler to hard-code the time spent per tile, and derive the total time based on it.
-    fov = (TILE_FOV_X, TILE_FOV_X * TILE_RES[1] / TILE_RES[0])
-    normalized_area = util.normalize_rect(area)
-    area_size = (normalized_area[2] - normalized_area[0],
-                 normalized_area[3] - normalized_area[1])
+    Note: "estimateTiledAcquisitionTime()" of the "_tiledacq.py" module cannot be used for a couple of reasons:
+    Firstly, the e-beam settings are not the current ones, but the one from the fastem_conf.
+    Secondly, the xt_client acquisition time is quite a bit longer than the settings suggests.
+    Therefore, we have an ad-hoc method here.
+
+    :param stream: (SEMstream) The stream used for the acquisition.
+    :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
+        The x and y axes are aligned with the x and y axes of the ebeam scanner. UNUSED: Can be used to take
+        speed of axes into account for time estimation.
+    :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region
+        in the sample carrier coordinate system.
+
+    :return: The estimated total acquisition time for the overview image in seconds.
+    """
+    # get the resolution per tile used during overview imaging
+    res = fastem_conf.SCANNER_CONFIG[fastem_conf.OVERVIEW_MODE]['resolution']
+    fov = fastem_conf.SCANNER_CONFIG[fastem_conf.OVERVIEW_MODE]['horizontalFoV']
+
+    # calculate area size
+    fov = (fov, fov * res[1] / res[0])
+    acquisition_area = util.normalize_rect(area)  # make sure order is l, b, r, t
+    area_size = (acquisition_area[2] - acquisition_area[0],
+                 acquisition_area[3] - acquisition_area[1])
+    # number of tiles
     nx = math.ceil(abs(area_size[0] / fov[0]))
     ny = math.ceil(abs(area_size[1] / fov[1]))
 
-    # TODO: compensate for longer dwell times => should be a A+Bx formula?
-    return nx * ny * TIME_PER_TILE_1US  # s
+    # add some overhead per tile for e.g. stage movement
+    overhead = 1  # [s]
+    # time per tile
+    acq_time_tile = res[0] * res[1] * stream.emitter.dwellTime.value + overhead  # [s]
+    # time for total overview image
+    acq_time_overview = nx * ny * acq_time_tile  # [s]
+
+    return acq_time_overview
 
 
 def _run_overview_acquisition(f, stream, stage, area, live_stream):
     """
-    :returns: (DataArray)
+    Runs the acquisition of one overview image (typically one scintillator).
+
+    :param f: (ProgressiveFuture) Acquisition future object.
+    :param stream: (SEMstream) The stream used for the acquisition.
+    :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
+        The x and y axes are aligned with the x and y axes of the ebeam scanner.
+    :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region.
+    :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
+           to build up live the whole acquisition. NOT SUPPORTED YET.
+
+    :returns: (DataArray) The complete overview image.
     """
     fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE)
 

@@ -1702,6 +1702,9 @@ class FastEMOverviewAcquiController(object):
         # Warning that no scintillators are selected
         self.update_acquisition_time()
 
+        # If scanner dwell time is changed, update the estimated acquisition time.
+        tab_data.main.ebeam.dwellTime.subscribe(self.update_acquisition_time)
+
     def _on_selection_button(self, evt):
         # add/remove scintillator number to/from selected_scintillators set and toggle button colour
         btn = evt.GetEventObject()
@@ -1733,7 +1736,7 @@ class FastEMOverviewAcquiController(object):
     def check_acquire_button(self):
         self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
 
-    def update_acquisition_time(self):
+    def update_acquisition_time(self, _=None):
         lvl = None  # icon status shown
         if not self._main_data_model.active_scintillators.value:
             lvl = logging.WARN

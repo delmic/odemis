@@ -4,7 +4,7 @@ Created on 15th July 2021
 
 @author: Sabrina Rossberger, Thera Pals, Éric Piel
 
-Copyright © 2021 Sabrina Rossberger, Delmic
+Copyright © 2021-2022 Sabrina Rossberger, Delmic
 
 This file is part of Odemis.
 
@@ -52,20 +52,12 @@ FASTEM_CONFIG = CONFIG_PATH + "sim/fastem-sim.odm.yaml"
 
 
 class TestFASTEMOverviewAcquisition(unittest.TestCase):
-    backend_was_running = False
+    """Test FASTEM overview image acquisition."""
 
     @classmethod
     def setUpClass(cls):
-
-        try:
+        if TEST_NOHW:
             test.start_backend(FASTEM_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
 
         cls.ebeam = model.getComponent(role="e-beam")
         cls.efocuser = model.getComponent(role="ebeam-focus")
@@ -73,38 +65,31 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         cls.stage = model.getComponent(role="stage")
         cls.stage.reference({"x", "y"}).result()
 
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
-
     def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
+        self.stream = stream.SEMStream("Single beam", self.sed, self.sed.data, self.ebeam,
+                                       focuser=self.efocuser,  # Not used during acquisition, but done by the GUI
+                                       hwemtvas={"scale", "dwellTime", "horizontalFoV"})
 
     def test_overview_acquisition(self):
-        s = stream.SEMStream("Single beam", self.sed, self.sed.data, self.ebeam,
-                             focuser=self.efocuser,  # Not used during acquisition, but done by the GUI
-                             hwemtvas={"scale", "dwellTime", "horizontalFoV"})
+        """Test the full overview image acquisition."""
         # This should be used by the acquisition
-        s.dwellTime.value = 1e-6  # s
+        self.stream.dwellTime.value = 1e-6  # s
 
         # Use random settings and check they are overridden by the overview acquisition
-        s.scale.value = (2, 2)
-        s.horizontalFoV.value = 20e-6  # m
+        self.stream.scale.value = (2, 2)
+        self.stream.horizontalFoV.value = 20e-6  # m
 
-        # Known position of the center scintillator
+        # Known position of the center scintillator in the sample carrier coordinate system
         scintillator5_area = (-0.007, -0.007, 0.007, 0.007)  # l, b, r, t
         # Small area for DEBUG (3x3)
         # scintillator5_area = (-0.002, -0.002, 0.002, 0.002)  # l, b, r, t
 
-        est_time = fastem.estimateTiledAcquisitionTime(s, self.stage, scintillator5_area)
+        est_time = fastem.estimateTiledAcquisitionTime(self.stream, self.stage, scintillator5_area)
         # don't use for DEBUG example
         self.assertGreater(est_time, 10)  # It should take more than 10s! (expect ~5 min)
 
         before_start_t = time.time()
-        f = fastem.acquireTiledArea(s, self.stage, scintillator5_area)
+        f = fastem.acquireTiledArea(self.stream, self.stage, scintillator5_area)
         time.sleep(1)
         start_t, end_t = f.get_progress()
         self.assertGreater(start_t, before_start_t)
@@ -124,13 +109,29 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         self.assertGreaterEqual(bbox[2], scintillator5_area[2])  # Right
         self.assertGreaterEqual(bbox[3], scintillator5_area[3])  # Top
 
+    def test_estimateTiledAcquisitionTime(self):
+        """Test estimated acquisition time for overview imaging."""
+
+        # small area on center scintillator (~3x4 tiles)
+        scintillator5_area = (-0.002, -0.002, 0.002, 0.002)  # l, b, r, t
+
+        self.stream.emitter.dwellTime.value = 1e-6  # s
+        est_time_1 = fastem.estimateTiledAcquisitionTime(self.stream, self.stage, scintillator5_area)
+
+        # increase dwell time
+        self.stream.emitter.dwellTime.value = 2e-6  # s
+        est_time_2 = fastem.estimateTiledAcquisitionTime(self.stream, self.stage, scintillator5_area)
+
+        # check that estimated time increases with dwell time
+        self.assertGreater(est_time_2, est_time_1)
+
 
 class TestFastEMROA(unittest.TestCase):
     """Test region of acquisition (ROA) class methods."""
 
     @classmethod
     def setUpClass(cls):
-        if TEST_NOHW is True:
+        if TEST_NOHW:
             raise unittest.SkipTest("No simulator running or HW present. Skip fastem ROA tests.")
 
         # get the hardware components
@@ -212,7 +213,7 @@ class TestFastEMAcquisition(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if TEST_NOHW is True:
+        if TEST_NOHW:
             raise unittest.SkipTest("No simulator running or HW present. Skip fastem acquisition tests.")
 
         # get the hardware components

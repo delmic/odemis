@@ -4,7 +4,7 @@ Created on 03 December 2021
 
 @author: Sabrina Rossberger, Éric Piel
 
-Copyright © 2021 Sabrina Rossberger, Delmic
+Copyright © 2021-2022 Sabrina Rossberger, Delmic
 
 This file is part of Odemis.
 
