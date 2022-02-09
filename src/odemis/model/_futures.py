@@ -502,21 +502,29 @@ class ProgressiveBatchFuture(ProgressiveFuture):
     """
     def __init__(self, futures):
         """
-        futures (ProgressiveFuture --> float): dict specifying futures and estimated times
+        :param futures (dict: ProgressiveFuture --> float): Keys are futures and values are the
+                        respective time estimates for the duration of the future.
         """
         self.futures = futures
-        start = time.time()
+        start = time.time()  # start time of the batch future
         super().__init__(start=start, end=start + sum(self.futures.values()))
         self.set_running_or_notify_cancel()
 
         for f in self.futures:
-            f.add_update_callback(self._on_future_update)
-            f.add_done_callback(self._on_future_done)
+            f.add_update_callback(self._on_future_update)  # called whenever set_progress is called
+            f.add_done_callback(self._on_future_done)  # called when future is done
 
     def _on_future_update(self, f, start, end):
-        if f.running():  # only care about future which are running, start/end estimates for others not reliable
-            self.futures[f] = end - start
-            self.set_progress(end=self._estimate_end())
+        """
+        Whenever progress on the single future is reported, the progress (or end) for the batch future
+        is updated accordingly.
+
+        :param start: (float) Start time of a single future in the batch future in seconds.
+        :param end: (float) End of a single future in the batch future in seconds.
+        """
+        if f.running():  # only care about the future which is currently running
+            self.futures[f] = end - start  # update the start and end of the single future
+            self.set_progress(end=self._estimate_end())  # set the progress for batch future
 
     def _on_future_done(self, f):
         self.set_progress(end=self._estimate_end())
@@ -538,8 +546,20 @@ class ProgressiveBatchFuture(ProgressiveFuture):
             self.set_result(None)
 
     def _estimate_end(self):
-        start, end = self.get_progress()
-        return start + sum(self.futures[f] for f in self.futures if not f.done())
+        """
+        Estimate the end of the batch future based on the current time plus the
+        estimated time for all futures that still need to be executed.
+
+        returns: (float) Newly estimated end time based for the batch future.
+        """
+        duration = time.time()
+        for f, t in self.futures.items():
+            # only take futures into account that are not executed (finished) yet
+            if not f.done():
+                duration += t
+        # FIXME: it does not update often enough in the GUI, the estimate seems reasonable, but
+        #  gauge does not execute 1s when showing 1 second has passed -> takes longer thought time would match well
+        return duration
 
     def cancel(self):
         super().cancel()
