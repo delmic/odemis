@@ -38,6 +38,8 @@ from functools import partial
 
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
+from odemis.acq.align import fastem as align_fastem
+from odemis.acq.align.fastem import OPTICAL_AUTOFOCUS, SCAN_ROTATION_PREALIGN, IMAGE_TRANSLATION_PREALIGN
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.gui import conf, FG_COLOUR_BUTTON
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
@@ -2272,50 +2274,126 @@ class AutoCenterController(object):
 
 
 class FastEMAlignmentController:
-    def __init__(self, tab_data, panel):
+    """
+    Takes care of the calibration button and process in the calibration panel in the FastEM acquisition tab.
+    """
+    def __init__(self, tab_data, tab_panel):
+        """
+        tab_data: (FastEMAcquisitionGUIData) The representation of the microscope GUI.
+        tab_panel: (wx.Frame) The calibration panel, which contains the calibration button,
+                    the gauge and the label of the gauge.
+        """
         self._tab_data = tab_data
-        self._panel = panel
+        self._main_data_model = tab_data.main
+        self._panel = tab_panel
 
-        self._panel.align_gauge_progress.Hide()
-        panel.btn_align.Bind(wx.EVT_BUTTON, self._on_btn_align)
-        tab_data.main.is_aligned.subscribe(self._on_align_state, init=True)
+        self.btn_align = tab_panel.btn_align
+        self.gauge_progress = tab_panel.align_gauge_progress  # progress bar
+        self.gauge_label = tab_panel.align_lbl_gauge  # progress bar label
+        self.is_aligned = tab_data.main.is_aligned
 
-    def _on_btn_align(self, evt):
-        # TODO: implement cancellation
+        self.gauge_progress.Hide()  # hide progress bar
+        self._panel.Parent.Layout()
+        self.btn_align.Bind(wx.EVT_BUTTON, self.on_align)
+
+        # FIXME: How to differentiate between simulator and real HW?
+        #   The following two calibrations can also be run with the simulator.
+        #   However, the rest not. How make compartible with both cases?
+        # CALIBRATIONS_SIM and CALIBRATIONS as global var somehow?
+        self.calibrations = [OPTICAL_AUTOFOCUS, IMAGE_TRANSLATION_PREALIGN]
+
+        # check calibration state of system
+        # If backend was not restarted, but only GUI, then the system is in principle still calibrated.
+        # However, so far when closing the GUI the system is also not calibrated anymore.
+        # self.is_aligned.subscribe(self._on_align_state, init=True) # TODO needed?
+
+        if not self.is_aligned.value:
+            self._reset_calibration_gui()  # display estimated calibration time
+
+        self._future_connector = None  # connect the future to the progress bar and its label
+
+    def on_align(self, evt):
+        """
+        Start or cancel the calibration when the button is triggered.
+        :param evt: (GenButtonEvent) Button triggered.
+        """
+        # check if cancelled
         if self._tab_data.main.is_acquiring.value:
-            logging.error("Cancelling alignment currently not supported.")
+            logging.debug("Calibration was cancelled.")
+            self.on_cancel(evt)
             return
+
+        # calibrate
         self._tab_data.main.is_acquiring.value = True  # make sure the acquire/tab buttons are disabled
 
-        # Change button to "cancel", show progress bar
-        self._panel.align_gauge_progress.Show()
-        # Label is displayed on the right, but during the acquisition, we want the gauge bar to occupy the
+        self.gauge_progress.Show()  # show progress bar
+        # Label is displayed on the right, but during the calibration, we want the gauge bar to occupy the
         # full available space --> use a panel instead of a spacer which can be hidden (spacers cannot) to
         # make it look nice.
-        self._panel.align_spacer_panel.Hide()
-        self._panel.align_lbl_gauge.Hide()
-        self._panel.btn_align.SetLabel("Cancel")
+        # self._panel.align_lbl_gauge.Hide()  # hide label progress bar TODO put below gauge instead of hide?
+        self._panel.align_spacer_panel.Hide()  # hide space progress bar and progress bar label
+        self._panel.btn_align.SetLabel("Cancel")  # change button label
         self._panel.Layout()
 
+        # TODO loop over calibrations here and then use batch future?
         # Start alignment
-        f = align.fastem.align(self._tab_data.main)
-        f.add_done_callback(self._on_alignment_done)
+        f = align.fastem.align(self._main_data_model.ebeam, self._main_data_model.multibeam,
+                               self._main_data_model.descanner, self._main_data_model.mppc,
+                               self._main_data_model.stage, self._main_data_model.ccd,
+                               self._main_data_model.beamshift, self._main_data_model.det_rotator,
+                               calibrations=self.calibrations)
+
+        f.add_done_callback(self._on_alignment_done)  # also handles cancelling and exceptions
+        # connect the future to the progress bar and its label
+        self._future_connector = ProgressiveFutureConnector(f, self.gauge_progress, self.gauge_label)
 
     @call_in_wx_main
     def _on_alignment_done(self, future):
-        self._tab_data.main.is_aligned.value = True
+        """
+        Called when the calibration is finished (either successfully, cancelled or failed).
+        :param future: (ProgressiveFuture) Calibration future object, which can be cancelled.
+        """
+
         self._tab_data.main.is_acquiring.value = False
+        self._future_connector = None  # reset connection to the progress bar
 
-        # Enable button, hide progress bar
-        self._panel.align_gauge_progress.Hide()
-        self._panel.align_spacer_panel.Show()
-        self._panel.align_lbl_gauge.Show()
-        self._panel.btn_align.SetLabel("Alignment...")
-        self._panel.Parent.Layout()
+        try:
+            future.result()  # wait until the calibration is done
+            self.is_aligned.value = True  # allow acquiring ROAs
+            self._reset_calibration_gui("Calibration successful")
+        except CancelledError:
+            self.is_aligned.value = False  # don't enable ROA acquisition
+            self._reset_calibration_gui("Calibration cancelled")  # update label to indicate cancelling
+            return
+        except Exception as ex:
+            self.is_aligned.value = False  # don't enable ROA acquisition
+            logging.exception("Calibration failed with %s.", ex)
+            self._reset_calibration_gui("Calibration failed")
+            return
 
-    def _on_align_state(self, aligned):
-        if aligned:
-            self._panel.align_lbl_gauge.SetLabel("System is aligned.")
+    def _reset_calibration_gui(self, text=None):
+        """
+        Set back every element in the calibration panel to be ready for the next calibration.
+        :param text (None or str): A (error) message to display instead of the estimated acquisition time.
+        """
+        self.btn_align.Enable(True)  # enable button again
+        self.btn_align.SetLabel("Alignment")  # change button label back to ready for calibration
+        self.gauge_progress.Hide()  # hide progress bar
+        self._panel.align_spacer_panel.Show()  # show space progress bar and progress bar label
+        self.gauge_label.Show()  # show label progress bar
+
+        if text is not None:
+            self.gauge_label.SetLabel(text)
         else:
-            # TODO: time estimation
-            self._panel.align_lbl_gauge.SetLabel("~ 2 seconds")
+            duration = align.fastem.estimate_calibration_time(self.calibrations)
+            self.gauge_label.SetLabel(str(duration) + " seconds")
+
+        self._panel.Layout()
+
+    def on_cancel(self, evt):
+        """
+        Cancel the calibration task.
+        Called during calibration when pressing the cancel button.
+        :param evt: (GenButtonEvent) Button triggered.
+        """
+        align_fastem._executor.cancel()  # all the rest will be handled by on_alignment_done()
