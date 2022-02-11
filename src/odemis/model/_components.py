@@ -687,9 +687,9 @@ class DigitalCamera(with_metaclass(ABCMeta, Detector)):
             try:
                 self.pointSpreadFunctionSize._set_value(sigma, force_write=True)
             except (IndexError, TypeError):
-                logging.warning("Spot size computed seems incorrect: %f px", sigma)
+                logging.warning("Point spread function size computed seems incorrect: %f px", sigma)
         except Exception:
-            logging.warning("Failure to update the spot size", exc_info=True)
+            logging.warning("Failure to update the point spread function size", exc_info=True)
 
 
 class Axis(object):
