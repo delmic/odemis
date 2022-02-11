@@ -27,29 +27,31 @@ from concurrent.futures import CancelledError
 from odemis import model
 
 try:
-    import fastem_calibrations
     from fastem_calibrations import (
         autofocus_multiprobe,
         scan_rotation_pre_align,
         scan_amplitude_pre_align,
+        descan_gain,
         image_translation_pre_align,
         descan_gain,
         image_rotation_pre_align,
         image_rotation,
         image_translation
     )
+    fastem_calibrations = True
 except ImportError:
-    fastem_calibrations = None
+    logging.info("fastem_calibrations package not found")
+    fastem_calibrations = False
 
 # TODO does it make sense to make this a list?
-OPTICAL_AUTOFOCUS = "autofocus_multiprobe"
-SCAN_ROTATION_PREALIGN = "scan_rotation_pre_align"
-SCAN_AMPLITUDE_PREALIGN = "scan_amplitude_pre_align"
-DESCAN_GAIN_STATIC = "descan_gain_static"
-IMAGE_ROTATION_PREALIGN = "image_rotation_pre_align"
-IMAGE_TRANSLATION_PREALIGN = "image_translation_pre_align"
-IMAGE_ROTATION_FINAL = "image_rotation"
-IMAGE_TRANSLATION_FINAL = "image_translation"
+OPTICAL_AUTOFOCUS = autofocus_multiprobe
+SCAN_ROTATION_PREALIGN = scan_rotation_pre_align
+SCAN_AMPLITUDE_PREALIGN = scan_amplitude_pre_align
+DESCAN_GAIN_STATIC = descan_gain
+IMAGE_ROTATION_PREALIGN = image_rotation_pre_align
+IMAGE_TRANSLATION_PREALIGN = image_translation_pre_align
+IMAGE_ROTATION_FINAL = image_rotation
+IMAGE_TRANSLATION_FINAL = image_translation
 
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
@@ -71,11 +73,10 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
     :param calibrations: (list of str) List of calibrations that should be run.
 
     :returns: (ProgressiveFuture) Alignment future object, which can be cancelled.
-            The result of the future is:
-                (Exception or None): Exception raised during the acquisition or None.
+            The result of the future is: (None)
     """
 
-    if fastem_calibrations is None:
+    if not fastem_calibrations:
         raise ModuleNotFoundError("fastem_calibration module missing. Cannot run calibrations.")
 
     f = model.ProgressiveFuture()
@@ -100,31 +101,14 @@ def estimate_calibration_time(calibrations):
     """
     tot_time = 0
     for calib in calibrations:
-        # TODO how to use a list of function calls in this loop to avoid writing the same line
-        #  for each calibration?
-        if calib == OPTICAL_AUTOFOCUS:
-            tot_time += autofocus_multiprobe.estimate_calibration_time()
-        if calib == IMAGE_TRANSLATION_PREALIGN:
-            tot_time += image_translation_pre_align.estimate_calibration_time()
-        if calib == SCAN_AMPLITUDE_PREALIGN:
-            tot_time += scan_amplitude_pre_align.estimate_calibration_time()
-        if calib == DESCAN_GAIN_STATIC:
-            tot_time += descan_gain.estimate_calibration_time()
-        if calib == IMAGE_ROTATION_PREALIGN:
-            tot_time += image_rotation_pre_align.estimate_calibration_time()
-        if calib == IMAGE_TRANSLATION_PREALIGN:
-            tot_time += image_translation_pre_align.estimate_calibration_time()
-        if calib == IMAGE_ROTATION_FINAL:
-            tot_time += image_rotation.estimate_calibration_time()
-        if calib == IMAGE_TRANSLATION_FINAL:
-            tot_time += image_translation.estimate_calibration_time()
+        tot_time += calib.estimate_calibration_time()
 
     return tot_time
 
 
 class CalibrationTask(object):
     """
-    The calibration task.
+    The calibration task, which runs the calibrations according to the order in the list of calibrations passed.
     """
 
     def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, future, calibrations):
@@ -169,7 +153,7 @@ class CalibrationTask(object):
         """
         Runs a set of calibration procedures.
         :returns:
-            (None) If calibrations successful return None.
+            (None) Calibrations successful.
         :raise:
             Exception: If a calibration failed.
             CancelledError: If the calibration was cancelled.
@@ -193,14 +177,14 @@ class CalibrationTask(object):
                 # def _pass_future_progress(sub_f, start, end):
                 #     f.set_progress(start, end)
 
-                # TODO Connect the progress of the sub-future to the main future
+                # TODO Connect the progress of the sub-future to the main future when sub-futures are implemented
                 # sf.add_update_callback(_pass_future_progress)
                 # sf.result()
 
-                # remove from list of calibrations when finished
+                # remove from set of calibrations when finished
                 self._calibrations_remaining.discard(calib)
 
-                # In case the calibrations was cancelled by a client, before the future returned,
+                # In case the calibrations were cancelled by a client, before the future returned,
                 # raise cancellation error.
                 if self._cancelled:
                     raise CancelledError()
@@ -208,7 +192,7 @@ class CalibrationTask(object):
                 # Update the time left for the calibrations remaining
                 self._future.set_progress(end=time.time() + self.estimate_calibration_time())
 
-        except CancelledError:  # raised in try statement
+        except CancelledError:
             logging.debug("Calibration was cancelled.")
             raise
         except Exception as ex:
@@ -266,8 +250,8 @@ class CalibrationTask(object):
         """
         self._cancelled = True
 
-        # FIXME Currently there is no subfuture implemented for each calibration. So currently,
-        #  when cancelling the calibration is still finished.
+        # FIXME Currently there is no subfuture implemented for each calibration.
+        #  So, when cancelling while a calibration has already started it will run until it is completely finished.
         # TODO When to set this to False in which event?
 
         return True
@@ -275,27 +259,6 @@ class CalibrationTask(object):
     def estimate_calibration_time(self):
         """
         Computes the approximate time it will take to run the remaining calibrations.
-        :return (0 <= float): The estimated time for the requested calibrations in s.
+        :return (0 <= float): The estimated time for the remaining calibrations in s.
         """
-        tot_time = 0
-        for calib in self._calibrations_remaining:
-            # TODO how to use a list of function calls in this loop to avoid writing the same line
-            #  for each calibration?
-            if calib == OPTICAL_AUTOFOCUS:
-                tot_time += autofocus_multiprobe.estimate_calibration_time()
-            if calib == IMAGE_TRANSLATION_PREALIGN:
-                tot_time += image_translation_pre_align.estimate_calibration_time()
-            if calib == SCAN_AMPLITUDE_PREALIGN:
-                tot_time += scan_amplitude_pre_align.estimate_calibration_time()
-            if calib == DESCAN_GAIN_STATIC:
-                tot_time += descan_gain.estimate_calibration_time()
-            if calib == IMAGE_ROTATION_PREALIGN:
-                tot_time += image_rotation_pre_align.estimate_calibration_time()
-            if calib == IMAGE_TRANSLATION_PREALIGN:
-                tot_time += image_translation_pre_align.estimate_calibration_time()
-            if calib == IMAGE_ROTATION_FINAL:
-                tot_time += image_rotation.estimate_calibration_time()
-            if calib == IMAGE_TRANSLATION_FINAL:
-                tot_time += image_translation.estimate_calibration_time()
-
-        return tot_time
+        return estimate_calibration_time(self._calibrations_remaining)

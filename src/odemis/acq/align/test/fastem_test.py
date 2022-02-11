@@ -72,13 +72,7 @@ class TestFastEMCalibration(unittest.TestCase):
     def setUp(self):
 
         self.good_focus = -70e-6  # position where the image of the multiprobe is displayed in focus [m]
-        self.good_mp_position = (650, 450)  # position for multiprobe where mp is aligned with mppc detector [px_dc]
-        self.ccd.updateMetadata(
-            {model.MD_FAV_POS_ACTIVE:
-                {"x": self.good_mp_position[0],
-                 "y": self.good_mp_position[1],
-                 "z": self.good_focus}}
-                                )
+        self.ccd.updateMetadata(model.MD_FAV_POS_ACTIVE.update({"z": self.good_focus}))
 
         # move the stage so that the image is in focus
         self.focuser.moveAbs({"z": self.good_focus}).result()
@@ -144,12 +138,13 @@ class TestFastEMCalibration(unittest.TestCase):
         self.assertIsNone(e)  # check no exceptions were returned
         self.assertTrue(self.done)
         # at least one update per calibration plus once at start of calibration, plus once at end of calibration
-        self.assertGreaterEqual(self.updates, 4)  # at least one update per
+        self.assertGreaterEqual(self.updates, 4)
 
     def test_cancel(self):
         """Test if it is possible to cancel the optical autofocus calibration."""
 
         # FIXME no subfuture available yet, which are cancelable
+        #  when subfutures are implemented, add a check in this test case that the subfuture was also cancelled
 
         self.end = None  # updated in callback on_progress_update
         self.updates = 0  # updated in callback on_progress_update
