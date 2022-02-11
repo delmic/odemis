@@ -185,7 +185,7 @@ class BeamShiftController(model.HwComponent):
                                            cls=(int, float), unit="m",
                                            setter=self._setShift)
 
-        if dependencies:
+        if dependencies and "scanner" in dependencies.keys():
             self.updateMetadata({model.MD_CALIB: dependencies["scanner"].beamShiftTransformationMatrix.value})
 
     def _findDevice(self, port=None, serialnum=None):

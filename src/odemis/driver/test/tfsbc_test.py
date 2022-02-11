@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
-from odemis.driver import tfsbc, xt_client
+from odemis.driver import tfsbc, simulated
 from odemis import model
 from odemis.util import test
 import unittest
@@ -29,7 +29,7 @@ import logging
 import os
 import time
 
-TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "1")  # Default to Hw testing
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -39,13 +39,6 @@ if TEST_NOHW:
 else:
     PORT = "/dev/ttyUSB*"
 
-CONFIG_DETECTOR = {"name": "detector", "role": "se-detector"}
-CONFIG_MB_SCANNER = {"name": "mb-scanner", "role": "ebeam", "hfw_nomag": 1}
-CONFIG_MB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@localhost:4242",
-                 "children": {"mb-scanner": CONFIG_MB_SCANNER,
-                              "detector": CONFIG_DETECTOR,
-                              }
-                 }
 
 # @skip("skip")
 class TestBeamShiftController(unittest.TestCase):
@@ -55,34 +48,24 @@ class TestBeamShiftController(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.bc = tfsbc.BeamShiftController("DC Offset", None, PORT, "FT2OMDD5")
-        # Values found during testing on the hardware
-        md = ((-0.00027788219369730165, 0.0013604844623992785),
-              (0.00012699407486043473, -0.0006217507619527259),
-              (-0.0013604844623992785, -0.00027788219369730165),
-              (0.0006217507619527259, 0.00012699407486043473))
-        cls.bc.updateMetadata({model.MD_CALIB: md})
+        scanner = simulated.GenericComponent(name="Multibeam XT Sim", role="e-beam",
+                                             vas={"beamShiftTransformationMatrix":
+                                                  # Values found during testing on the hardware
+                                                  {"value": ((-0.00027788219369730165, 0.0013604844623992785),
+                                                             (0.00012699407486043473, -0.0006217507619527259),
+                                                             (-0.0013604844623992785, -0.00027788219369730165),
+                                                             (0.0006217507619527259, 0.00012699407486043473)),
+                                                   "readonly": True,
+                                                   "unit": ""}})
 
-    @classmethod
-    def tearDownClass(cls):
-        pass
+        dependencies = {"scanner": scanner}
+        cls.bc = tfsbc.BeamShiftController("DC Offset", None, PORT, "FT2OMDD5", dependencies)
 
     def test_dependency_scanner(self):
         """Test dependency on scanner."""
-        # TODO only works with xt simulator now - how to make generic? for xt simulator has special flag "sim"
-        if TEST_NOHW:
-            self.microscope = xt_client.SEM(**CONFIG_MB_SEM)
-            for child in self.microscope.children.value:
-                if child.name == CONFIG_MB_SCANNER["name"]:
-                    self.scanner = child
-
-            dependencies = {"scanner": self.scanner}
-            self.bc = tfsbc.BeamShiftController("DC Offset", None, PORT, "FT2OMDD5", dependencies)
-            # Note: for simulator matrix is only 0s
-            calib_md = self.bc.getMetadata()[model.MD_CALIB]
-            self.assertIsNotNone(calib_md)
-            self.assertIsInstance(calib_md, list)
-            self.assertIsInstance(calib_md[0][0], float)
+        calib_md = self.bc.getMetadata()[model.MD_CALIB]
+        self.assertIsInstance(calib_md, list)
+        self.assertIsInstance(calib_md[0][0], float)
 
     def test_read_write(self):
         vals = [27000, 37000, 20000, 44000]
@@ -152,7 +135,7 @@ class TestBeamShiftController(unittest.TestCase):
         self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB: bs})
         bs = None
         self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB: bs})
-        bs = ((-0.00027788219369730165, 0.0013604844623992785))
+        bs = (-0.00027788219369730165, 0.0013604844623992785)
         self.assertRaises(ValueError, self.bc.updateMetadata, {model.MD_CALIB: bs})
         bs = ((-0.00027788219369730165), (-0.00027788219369730165, 0.0013604844623992785),
               (-0.00027788219369730165, 0.0013604844623992785), (-0.00027788219369730165, 0.0013604844623992785))
