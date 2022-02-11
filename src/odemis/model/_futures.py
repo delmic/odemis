@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 10 Dec 2013
 
 @author: Éric Piel
 
-Copyright © 2013-2015 Éric Piel, Delmic
+Copyright © 2013-2022 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -13,7 +13,7 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
 import collections
@@ -511,7 +511,7 @@ class ProgressiveBatchFuture(ProgressiveFuture):
         self.set_running_or_notify_cancel()
 
         for f in self.futures:
-            f.add_update_callback(self._on_future_update)  # called whenever set_progress is called
+            f.add_update_callback(self._on_future_update)  # called whenever set_progress of any single future is called
             f.add_done_callback(self._on_future_done)  # called when future is done
 
     def _on_future_update(self, f, start, end):
@@ -523,7 +523,7 @@ class ProgressiveBatchFuture(ProgressiveFuture):
         :param end: (float) End of a single future in the batch future in seconds.
         """
         if f.running():  # only care about the future which is currently running
-            self.futures[f] = end - start  # update the start and end of the single future
+            self.futures[f] = end - start  # update the time estimation of the time left of that future
             self.set_progress(end=self._estimate_end())  # set the progress for batch future
 
     def _on_future_done(self, f):
@@ -547,19 +547,16 @@ class ProgressiveBatchFuture(ProgressiveFuture):
 
     def _estimate_end(self):
         """
-        Estimate the end of the batch future based on the current time plus the
-        estimated time for all futures that still need to be executed.
+        Calculating the end of the batch future by estimating the time left to
+        run the remaining futures. Calculates the new end time based on the current
+        time plus the estimated time for all futures that still need to be executed.
 
-        returns: (float) Newly estimated end time based for the batch future.
+        returns: (float) Newly estimated end time for the batch future.
         """
-        duration = time.time()
-        for f, t in self.futures.items():
-            # only take futures into account that are not executed (finished) yet
-            if not f.done():
-                duration += t
-        # FIXME: it does not update often enough in the GUI, the estimate seems reasonable, but
-        #  gauge does not execute 1s when showing 1 second has passed -> takes longer thought time would match well
-        return duration
+        # with f.done() only futures are taken into account that are not executed (finished) yet
+        time_left = sum(t for f, t in self.futures.items() if not f.done())
+
+        return time.time() + time_left
 
     def cancel(self):
         super().cancel()
