@@ -1,38 +1,32 @@
 MultiBeamSEM: {
     class: Microscope,
     role: mbsem,
-    children: ["Sample Stage", "DiagnosticCam", "DiagnosticCam Focus"],
+    children: ["Sample Stage", "Optical Objective", "Diagnostic Camera"],
 }
 
 # Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
 #       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
-"DiagnosticCam": {
+"Diagnostic Camera": {
     class: simcam.Camera,
     role: diagnostic-ccd,
-    dependencies: {focus: "DiagnosticCam Focus"},
+    dependencies: {"focus": "Sample Stage"},
     init: {
         image: "../acq/align/test/multiprobe01.tiff",
     },
-    metadata: {
-        # Adjust the metadata to have a small depthOfField, which makes the focus blur stronger
-        LENS_MAG: 60,
-        LENS_NA: 0.95,
-        LENS_RI: 0.13,
-    },
 }
 
-"DiagnosticCam Focus": {
-    class: actuator.MultiplexActuator,
-    role: diagnostic-cam-focus,
-    children: {"z": "Sample Stage"},
+# Sets the optical path magnification and thus compute the pixel size of the diagnostic camera.
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
     init: {
-        axes_map: {"z": "z"}
+        # Adjust to have a small depthOfField, which makes the focus blur stronger.
+        mag: 60, # ratio, magnifying
+        na: 0.95,  # numerical aperture
+        ri: 1,  # refractive index
     },
-    properties: {
-        speed: {'z': 0.001} # m/s
-    }
+    affects: ["Diagnostic Camera"],
 }
-
 
 "Sample Stage": {
     class: simulated.Stage,
