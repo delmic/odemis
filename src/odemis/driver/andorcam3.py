@@ -265,8 +265,8 @@ class AndorCam3(model.DigitalCamera):
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
-        resolution = self.getSensorResolution()
-        sensor_res_user = self._transposeSizeToUser(resolution)
+        self._sensor_res = self.getSensorResolution()
+        sensor_res_user = self._transposeSizeToUser(self._sensor_res)
         if max_res is None:
             max_res = sensor_res_user
         else:
@@ -351,7 +351,7 @@ class AndorCam3(model.DigitalCamera):
         # translation is automatically adjusted to fit whenever res/bin change
         if self.isImplemented(u"FullAOIControl") and self.GetBool(u"FullAOIControl"):
             # Support ROI anywhere => provide translation
-            hlf_shape = (resolution[0] // 2 - 1, resolution[1] // 2 - 1)
+            hlf_shape = (self._sensor_res[0] // 2 - 1, self._sensor_res[1] // 2 - 1)
             uh_shape = self._transposeSizeToUser(hlf_shape)
             tran_rng = ((-uh_shape[0], -uh_shape[1]),
                         (uh_shape[0], uh_shape[1]))
@@ -1179,8 +1179,8 @@ class AndorCam3(model.DigitalCamera):
         value = self._transposeTransFromUser(value)
         # compute the min/max of the shift. It's the same as the margin between
         # the centered ROI and the border, taking into account the binning.
-        max_tran = ((self._shape[0] - self._resolution[0] * self._binning[0]) // 2,
-                    (self._shape[1] - self._resolution[1] * self._binning[1]) // 2)
+        max_tran = ((self._sensor_res[0] - self._resolution[0] * self._binning[0]) // 2,
+                    (self._sensor_res[1] - self._resolution[1] * self._binning[1]) // 2)
 
         # between -margin and +margin
         trans = (max(-max_tran[0], min(value[0], max_tran[0])),
@@ -1246,15 +1246,15 @@ class AndorCam3(model.DigitalCamera):
          twice smaller if the binning is 2 instead of 1. It must be a allowed
          resolution.
         """
-        resolution = self._shape[0:2]
-        assert (1 <= size[0] <= resolution[0] and 1 <= size[1] <= resolution[1])
+        sensor_res = self._sensor_res[0:2]
+        assert (1 <= size[0] <= sensor_res[0] and 1 <= size[1] <= sensor_res[1])
 
         # If the camera doesn't support Area of Interest, then it has to be the
         # size of the sensor
         if (not self.isImplemented(u"AOIWidth") or
             not self.isWritable(u"AOIWidth")):
-            max_size = (int(resolution[0] // self._binning[0]),
-                        int(resolution[1] // self._binning[1]))
+            max_size = (int(sensor_res[0] // self._binning[0]),
+                        int(sensor_res[1] // self._binning[1]))
             if size != max_size:
                 logging.warning("requested size %s different from the only"
                                 " size available %s.", size, max_size)
@@ -1270,8 +1270,8 @@ class AndorCam3(model.DigitalCamera):
         trans = self._translation
 
         # center the AOI (in original/sensor pixels)
-        lt = ((resolution[0] - size[0] * self._binning[0]) // 2 + 1 + trans[0],
-              (resolution[1] - size[1] * self._binning[1]) // 2 + 1 + trans[1])
+        lt = ((sensor_res[0] - size[0] * self._binning[0]) // 2 + 1 + trans[0],
+              (sensor_res[1] - size[1] * self._binning[1]) // 2 + 1 + trans[1])
 
         # order matters
         self.SetInt(u"AOIWidth", size[0])
