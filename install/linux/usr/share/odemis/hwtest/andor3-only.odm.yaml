@@ -34,6 +34,8 @@ Cam: {
     init: {
            device: 0,  # if a real camera is plugged in, it's usually 0
            bitflow_install_dirs: "/usr/share/bitflow/", # Put the path where Bitflow data is installed
+           # max_res: [320, 240],
+           # transp: [-2, 1]
     },
     properties: {
         # to disable the fan
