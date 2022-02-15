@@ -2303,6 +2303,14 @@ class AndorCam2(model.DigitalCamera):
                 else:
                     failures = 0
 
+                # Check if it got cancelled at the last moment. The user could have
+                # stopped, changed settings, and started again, while we were
+                # retrieving the image. Let's not send an image with the old
+                # settings in such case.
+                if self._acq_should_stop():
+                    logging.debug("Acquisition cancelled")
+                    break
+
                 logging.debug("image acquired successfully after %g s", time.time() - tstart)
                 self.data.notify(self._transposeDAToUser(array))
                 del cbuffer, array

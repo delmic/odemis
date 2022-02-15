@@ -173,6 +173,36 @@ class VirtualTestCam(with_metaclass(ABCMeta, object)):
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
 
+    def test_change_settings(self):
+        """
+        Start an acquisition, and stop just before it should end, then change the
+        settings, and acquire again. Check that we don't get the original acquisition
+        with the old settings.
+        (Such bug happened on the Andorcam2)
+        """
+        if not model.hasVA(self.camera, "binning") or self.camera.binning.readonly:
+            self.skipTest("Camera doesn't support setting binning")
+
+        self.camera.binning.value = self.camera.binning.clip((2, 2))
+        self.size = self.camera.resolution.value
+        self.camera.exposureTime.value = 0.09
+        self.left = 1
+
+        self.camera.data.subscribe(self.receive_image)
+        time.sleep(0.05)
+        logging.debug("Stopping acquisition")
+        self.camera.data.unsubscribe(self.receive_image)
+        # Never received an image...
+        self.assertEqual(self.left, 1)
+
+        # Change settings
+        logging.debug("Changing binning")
+        self.camera.binning.value = (1, 1)
+        exp_res = self.camera.resolution.value[::-1]
+        da = self.camera.data.get()
+        logging.debug("Got res of %s", da.shape)
+        self.assertEqual(da.shape, exp_res)
+
     def test_translation(self):
         """
         test the translation VA (if available)
@@ -712,11 +742,20 @@ class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
             except queue.Empty:
                 self.fail("No data %d received after %s s" % (i, duration))
 
-        # Now synchronized
-        # Note that it's hard to know when the synchronization switched, so we
-        # don't know how many triggers need to be sent. At most number_acq - 2.
+        # Now synchronized => Acquisition should be halted
+        # Note that there might have been a couple of extra images received, and
+        # that's fine. It just a sign that the test case went a little slower than
+        # the camera frame rate.
         self.ccd.data.synchronizedOn(self.ccd.softwareTrigger)
-        for i in range(2, number_acq):
+
+        time.sleep(0.2)
+        after_sync_left = self.ccd_left
+        time.sleep(1)
+        self.assertEqual(after_sync_left, self.ccd_left)
+        self._data = queue.Queue()  # Reset the queue
+
+        # Let's start again
+        for i in range(self.ccd_left):
             self.ccd.softwareTrigger.notify()
             try:
                 self._data.get(timeout=duration + 10)
