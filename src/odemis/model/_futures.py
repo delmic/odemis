@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 10 Dec 2013
 
 @author: Éric Piel
 
-Copyright © 2013-2015 Éric Piel, Delmic
+Copyright © 2013-2022 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -13,7 +13,7 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
 import collections
@@ -502,21 +502,29 @@ class ProgressiveBatchFuture(ProgressiveFuture):
     """
     def __init__(self, futures):
         """
-        futures (ProgressiveFuture --> float): dict specifying futures and estimated times
+        :param futures (dict: ProgressiveFuture --> float): Keys are futures and values are the
+                        respective time estimates for the duration of the future.
         """
         self.futures = futures
-        start = time.time()
+        start = time.time()  # start time of the batch future
         super().__init__(start=start, end=start + sum(self.futures.values()))
         self.set_running_or_notify_cancel()
 
         for f in self.futures:
-            f.add_update_callback(self._on_future_update)
-            f.add_done_callback(self._on_future_done)
+            f.add_update_callback(self._on_future_update)  # called whenever set_progress of any single future is called
+            f.add_done_callback(self._on_future_done)  # called when future is done
 
     def _on_future_update(self, f, start, end):
-        if f.running():  # only care about future which are running, start/end estimates for others not reliable
-            self.futures[f] = end - start
-            self.set_progress(end=self._estimate_end())
+        """
+        Whenever progress on the single future is reported, the progress (or end) for the batch future
+        is updated accordingly.
+
+        :param start: (float) Start time of a single future in the batch future in seconds.
+        :param end: (float) End of a single future in the batch future in seconds.
+        """
+        if f.running():  # only care about the future which is currently running
+            self.futures[f] = end - start  # update the time estimation of the time left of that future
+            self.set_progress(end=self._estimate_end())  # set the progress for batch future
 
     def _on_future_done(self, f):
         self.set_progress(end=self._estimate_end())
@@ -538,8 +546,17 @@ class ProgressiveBatchFuture(ProgressiveFuture):
             self.set_result(None)
 
     def _estimate_end(self):
-        start, end = self.get_progress()
-        return start + sum(self.futures[f] for f in self.futures if not f.done())
+        """
+        Calculating the end of the batch future by estimating the time left to
+        run the remaining futures. Calculates the new end time based on the current
+        time plus the estimated time for all futures that still need to be executed.
+
+        returns: (float) Newly estimated end time for the batch future.
+        """
+        # with f.done() only futures are taken into account that are not executed (finished) yet
+        time_left = sum(t for f, t in self.futures.items() if not f.done())
+
+        return time.time() + time_left
 
     def cancel(self):
         super().cancel()
