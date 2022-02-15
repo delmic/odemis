@@ -669,7 +669,7 @@ class DigitalCamera(with_metaclass(ABCMeta, Detector)):
             # the observed part changes. So just use 550 nm, which is never
             # more than 50% wrong.
         except (AttributeError, KeyError):
-            # Not enough metadata is present for computing Depth of Field and spot size.
+            # Not enough metadata is present for computing depth of field and point spread function size.
             return
 
         try:
