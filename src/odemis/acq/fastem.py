@@ -364,11 +364,9 @@ class AcquisitionTask(object):
         """
 
         total_field_time = self._detector.frameDuration.value
-        # For a dwell time of 10us the total field time is approximately 7 seconds,
-        # therefore 7 seconds is a save margin for the timeout.
-        timeout = total_field_time + 7
-        # The first field gets acquired twice, therefore the field time is multiplied by 2.
-        timeout_first_field = 2 * total_field_time + 7
+        # The first field is acquired twice, so the timeout must be at least twice the total field time.
+        # Use 5 times the total field time to have a wide margin.
+        timeout = 5 * total_field_time + 2
 
         # Acquire all single field images, which are automatically offloaded to the external storage.
         for field_idx in self._roa.field_indices:
@@ -386,9 +384,8 @@ class AcquisitionTask(object):
 
             dataflow.next(field_idx)  # acquire the next field image.
 
-            field_timeout = timeout_first_field if field_idx == (0, 0) else timeout
             # Wait until single field image data has been received (image_received sets flag to True).
-            if not self._data_received.wait(field_timeout):
+            if not self._data_received.wait(timeout):
                 # TODO here we often timeout when actually just the offload queue is full
                 #  need to handle offload queue error differently to just wait a bit instead of timing out
                 #   -> check if finish megafield is called in finally when hitting here
