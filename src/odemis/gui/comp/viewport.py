@@ -203,11 +203,10 @@ class ViewPort(wx.Panel):
     def HasFocus(self, *args, **kwargs):
         return self._has_focus is True
 
-    def SetFocus(self, focus):
-        """ Set the focus on the viewport according to the focus parameter.
+    def SetFocus(self, focus=True):
+        """ Set or remove the focus on the viewport according to the focus parameter.
 
-        focus:  A boolean value.
-
+        focus (bool): If True, a thin blue border is show around the viewport
         """
 
         logging.debug(["Removing focus from %s", "Setting focus to %s"][focus], id(self))
@@ -1264,15 +1263,12 @@ class NavigablePlotViewport(PlotViewport):
         #  initial position of mouse when started dragging
         self.drag_init_pos = (0, 0)  # cnvs, cnvs
 
-        # Track if the legend was dragged. It should be reset to False at the
-        # end of button up handlers, giving overlay the chance to check if a
-        # drag occurred.
-
         self.canvas.Bind(wx.EVT_MOUSEWHEEL, self.on_hlegend_scroll)
 
         self.canvas.Bind(wx.EVT_MIDDLE_DOWN, self.on_drag_start)
         self.canvas.Bind(wx.EVT_MIDDLE_UP, self.on_drag_end)
         self.canvas.Bind(wx.EVT_MOTION, self.on_canvas_motion)
+        self.canvas.Bind(wx.EVT_CHAR, self.on_char)
         self.canvas.Bind(miccanvas.EVT_FIT_VIEW_TO_CONTENT, self.on_fit_view)
 
         self.left_legend.Bind(wx.EVT_MOUSEWHEEL, self.on_vlegend_scroll)
@@ -1356,80 +1352,129 @@ class NavigablePlotViewport(PlotViewport):
             self.left_legend.lo_ellipsis = self.canvas.display_yrange[0] > self.canvas.data_yrange[0]
             self.left_legend.hi_ellipsis = self.canvas.display_yrange[1] < self.canvas.data_yrange[1]
 
-    def on_hlegend_scroll(self, evt=None):
+    # keycode to move/zoom ratio: 10% of the visible range
+    _key_to_hmove = {
+        wx.WXK_LEFT:-0.1,
+        wx.WXK_RIGHT: 0.1,
+    }
+    _key_to_vmove = {
+        wx.WXK_UP: 0.1,
+        wx.WXK_DOWN:-0.1,
+    }
+    # Horizontal and vertical ranges are disconnected, so have separate zoom control
+    _key_to_hzoom = {
+        ord("*"):-0.1,
+        ord("/"):0.1,
+    }
+    _key_to_vzoom = {
+        ord("-"):0.1,
+        ord("_"):0.1,  # On US keyboards, _ is the same key as -, but with shift
+        ord("+"):-0.1,
+        ord("="):-0.1,  # On US keyboards, = is the same key as +, but without shift
+    }
+
+    def on_char(self, evt):
+        """
+        Handle keys presses to pan and zoom the data display.
+        evt (KeyboardEvent)
+        """
+
+        key = evt.GetKeyCode()
+
+        if key in self._key_to_hmove:
+            move = self._key_to_hmove[key]
+            if evt.ShiftDown():  # "softer": smaller move
+                move *= 0.1
+
+            # convert ratio to units
+            rng = self.hrange.value
+            if rng is None:
+                return
+            shift = (rng[1] - rng[0]) * move
+
+            self.shift_horizontal(shift)
+
+        elif key in self._key_to_vmove:
+            move = self._key_to_vmove[key]
+            if evt.ShiftDown():  # "softer": smaller move
+                move *= 0.1
+
+            # convert ratio to units
+            rng = self.vrange.value
+            if rng is None:
+                return
+            shift = (rng[1] - rng[0]) * move
+
+            self.shift_vertical(shift)
+
+        elif key in self._key_to_hzoom:
+            scale = self._key_to_hzoom[key]
+            if evt.ShiftDown():  # "softer": smaller zoom
+                scale *= 0.1
+
+            rng = self.hrange.value
+            if rng is None:
+                return
+            centre = sum(rng) / 2
+            self.rescale_horizontal(scale, centre)
+
+        elif key in self._key_to_vzoom:
+            scale = self._key_to_vzoom[key]
+            if evt.ShiftDown():  # "softer": smaller zoom
+                scale *= 0.1
+
+            rng = self.vrange.value
+            if rng is None:
+                return
+
+            centre = rng[0]  # Keep the bottom at the bottom
+            self.rescale_vertical(scale, centre)
+        else:
+            # Key press unhandled, pass it on to any parent that could be interested
+            evt.Skip()
+
+    def on_hlegend_scroll(self, evt):
         """ Scroll event for the bottom legend.
 
         Zooms the x-scale of the data and refreshes display
+        evt (MouseEvent)
         """
-        if not self.canvas.has_data():
-            return
 
         rot = evt.GetWheelRotation() / evt.GetWheelDelta()
-        rng = self.hrange.value
-        span = rng[1] - rng[0]
+        scale = -0.1 * rot  # ±10% of the range per scroll wheel step
+        if evt.ShiftDown():  # "softer": smaller zoom
+            scale *= 0.1
+
+        # Zoom around the mouse position
         zoom_centre = self.canvas.pos_x_to_val_x(evt.Position[0])
-        scale = 0.1
+        self.rescale_horizontal(scale, zoom_centre)
 
-        # proportion of zoom_centre
-        prop = (zoom_centre - rng[0]) / span
-        
-        # zoom around the centre point
-        if rot < 0:
-            new_span = span * (1 + scale)
-        else:
-            new_span = span * (1 - scale)
-
-        lo = zoom_centre - prop * new_span
-        hi = lo + new_span
-
-        # Clamp the ranges - this functions differently for scrolls than pans
-        if lo < self.canvas.data_xrange[0]:
-            lo = self.canvas.data_xrange[0]
-        if hi > self.canvas.data_xrange[1]:
-            hi = self.canvas.data_xrange[1]
-
-        self.hrange.value = (lo, hi)
-        self.hrange_lock.value = True  # disable autoscaling when the user zooms in
-
-    def on_vlegend_scroll(self, evt=None):
+    def on_vlegend_scroll(self, evt):
         """ Scroll event for the left legend.
 
         Zooms the y-scale of the data and refreshes display
+        evt (MouseEvent)
         """
-        if not self.canvas.has_data():
-            return
 
         rot = evt.GetWheelRotation() / evt.GetWheelDelta()
-        rng = self.vrange.value
-        span = rng[1] - rng[0]
+        scale = -0.1 * rot  # ±10% of the range per scroll wheel step
+        if evt.ShiftDown():  # "softer": smaller zoom
+            scale *= 0.1
+
+        # Zoom around the mouse position
         zoom_centre = self.canvas.pos_y_to_val_y(evt.Position[1])
-        scale = 0.1
-
-        # proportion of zoom_centre
-        prop = (zoom_centre - rng[0]) / span
-
-        # zoom around the centre point
-        if rot < 0:
-            new_span = span * (1 + scale)
-        else:
-            new_span = span * (1 - scale)
-
-        lo = zoom_centre - prop * new_span
-        hi = lo + new_span
-
-        # Clamp the ranges - this functions differently for scrolls than pans
-        lo = max(self.canvas.data_yrange[0], lo)
-        hi = min(hi, self.canvas.data_yrange[1] + (self.canvas.data_yrange[1] - self.canvas.data_yrange[0]) * self._vmargin)
-
-        self.vrange.value = (lo, hi)
-        self.vrange_lock.value = True  # disable autoscaling when the user zooms in
+        self.rescale_vertical(scale, zoom_centre)
 
     def on_drag_start(self, evt):
-        """ Start a dragging procedure """
+        """ Start a dragging procedure, to pan around the data plot.
+
+        evt (MouseEvent)
+        """
         if not self.canvas.has_data():
             return
 
         self._dragging = True
+        evt.EventObject.SetFocus()
         capture_mouse_on_drag(evt.EventObject)
 
         pos = evt.Position
@@ -1439,7 +1484,9 @@ class NavigablePlotViewport(PlotViewport):
         logging.debug("Drag started at %s", self.drag_init_pos)
 
     def on_drag_end(self, evt):
-        """ End the dragging procedure """
+        """ End the dragging procedure
+        evt (MouseEvent)
+        """
         self._dragging = False
         release_mouse_on_drag(evt.EventObject)
 
@@ -1448,7 +1495,7 @@ class NavigablePlotViewport(PlotViewport):
 
         Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
         down.
-
+        evt (MouseEvent)
         """
         if self._dragging:
             v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
@@ -1457,31 +1504,14 @@ class NavigablePlotViewport(PlotViewport):
             self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
                                v_pos[1] - self.drag_init_pos[1])
 
-            # Rescale the horizontal axis
-            rng = self.hrange.value
-            if rng is None:
-                return
-            lo, hi = rng
-
-            lo += (self.drag_shift[0] * self._hdrag_scale_factor)
-            hi += (self.drag_shift[0] * self._hdrag_scale_factor)
-
-            if lo < self.canvas.data_xrange[0]:
-                lo = self.canvas.data_xrange[0]
-                hi = self.canvas.display_xrange[1]
-            if hi > self.canvas.data_xrange[1]:
-                hi = self.canvas.data_xrange[1]
-                lo = self.canvas.display_xrange[0]
-
-            self.hrange.value = (lo, hi)
-            self.hrange_lock.value = True  # disable autoscaling when the user drags the scale
+            self.shift_horizontal(self.drag_shift[0] * self._hdrag_scale_factor)
 
     def on_vlegend_motion(self, evt):
         """ Process mouse motion
 
         Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
         down.
-
+        evt (MouseEvent)
         """
         if self._dragging:
             v_pos = (self.canvas.pos_x_to_val_x(evt.Position[0]),
@@ -1490,31 +1520,14 @@ class NavigablePlotViewport(PlotViewport):
             self.drag_shift = (v_pos[0] - self.drag_init_pos[0],
                                v_pos[1] - self.drag_init_pos[1])
 
-            # Rescale the vertical axis
-            rng = self.vrange.value
-            if rng is None:
-                return
-            lo, hi = rng
-
-            lo += (self.drag_shift[1] * self._vdrag_scale_factor)
-            hi += (self.drag_shift[1] * self._vdrag_scale_factor)
-
-            if lo < self.canvas.data_yrange[0]:
-                lo = self.canvas.data_yrange[0]
-                hi = self.canvas.display_yrange[1]
-            if hi > self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin:
-                hi = self.canvas.data_yrange[1] + self.canvas.data_yrange[1] * self._vmargin
-                lo = self.canvas.display_yrange[0]
-
-            self.vrange.value = (lo, hi)
-            self.vrange_lock.value = True  # disable autoscaling when the user drags the scale
+            self.shift_vertical(self.drag_shift[1] * self._vdrag_scale_factor)
 
     def on_canvas_motion(self, evt):
         """ Process mouse motion
 
         Set the drag shift and refresh the image if dragging is enabled and the left mouse button is
         down.
-
+        evt (MouseEvent)
         """
         if not self._dragging:
             evt.Skip()
@@ -1553,6 +1566,127 @@ class NavigablePlotViewport(PlotViewport):
 
         self.vrange.value = (lo, hi)
         self.vrange_lock.value = True  # disable autoscaling when the user drags the scale
+
+    def rescale_horizontal(self, scale, centre):
+        """
+        Adjust the horizontal range to see a wider or narrower range. IOW, this
+          allows to zoom in/out horizontally.
+          The range is clipped to always stay within the data range.
+        scale (float): 0 is no change in scale, < 0 means smaller range (zoom in),
+            > 0 means larger range (zoom out).
+        centre (float): value to keep fixed in position. That's the position
+          around which the zoom will be applied. Note that if the range
+          becomes too large and gets clipped, the center might not be preserved.
+        """
+        rng = self.hrange.value
+        if rng is None:
+            return
+
+        span = rng[1] - rng[0]
+
+        # relative position of the centre in the current display range
+        prop = (centre - rng[0]) / span
+
+        # zoom around the centre point
+        new_span = span * (1 + scale)
+        lo = centre - prop * new_span
+        hi = lo + new_span
+
+        # Clamp the ranges to the data range
+        lo = max(self.canvas.data_xrange[0], lo)
+        hi = min(hi, self.canvas.data_xrange[1])
+
+        self.hrange.value = (lo, hi)
+        self.hrange_lock.value = True  # disable autoscaling when the user zooms in
+
+    def rescale_vertical(self, scale, centre):
+        """
+        Adjust the vertical range to see a wider or narrower range. IOW, this
+          allows to zoom in/out vertically. The range
+          is clipped to stay close from the data range.
+        scale (float): 0 is no change in scale, < 0 means smaller range (zoom in),
+            > 0 means larger range (zoom out).
+        centre (float): value to keep fixed in position. That's the position
+          around which the zoom will be applied. Note that if the range
+          becomes too large and gets clipped, the center might not be preserved.
+        """
+        rng = self.vrange.value
+        if rng is None:
+            return
+
+        span = rng[1] - rng[0]
+
+        # relative position of the centre
+        prop = (centre - rng[0]) / span
+
+        # zoom around the centre point
+        new_span = span * (1 + scale)
+        lo = centre - prop * new_span
+        hi = lo + new_span
+
+        # Clamp the ranges to the data range. We allow seeing a little bit higher
+        # than the maximum data as sometimes it's nicer to see a plot if the max
+        # value doesn't exactly touch the top of the plot.
+        lo = max(self.canvas.data_yrange[0], lo)
+        hi = min(hi, self.canvas.data_yrange[1] + (self.canvas.data_yrange[1] - self.canvas.data_yrange[0]) * self._vmargin)
+
+        self.vrange.value = (lo, hi)
+        self.vrange_lock.value = True  # disable autoscaling when the user zooms in
+
+    def shift_horizontal(self, shift):
+        """
+        Move the horizontal range. This allows to pan the data horizontally.
+        The range always stays within the data range, and the range span stays the same.
+        shift (float): amount to shift, in the same unit as the range.
+        """
+        rng = self.hrange.value
+        if rng is None:
+            return
+
+        # Shift the range
+        lo, hi = rng
+        lo += shift
+        hi += shift
+
+        # Make sure we don't go out of range, while keeping the range width the
+        # same (iow, keep the zoom level).
+        if lo < self.canvas.data_xrange[0]:
+            lo = self.canvas.data_xrange[0]
+            hi = self.canvas.data_xrange[0] + (self.canvas.display_xrange[1] - self.canvas.display_xrange[0])
+        if hi > self.canvas.data_xrange[1]:
+            hi = self.canvas.data_xrange[1]
+            lo = self.canvas.data_xrange[1] - (self.canvas.display_xrange[1] - self.canvas.display_xrange[0])
+
+        self.hrange.value = (lo, hi)
+        self.hrange_lock.value = True  # disable autoscaling when the user pans around
+
+    def shift_vertical(self, shift):
+        """
+        Move the vertical range. This allows to pan the data vertically.
+        The range always stays close from the data range, and the range span stays the same.
+        shift (float): amount to shift, in the same unit as the range
+        """
+        rng = self.vrange.value
+        if rng is None:
+            return
+
+        # Shift the range
+        lo, hi = rng
+        lo += shift
+        hi += shift
+
+        # Make sure we don't go out of range, while keeping the range width the
+        # same (iow, keep the zoom level).
+        hi_mx = self.canvas.data_yrange[1] + (self.canvas.data_yrange[1] - self.canvas.data_yrange[0]) * self._vmargin
+        if lo < self.canvas.data_yrange[0]:
+            lo = self.canvas.data_yrange[0]
+            hi = self.canvas.data_yrange[0] + (self.canvas.display_yrange[1] - self.canvas.display_yrange[0])
+        if hi > hi_mx:
+            hi = hi_mx
+            lo = hi_mx - (self.canvas.display_yrange[1] - self.canvas.display_yrange[0])
+
+        self.vrange.value = (lo, hi)
+        self.vrange_lock.value = True  # disable autoscaling when the user pans around
 
 
 class PointSpectrumViewport(NavigablePlotViewport):

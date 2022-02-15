@@ -929,7 +929,9 @@ class ActuatorGUIData(MicroscopyGUIData):
                   "aligner": (1e-6, [100e-9, 1e-4], "aligner", None),
                   "fibaligner": (50e-6, [5e-6, 500e-6], "fibaligner", None),
                   "lens_mover": (50e-6, [5e-6, 500e-6], "lens_mover", None),
-                  "spec_focus": (1e-6, [1e-6, 1000e-6], "spectrograph", {"focus"}),
+                  # There is not way to change the spec_focus stepsize in the GUI.
+                  # On the typical SPARCv2, the smallest step is ~10µm, anything below will not move.
+                  "spec_focus": (100e-6, [1e-6, 1000e-6], "spectrograph", {"focus"}),
                   "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", {"ry", "rz"}),
                   }
         # Use mirror_xy preferably, and fallback to mirror
