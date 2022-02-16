@@ -114,6 +114,9 @@ HW_SETTINGS_CONFIG = {
             ("depthOfField", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("pointSpreadFunctionSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
             # Advanced settings for andorcam2
             ("verticalReadoutRate", {
                 "control_type": odemis.gui.CONTROL_NONE,
@@ -318,6 +321,9 @@ HW_SETTINGS_CONFIG = {
             ("depthOfField", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("pointSpreadFunctionSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
             # Advanced settings for andorcam2
             ("verticalReadoutRate", {
                 "control_type": odemis.gui.CONTROL_NONE,
@@ -417,6 +423,9 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("depthOfField", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("pointSpreadFunctionSize", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             # Advanced settings for andorcam2
