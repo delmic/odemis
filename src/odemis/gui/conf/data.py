@@ -657,6 +657,16 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
             },
         },
     },
+    "mbsem": {
+        "e-beam":
+        {
+            "dwellTime":
+            {   # In XT the minimum dwell time can change based on the HFW, 100ns is the highest minimum value, if
+                # a user would set it to a lower value an error might be raised.
+                "range": (100e-9, 1.0),
+            },
+        },
+    },
 }
 
 # The sparc-simplex is identical to the sparc
