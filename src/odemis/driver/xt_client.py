@@ -1124,6 +1124,8 @@ class Scanner(model.Emitter):
             dwell_time_info["range"],
             unit=dwell_time_info["unit"],
             setter=self._setDwellTime)
+        # when the range has changed, clip the current dwell time value to the new range
+        self.dwellTime.clip_on_range = True
 
         voltage_info = self.parent.ht_voltage_info()
         init_voltage = numpy.clip(self.parent.get_ht_voltage(), voltage_info['range'][0], voltage_info['range'][1])
@@ -1381,6 +1383,8 @@ class Scanner(model.Emitter):
 
     def _onHorizontalFoV(self, fov):
         self._updateDepthOfField()
+        # the dwell time range is dependent on the magnification/horizontalFoV
+        self._updateDwellTimeRng()
         if self._has_detector:
             self._updatePixelSize()
 
@@ -1390,6 +1394,10 @@ class Scanner(model.Emitter):
         K = 100  # Magical constant that gives a not too bad depth of field
         dof = K * (fov / 1024)
         self.depthOfField._set_value(dof, force_write=True)
+
+    def _updateDwellTimeRng(self):
+        """The dwell time range is dependent on the magnification/horizontalFoV, the range whenever the fov updates."""
+        self.dwellTime._set_range(self.parent.dwell_time_info()["range"])
 
     def _isExternal(self):
         """
