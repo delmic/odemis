@@ -4,7 +4,7 @@ Created on 28 Jul 2014
 
 @author: Éric Piel
 
-Copyright © 2014 Éric Piel, Delmic
+Copyright © 2014-2022 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -91,9 +91,15 @@ class FakeCCD(model.HwComponent):
         super(FakeCCD, self).__init__("testccd", "ccd")
         self.exposureTime = model.FloatContinuous(0.1, (1e-6, 1000), unit="s")
         res = fake_img.shape[1], fake_img.shape[0]  # X, Y
+        depth = 2 ** (fake_img.dtype.itemsize * 8)
+        self.shape = (res[0], res[1], depth)
         self.binning = model.TupleContinuous((1, 1), [(1, 1), (8, 8)],
                                        cls=(int, long, float), unit="")
         self.resolution = model.ResolutionVA(res, [(1, 1), res])
+        self.readoutRate = model.FloatVA(1e9, unit="Hz", readonly=True)
+
+        pxs_sens = fake_img.metadata.get(model.MD_SENSOR_PIXEL_SIZE, (10e-6, 10e-6))
+        self.pixelSize = model.VigilantAttribute(pxs_sens, unit="m", readonly=True)
 
         self.data = CCDDataFlow(self)
         self._acquisition_thread = None
@@ -101,6 +107,8 @@ class FakeCCD(model.HwComponent):
         self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
         self.fake_img = fake_img
+
+        self._metadata = fake_img.metadata
 
     def start_acquire(self, callback):
         with self._acquisition_lock:
