@@ -84,9 +84,7 @@ def DivideInNeighborhoods(data, number_of_spots, scale, sensitivity_limit=100):
         subimage_coordinates = []
         subimages = []
 
-        i_max, j_max = unravel_index(image.argmax(), image.shape)
-        i_min, j_min = unravel_index(image.argmin(), image.shape)
-        max_diff = image[i_max, j_max] - image[i_min, j_min]
+        max_diff = image.max() - image.min()
         data_max = filters.maximum_filter(image, filter_window_size)
         data_min = filters.minimum_filter(image, filter_window_size)
 
