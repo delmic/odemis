@@ -72,8 +72,7 @@ class TestFastEMCalibration(unittest.TestCase):
     def setUp(self):
 
         self.good_focus = -70e-6  # position where the image of the multiprobe is displayed in focus [m]
-        self.ccd.updateMetadata(model.MD_FAV_POS_ACTIVE.update({"z": self.good_focus}))
-
+        self.ccd.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": self.good_focus}})
         # move the stage so that the image is in focus
         self.focuser.moveAbs({"z": self.good_focus}).result()
 
@@ -83,14 +82,13 @@ class TestFastEMCalibration(unittest.TestCase):
         calibrations = [OPTICAL_AUTOFOCUS]
 
         # move the stage so that the image is out of focus
-        self.center_position = -30e-6
-        self.focuser.moveAbs({"z": self.center_position}).result()
+        center_position = -30e-6
+        self.focuser.moveAbs({"z": center_position}).result()
 
         # Run auto focus
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
                          self.beamshift, self.det_rotator, calibrations)
 
-        # foc_pos, foc_lev = f.result(timeout=900)  # TODO make use of the focus level?
         e = f.result(timeout=900)
 
         self.assertIsNone(e)  # check no exceptions were returned

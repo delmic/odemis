@@ -24,6 +24,7 @@ import logging
 import time
 from concurrent.futures import CancelledError
 
+from fastem_calibrations.configure_hw import get_config_asm, configure_asm
 from odemis import model
 
 try:
@@ -111,7 +112,8 @@ class CalibrationTask(object):
     The calibration task, which runs the calibrations according to the order in the list of calibrations passed.
     """
 
-    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, future, calibrations):
+    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, future,
+                 calibrations):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -122,10 +124,9 @@ class CalibrationTask(object):
         :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
         :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
         :param det_rotator: (tmcm.CANController) K-mirror controller.
-        :param calibrations: (list of str) List of calibrations that should be run.
-
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled.
-                        (Exception or None): Exception raised during the calibration or None.
+                       (Exception or None): Exception raised during the calibration or None.
+        :param calibrations: (list of str) List of calibrations that should be run.
         """
         self._scanner = scanner
         self._multibeam = multibeam
@@ -146,8 +147,8 @@ class CalibrationTask(object):
         # keep track if future was cancelled or not
         self._cancelled = False
 
-        if model.MD_CALIB not in self._beamshift.getMetadata().keys():
-            self._beamshift.updateMetadata({model.MD_CALIB: self._scanner.beamShiftTransformationMatrix.value})
+        # reset beamshift
+        self._beamshift.shift.value = (0, 0)
 
     def run(self):
         """
@@ -168,6 +169,9 @@ class CalibrationTask(object):
 
         try:
             logging.debug("Starting calibration.")
+
+            logging.debug("Read initial Hw settings.")
+            self.asm_config = get_config_asm(self._multibeam, self._descanner, self._detector)
 
             # loop over calibrations in list (order in list is important!)
             for calib in self.calibrations:
@@ -196,17 +200,19 @@ class CalibrationTask(object):
             logging.debug("Calibration was cancelled.")
             raise
         except Exception as ex:
-            raise ex
+            logging.error("Calibration failed: %s", ex, exc_info=True)
+            raise
         finally:
             # Remove references to the calibrations once all calibrations are finished/cancelled.
             self._calibrations_remaining.clear()
             self._scanner.blanker.value = True  # always blank the beam to reduce beam damage on sample
-            logging.debug("Finish calibrations.")
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config)
+            logging.debug("Calibrations finished.")
 
     def run_calibrations(self, calibration):
         """
         Run a calibration.
-        # Note: All calibrations can be run on bare scintillator.
+        Note: All calibrations can be run on bare scintillator.
         """
         if calibration == OPTICAL_AUTOFOCUS:
             autofocus_multiprobe.run_autofocus(self._scanner, self._multibeam, self._descanner, self._detector,
@@ -217,8 +223,9 @@ class CalibrationTask(object):
                                                                 self._detector, self._dataflow, self._ccd)
 
         if calibration == SCAN_AMPLITUDE_PREALIGN:
-            scan_amplitude_pre_align.run_scan_amplitude_pre_align(self._scanner, self._multibeam, self._descanner,
-                                                                  self._detector, self._dataflow, self._ccd)
+            self.asm_config["multibeam"]["scanOffset"], self.asm_config["multibeam"]["scanAmplitude"] = \
+                scan_amplitude_pre_align.run_scan_amplitude_pre_align(self._scanner, self._multibeam, self._descanner,
+                                                                      self._detector, self._dataflow, self._ccd)
 
         if calibration == DESCAN_GAIN_STATIC:
             descan_gain.run_descan_gain_static(self._scanner, self._multibeam, self._descanner,
@@ -230,17 +237,19 @@ class CalibrationTask(object):
                                                                   self._det_rotator)
 
         if calibration == IMAGE_TRANSLATION_PREALIGN:
-            image_translation_pre_align.run_image_translation_pre_align(self._scanner, self._multibeam,
-                                                                        self._descanner, self._detector,
-                                                                        self._dataflow, self._ccd)
+            self.asm_config["descanner"]["scanOffset"] = \
+                image_translation_pre_align.run_image_translation_pre_align(self._scanner, self._multibeam,
+                                                                            self._descanner, self._detector,
+                                                                            self._dataflow, self._ccd)
 
         if calibration == IMAGE_ROTATION_FINAL:
             image_rotation.run_image_rotation(self._scanner, self._multibeam, self._descanner,
                                               self._detector, self._dataflow, self._det_rotator)
 
         if calibration == IMAGE_TRANSLATION_FINAL:
-            image_translation.run_image_translation(self._scanner, self._multibeam, self._descanner,
-                                                    self._detector, self._dataflow, self._ccd)
+            self.asm_config["descanner"]["scanOffset"] = \
+                image_translation.run_image_translation(self._scanner, self._multibeam, self._descanner,
+                                                        self._detector, self._dataflow, self._ccd)
 
     def cancel(self, future):
         """
