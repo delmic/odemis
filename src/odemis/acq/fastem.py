@@ -739,7 +739,9 @@ def _run_overview_acquisition(f, stream, stage, area, live_stream):
     sf = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
                                     focusing_method=FocusingMethod.NONE)
     # Connect the progress of the underlying future to the main future
-    sf.add_update_callback(_pass_future_progress)
+    # FIXME removed to provide better progress update in GUI
+    #  When _tiledacq.py has proper time update implemented, add this line here again.
+    # sf.add_update_callback(_pass_future_progress)
     das = sf.result()
 
     if len(das) != 1:
