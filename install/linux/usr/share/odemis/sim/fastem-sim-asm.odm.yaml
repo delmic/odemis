@@ -310,8 +310,7 @@ FASTEM-sim: {
     class: static.OpticalLens,
     role: lens,
     init: {
-        # Adjust to have a small depthOfField, which makes the focus blur stronger.
-        mag: 60, # ratio, magnifying
+        mag: 60, # ratio, magnifying; higher magnification is a stronger simulated blur
         na: 0.95,  # numerical aperture
         ri: 1,  # refractive index
     },
@@ -341,5 +340,3 @@ FASTEM-sim: {
                          "z": -43.e-6}  # [m] position of stage where the multiprobe is displayed in focus
     },
 }
-
-
