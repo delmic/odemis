@@ -2,9 +2,9 @@
 """
 Created on 22 Aug 2012
 
-@author: Éric Piel, Philip Winkler
+@author: Éric Piel, Philip Winkler, Sabrina Rossberger
 
-Copyright © 2012-2021 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
+Copyright © 2012 - 2022 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -39,7 +39,7 @@ from functools import partial
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align import fastem as align_fastem
-from odemis.acq.align.fastem import OPTICAL_AUTOFOCUS, SCAN_ROTATION_PREALIGN, IMAGE_TRANSLATION_PREALIGN
+from odemis.acq.align.fastem import Calibrations
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.gui import conf, FG_COLOUR_BUTTON
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
@@ -2296,21 +2296,25 @@ class FastEMAlignmentController:
         self._panel.Parent.Layout()
         self.btn_align.Bind(wx.EVT_BUTTON, self.on_align)
 
-        # FIXME: How to differentiate between simulator and real HW?
-        #   The following two calibrations can also be run with the simulator.
-        #   However, the rest not. How make compartible with both cases?
-        # CALIBRATIONS_SIM and CALIBRATIONS as global var somehow?
-        self.calibrations = [OPTICAL_AUTOFOCUS, IMAGE_TRANSLATION_PREALIGN]
+        # Check if we deal with a real or simulated microscope. If it is a simulator,
+        # we cannot run all calibrations yet.
+        if model.getComponent(role="mbsem") == "FASTEM-sim":  # it's a simulator
+            self.calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
+        else:  # it is a real microscope
+            self.calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.SCAN_ROTATION_PREALIGN,
+                                 Calibrations.SCAN_AMPLITUDE_PREALIGN, Calibrations.DESCAN_GAIN_STATIC,
+                                 Calibrations.IMAGE_ROTATION_PREALIGN, Calibrations.IMAGE_TRANSLATION_PREALIGN,]
+            # IMAGE_TRANSLATION_FINAL FIXME: add when we can update the good mp position and fix for max amplitude
+            # IMAGE_ROTATION_FINAL FIXME: add when fix for max amplitude is there
 
         # check calibration state of system
         # If backend was not restarted, but only GUI, then the system is in principle still calibrated.
         # However, so far when closing the GUI the system is also not calibrated anymore.
         # self.is_aligned.subscribe(self._on_align_state, init=True) # TODO needed?
-
         if not self.is_aligned.value:
             self._reset_calibration_gui()  # display estimated calibration time
 
-        self._future_connector = None  # connect the future to the progress bar and its label
+        self._future_connector = None  # attribute to store the ProgressiveFutureConnector
 
     def on_align(self, evt):
         """
@@ -2320,7 +2324,7 @@ class FastEMAlignmentController:
         # check if cancelled
         if self._tab_data.main.is_acquiring.value:
             logging.debug("Calibration was cancelled.")
-            self.on_cancel(evt)
+            align_fastem._executor.cancel()  # all the rest will be handled by on_alignment_done()
             return
 
         # calibrate
@@ -2389,11 +2393,3 @@ class FastEMAlignmentController:
             self.gauge_label.SetLabel(str(duration) + " seconds")
 
         self._panel.Layout()
-
-    def on_cancel(self, evt):
-        """
-        Cancel the calibration task.
-        Called during calibration when pressing the cancel button.
-        :param evt: (GenButtonEvent) Button triggered.
-        """
-        align_fastem._executor.cancel()  # all the rest will be handled by on_alignment_done()
