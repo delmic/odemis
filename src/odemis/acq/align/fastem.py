@@ -23,8 +23,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import time
 from concurrent.futures import CancelledError
+from enum import Enum
 
-from fastem_calibrations.configure_hw import get_config_asm, configure_asm
 from odemis import model
 
 try:
@@ -39,23 +39,41 @@ try:
         image_rotation,
         image_translation
     )
+    from fastem_calibrations.configure_hw import (
+        get_config_asm,
+        configure_asm
+    )
     fastem_calibrations = True
 except ImportError:
     logging.info("fastem_calibrations package not found")
     fastem_calibrations = False
 
-# TODO does it make sense to make this a list?
-OPTICAL_AUTOFOCUS = autofocus_multiprobe
-SCAN_ROTATION_PREALIGN = scan_rotation_pre_align
-SCAN_AMPLITUDE_PREALIGN = scan_amplitude_pre_align
-DESCAN_GAIN_STATIC = descan_gain
-IMAGE_ROTATION_PREALIGN = image_rotation_pre_align
-IMAGE_TRANSLATION_PREALIGN = image_translation_pre_align
-IMAGE_ROTATION_FINAL = image_rotation
-IMAGE_TRANSLATION_FINAL = image_translation
-
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
+
+
+class Calibrations(Enum):
+    """
+    Connect each calibration to a unique constant name.
+    """
+    if fastem_calibrations == True:
+        OPTICAL_AUTOFOCUS = autofocus_multiprobe
+        SCAN_ROTATION_PREALIGN = scan_rotation_pre_align
+        SCAN_AMPLITUDE_PREALIGN = scan_amplitude_pre_align
+        DESCAN_GAIN_STATIC = descan_gain
+        IMAGE_ROTATION_PREALIGN = image_rotation_pre_align
+        IMAGE_TRANSLATION_PREALIGN = image_translation_pre_align
+        IMAGE_ROTATION_FINAL = image_rotation
+        IMAGE_TRANSLATION_FINAL = image_translation
+    else:
+        OPTICAL_AUTOFOCUS = None
+        SCAN_ROTATION_PREALIGN = None
+        SCAN_AMPLITUDE_PREALIGN = None
+        DESCAN_GAIN_STATIC = None
+        IMAGE_ROTATION_PREALIGN = None
+        IMAGE_TRANSLATION_PREALIGN = None
+        IMAGE_ROTATION_FINAL = None
+        IMAGE_TRANSLATION_FINAL = None
 
 
 def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations):
@@ -66,24 +84,24 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
     :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
     :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
     :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
-    :param stage: (actuator.ConvertStage) The stage in the corrected scan coordinate system, the x and y axes are
-        aligned with the x and y axes of the multiprobe and the multibeam scanner.
+    :param stage: (actuator) The stage in the corrected scan coordinate system, the x and y axes are
+            aligned with the x and y axes of the multiprobe and the multibeam scanner. Must have x, y and z axes.
     :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
-    :param det_rotator: (tmcm.CANController) K-mirror controller.
-    :param calibrations: (list of str) List of calibrations that should be run.
+    :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
+    :param calibrations: (list) List of calibrations that should be run.
 
     :returns: (ProgressiveFuture) Alignment future object, which can be cancelled.
-            The result of the future is: (None)
     """
 
     if not fastem_calibrations:
         raise ModuleNotFoundError("fastem_calibration module missing. Cannot run calibrations.")
 
-    f = model.ProgressiveFuture()
+    est_dur = estimate_calibration_time(calibrations)
+    f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # Create a task that runs the calibration and alignments.
-    task = CalibrationTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, f, calibrations)
+    task = CalibrationTask(f, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -97,14 +115,11 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
 def estimate_calibration_time(calibrations):
     """
     Computes the approximate time it will take to run all calibrations.
-    :param calibrations: (list of str) List of calibrations that should be run.
+    :param calibrations: (list) List of calibrations that should be run.
     :return (0 <= float): The estimated time for the requested calibrations in s.
     """
-    tot_time = 0
-    for calib in calibrations:
-        tot_time += calib.estimate_calibration_time()
 
-    return tot_time
+    return sum(c.value.estimate_calibration_time() for c in calibrations)
 
 
 class CalibrationTask(object):
@@ -112,21 +127,22 @@ class CalibrationTask(object):
     The calibration task, which runs the calibrations according to the order in the list of calibrations passed.
     """
 
-    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, future,
+    def __init__(self, future, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
                  calibrations):
         """
-        :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
-        :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
-        :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
-        :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
-        :param stage: (actuator.ConvertStage) The stage in the corrected scan coordinate system, the x and y axes are
-            aligned with the x and y axes of the multiprobe and the multibeam scanner.
-        :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
-        :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
-        :param det_rotator: (tmcm.CANController) K-mirror controller.
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled.
                        (Exception or None): Exception raised during the calibration or None.
-        :param calibrations: (list of str) List of calibrations that should be run.
+        :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
+        :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
+        :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server
+            module.
+        :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
+        :param stage: (actuator) The stage in the corrected scan coordinate system, the x and y axes are
+            aligned with the x and y axes of the multiprobe and the multibeam scanner. Must have x, y and z axes.
+        :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
+        :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
+        :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
+        :param calibrations: (list) List of calibrations that should be run.
         """
         self._scanner = scanner
         self._multibeam = multibeam
@@ -147,9 +163,6 @@ class CalibrationTask(object):
         # keep track if future was cancelled or not
         self._cancelled = False
 
-        # reset beamshift
-        self._beamshift.shift.value = (0, 0)
-
     def run(self):
         """
         Runs a set of calibration procedures.
@@ -168,10 +181,11 @@ class CalibrationTask(object):
         logging.info("Starting calibrations, with expected duration of %f s", total_calibration_time)
 
         try:
-            logging.debug("Starting calibration.")
-
-            logging.debug("Read initial Hw settings.")
+            logging.debug("Starting calibration, reading initial hardware settings.")
             self.asm_config = get_config_asm(self._multibeam, self._descanner, self._detector)
+
+            # reset beamshift
+            self._beamshift.shift.value = (0, 0)
 
             # loop over calibrations in list (order in list is important!)
             for calib in self.calibrations:
@@ -214,42 +228,63 @@ class CalibrationTask(object):
         Run a calibration.
         Note: All calibrations can be run on bare scintillator.
         """
-        if calibration == OPTICAL_AUTOFOCUS:
+        if calibration == Calibrations.OPTICAL_AUTOFOCUS:
             autofocus_multiprobe.run_autofocus(self._scanner, self._multibeam, self._descanner, self._detector,
                                                self._dataflow, self._ccd, self._stage)
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
 
-        if calibration == SCAN_ROTATION_PREALIGN:
+        elif calibration == Calibrations.SCAN_ROTATION_PREALIGN:
             scan_rotation_pre_align.run_scan_rotation_pre_align(self._scanner, self._multibeam, self._descanner,
                                                                 self._detector, self._dataflow, self._ccd)
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
 
-        if calibration == SCAN_AMPLITUDE_PREALIGN:
-            self.asm_config["multibeam"]["scanOffset"], self.asm_config["multibeam"]["scanAmplitude"] = \
-                scan_amplitude_pre_align.run_scan_amplitude_pre_align(self._scanner, self._multibeam, self._descanner,
-                                                                      self._detector, self._dataflow, self._ccd)
+        elif calibration == Calibrations.SCAN_AMPLITUDE_PREALIGN:
+            s_offset, s_amplitude = scan_amplitude_pre_align.run_scan_amplitude_pre_align(self._scanner,
+                                                                                          self._multibeam,
+                                                                                          self._descanner,
+                                                                                          self._detector,
+                                                                                          self._dataflow,
+                                                                                          self._ccd)
+            self.asm_config["multibeam"]["scanOffset"] = s_offset
+            self.asm_config["multibeam"]["scanAmplitude"] = s_amplitude
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
 
-        if calibration == DESCAN_GAIN_STATIC:
+        elif calibration == Calibrations.DESCAN_GAIN_STATIC:
             descan_gain.run_descan_gain_static(self._scanner, self._multibeam, self._descanner,
                                                self._detector, self._dataflow, self._ccd)
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
 
-        if calibration == IMAGE_ROTATION_PREALIGN:
+        elif calibration == Calibrations.IMAGE_ROTATION_PREALIGN:
             image_rotation_pre_align.run_image_rotation_pre_align(self._scanner, self._multibeam, self._descanner,
                                                                   self._detector, self._dataflow, self._ccd,
                                                                   self._det_rotator)
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
 
-        if calibration == IMAGE_TRANSLATION_PREALIGN:
-            self.asm_config["descanner"]["scanOffset"] = \
-                image_translation_pre_align.run_image_translation_pre_align(self._scanner, self._multibeam,
-                                                                            self._descanner, self._detector,
-                                                                            self._dataflow, self._ccd)
+        elif calibration == Calibrations.IMAGE_TRANSLATION_PREALIGN:
+            d_offset = image_translation_pre_align.run_image_translation_pre_align(self._scanner, self._multibeam,
+                                                                                   self._descanner, self._detector,
+                                                                                   self._dataflow, self._ccd)
+            self.asm_config["descanner"]["scanOffset"] = d_offset
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
 
-        if calibration == IMAGE_ROTATION_FINAL:
+        elif calibration == Calibrations.IMAGE_ROTATION_FINAL:
             image_rotation.run_image_rotation(self._scanner, self._multibeam, self._descanner,
                                               self._detector, self._dataflow, self._det_rotator)
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
 
-        if calibration == IMAGE_TRANSLATION_FINAL:
-            self.asm_config["descanner"]["scanOffset"] = \
-                image_translation.run_image_translation(self._scanner, self._multibeam, self._descanner,
-                                                        self._detector, self._dataflow, self._ccd)
+        elif calibration == Calibrations.IMAGE_TRANSLATION_FINAL:
+            d_offset = image_translation.run_image_translation(self._scanner, self._multibeam, self._descanner,
+                                                               self._detector, self._dataflow, self._ccd)
+            self.asm_config["descanner"]["scanOffset"] = d_offset
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
 
     def cancel(self, future):
         """

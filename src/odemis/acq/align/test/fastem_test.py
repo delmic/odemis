@@ -33,12 +33,12 @@ import numpy
 import odemis
 from odemis import model
 from odemis.acq.align import fastem
-from odemis.acq.align.fastem import OPTICAL_AUTOFOCUS, IMAGE_TRANSLATION_PREALIGN
+from odemis.acq.align.fastem import Calibrations
 from odemis.util import test
 
 # * TEST_NOHW = 1: use simulator (asm/sam and xt adapter simulators need to be running)
-# * TEST_NOHW = 0: connected to the real hardware (backend needs to be running)
 # technolution_asm_simulator/simulator2/run_the_simulator.py
+# * TEST_NOHW = 0: connected to the real hardware (backend needs to be running)
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default is HW testing
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -65,7 +65,6 @@ class TestFastEMCalibration(unittest.TestCase):
         cls.stage = model.getComponent(
             role="stage")  # TODO replace with stage-scan when ROA conversion method available
         cls.ccd = model.getComponent(role="diagnostic-ccd")
-        cls.focuser = model.getComponent(role="diagnostic-cam-focus")
         cls.beamshift = model.getComponent(role="ebeam-shift")
         cls.det_rotator = model.getComponent(role="det-rotator")
 
@@ -74,16 +73,16 @@ class TestFastEMCalibration(unittest.TestCase):
         self.good_focus = -70e-6  # position where the image of the multiprobe is displayed in focus [m]
         self.ccd.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": self.good_focus}})
         # move the stage so that the image is in focus
-        self.focuser.moveAbs({"z": self.good_focus}).result()
+        self.stage.moveAbs({"z": self.good_focus}).result()
 
     def test_optical_autofocus(self):
         """Run the optical autofocus calibration. Can also be tested with simulator."""
 
-        calibrations = [OPTICAL_AUTOFOCUS]
+        calibrations = [Calibrations.OPTICAL_AUTOFOCUS]
 
         # move the stage so that the image is out of focus
         center_position = -30e-6
-        self.focuser.moveAbs({"z": center_position}).result()
+        self.stage.moveAbs({"z": center_position}).result()
 
         # Run auto focus
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
@@ -94,13 +93,13 @@ class TestFastEMCalibration(unittest.TestCase):
         self.assertIsNone(e)  # check no exceptions were returned
         # check that z stage position is close to good position
         # Note: This accuracy is dependent on the value chosen for the magnification on the lens.
-        numpy.testing.assert_allclose(self.focuser.position.value["z"], self.good_focus, atol=2e-6)
+        numpy.testing.assert_allclose(self.stage.position.value["z"], self.good_focus, atol=2e-6)
 
     def test_image_translation_prealign(self):
         """Run the image translation prealing calibration. Can also be tested with simulator.
         It calibrates the descanner offset."""
 
-        calibrations = [IMAGE_TRANSLATION_PREALIGN]
+        calibrations = [Calibrations.IMAGE_TRANSLATION_PREALIGN]
 
         # get current descanner offset
         descan_offset_cur = self.descanner.scanOffset.value
@@ -124,7 +123,7 @@ class TestFastEMCalibration(unittest.TestCase):
 
         self.updates = 0  # updated in callback on_progress_update
 
-        calibrations = [OPTICAL_AUTOFOCUS, IMAGE_TRANSLATION_PREALIGN]
+        calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
                          self.beamshift, self.det_rotator, calibrations)
 
@@ -148,7 +147,7 @@ class TestFastEMCalibration(unittest.TestCase):
         self.updates = 0  # updated in callback on_progress_update
         self.done = False  # updated in callback on_done
 
-        calibrations = [OPTICAL_AUTOFOCUS]
+        calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
                          self.beamshift, self.det_rotator, calibrations)
 
@@ -159,7 +158,8 @@ class TestFastEMCalibration(unittest.TestCase):
         self.assertTrue(f.running())
         f.cancel()
 
-        self.assertRaises(CancelledError, f.result, 1)  # add timeout = 1s in case cancellation error was not raised
+        with self.assertRaises(CancelledError):
+            f.result(timeout=5)  # add timeout = 5s in case cancellation error was not raised
         self.assertGreaterEqual(self.updates, 2)  # at least one update at cancellation
         self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
