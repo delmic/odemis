@@ -1,7 +1,7 @@
 # Prerequisites: Simulators that need to be available
-#- xt adapter simulator: python3 xtadapter/server_sim_xttoolkit.py
-#- ASM and SAM simulator by Technolution, started with:
-#  technolution_asm_simulator/simulator2/run_the_simulator.sh
+# - xt adapter simulator: python3 xtadapter/server_sim_xttoolkit.py
+# - ASM and SAM simulator by Technolution, started with:
+#   technolution_asm_simulator/simulator2/run_the_simulator.sh
 
 FASTEM-sim: {
     class: Microscope,
@@ -14,7 +14,7 @@ FASTEM-sim: {
                "Beam Shift Controller", "Focus Tracker",
                "ASM", "MultiBeam Scanner", "Mirror Descanner", "MPPC",
                "Detector Rotator", "Optical Objective",
-               "Diagnostic Camera",  # "Navigation Camera",
+               "Diagnostic Camera", # "Navigation Camera",
                ],
 }
 
@@ -147,7 +147,7 @@ FASTEM-sim: {
       # X/Y: position of the scintillators
       # Z: useful range for the (auto) focus
       POS_ACTIVE_RANGE: {"x": [-25.e-3, 25.e-3], "y": [-25.e-3, 25.e-3], "z": [-85.e-6, 5.e-6]}, # m, min/max
-      FAV_POS_ACTIVE: {"z": -63.e-6}  # [m] Estimate for good focus position
+      FAV_POS_ACTIVE: {"z": -63.e-6}  # [m] Estimate for good focus position - autofocus starts here to search
     },
     affects: ["Diagnostic Camera", "MultiBeam Scanner XT", "MultiBeam Scanner", "MPPC"]
 }
@@ -309,7 +309,11 @@ FASTEM-sim: {
 "Optical Objective": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 40}, # ratio, magnifying
+    init: {
+        mag: 60, # ratio, magnifying; higher magnification is a stronger simulated blur
+        na: 0.95,  # numerical aperture
+        ri: 1,  # refractive index
+    },
     affects: ["Diagnostic Camera"],
 }
 
@@ -319,6 +323,7 @@ FASTEM-sim: {
 "Diagnostic Camera": {
     class: simcam.Camera,
     role: diagnostic-ccd,
+    dependencies: {"focus": "Sample Stage in carrier coordinates"},
     init: {
         image: "../acq/align/test/multiprobe01.tiff",
     },
@@ -326,12 +331,12 @@ FASTEM-sim: {
         exposureTime: 0.005, # s
     },
     metadata: {
-        # Factory calibration position in diagnostic camera pixels, where the multiprobe is visible on the diagnostic
-        # camera and the mppc detector.
-        FAV_POS_ACTIVE: {"x": 750, "y": 550}
+        # x and y: Factory calibration position in diagnostic camera pixels, where the multiprobe is visible on
+        # the diagnostic camera and the mppc detector.
+        # z: Simulated stage position where the camera is in focus; choose different from stage metadata
+        # to better simulate the autofocusing procedure. Note: ONLY needed for simulator.
+        FAV_POS_ACTIVE: {"x": 750,  # [px_dc] good multiprobe position
+                         "y": 550,  # [px_dc] good multiprobe position
+                         "z": -43.e-6}  # [m] position of stage where the multiprobe is displayed in focus
     },
 }
-
-
-
-
