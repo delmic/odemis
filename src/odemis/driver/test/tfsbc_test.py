@@ -66,6 +66,7 @@ class TestBeamShiftController(unittest.TestCase):
         calib_md = self.bc.getMetadata()[model.MD_CALIB]
         self.assertIsInstance(calib_md, list)
         self.assertIsInstance(calib_md[0][0], float)
+        self.assertEqual(calib_md[0][0], -0.00027788219369730165)
 
     def test_read_write(self):
         vals = [27000, 37000, 20000, 44000]

@@ -167,7 +167,9 @@ class BeamShiftController(model.HwComponent):
         :param serialnum (str): serial number of RS485 adapter
             The connection can be specified by either port or serialnum, it's not needed to provide both.
         :param dependencies (dict str -> scanner):
-            scanner component -> name of the xt multibeam scanner component.
+            scanner component -> name of the xt multibeam scanner component. If None, no calibration
+            data, which is specific for the multibeam system, will be retrieved from the scanner and
+            added to the beamshift metadata.
         """
         # .hwVersion, .swVersion not available
         model.HwComponent.__init__(self, name, role, **kwargs)
