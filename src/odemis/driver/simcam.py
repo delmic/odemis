@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 19 Jun 2014
 
 @author: Éric Piel
 
-Copyright © 2014 Éric Piel, Kimon Tsitsikas, Delmic
+Copyright © 2014-2022 Éric Piel, Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
@@ -18,9 +18,10 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
+import math
 import threading
 from past.builtins import long
 from builtins import str
@@ -35,6 +36,7 @@ import time
 from PIL import Image, ImageDraw, ImageFont
 
 ERROR_STATE_FILE = "simcam-hw.error"
+
 
 class Camera(model.DigitalCamera):
     '''
@@ -273,7 +275,8 @@ class Camera(model.DigitalCamera):
         if self._focus:
             # apply the defocus
             pos = self._focus.position.value['z']
-            dist = abs(pos - self._metadata[model.MD_FAV_POS_ACTIVE]["z"]) / (self.depthOfField.value * 10)
+            # max blur of 30 pixels, else image generation takes too long
+            dist = min(math.sqrt(abs(pos - self._metadata[model.MD_FAV_POS_ACTIVE]["z"]) / self.depthOfField.value), 30)
             logging.debug("Focus blur = %g", dist)
             img = ndimage.gaussian_filter(gen_img, sigma=dist)
         else:
@@ -306,7 +309,6 @@ class Camera(model.DigitalCamera):
         image[txt_array == 255] = image.max()
 
         return image
-
 
     def set_image(self, new_img):
         """
@@ -393,6 +395,7 @@ class Camera(model.DigitalCamera):
 
         except Exception as e:
             logging.warning("In changing states in SimCam the error '%s' occurred", e)
+
 
 class SimpleDataFlow(model.DataFlow):
     def __init__(self, ccd):
