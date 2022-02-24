@@ -88,7 +88,7 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
     :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
     :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
-    :param calibrations: (list) List of calibrations that should be run.
+    :param calibrations: (list[Calibrations]) List of calibrations that should be run.
 
     :returns: (ProgressiveFuture) Alignment future object, which can be cancelled.
     """
@@ -141,7 +141,7 @@ class CalibrationTask(object):
         :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
         :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
         :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
-        :param calibrations: (list) List of calibrations that should be run.
+        :param calibrations: (list[Calibrations]) List of calibrations that should be run.
         """
         self._scanner = scanner
         self._multibeam = multibeam
@@ -289,13 +289,12 @@ class CalibrationTask(object):
         """
         Cancels the calibrations.
         :param future: (future) The calibration future.
-        :return: (bool) True if cancelled, TODO False?
+        :return: (bool) True if cancelled.
         """
         self._cancelled = True
 
         # FIXME Currently there is no subfuture implemented for each calibration.
         #  So, when cancelling while a calibration has already started it will run until it is completely finished.
-        # TODO When to set this to False in which event?
 
         return True
 
