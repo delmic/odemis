@@ -46,6 +46,15 @@ try:
     fastem_calibrations = True
 except ImportError:
     logging.info("fastem_calibrations package not found")
+    autofocus_multiprobe = None
+    scan_rotation_pre_align = None
+    scan_amplitude_pre_align = None
+    descan_gain = None
+    image_rotation_pre_align = None
+    image_translation_pre_align = None
+    image_rotation = None
+    image_translation = None
+
     fastem_calibrations = False
 
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
@@ -56,24 +65,14 @@ class Calibrations(Enum):
     """
     Connect each calibration to a unique constant name.
     """
-    if fastem_calibrations == True:
-        OPTICAL_AUTOFOCUS = autofocus_multiprobe
-        SCAN_ROTATION_PREALIGN = scan_rotation_pre_align
-        SCAN_AMPLITUDE_PREALIGN = scan_amplitude_pre_align
-        DESCAN_GAIN_STATIC = descan_gain
-        IMAGE_ROTATION_PREALIGN = image_rotation_pre_align
-        IMAGE_TRANSLATION_PREALIGN = image_translation_pre_align
-        IMAGE_ROTATION_FINAL = image_rotation
-        IMAGE_TRANSLATION_FINAL = image_translation
-    else:
-        OPTICAL_AUTOFOCUS = None
-        SCAN_ROTATION_PREALIGN = None
-        SCAN_AMPLITUDE_PREALIGN = None
-        DESCAN_GAIN_STATIC = None
-        IMAGE_ROTATION_PREALIGN = None
-        IMAGE_TRANSLATION_PREALIGN = None
-        IMAGE_ROTATION_FINAL = None
-        IMAGE_TRANSLATION_FINAL = None
+    OPTICAL_AUTOFOCUS = autofocus_multiprobe
+    SCAN_ROTATION_PREALIGN = scan_rotation_pre_align
+    SCAN_AMPLITUDE_PREALIGN = scan_amplitude_pre_align
+    DESCAN_GAIN_STATIC = descan_gain
+    IMAGE_ROTATION_PREALIGN = image_rotation_pre_align
+    IMAGE_TRANSLATION_PREALIGN = image_translation_pre_align
+    IMAGE_ROTATION_FINAL = image_rotation
+    IMAGE_TRANSLATION_FINAL = image_translation
 
 
 def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations):
