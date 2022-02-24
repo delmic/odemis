@@ -2308,9 +2308,8 @@ class FastEMAlignmentController:
             # IMAGE_ROTATION_FINAL FIXME: add when fix for max amplitude is there
 
         # check calibration state of system
-        # If backend was not restarted, but only GUI, then the system is in principle still calibrated.
-        # However, so far when closing the GUI the system is also not calibrated anymore.
-        # self.is_aligned.subscribe(self._on_align_state, init=True) # TODO needed?
+        # TODO If backend was not restarted, but only GUI, then the system is in principle still calibrated.
+        #   However, so far when closing the GUI the system is also not calibrated anymore.
         if not self.is_aligned.value:
             self._reset_calibration_gui()  # display estimated calibration time
 
@@ -2339,7 +2338,6 @@ class FastEMAlignmentController:
         self._panel.btn_align.SetLabel("Cancel")  # change button label
         self._panel.Layout()
 
-        # TODO loop over calibrations here and then use batch future?
         # Start alignment
         f = align.fastem.align(self._main_data_model.ebeam, self._main_data_model.multibeam,
                                self._main_data_model.descanner, self._main_data_model.mppc,
