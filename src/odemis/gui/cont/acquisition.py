@@ -2298,7 +2298,9 @@ class FastEMAlignmentController:
 
         # Check if we deal with a real or simulated microscope. If it is a simulator,
         # we cannot run all calibrations yet.
-        if model.getComponent(role="mbsem") == "FASTEM-sim":  # it's a simulator
+        # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
+        # need to know that it's simulated otherwise we can never simulate an acquisition.
+        if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
             self.calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:  # it is a real microscope
             self.calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.SCAN_ROTATION_PREALIGN,
