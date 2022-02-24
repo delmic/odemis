@@ -4,7 +4,7 @@ Created on 1 May 2019
 
 @author: Thera Pals
 
-Copyright © 2019 Thera Pals, Delmic
+Copyright © 2019-2022 Thera Pals, Delmic
 
 This file is part of Odemis.
 
@@ -44,34 +44,14 @@ class TestAutofocusSim(unittest.TestCase):
     """
     Test simulated auto focus for CL spots.
     """
-    backend_was_running = False
 
     @classmethod
     def setUpClass(cls):
-        try:
-            test.start_backend(CLSPOTS_SIM_CONFIG)
-        except LookupError:
-            logging.debug("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        test.start_backend(CLSPOTS_SIM_CONFIG)
 
         # find components by their role
         cls.diagnostic_cam = model.getComponent(role="diagnostic-ccd")
         cls.stage = model.getComponent(role="stage")
-        cls.ofocus = model.getComponent(role="diagnostic-cam-focus")
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     @timeout(1000)
     def test_autofocus_opt(self):
@@ -83,13 +63,13 @@ class TestAutofocusSim(unittest.TestCase):
         self.diagnostic_cam.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": good_focus}})
         # Move the stage so that the image is out of focus
         center_position = 17e-6
-        self.ofocus.moveAbs({"z": center_position}).result()
+        self.stage.moveAbs({"z": center_position}).result()
         # Run auto focus
-        future_focus = align.autofocus.CLSpotsAutoFocus(self.diagnostic_cam, self.ofocus)
+        future_focus = align.autofocus.CLSpotsAutoFocus(self.diagnostic_cam, self.stage)
         foc_pos, foc_lev = future_focus.result(timeout=900)
         # Check that the auto focus converged to the correct position and the stage moved to the correct position
-        numpy.testing.assert_allclose(foc_pos, good_focus, atol=0.5e-6)
-        numpy.testing.assert_allclose(self.ofocus.position.value["z"], foc_pos, atol=1e-6)
+        numpy.testing.assert_allclose(foc_pos, good_focus, atol=1e-6)
+        numpy.testing.assert_allclose(self.stage.position.value["z"], foc_pos, atol=1e-6)
 
     def test_focus_at_boundaries(self):
         """
@@ -100,26 +80,26 @@ class TestAutofocusSim(unittest.TestCase):
         self.diagnostic_cam.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": good_focus}})
         # Move the stage so that the image is out of focus
         center_position = 32e-6
-        self.ofocus.moveAbs({"z": center_position}).result()
+        self.stage.moveAbs({"z": center_position}).result()
         # Run auto focus
-        future_focus = align.autofocus.CLSpotsAutoFocus(self.diagnostic_cam, self.ofocus)
+        future_focus = align.autofocus.CLSpotsAutoFocus(self.diagnostic_cam, self.stage)
         foc_pos, foc_lev = future_focus.result(timeout=900)
         # Check that the auto focus converged to the correct position and the stage moved to the correct position
-        numpy.testing.assert_allclose(foc_pos, good_focus, atol=0.5e-6)
-        numpy.testing.assert_allclose(self.ofocus.position.value["z"], foc_pos, atol=1e-6)
+        numpy.testing.assert_allclose(foc_pos, good_focus, atol=1e-6)
+        numpy.testing.assert_allclose(self.stage.position.value["z"], foc_pos, atol=1e-6)
 
         # set the position where the image is in focus.
         good_focus = 100e-6
         self.diagnostic_cam.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": good_focus}})
         # Move the stage so that the image is out of focus
         center_position = 17e-6
-        self.ofocus.moveAbs({"z": center_position}).result()
+        self.stage.moveAbs({"z": center_position}).result()
         # Run auto focus
-        future_focus = align.autofocus.CLSpotsAutoFocus(self.diagnostic_cam, self.ofocus)
+        future_focus = align.autofocus.CLSpotsAutoFocus(self.diagnostic_cam, self.stage)
         foc_pos, foc_lev = future_focus.result(timeout=900)
         # Check that the auto focus converged to the correct position and the stage moved to the correct position
-        numpy.testing.assert_allclose(foc_pos, good_focus, atol=0.5e-6)
-        numpy.testing.assert_allclose(self.ofocus.position.value["z"], foc_pos, atol=1e-6)
+        numpy.testing.assert_allclose(foc_pos, good_focus, atol=1e-6)
+        numpy.testing.assert_allclose(self.stage.position.value["z"], foc_pos, atol=1e-6)
 
     @unittest.skip("Skip, very slow.")
     def test_autofocus_different_starting_positions(self):
@@ -129,54 +109,34 @@ class TestAutofocusSim(unittest.TestCase):
         for k in range(500):
             # Move the stage to a random starting position.
             start_position = numpy.random.randint(100) * 1e-6
-            self.ofocus.moveAbs({"z": start_position}).result()
+            self.stage.moveAbs({"z": start_position}).result()
             # Set the good focus to a random value.
             good_focus = numpy.random.randint(100) * 1e-6
             logging.debug("start position {}, good focus {}".format(start_position, good_focus))
             self.diagnostic_cam.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": good_focus}})
             # run auto focus
-            future_focus = align.autofocus.CLSpotsAutoFocus(self.diagnostic_cam, self.ofocus)
+            future_focus = align.autofocus.CLSpotsAutoFocus(self.diagnostic_cam, self.stage)
             foc_pos, foc_lev = future_focus.result(timeout=900)
             logging.debug("found focus at {} good focus at {}".format(foc_pos, good_focus))
-            numpy.testing.assert_allclose(foc_pos, good_focus, atol=0.5e-6)
+            numpy.testing.assert_allclose(foc_pos, good_focus, atol=1e-6)
 
 
 class TestAutofocusHW(unittest.TestCase):
     """
     Test auto focus functions for CL spots with hardware.
     """
-    backend_was_running = False
 
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
             raise unittest.SkipTest('No HW present. Skipping tests.')
 
-        try:
-            test.start_backend(CLSPOTS_CONFIG)
-        except LookupError:
-            logging.debug("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        test.start_backend(CLSPOTS_CONFIG)
 
         # find components by their role
         cls.diagnostic_cam = model.getComponent(role="diagnostic-ccd")
         cls.stage = model.getComponent(role="stage")
-        cls.ofocus = model.getComponent(role="diagnostic-cam-focus")
         cls._optimal_focus = 40e-6  # update with actual value
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        test.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     def test_autofocus_optical(self):
         """
@@ -184,10 +144,10 @@ class TestAutofocusHW(unittest.TestCase):
         """
         # Move the stage so that the image is out of focus
         center_position = 74e-6
-        self.ofocus.moveAbs({"z": center_position}).result()
-        numpy.testing.assert_allclose(self.ofocus.position.value["z"], center_position, atol=1e-7)
+        self.stage.moveAbs({"z": center_position}).result()
+        numpy.testing.assert_allclose(self.stage.position.value["z"], center_position, atol=1e-7)
         # run autofocus
-        future_focus = align.AutoFocus(self.diagnostic_cam, None, self.ofocus)
+        future_focus = align.AutoFocus(self.diagnostic_cam, None, self.stage)
         foc_pos, foc_lev = future_focus.result(timeout=900)
         # Test if the correct focus position was found.
         logging.debug("found focus at {} good focus at {}".format(foc_pos, self._optimal_focus))
@@ -204,15 +164,15 @@ class TestAutofocusHW(unittest.TestCase):
                 start_position = start_position * 1e-6
                 logging.debug("start pos {}".format(start_position))
                 # move the stage to the start position.
-                self.ofocus.moveAbs({"z": start_position}).result()
-                numpy.testing.assert_allclose(self.ofocus.position.value["z"], start_position, atol=1e-6)
+                self.stage.moveAbs({"z": start_position}).result()
+                numpy.testing.assert_allclose(self.stage.position.value["z"], start_position, atol=1e-6)
                 # run autofocus
-                future_focus = align.AutoFocus(self.diagnostic_cam, None, self.ofocus)
+                future_focus = align.AutoFocus(self.diagnostic_cam, None, self.stage)
                 foc_pos, foc_lev = future_focus.result(timeout=900)
                 # Test if the correct focus position was found.
                 logging.debug("found focus at {} good focus at {}".format(foc_pos, self._optimal_focus))
                 result = numpy.allclose(foc_pos, self._optimal_focus, atol=1e-6)
-                numpy.testing.assert_allclose(self.ofocus.position.value["z"], foc_pos, atol=1e-6)
+                numpy.testing.assert_allclose(self.stage.position.value["z"], foc_pos, atol=1e-6)
                 results.append(result)
             except Exception as e:
                 logging.debug("{}".format(e))
@@ -226,11 +186,11 @@ class TestAutofocusHW(unittest.TestCase):
         """
         # Move the stage so that the image is out of focus
         start_position = self._optimal_focus
-        self.ofocus.moveAbs({"z": start_position}).result()
+        self.stage.moveAbs({"z": start_position}).result()
         # check that it moved to the correct starting position
-        numpy.testing.assert_allclose(self.ofocus.position.value["z"], start_position, atol=1e-7)
+        numpy.testing.assert_allclose(self.stage.position.value["z"], start_position, atol=1e-7)
         # Run autofocus
-        future_focus = align.AutoFocus(self.diagnostic_cam, None, self.ofocus)
+        future_focus = align.AutoFocus(self.diagnostic_cam, None, self.stage)
         foc_pos, foc_lev = future_focus.result(timeout=900)
         # Test that the correct focus has been found.
         logging.debug("found focus at {} good focus at {}".format(foc_pos, self._optimal_focus))
