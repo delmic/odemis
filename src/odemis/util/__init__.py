@@ -106,34 +106,37 @@ def almost_equal(a, b, atol=1e-18, rtol=1e-7):
     rtol (float): relative tolerance
     returns (bool): True if a and b are almost equal
     """
-    if a == b:
-        return True
-
-    tol = max(atol, max(abs(a), abs(b)) * rtol)
-    if abs(a - b) <= tol:
-        return True
-
-    return False
+    # Since Python 3.5, there exists an almost equal function
+    return math.isclose(a, b, rel_tol=rtol, abs_tol=atol)
 
 
-def rot_almost_equal(a, b, atol=1e-18, rtol=1e-7):
+def rot_almost_equal(a: float, b: float, atol: float=1e-18, rtol: float=1e-7) -> bool:
     """
     Check the rotation difference between two radian angles is within a margin
-    a (float) an angle, in radians
-    b (float) an angle, in radians
-    atol (float): absolute tolerance
-    rtol (float): relative tolerance
-    returns (bool): True if a and b rotation is within a margin
+    a: an angle, in radians
+    b: an angle, in radians
+    atol: absolute tolerance
+    rtol: relative tolerance
+    returns: True if a and b rotation is within a margin
     """
     if a == b:
         return True
 
-    tau = 2 * math.pi
-    tol = max(atol, max(abs(a % tau), abs(b % tau)) * rtol)
-    if abs(((a - b) + math.pi) % tau - math.pi) <= tol:
-        return True
+    # Convert rtol to an absolute value (based on the largest argument)
+    # and pick the final tolerance as the biggest of the tolerances.
+    tol = max(atol, abs(wrap_to_mpi_ppi(a)) * rtol, abs(wrap_to_mpi_ppi(b)) * rtol)
+    # calculate the difference as a value between -pi and pi, and check it's near 0
+    return abs(wrap_to_mpi_ppi(a - b)) <= tol
 
-    return False
+
+def wrap_to_mpi_ppi(a: float) -> float:
+    """
+    Convert an angle to a value between -pi and +pi.
+    That's the representation of the angle with the smallest absolute value.
+    a: an angle, in radians
+    return (-pi <= float <= pi): same angle, but modulo
+    """
+    return (a + math.pi) % (2 * math.pi) - math.pi
 
 
 def to_str_escape(s):
