@@ -58,7 +58,7 @@ class FastEMROA(object):
     and detector.
     """
 
-    def __init__(self, name, coordinates, roc, asm, multibeam, descanner, detector):
+    def __init__(self, name, coordinates, roc, asm, multibeam, descanner, detector, overlap=0):
         """
         :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
                      the external storage.
@@ -70,6 +70,10 @@ class FastEMROA(object):
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
         :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
         :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
+        :param overlap: (float), optional
+            The amount of overlap required between single fields. An overlap of 0.2 means that two neighboring fields
+            overlap by 20%. By default, the overlap is 0, this means there is no overlap and one field is exactly next
+            to the neighboring field.
         """
         self.name = model.StringVA(name)
         self.coordinates = model.TupleContinuous(coordinates,
@@ -85,6 +89,7 @@ class FastEMROA(object):
         # List of tuples(int, int) containing the position indices of each field to be acquired.
         # Automatically updated when the coordinates change.
         self.field_indices = []
+        self.overlap = overlap
         self.coordinates.subscribe(self.on_coordinates, init=True)
 
         # TODO need to check if megafield already exists, otherwise overwritten, subscribe whenever name is changed,
@@ -126,10 +131,14 @@ class FastEMROA(object):
         field_res = self._multibeam.resolution.value
 
         # The size of a field consists of the effective cell images excluding overscanned pixels.
-        field_size = (field_res[0] * px_size[0], field_res[1] * px_size[1])
+        field_size = (field_res[0] * px_size[0],
+                      field_res[1] * px_size[1])
+
         # Note: floating point errors here, can result in an additional row or column of fields (that's fine)
-        n_hor_fields = math.ceil(abs(r - l) / field_size[0])
-        n_vert_fields = math.ceil(abs(b - t) / field_size[1])
+        # When fields overlap the number of fields is calculated by subtracting the size of the field that overlaps
+        # from the total roa size and dividing that by the non-overlapping field size.
+        n_hor_fields = math.ceil((abs(r - l) - field_size[0] * self.overlap) / (field_size[0] * (1 - self.overlap)))
+        n_vert_fields = math.ceil((abs(b - t) - field_size[1] * self.overlap) / (field_size[1] * (1 - self.overlap)))
         # Note: Megafields get asymmetrically extended towards the right and bottom.
 
         # Create the field indices based on the number of horizontal and vertical fields.
@@ -531,8 +540,8 @@ class AcquisitionTask(object):
         px_size = self._multibeam.pixelSize.value
         field_res = self._multibeam.resolution.value
 
-        rel_move_hor = self.field_idx[0] * px_size[0] * field_res[0]  # in meter
-        rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1]  # in meter
+        rel_move_hor = self.field_idx[0] * px_size[0] * field_res[0] * (1 - self._roa.overlap)  # in meter
+        rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1] * (1 - self._roa.overlap)  # in meter
 
         # With role="stage", move positive in x direction, because the second field should be right of the first,
         # and move negative in y direction, because the second field should be bottom of the first.
