@@ -593,9 +593,12 @@ class PMD401Bus(Actuator):
         if d2 & 0b100:
             raise PMDError(6, "External limit reached.")
 
-        # Check d3 (third status value) bit 2 (targetLimit) and bit 0 (targetReached)
+        # Check d3 (third status value) bit 2 (targetLimit: position limit reached) and bit 0 (targetReached)
         if d3 & 0b101:
-            # target reached
+            logging.debug("Target reached or position limit reached.")
+            return False
+        elif not d3 & 0b010:  # closed loop not active, thus it is not moving in closed loop
+            logging.debug("Closed loop not active, therefore not moving in closed loop.")
             return False
         else:
             return True
