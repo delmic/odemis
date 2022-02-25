@@ -425,6 +425,7 @@ class PMD401Bus(Actuator):
 
         end_time = time.time() + max_dur
         moving_axes = set(shifts.keys())  # All axes (still) moving
+        logging.debug(f"Axes {moving_axes} are moving.")
         while moving_axes:
             if f._must_stop.is_set():
                 for axname in moving_axes:
@@ -432,19 +433,24 @@ class PMD401Bus(Actuator):
                     raise CancelledError()
 
             if time.time() > end_time:
-                raise TimeoutError("Timeout after while waiting for end of motion on axes %s for %g s" % (moving_axes, max_dur))
+                raise TimeoutError(
+                    "Timeout while waiting for end of motion on axes %s for %g s" % (moving_axes, max_dur))
 
             for axname in moving_axes.copy():  # Copy as the set can change during the iteration
                 axis = self._axis_map[axname]
                 if self._closed_loop[axname]:
                     moving = self.isMovingClosedLoop(axis)
+                    logging.debug(f"Axis {axis} is moving closed loop.") if moving else None
                 else:
                     moving = self.isMovingOpenLoop(axis)
+                    logging.debug(f"Axis {axis} is moving open loop.") if moving else None
                 if not moving:
+                    logging.debug(f"Axis {axis} finished moving.")
                     moving_axes.discard(axname)
 
             self._check_hw_error()
             time.sleep(0.05)
+        logging.debug("All axis finished moving")
 
     def _check_hw_error(self):
         """
@@ -591,14 +597,15 @@ class PMD401Bus(Actuator):
         _, d2, d3, _ = self.getStatus(axis)
         # Check d2 (second status value) bit 2 (external limit)
         if d2 & 0b100:
-            raise PMDError(6, "External limit reached.")
+            logging.debug(f"External limit reached on axis {axis}, current position is {self.position.value}")
+            raise PMDError(6, f"External limit reached on axis {axis}.")
 
         # Check d3 (third status value) bit 2 (targetLimit: position limit reached) and bit 0 (targetReached)
-        if d3 & 0b101:
-            logging.debug("Target reached or position limit reached.")
+        if not d3 & 0b010:  # closed loop not active, thus it is not moving in closed loop
+            logging.debug(f"Closed loop not active, therefore not moving in closed loop on axis {axis}.")
             return False
-        elif not d3 & 0b010:  # closed loop not active, thus it is not moving in closed loop
-            logging.debug("Closed loop not active, therefore not moving in closed loop.")
+        elif d3 & 0b101:
+            logging.debug(f"Target reached or position limit reached on axis {axis}.")
             return False
         else:
             return True
