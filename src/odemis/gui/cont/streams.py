@@ -3176,7 +3176,7 @@ class FastEMProjectController(object):
         # Create the panel and add it to the project bar. Subscribe to controls.
         self.panel = FastEMProjectPanel(project_bar, name=name)
         project_bar.add_project_panel(self.panel)
-        self.panel.btn_add_roi.Bind(wx.EVT_BUTTON, self._on_btn_roa)
+        self.panel.btn_add_roa.Bind(wx.EVT_BUTTON, self._on_btn_roa)
         # Listen to both enter and kill focus event to make sure the text is really updated
         self.panel.txt_ctrl.Bind(wx.EVT_KILL_FOCUS, self._on_text)
         self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)

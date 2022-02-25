@@ -1693,6 +1693,8 @@ class FastEMProjectBar(wx.Panel):
             bitmap=img.getBitmap("stream_add_b.png")
         )
         self.btn_add_project.SetForegroundColour(FG_COLOUR_BUTTON)
+        self.btn_add_project.SetToolTip("Add a new project. A project can be used to organize "
+                                        "regions of acquisition (ROA) of similar type.")
         self._sz.Add(self.btn_add_project, flag=wx.ALL, border=10)
         self.btn_add_project.Show(add_btn)
 
@@ -1760,7 +1762,7 @@ class FastEMProjectBar(wx.Panel):
 
     def enable_buttons(self, enabled):
         for p in self.project_panels:
-            p.btn_add_roi.Enable(enabled)
+            p.btn_add_roa.Enable(enabled)
         self.btn_add_project.Enable(enabled)
 
     def fit_panels(self):
@@ -1836,15 +1838,16 @@ class FastEMProjectPanel(wx.Panel):
         self.SetSizer(self._main_sizer)
 
         # Add roi button
-        self.btn_add_roi = buttons.ImageTextButton(
+        self.btn_add_roa = buttons.ImageTextButton(
             self._panel, -1,
-            label="ADD ROI",
+            label="ADD ROA",
             style=wx.ALIGN_CENTER,
-            bitmap=img.getBitmap("stream_add_b.png")
+            bitmap=img.getBitmap("stream_add_b.png"),
         )
-        self.btn_add_roi.SetForegroundColour(FG_COLOUR_BUTTON)
-        self._panel_sizer.Add(self.btn_add_roi, flag=wx.TOP | wx.LEFT | wx.RIGHT, border=10)
-        self.btn_add_roi.Show(True)
+        self.btn_add_roa.SetForegroundColour(FG_COLOUR_BUTTON)
+        self.btn_add_roa.SetToolTip("Add new region of acquisition (ROA) to project.")
+        self._panel_sizer.Add(self.btn_add_roa, flag=wx.TOP | wx.LEFT | wx.RIGHT, border=10)
+        self.btn_add_roa.Show(True)
 
         # Make remove button and text control public (for FastEMProjectBarController)
         self.btn_remove = self._header.btn_remove
