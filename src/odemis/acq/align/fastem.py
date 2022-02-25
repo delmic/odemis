@@ -114,7 +114,7 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
 def estimate_calibration_time(calibrations):
     """
     Computes the approximate time it will take to run all calibrations.
-    :param calibrations: (list) List of calibrations that should be run.
+    :param calibrations: (list[Calibrations]) List of calibrations that should be run.
     :return (0 <= float): The estimated time for the requested calibrations in s.
     """
 
