@@ -271,6 +271,8 @@ FASTEM-sim: {
         # Factory calibrations of the descanner gain and offset
         SCAN_OFFSET: [-0.013, -0.119],  # [a.u._descan] start of the sawtooth descanner signal
         SCAN_AMPLITUDE: [0.0082, -0.0082],  # [a.u._descan] the dynamic amplitude of the sawtooth descanning signal
+        # On the hardware the scan gain is calculated, for simulation this is not possible and therefore add it here.
+        SCAN_GAIN: [5000, 5000],  # [px_dc/a.u._descan] the number of pixels a spot moves per arbitrary unit
     },
 }
 
