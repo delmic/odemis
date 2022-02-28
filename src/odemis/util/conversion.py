@@ -299,7 +299,7 @@ def get_img_transformation_matrix(md):
     Computes the 2D transformation matrix based on the given metadata.
     md (dict str -> value): the metadata (of the DataArray) containing MD_PIXEL_SIZE 
         and possibly also MD_ROTATION and MD_SHEAR.
-    return (numpy.matrix of 2,2 floats): the 2D transformation matrix
+    return (numpy.array of 2,2 floats): the 2D transformation matrix
     """
 
     if model.MD_PIXEL_SIZE not in md:
@@ -310,11 +310,11 @@ def get_img_transformation_matrix(md):
 
     # Y pixel coordinates goes down, but Y coordinates in world goes up
     # The '-' before ps[1] is there to make this conversion
-    ps_mat = numpy.matrix([[ps[0], 0], [0, -ps[1]]])
+    ps_mat = numpy.array([[ps[0], 0], [0, -ps[1]]])
     rcos, rsin = math.cos(rotation), math.sin(rotation)
-    rot_mat = numpy.matrix([[rcos, -rsin], [rsin, rcos]])
-    shear_mat = numpy.matrix([[1, 0], [-shear, 1]])
-    return rot_mat * shear_mat * ps_mat
+    rot_mat = numpy.array([[rcos, -rsin], [rsin, rcos]])
+    shear_mat = numpy.array([[1, 0], [-shear, 1]])
+    return rot_mat @ shear_mat @ ps_mat
 
 
 def get_tile_md_pos(i, tile_size, tileda, origda):
@@ -357,12 +357,12 @@ def get_tile_md_pos(i, tile_size, tileda, origda):
     tmat = get_img_transformation_matrix(md)
 
     # Converts the tile_rel_to_img_center_pixels array of coordinates to a 2 x 1 matrix
-    # The numpy.matrix(array) function returns a 1 x 2 matrix, so .getT() is called
+    # The numpy.array(array) function returns a 1 x 2 matrix, so .transpose() is called
     # to transpose the matrix
-    tile_rel_to_img_center_pixels = numpy.matrix(tile_rel_to_img_center_pixels).getT()
+    tile_rel_to_img_center_pixels = numpy.array(tile_rel_to_img_center_pixels).transpose()
     # calculate the new position of the tile, relative to the center of the image,
     # in world coordinates
-    new_tile_pos_rel = tmat * tile_rel_to_img_center_pixels
+    new_tile_pos_rel = tmat @ tile_rel_to_img_center_pixels
     new_tile_pos_rel = numpy.ravel(new_tile_pos_rel)
     # calculate the final position of the tile, in world coordinates
     tile_pos_world_final = md_pos + new_tile_pos_rel

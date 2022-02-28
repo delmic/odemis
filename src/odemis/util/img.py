@@ -900,11 +900,11 @@ def getCenterOfTiles(tiles, result_shape):
     # distance between the center of the tile and the center of the image, in pixel coordinates
     dist_centers_tile_pixels = [ct - ci for ct, ci in zip(center_tile_pixel, center_image_pixel)]
     # converts the centers distance, so this variable can be multiplied by the transformation matrix
-    dist_centers_tile_pixels = numpy.matrix(dist_centers_tile_pixels).getT()
+    dist_centers_tile_pixels = numpy.array(dist_centers_tile_pixels).transpose()
     # transformation matrix
     tmat = get_img_transformation_matrix(first_tile.metadata)
     # distance of the centers converted to world coordinates
-    dist_centers_w = tmat * dist_centers_tile_pixels
+    dist_centers_w = tmat @ dist_centers_tile_pixels
     # convert the variable from a numpy.matrix to a numpy.array
     dist_centers_w = numpy.ravel(dist_centers_w)
     # center of the tile in world coordinates

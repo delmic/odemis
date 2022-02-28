@@ -179,7 +179,7 @@ class AnchoredEstimator(object):
             logging.debug("Current drift: %s", self.drift)
             logging.debug("Previous frame diff: %s", prev_drift)
             if (abs(self.drift[0] - prev_drift[0]) > 5 * self._scale[0] or
-                abs(self.drift[1] - prev_drift[1]) > 5 * self._scale[1]):
+                    abs(self.drift[1] - prev_drift[1]) > 5 * self._scale[1]):
                 # TODO: in such case, add the previous and current image to .raw
                 logging.warning("Drift cannot be measured precisely, "
                                 "hesitating between %s and %s px",
@@ -310,8 +310,8 @@ def GuessAnchorRegion(whole_img, sample_region):
 
     # Find indices of edge pixels
     occurrences_indices = numpy.where(masked_img == 255)
-    X = numpy.matrix(occurrences_indices[0]).T
-    Y = numpy.matrix(occurrences_indices[1]).T
+    X = numpy.expand_dims(occurrences_indices[0], axis=1)
+    Y = numpy.expand_dims(occurrences_indices[1], axis=1)
     occurrences = numpy.hstack([X, Y])
 
     # If there is such a pixel outside of the sample region and there is enough
@@ -330,8 +330,8 @@ def GuessAnchorRegion(whole_img, sample_region):
         cannied_img = cv2.Canny(uint8_img, 100, 200)
         # Find indices of edge pixels
         occurrences_indices = numpy.where(cannied_img == 255)
-        X = numpy.matrix(occurrences_indices[0]).T
-        Y = numpy.matrix(occurrences_indices[1]).T
+        X = numpy.expand_dims(occurrences_indices[0], axis=1)
+        Y = numpy.expand_dims(occurrences_indices[1], axis=1)
         occurrences = numpy.hstack([X, Y])
         anchor_roi = ((occurrences[0, 0] - (dc_shape[0] / 2)) / whole_img.shape[0],
                       (occurrences[0, 1] - (dc_shape[1] / 2)) / whole_img.shape[1],
@@ -339,4 +339,3 @@ def GuessAnchorRegion(whole_img, sample_region):
                       (occurrences[0, 1] + (dc_shape[1] / 2)) / whole_img.shape[1])
 
     return anchor_roi
-
