@@ -80,7 +80,7 @@ def save_features(project_dir, features):
     """
     Save the whole features list directly to the file
     :param project_dir: (string) directory to save the file to (typically project directory)
-    :param features: (list) list of features to serialize
+    :param features: (ListVA) ListVA with features to serialize
     """
     filename = os.path.join(project_dir, "features.json")
     with open(filename, 'w') as jsonfile:
