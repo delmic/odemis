@@ -219,9 +219,16 @@ TINT_RGB_AS_IS = "rgbasis"
 # Rotation for FastEM multi-beam and single-beam scanner
 MD_SINGLE_BEAM_ROTATION = "Single-beam rotation"
 MD_MULTI_BEAM_ROTATION = "Multi-beam rotation"
+MD_MULTI_BEAM_ROTATION_CALIB = "Multi-beam rotation calibrated"
 
 # Scan amplitude, gain and offset for the FastEM scanner and descanner
 MD_SCAN_OFFSET = "Scan offset"  # tuple in [a.u.]
 MD_SCAN_AMPLITUDE = "Scan amplitude"  # tuple in [a.u.]
 MD_SCAN_GAIN = "Scan gain"  # tuple in [px/a.u.]
+MD_SCAN_OFFSET_CALIB = "Scan offset calibrated"  # tuple in [a.u.]
+MD_SCAN_AMPLITUDE_CALIB = "Scan amplitude calibrated"  # tuple in [a.u.]
 
+# Fastem: calibrated values for cell parameters
+MD_CELL_TRANSLATION = "Cell translation"  # nested tuple [px], origin of effective cell image in overscanned cell image
+MD_CELL_DARK_OFFSET = "Cell dark offset"  # nested tuple, the offset in image intensity per cell
+MD_CELL_DIGITAL_GAIN = "Cell digital gain"  # nested tuple, the digital gain intensity per cell

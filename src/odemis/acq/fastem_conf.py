@@ -124,7 +124,9 @@ def configure_scanner(scanner, mode):
         scanner.updateMetadata(md)
     elif mode == MEGAFIELD_MODE:
         md = scanner.getMetadata()
-        if model.MD_MULTI_BEAM_ROTATION in md:
+        if model.MD_MULTI_BEAM_ROTATION_CALIB in md:
+            scanner.rotation.value = md[model.MD_MULTI_BEAM_ROTATION_CALIB]
+        elif model.MD_MULTI_BEAM_ROTATION in md:  # if rotation is not calibrated yet, use the factory calibration
             scanner.rotation.value = md[model.MD_MULTI_BEAM_ROTATION]
         else:
             scanner.rotation.value = MULTI_BEAM_ROTATION_DEFAULT
