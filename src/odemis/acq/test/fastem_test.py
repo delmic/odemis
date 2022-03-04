@@ -37,7 +37,7 @@ import odemis
 from fastem_calibrations import configure_hw
 from odemis import model
 from odemis.acq import fastem, stream
-from odemis.util import test, img
+from odemis.util import test, img, is_point_in_rect
 
 # * TEST_NOHW = 1: connected to the simulator or not connected to anything
 # * TEST_NOHW = 0: connected to the real hardware, the backend should be running
@@ -655,6 +655,18 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             actual_position = task.get_abs_stage_movement()  # [m]
             numpy.testing.assert_allclose(actual_position, expected_position)
 
+            # Verify that for pre-calibrations compared to the top left corner of the ROA, the stage
+            # position is located half a field to the top left (outside the ROA).
+            task.field_idx = (-1, -1)  # (-1, -1) is the index where the pre-calibrations are performed
+
+            # In the role='stage' coordinate system the x-axis points to the right and y-axis to the top.
+            expected_position = (xmin - res_x / 2 * px_size_x,
+                                 ymax + res_x / 2 * px_size_y)  # [m]
+            actual_position = task.get_abs_stage_movement()  # [m]
+            numpy.testing.assert_allclose(actual_position, expected_position)
+            # Verify that the position where the pre-calibration is performed, does not lie inside the ROA coordinates.
+            self.assertFalse(is_point_in_rect(actual_position, coordinates))
+
     def test_pre_calibrate(self):
         """
         Test the ASM settings are unchanged after running the pre-calibrations, except the descanner scan offset.
@@ -740,18 +752,13 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
 
         cls.multibeam = Mock()
         cls.multibeam.pixelSize.value = (4.0e-9, 4.0e-9)
-        cls.multibeam.resolution.value = (800, 800)
+        cls.multibeam.resolution.value = (6400, 6400)
 
         cls.descanner = None
         cls.stage = None
         cls.ccd = None
         cls.beamshift = None
         cls.lens = None
-
-    def test_get_pos_first_tile(self):
-        self.skipTest(
-            "Skipping test because get_pos_first_tile is not mocked."
-        )
 
     def test_pre_calibrate(self):
         self.skipTest(

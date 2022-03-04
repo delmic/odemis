@@ -320,12 +320,17 @@ class AcquisitionTask(object):
         # Update the position of the first tile.
         self._pos_first_tile = self.get_pos_first_tile()
 
-        # Move the stage to the first tile, to ensure the autofocus and image translation pre-align are
-        # done in the correct location and the correct position is stored in the megafield metadata yaml file.
-        self.move_stage_to_next_tile()
-
         if self._pre_calibrate:
+            # Move the stage to the tile with index (-1, -1), to ensure the autofocus and image translation pre-align
+            # are done to the top left of the first field, outside the region of acquisition to limit beam damage.
+            self.field_idx = (-1, -1)
+            self.move_stage_to_next_tile()
             self.pre_calibrate()
+
+        # Move the stage to the first tile, to ensure the correct position is
+        # stored in the megafield metadata yaml file.
+        self.field_idx = (0, 0)
+        self.move_stage_to_next_tile()
 
         # set the sub-directories (<acquisition date>/<project name>) and megafield id
         self._detector.filename.value = os.path.join(self._path, self._roa.name.value)
