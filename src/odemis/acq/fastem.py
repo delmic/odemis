@@ -125,6 +125,19 @@ class FastEMROA(object):
         :return: (list of nested tuples (col, row)) The column and row field indices of the field images in the order
                  they should be acquired. The tuples are re-ordered so that the single field images resembling the
                  ROA are acquired first rows then columns.
+
+        Note: The number of fields with overlap is calculated in the following way:
+        An ROA with overlap can be visualized as follows:
+        |------|--⁞----|--⁞----|--⁞
+        If you have 3 fields of 6400 pixels wide with 400 pixels overlap, the resulting megafield is
+        6000 * 3 + 400 pixels in width and the width is abs(r - l). The number of fields that fit in a
+        certain width can be derived from this:
+        abs(r - l) = 6000 * 3 + 400
+        (abs(r-l) - 400) / 6000 = 3 fields
+        with:
+        400 = 6400 * overlap = field_size * overlap
+        6000 = 6400 * (1 - overlap) = field_size * (1 - overlap)
+        => n_fields = (abs(r - l) - field_size * overlap) / (field_size * (1 - overlap))
         """
         l, t, r, b = self.coordinates.value  # tuple of floats: l, t, r, b coordinates in m
         px_size = self._multibeam.pixelSize.value
@@ -136,7 +149,7 @@ class FastEMROA(object):
 
         # Note: floating point errors here, can result in an additional row or column of fields (that's fine)
         # When fields overlap the number of fields is calculated by subtracting the size of the field that overlaps
-        # from the total roa size and dividing that by the non-overlapping field size.
+        # from the total roa size and dividing that by the non-overlapping field size. (see note in docstring)
         n_hor_fields = math.ceil((abs(r - l) - field_size[0] * self.overlap) / (field_size[0] * (1 - self.overlap)))
         n_vert_fields = math.ceil((abs(b - t) - field_size[1] * self.overlap) / (field_size[1] * (1 - self.overlap)))
         # Note: Megafields get asymmetrically extended towards the right and bottom.
