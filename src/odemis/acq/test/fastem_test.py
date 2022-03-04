@@ -232,8 +232,13 @@ class TestFastEMROA(unittest.TestCase):
         for overlap in (0, 0.0625, 0.2, 0.5, 0.7):
             # The coordinates of the ROA in meters.
             xmin, ymin = (0, 0)
-            # The max field size is the number of fields multiplied with the field size including overlap, plus
-            # the extra overlap added to the end.
+            # Calculate the ROA size for a well specified number of fields taking the specified overlap between fields
+            # into account. As the fields of the last row and column do not have any neighbor to their right and bottom,
+            # do take their full size into account.
+            # An ROA with overlap can be visualized as follows:
+            # |------|--⁞----|--⁞----|--⁞
+            # where the left border of each field is drawn with a '|' and the right border of each field with a '⁞'.
+            # There are 3 fields of 8 '-' and the overlap is 2, therefore the total size is 3 * (8-2) + 2
             xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
                           field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
             coordinates = (xmin, ymin, xmax, ymax)  # in m
@@ -250,7 +255,8 @@ class TestFastEMROA(unittest.TestCase):
             field_indices = roa._calculate_field_indices()
 
             # Floating point errors can result in an extra field, which is fine.
-            # Check that maximum 1 extra field index in x and 1 in y is calculated.
+            # Check that maximum 1 extra field index in x and 1 in y is calculated and that there are not fewer fields
+            # calculated than expected.
             self.assertLessEqual(max(field_indices)[0] - max(expected_indices)[0], 1)
             self.assertGreaterEqual(max(field_indices)[0] - max(expected_indices)[0], 0)
             self.assertLessEqual(max(field_indices)[1] - max(expected_indices)[1], 1)
