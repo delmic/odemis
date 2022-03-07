@@ -598,6 +598,7 @@ class TiledAcquisitionTask(object):
         for ix, iy in self._generateScanningIndices((self._nx, self._ny)):
             logging.debug("Acquiring tile %dx%d", ix, iy)
             self._moveToTile((ix, iy), prev_idx, self._sfov)
+            time.sleep(0.5)
             prev_idx = ix, iy
 
             das = self._getTileDAs(i, ix, iy)
