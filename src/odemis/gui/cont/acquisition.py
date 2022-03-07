@@ -39,7 +39,6 @@ from functools import partial
 from odemis import model, dataio
 from odemis.acq import align, acqmng, stream, fastem
 from odemis.acq.align import fastem as align_fastem
-from odemis.acq.align.fastem import Calibrations
 from odemis.acq.align.spot import OBJECTIVE_MOVE
 from odemis.gui import conf, FG_COLOUR_BUTTON
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
