@@ -1889,6 +1889,13 @@ class FastEMOverviewTab(Tab):
         sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
 
+        # Controller for calibration panel 1
+        self._alignment_controller = acqcont.FastEMAlignmentController(
+            tab_data,
+            panel,
+            calibrations=[Calibrations.OPTICAL_AUTOFOCUS]
+        )
+
         # Acquisition controller
         self._acquisition_controller = acqcont.FastEMOverviewAcquiController(
             tab_data,
