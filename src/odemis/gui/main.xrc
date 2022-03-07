@@ -4535,7 +4535,7 @@
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
-                        <object class="wxPanel" name="pnl_fastem_alignment">
+                        <object class="wxPanel" name="pnl_fastem_calibration_1">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <object class="wxBoxSizer">
@@ -4586,7 +4586,6 @@
                               <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
                               <border>14</border>
                             </object>
-
                             <orient>wxHORIZONTAL</orient>
                           </object>
                         </object>
@@ -4595,7 +4594,7 @@
                         <bg>#555555</bg>
                       </object>
 					  <object class="FoldPanelItem">
-                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration">
+                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration_2">
 						  <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>

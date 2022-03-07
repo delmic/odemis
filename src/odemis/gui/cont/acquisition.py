@@ -2275,17 +2275,20 @@ class AutoCenterController(object):
 
 class FastEMAlignmentController:
     """
-    Takes care of the calibration button and process in the calibration panel in the FastEM acquisition tab.
+    Controls the calibration button and process in the calibration panel in the FastEM
+    overview and acquisition tab.
     """
-    def __init__(self, tab_data, tab_panel):
+    def __init__(self, tab_data, tab_panel, calibrations):
         """
         tab_data: (FastEMAcquisitionGUIData) The representation of the microscope GUI.
         tab_panel: (wx.Frame) The calibration panel, which contains the calibration button,
                     the gauge and the label of the gauge.
+        calibrations: (list[Calibrations]) List of calibrations that should be run.
         """
         self._tab_data = tab_data
         self._main_data_model = tab_data.main
         self._panel = tab_panel
+        self.calibrations = calibrations
 
         self.btn_align = tab_panel.btn_align
         self.gauge_progress = tab_panel.align_gauge_progress  # progress bar
@@ -2295,19 +2298,6 @@ class FastEMAlignmentController:
         self.gauge_progress.Hide()  # hide progress bar
         self._panel.Parent.Layout()
         self.btn_align.Bind(wx.EVT_BUTTON, self.on_align)
-
-        # Check if we deal with a real or simulated microscope. If it is a simulator,
-        # we cannot run all calibrations yet.
-        # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
-        # need to know that it's simulated otherwise we can never simulate an acquisition.
-        if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
-            self.calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
-        else:  # it is a real microscope
-            self.calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.SCAN_ROTATION_PREALIGN,
-                                 Calibrations.SCAN_AMPLITUDE_PREALIGN, Calibrations.DESCAN_GAIN_STATIC,
-                                 Calibrations.IMAGE_ROTATION_PREALIGN, Calibrations.IMAGE_TRANSLATION_PREALIGN,]
-            # IMAGE_TRANSLATION_FINAL FIXME: add when we can update the good mp position and fix for max amplitude
-            # IMAGE_ROTATION_FINAL FIXME: add when fix for max amplitude is there
 
         # check calibration state of system
         # TODO If backend was not restarted, but only GUI, then the system is in principle still calibrated.
@@ -2381,7 +2371,7 @@ class FastEMAlignmentController:
         :param text (None or str): A (error) message to display instead of the estimated acquisition time.
         """
         self.btn_align.Enable(True)  # enable button again
-        self.btn_align.SetLabel("Alignment")  # change button label back to ready for calibration
+        self.btn_align.SetLabel("Calibrate")  # change button label back to ready for calibration
         self.gauge_progress.Hide()  # hide progress bar
         self._panel.align_spacer_panel.Show()  # show space progress bar and progress bar label
         self.gauge_label.Show()  # show label progress bar

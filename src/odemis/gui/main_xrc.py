@@ -508,12 +508,12 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
-        self.pnl_fastem_alignment = xrc.XRCCTRL(self, "pnl_fastem_alignment")
+        self.pnl_fastem_calibration_1 = xrc.XRCCTRL(self, "pnl_fastem_calibration_1")
         self.btn_align = xrc.XRCCTRL(self, "btn_align")
         self.align_gauge_progress = xrc.XRCCTRL(self, "align_gauge_progress")
         self.align_spacer_panel = xrc.XRCCTRL(self, "align_spacer_panel")
         self.align_lbl_gauge = xrc.XRCCTRL(self, "align_lbl_gauge")
-        self.pnl_fastem_calibration = xrc.XRCCTRL(self, "pnl_fastem_calibration")
+        self.pnl_fastem_calibration_2 = xrc.XRCCTRL(self, "pnl_fastem_calibration_2")
         self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
         self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
@@ -5440,7 +5440,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
-                        <object class="wxPanel" name="pnl_fastem_alignment">
+                        <object class="wxPanel" name="pnl_fastem_calibration_1">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <object class="wxBoxSizer">
@@ -5448,7 +5448,7 @@ def __init_resources():
                               <object class="ImageTextButton" name="btn_align">
                                 <height>24</height>
                                 <face_colour>def</face_colour>
-                                <label>Alignment...</label>
+                                <label>Calibrate</label>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -5481,7 +5481,6 @@ def __init_resources():
                             </object>
                             <object class="sizeritem">
                               <object class="wxStaticText" name="align_lbl_gauge">
-                                <label>~ 30 seconds</label>
                                 <style>wxALIGN_RIGHT</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -5491,16 +5490,15 @@ def __init_resources():
                               <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
                               <border>14</border>
                             </object>
-
                             <orient>wxHORIZONTAL</orient>
                           </object>
                         </object>
-                        <label>ALIGNMENT</label>
+                        <label>CALIBRATION 1</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-					  <object class="FoldPanelItem">
-                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration">
+				      <object class="FoldPanelItem">
+                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration_2">
 						  <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -5509,7 +5507,7 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <label>CALIBRATION</label>
+                        <label>CALIBRATION 2</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>

@@ -43,6 +43,7 @@ import wx
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
 
+from odemis.acq.align.fastem import Calibrations
 from odemis.gui import conf, img
 from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
@@ -1767,17 +1768,32 @@ class FastEMAcquisitionTab(Tab):
             view_ctrl=self.view_controller,
         )
 
-        # Controller for calibration regions
+        # Controller for calibration panel 2
         self._calibrationbar_controller = streamcont.FastEMCalibrationController(
             tab_data,
-            panel.pnl_fastem_calibration,
+            panel.pnl_fastem_calibration_2,
             view_ctrl=self.view_controller,
         )
 
-        # Controller for alignment panel
+        # Check if we deal with a real or simulated microscope. If it is a simulator,
+        # we cannot run all calibrations yet.
+        # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
+        # need to know that it's simulated otherwise we can never simulate an acquisition.
+        if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
+        else:  # it is a real microscope
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.SCAN_ROTATION_PREALIGN,
+                            Calibrations.SCAN_AMPLITUDE_PREALIGN, Calibrations.DESCAN_GAIN_STATIC,
+                            Calibrations.IMAGE_ROTATION_PREALIGN, Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                            Calibrations.IMAGE_ROTATION_FINAL,
+                            ]
+            # IMAGE_TRANSLATION_FINAL FIXME: add when we can update the good mp position and fix for max amplitude
+
+        # Controller for calibration panel 1
         self._alignment_controller = acqcont.FastEMAlignmentController(
             tab_data,
-            panel
+            panel,
+            calibrations
         )
 
         # Acquisition controller
