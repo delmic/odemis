@@ -1232,7 +1232,7 @@ def __init_resources():
               <flag>wxLEFT|wxALIGN_BOTTOM</flag>
               <border>20</border>
             </object>
-			<object class="sizeritem">
+            <object class="sizeritem">
               <object class="TabButton" name="btn_tab_fastem_overview">
                 <size>160,30</size>
                 <face_colour>def</face_colour>
@@ -5397,7 +5397,7 @@ def __init_resources():
               <flag>wxALIGN_RIGHT</flag>
             </object>
             <orient>wxVERTICAL</orient>
-		    <object class="spacer">
+            <object class="spacer">
               <option>8</option>
               <flag>wxEXPAND</flag>
             </object>
@@ -5497,9 +5497,9 @@ def __init_resources():
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-				      <object class="FoldPanelItem">
+                      <object class="FoldPanelItem">
                         <object class="FastEMCalibrationBar" name="pnl_fastem_calibration_2">
-						  <size>300,-1</size>
+                          <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
@@ -5511,7 +5511,7 @@ def __init_resources():
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-					  <object class="FoldPanelItem">
+                      <object class="FoldPanelItem">
                         <object class="FastEMProjectBar" name="pnl_fastem_projects">
                           <size>300,-1</size>
                           <add_button>1</add_button>
