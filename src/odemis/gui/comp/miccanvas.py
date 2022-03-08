@@ -1855,6 +1855,14 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         overlay.active.value = False  # no need to activate by default
         return overlay
 
+    def remove_calibration_overlay(self, overlay):
+        """
+        overlay (FastEMROAOverlay): overlay to be deleted
+        """
+        overlay.active.value = False  # deactivating the overlay avoids weird behaviour
+        self.remove_world_overlay(overlay)
+        wx.CallAfter(self.request_drawing_update)
+
     def zoom_out(self):
         """
         Zoom out to show all scintillators.
