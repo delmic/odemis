@@ -31,8 +31,11 @@ from concurrent.futures import CancelledError
 import numpy
 
 try:
-    from fastem_calibrations import autofocus_multiprobe, image_translation_pre_align, configure_hw
-
+    from fastem_calibrations import (
+        autofocus_multiprobe,
+        image_translation_pre_align,
+        configure_hw
+    )
     fastem_calibrations = True
 except ImportError:
     logging.info("fastem_calibrations package not found")
@@ -185,8 +188,6 @@ class FastEMROA(object):
         return field_indices
 
 
-# TODO add ROC acquisition to acquisition task
-
 class FastEMROC(object):
     """
     Representation of a FastEM ROC (region of calibration).
@@ -210,8 +211,6 @@ class FastEMROC(object):
                                                  cls=(int, float),
                                                  unit='m')
         self.parameters = None  # calibration object with all relevant parameters
-        # TODO parameters are the darkOffset and digitalGain values for mppc VAs; set before starting acquisition
-        # if None -> acquire, if not None, don't acquire again
 
 
 def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens):
@@ -373,6 +372,7 @@ class AcquisitionTask(object):
                           self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1)
             # configure the HW settings
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
+            fastem_conf.configure_detector(self._detector, self._roc)
 
             dataflow.subscribe(self.image_received)
 

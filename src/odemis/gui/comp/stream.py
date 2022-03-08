@@ -1667,7 +1667,7 @@ class FastEMProjectPanelHeader(wx.Control):
         )
 
 
-class FastEMProjectBar(wx.Panel):
+class FastEMProjectList(wx.Panel):
     """
     The whole panel containing project panels and a button to add more projects.
     """
@@ -1800,7 +1800,7 @@ class FastEMProjectPanel(wx.Panel):
                  wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE, name="ProjectPanel", collapsed=False):
 
-        assert(isinstance(parent, FastEMProjectBar))
+        assert(isinstance(parent, FastEMProjectList))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
         # Appearance
@@ -2034,7 +2034,7 @@ class FastEMROAPanel(wx.Panel):
         event.Skip()
 
 
-class FastEMCalibrationBar(wx.Panel):
+class FastEMCalibrationPanelHeader(wx.Panel):
     """
     The whole panel containing the panel with the calibration buttons.
     """
@@ -2051,8 +2051,8 @@ class FastEMCalibrationBar(wx.Panel):
 
     def add_calibration_panel(self, panel):
         """
-        This method adds the calibration panel to the calibration bar. Should only be called once.
-        panel (FastEMCalibrationPanel): the calibration panel
+        This method adds the calibration panel to the calibration header. Should only be called once.
+        :param panel: (FastEMCalibrationPanel) The calibration panel to be added.
         """
         self._sz.Insert(0, panel, flag=self.DEFAULT_STYLE, border=self.DEFAULT_BORDER)
         panel.Layout()
@@ -2067,10 +2067,10 @@ class FastEMCalibrationPanel(wx.Panel):
                  wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
                  style=wx.CP_DEFAULT_STYLE, name="CalibrationPanel"):
         """
-        layout (list of lists of int): layout of scintillator grid, given as 2D list of scintillator positions,
+        :param layout: (list of lists of int) Layout of scintillator grid, given as 2D list of scintillator positions,
         e.g. [[6, 5, 4], [3, 2, 1]]
         """
-        assert(isinstance(parent, FastEMCalibrationBar))
+        assert(isinstance(parent, FastEMCalibrationPanelHeader))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
         self.buttons = {}  # int --> wx.Button
@@ -2085,7 +2085,7 @@ class FastEMCalibrationPanel(wx.Panel):
         for row_idx, row in enumerate(layout):
             for col_idx, elem in enumerate(row):
                 subsz = wx.BoxSizer(wx.HORIZONTAL)
-                btn = wx.Button(self, wx.ALL | wx.ALIGN_CENTER, label="?", size=(30, 30))
+                btn = wx.ToggleButton(self, wx.ALL | wx.ALIGN_CENTER, label="?", size=(30, 30))
                 btn.SetBackgroundColour(FG_COLOUR_BUTTON)
                 subsz.Add(btn)
                 subsz.AddSpacer(8)

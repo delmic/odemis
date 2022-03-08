@@ -231,19 +231,19 @@ class FastEMProjectBarXmlHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'FastEMProjectBar')
+        return self.IsOfClass(node, 'FastEMProjectList')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
 
-        if self.GetClass() == 'FastEMProjectBar':
+        if self.GetClass() == 'FastEMProjectList':
             parent = self.GetParentAsWindow()
-            w = strm.FastEMProjectBar(parent,
-                                      self.GetID(),
-                                      self.GetPosition(),
-                                      self.GetSize(),
-                                      self.GetStyle(),
-                                      add_button=self.GetBool('add_button'))
+            w = strm.FastEMProjectList(parent,
+                                       self.GetID(),
+                                       self.GetPosition(),
+                                       self.GetSize(),
+                                       self.GetStyle(),
+                                       add_button=self.GetBool('add_button'))
             self.SetupWindow(w)
             # 'Dirty' fix for the hard coded 'add stream' child button
             if self.GetBool('add_button'):
@@ -261,19 +261,19 @@ class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
         # Custom styles
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, 'FastEMCalibrationBar')
+        return self.IsOfClass(node, 'FastEMCalibrationPanelHeader')
 
     # Process XML parameters and create the object
     def DoCreateResource(self):
 
-        if self.GetClass() == 'FastEMCalibrationBar':
+        if self.GetClass() == 'FastEMCalibrationPanelHeader':
             parent = self.GetParentAsWindow()
-            w = strm.FastEMCalibrationBar(parent,
-                                          self.GetID(),
-                                          self.GetPosition(),
-                                          self.GetSize(),
-                                          self.GetStyle(),
-                                          add_button=self.GetBool('add_button'))
+            w = strm.FastEMCalibrationPanelHeader(parent,
+                                                  self.GetID(),
+                                                  self.GetPosition(),
+                                                  self.GetSize(),
+                                                  self.GetStyle(),
+                                                  add_button=self.GetBool('add_button'))
             self.SetupWindow(w)
             parent.add_item(w)
             return w
