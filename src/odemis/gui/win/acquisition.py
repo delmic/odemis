@@ -621,7 +621,9 @@ DEFAULT_FOV = (100e-6, 100e-6) # m
 
 class OverviewAcquisitionDialog(xrcfr_overview_acq):
     """
-    Class used to control the cryo-secom overview dialog
+    Class used to control the overview acquisition dialog
+    The data acquired is stored in a file, with predefined name, available on
+      .filename and it is opened (as pyramidal data) in .data .
     """
     def __init__(self, parent, orig_tab_data):
         xrcfr_overview_acq.__init__(self, parent)
@@ -641,13 +643,19 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # duplicate the interface, but with only one view
         self._tab_data_model = self.duplicate_tab_data_model(orig_tab_data)
 
+        # Store the final image as {datelng}-{timelng}-overview
+        # The pattern to store them in a sub folder, with the name xxxx-overview-tiles/xxx-overview-NxM.ome.tiff
         # The pattern to use for storing each tile file individually
         # None disables storing them
         save_dir = self.conf.last_path
         if isinstance(orig_tab_data, guimodel.CryoGUIData):
             save_dir = self.conf.pj_last_path
-        self.filename_tiles = create_filename(save_dir, "{datelng}-{timelng}-overview",
+        self.filename = create_filename(save_dir, "{datelng}-{timelng}-overview",
                                               ".ome.tiff")
+        assert self.filename.endswith(".ome.tiff")
+        dirname, basename = os.path.split(self.filename)
+        tiles_dir = os.path.join(dirname, basename[:-len(".ome.tiff")] + "-tiles")
+        self.filename_tiles = os.path.join(tiles_dir, basename)
 
         # Create a new settings controller for the acquisition dialog
         self._settings_controller = LocalizationSettingsController(
@@ -1044,7 +1052,11 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         zlevels = self._get_zstack_levels()
         focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
-        logging.info("Acquisition tiles logged at %s", self.filename_tiles)
+
+        if self.filename_tiles:
+            logging.info("Acquisition tiles logged at %s", self.filename_tiles)
+            os.makedirs(os.path.dirname(self.filename_tiles))
+
         self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
@@ -1086,8 +1098,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._acq_future_connector = None
 
         try:
-            # TODO: Add code for getting the data from the acquisition future
-            self.data = future.result(1)  # timeout is just for safety
+            data = future.result(1)  # timeout is just for safety
             self.conf.fn_count = update_counter(self.conf.fn_count)
         except CancelledError:
             # put back to original state:
@@ -1106,6 +1117,24 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.lbl_acqestimate.SetLabel("Acquisition failed.")
             self.lbl_acqestimate.Parent.Layout()
             # leave the gauge, to give a hint on what went wrong.
+            return
+
+        # Now store the data (as pyramidal data), and open it again (but now it's
+        # backed with the persistent storage.
+        try:
+            exporter = dataio.find_fittest_converter(self.filename)
+            if exporter.CAN_SAVE_PYRAMID:
+                exporter.export(self.filename, data, pyramid=True)
+            else:
+                logging.warning("File format doesn't support saving image in pyramidal form")
+                exporter.export(self.filename)
+            self.data = exporter.open_data(self.filename).content
+        except Exception:
+            # We cannot do much: just warn the user and pretend it was cancelled
+            logging.exception("Storage failed")
+            self.btn_secom_acquire.Enable()
+            self.lbl_acqestimate.SetLabel("Storage failed.")
+            self.lbl_acqestimate.Parent.Layout()
             return
 
         self.terminate_listeners()
