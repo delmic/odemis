@@ -248,6 +248,7 @@ class AcquisitionConfig(Config):
         # is completed.
         self.default.set("acquisition", "fn_ptn", u"{datelng}-{timelng}")
         self.default.set("acquisition", "fn_count", "0")
+        self.default.set("acquisition", "overlap", "0.0")
 
         self.default.add_section("export")
         self.default.set("export", "last_path", ACQUI_PATH)
@@ -327,6 +328,14 @@ class AcquisitionConfig(Config):
     @fn_count.setter
     def fn_count(self, cnt):
         self.set("acquisition", "fn_count", cnt)
+
+    @property
+    def overlap(self):
+        return float(self.get("acquisition", "overlap"))
+
+    @overlap.setter
+    def overlap(self, value):
+        self.set("acquisition", "overlap", value)
 
     @property
     def pj_last_path(self):
@@ -541,4 +550,3 @@ class CalibrationConfig(Config):
                 logging.exception("Failed to read calibration data")
 
         return None
-

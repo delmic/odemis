@@ -35,6 +35,7 @@ import wx
 import odemis.acq.fastem
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
+from odemis.gui import conf
 from odemis.gui.comp.stream import FastEMProjectPanel, FastEMROAPanel, FastEMCalibrationPanel
 from odemis.gui.util import call_in_wx_main
 from odemis.util.filename import make_unique_name
@@ -257,10 +258,13 @@ class FastEMROAController(object):
         self._tab_data = tab_data
         self._project_panel = project_panel
         self._view_ctrl = view_ctrl
+        # Read the overlap from the acquisition configuration
+        acqui_conf = conf.get_acqui_conf()
 
         self.model = odemis.acq.fastem.FastEMROA(name, acqstream.UNDEFINED_ROI, roc,
                                                  self._tab_data.main.asm, self._tab_data.main.multibeam,
-                                                 self._tab_data.main.descanner, self._tab_data.main.mppc)
+                                                 self._tab_data.main.descanner, self._tab_data.main.mppc,
+                                                 acqui_conf.overlap)
         self.model.coordinates.subscribe(self._on_coordinates)
         self.model.roc.subscribe(self._on_roc)
 
