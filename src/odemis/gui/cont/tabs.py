@@ -2571,7 +2571,7 @@ class CryoChamberTab(Tab):
 
     def _get_overview_view(self):
         overview_view = next(
-            (view for view in self.tab_data_model.views.value if type(view) == guimod.FeatureOverviewView), None)
+            (view for view in self.tab_data_model.views.value if isinstance(view, guimod.FeatureOverviewView)), None)
         if not overview_view:
             logging.warning("Could not find view of type FeatureOverviewView.")
 
@@ -2585,7 +2585,7 @@ class CryoChamberTab(Tab):
         try:
             overview_view = self._get_overview_view()
             overview_view.removeStream(overview_stream)
-        except AttributeError:
+        except AttributeError:  # No overview view
             pass
 
     def load_overview_streams(self, streams):
@@ -2594,15 +2594,10 @@ class CryoChamberTab(Tab):
         :param streams: (list of StaticStream) the newly acquired static streams from the localization tab
         """
         try:
-            # Replace the old streams with the newly acquired ones in the view
             overview_view = self._get_overview_view()
-            existing_streams = overview_view.getStreams()
             for stream in streams:
-                ex_st = next((ex_st for ex_st in existing_streams if ex_st.name.value == stream.name.value), None)
-                if ex_st:
-                    self.remove_overview_stream(ex_st)
                 overview_view.addStream(stream)
-        except AttributeError:
+        except AttributeError:  # No overview view
             pass
 
     def _on_change_project_folder(self, evt):
