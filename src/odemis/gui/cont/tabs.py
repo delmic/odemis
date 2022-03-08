@@ -525,6 +525,7 @@ class LocalizationTab(Tab):
         streams = data_to_static_streams(data)
 
         view = self.tab_data_model.views.value[0]  # overview map view
+        bbox = (None, None, None, None)  # ltrb in m
         for s in streams:
             s.name.value = "Overview " + s.name.value
             self._show_acquired_stream(s, view)
@@ -533,9 +534,24 @@ class LocalizationTab(Tab):
             self.tab_data_model.overviewStreams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)
 
-            # Display the same acquired data in the chamber tab view
-            chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
-            chamber_tab.load_overview_streams(streams)
+            # Compute the total bounding box
+            try:
+                s_bbox = s.getBoundingBox()
+            except ValueError:
+                continue  # Stream has no data (yet)
+            if bbox[0] is None:
+                bbox = s_bbox
+            else:
+                bbox = (min(bbox[0], s_bbox[0]), min(bbox[1], s_bbox[1]),
+                        max(bbox[2], s_bbox[2]), max(bbox[3], s_bbox[3]))
+
+        # Recenter to the new content only
+        if bbox[0] is not None:
+            self.panel.vp_secom_tl.canvas.fit_to_bbox(bbox)
+
+        # Display the same acquired data in the chamber tab view
+        chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+        chamber_tab.load_overview_streams(streams)
 
     def clear_live_streams(self):
         """
@@ -2597,6 +2613,9 @@ class CryoChamberTab(Tab):
             overview_view = self._get_overview_view()
             for stream in streams:
                 overview_view.addStream(stream)
+
+            # Make sure the whole content is shown
+            self.panel.vp_overview_map.canvas.fit_view_to_content()
         except AttributeError:  # No overview view
             pass
 
