@@ -744,12 +744,12 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
         roa = fastem.FastEMROA(roa_name, coordinates, None,
                                self.asm, self.multibeam, self.descanner,
-                               self.mppc)
+                               self.mppc, pre_calibrate=True)
 
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.ccd,
                                       self.beamshift, self.lens,
-                                      roa, path=None, future=None, pre_calibrate=True)
+                                      roa, path=None, future=None)
 
         self.descanner.updateMetadata({model.MD_SCAN_GAIN: (5000, 5000)})
 
