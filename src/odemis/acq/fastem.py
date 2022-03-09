@@ -321,11 +321,16 @@ class AcquisitionTask(object):
         self._pos_first_tile = self.get_pos_first_tile()
 
         if self._pre_calibrate:
+            # The pre-calibrations should run on a position that lies a full field
+            # outside the ROA, therefore temporarily set the overlap to zero.
+            overlap_init = self._roa.overlap
+            self._roa.overlap = 0
             # Move the stage to the tile with index (-1, -1), to ensure the autofocus and image translation pre-align
             # are done to the top left of the first field, outside the region of acquisition to limit beam damage.
             self.field_idx = (-1, -1)
             self.move_stage_to_next_tile()
             self.pre_calibrate()
+            self._roa.overlap = overlap_init  # set back the overlap to the initial value
 
         # Move the stage to the first tile, to ensure the correct position is
         # stored in the megafield metadata yaml file.
