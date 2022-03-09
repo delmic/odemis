@@ -467,6 +467,8 @@ class AcquisitionTask(object):
         if not fastem_calibrations:
             raise ModuleNotFoundError("Need fastem_calibrations repository to run pre-calibrations.")
 
+        asm_config_orig = None
+
         try:
             logging.debug("Read initial Hw settings.")
             asm_config_orig = configure_hw.get_config_asm(self._multibeam, self._descanner, self._detector)

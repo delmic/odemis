@@ -143,6 +143,7 @@ class CalibrationTask(object):
         :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
         :param calibrations: (list[Calibrations]) List of calibrations that should be run.
         """
+        self.asm_config = None
         self._scanner = scanner
         self._multibeam = multibeam
         self._descanner = descanner
