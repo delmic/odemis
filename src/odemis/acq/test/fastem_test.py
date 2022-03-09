@@ -655,17 +655,46 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             actual_position = task.get_abs_stage_movement()  # [m]
             numpy.testing.assert_allclose(actual_position, expected_position)
 
-            # Verify that for pre-calibrations compared to the top left corner of the ROA, the stage
-            # position is located half a field to the top left (outside the ROA).
-            task.field_idx = (-1, -1)  # (-1, -1) is the index where the pre-calibrations are performed
+    def test_stage_pos_outside_roa(self):
+        """
+        The pre-calibrations need to run outside the ROA. Test that get_abs_stage_movement returns the correct value
+        for a field index of (-1, -1) and that that value is outside the ROA.
+        """
+        res_x, res_y = self.multibeam.resolution.value  # single field size
+        px_size_x, px_size_y = self.multibeam.pixelSize.value
+        x_fields, y_fields = (3, 4)
+        field_size_x = res_x * px_size_x
+        field_size_y = res_y * px_size_y
+        # The coordinates of the ROA in meters.
+        xmin, ymin = (0, 0)
+        xmax, ymax = (field_size_x * x_fields,
+                      field_size_y * y_fields)
+        coordinates = (xmin, ymin, xmax, ymax)  # in m
 
-            # In the role='stage' coordinate system the x-axis points to the right and y-axis to the top.
-            expected_position = (xmin - res_x / 2 * px_size_x,
-                                 ymax + res_x / 2 * px_size_y)  # [m]
-            actual_position = task.get_abs_stage_movement()  # [m]
-            numpy.testing.assert_allclose(actual_position, expected_position)
-            # Verify that the position where the pre-calibration is performed, does not lie inside the ROA coordinates.
-            self.assertFalse(is_point_in_rect(actual_position, coordinates))
+        # Create an ROA with the coordinates of the field.
+        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa = fastem.FastEMROA(roa_name, coordinates, None,
+                               self.asm, self.multibeam, self.descanner,
+                               self.mppc)
+
+        task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
+                                      self.mppc, self.stage, self.ccd,
+                                      self.beamshift, self.lens,
+                                      roa, path=None, future=None)
+        # Set the _pos_first_tile, which would normally be set in the run function.
+        task._pos_first_tile = task.get_pos_first_tile()
+
+        # Verify that for pre-calibrations compared to the top left corner of the ROA, the stage
+        # position is located half a field to the top left (outside the ROA).
+        task.field_idx = (-1, -1)  # (-1, -1) is the index where the pre-calibrations are performed
+
+        # In the role='stage' coordinate system the x-axis points to the right and y-axis to the top.
+        expected_position = (xmin - res_x / 2 * px_size_x,
+                             ymax + res_x / 2 * px_size_y)  # [m]
+        actual_position = task.get_abs_stage_movement()  # [m]
+        numpy.testing.assert_allclose(actual_position, expected_position)
+        # Verify that the position where the pre-calibration is performed, does not lie inside the ROA coordinates.
+        self.assertFalse(is_point_in_rect(actual_position, coordinates))
 
     def test_pre_calibrate(self):
         """
