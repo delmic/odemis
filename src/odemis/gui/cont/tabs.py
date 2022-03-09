@@ -1812,6 +1812,15 @@ class FastEMAcquisitionTab(Tab):
             calibrations
         )
 
+        # Controller for acquistion settings panel
+        self._acq_settings_controller = settings.SettingsController(
+            panel.pnl_acq_settings,
+            "dwell time"
+        )
+        dt_conf = {"range": [1e-6, 40e-6]}  # Limit the values the user can set the dwell time to.
+        self._acq_settings_controller.add_setting_entry(
+            "dwell time", tab_data.main.multibeam.dwellTime, tab_data.main.multibeam, dt_conf)
+
         # Acquisition controller
         self._acquisition_controller = acqcont.FastEMAcquiController(
             tab_data,

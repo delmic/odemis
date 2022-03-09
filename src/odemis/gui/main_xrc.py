@@ -508,6 +508,7 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_acq_settings = xrc.XRCCTRL(self, "pnl_acq_settings")
         self.pnl_fastem_calibration_1 = xrc.XRCCTRL(self, "pnl_fastem_calibration_1")
         self.btn_align = xrc.XRCCTRL(self, "btn_align")
         self.align_gauge_progress = xrc.XRCCTRL(self, "align_gauge_progress")
@@ -5444,6 +5445,18 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
+                        <object class="FoldPanelItem" name="pnl_acq_settings">
+                            <size>300,-1</size>
+                            <add_button>1</add_button>
+                            <fg>#7F7F7F</fg>
+                            <bg>#333333</bg>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            <label>ACQUISITION SETTINGS</label>
+                            <fg>#1A1A1A</fg>
+                            <bg>#555555</bg>
+                        </object>
                       <object class="FoldPanelItem">
                         <object class="wxPanel" name="pnl_fastem_calibration_1">
                           <fg>#7F7F7F</fg>
