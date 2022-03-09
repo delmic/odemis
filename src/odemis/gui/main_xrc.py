@@ -557,6 +557,11 @@ class xrcpnl_tab_fastem_overview(wx.Panel):
         self.vp_fastem_overview = xrc.XRCCTRL(self, "vp_fastem_overview")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_fastem_optical_autofocus = xrc.XRCCTRL(self, "pnl_fastem_optical_autofocus")
+        self.btn_align = xrc.XRCCTRL(self, "btn_align")
+        self.align_gauge_progress = xrc.XRCCTRL(self, "align_gauge_progress")
+        self.align_spacer_panel = xrc.XRCCTRL(self, "align_spacer_panel")
+        self.align_lbl_gauge = xrc.XRCCTRL(self, "align_lbl_gauge")
         self.pnl_fastem_overview_streams = xrc.XRCCTRL(self, "pnl_fastem_overview_streams")
         self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
@@ -5800,6 +5805,64 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
+                      <object class="FoldPanelItem">
+                        <object class="wxPanel" name="pnl_fastem_optical_autofocus">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_align">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Optical Autofocus</label>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="align_gauge_progress">
+                                <size>-1,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <hidden>1</hidden>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxPanel" name="align_spacer_panel">
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="align_lbl_gauge">
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <style>wxALIGN_RIGHT</style>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>14</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                        </object>
+                        <label>CALIBRATION</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_fastem_overview_streams">
                           <size>300,-1</size>
