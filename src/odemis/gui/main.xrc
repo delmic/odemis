@@ -4492,7 +4492,7 @@
               <flag>wxALIGN_RIGHT</flag>
             </object>
             <orient>wxVERTICAL</orient>
-		    <object class="spacer">
+            <object class="spacer">
               <option>8</option>
               <flag>wxEXPAND</flag>
             </object>
@@ -4535,7 +4535,7 @@
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
-                        <object class="wxPanel" name="pnl_fastem_alignment">
+                        <object class="wxPanel" name="pnl_fastem_calibration_1">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <object class="wxBoxSizer">
@@ -4543,7 +4543,7 @@
                               <object class="ImageTextButton" name="btn_align">
                                 <height>24</height>
                                 <face_colour>def</face_colour>
-                                <label>Alignment...</label>
+                                <label>Calibrate</label>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -4576,7 +4576,6 @@
                             </object>
                             <object class="sizeritem">
                               <object class="wxStaticText" name="align_lbl_gauge">
-                                <label>~ 30 seconds</label>
                                 <style>wxALIGN_RIGHT</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -4586,17 +4585,16 @@
                               <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
                               <border>14</border>
                             </object>
-
                             <orient>wxHORIZONTAL</orient>
                           </object>
                         </object>
-                        <label>ALIGNMENT</label>
+                        <label>CALIBRATION 1</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-					  <object class="FoldPanelItem">
-                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration">
-						  <size>300,-1</size>
+                      <object class="FoldPanelItem">
+                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration_2">
+                          <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
@@ -4604,11 +4602,11 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <label>CALIBRATION</label>
+                        <label>CALIBRATION 2</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-					  <object class="FoldPanelItem">
+                      <object class="FoldPanelItem">
                         <object class="FastEMProjectBar" name="pnl_fastem_projects">
                           <size>300,-1</size>
                           <add_button>1</add_button>
@@ -4835,7 +4833,7 @@
     </object>
     <bg>#333333</bg>
   </object>
- <object class="wxPanel" name="pnl_tab_fastem_overview">
+  <object class="wxPanel" name="pnl_tab_fastem_overview">
     <object class="wxBoxSizer">
       <orient>wxHORIZONTAL</orient>
       <object class="sizeritem">
@@ -4855,7 +4853,7 @@
               <flag>wxALIGN_RIGHT</flag>
             </object>
             <orient>wxVERTICAL</orient>
-		    <object class="spacer">
+            <object class="spacer">
               <option>8</option>
               <flag>wxEXPAND</flag>
             </object>
@@ -4897,7 +4895,7 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
-					  <object class="FoldPanelItem">
+                      <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_fastem_overview_streams">
                           <size>300,-1</size>
                           <add_button>0</add_button>
@@ -4934,7 +4932,7 @@
               <minsize>400,400</minsize>
             </object>
             <orient>wxVERTICAL</orient>
-<object class="sizeritem">
+            <object class="sizeritem">
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
@@ -4946,14 +4944,14 @@
                     <option>0</option>
                     <flag>wxEXPAND</flag>
                   </object>
-				  <object class="sizeritem">
-				    <object class="FastEMSelectionPanel" name="selection_panel">
-					  <bg>#333333</bg>
-					  <fg>#999999</fg>
-					  <size>400,-1</size>
-					  <flag>wxALL|wxEXPAND</flag>
-					 </object> 
-                   </object>
+                  <object class="sizeritem">
+                    <object class="FastEMSelectionPanel" name="selection_panel">
+                      <bg>#333333</bg>
+                      <fg>#999999</fg>
+                      <size>400,-1</size>
+                      <flag>wxALL|wxEXPAND</flag>
+                    </object>
+                  </object>
                   <object class="sizeritem">
                     <object class="wxPanel">
                       <object class="wxBoxSizer">
@@ -5087,102 +5085,102 @@
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
-			   <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="ImageToggleButton" name="btn_pressure">
-                          <icon>img/icon/ico_press.png</icon>
-                          <icon_on>img/icon/ico_press_green.png</icon_on>
-                          <height>48</height>
-                          <size>120,48</size>
-                          <face_colour>def</face_colour>
-                          <label>PUMP</label>
-                          <fg>#1A1A1A</fg>
-                          <font>
-                            <size>11</size>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxEXPAND</flag>
-                        <cellpos>0,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageToggleButton" name="btn_ebeam">
-                          <icon>img/icon/ico_sem.png</icon>
-                          <icon_on>img/icon/ico_sem_green.png</icon_on>
-                          <height>48</height>
-                          <size>120,48</size>
-                          <face_colour>def</face_colour>
-                          <label>E-BEAM</label>
-                          <fg>#1A1A1A</fg>
-                          <font>
-                            <size>11</size>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxEXPAND</flag>
-                        <cellpos>0,1</cellpos>
-                      </object>
-                      <vgap>10</vgap>
-                      <hgap>10</hgap>
+              <object class="sizeritem">
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="ImageToggleButton" name="btn_pressure">
+                      <icon>img/icon/ico_press.png</icon>
+                      <icon_on>img/icon/ico_press_green.png</icon_on>
+                      <height>48</height>
+                      <size>120,48</size>
+                      <face_colour>def</face_colour>
+                      <label>PUMP</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
+                    <flag>wxEXPAND</flag>
+                    <cellpos>0,0</cellpos>
                   </object>
                   <object class="sizeritem">
-                      <object class="wxBoxSizer">
-                        <orient>wxHORIZONTAL</orient>
-                        <object class="sizeritem">
-                          <object class="wxStaticText">
-                            <label>Pressure: </label>
-                            <fg>#DDDDDD</fg>
-                            <font>
-                              <size>10</size>
-                              <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                            </font>
-                          </object>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxStaticText" name="pressure_label">
-                              <size>150,20</size>
-                              <value>...</value>
-                              <fg>#DDDDDD</fg>
-                              <bg>#333333</bg>
-                          </object>
-                        </object>
-                      </object>
-                      <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
-                      <border>10</border>
+                    <object class="ImageToggleButton" name="btn_ebeam">
+                      <icon>img/icon/ico_sem.png</icon>
+                      <icon_on>img/icon/ico_sem_green.png</icon_on>
+                      <height>48</height>
+                      <size>120,48</size>
+                      <face_colour>def</face_colour>
+                      <label>E-BEAM</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                    <cellpos>0,1</cellpos>
                   </object>
-                  <object class="sizeritem">
-                      <object class="wxTextCtrl">
-                          <size>150,20</size>
-                          <value>SCINTILLATOR SELECTION</value>
-                          <fg>#DDDDDD</fg>
-                          <bg>#333333</bg>
-                          <style>wxBORDER_NONE|wxTE_READONLY</style>
-                      </object>
-                      <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
-                      <border>10</border>
+                  <vgap>10</vgap>
+                  <hgap>10</hgap>
+                </object>
+                <flag>wxALL</flag>
+                <border>10</border>
+              </object>
+              <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <orient>wxHORIZONTAL</orient>
+                <object class="sizeritem">
+                  <object class="wxStaticText">
+                    <label>Pressure: </label>
+                    <fg>#DDDDDD</fg>
+                    <font>
+                      <size>10</size>
+                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                    </font>
                   </object>
-                   <object class="sizeritem">
-				    <object class="FastEMSelectionPanel" name="selection_panel">
-                      <tooltip>Select scintillators containing sample.</tooltip>
-					  <bg>#333333</bg>
-					  <fg>#999999</fg>
-					  <size>400,-1</size>
-					  <flag>wxTOP|wxEXPAND</flag>
-                      <border>5</border>
-					 </object> 
-                   </object>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxStaticText" name="pressure_label">
+                      <size>150,20</size>
+                      <value>...</value>
+                      <fg>#DDDDDD</fg>
+                      <bg>#333333</bg>
+                  </object>
+                </object>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+              <border>10</border>
+              </object>
+              <object class="sizeritem">
+                <object class="wxTextCtrl">
+                  <size>150,20</size>
+                  <value>SCINTILLATOR SELECTION</value>
+                  <fg>#DDDDDD</fg>
+                  <bg>#333333</bg>
+                  <style>wxBORDER_NONE|wxTE_READONLY</style>
+                </object>
+                <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+                <border>10</border>
+              </object>
+               <object class="sizeritem">
+                <object class="FastEMSelectionPanel" name="selection_panel">
+                  <tooltip>Select scintillators containing sample.</tooltip>
+                  <bg>#333333</bg>
+                  <fg>#999999</fg>
+                  <size>400,-1</size>
+                  <flag>wxTOP|wxEXPAND</flag>
+                  <border>5</border>
+                 </object>
+               </object>
             <object class="spacer">
               <option>1</option>
               <flag>wxEXPAND</flag>
