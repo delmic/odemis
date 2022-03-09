@@ -607,8 +607,13 @@ this command::
 
     ./util/generate_xrc.py src/odemis/gui/main.xrc
 
+Note that on Ubuntu 18.04 this call does not work with python3, therefore you
+will need to explicitly call this with python2::
 
-If you add/modify an image (used as a GUI element, not a microscope acquisition), 
+    python2 ./util/generate_xrc.py src/odemis/gui/main.xrc
+
+
+If you add/modify an image (used as a GUI element, not a microscope acquisition),
 it should be done in ``src/odemis/gui/img``. After the modifications, you should
 make sure the images are optimised, with the following script::
 
