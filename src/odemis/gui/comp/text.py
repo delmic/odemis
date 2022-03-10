@@ -936,10 +936,10 @@ class _NumberTextCtrl(wx.TextCtrl):
     def on_text_enter(self, evt):
         """ Process [enter] key presses """
 
-        logging.debug("New text entered in %s", self.__class__.__name__)
         # almost the same as on_kill_focus, but still display raw
         wx.CallAfter(self.SetSelection, 0, 0)
         str_val = wx.TextCtrl.GetValue(self)
+        logging.debug("New text entered in %s: %s", self.__class__.__name__, str_val)
         self._set_number_value(str_val)
         self._display_pretty()
 

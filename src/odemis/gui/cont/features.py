@@ -135,6 +135,8 @@ class CryoFeatureController(object):
                                                                        ctrl_2_va=self._on_cmb_feature_status_change,
                                                                        va_2_ctrl=self._on_feature_status)
 
+        # TODO: check, it seems that sometimes the EVT_TEXT_ENTER is first received
+        # by the VAC, before the widget itself, which prevents getting the right value.
         self._feature_z_va_connector = VigilantAttributeConnector(feature.pos,
                                                                   self._panel.ctrl_feature_z,
                                                                   events=wx.EVT_TEXT_ENTER,
@@ -189,9 +191,14 @@ class CryoFeatureController(object):
         Get the current feature Z ctrl value to set feature Z position
         :return: (tuple of 3 floats) the full position including the Z ctrl value
         """
+        # HACK: sometimes the event is first received by this handler and later
+        # by the UnitFloatCtrl. So the value is not yet computed => Force it, just in case.
+        self._panel.ctrl_feature_z.on_text_enter(None)
+        zpos = self._panel.ctrl_feature_z.GetValue()
+
         feature = self._tab_data_model.main.currentFeature.value
         if not feature:
             logging.error("No feature connected, but Z position changed!")
-            return None, None, float(self._panel.ctrl_feature_z.Value)
+            return None, None, zpos
         pos = feature.pos.value
-        return pos[0], pos[1], float(self._panel.ctrl_feature_z.Value)
+        return pos[0], pos[1], zpos
