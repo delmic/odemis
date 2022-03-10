@@ -108,7 +108,7 @@ class TestMicroscope(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW is True:
-            raise unittest.SkipTest("No hardware available.")
+            raise unittest.SkipTest("No simulator available.")
 
         cls.microscope = xt_client.SEM(**CONFIG_SEM)
 
@@ -540,7 +540,7 @@ class TestMicroscopeInternal(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW is True:
-            raise unittest.SkipTest("No hardware available.")
+            raise unittest.SkipTest("No simulator available.")
 
         cls.microscope = xt_client.SEM(**CONFIG_SEM)
 
@@ -1003,6 +1003,8 @@ class TestFIBScanner(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No simulator available.")
 
         cls.microscope = xt_client.SEM(**CONFIG_FIB_SEM)
 
@@ -1013,8 +1015,6 @@ class TestFIBScanner(unittest.TestCase):
                 cls.detector = child
 
     def setUp(self):
-        if TEST_NOHW:
-            self.skipTest("No hardware available.")
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
 
@@ -1034,6 +1034,8 @@ class TestDualModeMicroscope(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No simulator available.")
 
         cls.microscope = xt_client.SEM(**CONFIG_DUAL_MODE_SEM)
 
@@ -1046,8 +1048,6 @@ class TestDualModeMicroscope(unittest.TestCase):
                 cls.detector = child
 
     def setUp(self):
-        if TEST_NOHW:
-            self.skipTest("No hardware available.")
         if self.microscope.get_vacuum_state() != 'vacuum':
             self.skipTest("Chamber needs to be in vacuum, please pump.")
 
@@ -1149,7 +1149,7 @@ class TestMBScanner(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW is True:
-            raise unittest.SkipTest("No hardware available.")
+            raise unittest.SkipTest("No simulator available.")
 
         cls.microscope = xt_client.SEM(**CONFIG_MB_SEM)
 
