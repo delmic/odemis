@@ -650,6 +650,34 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if recenter:
                 self.view.view_pos.value = self.requested_phys_pos
 
+    def fit_to_bbox(self, bbox):
+        """
+        Zoom in to the bounding box and recenter. Same as fit_view_to_content,
+          but with explicit bounding box, so we can zoom to a specific position.
+        bbox (4 floats): bounding box to be shown, defined as minx, miny, maxx,
+          maxy positions in m.
+        """
+        # compute mpp so that the bbox fits exactly the visible part
+        w, h = abs(bbox[2] - bbox[0]), abs(bbox[3] - bbox[1])  # m
+
+        # In case they are 0, don't go crazy, and just pretend it's tiny
+        w = max(1e-12, w)
+        h = max(1e-12, h)
+
+        cs = self.ClientSize
+        cw = max(1, cs[0])  # px
+        ch = max(1, cs[1])  # px
+        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
+
+        c = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
+        self.requested_phys_pos = c  # As recenter_buffer but without request_drawing_update
+
+        if self.view:
+            self.view.mpp.value = self.view.mpp.clip(1 / self.scale)
+            self.view.view_pos.value = c
+
+        wx.CallAfter(self.request_drawing_update)
+
     def _on_view_mpp(self, mpp):
         """ Called when the view.mpp is updated """
         self.scale = 1 / mpp
@@ -917,7 +945,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
     # It would allow to decide how to redraw depending if it's on size event or more high level.
     def fit_to_content(self, recenter=False):
         """ Adapt the scale and (optionally) center to fit to the current content
-        :param recenter: (boolean) If True, also recenter the view.
+        recenter: (boolean) If True, also recenter the view.
         """
         # TODO: take into account the dragging. For now we skip it (is unlikely to happen anyway)
 
@@ -932,7 +960,6 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             hh = max(abs(c[1] - bbox[1]), abs(c[1] - bbox[3]))
             bbox = [c[0] - hw, c[1] - hh, c[0] + hw, c[1] + hh]
 
-        # TODO: check sign of Y
         # compute mpp so that the bbox fits exactly the visible part
         w, h = bbox[2] - bbox[0], bbox[3] - bbox[1]  # m
         if w == 0 or h == 0:
@@ -1858,36 +1885,6 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
             self.fit_to_bbox((l, t, r, b))
         else:
             raise ValueError("Tab data model not initialized yet.")
-
-    def fit_to_bbox(self, bbox):
-        """
-        Zoom in to the bbox and recenter. Same as fit_to_content, but with explicit bounding box,
-        so we can zoom to a specific position.
-        bbox (tuple of 4 floats): l, t, r, b positions in m
-        """
-        if bbox[0] is None:
-            return  # no image => nothing to do
-
-        # TODO: check sign of Y
-        # compute mpp so that the bbox fits exactly the visible part
-        w, h = abs(bbox[2] - bbox[0]), abs(bbox[3] - bbox[1])  # m
-        if w == 0 or h == 0:
-            logging.warning("Weird image size of %fx%f m", w, h)
-            return  # no image
-
-        cs = self.ClientSize
-        cw = max(1, cs[0])  # px
-        ch = max(1, cs[1])  # px
-        self.scale = min(ch / h, cw / w)  # pick the dimension which is shortest
-        self.view.mpp.value = 1 / self.scale
-
-        # TODO: avoid aliasing when possible by picking a round number for the
-        # zoom level (for the "main" image) if it's ±10% of the target size
-
-        c = (bbox[0] + bbox[2]) / 2, (bbox[1] + bbox[3]) / 2
-        self.requested_phys_pos = c  # As recenter_buffer but without request_drawing_update
-
-        wx.CallAfter(self.request_drawing_update)
 
     def on_dbl_click(self, evt):
         # don't recenter on double click, it's confusing, especially because selecting + moving a ROA

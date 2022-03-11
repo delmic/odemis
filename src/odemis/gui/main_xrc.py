@@ -879,7 +879,7 @@ class xrcfr_overview_acq(wx.Dialog):
         self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
-        self.zstack_slider_step = xrc.XRCCTRL(self, "zstack_slider_step")
+        self.zstep_size_ctrl = xrc.XRCCTRL(self, "zstep_size_ctrl")
         self.tiles_number_x = xrc.XRCCTRL(self, "tiles_number_x")
         self.tiles_number_y = xrc.XRCCTRL(self, "tiles_number_y")
         self.area_size_txt = xrc.XRCCTRL(self, "area_size_txt")
@@ -8339,9 +8339,13 @@ def __init_resources():
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="zstack_slider_step">
-                          <label>...</label>
-                          <fg>#777777</fg>
+                        <object class="UnitFloatCtrl" name="zstep_size_ctrl">
+                          <value>1</value>
+                          <key_step>0.000001</key_step>
+                          <min>0</min>
+                          <max>1</max>
+                          <unit>m</unit>
+                          <accuracy>3</accuracy>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
@@ -8373,7 +8377,7 @@ def __init_resources():
                         <object class="UnitIntegerCtrl" name="tiles_number_x">
                           <size>-1,15</size>
                           <value>10</value>
-                          <key_step>0.1</key_step>
+                          <key_step>1</key_step>
                           <min>1</min>
                           <max>1000</max>
                           <unit/>
@@ -8411,7 +8415,7 @@ def __init_resources():
                         <object class="UnitIntegerCtrl" name="tiles_number_y">
                           <size>-1,15</size>
                           <value>10</value>
-                          <key_step>0.1</key_step>
+                          <key_step>1</key_step>
                           <min>1</min>
                           <max>1000</max>
                           <unit/>
