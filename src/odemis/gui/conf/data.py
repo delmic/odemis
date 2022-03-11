@@ -666,6 +666,13 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "range": (100e-9, 1.0),
             },
         },
+        "multibeam":
+        {
+            "dwellTime":
+            {
+                "range": (1e-6, 40e-6),  # Limit the values the user can set the dwell time to.
+            },
+        },
     },
 }
 

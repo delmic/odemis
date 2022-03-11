@@ -1815,11 +1815,11 @@ class FastEMAcquisitionTab(Tab):
         # Controller for acquistion settings panel
         self._acq_settings_controller = settings.SettingsController(
             panel.pnl_acq_settings,
-            "dwell time"
+            ""  # default message, which is shown if no setting is available
         )
-        dt_conf = {"range": [1e-6, 40e-6]}  # Limit the values the user can set the dwell time to.
+        dt_conf = get_hw_config(tab_data.main.multibeam, tab_data.main.hw_settings_config).get("dwellTime")
         self._acq_settings_controller.add_setting_entry(
-            "dwell time", tab_data.main.multibeam.dwellTime, tab_data.main.multibeam, dt_conf)
+            "dwellTime", tab_data.main.multibeam.dwellTime, tab_data.main.multibeam, dt_conf)
 
         # Acquisition controller
         self._acquisition_controller = acqcont.FastEMAcquiController(
