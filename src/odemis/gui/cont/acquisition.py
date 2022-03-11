@@ -516,6 +516,8 @@ class CryoAcquiController(object):
         self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
         self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
 
+        self._zlevels = {}  # type: dict[Stream, list[float]]
+
         # callbacks of VA's
         self._tab_data.filename.subscribe(self._on_filename, init=True)
         self._tab_data.zStackActive.subscribe(self._update_zstack_active, init=True)
@@ -575,6 +577,7 @@ class CryoAcquiController(object):
 
         # acquire the data
         if self._zStackActive.value:
+            self._on_zstack()  # update the zlevels with the current focus position
             self._acq_future = acqmng.acquireZStack(
                 self._acquiStreams.value, self._zlevels, self._tab_data.main.settings_obs)
 
@@ -796,8 +799,11 @@ class CryoAcquiController(object):
         ]
         self._sort_streams(streams)
 
-    @call_in_wx_main
     def _sort_streams(self, streams):
+        """
+        Sort the list of streams in the same order that they will be acquired
+        Must be called from the main GUI thread.
+        """
         for i, s in enumerate(acqmng.sortStreams(streams)):
             # replace the unsorted streams with the sorted streams one by one
             self._panel.streams_chk_list.Delete(i)
@@ -828,8 +834,7 @@ class CryoAcquiController(object):
         self._panel.param_Zmax.Enable(active)
         self._panel.param_Zstep.Enable(active)
         self._on_zstack()
-        if not active:
-            self._update_acquisition_time()
+        self._update_acquisition_time()
 
     def _on_zstack(self):
         """
@@ -838,15 +843,15 @@ class CryoAcquiController(object):
         """
         if not self._zStackActive.value:
             return
-        self._zlevels = {}
-        for s in self._acquiStreams.value:
-            # the other possible streams are SEM which are generally not wanted by the user to be zstacked  
-            if isinstance(s, (FluoStream, BrightfieldStream)):
-                levels = generate_zlevels(
-                    self._tab_data.main.focus,
-                    [self._tab_data.zMin.value, self._tab_data.zMax.value],
-                    self._tab_data.zStep.value)
-                self._zlevels[s] = levels
+
+        levels = generate_zlevels(self._tab_data.main.focus,
+                                  (self._tab_data.zMin.value, self._tab_data.zMax.value),
+                                  self._tab_data.zStep.value)
+
+        # Only use zstack for the optical streams (not SEM), as that's the ones
+        # the user is interested in on the METEOR/ENZEL.
+        self._zlevels = {s: levels for s in self._acquiStreams.value
+                         if isinstance(s, (FluoStream, BrightfieldStream))}
 
         # update the time, taking the zstack into account 
         self._update_acquisition_time()
