@@ -26,19 +26,26 @@ import os
 
 import unittest
 from odemis.driver import kryoz
-import odemis.model as model
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
+# Export TEST_NOHW=1 to force using only the simulator and skipping test cases
+# needing real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
+
 
 class TestKryozCooler(unittest.TestCase):
     """
-    Tests cases for the Kryoz COoler driver
+    Tests cases for the Kryoz Cooler driver
     """
 
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW:
+            # Until we have a simulator...
+            raise unittest.SkipTest("No simulator available")
+
         cls.dev = kryoz.Cryolab("Test", "cooler", "localhost")
 
     @classmethod
@@ -53,3 +60,7 @@ class TestKryozCooler(unittest.TestCase):
         self.assertEqual(len(status), 5)
         # set setPoint
         self.dev.disconnect()
+
+
+if __name__ == "__main__":
+    unittest.main()
