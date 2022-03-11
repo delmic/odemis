@@ -257,6 +257,8 @@ FASTEM-sim: {
         # Factory calibrations of the scanner amplitude and offset
         SCAN_OFFSET: [-0.0935, 0.0935],  # [a.u._scan] the start of the sawtooth scanning signal
         SCAN_AMPLITUDE: [0.187, -0.187],  # [a.u._scan] the amplitude of the sawtooth scanning signal
+        SCAN_OFFSET_CALIB: [-0.0935, 0.0935],  # [a.u_scan] only needed for simulator
+        SCAN_AMPLITUDE_CALIB: [0.187, -0.187],  # [a.u_scan] only needed for simulator
     },
 }
 
