@@ -262,6 +262,36 @@ class TestFastEMROA(unittest.TestCase):
             self.assertLessEqual(max(field_indices)[1] - max(expected_indices)[1], 1)
             self.assertGreaterEqual(max(field_indices)[1] - max(expected_indices)[1], 0)
 
+    def test_calculate_field_indices_overlap_small_roa(self):
+        """Check that the correct number of field indices are calculated for ROA's that are smaller than the overlap."""
+        res_x, res_y = self.multibeam.resolution.value  # single field size
+        px_size_x, px_size_y = self.multibeam.pixelSize.value
+        overlap = 0.2
+
+        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+
+        field_size_x = res_x * px_size_x
+        field_size_y = res_y * px_size_y
+        # The coordinates of the ROA in meters.
+        xmin, ymin = (0, 0)
+        # Create xmax and ymax such that they are smaller than the field_size * overlap.
+        xmax, ymax = (0.8 * field_size_x * overlap,
+                      0.8 * field_size_y * overlap)
+        coordinates = (xmin, ymin, xmax, ymax)  # in m
+        roa = fastem.FastEMROA(roa_name,
+                               coordinates,
+                               None,
+                               self.asm,
+                               self.multibeam,
+                               self.descanner,
+                               self.mppc,
+                               overlap)
+
+        # For very small ROA's we expect at least a single field.
+        expected_indices = [(0, 0)]  # (col, row)
+        field_indices = roa._calculate_field_indices()
+        self.assertListEqual(field_indices, expected_indices)
+
 
 class TestFastEMAcquisition(unittest.TestCase):
     """Test multibeam acquisition."""

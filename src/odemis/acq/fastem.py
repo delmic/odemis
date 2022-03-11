@@ -147,12 +147,24 @@ class FastEMROA(object):
         field_size = (field_res[0] * px_size[0],
                       field_res[1] * px_size[1])
 
-        # Note: floating point errors here, can result in an additional row or column of fields (that's fine)
+        # Note: Megafields get asymmetrically extended towards the right and bottom.
         # When fields overlap the number of fields is calculated by subtracting the size of the field that overlaps
         # from the total roa size and dividing that by the non-overlapping field size. (see note in docstring)
-        n_hor_fields = math.ceil((abs(r - l) - field_size[0] * self.overlap) / (field_size[0] * (1 - self.overlap)))
-        n_vert_fields = math.ceil((abs(b - t) - field_size[1] * self.overlap) / (field_size[1] * (1 - self.overlap)))
-        # Note: Megafields get asymmetrically extended towards the right and bottom.
+        width = abs(r - l) - field_size[0] * self.overlap
+        # If the width is smaller than field_size * overlap assume the user wants to acquire at least 1 field
+        if width <= 0:
+            n_hor_fields = 1
+        else:
+            # Note: floating point errors here, can result in an additional row or column of fields (that's fine)
+            n_hor_fields = math.ceil(width / (field_size[0] * (1 - self.overlap)))
+
+        height = abs(b - t) - field_size[1] * self.overlap
+        # If the height is smaller than field_size * overlap assume the user wants to acquire at least 1 field
+        if height <= 0:
+            n_vert_fields = 1
+        else:
+            # Note: floating point errors here, can result in an additional row or column of fields (that's fine)
+            n_vert_fields = math.ceil(height / (field_size[1] * (1 - self.overlap)))
 
         # Create the field indices based on the number of horizontal and vertical fields.
         field_indices = numpy.ndindex(n_vert_fields, n_hor_fields)
