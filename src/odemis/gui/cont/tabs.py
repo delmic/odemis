@@ -1,9 +1,10 @@
 # -*- coding: utf-8 -*-
 
 """
-@author: Rinze de Laat
+@author: Rinze de Laat, Éric Piel, Philip Winkler, Victoria Mavrikopoulou,
+         Anders Muskens, Bassim Lazem
 
-Copyright © 2012-2021 Rinze de Laat, Éric Piel, Philip Winkler, Delmic
+Copyright © 2012-2022 Rinze de Laat, Éric Piel, Delmic
 
 Handles the switch of the content of the main GUI tabs.
 
@@ -30,7 +31,6 @@ import logging
 import math
 import os
 import os.path
-import shutil
 import time
 from concurrent.futures._base import CancelledError, RUNNING
 from functools import partial
@@ -42,14 +42,6 @@ import wx
 # file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
 # This is not related to any particular wxPython version and is most likely permanent.
 import wx.html
-
-from odemis.acq.align.fastem import Calibrations
-from odemis.gui import conf, img
-from odemis.gui.cont.features import CryoFeatureController
-from odemis.gui.util.wx_adapter import fix_static_text_clipping
-from odemis.gui.win.acquisition import ShowChamberFileDialog
-from odemis.model import getVAs
-from odemis.util.filename import guess_pattern, create_projectname, create_filename
 
 import odemis.acq.stream as acqstream
 import odemis.gui
@@ -63,9 +55,13 @@ import odemis.gui.util.align as align
 from odemis import dataio, model
 from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus
-from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
-from odemis.gui.conf.util import create_axis_entry
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
+from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
+from odemis.acq.align.fastem import Calibrations
+from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel, \
+    FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, POSITION_NAMES, THREE_BEAMS, \
+    get3beamsSafePos, SAFETY_MARGIN_5DOF
+from odemis.acq.move import cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
     CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
@@ -74,12 +70,8 @@ from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStr
     PixelTemporalSpectrumProjection, SinglePointTemporalProjection, \
     ScannedTemporalSettingsStream, \
     ARRawProjection, ARPolarimetryProjection, StaticStream, LiveStream, FIBStream
-from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel, \
-    FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, POSITION_NAMES, THREE_BEAMS, \
-    get3beamsSafePos, SAFETY_MARGIN_5DOF
-from odemis.acq.move import cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
-from odemis.util.units import decompose_si_prefix, readable_str
 from odemis.driver.actuator import ConvertStage
+from odemis.gui import conf, img
 from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport, \
@@ -88,8 +80,10 @@ from odemis.gui.comp.viewport import MicroscopeViewport, AngularResolvedViewport
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
     get_hw_config
-from odemis.gui.cont import settings
+from odemis.gui.conf.util import create_axis_entry
+from odemis.gui.cont import settings, fastem_acq, project
 from odemis.gui.cont.actuators import ActuatorController
+from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController, FastEMStateController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
@@ -98,8 +92,13 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter, VigilantAttributeConnector
+from odemis.gui.util.wx_adapter import fix_static_text_clipping
+from odemis.gui.win.acquisition import ShowChamberFileDialog
+from odemis.model import getVAs
 from odemis.util import units, spot, limit_invocation
 from odemis.util.dataio import data_to_static_streams, open_acquisition
+from odemis.util.filename import guess_pattern, create_projectname
+from odemis.util.units import decompose_si_prefix, readable_str
 
 # The constant order of the toolbar buttons
 TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_RULER, TOOL_POINT,
@@ -1778,14 +1777,14 @@ class FastEMAcquisitionTab(Tab):
                                                                       )
 
         # Project bar controller
-        self._projectbar_controller = streamcont.FastEMProjectBarController(
+        self._projectbar_controller = project.FastEMProjectBarController(
             tab_data,
             panel.pnl_fastem_projects,
             view_ctrl=self.view_controller,
         )
 
         # Controller for calibration panel 2
-        self._calibrationbar_controller = streamcont.FastEMCalibrationController(
+        self._calibrationbar_controller = project.FastEMCalibrationRegionsController(
             tab_data,
             panel.pnl_fastem_calibration_2,
             view_ctrl=self.view_controller,
@@ -1806,7 +1805,7 @@ class FastEMAcquisitionTab(Tab):
             # IMAGE_TRANSLATION_FINAL FIXME: add when we can update the good mp position and fix for max amplitude
 
         # Controller for calibration panel 1
-        self._alignment_controller = acqcont.FastEMAlignmentController(
+        self._alignment_controller = fastem_acq.FastEMCalibrationController(
             tab_data,
             panel,
             calibrations
@@ -1822,7 +1821,7 @@ class FastEMAcquisitionTab(Tab):
             "dwellTime", tab_data.main.multibeam.dwellTime, tab_data.main.multibeam, dt_conf)
 
         # Acquisition controller
-        self._acquisition_controller = acqcont.FastEMAcquiController(
+        self._acquisition_controller = fastem_acq.FastEMAcquiController(
             tab_data,
             panel,
             self._projectbar_controller,
@@ -1915,14 +1914,14 @@ class FastEMOverviewTab(Tab):
         sem_stream_cont.stream_panel.show_remove_btn(False)
 
         # Controller for calibration panel 1
-        self._alignment_controller = acqcont.FastEMAlignmentController(
+        self._alignment_controller = fastem_acq.FastEMCalibrationController(
             tab_data,
             panel,
             calibrations=[Calibrations.OPTICAL_AUTOFOCUS]
         )
 
         # Acquisition controller
-        self._acquisition_controller = acqcont.FastEMOverviewAcquiController(
+        self._acquisition_controller = fastem_acq.FastEMOverviewAcquiController(
             tab_data,
             panel,
         )
