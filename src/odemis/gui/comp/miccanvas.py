@@ -1815,21 +1815,6 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super(FastEMAcquisitionCanvas, self).__init__(*args, **kwargs)
-        # When starting the GUI, we want to zoom out to show the background overlay. However, calling this function
-        # here in __init__ does not work, probably because some values are not initialized properly yet (.ClientSize?)
-        # As a hack, the zooming is done in on_size, but only once after starting.
-        # TODO: find a better way of implementing this
-        self._starting = True
-
-    def on_size(self, evt):
-        """ Called when the canvas is resized """
-        if self._starting:
-            try:
-                self.zoom_out()
-                self._starting = False
-            except (ValueError, IndexError):
-                logging.debug("Zooming out failed, waiting for initialization.")
-        super(FastEMAcquisitionCanvas, self).on_size(evt)
 
     def add_background_overlay(self, rectangles):
         """

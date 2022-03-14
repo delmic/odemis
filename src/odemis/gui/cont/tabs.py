@@ -1756,6 +1756,10 @@ class FastEMAcquisitionTab(Tab):
         super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("ACQUISITION")
 
+        # Flag to indicate the tab has been fully initialized or not. Some initialisation
+        # need to wait for the tab to be shown on the first time.
+        self._initialized_after_show = False
+
         # View Controller
         vp = panel.vp_fastem_acqui
         assert(isinstance(vp, FastEMAcquisitionViewport))
@@ -1847,6 +1851,13 @@ class FastEMAcquisitionTab(Tab):
     def Show(self, show=True):
         super(FastEMAcquisitionTab, self).Show(show)
 
+        if show and not self._initialized_after_show:
+            # At init the canvas has sometimes a weird size (eg, 1000x1 px), which
+            # prevents the fitting to work properly. We need to wait until the
+            # canvas has been resized to the final size. That's quite late...
+            wx.CallAfter(self.panel.vp_fastem_acqui.canvas.zoom_out)
+            self._initialized_after_show = True
+
     @classmethod
     def get_display_priority(cls, main_data):
         # Tab is used only for FastEM
@@ -1874,6 +1885,10 @@ class FastEMOverviewTab(Tab):
 
         super(FastEMOverviewTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("OVERVIEW")
+
+        # Flag to indicate the tab has been fully initialized or not. Some initialisation
+        # need to wait for the tab to be shown on the first time.
+        self._initialized_after_show = False
 
         # View Controller
         vp = panel.vp_fastem_overview
@@ -1931,6 +1946,7 @@ class FastEMOverviewTab(Tab):
         self.tb = panel.fastem_overview_toolbar
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+        # TODO: add tool to zoom out (ie, all the scintillators, calling canvas.zoom_out())
 
     @property
     def streambar_controller(self):
@@ -1961,6 +1977,13 @@ class FastEMOverviewTab(Tab):
 
     def Show(self, show=True):
         super().Show(show)
+        if show and not self._initialized_after_show:
+            # At init the canvas has sometimes a weird size (eg, 1000x1 px), which
+            # prevents the fitting to work properly. We need to wait until the
+            # canvas has been resized to the final size. That's quite late...
+            wx.CallAfter(self.panel.vp_fastem_overview.canvas.zoom_out)
+            self._initialized_after_show = True
+
         if not show:
             self._stream_controller.pauseStreams()
 
