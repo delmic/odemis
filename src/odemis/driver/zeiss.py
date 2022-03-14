@@ -976,7 +976,7 @@ class RemconSimulator(object):
             total_dist = self.target_pos - self.pos
             while time.time() < self._end_move:
                 if self._stage_stop.wait(0.01):
-                    logging.debug("SIM: Aborting move")
+                    logging.debug("SIM: Aborting move at pos %s", self.pos)
                     break
                 traveled_ratio = min((time.time() - self._start_move) / (self._end_move - self._start_move),
                                      1)
@@ -1078,8 +1078,6 @@ class RemconSimulator(object):
             self._sendAnswer(RS_SUCCESS, b"%G" % self.rotation)
         elif com == b"FOC?":
             self._sendAck(RS_VALID)
-            # Simulate a long answer
-            time.sleep(2)
             self._sendAnswer(RS_SUCCESS, b"%G" % self.focus)
         elif com == b"EHT?":
             self._sendAck(RS_VALID)
@@ -1106,7 +1104,11 @@ class RemconSimulator(object):
             self._sendAck(RS_SUCCESS)
         elif com == b"EDX":
             self._sendAck(RS_VALID)
-            self.external = int(args[0])
+            ext = int(args[0])
+            if ext != self.external:
+                # Simulate a long answer
+                time.sleep(2)
+                self.external = ext
             self._sendAck(RS_SUCCESS)
         elif com == b"BBLK":
             self._sendAck(RS_VALID)
