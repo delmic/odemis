@@ -1787,6 +1787,12 @@ class FakeMC_5DOF_DLL(object):
     """
 
     def __init__(self, axes=None):
+        """
+        axes: dict str (axis name) -> dict (axis parameters).
+          Allows to change the default range for some of the axes.
+          The parameters should include "range", which is in m for the linear axes,
+          and in rad for the rotational axes.
+        """
         self.pose = SA_MC_Pose()
         self.target = SA_MC_Pose()
         self.properties = {
@@ -1813,7 +1819,11 @@ class FakeMC_5DOF_DLL(object):
             # adjust internal range with the requested one
             for a, ad in axes.items():
                 orig_rng = self._range[a]
-                self._range[a] = (max(orig_rng[0], ad['range'][0]), min(orig_rng[1], ad['range'][1]))
+                user_rng = ad['range']
+                # rotation values are in internally in degrees => convert from rad
+                if a.startswith("r"):
+                    user_rng = [math.degrees(v) for v in user_rng]
+                self._range[a] = (max(orig_rng[0], user_rng[0]), min(orig_rng[1], user_rng[1]))
 
         self.stopping = threading.Event()
 
@@ -1940,7 +1950,7 @@ class FakeMC_5DOF_DLL(object):
             self._last_time = time.time()
             logging.debug("sim MC5DOF: moving to target: %s duration %f s" % (self.target, dur))
         else:
-            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, "Position not in range error.")
+            raise SA_MCError(MC_5DOF_DLL.SA_MC_ERROR_POSE_UNREACHABLE, f"Position not in range: {pose}.")
 
     def SA_MC_GetPose(self, id, p_pose):
         if not self.properties[MC_5DOF_DLL.SA_MC_PKEY_IS_REFERENCED].value:
