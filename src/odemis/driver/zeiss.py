@@ -78,9 +78,8 @@ class SEM(model.HwComponent):
 
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
-        # create a special function, that look for the port, cf _findDevice
+        # basic objects to access the device
         self._ser_access = threading.Lock()
-        self._ser_access_sub = threading.Lock()
         self._serial = None
         self._file = None
         self._port, self._idn = self._findDevice(port)  # sets ._serial and ._file
@@ -478,6 +477,15 @@ class Stage(model.Actuator):
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Position polling")
         self._pos_poll.start()
 
+    def terminate(self):
+        if self._executor:
+            self._executor.cancel()
+            self._executor.shutdown()
+            self._executor = None
+        if self._pos_poll:
+            self._pos_poll.cancel()
+            self._pos_poll = None
+
     def _updatePosition(self, raw_pos=None):
         """
         update the position VA
@@ -715,6 +723,11 @@ class Scanner(model.Emitter):
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling")
         self._va_poll.start()
 
+    def terminate(self):
+        if self._va_poll:
+            self._va_poll.cancel()
+            self._va_poll = None
+
     def _updateSettings(self):
         """
         Read all the current settings from the SEM and reflects them on the VAs
@@ -827,6 +840,15 @@ class Focus(model.Actuator):
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
         self._pos_poll.start()
+
+    def terminate(self):
+        if self._executor:
+            self._executor.cancel()
+            self._executor.shutdown()
+            self._executor = None
+        if self._pos_poll:
+            self._pos_poll.cancel()
+            self._pos_poll = None
 
     def _updatePosition(self):
         """
