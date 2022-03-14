@@ -180,6 +180,9 @@ class PMD401Bus(Actuator):
         self._port = None  # port number
         min_axis = min(self._axis_map.values())
         self._serial = self._findDevice(port, min_axis)
+        # To be able to give the correct response the simulator needs to know which axes have closed loop active.
+        if port.startswith("/dev/fake"):
+            self._serial.closed_loop = {self._axis_map[k]: v for (k, v) in self._closed_loop.items()}
         self._recovering = False
 
         # Get version
@@ -966,6 +969,7 @@ class PMDSimulator(object):
         self.is_moving = False
         self.status = "0000"
         self.indexing = True
+        self.closed_loop = {1: False, 2: False}
 
         self.executor = CancellableThreadPoolExecutor(1)
 
@@ -1114,9 +1118,11 @@ class PMDSimulator(object):
                         self._output_buf += ":70000"
             elif cmd == "U":
                 if self.is_moving:
-                    self.status = "0000"
+                    # "0020" means targetMode (closed loop mode) active
+                    self.status = "0020" if self.closed_loop[axis] else "0000"
                 else:
-                    self.status = "0050"
+                    # "0030" means targetMode (closed loop mode) active and targetReached, "0010" means targetReached
+                    self.status = "0030" if self.closed_loop[axis] else "0010"
                 self._output_buf += ":%s" % self.status
             else:
                 # Syntax error is indicated by inserting _??_ in the response
