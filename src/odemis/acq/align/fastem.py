@@ -117,8 +117,8 @@ def estimate_calibration_time(calibrations):
     :param calibrations: (list[Calibrations]) List of calibrations that should be run.
     :return (0 <= float): The estimated time for the requested calibrations in s.
     """
-
-    return sum(c.value.estimate_calibration_time() for c in calibrations)
+    # Note: the check for None is only in case fastem_calibrations is missing
+    return sum(c.value.estimate_calibration_time() for c in calibrations if c.value is not None)
 
 
 class CalibrationTask(object):
