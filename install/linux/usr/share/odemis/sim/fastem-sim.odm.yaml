@@ -250,6 +250,7 @@ FASTEM-sim: {
 "Optical Objective": {
     class: static.OpticalLens,
     role: lens,
+    init: {
         mag: 60, # ratio, magnifying; higher magnification is a stronger simulated blur
         na: 0.95,  # numerical aperture
         ri: 1,  # refractive index
