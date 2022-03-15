@@ -1,3 +1,6 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
 import json
 import logging
 import unittest
@@ -41,3 +44,7 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         r_features = read_features("")
         self.assertEqual(len(features.value), len(r_features))
         self.assertEqual(features.value[0].name.value, r_features[0].name.value)
+
+
+if __name__ == "__main__":
+    unittest.main()
