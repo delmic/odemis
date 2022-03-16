@@ -232,3 +232,6 @@ MD_SCAN_AMPLITUDE_CALIB = "Scan amplitude calibrated"  # tuple in [a.u.]
 MD_CELL_TRANSLATION = "Cell translation"  # nested tuple [px], origin of effective cell image in overscanned cell image
 MD_CELL_DARK_OFFSET = "Cell dark offset"  # nested tuple, the offset in image intensity per cell
 MD_CELL_DIGITAL_GAIN = "Cell digital gain"  # nested tuple, the digital gain intensity per cell
+
+# Fastem: Correction for the shift in (x, y) between immersion mode and field free mode
+MD_FIELD_FREE_POS_SHIFT = "Field free position shift"  # tuple [m]
