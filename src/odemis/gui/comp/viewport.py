@@ -1439,6 +1439,8 @@ class NavigablePlotViewport(PlotViewport):
         Zooms the x-scale of the data and refreshes display
         evt (MouseEvent)
         """
+        if not self.canvas.has_data():
+            return
 
         rot = evt.GetWheelRotation() / evt.GetWheelDelta()
         scale = -0.1 * rot  # ±10% of the range per scroll wheel step
@@ -1455,6 +1457,8 @@ class NavigablePlotViewport(PlotViewport):
         Zooms the y-scale of the data and refreshes display
         evt (MouseEvent)
         """
+        if not self.canvas.has_data():
+            return
 
         rot = evt.GetWheelRotation() / evt.GetWheelDelta()
         scale = -0.1 * rot  # ±10% of the range per scroll wheel step
