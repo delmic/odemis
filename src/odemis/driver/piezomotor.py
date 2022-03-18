@@ -966,6 +966,7 @@ class PMDSimulator(object):
         self.is_moving = False
         self.status = "0000"
         self.indexing = True
+        self.closed_loop = {1: False, 2: False, 3: False}
 
         self.executor = CancellableThreadPoolExecutor(1)
 
@@ -1045,6 +1046,7 @@ class PMDSimulator(object):
                     raise ValueError()
             elif cmd == "T":
                 # Absolute move
+                self.closed_loop[axis] = True
                 if not args:
                     self._output_buf += ":%d" % self.target_pos[axis]
                 elif len(args) == 1:
@@ -1060,10 +1062,12 @@ class PMDSimulator(object):
                     self.move(steps)
                 else:
                     raise ValueError()
-            elif cmd == "S":
+            elif cmd == "S":  # stop axis
                 self.is_moving = False
+                self.closed_loop[axis] = False
             elif cmd == "C":
                 # Relative move
+                self.closed_loop[axis] = True
                 if not args:
                     self._output_buf += ":%d" % self.target_pos[axis]
                 elif len(args) == 1:
@@ -1114,9 +1118,11 @@ class PMDSimulator(object):
                         self._output_buf += ":70000"
             elif cmd == "U":
                 if self.is_moving:
-                    self.status = "0000"
+                    # "0020" means targetMode (closed loop mode) active
+                    self.status = "0020" if self.closed_loop[axis] else "0000"
                 else:
-                    self.status = "0050"
+                    # "0030" means targetMode (closed loop mode) active and targetReached, "0010" means targetReached
+                    self.status = "0030" if self.closed_loop[axis] else "0010"
                 self._output_buf += ":%s" % self.status
             else:
                 # Syntax error is indicated by inserting _??_ in the response
