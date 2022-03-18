@@ -97,8 +97,8 @@ class VigilantAttributeConnector(object):
         if self.paused:
             return
 
+        value = self.ctrl_2_va()
         try:
-            value = self.ctrl_2_va()
             logging.debug("Setting VA value to %s after control event %d", value, evt.Id)
             self.vigilattr.value = value
         except (ValueError, TypeError, IndexError) as exc:

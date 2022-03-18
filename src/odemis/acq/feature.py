@@ -31,7 +31,7 @@ class CryoFeature(object):
         self.name = model.StringVA(name)
         # The 3D position of an interesting point in the site (Typically, the milling should happen around that
         # volume, never touching it.)
-        self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), )
+        self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), unit="m")
         # TODO: Check if negative milling angle is allowed
         if milling_angle <= 0:
             milling_angle = DEFAULT_MILLING_ANGLE

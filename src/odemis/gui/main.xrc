@@ -6575,12 +6575,11 @@
 										<object class="sizeritem">
 											<object class="UnitFloatCtrl"
       												name="ctrl_feature_z">
-												<size>-1,20</size>
-												<accuracy>4</accuracy>
+												<size>-1,15</size>
+												<accuracy>5</accuracy>
 												<key_step>0.001</key_step>
+												<unit>m</unit>
                                                 <bg>#333333</bg>
-												<scale>linear</scale>
-												<accuracy>2</accuracy>
 											</object>
 											<flag>wxLEFT</flag>
 											<border>10</border>
