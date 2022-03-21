@@ -58,7 +58,7 @@ class FastEMROA(object):
     and detector.
     """
 
-    def __init__(self, name, coordinates, roc, asm, multibeam, descanner, detector, overlap=0):
+    def __init__(self, name, coordinates, roc, asm, multibeam, descanner, detector, overlap=0, pre_calibrate=False):
         """
         :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
                      the external storage.
@@ -74,6 +74,7 @@ class FastEMROA(object):
             The amount of overlap required between single fields. An overlap of 0.2 means that two neighboring fields
             overlap by 20%. By default, the overlap is 0, this means there is no overlap and one field is exactly next
             to the neighboring field.
+        :param pre_calibrate: (bool) If True run pre-calibrations before each ROA acquisition.
         """
         self.name = model.StringVA(name)
         self.coordinates = model.TupleContinuous(coordinates,
@@ -90,6 +91,7 @@ class FastEMROA(object):
         # Automatically updated when the coordinates change.
         self.field_indices = []
         self.overlap = overlap
+        self.pre_calibrate = pre_calibrate
         self.coordinates.subscribe(self.on_coordinates, init=True)
 
         # TODO need to check if megafield already exists, otherwise overwritten, subscribe whenever name is changed,
@@ -111,6 +113,11 @@ class FastEMROA(object):
         """
         field_time = self._detector.frameDuration.value
         tot_time = len(self.field_indices) * field_time
+
+        if self.pre_calibrate:
+            # TODO replace with call to estimate calibration time in module for each calibrations
+            #  when code here replaced with calls to calibration manager
+            tot_time += 60  # add some extra time for the pre-calibrations
 
         return tot_time
 
@@ -207,7 +214,7 @@ class FastEMROC(object):
         # if None -> acquire, if not None, don't acquire again
 
 
-def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, pre_calibrate=False):
+def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -228,19 +235,19 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
     :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
     :param lens: (static.OpticalLens) Optical lens component.
-    :param pre_calibrate: (bool) If True run pre-calibrations before each ROA acquisition.
 
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
                 (model.DataArray): The acquisition data, which depends on the value of the detector.dataContent VA.
                 (Exception or None): Exception raised during the acquisition or None.
     """
-    f = model.ProgressiveFuture()
+
+    est_dur = roa.estimate_acquisition_time()
+    f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
-    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, f,
-                           pre_calibrate=pre_calibrate)
+    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -257,8 +264,7 @@ class AcquisitionTask(object):
     An ROA consists of multiple single field images.
     """
 
-    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, future,
-                 pre_calibrate=False):
+    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -282,7 +288,6 @@ class AcquisitionTask(object):
                             (model.DataArray): The acquisition data, which depends on the value of the
                                                detector.dataContent VA.
                             (Exception or None): Exception raised during the acquisition or None.
-        :param pre_calibrate: (bool) If True run pre-calibrations before each ROA acquisition.
         """
         self._scanner = scanner
         self._multibeam = multibeam
@@ -296,7 +301,7 @@ class AcquisitionTask(object):
         self._roc = roa.roc  # region of calibration object
         self._path = path  # sub-directories on external storage
         self._future = future
-        self._pre_calibrate = pre_calibrate
+        self._pre_calibrate = roa.pre_calibrate
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
         self.megafield = {}
@@ -329,6 +334,14 @@ class AcquisitionTask(object):
         :raise:
             Exception: If it failed before any single field images were acquired or if acquisition was cancelled.
         """
+
+        # Get the estimated time for the roa.
+        total_roa_time = self._roa.estimate_acquisition_time()
+
+        # No need to set the start time of the future: it's automatically done when setting its state to running.
+        self._future.set_progress(end=time.time() + total_roa_time)  # provide end time to future
+        logging.info("Starting acquisition of mega field, with expected duration of %f s", total_roa_time)
+
         # Update the position of the first tile.
         self._pos_first_tile = self.get_pos_first_tile()
 
@@ -353,13 +366,6 @@ class AcquisitionTask(object):
         self._detector.filename.value = os.path.join(self._path, self._roa.name.value)
 
         exception = None
-
-        # Get the estimated time for the roa.
-        total_roa_time = self._roa.estimate_acquisition_time()
-        # No need to set the start time of the future: it's automatically done when setting its state to running.
-        self._future.set_progress(end=time.time() + total_roa_time)  # provide end time to future
-        logging.info("Starting acquisition of mega field, with expected duration of %f s", total_roa_time)
-
         dataflow = self._detector.data
 
         try:
@@ -460,6 +466,8 @@ class AcquisitionTask(object):
         """
         if not fastem_calibrations:
             raise ModuleNotFoundError("Need fastem_calibrations repository to run pre-calibrations.")
+
+        asm_config_orig = None
 
         try:
             logging.debug("Read initial Hw settings.")

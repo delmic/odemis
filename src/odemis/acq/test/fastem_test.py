@@ -453,7 +453,8 @@ class TestFastEMAcquisition(unittest.TestCase):
         self.assertTrue(f.running())
         f.cancel()
 
-        self.assertRaises(CancelledError, f.result, 1)  # add timeout = 1s in case cancellation error was not raised
+        with self.assertRaises(CancelledError):
+            f.result(timeout=5)  # add timeout = 5s in case cancellation error was not raised
         self.assertGreaterEqual(self.updates, 3)  # at least one update at cancellation
         self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
@@ -744,12 +745,12 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
         roa = fastem.FastEMROA(roa_name, coordinates, None,
                                self.asm, self.multibeam, self.descanner,
-                               self.mppc)
+                               self.mppc, pre_calibrate=True)
 
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.ccd,
                                       self.beamshift, self.lens,
-                                      roa, path=None, future=None, pre_calibrate=True)
+                                      roa, path=None, future=None)
 
         self.descanner.updateMetadata({model.MD_SCAN_GAIN: (5000, 5000)})
 
