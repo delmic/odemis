@@ -47,6 +47,8 @@ FASTEM-sim: {
         PIXEL_SIZE_COR: [1.05, 1.05], # ratio
         SINGLE_BEAM_ROTATION: 0.,  # rad; rotation for overview image acquisition
         MULTI_BEAM_ROTATION: 0.0157,  # rad; rotation for multibeam image acquisition (~0.9°)
+        # Correction for the shift in (x, y) between immersion mode and field free mode:
+        FIELD_FREE_POS_SHIFT: [90.0e-6, 50.0e-6],  # [m]
     },
     persistent: {
         metadata: [PIXEL_SIZE_COR],

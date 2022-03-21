@@ -91,7 +91,7 @@ def configure_scanner(scanner, mode):
     # Immersion needs to be set before changing the horizontalFoV, as the range is updated
     scanner.immersion.value = conf["immersion"]
 
-    if scanner.immersion.value is False:
+    if scanner.immersion.value:
         # When the scanner is in immersion mode set the position correction to [0, 0]
         scanner.updateMetadata({model.MD_POS_COR: [0, 0]})
     else:
