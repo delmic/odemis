@@ -745,8 +745,8 @@ class CryoLocalizationGUIData(CryoGUIData):
 
         if len(limits) > 1:
             self.zPos.range = (min(limits), max(limits))
-            logging.debug("Z stack range updated to %f - %f, ZPos: %f", self.zPos.range[0], self.zPos.range[1],
-                          self.zPos.value)
+            logging.debug("Z stack display range updated to %f - %f, ZPos: %f",
+                          self.zPos.range[0], self.zPos.range[1], self.zPos.value)
         else:
             self.zPos.range = (0, 0)
 
@@ -905,7 +905,8 @@ class AnalysisGUIData(MicroscopyGUIData):
 
         if len(limits) > 1:
             self.zPos.range = (min(limits), max(limits))
-            logging.debug("Z stack range updated to %f - %f, ZPos: %f", self.zPos.range[0], self.zPos.range[1], self.zPos.value)
+            logging.debug("Z stack display range updated to %f - %f, ZPos: %f",
+                          self.zPos.range[0], self.zPos.range[1], self.zPos.value)
         else:
             self.zPos.range = (0, 0)
 

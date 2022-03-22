@@ -137,7 +137,14 @@ def generate_zlevels(focuser, zrange, zstep):
         raise KeyError("The focus actuator %s does not have z axis" %focuser)
 
     focuser_pos = focuser.position.value["z"]
+
+    # Get the range from the axis range + extra limit POS_ACTIVE_RANGE
     focuser_rng = focuser.axes["z"].range
+    sw_rng = focuser.getMetadata().get(model.MD_POS_ACTIVE_RANGE)
+    if sw_rng:
+        focuser_rng = (max(focuser_rng[0], sw_rng[0]),
+                       min(focuser_rng[1], sw_rng[1]))
+
     # clip the zMax and zMin to the actuator limits if necessary 
     if zrange[1] + focuser_pos > focuser_rng[1]:
         zrange[1] = focuser_rng[1] - focuser_pos
