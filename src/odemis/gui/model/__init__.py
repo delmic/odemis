@@ -1276,12 +1276,16 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         assert main.microscope is not None
         super(FastEMAcquisitionGUIData, self).__init__(main)
 
-        # TODO duplicate for calibration step 3
-        #  regions_calib_2
-        #  regions_calib_3
-        self.calibration_regions = model.VigilantAttribute({})  # dict, number --> FastEMROC
+        # calibration regions for calibration step 2
+        self.regions_calib_2 = model.VigilantAttribute({})  # dict, number --> FastEMROC
         for i in main.scintillator_positions:
-            self.calibration_regions.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+            self.regions_calib_2.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+
+        # calibration regions for calibration step 3
+        self.regions_calib_3 = model.VigilantAttribute({})  # dict, number --> FastEMROC
+        for i in main.scintillator_positions:
+            self.regions_calib_3.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+
         self.projects = model.ListVA([])  # list of FastEMProject
 
 

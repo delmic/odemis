@@ -154,11 +154,15 @@ def configure_detector(detector, roc):
     :param roc: (FASTEMROC) The region of calibration as selected on the scintillator,
                 which stores the calibrated settings if calibration was performed.
     """
-    if "cellDarkOffset" in roc.value.parameters:
+    if roc.value.parameters and "cellDarkOffset" in roc.value.parameters:
         detector.cellDarkOffset.value = roc.value.parameters["cellDarkOffset"]
     else:
         logging.warning("Region of calibration doesn't have dark offset parameters.")
-    if "cellDigitalGain" in roc.value.parameters:
+    if roc.value.parameters and "cellDigitalGain" in roc.value.parameters:
         detector.cellDigitalGain.value = roc.value.parameters["cellDigitalGain"]
     else:
         logging.warning("Region of calibration doesn't have digital gain parameters.")
+    if roc.value.parameters and "cellTranslation" in roc.value.parameters:
+        detector.cellTranslation.value = roc.value.parameters["cellTranslation"]
+    else:
+        logging.warning("Region of calibration doesn't have cell translation parameters.")

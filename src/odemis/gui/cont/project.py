@@ -40,9 +40,8 @@ from odemis.gui.comp.stream import FastEMProjectPanel, FastEMROAPanel, FastEMCal
 from odemis.gui.util import call_in_wx_main
 from odemis.util.filename import make_unique_name
 
-# Blue, green, cyan, yellow, purple, magenta, red
-FASTEM_PROJECT_COLOURS = ["#0000ff", "#00ff00", "#00ffff", "#ffff00", "#ff00ff",
-                          "#ff00bf", "#ff0000"]
+# Blue, cyan, yellow, purple, magenta, red
+FASTEM_PROJECT_COLOURS = ["#0000ff", "#00ffff", "#ffff00", "#ff00ff", "#ff00bf", "#ff0000"]
 
 
 class FastEMProjectListController(object):
@@ -135,6 +134,7 @@ class FastEMProjectController(object):
         self._tab_data = tab_data
         self._project_bar = project_list
         self._view_ctrl = view_ctrl
+        self.calibration_regions = getattr(tab_data, "regions_" + "calib_2")  # FIXME calib_prefix
 
         self.roa_ctrls = {}  # dict int --> FastEMROAController
         self.colour = colour
@@ -204,7 +204,7 @@ class FastEMProjectController(object):
 
             # Improve parameters guess
             num = self._find_closest_scintillator(coords)
-            roa_ctrl.model.roc.value = self._tab_data.calibration_regions.value[num]
+            roa_ctrl.model.roc.value = self.calibration_regions.value[num]
 
             # Add the ROA model to project model
             self.model.roas.value.append(roa_ctrl.model)
@@ -325,7 +325,7 @@ class FastEMROAController(object):
 
     def _on_combobox(self, _):
         num = self.panel.calibration_ctrl.GetSelection() + 1
-        self.model.roc.value = self._tab_data.calibration_regions.value[num]
+        self.model.roc.value = self.calibration_regions.value[num]
         logging.debug("ROA calibration changed to %s.", self.model.roc.value.name.value)
 
     def _on_text(self, evt):
@@ -353,17 +353,21 @@ class FastEMROCController(object):
     Controller for a single region of calibration (ROC).
     """
 
-    def __init__(self, number, tab_data, view_ctrl):
+    def __init__(self, number, tab_data, view_ctrl, calib_prefix):
         """
         :param number: (int) The number of the calibration region.
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param view_ctrl (FastEMAcquisitionViewport) The viewport controller. TODO replace with view only.
+        :param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
         """
         self._view_ctrl = view_ctrl
         self._tab_data = tab_data
+        self.calib_prefix = calib_prefix
 
         # Get ROC model (exists already in tab data) and change coordinates
-        self.calib_model = tab_data.calibration_regions.value[number]
+        calibration_regions = getattr(tab_data, "regions_" + calib_prefix)
+        self.calib_model = calibration_regions.value[number]
+        # self.calib_model = tab_data.calibration_regions.value[number]
         self.calib_model.coordinates.subscribe(self._on_coordinates)
 
         self.overlay = None
@@ -396,8 +400,14 @@ class FastEMROCController(object):
         else:
             # add ROC overlay if not there yet (e.g. do not add when just moving the overlay)
             if self.overlay is None:
-                self.overlay = self._view_ctrl.viewports[0].canvas.add_calibration_overlay(self.calib_model.coordinates,
-                                                                                           self.calib_model.name.value)
+                if self.calib_prefix == "calib_3":
+                    self.overlay = self._view_ctrl.viewports[0].canvas.\
+                        add_calibration_overlay(self.calib_model.coordinates,
+                                                self.calib_model.name.value,
+                                                colour="#00ff00")
+                else:  # use default color (orange)
+                    self.overlay = self._view_ctrl.viewports[0].\
+                        canvas.add_calibration_overlay(self.calib_model.coordinates, self.calib_model.name.value)
 
 
 class FastEMCalibrationRegionsController(object):
@@ -405,7 +415,7 @@ class FastEMCalibrationRegionsController(object):
     Listens to the calibration buttons and creates the FastEMROCControllers accordingly.
     """
 
-    def __init__(self, tab_data, calibration_panel, view_ctrl):
+    def __init__(self, tab_data, calibration_panel, view_ctrl, calib_prefix):
         """
         :param tab_data (FastEMAcquisitionGUIData): The tab data model.
         :param calibration_panel (FastEMCalibrationPanelHeader): The main calibration panel including the 9 regions
@@ -413,9 +423,11 @@ class FastEMCalibrationRegionsController(object):
         :param view_ctrl (FastEMAcquisitionViewport): The viewport controller. TODO replace with just view
         """
         self._tab_data = tab_data
-        self._data_model = self._tab_data.main
+        self._data_model = tab_data.main
+        self.calibration_regions = getattr(tab_data, "regions_" + calib_prefix)
         self._calibration_panel = calibration_panel
         self._view_ctrl = view_ctrl
+        self._calib_prefix = calib_prefix
 
         self.panel = FastEMCalibrationPanel(calibration_panel, tab_data.main.scintillator_layout)
         calibration_panel.add_calibration_panel(self.panel)
@@ -426,8 +438,8 @@ class FastEMCalibrationRegionsController(object):
 
         # create calibration controller for each scintillator
         self.roc_ctrls = {}
-        for roc_num, roc in self._tab_data.calibration_regions.value.items():
-            self.roc_ctrls[roc_num] = FastEMROCController(roc_num, self._tab_data, self._view_ctrl)
+        for roc_num, roc in self.calibration_regions.value.items():
+            self.roc_ctrls[roc_num] = FastEMROCController(roc_num, tab_data, view_ctrl, calib_prefix)
             roc.coordinates.subscribe(self._on_coordinates)
 
         # Only enable buttons for scintillators which have been selected in the chamber tab
@@ -474,7 +486,7 @@ class FastEMCalibrationRegionsController(object):
         Whenever the list of active scintillators changes and or a roc is selected/deselected, the
         buttons are updated/enabled/disabled accordingly.
         """
-        rocs = self._tab_data.calibration_regions.value
+        rocs = self.calibration_regions.value
         active_scintillators = self._tab_data.main.active_scintillators.value
 
         for num, b in self.panel.buttons.items():

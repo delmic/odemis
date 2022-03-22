@@ -1808,16 +1808,40 @@ class FastEMAcquisitionTab(Tab):
         self._calib_2_region_controller = project.FastEMCalibrationRegionsController(
             tab_data,
             panel.calib_2_pnl_regions,
-            view_ctrl=self.view_controller,  # TODO pass only viewport (panel.vp_fastem_acqui)
+            view_ctrl=self.view_controller,  # TODO -pass only viewport (panel.vp_fastem_acqui)
+            calib_prefix="calib_2",
         )
 
         # Controller for calibration panel 2
-        self._calib_2_controller = fastem_acq.FastEMScintillatorCalibrationController(
+        self._calib_2_controller = fastem_acq.FastEMCalibration2Controller(
             tab_data,
             panel,
             calib_prefix="calib_2",
-            calibrations=[Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                          Calibrations.DARK_OFFSET, Calibrations.DIGITAL_GAIN]
+            calibrations=[Calibrations.IMAGE_TRANSLATION_PREALIGN]
+            # calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
+            #                 Calibrations.DARK_OFFSET, Calibrations.DIGITAL_GAIN]
+        )
+
+        # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController inherit from?
+        # Controller for regions of calibration 3
+        self._calib_3_region_controller = project.FastEMCalibrationRegionsController(
+            tab_data,
+            panel.calib_3_pnl_regions,
+            view_ctrl=self.view_controller,  # TODO -pass only viewport (panel.vp_fastem_acqui)
+            calib_prefix="calib_3",
+        )
+
+        # Controller for calibration panel 3
+        self._calib_3_controller = fastem_acq.FastEMCalibration3Controller(
+            tab_data,
+            panel,
+            calib_prefix="calib_3",
+            calibrations=[Calibrations.IMAGE_TRANSLATION_PREALIGN]
+            # TODO put back when pr finished; implement simulator only version
+            # TODO make calibration regions different color
+            # calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
+            #                 Calibrations.SCAN_ROTATION_FINAL, Calibrations.SCAN_AMPLITUDE_FINAL,
+            #                 Calibrations.CELL_TRANSLATION]
         )
 
         # Controller for acquisition settings panel
