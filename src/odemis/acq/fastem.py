@@ -427,10 +427,7 @@ class AcquisitionTask(object):
 
             self.move_stage_to_next_tile()  # move stage to next field image position
 
-            # Beamshift correction is not necessary on the first field, because the pattern was just centered on the
-            # mppc detector using the image translation pre-alignment.
-            if field_idx != (0, 0):
-                self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
+            self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
 
             dataflow.next(field_idx)  # acquire the next field image.
 
