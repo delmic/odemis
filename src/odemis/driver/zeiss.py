@@ -78,9 +78,8 @@ class SEM(model.HwComponent):
 
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
-        # create a special function, that look for the port, cf _findDevice
+        # basic objects to access the device
         self._ser_access = threading.Lock()
-        self._ser_access_sub = threading.Lock()
         self._serial = None
         self._file = None
         self._port, self._idn = self._findDevice(port)  # sets ._serial and ._file
@@ -478,6 +477,15 @@ class Stage(model.Actuator):
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Position polling")
         self._pos_poll.start()
 
+    def terminate(self):
+        if self._executor:
+            self._executor.cancel()
+            self._executor.shutdown()
+            self._executor = None
+        if self._pos_poll:
+            self._pos_poll.cancel()
+            self._pos_poll = None
+
     def _updatePosition(self, raw_pos=None):
         """
         update the position VA
@@ -715,6 +723,11 @@ class Scanner(model.Emitter):
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling")
         self._va_poll.start()
 
+    def terminate(self):
+        if self._va_poll:
+            self._va_poll.cancel()
+            self._va_poll = None
+
     def _updateSettings(self):
         """
         Read all the current settings from the SEM and reflects them on the VAs
@@ -827,6 +840,15 @@ class Focus(model.Actuator):
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Focus position polling")
         self._pos_poll.start()
+
+    def terminate(self):
+        if self._executor:
+            self._executor.cancel()
+            self._executor.shutdown()
+            self._executor = None
+        if self._pos_poll:
+            self._pos_poll.cancel()
+            self._pos_poll = None
 
     def _updatePosition(self):
         """
@@ -954,7 +976,7 @@ class RemconSimulator(object):
             total_dist = self.target_pos - self.pos
             while time.time() < self._end_move:
                 if self._stage_stop.wait(0.01):
-                    logging.debug("SIM: Aborting move")
+                    logging.debug("SIM: Aborting move at pos %s", self.pos)
                     break
                 traveled_ratio = min((time.time() - self._start_move) / (self._end_move - self._start_move),
                                      1)
@@ -1056,8 +1078,6 @@ class RemconSimulator(object):
             self._sendAnswer(RS_SUCCESS, b"%G" % self.rotation)
         elif com == b"FOC?":
             self._sendAck(RS_VALID)
-            # Simulate a long answer
-            time.sleep(2)
             self._sendAnswer(RS_SUCCESS, b"%G" % self.focus)
         elif com == b"EHT?":
             self._sendAck(RS_VALID)
@@ -1084,7 +1104,11 @@ class RemconSimulator(object):
             self._sendAck(RS_SUCCESS)
         elif com == b"EDX":
             self._sendAck(RS_VALID)
-            self.external = int(args[0])
+            ext = int(args[0])
+            if ext != self.external:
+                # Simulate a long answer
+                time.sleep(2)
+                self.external = ext
             self._sendAck(RS_SUCCESS)
         elif com == b"BBLK":
             self._sendAck(RS_VALID)
