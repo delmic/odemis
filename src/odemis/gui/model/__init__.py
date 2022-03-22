@@ -2,7 +2,7 @@
 """
 :created: 16 Feb 2012
 :author: Éric Piel
-:copyright: © 2012-2020 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
+:copyright: © 2012 - 2022 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -1281,13 +1281,26 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         assert main.microscope is not None
         super(FastEMAcquisitionGUIData, self).__init__(main)
 
-        # TODO duplicate for calibration step 3
-        #  regions_calib_2
-        #  regions_calib_3
-        self.calibration_regions = model.VigilantAttribute({})  # dict, number --> FastEMROC
+        # calibration regions for calibration step 2
+        self.regions_calib_2 = model.VigilantAttribute({})  # dict, number --> FastEMROC
         for i in main.scintillator_positions:
-            self.calibration_regions.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+            self.regions_calib_2.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+
+        # calibration regions for calibration step 3
+        self.regions_calib_3 = model.VigilantAttribute({})  # dict, number --> FastEMROC
+        for i in main.scintillator_positions:
+            self.regions_calib_3.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+
         self.projects = model.ListVA([])  # list of FastEMProject
+
+        # Indicates the calibration state:
+        # True: is calibrated successfully for all in the acquisition tab selected scintillators
+        # False: not yet calibrated
+        self.is_calib_1_done = model.BooleanVA(False)
+        self.is_calib_2_done = model.BooleanVA(False)
+        self.is_calib_3_done = model.BooleanVA(False)
+        # Indicates the microscope state: True: is currently calibrating; False: not in calibration mode
+        self.is_calibrating = model.BooleanVA(False)
 
 
 class FastEMOverviewGUIData(MicroscopyGUIData):
@@ -1300,6 +1313,11 @@ class FastEMOverviewGUIData(MicroscopyGUIData):
         super(FastEMOverviewGUIData, self).__init__(main)
 
         self.selected_scintillators = model.ListVA([])  # set of ints, overview images to be acquired
+
+        # Indicates the calibration state; True: is calibrated successfully; False: not yet calibrated
+        self.is_calib_done = model.BooleanVA(False)
+        # Indicates the microscope state; True: is currently calibrating; False: not in calibration mode
+        self.is_calibrating = model.BooleanVA(False)
 
 
 class FastEMProject(object):
