@@ -69,9 +69,11 @@ class TestFastEMCalibration(unittest.TestCase):
         cls.det_rotator = model.getComponent(role="det-rotator")
 
     def setUp(self):
-
         self.good_focus = -70e-6  # position where the image of the multiprobe is displayed in focus [m]
-        self.ccd.updateMetadata({model.MD_FAV_POS_ACTIVE: {"z": self.good_focus}})
+        fav_pos = self.ccd.getMetadata()[model.MD_FAV_POS_ACTIVE]  # needed otherwise x and y MD gone
+        fav_pos.update({"z": self.good_focus})
+        self.ccd.updateMetadata({model.MD_FAV_POS_ACTIVE: fav_pos})
+
         # move the stage so that the image is in focus
         self.stage.moveAbs({"z": self.good_focus}).result()
 
