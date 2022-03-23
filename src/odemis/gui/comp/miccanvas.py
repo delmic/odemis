@@ -1836,9 +1836,9 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         overlay.active.value = True
         return overlay
 
-    def remove_roa_overlay(self, overlay):
+    def remove_overlay(self, overlay):
         """
-        overlay (FastEMROAOverlay): overlay to be deleted
+        overlay (FastEMROAOverlay or FastEMROAOverlay): overlay to be deleted
         """
         overlay.active.value = False  # deactivating the overlay avoids weird behaviour
         self.remove_world_overlay(overlay)
@@ -1854,14 +1854,6 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         self.add_world_overlay(overlay)
         overlay.active.value = False  # no need to activate by default
         return overlay
-
-    def remove_calibration_overlay(self, overlay):
-        """
-        overlay (FastEMROAOverlay): overlay to be deleted
-        """
-        overlay.active.value = False  # deactivating the overlay avoids weird behaviour
-        self.remove_world_overlay(overlay)
-        wx.CallAfter(self.request_drawing_update)
 
     def zoom_out(self):
         """

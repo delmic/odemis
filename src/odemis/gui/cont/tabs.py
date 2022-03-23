@@ -1802,7 +1802,8 @@ class FastEMAcquisitionTab(Tab):
             calibrations=calibrations
         )
 
-        # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController inherit from?
+        # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController and
+        #  not here as a separate controller -> will reduce it here to only one calibration 2 controller
         # Controller for regions of calibration 2
         self._calib_2_region_controller = project.FastEMCalibrationRegionsController(
             tab_data,

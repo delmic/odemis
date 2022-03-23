@@ -93,7 +93,8 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
     :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
     :param calibrations: (list[Calibrations]) List of calibrations that should be run.
-    :param stage_pos: (float, float) Stage position where the calibration should be run.
+    :param stage_pos: (float, float) Stage position where the calibration should be run. If None,
+                      the calibration is run at the current stage position.
 
     :returns: (ProgressiveFuture) Alignment future object, which can be cancelled.
     """
@@ -148,6 +149,8 @@ class CalibrationTask(object):
         :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
         :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
         :param calibrations: (list[Calibrations]) List of calibrations that should be run.
+        :param stage_pos: (float, float) Stage position where the calibration should be run. If None,
+                      the calibration is run at the current stage position.
         """
         self.asm_config = None
         self._scanner = scanner
@@ -172,26 +175,27 @@ class CalibrationTask(object):
 
     def run(self):
         """
-        Runs a set of calibration procedures.
+        Runs a set of calibration procedures and return the calibrated settings.
         :returns:
-            (nested dict) A dictionary containing factory and/or calibrated settings. Settings that are
-             calibrated for are overwriting factory settings.
-        multibeam:
-            scanOffset: (tuple) The x and y start of the scanning movement (start of scan ramp) of the multibeam
-                        scanner in arbitrary units.
-            scanAmplitude: (tuple) The x and y heights of the scan ramp of the multibeam scanner in arbitrary units.
-            dwellTime: (float) The acquisition time for one pixel within a cell image.
-            resolution: (tuple) The effective resolution of a single field image excluding overscanned pixels.
-        descanner:
-            scanOffset: (tuple) The x and y start of the scanning movement (start of scan ramp) of the descanner
-                        in arbitrary units.
-            scanAmplitude: (tuple) The x and y heights of the scan ramp of the descanner in arbitrary units.
-        mppc:
-            cellCompleteResolution: (tuple) The resolution of a cell image including overscanned pixels.
-            cellTranslation: (tuple of tuples of shape mppc.shape) The origin for each cell image within the
-                             overscanned cell image.
-            cellDarkOffset: (tuple of tuples of shape mppc.shape) The dark offset correction for each cell image.
-            cellDigitalGain: (tuple of tuples of shape mppc.shape) The digital gain correction for each cell image.
+            self.asm_config: (nested dict) A dictionary containing factory and/or calibrated settings. Settings
+            that are calibrated or are overwriting factory settings. The content of the dict is:
+            multibeam:
+                scanOffset: (tuple) The x and y start of the scanning movement (start of scan ramp) of the multibeam
+                            scanner in arbitrary units.
+                scanAmplitude: (tuple) The x and y heights of the scan ramp of the multibeam scanner in arbitrary units.
+                dwellTime: (float) The acquisition time for one pixel within a cell image in seconds.
+                resolution: (tuple) The effective resolution of a single field image excluding overscanned pixels
+                                    in pixels.
+            descanner:
+                scanOffset: (tuple) The x and y start of the scanning movement (start of scan ramp) of the descanner
+                            in arbitrary units.
+                scanAmplitude: (tuple) The x and y heights of the scan ramp of the descanner in arbitrary units.
+            mppc:
+                cellCompleteResolution: (tuple) The resolution of a cell image including overscanned pixels in pixels.
+                cellTranslation: (tuple of tuples of shape mppc.shape) The origin for each cell image within the
+                                 overscanned cell image in pixels.
+                cellDarkOffset: (tuple of tuples of shape mppc.shape) The dark offset correction for each cell image.
+                cellDigitalGain: (tuple of tuples of shape mppc.shape) The digital gain correction for each cell image.
         :raise:
             Exception: If a calibration failed.
             CancelledError: If the calibration was cancelled.
@@ -261,7 +265,6 @@ class CalibrationTask(object):
     def run_calibrations(self, calibration):
         """
         Run a calibration.
-        Note: All calibrations can be run on bare scintillator.
         """
         if calibration == Calibrations.OPTICAL_AUTOFOCUS:
             autofocus_multiprobe.run_autofocus(self._scanner, self._multibeam, self._descanner, self._detector,

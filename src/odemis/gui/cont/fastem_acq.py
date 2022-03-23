@@ -514,13 +514,13 @@ class FastEMCalibrationController:
         self.is_aligned = tab_data.main.is_aligned
         tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button
 
-        self.button.Bind(wx.EVT_BUTTON, self.calibrate)
+        self.button.Bind(wx.EVT_BUTTON, self.on_calibrate)
 
         self._on_calibration_state()  # display estimated calibration time
 
         self._future_connector = None  # attribute to store the ProgressiveFutureConnector
 
-    def calibrate(self, evt):
+    def on_calibrate(self, evt):
         """
         Start or cancel the calibration when the button is triggered.
         :param evt: (GenButtonEvent) Button triggered.
@@ -641,9 +641,9 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
 
         self._main_data_model.active_scintillators.subscribe(self._on_calibration_state)
 
-    def calibrate(self, evt):
+    def on_calibrate(self, evt):
         """
-        Start or cancel the calibrations for all set regions of calibrations (roc) when the calibration
+        Start or cancel the calibrations for all set regions of calibrations (ROC) when the calibration
         button is triggered. A progressive future for all rocs is created.
         :param evt: (GenButtonEvent) Button triggered.
         """
@@ -665,18 +665,18 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
 
         futures = {}
         for roc_num in sorted(self._tab_data.calibration_regions.value.keys()):
-            # check if calibration region (ROC) on scintillator is set
+            # check if calibration region (ROC) on scintillator is set (undefined = not set)
             roc = self._tab_data.calibration_regions.value[roc_num]
             if roc.coordinates.value != stream.UNDEFINED_ROI:
 
                 # calculate the center position of the ROC (half field right/bottom
                 # compared to top/left corner in view)
-                l, t, _, _ = roc.coordinates.value  # (l, t, r, b)
+                xmin, ymin, _, _ = roc.coordinates.value
                 field_size = (self._tab_data.main.multibeam.resolution.value[0]
                               * self._tab_data.main.multibeam.pixelSize.value[0],
                               self._tab_data.main.multibeam.resolution.value[1]
                               * self._tab_data.main.multibeam.pixelSize.value[1])
-                roc_center = (l + field_size[0] / 2, t + field_size[1] / 2)
+                roc_center = (xmin + field_size[0] / 2, ymin + field_size[1] / 2)
 
                 # start calibration
                 f = align.fastem.align(self._main_data_model.ebeam, self._main_data_model.multibeam,
@@ -689,21 +689,20 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
                 f.add_done_callback(partial(self._on_calibration_done, roc_num=roc_num))
                 futures[f] = t
 
-        # if futures:
-        calib_future = model.ProgressiveBatchFuture(futures)
-        # also handles cancelling and exceptions
-        calib_future.add_done_callback(self._on_batch_calibrations_done)
-        # connect the future to the progress bar and its label
-        self._future_connector = ProgressiveFutureConnector(calib_future, self.gauge, self.label, full=False)
-        # TODO needed?
-        # else:  # In case all calibrations failed to start
-        #     self._main_data_model.is_acquiring.value = False
-        #     self._reset_calibration_gui("Calibrations failed (see log panel).", level=logging.WARNING)
+        if futures:
+            calib_future = model.ProgressiveBatchFuture(futures)
+            # also handles cancelling and exceptions
+            calib_future.add_done_callback(self._on_batch_calibrations_done)
+            # connect the future to the progress bar and its label
+            self._future_connector = ProgressiveFutureConnector(calib_future, self.gauge, self.label, full=False)
+        else:  # In case all calibrations failed to start
+            self._main_data_model.is_acquiring.value = False
+            self._update_calibration_controls("Calibrations failed.")
 
-    # @call_in_wx_main
+    @call_in_wx_main  # as gui is changed
     def _on_calibration_done(self, future, roc_num):
         """
-        Called when the calibrations for one region of calibration (roc) are finished
+        Called when the calibrations for one region of calibration (ROC) are finished
         (either successfully, cancelled or failed).
         It stores the calibrated parameters on the ROC object.
         :param future: (ProgressiveFuture) Calibration future object, which can be cancelled.
@@ -716,11 +715,9 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         except CancelledError:
             self.is_aligned.value = False  # don't enable ROA acquisition
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
-            # TODO @Eric is then the callback for all futures still called?
             # return
         except Exception as ex:
             logging.exception("Calibration failed with %s.", ex)
-            # return
 
     @call_in_wx_main  # as changes in gui are triggered
     def _on_batch_calibrations_done(self, batch_future):
@@ -749,22 +746,22 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
     def _on_calibration_state(self, _=None):
         """
         Updates the calibration state based on the active (loaded) scintillators and whether
-        any regions of calibration (roc) are selected.
+        any regions of calibration (ROC) are selected.
         """
         # check if any scintillators loaded
         if not self._main_data_model.active_scintillators.value:
             self._update_calibration_controls("No scintillator loaded (go to Chamber tab).", False)
         else:
-            # check if at least one roc was selected
-            if all(roc.coordinates.value == stream.UNDEFINED_ROI
+            # check if at least one roc was selected (undefined = not set)
+            if any(roc.coordinates.value != stream.UNDEFINED_ROI
                    for roc in self._tab_data.calibration_regions.value.values()):
-                self._update_calibration_controls("No calibration region selected.", False)
-            else:
                 self._update_calibration_controls()
+            else:
+                self._update_calibration_controls("No calibration region selected.", False)
 
     def save_calibrated_settings(self, roc_num, config):
         """
-        Save the calibrated settings on the region of calibration (roc) object.
+        Save the calibrated settings on the region of calibration (ROC) object.
         :param roc_num: (int) The number of the region of calibration.
         :param config: (nested dict) Dictionary containing various calibrated settings.
         """
@@ -780,12 +777,12 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
     def estimate_calibration_time(self):
         """
         Calculate the estimated calibration time based on the calibrations that need to be run and the
-        number of region of calibrations (roc) selected.
+        number of region of calibrations (ROC) selected.
         :return (float): The estimated calibration time in seconds.
         """
         # get number of rocs set
         nroc = len([roc for roc in self._tab_data.calibration_regions.value.values()
-                   if roc.coordinates.value != stream.UNDEFINED_ROI])
+                   if roc.coordinates.value != stream.UNDEFINED_ROI])  # (undefined = not set)
 
         # TODO take dwell time into account during calibration?
 

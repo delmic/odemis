@@ -196,7 +196,7 @@ class FastEMProjectController(object):
         # Abort ROI creation if nothing was selected
         if coords == acqstream.UNDEFINED_ROI:
             logging.debug("Aborting ROA creation.")
-            self._view_ctrl.viewports[0].canvas.remove_roa_overlay(roa_ctrl.overlay)
+            self._view_ctrl.viewports[0].canvas.remove_overlay(roa_ctrl.overlay)
             self.roa_ctrls = {key: val for key, val in self.roa_ctrls.items() if val != roa_ctrl}
         else:
             # Create the panel
@@ -227,7 +227,7 @@ class FastEMProjectController(object):
         self.roa_ctrls = {key: val for key, val in self.roa_ctrls.items() if val != roa_ctrl}
 
         # Remove overlay
-        self._view_ctrl.viewports[0].canvas.remove_roa_overlay(roa_ctrl.overlay)
+        self._view_ctrl.viewports[0].canvas.remove_overlay(roa_ctrl.overlay)
 
         # Remove model
         self.model.roas.value.remove(roa_ctrl.model)
@@ -237,9 +237,10 @@ class FastEMProjectController(object):
 
     def _find_closest_scintillator(self, coordinates):
         """
-        Given coordinates coords, find the closest scintillator.
-        coordinates (float, float, float, float): l, t, r, b coordinates in m
-        return (int): name (key) of closest scintillator in ._tab_data.scintillator_positions dict
+        Find the closest scintillator for the provided region of acquisition (ROA) coordinates.
+        :param coordinates: (float, float, float, float) xmin (left), ymin (top), xmax (right), ymax (bottom)
+                            coordinates in m.
+        :return: (int) Name (key) of closest scintillator in the ._tab_data.scintillator_positions dictionary.
         """
         roi_x, roi_y = (coordinates[2] + coordinates[0]) / 2, (coordinates[1] + coordinates[3]) / 2
         mindist = 1  # distances always lower 1
@@ -369,15 +370,16 @@ class FastEMROCController(object):
 
     def fit_view_to_bbox(self):
         """
-        Zoom into calibration region. Calibration region is centered in the scintillator with the
+        Zoom in on calibration region (ROC). Calibration region is centered in the scintillator with the
         corresponding number and takes up approximately 1/100 of the viewport area.
         """
-        logging.debug("Zooming into calibration region %s.", self.calib_model.name.value)
+        logging.debug("Zooming in on calibration region %s.", self.calib_model.name.value)
         cnvs = self._view_ctrl.viewports[0].canvas
-        l, t, r, b = self.calib_model.coordinates.value
+        xmin, ymin, xmax, ymax = self.calib_model.coordinates.value
         size = (self._tab_data.main.multibeam.resolution.value[0] * self._tab_data.main.multibeam.pixelSize.value[0],
                 self._tab_data.main.multibeam.resolution.value[1] * self._tab_data.main.multibeam.pixelSize.value[1])
-        cnvs.fit_to_bbox([l - 5 * size[0], t - 5 * size[1], r + 5 * size[0], b + 5 * size[1]])
+        # zoom in on ROC; add some space around ROC (factor 5 defines zoom level)
+        cnvs.fit_to_bbox([xmin - 5 * size[0], ymin - 5 * size[1], xmax + 5 * size[0], ymax + 5 * size[1]])
 
     def _on_coordinates(self, coordinates):
         """
@@ -389,7 +391,7 @@ class FastEMROCController(object):
         if coordinates == acqstream.UNDEFINED_ROI:
             # remove the ROC overlay in the viewport
             if self.overlay is not None:
-                self._view_ctrl.viewports[0].canvas.remove_calibration_overlay(self.overlay)
+                self._view_ctrl.viewports[0].canvas.remove_overlay(self.overlay)
                 self.overlay = None  # needed so it can be added again to viewport
         else:
             # add ROC overlay if not there yet (e.g. do not add when just moving the overlay)
@@ -436,7 +438,7 @@ class FastEMCalibrationRegionsController(object):
     def _on_button(self, evt):
         """
         Called when one of the 9 single region of calibration (ROC) buttons is triggered.
-        A ROC can be added or removed by clicking again. If a ROC is added, an overlay will be
+        An ROC can be added or removed by clicking again. If a ROC is added, an overlay will be
         created in the center of the corresponding viewport. Size of the ROC is one single field.
         If a ROC is removed, the coordinates are reset to undefined.
         :param evt: (CommandEvent) Button triggered.
@@ -454,12 +456,12 @@ class FastEMCalibrationRegionsController(object):
             sz = (self._data_model.multibeam.resolution.value[0] * self._data_model.multibeam.pixelSize.value[0],
                   self._data_model.multibeam.resolution.value[1] * self._data_model.multibeam.pixelSize.value[1])
 
-            l = pos[0] - 0.5 * sz[0]
-            t = pos[1] + 0.5 * sz[1]
-            r = pos[0] + 0.5 * sz[0]
-            b = pos[1] - 0.5 * sz[1]
+            xmin = pos[0] - 0.5 * sz[0]
+            ymin = pos[1] + 0.5 * sz[1]
+            xmax = pos[0] + 0.5 * sz[0]
+            ymax = pos[1] - 0.5 * sz[1]
 
-            self.roc_ctrls[num].calib_model.coordinates.value = (l, t, r, b)
+            self.roc_ctrls[num].calib_model.coordinates.value = (xmin, ymin, xmax, ymax)
             self.roc_ctrls[num].fit_view_to_bbox()  # Zoom to calibration region
         else:
             # reset coordinates for ROC to undefined
