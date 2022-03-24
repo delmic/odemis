@@ -464,11 +464,11 @@ class AcquisitionTask(object):
         if not fastem_calibrations:
             raise ModuleNotFoundError("Need fastem_calibrations repository to run pre-calibrations.")
 
-        asm_config_orig = None
+        asm_config = None
 
         try:
             logging.debug("Read initial Hw settings.")
-            asm_config_orig = configure_hw.get_config_asm(self._multibeam, self._descanner, self._detector)
+            asm_config = configure_hw.get_config_asm(self._multibeam, self._descanner, self._detector)
 
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
 
@@ -490,7 +490,7 @@ class AcquisitionTask(object):
                                        self._descanner,
                                        self._detector,
                                        self._detector.data,
-                                       asm_config_orig,
+                                       asm_config,
                                        upload=False)
             # Image translation pre-alignment ensures that the image of the multiprobe is roughly centered on the
             # mppc detector.
@@ -503,7 +503,7 @@ class AcquisitionTask(object):
                                                                                            self._ccd)
 
             # Set the descanner offset to the value calibrated with the image translation pre-alignment.
-            asm_config_orig["descanner"]["scanOffset"] = descanner_offset
+            asm_config["descanner"]["scanOffset"] = descanner_offset
             logging.debug(f"Descanner offset set to: {descanner_offset}")
             # Blank the beam to reduce beam damage on the sample.
             self._scanner.blanker.value = True
@@ -515,13 +515,17 @@ class AcquisitionTask(object):
         finally:
             # Blank the beam after the acquisition is done.
             self._scanner.blanker.value = True
-            # set back the initial values on the hardware
-            configure_hw.configure_asm(self._multibeam,
-                                       self._descanner,
-                                       self._detector,
-                                       self._detector.data,
-                                       asm_config_orig,
-                                       upload=False)
+            if asm_config is None:
+                logging.warning("Failed to retrieve asm configuration, configure_asm cannot be executed.")
+            else:
+                # put system into state ready for next task
+                # upload=False: it is enough to set calibrated values on HW during following acquisition
+                configure_hw.configure_asm(self._multibeam,
+                                           self._descanner,
+                                           self._detector,
+                                           self._detector.data,
+                                           asm_config,
+                                           upload=False)
 
             logging.debug("Finish pre-calibration.")
 
