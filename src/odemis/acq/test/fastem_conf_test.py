@@ -123,6 +123,9 @@ class TestFASTEMConfig(unittest.TestCase):
         # check that rotation is the same as was specified for the scanner (e-beam) for megafield imaging
         self.assertEqual(self.multibeam.getMetadata()[model.MD_ROTATION], math.radians(10))
 
+        # check that the MD_POS_COR is set to [0, 0] for live stream imaging.
+        self.assertListEqual([0, 0], self.scanner.getMetadata()[model.MD_POS_COR])
+
 
 if __name__ == "__main__":
     unittest.main()
