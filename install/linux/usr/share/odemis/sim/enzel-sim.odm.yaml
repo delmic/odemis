@@ -220,8 +220,26 @@ ENZEL-Sim: {
         # ref_start: null, # rad, value to where start the referencing, default is to start at 5% of cycle
     },
     metadata: {
-        # TODO: calibrate
-        POS_COR: -0.0  # rad, adjustment needed for 0 = no astigmatism
+        POS_COR: -0.5,  # rad, adjustment needed for 0 = no astigmatism
+        # Z localization calibration: stigmator angle -> calibration
+        CALIB: {
+            0.08726: { # 5°
+                    'x': {'a': -0.24759672307261632, 'b': 1.0063089478825507, 'c': 653.0753677001792,  'd': 638.8463397122532,  'w0': 11.560179003062268},
+                    'y': {'a': 0.5893174060828265, 'b': 0.23950839318911246, 'c': 1202.1980639514566,  'd': 425.6030263781317, 'w0': 11.332043010740446},
+                    'feature_angle': -3.1416,
+                    'upsample_factor': 5,
+                    'z_least_confusion': 9.418563712742548e-07,
+                    'z_calibration_range': [-9.418563712742548e-07, 8.781436287257452e-07]
+            },
+            0.17453: { # 10°
+                    'x': {'a': -0.24759672307261632, 'b': 1.0063089478825507, 'c': 653.0753677001792,  'd': 638.8463397122532,  'w0': 11.560179003062268},
+                    'y': {'a': 0.5893174060828265, 'b': 0.23950839318911246, 'c': 1202.1980639514566,  'd': 425.6030263781317, 'w0': 11.332043010740446},
+                    'feature_angle': -3.1416,
+                    'upsample_factor': 5,
+                    'z_least_confusion': 9.418563712742548e-07,
+                    'z_calibration_range': [-9.418563712742548e-07, 8.781436287257452e-07]
+            },
+        },
     },
 }
 
@@ -353,7 +371,8 @@ ENZEL-Sim: {
     # Initial position when going to FM/SEM imaging.
     # It should be within the ACTIVE_RANGE
     FAV_POS_ACTIVE: { 'rx': 0.4886, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.002 },
-    # SEM Imaging position
+    # SEM Imaging position (unused)
+    # TODO: once the acq/move.py function doesn't enforce its presence, remove
     FAV_POS_SEM_IMAGING: { 'rx': 0, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.00 },
     # Loading position
     FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 0, 'x': 0.015, 'y': 0.0052, 'z': -0.0068 },

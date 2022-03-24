@@ -82,6 +82,7 @@ from odemis.gui.conf.data import get_local_vas, get_stream_settings_config, \
     get_hw_config
 from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings, fastem_acq, project
+from odemis.gui.cont.acquisition import CryoZLocalizationController
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController, FastEMStateController
@@ -414,6 +415,7 @@ class LocalizationTab(Tab):
         )
 
         self._feature_panel_controller = CryoFeatureController(tab_data, panel, self)
+        self._zloc_controller = CryoZLocalizationController(tab_data, panel, self)
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
         self.conf = conf.get_acqui_conf()
 

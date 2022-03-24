@@ -790,6 +790,11 @@ class xrcpnl_tab_localization(wx.Panel):
         self.btn_go_to_feature = xrc.XRCCTRL(self, "btn_go_to_feature")
         self.ctrl_feature_z = xrc.XRCCTRL(self, "ctrl_feature_z")
         self.btn_use_current_z = xrc.XRCCTRL(self, "btn_use_current_z")
+        self.btn_z_localization = xrc.XRCCTRL(self, "btn_z_localization")
+        self.lbl_z_localization = xrc.XRCCTRL(self, "lbl_z_localization")
+        self.gauge_z_localization = xrc.XRCCTRL(self, "gauge_z_localization")
+        self.lbl_stigmator_angle = xrc.XRCCTRL(self, "lbl_stigmator_angle")
+        self.cmb_stigmator_angle = xrc.XRCCTRL(self, "cmb_stigmator_angle")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.streams_chk_list = xrc.XRCCTRL(self, "streams_chk_list")
@@ -950,7 +955,7 @@ def __init_resources():
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
     main_xrc = u'''\
-<?xml version="1.0" ?><resource class="wxFrame" version="2.5.3.0" xmlns="http://www.wxwidgets.org/wxxrc">
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxFrame" name="fr_main">
     <object class="wxMenuBar">
       <object class="wxMenu">
@@ -7609,10 +7614,87 @@ def __init_resources():
 								<flag>wxLEFT|wxTOP|wxBOTTOM</flag>
 								<border>10</border>
 							</object>
+                            <!-- TODO: put all in a single panel, to hide easily? -->
+                            <object class="sizeritem">
+                                <object class="wxBoxSizer">
+		                          <object class="sizeritem">
+		                            <object class="ImageTextButton" name="btn_z_localization">
+		                              <height>24</height>
+		                              <label>Locate Z...</label>
+		                              <style>wxALIGN_CENTRE</style>
+		                              <XRCED>
+		                                <assign_var>1</assign_var>
+		                              </XRCED>
+		                              <bg>#000000</bg>
+		                            </object>
+		                            <flag>wxRIGHT</flag>
+		                            <border>10</border>
+		                          </object>
+		                          <object class="sizeritem">
+		                            <object class="wxStaticText" name="lbl_z_localization">
+		                              <label>~ 4 seconds</label>
+		                              <style>wxALIGN_CENTRE</style>
+		                              <XRCED>
+		                                <assign_var>1</assign_var>
+		                              </XRCED>
+                                      <fg>#DDDDDD</fg>
+		                            </object>
+		                            <flag>wxTOP</flag>
+		                            <border>3</border>
+		                          </object>
+		                          <object class="sizeritem">
+		                            <object class="wxGauge" name="gauge_z_localization">
+		                              <size>-1,10</size>
+		                              <range>100</range>
+		                              <value>0</value>
+		                              <style>wxGA_HORIZONTAL|wxGA_SMOOTH</style>
+		                              <XRCED>
+		                                <assign_var>1</assign_var>
+		                              </XRCED>
+		                              <hidden>1</hidden>
+		                            </object>
+		                            <option>1</option>
+		                            <flag>wxTOP</flag>
+		                            <border>4</border>
+		                          </object>
+                                  <orient>wxHORIZONTAL</orient>
+                                </object>
+                                <flag>wxLEFT|wxBOTTOM|wxRIGHT|wxEXPAND</flag>
+                                <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                                <object class="wxBoxSizer">
+									<object class="sizeritem">
+										<object class="wxStaticText" name="lbl_stigmator_angle">
+											<label>Stigmator angle</label>
+											<fg>#DDDDDD</fg>
+		                                    <XRCED>
+                                                <assign_var>1</assign_var>
+                                            </XRCED>
+										</object>
+									</object>
+									<object class="sizeritem">
+										<object class="OwnerDrawnComboBox" name="cmb_stigmator_angle">
+											<size>110,16</size>
+											<fg>#2FA7D4</fg>
+											<bg>#333333</bg>
+											<style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER
+											</style>
+		                                    <XRCED>
+                                                <assign_var>1</assign_var>
+                                            </XRCED>
+										</object>
+										<flag>wxLEFT</flag>
+										<border>10</border>
+									</object>
+                                    <orient>wxHORIZONTAL</orient>
+                                </object>
+                                <flag>wxLEFT|wxBOTTOM</flag>
+                                <border>10</border>
+                            </object>
 					   <flag>wxALIGN_RIGHT</flag>
 					   <orient>wxVERTICAL</orient>
                       </object>
-							
 						</object>
                         <label>FEATURES</label>
                         <fg>#1A1A1A</fg>

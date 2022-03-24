@@ -20,10 +20,22 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import unittest
-from odemis.util import almost_equal
+import logging
+from odemis import model
+import odemis
+from odemis.acq import stream
 from odemis.dataio.tiff import read_data
-from odemis.acq.align.z_localization import determine_z_position
+from odemis.util import test, comp
+import os
+import unittest
+
+from odemis.acq.align.z_localization import determine_z_position, measure_z
+
+
+logging.getLogger().setLevel(logging.DEBUG)
+
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
+ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 
 
 # Images and calibration data from the z-stack: 2021-06-28-17-20-07zstack_-28.432deg_step50nm_4.80884319rad
@@ -118,6 +130,83 @@ class TestDetermineZPosition(unittest.TestCase):
     #
     #     with self.assertRaises(ModuleNotFoundError):
     #         _, _ = determine_z_position(image, CALIB_DATA)
+
+
+class TestMeasureZ(unittest.TestCase):
+    """
+    Test measure_z
+    """
+    @classmethod
+    def setUpClass(cls):
+        test.start_backend(ENZEL_CONFIG)
+
+        cls.stage = model.getComponent(role="stage")
+        cls.ccd = model.getComponent(role="ccd")
+        cls.light = model.getComponent(role="light")
+        cls.stigmator = model.getComponent(role="stigmator")
+        cls.focus = model.getComponent(role="focus")
+        cls.filter = model.getComponent(role="filter")
+
+    def test_measure_z(self):
+        """
+        Check the call to measure_z() works
+        """
+        # Note: the simulator image is not proper, so measure_z will return odd value
+        # with a warning.
+
+        # Ask to locate exactly in the center
+        pos = self.stage.position.value
+        pos = pos["x"], pos["y"]
+
+        fms = stream.FluoStream("fluo", self.ccd, self.ccd.data,
+                               self.light, self.filter, focuser=self.focus)
+
+        angle = min(self.stigmator.getMetadata()[model.MD_CALIB].keys())
+
+        f = measure_z(self.stigmator, angle, pos, fms)
+        zshift, warning = f.result(30)
+
+        # Check it's not a super odd value: < 10µm
+        self.assertLessEqual(abs(zshift), 10e-6)
+
+    def test_measure_z_pos_shifted(self):
+        """
+        Test measure_z with a pos within the FoV, but not in the center
+        """
+        # Note: the simulator image is not proper, so measure_z will return odd value
+        # with a warning.
+
+        # Ask to locate shift from the center (but within FoV)
+        pos = self.stage.position.value
+        fov = comp.compute_camera_fov(self.ccd)
+        pos = pos["x"] + fov[0] / 3, pos["y"] - fov[1] / 4
+
+        fms = stream.FluoStream("fluo", self.ccd, self.ccd.data,
+                               self.light, self.filter, focuser=self.focus)
+
+        angle = min(self.stigmator.getMetadata()[model.MD_CALIB].keys())
+
+        f = measure_z(self.stigmator, angle, pos, fms, logpath="test-measurez.ome.tiff")
+        zshift, warning = f.result(30)
+
+        # Check it's not a super odd value: < 10µm
+        self.assertLessEqual(abs(zshift), 10e-6)
+
+    def test_measure_z_bad_angle(self):
+        """
+        Check that an error is reported if passing the wrong angle
+        """
+        pos = self.stage.position.value
+        pos = pos["x"], pos["y"]
+
+        fms = stream.FluoStream("fluo", self.ccd, self.ccd.data,
+                               self.light, self.filter, focuser=self.focus)
+
+        angle = -1.57 # Should not be within the calibration angles
+
+        with self.assertRaises(KeyError):
+            f = measure_z(self.stigmator, angle, pos, fms)
+            zshit, warning = f.result(30)
 
 
 if __name__ == '__main__':

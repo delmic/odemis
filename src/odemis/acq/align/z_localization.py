@@ -19,10 +19,15 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+from concurrent.futures import Future
 import logging
 import math
-
 import numpy
+from odemis import dataio, model, util
+from odemis.acq import acqmng
+from odemis.model import ProgressiveFuture
+import time
+from typing import Tuple, Optional
 
 try:
     from skimage import io, exposure
@@ -192,3 +197,109 @@ def determine_z_position(image, calibration_data, fit_tol=0.1):
             warning = 4
 
     return z_position, warning
+
+
+def measure_z(stigmator, angle: float, pos: Tuple[float, float], stream, logpath: Optional[str]=None) -> ProgressiveFuture:
+    """
+    Using the stigmator at the given angle, observe the image of a spot, and based
+      on the Gaussian estimates the position of the point in the Z direction.
+    stigmator (Actuator): has a rz axis to move the axis in radians
+    angle (float): angle in radians for the stigmator. The stigmator will be moved
+      back to 0 at the end of the function.
+    pos (float, float): absolute position (X, Y, in m) of the spot to locate.
+    stream (Stream): The FM stream to acquire an image.
+    logpath (str or None): if not None, will store the acquired NavCam image
+      in the directory.
+    return a ProgressiveFuture, returning:
+        z_position (float): determined z position of the feature (in m), relative
+            to the current focus position.
+        warning (int or None): if the localization can not be accurately measured,
+           the reason is passed here. See determine_z_position() for details.
+    """
+
+    # Create ProgressiveFuture and run it in a separate thread.
+    est_start = time.time() + 0.1
+
+    f = ProgressiveFuture(start=est_start,
+                          end=est_start + estimate_measure_z(stigmator, angle, pos, stream))
+
+    # For now, it's impossible to cancel (it's very short anyway)
+    # f.task_canceller = ...
+
+    # Run in separate thread
+    util.executeAsyncTask(f, _do_measure_z, args=(f, stigmator, angle, pos, stream, logpath))
+    return f
+
+def estimate_measure_z(stigmator, angle: float, pos: Tuple[float, float], stream) -> float:
+    """
+    Estimate the time measure_z() will take.
+    parameters: same as measure_z()
+    return float: duration in s
+    """
+    # 1 s: move stigmator
+    # can vary: Acquire stream (typically, < 1s)
+    # 1 s: determine_z_position
+    # 1 s: move back stigmator
+    return 3 + acqmng.estimateTime([stream])
+
+
+def _do_measure_z(f: Future, stigmator, angle: float, pos: Tuple[float, float], stream, logpath: Optional[str]=None):
+    """
+    Using the stigmator at the given angle, observe the image of a spot, and based
+      on the Gaussian estimates the position of the point in the Z direction.
+    arguments: see measure_z()
+    """
+
+    try:
+        if logpath:
+            exporter = dataio.find_fittest_converter(logpath)
+
+        # TODO: handle floating point errors? (for now we pass always the exact same value, so no need)
+        try:
+            calib = stigmator.getMetadata()[model.MD_CALIB][angle]
+        except KeyError:
+            raise KeyError(f"No CALIB found for {angle} rad on stigmator")
+
+        # Move the stigmator to the measurement angle
+        f = stigmator.moveAbs({"rz": angle})
+        f.result(timeout=600)
+
+        # Acquire an image of the spot
+        f = acqmng.acquire([stream])
+        # Typically ex is always None as we acquire only one stream (an error will directly raise a exception)
+        # so we don't check it.
+        data, ex = f.result(timeout=600)
+        im = data[0]
+        if len(data) != 1:
+            logging.warning("Unexpected extra DataArray from acquisition: %s", data)
+
+        # Crop the part of the image that should contain the feature (as a square around the feature)
+        # We arbitrarily take a with of 20 x the supposed PSF FWHM.
+        # The PSF includes the binning, so need for any extra tweak
+        half_width = int(math.ceil(10 * stream.detector.pointSpreadFunctionSize.value))  # px
+
+        pos_px = stream.getPixelCoordinates(pos)
+        if pos_px is None:
+            raise ValueError(f"Feature position {pos} is outside of current FoV {stream.getBoundingBox()}")
+
+        logging.debug("Feature is at %s, corresponding to %s px, will crop %s pixels around",
+                      pos, pos_px, 2 * half_width)
+
+        # Note: if cropping is situated near the max side, numpy will silently clip the sub rectangle
+        sub_im = im[max(0, pos_px[1] - half_width):pos_px[1] + half_width,  # Y
+                    max(0, pos_px[0] - half_width):pos_px[0] + half_width]  # X
+
+        logging.debug("RoI has shape %s", sub_im.shape)
+        if logpath:
+            # TODO update the sub_im metadata so that it's displayed at the right position
+            exporter.export(logpath, data + [sub_im])
+
+        # Call the localization
+        zshift, warning = determine_z_position(sub_im, calib)
+
+        logging.debug("Located feature Z shifted by %s m", zshift)
+
+        return zshift, warning
+    finally:
+        f = stigmator.moveAbs({"rz": 0})
+        f.result(timeout=600)
