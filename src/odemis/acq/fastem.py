@@ -111,8 +111,8 @@ class FastEMROA(object):
         Computes the approximate time it will take to run the ROA (megafield) acquisition.
         :return (0 <= float): The estimated time for the ROA (megafield) acquisition in s.
         """
-        field_time = self._detector.frameDuration.value
-        tot_time = len(self.field_indices) * field_time
+        field_time = self._detector.frameDuration.value + 1.5  # there is about 1.5 seconds overhead per field
+        tot_time = (len(self.field_indices) + 1) * field_time  # +1 because the first field is acquired twice
 
         if self.pre_calibrate:
             # TODO replace with call to estimate calibration time in module for each calibrations
@@ -411,7 +411,7 @@ class AcquisitionTask(object):
         :param dataflow: (model.DataFlow) The dataflow on the detector.
         """
 
-        total_field_time = self._detector.frameDuration.value
+        total_field_time = self._detector.frameDuration.value + 1.5  # there is about 1.5 seconds overhead per field
         # The first field is acquired twice, so the timeout must be at least twice the total field time.
         # Use 5 times the total field time to have a wide margin.
         timeout = 5 * total_field_time + 2
@@ -445,7 +445,7 @@ class AcquisitionTask(object):
 
             # Update the time left for the acquisition.
             expected_time = len(self._fields_remaining) * total_field_time
-            self._future.set_progress(end=time.time() + expected_time)
+            self._future.set_progress(start=time.time(), end=time.time() + expected_time)
 
     def pre_calibrate(self):
         """
