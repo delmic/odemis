@@ -659,7 +659,8 @@ class LocalizationTab(Tab):
         :param pos: (dict str->float or None) updated position of the stage
         """
         if self.main_data.role == "enzel":
-            guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[IMAGING])
+            # TODO: IMAGING position should not be used on ENZEL anymore
+            guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[THREE_BEAMS, IMAGING])
         elif self.main_data.role == "meteor":
             guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[FM_IMAGING, SEM_IMAGING])
 
@@ -2552,13 +2553,6 @@ class CryoChamberTab(Tab):
                                                                         ctrl_2_va=self._btn_show_advaned_toggled,
                                                                         va_2_ctrl=self._on_show_advanced)
 
-            # Check stage FAV positions in its metadata, and store them in respect to their movement
-            if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
-                raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE and FAV_POS_COATING metadata.')
-            self.target_position_metadata = {LOADING: stage_metadata[model.MD_FAV_POS_DEACTIVE],
-                                            IMAGING: stage_metadata[model.MD_FAV_POS_ACTIVE],
-                                            COATING: stage_metadata[model.MD_FAV_POS_COATING], }
-
             # Event binding for tab controls
             panel.btn_switch_loading.Bind(wx.EVT_BUTTON, self._on_switch_btn)
             panel.btn_switch_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
@@ -2862,12 +2856,12 @@ class CryoChamberTab(Tab):
         """
         if self._role == 'enzel':
             # Define which button to disable in respect to the current move
-            disable_buttons = {LOADING: (), THREE_BEAMS: (), ALIGNMENT: (COATING, SEM_IMAGING), COATING: (ALIGNMENT, SEM_IMAGING),
+            disable_buttons = {LOADING: (), THREE_BEAMS: (), IMAGING: (), ALIGNMENT: (COATING, SEM_IMAGING), COATING: (ALIGNMENT, SEM_IMAGING),
                                SEM_IMAGING: (COATING,), LOADING_PATH: (ALIGNMENT, COATING, SEM_IMAGING)}
             for movement, button in self.position_btns.items():
                 if current_position == UNKNOWN:
-                    # Only enable loading button when the move is unknown
-                    button.Enable() if movement == LOADING else button.Disable()
+                    # If at unknown position, only allow going to LOADING position
+                    button.Enable(movement == LOADING)
                 elif movement in disable_buttons[current_position]:
                     button.Disable()
                 else:
