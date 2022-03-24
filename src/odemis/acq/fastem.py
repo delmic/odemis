@@ -409,8 +409,6 @@ class AcquisitionTask(object):
         """
         Acquire the single field images that resemble the region of acquisition (ROA, megafield image).
         :param dataflow: (model.DataFlow) The dataflow on the detector.
-        :return: (list of DataArrays): A list of the raw image data. Each data array (entire field, thumbnail,
-                                       or zero array) represents one single field image within the ROA (megafield).
         """
 
         total_field_time = self._detector.frameDuration.value
@@ -448,8 +446,6 @@ class AcquisitionTask(object):
             # Update the time left for the acquisition.
             expected_time = len(self._fields_remaining) * total_field_time
             self._future.set_progress(end=time.time() + expected_time)
-
-        return self.megafield
 
     def pre_calibrate(self):
         """
