@@ -1027,6 +1027,169 @@ class OverviewStreamAcquiController(object):
             return None
 
 
+class CryoZLocalizationController(object):
+    """
+    Controller to handle the Z localization for the ENZEL/METEOR with a stigmator.
+    """
+    def __init__(self, tab_data, panel, tab):
+        self._panel = panel
+        self._tab_data = tab_data
+        self._tab = tab
+        self._stigmator = tab_data.main.stigmator
+
+        if self._stigmator:
+            # Automatically move it to 0 at init, and then after every Z localization
+            # (even if no calibration data)
+            self._stigmator.moveAbs({"rz": 0})
+
+        # Support for Z localization?
+        if not hasattr(tab_data, "stigmatorAngle"):
+            self._panel.btn_z_localization.Hide()
+            self._panel.lbl_z_localization.Hide()
+            self._panel.lbl_stigmator_angle.Hide()
+            self._panel.cmb_stigmator_angle.Hide()
+            self._panel.Layout()
+            return
+
+        # Connect the button and combobox
+        self._panel.btn_z_localization.Bind(wx.EVT_BUTTON, self._on_z_localization)
+
+        # TODO: set the available values
+        for angle in sorted(tab_data.stigmatorAngle.choices):
+            angle_str = units.to_string_pretty(math.degrees(angle), 3, "°")
+            self._panel.cmb_stigmator_angle.Append(angle_str, angle)
+
+        self._cmb_vac = VigilantAttributeConnector(
+            va=self._tab_data.stigmatorAngle,
+            value_ctrl=self._panel.cmb_stigmator_angle,
+            events=wx.EVT_COMBOBOX,
+            va_2_ctrl=self._cmb_stig_angle_set,
+            ctrl_2_va=self._cmb_stig_angle_get
+        )
+
+    def _cmb_stig_angle_get(self):
+        """
+        Change the current angle based on the dropdown selection
+        """
+        i = self._panel.cmb_stigmator_angle.GetSelection()
+        if i == wx.NOT_FOUND:
+            logging.warning("cmb_stigmator_angle has unknown value.")
+            return
+        angle = self._panel.cmb_stigmator_angle.GetClientData(i)
+        return angle
+
+    def _cmb_stig_angle_set(self, value):
+        ctrl = self._panel.cmb_stigmator_angle
+        for i in range(ctrl.GetCount()):
+            d = ctrl.GetClientData(i)
+            if d == value:
+                logging.debug("Setting combobox value to %s", ctrl.Items[i])
+                ctrl.SetSelection(i)
+                break
+        else:
+            logging.warning("Combobox stigmator angle has no value %s", value)
+
+    def _on_z_localization(self, evt):
+
+        # TODO: move to a ProgressiveFuture
+
+        # Pick the last FM stream (TODO: make that more obvious to the user)
+        try:
+            s = next(s for s in self._tab_data.streams.value if isinstance(s, FluoStream))
+        except StopIteration:
+            raise ValueError("No FM stream available to acquire a image of the the feature")
+
+        # TODO: the button should be disabled as long as no feature is selected (with a message "select a feature")
+        feature = self._tab_data.main.currentFeature.value
+        if feature is None:
+            raise ValueError("Select a feature first to specify the Z localization in X/Y")
+
+        # The angles of stigmatorAngle should come from MD_CALIB, so it's relatively safe
+        angle = self._tab_data.stigmatorAngle.value
+        # TODO: use the closest angle?
+        calib = self._stigmator.getMetadata()[model.MD_CALIB][angle]
+
+        self._tab.streambar_controller.pauseStreams()
+        self._tab.streambar_controller.pause()
+        self._tab_data.main.is_acquiring.value = True
+
+        acq_conf = conf.get_acqui_conf()
+        # TODO: store the acquisition somewhere, for debugging purposes
+        fn = create_filename(acq_conf.pj_last_path, "{datelng}-{timelng}-superz", ".ome.tiff")
+        assert fn.endswith(".ome.tiff")
+        exporter = dataio.find_fittest_converter(fn)
+
+        # TODO change the GUI:
+        # Make the button a "cancel" button
+        # Change the time estimate to a gauge
+
+        # Set the stigmator to the new angle
+        try:
+            f = self._stigmator.moveAbs({"rz": angle})
+            f.result(timeout=600)
+
+            # Store the focus position (it'll the base for the shift computed by the z localization)
+            zpos_acq = self._tab_data.main.focus.position.value["z"]
+
+            f = acqmng.acquire([s], self._tab_data.main.settings_obs)
+            # Typically exp is always None as we acquire only one stream (an error will directly raise a exception)
+            # so we don't check it.
+            data, exp = f.result(timeout=600)
+            im = data[0]
+            if len(data) != 1:
+                logging.warning("Unexpected extra DataArray from acquisition: %s", data)
+
+            # Crop the part of the image that should contain the feature
+            # We arbitrarily take a with of 10 x the supposed PSF FWHM.
+            # The PSF includes the binning, so need for any extra tweak
+            half_width = int(math.ceil(5 * s.detector.pointSpreadFunctionSize.value))  # px
+
+            pos = feature.pos.value[:2]
+            pos_px = s.getPixelCoordinates(pos)
+            if pos_px is None:
+                raise ValueError(f"Feature position {pos} is outside of current FoV {s.getBoundingBox()}")
+
+            logging.debug("Feature is at %s, corresponding to %s px, will crop %s pixels around",
+                          pos, pos_px, 2 * half_width)
+
+            # Crop the image (as a square around the feature)
+            # Note: if it's on the side, numpy will silently clip the sub rectangle
+            sub_im = im[pos_px[1] - half_width:pos_px[1] + half_width,  # Y
+                        pos_px[0] - half_width:pos_px[0] + half_width]  # X
+
+            logging.debug("RoI has shape %s", sub_im.shape)
+            exporter.export(fn, data + [sub_im])
+
+            # Call the localization
+            zshift, warning = 10e-6, 0  # FIXME
+            # zshift, warning = z_localization.determine_z_position(sub_im, calib)
+
+            zpos = zpos_acq + zshift
+
+            # TODO: extra check on the zshift? Like < 100 µm
+            if abs(zshift) > 100e-6:
+                warning = 7
+
+            # Update the feature Z pos, and move there
+            feature.pos.value = pos + (zpos,)
+            if warning:
+                # Update the Z pos, but do not move there.
+                # TODO: does it make sense?
+                logging.warning("Z pos shift detected at %s, but with warning %s", zshift, warning)
+                popup.show_message(self._tab.main_frame, "Z localization unreliable",
+                                   "The Z localization could not locate the depth with sufficient certainty.",
+                                   level=logging.WARNING)
+            else:
+                f = self._tab_data.main.focus.moveAbs({"z": zpos})
+                # Don't wait for it to be complete, the user will notice anyway
+
+        finally:
+            f = self._stigmator.moveAbs({"rz": 0})
+            f.result(timeout=600)
+            self._tab_data.main.is_acquiring.value = False
+            self._tab.streambar_controller.resume()
+
+
 class SparcAcquiController(object):
     """
     Takes care of the acquisition button and process on the Sparc acquisition
