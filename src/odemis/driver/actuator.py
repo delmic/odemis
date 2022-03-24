@@ -2152,15 +2152,14 @@ class RotationActuator(model.Actuator):
                 f.add_done_callback(self._on_referenced)
 
     def updateMetadata(self, md):
-        for key, value in md.items():
-            if isinstance(value, numbers.Real) and (0 <= abs(value) <= self._cycle/2):
-                super(RotationActuator, self).updateMetadata(md)
-                self._updatePosition()
-                logging.debug("reporting metadata entry %s with value %s." % (value, key))
-            else:
-                logging.error("value %s for metadata entry %s is not allowed. "
-                                  "Value should be in range -%s/2 and +%s/2." % (value, key, self._cycle, self._cycle))
-                raise ValueError("value %s for metadata entry %s is not allowed." % (value, key))
+        if model.MD_POS_COR in md:
+            p = md[model.MD_POS_COR]
+            if not isinstance(p, numbers.Real) or abs(p) > self._cycle / 2:
+                raise ValueError("POS_COR value %s is not allowed, it should be in range -%s/2 and +%s/2." %
+                                 (p, self._cycle, self._cycle))
+            
+        super().updateMetadata(md)
+        self._updatePosition()
 
     def _on_referenced(self, future):
         try:
