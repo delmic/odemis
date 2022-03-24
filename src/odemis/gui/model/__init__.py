@@ -842,15 +842,20 @@ class CryoChamberGUIData(CryoGUIData):
         self.stage_align_slider_va = model.FloatVA(1e-6)
         self.show_advaned = model.BooleanVA(False)
 
-        # Some extra checks about the microscope config
-        # The active range should be within the FM range (which can be wider)
-        stage_fm_imaging_rng = main.stage_bare.getMetadata()[model.MD_FM_IMAGING_RANGE]
-        stage_rng = main.stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
-        for axis in ("x", "y"):
-            fm_rng = stage_fm_imaging_rng[axis]
-            if not all(fm_rng[0] <= r <= fm_rng[1] for r in stage_rng[axis]):
-                raise ValueError(f"stage.POS_ACTIVE_RANGE should be within stage-bare.FM_IMAGING_RANGE "
-                                 f"but got axis {axis} with range {stage_rng[axis]} out of {fm_rng}")
+        # Some extra checks on the METEOR about the microscope config.
+        # The active range (on stage) should be within the FM range (on stage-bare).
+        # The difference between the two stages is only that Y is rotated (so a move
+        # on stage.Y could move less on stage-bare.Y) but typically stage-bare has a
+        # much wider range. So we assume it should always be at least as big, and
+        # this allows to detect when the user updated one metadata and not the other one.
+        if main.role == "meteor":
+            stage_fm_imaging_rng = main.stage_bare.getMetadata()[model.MD_FM_IMAGING_RANGE]
+            stage_rng = main.stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
+            for axis in ("x", "y"):
+                fm_rng = stage_fm_imaging_rng[axis]
+                if not all(fm_rng[0] <= r <= fm_rng[1] for r in stage_rng[axis]):
+                    raise ValueError(f"stage.POS_ACTIVE_RANGE should be within stage-bare.FM_IMAGING_RANGE "
+                                     f"but got axis {axis} with range {stage_rng[axis]} out of {fm_rng}")
 
 
 class AnalysisGUIData(MicroscopyGUIData):
