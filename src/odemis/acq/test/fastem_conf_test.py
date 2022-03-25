@@ -60,7 +60,8 @@ class TestFASTEMConfig(unittest.TestCase):
 
         # change the rotation for single and multibeam mode to check the correct one is selected depending on the mode
         cls.scanner.updateMetadata({model.MD_SINGLE_BEAM_ROTATION: math.radians(5),
-                                    model.MD_MULTI_BEAM_ROTATION: math.radians(10)})
+                                    model.MD_MULTI_BEAM_ROTATION: math.radians(10),
+                                    model.MD_FIELD_FREE_POS_SHIFT: [90.0e-6, 50.0e-6]})
 
     def test_configure_scanner_overview(self):
         """Check that for the overview mode, the correct HW settings are set on the respective scanner VAs."""
@@ -74,8 +75,13 @@ class TestFASTEMConfig(unittest.TestCase):
         self.assertGreater(self.scanner.horizontalFoV.value, 1.e-3)  # should be big FoV for overview
         self.assertEqual(self.scanner.rotation.value, math.radians(5))
 
+        scanner_md = self.scanner.getMetadata()
+
+        # check that the MD_POS_COR is correctly set for overview imaging.
+        self.assertListEqual(scanner_md[model.MD_FIELD_FREE_POS_SHIFT], scanner_md[model.MD_POS_COR])
+
         # check rotation set is also stored in MD as rotation correction
-        self.assertEqual(self.scanner.getMetadata()[model.MD_ROTATION_COR], math.radians(5))
+        self.assertEqual(scanner_md[model.MD_ROTATION_COR], math.radians(5))
 
         # acquire an image and check the MD is correct: ROTATION - ROTATION_COR == 0
         image = self.sed.data.get()
@@ -95,6 +101,10 @@ class TestFASTEMConfig(unittest.TestCase):
         self.assertTrue(self.scanner.immersion.value)
         self.assertEqual(self.scanner.rotation.value, math.radians(5))
 
+        scanner_md = self.scanner.getMetadata()
+        # check that the MD_POS_COR is set to [0, 0] for live stream imaging.
+        self.assertListEqual([0, 0], scanner_md[model.MD_POS_COR])
+
     def test_configure_scanner_megafield(self):
         """Check that for megafield mode, the correct HW settings are set on the respective scanner VAs."""
 
@@ -112,6 +122,9 @@ class TestFASTEMConfig(unittest.TestCase):
         self.assertEqual(self.multibeam.getMetadata().get(model.MD_ROTATION_COR, 0), 0)
         # check that rotation is the same as was specified for the scanner (e-beam) for megafield imaging
         self.assertEqual(self.multibeam.getMetadata()[model.MD_ROTATION], math.radians(10))
+
+        # check that the MD_POS_COR is set to [0, 0] for live stream imaging.
+        self.assertListEqual([0, 0], self.scanner.getMetadata()[model.MD_POS_COR])
 
 
 if __name__ == "__main__":
