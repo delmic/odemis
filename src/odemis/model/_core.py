@@ -30,7 +30,7 @@ import multiprocessing
 import os
 import threading
 from future.moves.urllib.parse import quote
-from odemis.util import inspect_getmembers
+from odemis.util import driver, inspect_getmembers
 
 
 # Pyro4.config.COMMTIMEOUT = 30.0 # a bit of timeout
@@ -71,9 +71,14 @@ def getMicroscope():
     return the microscope component managed by the backend
     Note: if a connection has already been set up, it will reuse it, unless
     you reset _microscope to None
+    :raises IOError when the backend is stopped or dead.
     """
     global _microscope # cached at the module level
     if _microscope is None:
+        status = driver.get_backend_status()
+        if status == driver.BACKEND_STOPPED or status == driver.BACKEND_DEAD:
+            raise IOError(f"Cannot get microscope because the backend is {status}")
+
         backend = getContainer(BACKEND_NAME, validate=False)
 
         # Force a short timeout, because if the backend is not reachable very
@@ -502,4 +507,3 @@ def _manageContainer(name, isready=None):
         isready.set()
     container.run()
     container.close()
-
