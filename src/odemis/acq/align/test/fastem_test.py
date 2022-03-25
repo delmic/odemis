@@ -34,7 +34,7 @@ import odemis
 from odemis import model
 from odemis.acq.align import fastem
 from odemis.acq.align.fastem import Calibrations
-from odemis.util import test
+from odemis.util import driver, test
 
 # * TEST_NOHW = 1: use simulator (asm/sam and xt adapter simulators need to be running)
 # technolution_asm_simulator/simulator2/run_the_simulator.py
@@ -55,6 +55,8 @@ class TestFastEMCalibration(unittest.TestCase):
     def setUpClass(cls):
         if TEST_NOHW:
             test.start_backend(FASTEM_CONFIG)
+        elif driver.get_backend_status() != driver.BACKEND_RUNNING:
+            raise IOError("Backend controlling a real hardware should be started before running this test case")
 
         # get the hardware components
         cls.scanner = model.getComponent(role='e-beam')

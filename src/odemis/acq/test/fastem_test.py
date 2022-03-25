@@ -37,7 +37,7 @@ import odemis
 from fastem_calibrations import configure_hw
 from odemis import model
 from odemis.acq import fastem, stream
-from odemis.util import test, img, is_point_in_rect
+from odemis.util import driver, img, is_point_in_rect, test
 
 # * TEST_NOHW = 1: connected to the simulator or not connected to anything
 # * TEST_NOHW = 0: connected to the real hardware, the backend should be running
@@ -59,6 +59,8 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
     def setUpClass(cls):
         if TEST_NOHW:
             test.start_backend(FASTEM_CONFIG)
+        elif driver.get_backend_status() != driver.BACKEND_RUNNING:
+            raise IOError("Backend controlling a real hardware should be started before running this test case")
 
         cls.ebeam = model.getComponent(role="e-beam")
         cls.efocuser = model.getComponent(role="ebeam-focus")
@@ -134,6 +136,8 @@ class TestFastEMROA(unittest.TestCase):
     def setUpClass(cls):
         if TEST_NOHW:
             test.start_backend(FASTEM_CONFIG_ASM)
+        elif driver.get_backend_status() != driver.BACKEND_RUNNING:
+            raise IOError("Backend controlling a real hardware should be started before running this test case")
 
         # get the hardware components
         cls.asm = model.getComponent(role="asm")
@@ -300,6 +304,8 @@ class TestFastEMAcquisition(unittest.TestCase):
     def setUpClass(cls):
         if TEST_NOHW:
             test.start_backend(FASTEM_CONFIG_ASM)
+        elif driver.get_backend_status() != driver.BACKEND_RUNNING:
+            raise IOError("Backend controlling a real hardware should be started before running this test case")
 
         # get the hardware components
         cls.scanner = model.getComponent(role='e-beam')
@@ -527,6 +533,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
     def setUpClass(cls):
         if TEST_NOHW:
             test.start_backend(FASTEM_CONFIG_ASM)
+        elif driver.get_backend_status() != driver.BACKEND_RUNNING:
+            raise IOError("Backend controlling a real hardware should be started before running this test case")
 
         # Get the hardware components from the simulators or hardware
         cls.scanner = model.getComponent(role='e-beam')
