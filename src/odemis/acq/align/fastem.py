@@ -220,7 +220,11 @@ class CalibrationTask(object):
             # Remove references to the calibrations once all calibrations are finished/cancelled.
             self._calibrations_remaining.clear()
             self._scanner.blanker.value = True  # always blank the beam to reduce beam damage on sample
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config)
+            # put system back into state ready for next task and set calibrated settings
+            if self.asm_config is None:
+                logging.warning("Failed to retrieve asm configuration, configure_asm cannot be executed.")
+            else:
+                configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config)
             logging.debug("Calibrations finished.")
 
     def run_calibrations(self, calibration):
