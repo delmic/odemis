@@ -40,7 +40,8 @@ from wx.lib.pubsub import pub
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
 from odemis import model, util
-from odemis.acq.stream import MeanSpectrumProjection, FastEMOverviewStream
+from odemis.acq.stream import MeanSpectrumProjection, FastEMOverviewStream, \
+    StaticStream
 from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
     CONTROL_COMBO, CONTROL_FLT
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -3083,3 +3084,130 @@ class FastEMStreamsController(StreamBarController):
             if isinstance(s, FastEMOverviewStream) and s not in tab_streams:
                 tab_streams.append(s)
                 canvas.view.addStream(s)
+
+
+class CryoAcquiredStreamsController(StreamBarController):
+    """
+    StreamBarController to control the display of the Static streams in the Cryo
+    Localization tab. It deals with two types of streams:
+     * Overview streams: shown only in the overview view. Independent of the
+       current feature selected.
+     * Feature streams: the streams related to a specific CryoFeature. They are
+       shown only in the "acquired" view, and only when the related feature is
+       selected. Note that *all* acquired streams are linked to one (and only one)
+       CryoFeature.
+    """
+
+    def __init__(self, tab_data, feature_view, ov_view, *args, **kwargs):
+        """
+        feature_view (StreamView): the view to show the feature streams
+        ov_view (StreamView): the view to show the overview streams
+        """
+        super().__init__(tab_data, *args, **kwargs)
+        self._feature_view = feature_view
+        self._ov_view = ov_view
+
+        # tab_data has:
+        # * .streams, which contains *all* the streams. This controller takes
+        #   care only of the StaticStreams there.
+        # * .overviewStreams, which contains the list of overview streams
+        # The main has:
+        # * .features: which contain every CryoFeature, which all have a .streams
+        # * .currentFeature: the current feature (can be None)
+
+        # TODO: eventually, also unload/reload data when the feature is not shown? (to save memory)
+
+        tab_data.main.currentFeature.subscribe(self._on_current_feature_changes)
+
+    def showOverviewStream(self, stream) -> StreamController:
+        """
+        Shows an Overview stream (in the Overview view)
+        Must be run in the main GUI thread.
+        """
+        self._ov_view.addStream(stream)
+        sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
+                                   view=self._ov_view)
+
+        return sc
+
+    def showFeatureStream(self, stream) -> StreamController:
+        """
+        Shows an Feature stream (in the Acquired view)
+        Must be run in the main GUI thread.
+        """
+        # TODO: don't delete/create stream controller every time? Instead, we
+        # could just hide/show them the same way it's done when switching view.
+        self._feature_view.addStream(stream)
+        sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
+                                   view=self._feature_view)
+        return sc
+
+    def _on_current_feature_changes(self, feature):
+        """
+        Handle switching the acquired streams appropriate to the current feature
+        :param feature: (CryoFeature or None) the newly selected current feature
+        """
+        self.clear_feature_streams()
+        # show the feature streams on the acquired view
+        acquired_streams = feature.streams.value if feature else []
+        for stream in acquired_streams:
+            self.showFeatureStream(stream)
+
+    def clear_feature_streams(self):
+        """
+        Remove from display all feature streams (but leave the overview and live streams)
+        But DO NOT REMOVE the streams from the model
+        """
+        # Remove the panels, and indirectly it will clear the view
+        v = self._feature_view
+        for sc in self.stream_controllers.copy():
+            if not isinstance(sc.stream, StaticStream):
+                logging.warning("Unexpected non static stream: %s", sc.stream)
+                continue
+            # Leave the overview streams
+            if sc.stream in self._tab_data_model.overviewStreams.value:
+                continue
+
+            self._stream_bar.remove_stream_panel(sc.stream_panel)
+            if hasattr(v, "removeStream"):
+                v.removeStream(sc.stream)
+            self.stream_controllers.remove(sc)
+
+        self._stream_bar.fit_streams()
+
+        # Force a check of what can be garbage collected, as some of the streams
+        # could be quite big, that will help to reduce memory pressure.
+        gc.collect()
+
+    def clear(self, clear_model=True):
+        """
+        Remove all the streams, from the GUI (view, stream panels) and possibly
+        from the model too (in .streams and features.streams)
+        Must be called in the main GUI thread.
+        :param clear_model: (bool) if True, streams will be removed from model
+        """
+        # clear the graphical part
+        self._stream_bar.clear()
+
+        # Clean up the views
+        for stream in self._tab_data_model.streams.value:
+            if isinstance(stream, StaticStream):
+                for v in (self._feature_view, self._ov_view):
+                    if hasattr(v, "removeStream"):
+                        v.removeStream(stream)
+
+        if clear_model:
+            while self._tab_data_model.overviewStreams.value:
+                stream = self._tab_data_model.overviewStreams.value.pop()
+
+            # Typically, all the features will also be deleted, but that's not our job
+            # (see CryoChamberTab._reset_project_data())
+            for f in self._tab_data_model.main.features.value:
+                f.streams.value.clear()
+
+        # Clear the stream controller
+        self.stream_controllers = []
+
+        # Force a check of what can be garbage collected, as some of the streams
+        # could be quite big, that will help to reduce memory pressure.
+        gc.collect()

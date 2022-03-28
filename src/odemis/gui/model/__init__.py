@@ -669,21 +669,36 @@ class CryoGUIData(MicroscopyGUIData):
 
     def select_current_position_feature(self):
         """
-        Given current stage position, either select one of the features closest to the position or create a new one with the position
+        Given current stage position, either select one of the features closest to
+          the position or create a new one with the position.
         """
         current_position = self.main.stage.position.value
-        for feature in self.main.features.value:
-            feature_dist = math.hypot(feature.pos.value[0] - current_position["x"],
-                                      feature.pos.value[1] - current_position["y"])
-            if feature_dist <= self.ATOL_FEATURE_POS:
-                self.main.currentFeature.value = feature
-                break
-        else:
-            # create new feature if no close feature found
-            feature = self.add_new_feature(current_position["x"], current_position["y"],
-                                                          self.main.focus.position.value["z"])
-            logging.debug("A new feature is created at {} because none are close by.".format((current_position["x"], current_position["y"])))
-            self.main.currentFeature.value = feature
+        current_feature = self.main.currentFeature.value
+
+        def dist_to_pos(feature):
+            return math.hypot(feature.pos.value[0] - current_position["x"],
+                              feature.pos.value[1] - current_position["y"])
+
+
+        if current_feature and dist_to_pos(current_feature) <= self.ATOL_FEATURE_POS:
+            return  # We are already good, nothing else to do
+
+        # Find the closest feature... and check it's actually close by
+        try:
+            closest = min(self.main.features.value, key=dist_to_pos)
+            if dist_to_pos(closest) <= self.ATOL_FEATURE_POS:
+                self.main.currentFeature.value = closest
+                return
+        except ValueError:  # raised by min() if no features at all
+            pass
+
+        # No feature nearby => create a new one
+        feature = self.add_new_feature(current_position["x"], current_position["y"],
+                                       self.main.focus.position.value["z"])
+        logging.debug("New feature created at %s because none are close by.",
+                      (current_position["x"], current_position["y"]))
+        self.main.currentFeature.value = feature
+
 
 class CryoLocalizationGUIData(CryoGUIData):
     """ Represent an interface used to only show the current data from the microscope.
@@ -717,7 +732,7 @@ class CryoLocalizationGUIData(CryoGUIData):
         self.zStackActive = model.BooleanVA(value=False)
         # the streams to acquire among all streams in .streams
         self.acquisitionStreams = model.ListVA()
-        # the static overview map streams
+        # the static overview map streams, among all streams in .streams
         self.overviewStreams = model.ListVA()
         # for the filename
         config = conf.get_acqui_conf()

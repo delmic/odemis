@@ -5,6 +5,7 @@ import wx
 from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_DEACTIVE, save_features, FEATURE_POLISHED
 from odemis.gui.model import TOOL_FEATURE
 from odemis.gui.util.widgets import VigilantAttributeConnector
+from odemis.gui.util import call_in_wx_main
 
 
 class CryoFeatureController(object):
@@ -74,22 +75,64 @@ class CryoFeatureController(object):
         self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1]})
         self._main_data_model.focus.moveAbs({'z': pos[2]})
 
+    def _enable_feature_ctrls(self, enable: bool):
+        """
+        Enables/disables the feature controls
+
+        enable: If True, allow all the feature controls to be used.
+        """
+        self._panel.cmb_feature_status.Enable(enable)
+        self._panel.ctrl_feature_z.Enable(enable)
+        self._panel.btn_use_current_z.Enable(enable)
+        self._panel.btn_go_to_feature.Enable(enable)
+
+    def _update_feature_cmb_list(self):
+        """
+        Fill up the combobox with the list of features, and select the current feature
+        To be called in the main GUI thread
+        """
+        current_feature = self._tab_data_model.main.currentFeature.value
+        # Special case: there is no selected feature
+        if current_feature is None:
+            self._enable_feature_ctrls(False)
+            self._panel.cmb_features.SetValue("No Feature Selected")
+            self._panel.cmb_feature_status.SetValue(FEATURE_ACTIVE)  # Default
+        else:
+            self._enable_feature_ctrls(True)
+
+            features = self._tab_data_model.main.features.value
+            self._panel.cmb_features.Clear()
+            for i, feature in enumerate(features):
+                self._panel.cmb_features.Insert(feature.name.value, i, feature)
+
+            # Select the current feature
+            index = features.index(current_feature)
+            if index == -1:
+                logging.debug("Current selected feature '%s' is not part of the list of features",
+                              current_feature.name.value)
+                return
+
+            self._panel.cmb_features.SetSelection(index)
+
+    @call_in_wx_main
     def _on_features_changes(self, features):
         """
-        repopulate the feature list dropdown with the modified features
-        :param features: list(CryoFeature) list of modified features
+        repopulate the feature list dropdown with the modified .features
+        Note that .currentFeature is supposed to be updated too, so that it points
+        to one of the features, or None.
+        :param features: list[CryoFeature] new list of available features
         """
         if not features:
             # Clear current selections
             self._panel.cmb_features.Clear()
-            self._on_current_feature_changes(None)
+            # currentFeature should also have been set to None, which will disable the other widgets
             return
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
-        self._panel.cmb_features.Clear()
-        for i, feature in enumerate(features):
-            self._panel.cmb_features.Insert(feature.name.value, i, feature)
-        self._on_current_feature_changes(None)
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
+        # Make sure the current feature is selected
+        self._update_feature_cmb_list()
+
+    @call_in_wx_main
     def _on_current_feature_changes(self, feature):
         """
         Update the feature panel controls when the current feature VA is modified
@@ -104,23 +147,13 @@ class CryoFeatureController(object):
         if self._feature_z_va_connector:
             self._feature_z_va_connector.disconnect()
 
-        def enable_feature_ctrls(enable):
-            self._panel.cmb_feature_status.Enable(enable)
-            self._panel.ctrl_feature_z.Enable(enable)
-            self._panel.btn_use_current_z.Enable(enable)
-            self._panel.btn_go_to_feature.Enable(enable)
+        self._update_feature_cmb_list()
 
-        if not feature:
-            enable_feature_ctrls(False)
-            self._panel.cmb_features.SetValue("No Feature Selected")
-            self._panel.cmb_feature_status.SetValue("Not Selected")
+        if feature is None:
+            self._enable_feature_ctrls(False)
             return
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
 
-        enable_feature_ctrls(True)
-        # Set feature list with the current feature
-        index = self._tab_data_model.main.features.value.index(feature)
-        self._panel.cmb_features.SetSelection(index)
+        self._enable_feature_ctrls(True)
 
         # Disconnect and reconnect the VA connectors to the newly selected feature
         self._feature_name_va_connector = VigilantAttributeConnector(feature.name,
@@ -146,14 +179,18 @@ class CryoFeatureController(object):
     def _on_feature_pos(self, feature_pos):
         # Set the feature Z ctrl with the 3rd (focus) element of the feature position
         self._panel.ctrl_feature_z.SetValue(feature_pos[2])
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
     def _on_feature_name(self, _):
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
+        # Force an update of the list of features
+        self._on_features_changes(self._tab_data_model.main.features.value)
 
-    def _on_cmb_feature_name_change(self, ):
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
+
+    def _on_cmb_feature_name_change(self):
         feature = self._tab_data_model.main.currentFeature.value
-        value= self._panel.cmb_features.GetValue()
+        value = self._panel.cmb_features.GetValue()  # Old name
+        # Update the name of the streams with the new name
         for stream in feature.streams.value:
             stream.name.value = stream.name.value.replace(feature.name.value, value)
         return value
@@ -164,7 +201,7 @@ class CryoFeatureController(object):
         :param feature_status: (string) the updated feature status
         """
         self._panel.cmb_feature_status.SetValue(feature_status)
-        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features)
+        save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
     def _on_cmb_features_change(self, evt):
         """
