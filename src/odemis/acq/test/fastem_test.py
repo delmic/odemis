@@ -548,9 +548,6 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         cls.beamshift = model.getComponent(role="ebeam-shift")
         cls.lens = model.getComponent(role="lens")
 
-        # Normally the beamshift MD_CALIB is set when running the calibrations.
-        # Set it here explicitly because we do not run the calibrations in these test cases.
-        cls.beamshift.updateMetadata({model.MD_CALIB: cls.scanner.beamShiftTransformationMatrix.value})
         cls.beamshift.shift.value = (0, 0)
         cls.stage.reference({"x", "y"}).result()
 
