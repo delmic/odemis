@@ -37,8 +37,7 @@ import serial
 import threading
 import time
 
-
-MAGNIFICATION_RANGE = (5., 500.e3)
+MAGNIFICATION_RANGE = (5., 2e6)  # Doc says max 500k, but some microscopes have 2M
 FOCUS_RANGE = (0., 121.)  # mm
 PC_RANGE = (1.0e-14, 2.0e-5)  # Amp probe current range
 VOLTAGE_RANGE = (0.0, 40.0)  # kV acceleration voltage range
@@ -673,7 +672,13 @@ class Stage(model.Actuator):
 
 class Scanner(model.Emitter):
 
-    def __init__(self, name, role, parent, hfw_nomag, **kwargs):
+    def __init__(self, name, role, parent, hfw_nomag, mag_rng=MAGNIFICATION_RANGE, **kwargs):
+        """
+        hfw_nomag (float): conversion factor between magnification and HFW on the
+          SEM. hfw_nomag = HFW * mag
+        mag_rng (float, float): min/max value that the magnification may take on
+          the SEM. Default is 5 -> 2e6.
+        """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
         self.parent = parent
 
@@ -683,9 +688,9 @@ class Scanner(model.Emitter):
 
         self.magnification = model.FloatContinuous(self.parent.GetMagnification(),
                                                    unit="", readonly=True,
-                                                   range=MAGNIFICATION_RANGE)
-        fov_range = (self._hfw_nomag / MAGNIFICATION_RANGE[1],
-                     self._hfw_nomag / MAGNIFICATION_RANGE[0])
+                                                   range=mag_rng)
+        fov_range = (self._hfw_nomag / mag_rng[1],
+                     self._hfw_nomag / mag_rng[0])
         self.horizontalFoV = model.FloatContinuous(self._hfw_nomag / self.magnification.value,
                                                    range=fov_range, unit="m",
                                                    setter=self._setHorizontalFoV)
@@ -738,7 +743,7 @@ class Scanner(model.Emitter):
             mag = self.parent.GetMagnification()
             if mag != self.magnification.value:
                 # Update both horizontalFoV, and magnification
-                if MAGNIFICATION_RANGE[0] <= mag <= MAGNIFICATION_RANGE[1]:
+                if self.magnification.range[0] <= mag <= self.magnification.range[1]:
                     self.magnification._set_value(mag, force_write=True)
                     fov = self._hfw_nomag / mag
                     self.horizontalFoV._value = fov
