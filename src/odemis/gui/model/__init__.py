@@ -661,6 +661,7 @@ class CryoGUIData(MicroscopyGUIData):
             pos_z = self.main.focus.position.value['z']
         feature = CryoFeature(f_name, pos_x, pos_y, pos_z, milling_angle)
         self.main.features.value.append(feature)
+        self.main.currentFeature.value = feature
         return feature
 
     # Todo: find the right margin
