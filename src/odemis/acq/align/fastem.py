@@ -40,17 +40,17 @@ try:
         image_translation,
         dark_offset_correction,
         digital_gain_correction,
-        # scan_rotation,  # FIXME circular import?
-        # scan_amplitude,
-        # cell_translation,
+        scan_rotation,
+        scan_amplitude,
+        cell_translation,
     )
     from fastem_calibrations.configure_hw import (
         get_config_asm,
         configure_asm
     )
     fastem_calibrations = True
-except ImportError:
-    logging.info("fastem_calibrations package not found")
+except ImportError as err:
+    logging.info("fastem_calibrations package not found with error: {}".format(err))
     autofocus_multiprobe = None
     scan_rotation_pre_align = None
     scan_amplitude_pre_align = None
@@ -61,9 +61,9 @@ except ImportError:
     image_translation = None
     dark_offset_correction = None
     digital_gain_correction = None
-    # scan_rotation = None
-    # scan_amplitude = None
-    # cell_translation = None
+    scan_rotation = None
+    scan_amplitude = None
+    cell_translation = None
 
     fastem_calibrations = False
 
@@ -85,9 +85,9 @@ class Calibrations(Enum):
     IMAGE_TRANSLATION_FINAL = image_translation
     DARK_OFFSET = dark_offset_correction
     DIGITAL_GAIN = digital_gain_correction
-    # SCAN_ROTATION_FINAL = scan_rotation
-    # SCAN_AMPLITUDE_FINAL = scan_amplitude
-    # CELL_TRANSLATION = cell_translation
+    SCAN_ROTATION_FINAL = scan_rotation
+    SCAN_AMPLITUDE_FINAL = scan_amplitude
+    CELL_TRANSLATION = cell_translation
 
 
 def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations, stage_pos=None):

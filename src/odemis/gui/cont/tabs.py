@@ -1866,6 +1866,21 @@ class FastEMAcquisitionTab(Tab):
             panel,
         )
 
+        # FIXME where to put this code?
+        # set tooltips on the header of the respective panels
+        panel.calib_1_pnl_fastem.GetParent().GetParent() \
+            .SetToolTip("Optical path and pattern calibrations: Calibrating and focusing the optical path and the "
+                        "multiprobe pattern. Calibrating the scanning orientation and distance.")
+        panel.calib_2_pnl_regions.GetParent().GetParent() \
+            .SetToolTip("Dark offset and digital gain calibration: Correcting between cell images for differences "
+                        "in background noise and homogenizing accross applification differences.")
+        panel.calib_3_pnl_regions.GetParent().GetParent() \
+            .SetToolTip("Cell image calibration: Fine-tuning the cell image size and the cell image orientation "
+                        "in respect to the scanning direction. Stitching of cell images into a single field image.")
+        # set tooltips on the buttons
+        panel.calib_2_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on scintillator.")
+        panel.calib_3_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on scintillator.")
+
     def Show(self, show=True):
         super(FastEMAcquisitionTab, self).Show(show)
 

@@ -1258,7 +1258,7 @@ class FastEMMainGUIData(MainGUIData):
         self.emState = model.IntEnumerated(STATE_OFF, choices=hw_states)
 
         # Alignment status, reset to "not aligned" every time the emState or chamberState is changed
-        self.is_aligned = model.BooleanVA(False)
+        self.is_aligned = model.BooleanVA(False)  # FIXME
         self.emState.subscribe(self._reset_is_aligned)
         self.chamberState.subscribe(self._reset_is_aligned)
 
@@ -1288,6 +1288,10 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
 
         self.projects = model.ListVA([])  # list of FastEMProject
 
+        self.is_calib_1 = model.BooleanVA(False)
+        self.is_calib_2 = model.BooleanVA(False)
+        self.is_calib_3 = model.BooleanVA(False)
+
 
 class FastEMOverviewGUIData(MicroscopyGUIData):
     """
@@ -1299,6 +1303,8 @@ class FastEMOverviewGUIData(MicroscopyGUIData):
         super(FastEMOverviewGUIData, self).__init__(main)
 
         self.selected_scintillators = model.ListVA([])  # set of ints, overview images to be acquired
+
+        self.is_calib = model.BooleanVA(False)
 
 
 class FastEMProject(object):

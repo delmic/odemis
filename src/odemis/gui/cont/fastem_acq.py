@@ -93,11 +93,16 @@ class FastEMOverviewAcquiController(object):
         self._tab_panel.Parent.Layout()
         self.btn_acquire.Enable(False)
 
+        self._tab_data_model.is_calib.subscribe(self._on_va_change, init=True)
         # Warning that no scintillators are selected
-        self.update_acquisition_time()
+        # self.update_acquisition_time()
 
         # If scanner dwell time is changed, update the estimated acquisition time.
         tab_data.main.ebeam.dwellTime.subscribe(self.update_acquisition_time)
+
+    def _on_va_change(self, _):
+        self.check_acquire_button()
+        self.update_acquisition_time()  # to update the message
 
     def _on_selection_button(self, evt):
         # add/remove scintillator number to/from selected_scintillators set and toggle button colour
@@ -128,11 +133,16 @@ class FastEMOverviewAcquiController(object):
 
     @call_in_wx_main
     def check_acquire_button(self):
-        self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
+        self.btn_acquire.Enable(True if self._tab_data_model.is_calib.value
+                                and self._tab_data_model.selected_scintillators.value
+                                else False)
 
     def update_acquisition_time(self, _=None):
         lvl = None  # icon status shown
-        if not self._main_data_model.active_scintillators.value:
+        if not self._tab_data_model.is_calib.value:
+            lvl = logging.WARN
+            txt = "System is not calibrated."
+        elif not self._main_data_model.active_scintillators.value:
             lvl = logging.WARN
             txt = "No scintillator loaded (go to Chamber tab)."
         elif not self._tab_data_model.selected_scintillators.value:
@@ -318,13 +328,19 @@ class FastEMAcquiController(object):
         self.btn_acquire.Enable(False)
 
         # Update text controls when projects/roas/rocs are changed
-        self.roa_subscribers = []  # list of ROA subscribers (to make sure we don't subscribe to the same ROA twice)
+        self.roa_subscribers_2 = []  # list of ROA subscribers (to make sure we don't subscribe to the same ROA twice)
+        self.roa_subscribers_3 = []  # list of ROA subscribers (to make sure we don't subscribe to the same ROA twice)
         tab_data.projects.subscribe(self._on_projects, init=True)
-        self.calibration_regions = getattr(tab_data, "regions_" + "calib_2")  # FIXME calib_prefix
-        for roc in self.calibration_regions.value.values():
+        self.calibration_regions_2 = getattr(tab_data, "regions_" + "calib_2")  # FIXME calib_prefix
+        self.calibration_regions_3 = getattr(tab_data, "regions_" + "calib_3")  # FIXME calib_prefix
+        for roc in self.calibration_regions_2.value.values():
+            roc.coordinates.subscribe(self._on_va_change)
+        for roc in self.calibration_regions_3.value.values():
             roc.coordinates.subscribe(self._on_va_change)
 
-        self._main_data_model.is_aligned.subscribe(self._on_va_change, init=True)
+        self._tab_data_model.is_calib_1.subscribe(self._on_va_change, init=True)
+        self._tab_data_model.is_calib_2.subscribe(self._on_va_change, init=True)
+        self._tab_data_model.is_calib_3.subscribe(self._on_va_change, init=True)
         self._main_data_model.is_acquiring.subscribe(self._on_va_change)
 
     def _on_projects(self, projects):
@@ -334,9 +350,12 @@ class FastEMAcquiController(object):
     def _on_roas(self, roas):
         # For each roa, subscribe to calibration attribute. Make sure to update acquire button / text if ROC is changed.
         for roa in roas:
-            if roa not in self.roa_subscribers:
-                roa.roc.subscribe(self._on_va_change)
-                self.roa_subscribers.append(roa)
+            if roa not in self.roa_subscribers_2:
+                roa.roc_2.subscribe(self._on_va_change)
+                self.roa_subscribers_2.append(roa)
+            if roa not in self.roa_subscribers_3:
+                roa.roc_3.subscribe(self._on_va_change)
+                self.roa_subscribers_3.append(roa)
         self._update_roa_count()
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
@@ -345,9 +364,14 @@ class FastEMAcquiController(object):
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
+    @call_in_wx_main
     def check_acquire_button(self):
-        self.btn_acquire.Enable(self._main_data_model.is_aligned.value and self.roa_count
-                                and not self._get_undefined_calibrations() and
+        self.btn_acquire.Enable(self._tab_data_model.is_calib_1.value
+                                and self._tab_data_model.is_calib_2.value
+                                and self._tab_data_model.is_calib_3.value
+                                and self.roa_count
+                                and not self._get_undefined_calibrations_2()
+                                and not self._get_undefined_calibrations_3() and
                                 not self._main_data_model.is_acquiring.value)  # is_acquiring is True during alignment
 
     @wxlimit_invocation(1)  # max 1/s
@@ -357,15 +381,20 @@ class FastEMAcquiController(object):
         self._tab_panel.txt_destination.SetValue(self.path)
 
         lvl = None  # icon status shown
-        if not self._main_data_model.is_aligned.value:
+        if not self._tab_data_model.is_calib_1.value \
+                or not self._tab_data_model.is_calib_2.value \
+                or not self._tab_data_model.is_calib_3.value:
             lvl = logging.WARN
-            txt = "System is not aligned."
+            txt = "System is not calibrated."
         elif self.roa_count == 0:
             lvl = logging.WARN
             txt = "No region of acquisition selected."
-        elif self._get_undefined_calibrations():
+        elif self._get_undefined_calibrations_2():
             lvl = logging.WARN
-            txt = "Calibration regions %s missing." % (", ".join(str(c) for c in self._get_undefined_calibrations()),)
+            txt = "Calibration regions %s missing." % (", ".join(str(c) for c in self._get_undefined_calibrations_2()),)
+        elif self._get_undefined_calibrations_3():
+            lvl = logging.WARN
+            txt = "Calibration regions %s missing." % (", ".join(str(c) for c in self._get_undefined_calibrations_3()),)
         else:
             # Don't update estimated time if acquisition is running (as we are
             # sharing the label with the estimated time-to-completion).
@@ -384,14 +413,26 @@ class FastEMAcquiController(object):
         self.lbl_acqestimate.SetLabel(txt)
         self._show_status_icons(lvl)
 
-    def _get_undefined_calibrations(self):
+    def _get_undefined_calibrations_2(self):
         """
         returns (list of str): names of ROCs which are undefined
         """
         undefined = set()
         for p in self._tab_data_model.projects.value:
             for roa in p.roas.value:
-                roc = roa.roc.value
+                roc = roa.roc_2.value
+                if roc.coordinates.value == stream.UNDEFINED_ROI:
+                    undefined.add(roc.name.value)
+        return sorted(undefined)
+
+    def _get_undefined_calibrations_3(self):
+        """
+        returns (list of str): names of ROCs which are undefined
+        """
+        undefined = set()
+        for p in self._tab_data_model.projects.value:
+            for roa in p.roas.value:
+                roc = roa.roc_3.value
                 if roc.coordinates.value == stream.UNDEFINED_ROI:
                     undefined.add(roc.name.value)
         return sorted(undefined)
@@ -512,7 +553,11 @@ class FastEMCalibrationController:
         self.gauge = getattr(tab_panel, calib_prefix + "_gauge")
         self.label = getattr(tab_panel, calib_prefix + "_label")
 
-        self.is_aligned = tab_data.main.is_aligned
+        # FIXME model is self.is_calibrated but here use prefix and cannot initalize all three
+        #  also used by overview tab for calib....?
+        # self.is_aligned = tab_data.main.is_aligned
+        # create attribute to keep track of calibration status
+        setattr(self, "is_" + calib_prefix, getattr(tab_data, "is_" + calib_prefix))
         tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button
 
         self.button.Bind(wx.EVT_BUTTON, self.on_calibrate)
@@ -552,6 +597,7 @@ class FastEMCalibrationController:
         # connect the future to the progress bar and its label
         self._future_connector = ProgressiveFutureConnector(f, self.gauge, self.label, full=False)
 
+    @call_in_wx_main
     def _on_calibration_done(self, future, _=None):
         """
         Called when the calibration is finished (either successfully, cancelled or failed).
@@ -563,16 +609,17 @@ class FastEMCalibrationController:
 
         try:
             future.result()  # wait until the calibration is done
-            self.is_aligned.value = True  # allow acquiring ROAs
+            getattr(self, "is_" + self._calib_prefix).value = True  # allow acquiring ROAs
             self._update_calibration_controls("Calibration successful")
         except CancelledError:
-            self.is_aligned.value = False  # don't enable ROA acquisition
+            getattr(self, "is_" + self._calib_prefix).value = False  # don't enable ROA acquisition
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
         except Exception as ex:
-            self.is_aligned.value = False  # don't enable ROA acquisition
+            getattr(self, "is_" + self._calib_prefix).value = False  # don't enable ROA acquisition
             logging.exception("Calibration failed with %s.", ex)
             self._update_calibration_controls("Calibration failed")
 
+    @call_in_wx_main
     def _on_calibration_state(self, _=None):
         """
         Updates the calibration state by updating the calibration controls in the panel.
@@ -590,6 +637,8 @@ class FastEMCalibrationController:
 
         # TODO disable overlay, so it cannot be moved while calibrating!
 
+        # TODO replace with is_calibrating to be able to differentiate between acq and calib
+        #  this allows to still move ROAs while calibrating or move ROC while calibrating the other ROC
         if self._tab_data.main.is_acquiring.value:
             self.button.SetLabel("Cancel")  # indicate canceling is possible
             self.gauge.Show()  # show progress bar
@@ -704,7 +753,7 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
             self._main_data_model.is_acquiring.value = False
             self._update_calibration_controls("Calibrations failed.")
 
-    @call_in_wx_main  # as gui is changed
+    @call_in_wx_main
     def _on_calibration_done(self, future, roc_num):
         """
         Called when the calibrations for one region of calibration (ROC) are finished
@@ -718,7 +767,7 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
             config = future.result()  # wait until the calibration is done
             self.save_calibrated_settings(roc_num, config)  # save calibrated
         except CancelledError:
-            self.is_aligned.value = False  # don't enable ROA acquisition
+            getattr(self, "is_" + self._calib_prefix).value = False  # don't enable ROA acquisition
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
             # return
         except Exception as ex:
@@ -736,18 +785,19 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
 
         try:
             batch_future.result()  # wait until the calibration is done
-            self.is_aligned.value = True  # allow acquiring ROAs
+            getattr(self, "is_" + self._calib_prefix).value = True  # allow acquiring ROAs
             self._update_calibration_controls("Calibration successful")
         except CancelledError:
-            self.is_aligned.value = False  # don't enable ROA acquisition
+            getattr(self, "is_" + self._calib_prefix).value = False  # don't enable ROA acquisition
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
             # return
         except Exception as ex:
-            self.is_aligned.value = False  # don't enable ROA acquisition
+            getattr(self, "is_" + self._calib_prefix).value = False  # don't enable ROA acquisition
             logging.exception("Calibration failed with %s.", ex)
             self._update_calibration_controls("Calibration failed")
             # return
 
+    @call_in_wx_main
     def _on_calibration_state(self, _=None):
         """
         Updates the calibration state based on the active (loaded) scintillators and whether

@@ -134,7 +134,8 @@ class FastEMProjectController(object):
         self._tab_data = tab_data
         self._project_bar = project_list
         self._view_ctrl = view_ctrl
-        self.calibration_regions = getattr(tab_data, "regions_" + "calib_2")  # FIXME calib_prefix
+        self.calibration_regions_2 = getattr(tab_data, "regions_" + "calib_2")  # FIXME calib_prefix
+        self.calibration_regions_3 = getattr(tab_data, "regions_" + "calib_3")  # FIXME calib_prefix
 
         self.roa_ctrls = {}  # dict int --> FastEMROAController
         self.colour = colour
@@ -165,7 +166,7 @@ class FastEMProjectController(object):
         evt.Skip()
 
     def _on_btn_roa(self, _):
-        # Two-step process: Instantiate FastEM object here, but wait until first ROI is selected until
+        # Two-step process: Instantiate FastEM object here, but wait until first ROA is selected until
         # further processing. The process can still be aborted by clicking in the viewport without dragging.
         # In the callback to the ROI, the ROI creation will be completed or aborted.
         self._project_bar.enable_buttons(False)
@@ -179,7 +180,7 @@ class FastEMProjectController(object):
         name = "ROA-%s" % num
         name = make_unique_name(name, [roa.name.value for roa in self.model.roas.value])
         # better guess for parameters after region is selected in _add_roa_ctrl
-        roa_ctrl = FastEMROAController(name, None, self.colour, self._tab_data, self.panel, self._view_ctrl)
+        roa_ctrl = FastEMROAController(name, None, None, self.colour, self._tab_data, self.panel, self._view_ctrl)
         self.roa_ctrls[num] = roa_ctrl
         self._current_roa_ctrl = roa_ctrl
 
@@ -193,7 +194,7 @@ class FastEMProjectController(object):
         self._current_roa_ctrl = None
         roa_ctrl.model.coordinates.unsubscribe(self._add_roa_ctrl)
 
-        # Abort ROI creation if nothing was selected
+        # Abort ROA creation if nothing was selected
         if coords == acqstream.UNDEFINED_ROI:
             logging.debug("Aborting ROA creation.")
             self._view_ctrl.viewports[0].canvas.remove_overlay(roa_ctrl.overlay)
@@ -204,12 +205,13 @@ class FastEMProjectController(object):
 
             # Improve parameters guess
             num = self._find_closest_scintillator(coords)
-            roa_ctrl.model.roc.value = self.calibration_regions.value[num]
+            roa_ctrl.model.roc_2.value = self.calibration_regions_2.value[num]
+            roa_ctrl.model.roc_3.value = self.calibration_regions_3.value[num]
 
             # Add the ROA model to project model
             self.model.roas.value.append(roa_ctrl.model)
 
-            # Callback to ROI remove button
+            # Callback to ROA remove button
             roa_ctrl.panel.btn_remove.Bind(wx.EVT_BUTTON, lambda evt: self._on_btn_remove(evt, roa_ctrl))
 
         # Enable buttons of project bar
@@ -259,10 +261,11 @@ class FastEMROAController(object):
     Controller for a single region of acquisition (ROA).
     """
 
-    def __init__(self, name, roc, colour, tab_data, project_panel, view_ctrl):
+    def __init__(self, name, roc_2, roc_3, colour, tab_data, project_panel, view_ctrl):
         """
         :param name: (str) The default name for the ROA.
-        :param roc: (FastEMROC): The region of calibration corresponding to the ROA.
+        :param roc_2: (FastEMROC): The region of calibration corresponding to the ROA.
+        :param roc_3: (FastEMROC): The region of calibration corresponding to the ROA.
         :param colour: (str) Hexadecimal colour code for the bounding box of the roas in the viewport.
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param project_panel: (FastEMProjectPanel) The corresponding project panel.
@@ -275,12 +278,13 @@ class FastEMROAController(object):
         # Read the overlap from the acquisition configuration
         acqui_conf = conf.get_acqui_conf()
 
-        self.model = odemis.acq.fastem.FastEMROA(name, acqstream.UNDEFINED_ROI, roc,
+        self.model = odemis.acq.fastem.FastEMROA(name, acqstream.UNDEFINED_ROI, roc_2, roc_3,
                                                  self._tab_data.main.asm, self._tab_data.main.multibeam,
                                                  self._tab_data.main.descanner, self._tab_data.main.mppc,
                                                  acqui_conf.overlap, pre_calibrate=True)
         self.model.coordinates.subscribe(self._on_coordinates)
-        self.model.roc.subscribe(self._on_roc)
+        self.model.roc_2.subscribe(self._on_roc)
+        self.model.roc_3.subscribe(self._on_roc)
 
         # The panel is not created on initialization to allow for cancellation of the ROA creation
         # (cf discussion in FastEMProjectController), create panel with .create_panel().
@@ -301,6 +305,7 @@ class FastEMROAController(object):
         self._project_panel.add_roa_panel(self.panel)
 
         self.panel.calibration_ctrl.Bind(wx.EVT_COMBOBOX, self._on_combobox)
+        # TODO add roc 3
         self.panel.txt_ctrl.Bind(wx.EVT_KILL_FOCUS, self._on_text)
         self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)
 
@@ -325,8 +330,9 @@ class FastEMROAController(object):
 
     def _on_combobox(self, _):
         num = self.panel.calibration_ctrl.GetSelection() + 1
-        self.model.roc.value = self.calibration_regions.value[num]
-        logging.debug("ROA calibration changed to %s.", self.model.roc.value.name.value)
+        self.model.roc_2.value = self._tab_data.regions_calib_2.value[num]  # FIXME not generic enough?
+        # TODO add for roc_3
+        logging.debug("ROA calibration changed to %s.", self.model.roc_2.value.name.value)
 
     def _on_text(self, evt):
         txt = self.panel.txt_ctrl.GetValue()
@@ -367,7 +373,6 @@ class FastEMROCController(object):
         # Get ROC model (exists already in tab data) and change coordinates
         calibration_regions = getattr(tab_data, "regions_" + calib_prefix)
         self.calib_model = calibration_regions.value[number]
-        # self.calib_model = tab_data.calibration_regions.value[number]
         self.calib_model.coordinates.subscribe(self._on_coordinates)
 
         self.overlay = None
