@@ -1790,8 +1790,7 @@ class FastEMAcquisitionTab(Tab):
             calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.SCAN_ROTATION_PREALIGN,
                             Calibrations.SCAN_AMPLITUDE_PREALIGN, Calibrations.DESCAN_GAIN_STATIC,
                             Calibrations.IMAGE_ROTATION_PREALIGN, Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                            Calibrations.IMAGE_ROTATION_FINAL,
-                            ]
+                            Calibrations.IMAGE_ROTATION_FINAL,]
             # IMAGE_TRANSLATION_FINAL FIXME: add when we can update the good mp position and fix for max amplitude
 
         # Controller for calibration panel 1
@@ -1817,10 +1816,21 @@ class FastEMAcquisitionTab(Tab):
             tab_data,
             panel,
             calib_prefix="calib_2",
-            calibrations=[Calibrations.IMAGE_TRANSLATION_PREALIGN]
-            # calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
-            #                 Calibrations.DARK_OFFSET, Calibrations.DIGITAL_GAIN]
+            # calibrations=[Calibrations.IMAGE_TRANSLATION_PREALIGN]
+            calibrations=[Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                          Calibrations.DARK_OFFSET, Calibrations.DIGITAL_GAIN]
         )
+
+        # Check if we deal with a real or simulated microscope. If it is a simulator,
+        # we cannot run all calibrations yet.
+        # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
+        # need to know that it's simulated otherwise we can never simulate an acquisition.
+        if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
+        else:  # it is a real microscope
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                            Calibrations.SCAN_ROTATION_FINAL, Calibrations.SCAN_AMPLITUDE_FINAL,
+                            Calibrations.CELL_TRANSLATION]
 
         # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController inherit from?
         # Controller for regions of calibration 3
@@ -1836,12 +1846,8 @@ class FastEMAcquisitionTab(Tab):
             tab_data,
             panel,
             calib_prefix="calib_3",
-            calibrations=[Calibrations.IMAGE_TRANSLATION_PREALIGN]
-            # TODO put back when pr finished; implement simulator only version
-            # TODO make calibration regions different color
-            # calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
-            #                 Calibrations.SCAN_ROTATION_FINAL, Calibrations.SCAN_AMPLITUDE_FINAL,
-            #                 Calibrations.CELL_TRANSLATION]
+            # calibrations=[Calibrations.IMAGE_TRANSLATION_PREALIGN]
+            calibrations=calibrations
         )
 
         # Controller for acquisition settings panel

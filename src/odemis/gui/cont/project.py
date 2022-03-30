@@ -426,6 +426,7 @@ class FastEMCalibrationRegionsController(object):
         :param calibration_panel (FastEMCalibrationPanelHeader): The main calibration panel including the 9 regions
                 of calibration (ROC) buttons, the calibrate button, the gauge and the label.
         :param view_ctrl (FastEMAcquisitionViewport): The viewport controller. TODO replace with just view
+        :param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
         """
         self._tab_data = tab_data
         self._data_model = tab_data.main
@@ -450,8 +451,10 @@ class FastEMCalibrationRegionsController(object):
         # Only enable buttons for scintillators which have been selected in the chamber tab
         tab_data.main.active_scintillators.subscribe(self._on_active_scintillators)
 
-        tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button
+        tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable calib button during acquisition
+        tab_data.is_calibrating.subscribe(self._on_is_acquiring)  # enable/disable calib button during calibration
 
+    # @call_in_wx_main FIXME crashes GUI!
     def _on_button(self, evt):
         """
         Called when one of the 9 single region of calibration (ROC) buttons is triggered.
@@ -536,6 +539,6 @@ class FastEMCalibrationRegionsController(object):
         """
         Enable or disable the calibration panel depending on whether
         a calibration or acquisition is already ongoing or not.
-        :param mode: (bool) Whether the system is currently acquiring or not acquiring.
+        :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
         self._calibration_panel.Enable(not mode)

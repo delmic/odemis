@@ -94,8 +94,6 @@ class FastEMOverviewAcquiController(object):
         self.btn_acquire.Enable(False)
 
         self._tab_data_model.is_calib.subscribe(self._on_va_change, init=True)
-        # Warning that no scintillators are selected
-        # self.update_acquisition_time()
 
         # If scanner dwell time is changed, update the estimated acquisition time.
         tab_data.main.ebeam.dwellTime.subscribe(self.update_acquisition_time)
@@ -104,9 +102,10 @@ class FastEMOverviewAcquiController(object):
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
+    # @call_in_wx_main FIXME makes GUI crash!!
     def _on_selection_button(self, evt):
         # add/remove scintillator number to/from selected_scintillators set and toggle button colour
-        btn = evt.GetEventObject()
+        btn = evt.GetEventObject()  # FIXME GUI crashes here
         num = [num for num, b in self.selection_panel.buttons.items() if b == btn][0]
         if btn.GetValue():
             if num not in self._tab_data_model.selected_scintillators.value:
@@ -191,6 +190,7 @@ class FastEMOverviewAcquiController(object):
         self.bmp_acq_status_warn.Show(level == logging.WARN)
         self._tab_panel.Layout()
 
+    @call_in_wx_main
     def on_acquisition(self, evt):
         """
         Start the acquisition (really)
@@ -372,7 +372,7 @@ class FastEMAcquiController(object):
                                 and self.roa_count
                                 and not self._get_undefined_calibrations_2()
                                 and not self._get_undefined_calibrations_3() and
-                                not self._main_data_model.is_acquiring.value)  # is_acquiring is True during alignment
+                                not self._main_data_model.is_acquiring.value)
 
     @wxlimit_invocation(1)  # max 1/s
     def update_acquisition_time(self):
@@ -437,17 +437,20 @@ class FastEMAcquiController(object):
                     undefined.add(roc.name.value)
         return sorted(undefined)
 
+    @call_in_wx_main
     def _update_roa_count(self):
         roas = [roa for p in self._tab_data_model.projects.value for roa in p.roas.value]
         self.txt_num_rois.SetValue("%s" % len(roas))
         self.roa_count = len(roas)
 
+    @call_in_wx_main
     def _show_status_icons(self, lvl):
         # update status icon to show the logging level
         self.bmp_acq_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
         self.bmp_acq_status_warn.Show(lvl == logging.WARN)
         self._tab_panel.Layout()
 
+    @call_in_wx_main
     def _reset_acquisition_gui(self, text=None, level=None):
         """
         Set back every GUI elements to be ready for the next acquisition
@@ -466,6 +469,7 @@ class FastEMAcquiController(object):
         else:
             self.update_acquisition_time()
 
+    @call_in_wx_main
     def on_acquisition(self, evt):
         """
         Start the acquisition (really)
@@ -553,12 +557,11 @@ class FastEMCalibrationController:
         self.gauge = getattr(tab_panel, calib_prefix + "_gauge")
         self.label = getattr(tab_panel, calib_prefix + "_label")
 
-        # FIXME model is self.is_calibrated but here use prefix and cannot initalize all three
-        #  also used by overview tab for calib....?
         # self.is_aligned = tab_data.main.is_aligned
-        # create attribute to keep track of calibration status
+        # get attribute that keeps track of calibration status
         setattr(self, "is_" + calib_prefix, getattr(tab_data, "is_" + calib_prefix))
-        tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button
+        tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button if acquiring
+        tab_data.is_calibrating.subscribe(self._on_is_acquiring)  # enable/disable button if calibrating
 
         self.button.Bind(wx.EVT_BUTTON, self.on_calibrate)
 
@@ -572,17 +575,17 @@ class FastEMCalibrationController:
         :param evt: (GenButtonEvent) Button triggered.
         """
         # check if cancelled
-        if self._tab_data.main.is_acquiring.value:
+        if self._tab_data.is_calibrating.value:
             logging.debug("Calibration was cancelled.")
             align_fastem._executor.cancel()  # all the rest will be handled by on_alignment_done()
             return
 
         # calibrate
-        self._tab_data.main.is_acquiring.unsubscribe(self._on_is_acquiring)
-        # Don't catch this event (is_acquiring = True) - this would disable the button,
+        self._tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        # Don't catch this event (is_calibrating = True) - this would disable the button,
         # but it should be still enabled in order to be able to cancel the calibration
-        self._tab_data.main.is_acquiring.value = True  # make sure the acquire/tab buttons are disabled
-        self._tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)
+        self._tab_data.is_calibrating.value = True  # make sure the acquire/tab buttons are disabled
+        self._tab_data.is_calibrating.subscribe(self._on_is_acquiring)
 
         self._on_calibration_state()  # update the controls in the panel
 
@@ -604,7 +607,7 @@ class FastEMCalibrationController:
         :param future: (ProgressiveFuture) Calibration future object, which can be cancelled.
         """
 
-        self._tab_data.main.is_acquiring.value = False
+        self._tab_data.is_calibrating.value = False
         self._future_connector = None  # reset connection to the progress bar
 
         try:
@@ -639,7 +642,7 @@ class FastEMCalibrationController:
 
         # TODO replace with is_calibrating to be able to differentiate between acq and calib
         #  this allows to still move ROAs while calibrating or move ROC while calibrating the other ROC
-        if self._tab_data.main.is_acquiring.value:
+        if self._tab_data.is_calibrating.value:
             self.button.SetLabel("Cancel")  # indicate canceling is possible
             self.gauge.Show()  # show progress bar
         else:
@@ -666,7 +669,7 @@ class FastEMCalibrationController:
         """
         Enable or disable the button to start a calibration depending on whether
         a calibration or acquisition is already ongoing or not.
-        :param mode: (bool) Whether the system is currently acquiring or not acquiring.
+        :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
         self.button.Enable(not mode)
 
@@ -702,18 +705,18 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         :param evt: (GenButtonEvent) Button triggered.
         """
         # check if cancelled
-        if self._tab_data.main.is_acquiring.value:
+        if self._tab_data.is_calibrating.value:
             logging.debug("Calibration was cancelled.")
             align_fastem._executor.cancel()  # all the rest will be handled by on_alignment_done()
             # FIXME cancelling does not yet display the correct label in the gui
             return
 
         # calibrate
-        self._tab_data.main.is_acquiring.unsubscribe(self._on_is_acquiring)
+        self._tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
         # Briefly unsubscribe as don't need to know about this event (is_acquiring = True):
         # It  would disable the calibration button, but want to be able to still cancel calibration.
-        self._tab_data.main.is_acquiring.value = True  # make sure the acquire/tab buttons are disabled
-        self._tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)
+        self._tab_data.is_calibrating.value = True  # make sure the acquire/tab buttons are disabled
+        self._tab_data.is_calibrating.subscribe(self._on_is_acquiring)
 
         self._on_calibration_state()  # update the controls in the panel
 
@@ -780,7 +783,7 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         :param batch_future: (ProgressiveFuture) Calibration future object, which can be cancelled.
         """
 
-        self._tab_data.main.is_acquiring.value = False
+        self._tab_data.is_calibrating.value = False
         self._future_connector = None  # reset connection to the progress bar
 
         try:

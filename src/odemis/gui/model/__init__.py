@@ -2,7 +2,7 @@
 """
 :created: 16 Feb 2012
 :author: Éric Piel
-:copyright: © 2012-2020 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
+:copyright: © 2012 - 2022 Éric Piel, Rinze de Laat, Philip Winkler, Delmic
 
 This file is part of Odemis.
 
@@ -1291,6 +1291,8 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
         self.is_calib_1 = model.BooleanVA(False)
         self.is_calib_2 = model.BooleanVA(False)
         self.is_calib_3 = model.BooleanVA(False)
+        # indicates whether the microscope is calibrating
+        self.is_calibrating = model.BooleanVA(False)
 
 
 class FastEMOverviewGUIData(MicroscopyGUIData):
@@ -1305,6 +1307,8 @@ class FastEMOverviewGUIData(MicroscopyGUIData):
         self.selected_scintillators = model.ListVA([])  # set of ints, overview images to be acquired
 
         self.is_calib = model.BooleanVA(False)
+        # indicates whether the microscope is calibrating
+        self.is_calibrating = model.BooleanVA(False)
 
 
 class FastEMProject(object):
