@@ -543,7 +543,7 @@ class BufferedCanvas(wx.Panel):
                 # TODO: can we change this around? So that we immediately draw when no timer is
                 # running and then start the timer? Now there's always a delay before anything
                 # gets drawn, even if it's not necessary.
-                self.draw_timer.Start(delay * 1000.0, oneShot=True)
+                self.draw_timer.Start(int(delay * 1000), oneShot=True)
         except RuntimeError:
             # This only should happen when running test cases
             logging.warn("Drawing requested on dead canvas")
