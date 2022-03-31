@@ -31,7 +31,6 @@ from odemis.util import test
 import os
 import time
 import unittest
-from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -54,6 +53,12 @@ class TestFlim(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        try:
+            # The nikonc driver needs omniorb which is not packaged in Ubuntu anymore
+            from odemis.driver import nikonc
+        except ImportError as err:
+            raise unittest.SkipTest(f"Skipping FLIM tests, cannot import nikonc driver."
+                                    f"Got error: {err}")
 
         try:
             test.start_backend(SECOM_FLIM_CONFIG)
@@ -481,4 +486,3 @@ class TestFlim(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

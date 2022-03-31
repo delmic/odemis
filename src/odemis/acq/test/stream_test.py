@@ -688,6 +688,13 @@ class SECOMConfocalTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
+            # The nikonc driver needs omniorb which is not packaged in Ubuntu anymore
+            from odemis.driver import nikonc
+        except ImportError as err:
+            raise unittest.SkipTest(f"Skipping SECOM confocal tests, cannot import nikonc driver."
+                                    f"Got error: {err}")
+
+        try:
             test.start_backend(SECOM_CONFOCAL_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
