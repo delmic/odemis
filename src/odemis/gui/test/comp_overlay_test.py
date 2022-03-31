@@ -938,7 +938,7 @@ class OverlayTestCase(test.GuiTestCase):
         # Ruler overlay with 4 rulers, 1 of them is selected (highlighted)
         cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
         cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
-        img = wx.ImageFromBitmap(cnvs._bmp_buffer)
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
         sel_buffer = wxImage2NDImage(img)
         assert_array_not_equal(new_buffer, sel_buffer,
                         msg="Buffers are equal, which means that the label was not drawn")
@@ -1039,7 +1039,7 @@ class OverlayTestCase(test.GuiTestCase):
         # ruler overlay with 4 labels, 1 of them is selected (highlighted)
         cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
         cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
-        img = wx.ImageFromBitmap(cnvs._bmp_buffer)
+        img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
         sel_buffer = wxImage2NDImage(img)
         assert_array_not_equal(new_buffer, sel_buffer,
                                msg="Buffers are equal, which means that the labels were not drawn")
