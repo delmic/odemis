@@ -470,6 +470,16 @@ class AcquisitionTask(object):
             logging.debug("Read initial Hw settings.")
             asm_config = configure_hw.get_config_asm(self._multibeam, self._descanner, self._detector)
 
+            # temp fix: hardcode scan amplitude
+            asm_config["multibeam"]["scanAmplitude"] = configure_hw.CALIBRATED
+            asm_config["multibeam"]["scanOffset"] = configure_hw.CALIBRATED
+            configure_hw.configure_asm(self._multibeam,
+                                       self._descanner,
+                                       self._detector,
+                                       self._detector.data,
+                                       asm_config,
+                                       upload=False)
+
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
 
             # Set the beamshift to zero before adjusting the descanner offset, this ensures that the maximum beamshift

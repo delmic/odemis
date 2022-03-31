@@ -35,7 +35,7 @@ import wx
 import odemis.acq.fastem
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
-from odemis.gui import conf
+from odemis.gui import conf, FG_COLOUR_WARNING
 from odemis.gui.comp.stream import FastEMProjectPanel, FastEMROAPanel, FastEMCalibrationPanel
 from odemis.gui.util import call_in_wx_main
 from odemis.util.filename import make_unique_name
@@ -509,7 +509,10 @@ class FastEMCalibrationRegionsController(object):
             elif num in active_scintillators and roc.coordinates.value != acqstream.UNDEFINED_ROI:
                 b.Enable(True)
                 b.SetLabel("OK")
-                b.SetForegroundColour(wx.GREEN)
+                if self._calib_prefix == "calib_2":
+                    b.SetForegroundColour(FG_COLOUR_WARNING)
+                else:
+                    b.SetForegroundColour(wx.GREEN)  # default to green
             # scintillator unselected
             else:
                 b.Enable(False)

@@ -1788,7 +1788,8 @@ class FastEMAcquisitionTab(Tab):
             calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:  # it is a real microscope
             calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.SCAN_ROTATION_PREALIGN,
-                            Calibrations.SCAN_AMPLITUDE_PREALIGN, Calibrations.DESCAN_GAIN_STATIC,
+                            # FIXME Calibrations.SCAN_AMPLITUDE_PREALIGN,
+                            Calibrations.DESCAN_GAIN_STATIC,
                             Calibrations.IMAGE_ROTATION_PREALIGN, Calibrations.IMAGE_TRANSLATION_PREALIGN,
                             Calibrations.IMAGE_ROTATION_FINAL,]
             # IMAGE_TRANSLATION_FINAL FIXME: add when we can update the good mp position and fix for max amplitude
@@ -1829,7 +1830,7 @@ class FastEMAcquisitionTab(Tab):
             calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:  # it is a real microscope
             calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                            Calibrations.SCAN_ROTATION_FINAL, Calibrations.SCAN_AMPLITUDE_FINAL,
+                            Calibrations.SCAN_ROTATION_FINAL, # FIXME Calibrations.SCAN_AMPLITUDE_FINAL,
                             Calibrations.CELL_TRANSLATION]
 
         # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController inherit from?
@@ -1878,14 +1879,14 @@ class FastEMAcquisitionTab(Tab):
             .SetToolTip("Optical path and pattern calibrations: Calibrating and focusing the optical path and the "
                         "multiprobe pattern. Calibrating the scanning orientation and distance.")
         panel.calib_2_pnl_regions.GetParent().GetParent() \
-            .SetToolTip("Dark offset and digital gain calibration: Correcting between cell images for differences "
+            .SetToolTip("Dark offset and digital gain calibration (orange square): Correcting between cell images for differences "
                         "in background noise and homogenizing accross applification differences.")
         panel.calib_3_pnl_regions.GetParent().GetParent() \
-            .SetToolTip("Cell image calibration: Fine-tuning the cell image size and the cell image orientation "
+            .SetToolTip("Cell image calibration (green square): Fine-tuning the cell image size and the cell image orientation "
                         "in respect to the scanning direction. Stitching of cell images into a single field image.")
         # set tooltips on the buttons
-        panel.calib_2_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on scintillator.")
-        panel.calib_3_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on scintillator.")
+        panel.calib_2_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on empty scintillator.")
+        panel.calib_3_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on tissue.")
 
     def Show(self, show=True):
         super(FastEMAcquisitionTab, self).Show(show)
