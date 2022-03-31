@@ -731,6 +731,11 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         """
         Test the ASM settings are unchanged after running the pre-calibrations, except the descanner scan offset.
         """
+        try:
+            import fastem_calibrations
+        except ImportError as err:
+            raise unittest.SkipTest(f"Skipping 'test_pre_calibrate', correct libraries to perform this test are not available.\n"
+                                    f"Got the error: {err}")
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
 
