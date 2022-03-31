@@ -675,19 +675,21 @@ class TestPicoscale(unittest.TestCase):
         time.sleep(0.2)
         f.cancel()
         time.sleep(0.1)  # it takes a little while until ._was_stopped is updated
-        self.assertTrue(f._was_stopped)
+        self.assertTrue(f.cancelled())
 
         f = self.dev.reference()
         time.sleep(1)
         f.cancel()
         time.sleep(0.1)
-        self.assertTrue(f._was_stopped)
+        self.assertTrue(f.cancelled())
 
+        logging.debug("Referencing")
         f = self.dev.reference()
         time.sleep(5)
+        logging.debug("Will request cancellation")
         f.cancel()
         time.sleep(0.1)
-        self.assertTrue(f._was_stopped)
+        self.assertTrue(f.cancelled())
 
         # Test queued futures
         f1 = self.dev.reference()
@@ -702,7 +704,7 @@ class TestPicoscale(unittest.TestCase):
         time.sleep(1)
         f.cancel()
         time.sleep(0.1)
-        self.assertTrue(f._was_stopped)
+        self.assertTrue(f.cancelled())
         for a, i in self.dev.referenced.value.items():
             self.assertFalse(i)
 
