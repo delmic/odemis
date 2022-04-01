@@ -213,11 +213,12 @@ FASTEM-sim: {
 "Beam Shift Controller": {
     class: tfsbc.BeamShiftController,
     role: ebeam-shift,
+    dependencies: {"scanner": "MultiBeam Scanner XT"},
     init: {
         port: "/dev/fake",
         serialnum: FT43FD2D,
     },
-    affects: ["EBeam Scanner", "MultiBeam Scanner"],
+    affects: ["MultiBeam Scanner XT", "MultiBeam Scanner"],
 }
 
 "Focus Tracker": {

@@ -211,11 +211,15 @@ FASTEM-sim: {
 "Beam Shift Controller": {
     class: tfsbc.BeamShiftController,
     role: ebeam-shift,
+    # The Multibeam Scanner XT can be set as a dependency to automatically retrieve
+    # the calibration data from the scanner, however this is not possible here,
+    # because the SimSem does not contain calibration data.
+    # dependencies: {"scanner": "MultiBeam Scanner XT"},
     init: {
         port: "/dev/fake",
         serialnum: FT43FD2D,
     },
-    affects: ["EBeam Scanner", "MultiBeam Scanner"],
+    affects: ["MultiBeam Scanner XT", "MultiBeam Scanner"],
 }
 
 "Focus Tracker": {
