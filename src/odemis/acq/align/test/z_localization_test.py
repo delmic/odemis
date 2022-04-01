@@ -40,6 +40,17 @@ z_stack_step_size = 50*10-9  # m
 PRECISION = z_stack_step_size * 0.45  # Precision should be better than the step within a z stack
 
 class TestDetermineZPosition(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        try:
+            from skimage import io, exposure
+            from scipy.optimize import fmin_cg
+            import psf_extractor
+
+        except ImportError as err:
+            raise unittest.SkipTest(f"Skipping the z localization tests, correct libraries to perform the tests are not available.\n"
+                                    f"Got the error: %s" % err)
+
     def test_determine_z_position(self):
         """
         Test for known data the outcome of the function determine_z_position
