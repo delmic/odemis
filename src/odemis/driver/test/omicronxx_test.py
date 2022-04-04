@@ -63,7 +63,7 @@ class TestStatic(unittest.TestCase):
             dev.terminate()
 
 
-class TestGenericxX(object):
+class BaseGenericxX:
     def tearDown(self):
         self.dev.terminate()
 
@@ -96,14 +96,14 @@ class TestGenericxX(object):
             self.assertEqual(self.dev.power.value[i], 0.0)
 
 
-class TestMultixX(TestGenericxX, unittest.TestCase):
+class TestMultixX(BaseGenericxX, unittest.TestCase):
     def setUp(self):
         if TEST_NOHW:
             self.skipTest("No simulator for MultixX")
         self.dev = omicronxx.MultixX("test", "light", MXXPORTS)
 
 
-class TestHubxX(TestGenericxX, unittest.TestCase):
+class TestHubxX(BaseGenericxX, unittest.TestCase):
     def setUp(self):
         self.dev = omicronxx.HubxX("test", "light", HUBPORT)
 
