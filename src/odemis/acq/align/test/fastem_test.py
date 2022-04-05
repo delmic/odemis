@@ -53,6 +53,12 @@ class TestFastEMCalibration(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        try:
+            import fastem_calibrations
+        except ImportError as err:
+            raise unittest.SkipTest(f"Skipping the fastem tests, correct libraries to perform the tests are not available.\n"
+                                    f"Got the error: {err}")
+
         if TEST_NOHW:
             test.start_backend(FASTEM_CONFIG)
         elif driver.get_backend_status() != driver.BACKEND_RUNNING:
