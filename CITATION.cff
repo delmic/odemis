@@ -1,0 +1,62 @@
+cff-version: 1.2.0
+title: Open Delmic Microscope Software
+message: You may cite this software using these metadata.
+type: software
+authors:
+  - family-names: Piel
+    given-names: Éric
+    affiliation: Delmic B.V.
+    email: piel@delmic.com
+  - family-names: de Laat
+    given-names: Rinze
+    affiliation: Delmic B.V.
+  - family-names: Tsitsikas
+    given-names: Kimon
+    affiliation: Delmic B.V.
+  - family-names: Winkler
+    given-names: Philip
+    affiliation: Delmic B.V.
+  - family-names: Muskens
+    given-names: Anders
+    affiliation: Delmic B.V.
+  - family-names: Rossberger
+    given-names: Sabrina
+    affiliation: Delmic B.V.
+    email: rossberger@delmic.com
+  - family-names: Pals
+    given-names: Thera
+    affiliation: Delmic B.V.
+    email: pals@delmic.com
+  - family-names: Mavrikopoulou
+    given-names: Victoria
+    affiliation: Delmic B.V.
+  - family-names: Kleijwegt
+    given-names: Kornee
+    affiliation: Delmic B.V.
+    email: kleijwegt@delmic.com
+  - family-names: Lazem
+    given-names: Bassim
+    affiliation: Delmic B.V.
+  - family-names: Barazi
+    given-names: Mahmoud
+    affiliation: Delmic B.V.
+  - family-names: Helsloot
+    given-names: Arthur
+    affiliation: Delmic B.V.
+contact:
+  - name: "Delmic B.V."
+    website: 'https://www.delmic.com/'
+    email: info@delmic.com
+url: 'https://www.delmic.com/'
+version: 3.2.0
+repository: 'https://github.com/delmic/odemis'
+abstract: >-
+  Odemis (Open Delmic Microscope Software) is the open-source microscopy
+  software of Delmic B.V. . Odemis is used for controlling microscopes of
+  Delmic and the Odemis Viewer allows to load previous experimental data
+  for visualization, analysis, and export.
+keywords:
+  - microscope
+  - software
+license: GPL-2.0
+date-released: '2022-04-01'
