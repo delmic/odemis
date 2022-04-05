@@ -69,6 +69,7 @@ class FastEMProjectListController(object):
 
         tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable project panel
 
+    # already running in main GUI thread as it receives event from GUI
     def _add_project(self, _):
         # Get the smallest number that is not already in use. It's a bit challenging because projects can be
         # deleted, so we might have project 2 in colour red, but project 1 in blue has been deleted, so the
@@ -86,6 +87,7 @@ class FastEMProjectListController(object):
         # Remove callback for every new remove button
         project_ctrl.panel.btn_remove.Bind(wx.EVT_BUTTON, lambda evt: self._remove_project(evt, project_ctrl))
 
+    # already running in main GUI thread as it receives event from GUI
     def _remove_project(self, _, project_ctrl):
         # TODO: open dialog "Are you sure?"
         logging.debug("Removing project %s." % project_ctrl.model.name.value)
@@ -106,7 +108,7 @@ class FastEMProjectListController(object):
         # Destroy ROAController object
         del project_ctrl
 
-    @call_in_wx_main
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_acquiring(self, mode):
         """
         Enable or disable the project list with all the ROAs depending on whether
@@ -151,6 +153,7 @@ class FastEMProjectController(object):
         # For ROA creation process
         self._current_roa_ctrl = None
 
+    # already running in main GUI thread as it receives event from GUI
     def _on_text(self, evt):
         txt = self.panel.txt_ctrl.GetValue()
         current_name = self.model.name.value
@@ -164,6 +167,7 @@ class FastEMProjectController(object):
             self.panel.txt_ctrl.SetValue(txt)
         evt.Skip()
 
+    # already running in main GUI thread as it receives event from GUI
     def _on_btn_roa(self, _):
         # Two-step process: Instantiate FastEM object here, but wait until first ROI is selected until
         # further processing. The process can still be aborted by clicking in the viewport without dragging.
@@ -185,9 +189,11 @@ class FastEMProjectController(object):
 
         roa_ctrl.model.coordinates.subscribe(self._add_roa_ctrl)
 
+    # already running in main GUI thread as it receives event from GUI
     def _on_btn_remove(self, _, roa_ctrl):
         self.remove_roa_ctrl(roa_ctrl)
 
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _add_roa_ctrl(self, coords):
         roa_ctrl = self._current_roa_ctrl
         self._current_roa_ctrl = None
@@ -215,8 +221,10 @@ class FastEMProjectController(object):
         # Enable buttons of project bar
         self._project_bar.enable_buttons(True)
 
-    # Should be called from GUI main thread
     def remove_roa_ctrl(self, roa_ctrl):
+        """
+        Note: Must be called from within the main GUI thread. Make sure caller is running in main GUI thread.
+        """
         # Public function, so it can officially be called from the projectbar controller
         logging.debug("Removing ROA '%s' of project '%s'.", roa_ctrl.model.name.value, self.model.name.value)
         # Remove panel
@@ -294,6 +302,9 @@ class FastEMROAController(object):
     def create_panel(self):
         """
         Create a panel, add it to the project panel and subscribe to the controls. Should only be called once.
+
+        Note: Should be called from the main GUI thread, but cannot add decorator here as otherwise creation
+        of panel is delayed. Instead, make sure callers are running in main GUI thread!
         """
         logging.debug("Creating panel for ROA %s.", self.model.name.value)
         self.panel = FastEMROAPanel(self._project_panel, self.model.name.value,
@@ -304,6 +315,7 @@ class FastEMROAController(object):
         self.panel.txt_ctrl.Bind(wx.EVT_KILL_FOCUS, self._on_text)
         self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)
 
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_overlay_active(self, active):
         if self.panel:
             if active:
@@ -317,17 +329,20 @@ class FastEMROAController(object):
         # Purely for logging
         logging.debug("ROA '%s' coordinates changed to %s.", self.model.name.value, coords)
 
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_roc(self, roc):
         # Update calibration control
         logging.debug("ROA calibration changed to %s.", roc.name.value)
         if self.panel:
             self.panel.calibration_ctrl.SetSelection(int(roc.name.value) - 1)  # counting starts at 0
 
+    # already running in main GUI thread as it receives event from GUI
     def _on_combobox(self, _):
         num = self.panel.calibration_ctrl.GetSelection() + 1
         self.model.roc.value = self._tab_data.calibration_regions.value[num]
         logging.debug("ROA calibration changed to %s.", self.model.roc.value.name.value)
 
+    # already running in main GUI thread as it receives event from GUI
     def _on_text(self, evt):
         txt = self.panel.txt_ctrl.GetValue()
         current_name = self.model.name.value
@@ -370,8 +385,9 @@ class FastEMROCController(object):
 
     def fit_view_to_bbox(self):
         """
-        Zoom in on calibration region (ROC). Calibration region is centered in the scintillator with the
-        corresponding number and takes up approximately 1/100 of the viewport area.
+        Zoom in on calibration region (ROC). Calibration region has the size of a single field
+        image, which is approximately 1/100 of the viewport area (= size of a single scintillator)
+        and is centered in the scintillator with the corresponding number.
         """
         logging.debug("Zooming in on calibration region %s.", self.calib_model.name.value)
         cnvs = self._view_ctrl.viewports[0].canvas
@@ -382,6 +398,7 @@ class FastEMROCController(object):
         # wx.callAfter: then don't need decorator to run it in main GUI thread
         wx.CallAfter(cnvs.fit_to_bbox, [xmin - 5 * size[0], ymin - 5 * size[1], xmax + 5 * size[0], ymax + 5 * size[1]])
 
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_coordinates(self, coordinates):
         """
         Called when the coordinates of a region of calibration (ROC) object are changed.
@@ -436,6 +453,7 @@ class FastEMCalibrationRegionsController(object):
 
         tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button
 
+    # already running in main GUI thread as it receives event from GUI
     def _on_button(self, evt):
         """
         Called when one of the 9 single region of calibration (ROC) buttons is triggered.
@@ -468,7 +486,7 @@ class FastEMCalibrationRegionsController(object):
             # reset coordinates for ROC to undefined
             self.roc_ctrls[num].calib_model.coordinates.value = acqstream.UNDEFINED_ROI
 
-    @call_in_wx_main
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_coordinates(self, _=None):
         """
         Checks that the region of calibration (ROC) buttons are up-to-date (synchronize model with GUI).
@@ -512,10 +530,7 @@ class FastEMCalibrationRegionsController(object):
         # update ROC buttons
         self._on_coordinates()
 
-    def _update(self):
-        pass
-
-    @call_in_wx_main
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_acquiring(self, mode):
         """
         Enable or disable the calibration panel depending on whether

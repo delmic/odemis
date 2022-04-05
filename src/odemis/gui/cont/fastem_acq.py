@@ -99,6 +99,7 @@ class FastEMOverviewAcquiController(object):
         # If scanner dwell time is changed, update the estimated acquisition time.
         tab_data.main.ebeam.dwellTime.subscribe(self.update_acquisition_time)
 
+    # already running in main GUI thread as it receives event from GUI
     def _on_selection_button(self, evt):
         # add/remove scintillator number to/from selected_scintillators set and toggle button colour
         btn = evt.GetEventObject()
@@ -114,8 +115,8 @@ class FastEMOverviewAcquiController(object):
         self.update_acquisition_time()
         self.check_acquire_button()
 
-    @call_in_wx_main
-    def _on_active_scintillators(self, evt):
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
+    def _on_active_scintillators(self, _):
         for num, b in self.selection_panel.buttons.items():
             if num in self._main_data_model.active_scintillators.value:
                 b.Enable(True)
@@ -126,7 +127,7 @@ class FastEMOverviewAcquiController(object):
         self.update_acquisition_time()
         self.check_acquire_button()
 
-    @call_in_wx_main
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def check_acquire_button(self):
         self.btn_acquire.Enable(True if self._tab_data_model.selected_scintillators.value else False)
 
@@ -155,7 +156,7 @@ class FastEMOverviewAcquiController(object):
         logging.debug("Updating status message %s, with level %s", txt, lvl)
         self._set_status_message(txt, lvl)
 
-    @call_in_wx_main
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _reset_acquisition_gui(self, text=None, level=None):
         """
         Set back every GUI elements to be ready for the next acquisition
@@ -173,7 +174,7 @@ class FastEMOverviewAcquiController(object):
         else:
             self.update_acquisition_time()
 
-    @wxlimit_invocation(1)
+    @wxlimit_invocation(1)  # max 1/s; called in main GUI thread
     def _set_status_message(self, text, level=None):
         self.lbl_acqestimate.SetLabel(text)
         # update status icon to show the logging level
@@ -181,6 +182,7 @@ class FastEMOverviewAcquiController(object):
         self.bmp_acq_status_warn.Show(level == logging.WARN)
         self._tab_panel.Layout()
 
+    # already running in main GUI thread as it receives event from GUI
     def on_acquisition(self, evt):
         """
         Start the acquisition (really)
@@ -261,7 +263,7 @@ class FastEMOverviewAcquiController(object):
         ovv_ss[num] = s
         self._main_data_model.overview_streams.value = ovv_ss
 
-    @call_in_wx_main
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def full_acquisition_done(self, future):
         """
         Callback called when the acquisition of all selected overview images is finished
@@ -344,12 +346,13 @@ class FastEMAcquiController(object):
         self.check_acquire_button()
         self.update_acquisition_time()  # to update the message
 
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def check_acquire_button(self):
         self.btn_acquire.Enable(self._main_data_model.is_aligned.value and self.roa_count
                                 and not self._get_undefined_calibrations() and
                                 not self._main_data_model.is_acquiring.value)  # is_acquiring is True during alignment
 
-    @wxlimit_invocation(1)  # max 1/s
+    @wxlimit_invocation(1)  # max 1/s; called in main GUI thread
     def update_acquisition_time(self):
         # Update path (in case it's already the next day)
         self.path = datetime.today().strftime('%Y-%m-%d')
@@ -395,17 +398,20 @@ class FastEMAcquiController(object):
                     undefined.add(roc.name.value)
         return sorted(undefined)
 
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _update_roa_count(self):
         roas = [roa for p in self._tab_data_model.projects.value for roa in p.roas.value]
         self.txt_num_rois.SetValue("%s" % len(roas))
         self.roa_count = len(roas)
 
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _show_status_icons(self, lvl):
         # update status icon to show the logging level
         self.bmp_acq_status_info.Show(lvl in (logging.INFO, logging.DEBUG))
         self.bmp_acq_status_warn.Show(lvl == logging.WARN)
         self._tab_panel.Layout()
 
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _reset_acquisition_gui(self, text=None, level=None):
         """
         Set back every GUI elements to be ready for the next acquisition
@@ -424,6 +430,7 @@ class FastEMAcquiController(object):
         else:
             self.update_acquisition_time()
 
+    # already running in main GUI thread as it receives event from GUI
     def on_acquisition(self, evt):
         """
         Start the acquisition (really)
@@ -461,7 +468,7 @@ class FastEMAcquiController(object):
         fastem._executor.cancel()
         # all the rest will be handled by on_acquisition_done()
 
-    @call_in_wx_main
+    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def on_acquisition_done(self, future):
         """
         Callback called when the acquisition is finished (either successfully or

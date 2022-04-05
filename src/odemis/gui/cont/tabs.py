@@ -520,6 +520,7 @@ class LocalizationTab(Tab):
 
         return vpv
 
+    @call_in_wx_main
     def load_overview_data(self, data):
         # Create streams from data
         streams = data_to_static_streams(data)
