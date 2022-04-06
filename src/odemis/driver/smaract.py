@@ -4220,8 +4220,9 @@ class Picoscale(model.HwComponent):
             IOError: if referencing failed due to hardware
             CancelledError if was cancelled
         """
-        # The position polling thread can continue, it does not seem to interfere with the referencing procedure.
         try:
+            # TODO: can we leave the position polling thread on? It does not seem
+            # to interfere with the referencing procedure.
             if self._polling_thread:
                 self._polling_thread.cancel()
                 self._polling_thread = None
@@ -4264,18 +4265,15 @@ class Picoscale(model.HwComponent):
         except SA_SIError as ex:
             # This occurs if a stop command interrupts referencing
             if ex.errno == SA_SI_ERROR_CANCELLED:
-                future._was_stopped = True
                 logging.info("Referencing stopped: %s", ex)
                 raise CancelledError()
             elif future._must_stop.is_set():
-                future._was_stopped = True
                 raise CancelledError()
             else:
                 logging.error("Referencing failed: %s", ex)
                 raise
         except CancelledError:
             logging.debug("Referencing cancelled.")
-            future._was_stopped = True
             raise  # No fuss, pass it as-is
         except Exception:
             logging.exception("Referencing failure.")
@@ -4283,7 +4281,7 @@ class Picoscale(model.HwComponent):
         finally:
             # If the state of the device is stable and all channels are valid, the referencing procedure
             # succeeded. Typically, all channels become valid at the same time during the reference procedure.
-            # We still check all of them inidividually to be sure.
+            # We still check all of them individually to be sure.
             if self.IsStable():
                 for ch, num in self._channels.items():
                     self.referenced._value[ch] = self.IsValid(num)
@@ -4327,9 +4325,11 @@ class Picoscale(model.HwComponent):
             CancelledError if was cancelled
         """
         try:
+            # Don't poll positions during the referencing
             if self._polling_thread:
                 self._polling_thread.cancel()
                 self._polling_thread = None
+
             with future._moving_lock:
                 if future._must_stop.is_set():
                     raise CancelledError()
@@ -4364,7 +4364,6 @@ class Picoscale(model.HwComponent):
                 raise
         except CancelledError:
             logging.debug("Validation cancelled.")
-            future._was_stopped = True
             raise  # No fuss, pass it as-is
         except Exception:
             logging.exception("Validation failure.")
@@ -4375,11 +4374,11 @@ class Picoscale(model.HwComponent):
             for ch, num in self._channels.items():
                 if not self.IsValid(num):
                     raise IOError("Failed to validate channel %s" % num)
-                else:
-                    # Start polling thread
-                    self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
-                    self._polling_thread.start()
-                    self._updatePosition()
+
+            # Start polling thread
+            self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
+            self._polling_thread.start()
+            self._updatePosition()
 
     def _on_referenced(self, future):
         """
@@ -4420,7 +4419,6 @@ class Picoscale(model.HwComponent):
         """
         f = CancellableFuture()
         f._must_stop = threading.Event()  # cancel of the current future requested
-        f._was_stopped = False  # future was actually stopped
         f._moving_lock = threading.Lock()  # taken while moving
         f.task_canceller = self._cancelReference
         return f
@@ -4436,9 +4434,8 @@ class Picoscale(model.HwComponent):
         # Synchronise with the ending of the future
         with future._moving_lock:
             self.core.SA_SI_Cancel(self._id)
-            if not future._was_stopped:
-                logging.debug("Cancelling failed.")
-            return future._was_stopped
+
+        return True
 
 
 class _PicoscaleScanned(Picoscale):
@@ -4541,7 +4538,6 @@ class FakePicoscale_DLL(object):
         ev.type = self.active_event
         ev.devEventParameter = self.properties[self.active_property]
         if self.cancel_event:
-            self.cancel_event = False
             raise SA_SIError(SA_SI_ERROR_CANCELLED, "CANCELLED")
         return SA_SI_ERROR_NONE
 
@@ -4568,6 +4564,9 @@ class FakePicoscale_DLL(object):
         if shifted_key == SA_PS_AF_ADJUSTMENT_STATE_PROP:
             # System not stable while adjusting
             self.properties[SA_PS_SYS_IS_STABLE_PROP] = 0
+            self.cancel_event = False
+            # Reset cancelling flag
+            self.cancel_referencing = False
             self.executor.submit(self._adjustment_thread, value.value)
 
     def SA_SI_SetProperty_i64(self, handle, property_key, value):
@@ -4636,6 +4635,5 @@ class FakePicoscale_DLL(object):
             self.properties[SA_PS_SYS_IS_STABLE_PROP] = 1  # system stable
             self.properties[SA_PS_CH_IS_VALID_PROP] = 1  # channel is referenced
             self.properties[SA_PS_AF_ADJUSTMENT_STATE_PROP] = finished_param
-
-        # Reset cancelling flag
-        self.cancel_referencing = False
+        else:
+            logging.debug("Picoscale sim adjustment cancelled")
