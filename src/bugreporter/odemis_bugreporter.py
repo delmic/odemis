@@ -644,14 +644,12 @@ class BugreporterFrame(wx.Frame):
     def _on_report_sent(self, future):
         try:
             future.result()
-            # CallAfter doesn't work properly with the notifications for some
-            # unknown reason: the message almost immediately disappears. This
-            # doesn't happen with CallLater().
-            # wx.CallAfter(self._on_report_sent_successful)
-            wx.CallLater(0, self._on_report_sent_successful)
         except Exception as e:
             logging.exception("osTicket upload failed: %s", e)
             wx.CallAfter(self.open_failed_upload_dlg)
+        else:
+            # Show it went fine
+            wx.CallAfter(self._on_report_sent_successful)
 
     def on_close(self, _):
         """
@@ -676,15 +674,20 @@ class BugreporterFrame(wx.Frame):
         """
         Called when the report was successfully uploaded.
         It will show a pop-up to confirm to the user, and close the window
+        To be called in the main GUI thread.
         """
+        # Note: notify2 doesn't need to be called from the main GUI thread
         notify2.init("Odemis")
-        notif = notify2.Notification("")
-        notif.update("Odemis bug-report successfully uploaded",
+        notif = notify2.Notification("Odemis bug-report successfully uploaded",
                      "You will shortly receive a confirmation by email.",
                      "dialog-info")
         notif.show()
 
-        self.Destroy()
+        # On Ubuntu 18.04, with wxPython 4.0.1, the notification immediately hides
+        # if the application is closed. So we just hide the window, and wait a little
+        # while (5 s) before closing the window.
+        self.Hide()
+        wx.CallLater(5 * 1000, self.Destroy)
 
     def open_failed_upload_dlg(self):
         """
