@@ -1,4 +1,8 @@
 #!/bin/bash
+# Can be executed with the either of both options but not simultaneously both:
+#   --unit-test for the standard extended unit-testing report (default when no option is provided)
+#   --pytest for the shortened pytest summary report
+#
 # Should be run in the directory where the log files should be saved.
 # It should also have ../mic-odm-yaml/ directory, which contains all the microscopes files.
 # Ex:
@@ -10,6 +14,13 @@
 #  * unittest-full-$DATE.log : results of unit tests
 #  * integtest-full-$DATE.log: results of the integration tests
 #  * ./integtest-$DATE/ :logs of integration testing (2 files per conf)
+
+# Only when the first argument contains pytest the unittests are run using pytests and a pytest report is made.
+if [[ $1 = "--pytest" ]]; then
+  pytest=True
+else
+  pytest=False
+fi
 
 # Root path of the repo
 ODEMIS_DIR="$(readlink -m $(dirname $0)/../)"
@@ -58,9 +69,24 @@ export TEST_NO_SUPPORT_TICKET=1
 # and there are many other things that can affect execution order (eg, threads).
 export PYTHONHASHSEED=1567315
 
-TESTLOG=./unittest-full-$DATE.log
+mkdir -p ~/development/odemis-testing
+TESTLOG=~/development/odemis-testing/unittest-full-$DATE.log
 # make sure it is full path
 TESTLOG="$(readlink -m "$TESTLOG")"
+
+if [ $pytest = True ]; then
+  TESTSUMMARY=~/development/odemis-testing/pytest-summary-$DATE.log
+  # Remove any files which might already exist from a previously (expected incomplete) run of that day.
+  rm -f $TESTSUMMARY
+  touch $TESTSUMMARY
+  TESTSUMMARY="$(readlink -m "$TESTSUMMARY")"
+fi
+
+
+# The temporary files are used to save multi line strings (This had issues with bash)
+rm -f /tmp/filtered_test.txt /tmp/test_summary.txt
+touch /tmp/test_summary.txt /tmp/filtered_test.txt
+
 
 if [ ! -d /var/run/odemisd ] ; then
     echo  "Need /var/run/odemisd"
@@ -71,10 +97,10 @@ fi
 sudo odemis-stop
 
 # find the test scripts (should not contain spaces)
-testfiles="$(find "$ODEMIS_SRC" -wholename "*/test/*test.py")"
+testfiles="$(find "$ODEMIS_SRC" -wholename "*/test/*_test.py")"
 
-#Warn if some files are misnamed
-skippedfiles="$(find "$ODEMIS_SRC" -wholename "*/test/*.py" -and -not -wholename "*/test/*test.py")"
+# Warn if some files are misnamed
+skippedfiles="$(find "$ODEMIS_SRC" -wholename "*/test/*.py" -and -not -wholename "*/test/*_test.py")"
 if [ "$skippedfiles" != "" ]; then
     echo "Warning, these scripts are not named *_test.py and will be skipped:"
     echo "$skippedfiles"
@@ -100,7 +126,12 @@ for f in $testfiles; do
     # run it in its own directory (sometimes they need specific files from there)
     pushd "$(dirname $f)" > /dev/null
         # Automatically kill after MAXTIME, then try harder after 30 s
-        timeout -k 30 $MAXTIME $interpreter $f --verbose >> "$TESTLOG" 2>&1
+        if [ $pytest = True ]; then
+          timeout -k 30 $MAXTIME $interpreter -m pytest $f --tb=short --verbose >> "$TESTLOG" 2>&1
+        else
+          timeout -k 30 $MAXTIME $interpreter $f --verbose >> "$TESTLOG" 2>&1
+        fi
+
         status=$?
         echo $f returned $status >> "$TESTLOG" 2>&1
     popd > /dev/null
@@ -109,10 +140,18 @@ for f in $testfiles; do
     if [[ "$new_size" == "$prev_size" ]]; then
         echo "NOT RUN"
     else
-        tail -n "+$prev_size" "$TESTLOG" | grep -E 'OK' | tail -1
-        tail -n "+$prev_size" "$TESTLOG" | awk "/^FAIL: /,/FAILED/"
-        tail -n "+$prev_size" "$TESTLOG" | awk "/^ERROR: /,/FAILED/"
-        #tail -n "+$prev_size" "$TESTLOG" | awk '/===/, /FAILED/'
+        if [ $pytest = True ]; then
+          tail -n "+$prev_size" "$TESTLOG" > /tmp/latest_test_case_log.txt
+          # Filter the output to only print the summary
+          python3 $ODEMIS_DIR/util/pytest_log_filter.py /tmp/latest_test_case_log.txt > /tmp/filtered_test.txt
+          cat /tmp/filtered_test.txt >> $TESTSUMMARY
+          echo -e "\n" >> $TESTSUMMARY
+        else
+          tail -n "+$prev_size" "$TESTLOG" | grep -E 'OK' | tail -1
+          tail -n "+$prev_size" "$TESTLOG" | awk "/^FAIL: /,/FAILED/"
+          tail -n "+$prev_size" "$TESTLOG" | awk "/^ERROR: /,/FAILED/"
+          #tail -n "+$prev_size" "$TESTLOG" | awk '/===/, /FAILED/'
+        fi
     fi
     echo -e "\n"
     if [ "$status" -gt 0 ]; then
