@@ -50,16 +50,16 @@ class FastEMProjectListController(object):
     Creates/removes new FastEM projects.
     """
 
-    def __init__(self, tab_data, project_list, view_ctrl):
+    def __init__(self, tab_data, project_list, viewport):
         """
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param project_list: (FastEMProjectList) The top-level panel containing all project panels.
-        :param view_ctrl: (FastEMAcquisitionViewport) The viewport controller. TODO replace with view only.
+        :param viewport: (FastEMAcquisitionViewport) The acquisition view.
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._project_list = project_list
-        self._view_ctrl = view_ctrl
+        self._viewport = viewport
 
         self.project_ctrls = {}  # dict int --> FastEMProjectController
         self._project_list.btn_add_project.Bind(wx.EVT_BUTTON, self._add_project)
@@ -78,7 +78,7 @@ class FastEMProjectListController(object):
         name = "Project-%s" % num
         logging.debug("Creating new project %s.", name)
         colour = FASTEM_PROJECT_COLOURS[(num - 1) % len(FASTEM_PROJECT_COLOURS)]
-        project_ctrl = FastEMProjectController(name, colour, self._tab_data_model, self._project_list, self._view_ctrl)
+        project_ctrl = FastEMProjectController(name, colour, self._tab_data_model, self._project_list, self._viewport)
 
         # Add the project model to tab_data
         self.project_ctrls[num] = project_ctrl
@@ -126,17 +126,17 @@ class FastEMProjectController(object):
     During initialization, a panel is created and added to the project list.
     """
 
-    def __init__(self, name, colour, tab_data, project_list, view_ctrl):
+    def __init__(self, name, colour, tab_data, project_list, viewport):
         """
         :param name: (str) The default name for the project.
         :param colour: (str) Hexadecimal colour code for the bounding box of the roas in the viewport
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param project_list: (FastEMProjectList) The top-level panel containing all project panels.
-        :param view_ctrl: (FastEMAcquisitionViewport) The viewport controller. TODO replace with view only
+        :param viewport: (FastEMAcquisitionViewport) The acquisition view.
         """
         self._tab_data = tab_data
         self._project_bar = project_list
-        self._view_ctrl = view_ctrl
+        self._viewport = viewport
 
         self.roa_ctrls = {}  # dict int --> FastEMROAController
         self.colour = colour
@@ -183,7 +183,7 @@ class FastEMProjectController(object):
         name = "ROA-%s" % num
         name = make_unique_name(name, [roa.name.value for roa in self.model.roas.value])
         # better guess for parameters after region is selected in _add_roa_ctrl
-        roa_ctrl = FastEMROAController(name, None, self.colour, self._tab_data, self.panel, self._view_ctrl)
+        roa_ctrl = FastEMROAController(name, None, self.colour, self._tab_data, self.panel, self._viewport)
         self.roa_ctrls[num] = roa_ctrl
         self._current_roa_ctrl = roa_ctrl
 
@@ -202,7 +202,7 @@ class FastEMProjectController(object):
         # Abort ROI creation if nothing was selected
         if coords == acqstream.UNDEFINED_ROI:
             logging.debug("Aborting ROA creation.")
-            self._view_ctrl.viewports[0].canvas.remove_overlay(roa_ctrl.overlay)
+            self._viewport.canvas.remove_overlay(roa_ctrl.overlay)
             self.roa_ctrls = {key: val for key, val in self.roa_ctrls.items() if val != roa_ctrl}
         else:
             # Create the panel
@@ -235,7 +235,7 @@ class FastEMProjectController(object):
         self.roa_ctrls = {key: val for key, val in self.roa_ctrls.items() if val != roa_ctrl}
 
         # Remove overlay
-        self._view_ctrl.viewports[0].canvas.remove_overlay(roa_ctrl.overlay)
+        self._viewport.canvas.remove_overlay(roa_ctrl.overlay)
 
         # Remove model
         self.model.roas.value.remove(roa_ctrl.model)
@@ -267,18 +267,18 @@ class FastEMROAController(object):
     Controller for a single region of acquisition (ROA).
     """
 
-    def __init__(self, name, roc, colour, tab_data, project_panel, view_ctrl):
+    def __init__(self, name, roc, colour, tab_data, project_panel, viewport):
         """
         :param name: (str) The default name for the ROA.
         :param roc: (FastEMROC): The region of calibration corresponding to the ROA.
         :param colour: (str) Hexadecimal colour code for the bounding box of the roas in the viewport.
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param project_panel: (FastEMProjectPanel) The corresponding project panel.
-        :param view_ctrl: (FastEMAcquisitionViewport) The viewport controller. TODO replace with view only.
+        :param viewport: (FastEMAcquisitionViewport) The acquisition view.
         """
         self._tab_data = tab_data
         self._project_panel = project_panel
-        self._view_ctrl = view_ctrl
+        self._viewport = viewport
 
         # Read the overlap from the acquisition configuration
         acqui_conf = conf.get_acqui_conf()
@@ -295,7 +295,7 @@ class FastEMROAController(object):
         self.panel = None
 
         logging.debug("Creating overlay for ROA '%s'.", name)
-        canvas = self._view_ctrl.viewports[0].canvas
+        canvas = self._viewport.canvas
         self.overlay = canvas.add_roa_overlay(self.model.coordinates, colour)
         self.overlay.active.subscribe(self._on_overlay_active)
 
@@ -368,13 +368,13 @@ class FastEMROCController(object):
     Controller for a single region of calibration (ROC).
     """
 
-    def __init__(self, number, tab_data, view_ctrl):
+    def __init__(self, number, tab_data, viewport):
         """
         :param number: (int) The number of the calibration region.
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
-        :param view_ctrl (FastEMAcquisitionViewport) The viewport controller. TODO replace with view only.
+        :param viewport (FastEMAcquisitionViewport) The acquisition view.
         """
-        self._view_ctrl = view_ctrl
+        self._viewport = viewport
         self._tab_data = tab_data
 
         # Get ROC model (exists already in tab data) and change coordinates
@@ -390,7 +390,7 @@ class FastEMROCController(object):
         and is centered in the scintillator with the corresponding number.
         """
         logging.debug("Zooming in on calibration region %s.", self.calib_model.name.value)
-        cnvs = self._view_ctrl.viewports[0].canvas
+        cnvs = self._viewport.canvas
         xmin, ymin, xmax, ymax = self.calib_model.coordinates.value
         size = (self._tab_data.main.multibeam.resolution.value[0] * self._tab_data.main.multibeam.pixelSize.value[0],
                 self._tab_data.main.multibeam.resolution.value[1] * self._tab_data.main.multibeam.pixelSize.value[1])
@@ -409,13 +409,13 @@ class FastEMROCController(object):
         if coordinates == acqstream.UNDEFINED_ROI:
             # remove the ROC overlay in the viewport
             if self.overlay is not None:
-                self._view_ctrl.viewports[0].canvas.remove_overlay(self.overlay)
+                self._viewport.canvas.remove_overlay(self.overlay)
                 self.overlay = None  # needed so it can be added again to viewport
         else:
             # add ROC overlay if not there yet (e.g. do not add when just moving the overlay)
             if self.overlay is None:
-                self.overlay = self._view_ctrl.viewports[0].canvas.add_calibration_overlay(self.calib_model.coordinates,
-                                                                                           self.calib_model.name.value)
+                self.overlay = self._viewport.canvas.add_calibration_overlay(self.calib_model.coordinates,
+                                                                             self.calib_model.name.value)
 
 
 class FastEMCalibrationRegionsController(object):
@@ -423,17 +423,17 @@ class FastEMCalibrationRegionsController(object):
     Listens to the calibration buttons and creates the FastEMROCControllers accordingly.
     """
 
-    def __init__(self, tab_data, calibration_panel, view_ctrl):
+    def __init__(self, tab_data, calibration_panel, viewport):
         """
         :param tab_data (FastEMAcquisitionGUIData): The tab data model.
         :param calibration_panel (FastEMCalibrationPanelHeader): The main calibration panel including the 9 regions
                 of calibration (ROC) buttons, the calibrate button, the gauge and the label.
-        :param view_ctrl (FastEMAcquisitionViewport): The viewport controller. TODO replace with just view
+        :param viewport (FastEMAcquisitionViewport): The acquisition view.
         """
         self._tab_data = tab_data
         self._data_model = self._tab_data.main
         self._calibration_panel = calibration_panel
-        self._view_ctrl = view_ctrl
+        self._viewport = viewport
 
         self.panel = FastEMCalibrationPanel(calibration_panel, tab_data.main.scintillator_layout)
         calibration_panel.add_calibration_panel(self.panel)
@@ -445,7 +445,7 @@ class FastEMCalibrationRegionsController(object):
         # create calibration controller for each scintillator
         self.roc_ctrls = {}
         for roc_num, roc in self._tab_data.calibration_regions.value.items():
-            self.roc_ctrls[roc_num] = FastEMROCController(roc_num, self._tab_data, self._view_ctrl)
+            self.roc_ctrls[roc_num] = FastEMROCController(roc_num, self._tab_data, self._viewport)
             roc.coordinates.subscribe(self._on_coordinates)
 
         # Only enable buttons for scintillators which have been selected in the chamber tab

@@ -1810,7 +1810,7 @@ class FastEMAcquisitionTab(Tab):
         self._calib_2_region_controller = project.FastEMCalibrationRegionsController(
             tab_data,
             panel.calib_2_pnl_regions,
-            view_ctrl=self.view_controller,  # TODO pass only viewport (panel.vp_fastem_acqui)
+            viewport=vp,
         )
 
         # Controller for calibration panel 2
@@ -1835,7 +1835,7 @@ class FastEMAcquisitionTab(Tab):
         self._project_list_controller = project.FastEMProjectListController(
             tab_data,
             panel.pnl_fastem_projects,
-            view_ctrl=self.view_controller,
+            viewport=vp,
         )
 
         # Acquisition controller
