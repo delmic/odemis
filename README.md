@@ -3,15 +3,15 @@
 </p>
 
 # Odemis
-Odemis (_Open Delmic Microscope Software_) is the open-source microscopy software of [Delmic B.V](https://www.delmic.com). Odemis is used for controlling microscopes of Delmic and the Odemis viewer allows to load previous experimental data for visualization, analysis and export.  
+Odemis (_Open Delmic Microscope Software_) is the open-source microscopy software of [Delmic B.V.](https://www.delmic.com). Odemis is used for controlling microscopes of Delmic and the Odemis viewer allows to load previous experimental data for visualization, analysis and export.
 Delmic’s mission is to empower companies and researchers by helping them achieve results that can be trusted implicitly with powerful and user-friendly solutions.
 
 ## Requirements
-* Linux (tested on Ubuntu 16.04 and 18.04 x86 32-bits and 64-bits)
-* Python (v3.5+)
+* Linux (tested on Ubuntu 18.04 and 20.04 x86)
+* Python (v3.6+)
 * Special (forked) version of Pyro4 from Delmic
 
-Note: the viewer part is also tested to run on Windows (7 and 10).
+Note: the viewer part is also tested to run on Windows (10+).
 
 For the complete list of dependencies, see the file `requirements.txt`.
 

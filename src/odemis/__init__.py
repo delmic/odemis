@@ -90,7 +90,7 @@ def get_version_simplified():
 __version__ = _get_version()
 __fullname__ = "Open Delmic Microscope Software"
 __shortname__ = "Odemis"
-__copyright__ = "Copyright © 2012-2021 Delmic"
+__copyright__ = "Copyright © 2012-2022 Delmic"
 __authors__ = ["Éric Piel", "Rinze de Laat", "Kimon Tsitsikas",
                "Philip Winkler", "Anders Muskens", "Sabrina Rossberger",
                "Thera Pals", "Victoria Mavrikopoulou", "Kornee Kleijwegt",
