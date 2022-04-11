@@ -134,7 +134,7 @@ class TestSEMStatic(unittest.TestCase):
         sem.terminate()
         daemon.shutdown()
 
-class TestSEMBase(object):
+class BaseSEMTest(object):
 
     @classmethod
     def setUpClass(cls):
@@ -245,7 +245,7 @@ class TestSEMBase(object):
     # TODO: test move
 
 
-class TestSEMNoDet(TestSEMBase, unittest.TestCase):
+class TestSEMNoDet(BaseSEMTest, unittest.TestCase):
     """
     Tests when connected for only controlling the settings, but no acquisition
     """
@@ -274,7 +274,7 @@ class TestSEMNoDet(TestSEMBase, unittest.TestCase):
 
 
 # @skip("skip")
-class TestSEM(TestSEMBase, unittest.TestCase):
+class TestSEM(BaseSEMTest, unittest.TestCase):
     """
     Tests which can share one SEM device
     """

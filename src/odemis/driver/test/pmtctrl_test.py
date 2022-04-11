@@ -192,7 +192,7 @@ class TestPMT(unittest.TestCase):
 
     def setUp(self):
         # We will need to catch some log messages
-        self.handler = h = TestHandler(Matcher())
+        self.handler = h = MatchLogHandler(Matcher())
         self.logger = logging.getLogger()
         self.logger.addHandler(h)
         # reset resolution and dwellTime
@@ -371,7 +371,7 @@ class TestTCPMT(unittest.TestCase):
         dataflow.unsubscribe(self.receive_image)
         self.is_received.set()
 
-class TestHandler(BufferingHandler):
+class MatchLogHandler(BufferingHandler):
     def __init__(self, matcher):
         # BufferingHandler takes a "capacity" argument
         # so as to know when to flush. As we're overriding
