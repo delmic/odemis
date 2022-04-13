@@ -31,11 +31,10 @@ from time import sleep
 from odemis.driver import orsay
 from odemis.model import HwError
 from odemis import model
+from odemis.util import timeout
 
-TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
-if not TEST_NOHW == "sim":
-    TEST_NOHW = TEST_NOHW == "1"  # make sure values other than "sim", 0 and 1 are converted to 0
-# For simulation, make sure to have the Orsay Physics Control Server installed and running.
+logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 CONFIG_PSUS = {"name": "pneumatic-suspension", "role": "pneumatic-suspension"}
 CONFIG_PRESSURE = {"name": "pressure", "role": "chamber"}
@@ -52,7 +51,7 @@ CONFIG_FOCUS = {"name": "focus", "role": "focus", "rng": (-2e-3, 2e-3)}
 
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
-CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.56.101",
+CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.30.101",
                 "children": {"pneumatic-suspension": CONFIG_PSUS,
                              "pressure": CONFIG_PRESSURE,
                              "pumping-system": CONFIG_PSYS,
@@ -71,6 +70,16 @@ NO_SERVER_MSG = "TEST_NOHW is set. No server to contact."
 CANT_FORCE_ACTUAL_MSG = "TEST_NOHW is not set to sim, cannot force data on Actual parameters of Orsay server outside " \
                         "of simulation. "
 
+TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
+if TEST_NOHW == "sim":
+    # For simulation, make sure to have the Orsay Physics Control Server installed and running.
+    CONFIG_ORSAY["host"] = "192.168.56.101"  # IP address of the simulated Orsay Physics Control Server
+elif TEST_NOHW == "0":
+    TEST_NOHW = False
+elif TEST_NOHW == "1":
+    TEST_NOHW = True
+else:
+    raise ValueError("Unknown value of environment variable TEST_NOHW=%s" % TEST_NOHW)
 
 class TestOrsayStatic(unittest.TestCase):
     """
@@ -81,7 +90,7 @@ class TestOrsayStatic(unittest.TestCase):
         """
         Test to create an Orsay component
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             self.skipTest(NO_SERVER_MSG)
         try:
             oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
@@ -111,7 +120,7 @@ class TestOrsay(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW != "sim":
             raise unittest.SkipTest(NO_SERVER_MSG)
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -137,13 +146,12 @@ class TestOrsay(unittest.TestCase):
         """
         cls.oserver.terminate()
 
+    # TODO Currently fails if test_reconnection fails.
     def test_updateProcessInfo(self):
         """
-        Check that the processInfo VA is updated properly and an exception is raised when the wrong parameter is passed
+        Check that the processInfo VA is updated properly
         """
-        with self.assertRaises(ValueError):
-            self.oserver._updateProcessInfo(self.datamodel.HybridPlatform.Cancel)
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
         init_state = self.datamodel.HybridPlatform.ProcessInfo.Actual
         test_string = "Some process information"
@@ -152,6 +160,7 @@ class TestOrsay(unittest.TestCase):
         self.assertEqual(self.oserver.processInfo.value, test_string)
         self.datamodel.HybridPlatform.ProcessInfo.Actual = init_state  # return to value from before test
 
+    # @timeout(60)  # Sometimes gets stuck, expected test time << 60 sec
     def test_reconnection(self):
         """
         Checks that after reconnection things still work
@@ -167,14 +176,18 @@ class TestOrsay(unittest.TestCase):
         # perform some test to check writing and reading still works
         init_state = self.gis_res.targetTemperature.value
 
+        # TODO Implement something simpler like aperture control
+        # TODO For GIS temperture control the value HybridGIS RegulationOn.Target True
         test_value = 27
         self.gis_res.targetTemperature.value = test_value
-        sleep(1)
+        sleep(60)
         self.assertEqual(int(self.gis_res._temperaturePar.Target), test_value)
+        self.assertEqual(int(self.gis_res.temperature.value), 27)
 
         self.gis_res.targetTemperature.value = 0
-        sleep(1)
+        sleep(3)
         self.assertEqual(int(self.gis_res._temperaturePar.Target), 0)
+        self.assertEqual(int(self.gis_res.temperature.value), 0)
 
         self.gis_res.targetTemperature.value = init_state  # return to value from before test
 
@@ -191,7 +204,7 @@ class TestPneumaticSuspension(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW != "sim":
             raise unittest.SkipTest(NO_SERVER_MSG)
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -233,12 +246,9 @@ class TestPneumaticSuspension(unittest.TestCase):
 
     def test_errorstate(self):
         """
-        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
+        Check that the state VA is updated properly
         """
-        with self.assertRaises(ValueError):
-            self.psus._updateErrorState(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW == True:
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
         test_string = "This thing broke"
 
@@ -275,11 +285,8 @@ class TestPneumaticSuspension(unittest.TestCase):
 
     def test_updatePower(self):
         """
-        Check that the power VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the power VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.psus._updatePower(self.datamodel.HybridPlatform.Cancel)
-
         init_state = self.psus._valve.Target
 
         self.psus._valve.Target = orsay.VALVE_OPEN
@@ -294,12 +301,9 @@ class TestPneumaticSuspension(unittest.TestCase):
 
     def test_updatePressure(self):
         """
-        Check that the pressure VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the pressure VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.psus._updatePressure(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
         init_state = self.psus._gauge.Actual
         test_value = 1.0
@@ -321,7 +325,7 @@ class TestVacuumChamber(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -344,7 +348,7 @@ class TestVacuumChamber(unittest.TestCase):
         for the chamber pressure to change, whilst the simulator does not change the pressure.
         """
 
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest("Perform tests with the vacuum status manually on the hardware.")
 
         # Vacuum levels are conveniently internally named 0, 1, 2, in the decreasing order of pressure
@@ -359,10 +363,7 @@ class TestVacuumChamber(unittest.TestCase):
         """
         Check that the pressure VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.pressure._updatePressure(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
         init_state = self.pressure._chamber.Pressure.Actual
         test_value = 1.0
@@ -373,12 +374,9 @@ class TestVacuumChamber(unittest.TestCase):
 
     def test_updatePosition(self):
         """
-        Check that the position VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the position VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.pressure._updatePosition(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
         init_state = self.pressure._chamber.VacuumStatus.Actual
 
@@ -402,7 +400,7 @@ class TestPumpingSystem(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -420,12 +418,9 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_errorstate(self):
         """
-        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
+        Check that the state VA is updated properly
         """
-        with self.assertRaises(ValueError):
-            self.psys._updateErrorState(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
         test_string = "This thing broke"
 
@@ -453,12 +448,9 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updateSpeed(self):
         """
-        Check that the speed VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the speed VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.psys._updateSpeed(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.TurboPump1.Speed.Actual
@@ -470,12 +462,9 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updateTemperature(self):
         """
-        Check that the temperature VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the temperature VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.psys._updateTemperature(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.TurboPump1.Temperature.Actual
@@ -487,12 +476,9 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updatePower(self):
         """
-        Check that the power VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the power VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.psys._updatePower(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.TurboPump1.Power.Actual
@@ -504,13 +490,9 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updateSpeedReached(self):
         """
-        Check that the speedReached VA is updated correctly and an exception is raised when the wrong parameter is
-        passed
+        Check that the speedReached VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.psys._updateSpeedReached(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.TurboPump1.SpeedReached.Actual
@@ -522,12 +504,9 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updateTurboPumpOn(self):
         """
-        Check that the turboPumpOn VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the turboPumpOn VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.psys._updateTurboPumpOn(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.TurboPump1.IsOn.Actual
@@ -541,13 +520,9 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updatePrimaryPumpOn(self):
         """
-        Check that the primaryPumpOn VA is updated correctly and an exception is raised when the wrong parameter is
-        passed
+        Check that the primaryPumpOn VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.psys._updatePrimaryPumpOn(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.datamodel.HybridPlatform.PrimaryPumpState.Actual
@@ -561,13 +536,9 @@ class TestPumpingSystem(unittest.TestCase):
 
     def test_updateNitrogenPressure(self):
         """
-        Check that the nitrogenPressure VA is updated correctly and an exception is raised when the wrong parameter is
-        passed
+        Check that the nitrogenPressure VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.psys._updateNitrogenPressure(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.Manometer1.Pressure.Actual
@@ -576,7 +547,6 @@ class TestPumpingSystem(unittest.TestCase):
         sleep(1)
         self.assertEqual(self.psys.nitrogenPressure.value, test_value)
         self.psys._system.Manometer1.Pressure.Actual = init_state  # return to value from before test
-
 
 class TestUPS(unittest.TestCase):
     """
@@ -590,7 +560,7 @@ class TestUPS(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -608,10 +578,11 @@ class TestUPS(unittest.TestCase):
 
     def test_updateLevel(self):
         """
-        Check that the level VA raises an exception when the wrong parameter is passed
+        Check that the level VA is the correct value
         """
-        with self.assertRaises(ValueError):
-            self.ups._updateLevel(self.datamodel.HybridPlatform.Cancel)
+        battery_level = float(self.datamodel.HybridPlatform.UPS.UPScontroller.BatteryLevel.Actual)
+        self.ups._updateLevel()
+        self.assertEqual(battery_level/100, self.ups.level.value)  # ups.level is from 0.0 --> 1.0
 
 
 class TestGIS(unittest.TestCase):
@@ -626,7 +597,7 @@ class TestGIS(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -644,12 +615,9 @@ class TestGIS(unittest.TestCase):
 
     def test_errorstate(self):
         """
-        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
+        Check that the state VA is updated properly
         """
-        with self.assertRaises(ValueError):
-            self.gis._updateErrorState(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
         test_string = "This thing broke"
 
@@ -666,14 +634,10 @@ class TestGIS(unittest.TestCase):
 
     def test_updatePositionArm(self):
         """
-        Check that the "arm" part of the position VA is updated correctly and an exception is raised when the wrong
-        parameter is passed.
+        Check that the "arm" part of the position VA is updated correctly
         Only perform this test in simulation, because MOVING should never be written to Target on the hardware.
         """
-        with self.assertRaises(ValueError):
-            self.gis._updatePosition(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW == True:
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
         init_pos = self.gis._positionPar.Target
@@ -697,7 +661,7 @@ class TestGIS(unittest.TestCase):
         Check that the "reservoir" part of the position VA is updated correctly.
         Only perform this test in simulation, because MOVING should never be written to Target on the hardware.
         """
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest("TEST_NOHW is not set to sim, data isn't copied from Target to Actual outside of simulation.")
 
         init_flow = self.gis._reservoirPar.Target
@@ -716,10 +680,14 @@ class TestGIS(unittest.TestCase):
 
         self.gis._reservoirPar.Target = init_flow  # return to value from before test
 
+    # TODO Currently not tested on the real hardware because for now it seems to be unsafe to move the GIS
     def test_moveAbs(self):
         """
         Test movement of the gis to working position and parking position
         """
+        if TEST_NOHW != "sim":
+            self.skipTest("This test is currently not hardware safe.")
+
         init_arm = self.gis.position.value["arm"]
         init_gas = self.gis.position.value["reservoir"]
 
@@ -825,7 +793,7 @@ class TestGISReservoir(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
@@ -846,12 +814,9 @@ class TestGISReservoir(unittest.TestCase):
 
     def test_errorstate(self):
         """
-        Check that the state VA is updated properly and an exception is raised when the wrong parameter is passed
+        Check that the state VA is updated properly
         """
-        with self.assertRaises(ValueError):
-            self.gis_res._updateErrorState(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
         test_string = "This thing broke"
 
@@ -888,12 +853,8 @@ class TestGISReservoir(unittest.TestCase):
 
     def test_updateTargetTemperature(self):
         """
-        Check that the targetTemperature VA is updated correctly and an exception is raised when the wrong parameter is
-        passed
+        Check that the targetTemperature VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.gis_res._updateTargetTemperature(self.datamodel.HybridPlatform.Cancel)
-
         init_state = self.gis_res._temperaturePar.Target
 
         test_value = 27
@@ -907,15 +868,12 @@ class TestGISReservoir(unittest.TestCase):
 
         self.gis_res._temperaturePar.Target = init_state  # return to value from before test
 
+    # TODO test again, GIS Reservoir could not be used during Hw testing
     def test_updateTemperature(self):
         """
-        Check that the temperature VA is updated correctly and an exception is raised when the wrong parameter is
-        passed
+        Check that the temperature VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.gis_res._updateTemperature(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.gis_res._temperaturePar.Target
@@ -931,14 +889,11 @@ class TestGISReservoir(unittest.TestCase):
 
         self.gis_res._temperaturePar.Target = init_state  # return to value from before test
 
+    # TODO test again, GIS Reservoir could not be used during Hw testing
     def test_updateTemperatureRegulation(self):
         """
-        Check that the temperatureRegulation VA is updated correctly and an exception is raised when the wrong parameter
-        is passed
+        Check that the temperatureRegulation VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.gis_res._updateTemperatureRegulation(self.datamodel.HybridPlatform.Cancel)
-
         init_state = self.gis_res._gis.RegulationOn.Target
 
         self.gis_res._gis.RegulationOn.Target = True
@@ -953,12 +908,9 @@ class TestGISReservoir(unittest.TestCase):
 
     def test_updateAge(self):
         """
-        Check that the age VA is updated correctly and an exception is raised when the wrong parameter is passed
+        Check that the age VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.gis_res._updateAge(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.gis_res._gis.ReservoirLifeTime.Actual
@@ -976,13 +928,9 @@ class TestGISReservoir(unittest.TestCase):
 
     def test_updatePrecursorType(self):
         """
-        Check that the precursorType VA is updated correctly and an exception is raised when the wrong parameter is
-        passed
+        Check that the precursorType VA is updated correctly
         """
-        with self.assertRaises(ValueError):
-            self.gis_res._updatePrecursorType(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.gis_res._gis.PrecursorType.Actual
@@ -1015,6 +963,7 @@ class TestGISReservoir(unittest.TestCase):
 
         self.gis_res.targetTemperature.value = init_state  # return to value from before test
 
+    # TODO test again, GIS Reservoir could not be used during Hw testing
     def test_setTemperatureRegulation(self):
         """
         Test the setter of the temperatureRegulation VA
@@ -1046,7 +995,7 @@ class TestOrsayParameterConnector(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
@@ -1069,11 +1018,6 @@ class TestOrsayParameterConnector(unittest.TestCase):
         with self.assertRaises(TypeError):  # Multiple parameters are passed, but VA is not of a tuple type
             orsay.OrsayParameterConnector(model.IntVA(0), [self.datamodel.HybridValveFIB.ErrorState,
                                                            self.datamodel.HybridIonPumpGunFIB.ErrorState])
-
-    def test_incorrect_parameter(self):
-        connector = orsay.OrsayParameterConnector(model.FloatVA(0.0), self.datamodel.HybridIonPumpGunFIB.Pressure)
-        with self.assertRaises(ValueError):  # Incorrect parameter passed
-            connector.update_VA(parameter=self.datamodel.HybridIonPumpGunFIB.ErrorState)
 
     def test_parameter_update(self):
         test_parameter = self.datamodel.IonColumnMCS.ObjectivePhi
@@ -1126,7 +1070,7 @@ class TestOrsayParameterConnector(unittest.TestCase):
         self.assertEqual(va.range[0], float(minpar.Target))
         self.assertEqual(va.range[1], float(maxpar.Target))
 
-
+# TODO Currently not tested due to vacuum issues FIB vacuum
 class TestFIBVacuum(unittest.TestCase):
     """
     Tests for the Focused Ion Beam (FIB) vacuum parameters
@@ -1139,7 +1083,7 @@ class TestFIBVacuum(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
@@ -1157,10 +1101,7 @@ class TestFIBVacuum(unittest.TestCase):
 
     def test_errorstate(self):
         """Check that any text in an ErrorState parameter results in that text in the state VA"""
-        with self.assertRaises(ValueError):
-            self.fib_vacuum._updateErrorState(self.datamodel.HybridPlatform.Cancel)
-
-        if not TEST_NOHW == "sim":
+        if TEST_NOHW != "sim":
             self.skipTest("This test is not hardware safe.")
 
         test_string = "This thing broke"
@@ -1181,13 +1122,13 @@ class TestFIBVacuum(unittest.TestCase):
         self.assertIn(test_string, str(self.fib_vacuum.state.value))
         self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual = ""
 
-        init_state_interlock2 = self.datamodel.HybridInterlockOutChamberVac.ErrorState.Actual
-        self.datamodel.HybridInterlockOutChamberVac.ErrorState.Actual = test_string
+        init_state_interlock2 = self.datamodel.HybridPlatform.AnalysisChamber.ItlkOutChamberVac.ErrorState.Actual
+        self.datamodel.HybridPlatform.AnalysisChamber.ItlkOutChamberVac.ErrorState.Actual = test_string
         sleep(0.5)
         self.assertIsInstance(self.fib_vacuum.state.value, HwError)
-        self.assertIn("HybridInterlockOutChamberVac", str(self.fib_vacuum.state.value))
+        self.assertIn("HybridPlatform.AnalysisChamber.ItlkOutChamberVac", str(self.fib_vacuum.state.value))
         self.assertIn(test_string, str(self.fib_vacuum.state.value))
-        self.datamodel.HybridInterlockOutChamberVac.ErrorState.Actual = ""
+        self.datamodel.HybridPlatform.AnalysisChamber.ItlkOutChamberVac.ErrorState.Actual = ""
 
         init_state_interlock3 = self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual
         self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = test_string
@@ -1234,7 +1175,7 @@ class TestFIBVacuum(unittest.TestCase):
 
         self.datamodel.HybridGaugeCompressedAir.ErrorState.Actual = init_state_gauge
         self.datamodel.HybridInterlockInChamberVac.ErrorState.Actual = init_state_interlock1
-        self.datamodel.HybridInterlockOutChamberVac.ErrorState.Actual = init_state_interlock2
+        self.datamodel.HybridPlatform.AnalysisChamber.ItlkOutChamberVac.ErrorState.Actual = init_state_interlock2
         self.datamodel.HybridInterlockOutHVPS.ErrorState.Actual = init_state_interlock3
         self.datamodel.HybridInterlockOutSED.ErrorState.Actual = init_state_interlock4
         self.datamodel.HybridIonPumpColumnFIB.ErrorState.Actual = init_state_column
@@ -1243,9 +1184,6 @@ class TestFIBVacuum(unittest.TestCase):
 
     def test_interlockInChamberTriggered(self):
         """Check that the interlockInChamberTriggered VA is updated correctly"""
-        with self.assertRaises(ValueError):
-            self.fib_vacuum._updateInterlockInChamberTriggered(self.datamodel.HybridPlatform.Cancel)
-
         connector_test(self, self.fib_vacuum.interlockInChamberTriggered,
                        self.fib_vacuum._interlockInChamber.ErrorState,
                        [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
@@ -1253,9 +1191,6 @@ class TestFIBVacuum(unittest.TestCase):
 
     def test_interlockOutChamberTriggered(self):
         """Check that the interlockOutChamberTriggered VA is updated correctly"""
-        with self.assertRaises(ValueError):
-            self.fib_vacuum._updateInterlockOutChamberTriggered(self.datamodel.HybridPlatform.Cancel)
-
         connector_test(self, self.fib_vacuum.interlockOutChamberTriggered,
                        self.fib_vacuum._interlockOutChamber.ErrorState,
                        [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
@@ -1263,9 +1198,6 @@ class TestFIBVacuum(unittest.TestCase):
 
     def test_interlockOutHVPSTriggered(self):
         """Check that the interlockOutHVPSTriggered VA is updated correctly"""
-        with self.assertRaises(ValueError):
-            self.fib_vacuum._updateInterlockOutHVPSTriggered(self.datamodel.HybridPlatform.Cancel)
-
         connector_test(self, self.fib_vacuum.interlockOutHVPSTriggered,
                        self.fib_vacuum._interlockOutHVPS.ErrorState,
                        [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
@@ -1273,9 +1205,6 @@ class TestFIBVacuum(unittest.TestCase):
 
     def test_interlockOutSEDTriggered(self):
         """Check that the interlockOutSEDTriggered VA is updated correctly"""
-        with self.assertRaises(ValueError):
-            self.fib_vacuum._updateInterlockOutSEDTriggered(self.datamodel.HybridPlatform.Cancel)
-
         connector_test(self, self.fib_vacuum.interlockOutSEDTriggered,
                        self.fib_vacuum._interlockOutSED.ErrorState,
                        [(True, orsay.INTERLOCK_DETECTED_STR), (False, "")],
@@ -1283,8 +1212,12 @@ class TestFIBVacuum(unittest.TestCase):
 
     def test_columnPumpOn(self):
         """Check that the columnPumpOn VA is updated correctly"""
+        settletime = 60
+        if TEST_NOHW == "sim":
+            settletime = 5
+
         connector_test(self, self.fib_vacuum.columnPumpOn, self.fib_vacuum._columnPump.IsOn,
-                       [(True, "True"), (False, "False")], hw_safe=True, settletime=5)
+                       [(True, "True"), (False, "False")], hw_safe=True, settletime=settletime)
         # Reset the interlocks that get triggered by turning off the column pump
         self.fib_vacuum.interlockOutChamberTriggered.value = False
         self.fib_vacuum.interlockOutHVPSTriggered.value = False
@@ -1293,17 +1226,17 @@ class TestFIBVacuum(unittest.TestCase):
     def test_gunPressure(self):
         """Check that the gunPressure VA is updated correctly"""
         connector_test(self, self.fib_vacuum.gunPressure, self.fib_vacuum._gunPump.Pressure,
-                       [(1e-3, 1e-3), (2e-3, 2e-3)], readonly=True)
+                       [(1e-3, 1e-3), (2e-3, 2e-3)], hw_safe=False, readonly=True)
 
     def test_columnPressure(self):
         """Check that the columnPressure VA is updated correctly"""
         connector_test(self, self.fib_vacuum.columnPressure, self.fib_vacuum._columnPump.Pressure,
-                       [(1e-3, 1e-3), (2e-3, 2e-3)], readonly=True)
+                       [(1e-3, 1e-3), (2e-3, 2e-3)], hw_safe=False, readonly=True)
 
     def test_compressedAirPressure(self):
         """Check that the compressedAirPressure VA is updated correctly"""
         connector_test(self, self.fib_vacuum.compressedAirPressure, self.datamodel.HybridGaugeCompressedAir.Pressure,
-                       [(1e5, 1e5), (0, 0)], readonly=True)
+                       [(1e5, 1e5), (0, 0)], hw_safe=False, readonly=True)
 
 
 class TestFIBSource(unittest.TestCase):
@@ -1318,7 +1251,7 @@ class TestFIBSource(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
@@ -1337,10 +1270,10 @@ class TestFIBSource(unittest.TestCase):
         cls.oserver.terminate()
 
     def test_gunOn(self):
-        """Check that the gunOn VA is updated correctly"""
+        """Check that the gunOn VA on the FIBSource is updated correctly"""
         if hasattr(self, 'fib_vacuum'):
             init_gun = self.fib_vacuum.gunPumpOn.value
-            init_column = self.fib_vacuum.gunPumpOn.value
+            init_column = self.fib_vacuum.columnPumpOn.value
             self.fib_vacuum.gunPumpOn.value = True  # pumps need to be on for the gun to be able to turn on
             self.fib_vacuum.columnPumpOn.value = True
             connector_test(self, self.fib_source.gunOn, self.fib_source._hvps.GunState,
@@ -1353,60 +1286,71 @@ class TestFIBSource(unittest.TestCase):
     def test_lifetime(self):
         """Check that the lifetime VA is updated correctly"""
         connector_test(self, self.fib_source.lifetime, self.fib_source._hvps.SourceLifeTime,
-                       [(0.1, 0.1), (0.2, 0.2)], readonly=True)
+                       [(0.1, 0.1), (0.2, 0.2)], hw_safe=False, readonly=True)
 
     def test_currentRegulation(self):
         """Check that the currentRegulation VA is updated correctly"""
         connector_test(self, self.fib_source.currentRegulation, self.fib_source._hvps.BeamCurrent_Enabled,
-                       [(True, "True"), (False, "False")], readonly=True, settletime=1)
+                       [(True, "True"), (False, "False")], hw_safe=False, readonly=True, settletime=1)
 
     def test_sourceCurrent(self):
         """Check that the sourceCurrent VA is updated correctly"""
         connector_test(self, self.fib_source.sourceCurrent, self.fib_source._hvps.BeamCurrent,
-                       [(1e-5, 1e-5), (0, 0)], readonly=True)
+                       [(1e-6, 1e-6), (2e-6, 2e-6)], hw_safe=False, readonly=True, settletime=30)
 
     def test_suppressorVoltage(self):
         """Check that the suppressorVoltage VA is updated correctly"""
+        # Make sure the gun is on, also select a correct preset ('For testing' for example)
+        if TEST_NOHW == "sim":
+            # TODO Currently the current doesn't change on the simulator --> Ask Orsay to also simulate the current and regulation mode.
+            self.skipTest("Regulation mode is not implemented on the simulator")
+
+        hvps = self.datamodel.HVPSFloatingIon
+        init_state = hvps.BeamCurrent_Enabled.Target  # Actual isn't used on this one
+        hvps.BeamCurrent_Enabled.Target = False  # Set to voltage mode
         connector_test(self, self.fib_source.suppressorVoltage, self.fib_source._hvps.Suppressor,
-                       [(10, 10), (0, 0)], hw_safe=True, settletime=1)
+                       [(1000, 1000), (900, 900)], hw_safe=True, settletime=10)
 
-    def test_heaterCurrent(self):
-        """Check that the heaterCurrent VA is updated correctly"""
-        connector_test(self, self.fib_source.heaterCurrent, self.fib_source._hvps.Heater,
-                       [(1, 1), (0, 0)], hw_safe=True, settletime=1)
-
-    def test_heater(self):
-        """Check that the heater VA is updated correctly"""
-        connector_test(self, self.fib_source.heater, self.fib_source._hvps.HeaterState,
-                       [(True, orsay.HEATER_ON), (False, orsay.HEATER_OFF)],
-                       hw_safe=True, settletime=1)
-
-        if TEST_NOHW == "sim":  # This part of the test is only safe in simulation
-            self.fib_source._hvps.HeaterState.Target = orsay.HEATER_RISING
-            sleep(0.5)
-            self.assertTrue(self.fib_source.heater.value)
-
-            self.fib_source._hvps.HeaterState.Target = orsay.HEATER_ERROR
-            sleep(0.5)
-            self.assertFalse(self.fib_source.heater.value)
-            self.assertIsInstance(self.fib_source.state.value, HwError)
-            self.assertIn("FIB source forced to shut down", str(self.fib_source.state.value))
-
-            self.fib_source._hvps.HeaterState.Target = orsay.HEATER_FALLING
-            sleep(0.5)
-            self.assertTrue(self.fib_source.heater.value)
-            self.assertEqual(self.fib_source.state.value, model.ST_RUNNING)
-            self.fib_source._hvps.HeaterState.Target = orsay.HEATER_ON
+        hvps.BeamCurrent_Enabled.Actual = init_state
 
     def test_acceleratorVoltage(self):
         """Check that the acceleratorVoltage VA is updated correctly"""
         connector_test(self, self.fib_source.acceleratorVoltage, self.fib_source._hvps.Energy,
                        [(10.0, 10.0), (0.0, 0.0)], hw_safe=True, settletime=1)
 
-    def test_energyLink(self):
-        """Check that the energyLink VA is updated correctly"""
-        connector_test(self, self.fib_source.energyLink, self.fib_source._hvps.EnergyLink,
-                       [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=2)
+    # Note: Currently unused and unsafe
+    # def test_heaterCurrent(self):
+    #     """Check that the heaterCurrent VA is updated correctly"""
+    #     connector_test(self, self.fib_source.heaterCurrent, self.fib_source._hvps.Heater,
+    #                    [(1, 1), (0, 0)], hw_safe=True, settletime=1)
+    #
+    # def test_heater(self):
+    #     """Check that the heater VA is updated correctly"""
+    #     connector_test(self, self.fib_source.heater, self.fib_source._hvps.HeaterState,
+    #                    [(True, orsay.HEATER_ON), (False, orsay.HEATER_OFF)],
+    #                    hw_safe=True, settletime=1)
+    #
+    #     if TEST_NOHW == "sim":  # This part of the test is only safe in simulation
+    #         self.fib_source._hvps.HeaterState.Target = orsay.HEATER_RISING
+    #         sleep(0.5)
+    #         self.assertTrue(self.fib_source.heater.value)
+    #
+    #         self.fib_source._hvps.HeaterState.Target = orsay.HEATER_ERROR
+    #         sleep(0.5)
+    #         self.assertFalse(self.fib_source.heater.value)
+    #         self.assertIsInstance(self.fib_source.state.value, HwError)
+    #         self.assertIn("FIB source forced to shut down", str(self.fib_source.state.value))
+    #
+    #         self.fib_source._hvps.HeaterState.Target = orsay.HEATER_FALLING
+    #         sleep(0.5)
+    #         self.assertTrue(self.fib_source.heater.value)
+    #         self.assertEqual(self.fib_source.state.value, model.ST_RUNNING)
+    #         self.fib_source._hvps.HeaterState.Target = orsay.HEATER_ON
+    #
+    # def test_energyLink(self):
+    #     """Check that the energyLink VA is updated correctly"""
+    #     connector_test(self, self.fib_source.energyLink, self.fib_source._hvps.EnergyLink,
+    #                    [(True, "ON"), (False, "OFF")], hw_safe=True, settletime=2)
 
     def test_extractorVoltage(self):
         """Check that the extractorVoltage VA is updated correctly"""
@@ -1414,6 +1358,7 @@ class TestFIBSource(unittest.TestCase):
                        [(10, 10), (0, 0)], hw_safe=True, settletime=1)
 
 
+# TODO Some work/updates to do but all pass in the end unless a comment
 class TestFIBBeam(unittest.TestCase):
     """
     Tests for the Focused Ion Beam (FIB) Beam components
@@ -1426,7 +1371,7 @@ class TestFIBBeam(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
@@ -1523,15 +1468,16 @@ class TestFIBBeam(unittest.TestCase):
         connector_test(self, self.fibbeam.xyRatio, self.fibbeam._ionColumn.ObjectiveXYRatio,
                        [(0.5, 0.5), (1.0, 1.0)], hw_safe=True, settletime=1)
 
-    def test_mirror(self):
-        """Check that the mirror VA is updated correctly"""
-        connector_test(self, self.fibbeam.mirror, self.fibbeam._ionColumn.Mirror,
+    def test_mirrorImage(self):
+        """Check that the mirrorImage VA is updated correctly"""
+        connector_test(self, self.fibbeam.mirrorImage, self.fibbeam._ionColumn.Mirror,
                        [(True, -1), (False, 1)], hw_safe=True, settletime=1)
 
-    def test_imageFromSteerers(self):
-        """Check that the imageFromSteerers VA is updated correctly"""
-        connector_test(self, self.fibbeam.imageFromSteerers, self.fibbeam._ionColumn.ObjectiveScanSteerer,
-                       [(True, 1), (False, 0)], hw_safe=True, settletime=1)
+    # Note: Currently unused and unsafe
+    # def test_imageFromSteerers(self):
+    #     """Check that the imageFromSteerers VA is updated correctly"""
+    #     connector_test(self, self.fibbeam.imageFromSteerers, self.fibbeam._ionColumn.ObjectiveScanSteerer,
+    #                    [(True, 1), (False, 0)], hw_safe=False, settletime=1)
 
     def test_objectiveVoltage(self):
         """Check that the objectiveVoltage VA is updated correctly"""
@@ -1553,12 +1499,12 @@ class TestFIBBeam(unittest.TestCase):
     def test_measuringCurrent(self):
         """Check that the measuringCurrent VA is updated correctly"""
         connector_test(self, self.fibbeam.measuringCurrent, self.fibbeam._ionColumn.FaradayStart,
-                       [(True, 1), (False, 0)], hw_safe=True, settletime=1)
+                       [(True, 1), (False, 0)], hw_safe=True, settletime=5)
 
     def test_current(self):
         """Check that the current VA is updated correctly"""
         connector_test(self, self.fibbeam.current, self.fibbeam._ionColumn.FaradayCurrent,
-                       [(1e-6, 1e-6), (0.0, 0.0)], readonly=True)
+                       [(1e-6, 1e-6), (0.0, 0.0)], hw_safe=False, readonly=True)
 
     def test_videoDelay(self):
         """Check that the videoDelay VA is updated correctly"""
@@ -1605,16 +1551,13 @@ class TestFIBBeam(unittest.TestCase):
         self.fibsource.gunOn.value = init_gun  # return to value before test
         sleep(5)  # give it some time to turn off
 
-    def test_operatingMode(self):
-        """Check that the operatingMode VA is updated correctly"""
-        connector_test(self, self.fibbeam.operatingMode, self.fibbeam._datamodel.Scanner.OperatingMode,
+    def test_imagingMode(self):
+        """Check that the imagingMode VA is updated correctly"""
+        connector_test(self, self.fibbeam.imagingMode, self.fibbeam._datamodel.Scanner.OperatingMode,
                        [(True, 1), (False, 0)], hw_safe=True, settletime=1)
 
     def test_imageFormat(self):
         """Check that the imageFormat VA is updated correctly"""
-        with self.assertRaises(ValueError):
-            self.fibbeam._updateImageFormat(self.datamodel.HybridPlatform.Cancel)
-
         init_format = self.fibbeam.imageFormat.value
 
         connector_test(self, self.fibbeam.imageFormat, self.fibbeam._ionColumn.ImageSize,
@@ -1625,9 +1568,6 @@ class TestFIBBeam(unittest.TestCase):
 
     def test_imageArea(self):
         """Check that the translation and resolution VA's are updated correctly"""
-        with self.assertRaises(ValueError):
-            self.fibbeam._updateTranslationResolution(self.datamodel.HybridPlatform.Cancel)
-
         init_format = self.fibbeam.imageFormat.value
         init_trans = self.fibbeam.translation.value
         init_res = self.fibbeam.resolution.value
@@ -1791,7 +1731,7 @@ class TestLight(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
@@ -1810,8 +1750,8 @@ class TestLight(unittest.TestCase):
     def test_power(self):
         """Check that the power VA is updated correctly"""
         connector_test(self, self.light.power, self.datamodel.HybridPlatform.AnalysisChamber.InfraredLight.State,
-                       [([0.0], "False"), ([1.0], "True")],
-                       hw_safe=True, settletime=1)
+                       [([0.0], str(0)), ([1.0], str(1))],
+                       hw_safe=True, settletime=3)
 
 
 class TestScanner(unittest.TestCase):
@@ -1826,7 +1766,7 @@ class TestScanner(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
@@ -1852,14 +1792,22 @@ class TestScanner(unittest.TestCase):
 
         self.scanner.power.value = False
         self.assertFalse(self.fibsource.gunOn.value)
+        if TEST_NOHW != "sim":
+            sleep(10)  # Give the microscope some time so it won't break
         self.scanner.power.value = True
         self.assertTrue(self.fibsource.gunOn.value)
 
+        if TEST_NOHW != "sim":
+            sleep(10)  # Give the microscope some time so it won't break
         self.fibsource.gunOn.value = False
         self.assertEqual(False, self.scanner.power.value)
+        if TEST_NOHW != "sim":
+            sleep(10)  # Give the microscope some time so it won't break
         self.fibsource.gunOn.value = True
         self.assertEqual(True, self.scanner.power.value)
 
+        if TEST_NOHW != "sim":
+            sleep(10)  # Give the microscope some time so it won't break
         self.scanner.power.value = init_value  # return to initial value
 
     def test_blanker(self):
@@ -1868,17 +1816,22 @@ class TestScanner(unittest.TestCase):
 
         self.fibbeam.blanker.value = True
         self.assertTrue(self.scanner.blanker.value)
+        sleep(1)  # Give the microscope some time so it won't break
         self.fibbeam.blanker.value = False
         self.assertFalse(self.scanner.blanker.value)
+        sleep(1)  # Give the microscope some time so it won't break
         self.fibbeam.blanker.value = None
         self.assertIsNone(self.scanner.blanker.value)
 
         self.scanner.blanker.value = True
         self.assertTrue(self.fibbeam.blanker.value)
+        sleep(1)  # Give the microscope some time so it won't break
         self.scanner.blanker.value = False
         self.assertFalse(self.fibbeam.blanker.value)
+        sleep(1)  # Give the microscope some time so it won't break
         self.scanner.blanker.value = None
         self.assertIsNone(self.fibbeam.blanker.value)
+        sleep(1)  # Give the microscope some time so it won't break
 
         self.fibbeam.blanker.value = init_value  # return to initial value
 
@@ -1895,7 +1848,7 @@ class TestFocus(unittest.TestCase):
         """
         Setup the Orsay client
         """
-        if TEST_NOHW == 1:
+        if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
@@ -1907,13 +1860,12 @@ class TestFocus(unittest.TestCase):
             elif child.name == CONFIG_FOCUS["name"]:
                 cls.focus = child
                 cls.focus.updateMetadata({model.MD_CALIB: 0.18e6})  # Volt per meter
-        # Set the objective voltage and base voltage to the same reasonable value
         cls.init_lens_voltage = cls.ov.Target
         cls.focus.baseLensVoltage = 10000
+        cls.fibbeam.objectiveVoltage.value = 14000
         if TEST_NOHW == "sim":  # Actual stays 0 in simulation, so set it directly
             cls.ov.Actual = 10000
-        else:
-            cls.fibbeam.objectiveVoltage.value = 10000
+
         sleep(0.5)
 
     @classmethod
@@ -1958,7 +1910,7 @@ class TestFocus(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.focus.moveRel({"z": 1})  # try to move way outside the range
 
-        if not TEST_NOHW == 1:
+        if not TEST_NOHW == True:
             self.skipTest("Writing to FIBBeam.objectiveVoltage does not work in simulation, because the simulator does"
                           "not copy the Target value to Actual. No way to test moveRel.")
 
@@ -1979,7 +1931,7 @@ class TestFocus(unittest.TestCase):
         with self.assertRaises(ValueError):
             self.focus.moveAbs({"z": 1})  # try to move way outside the range
 
-        if not TEST_NOHW == 1:
+        if not TEST_NOHW == True:
             self.skipTest("Writing to FIBBeam.objectiveVoltage does not work in simulation, because the simulator does"
                           "not copy the Target value to Actual. No way to test moveAbs.")
 
@@ -1994,7 +1946,7 @@ class TestFocus(unittest.TestCase):
         """
         Test that stop works
         """
-        if not TEST_NOHW == 1:
+        if not TEST_NOHW == True:
             self.skipTest("Writing to FIBBeam.objectiveVoltage does not work in simulation, because the simulator does"
                           "not copy the Target value to Actual. No way to test stop.")
 
@@ -2003,7 +1955,7 @@ class TestFocus(unittest.TestCase):
         with self.assertLogs(logger=None, level=logging.DEBUG):
             self.focus.stop()
 
-
+@timeout(240)  # Sometimes something in the test with the Orsay server gets stuck and the test cases take too much time.
 def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_safe=False, settletime=0.5):
     """
     Standard test for testing an OrsayParameterConnector.
@@ -2025,10 +1977,10 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
         Defaults to 0.5.
     :returns: Nothing
     """
-    if TEST_NOHW == 1:
+    if TEST_NOHW == True:
         test_case.skipTest(NO_SERVER_MSG)
 
-    if not TEST_NOHW == "sim" and not hw_safe:
+    if TEST_NOHW != "sim" and not hw_safe:
         test_case.skipTest("This test is not hardware safe.")
 
     if len(valuepairs) < 2:
@@ -2036,7 +1988,9 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
 
     attributes = ["Target"]
     if TEST_NOHW == "sim":
-        attributes.append("Actual")  # in simulation write to both Target and Actual
+        # The simulator does not update the Actual value itself when Target changes. So we do it ourselves by copying
+        # the same value as set in Target.
+        attributes.append("Actual")
         settletime = 0.5
 
     # assure that non-tuple va's can be handled the same as tuple va's for the remainder of this function
@@ -2058,21 +2012,21 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
             for a in attributes:
                 setattr(parameters[i], a, par_value1[i])
         sleep(settletime)
-        test_case.assertEqual(va.value, va_value1)
+        test_case.assertEqual(va.value, va_value1, "The assertEqual between va.value and va_value1 isn't correct.")
 
         # Go to the second value
         for i in range(len(parameters)):
             for a in attributes:
                 setattr(parameters[i], a, par_value2[i])
         sleep(settletime)
-        test_case.assertEqual(va.value, va_value2)
+        test_case.assertEqual(va.value, va_value2, "The assertEqual between va.value and va_value2 isn't correct.")
 
         # Go back to the first value
         for i in range(len(parameters)):
             for a in attributes:
                 setattr(parameters[i], a, par_value1[i])
         sleep(settletime)
-        test_case.assertEqual(va.value, va_value1)
+        test_case.assertEqual(va.value, va_value1, "The second assertEqual between va.value and va_value1 isn't correct.")
 
     if not readonly:
         # write to the VA, check that the Parameter follows
@@ -2082,21 +2036,21 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
             sleep(settletime)
             for i in range(len(parameters)):
                 target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
-                test_case.assertEqual(target, par_value1[i])
+                test_case.assertEqual(target, par_value1[i], "The assertEqual between target and par_value1 isn't correct.")
 
             # Go to the second value
             va.value = va_value2
             sleep(settletime)
             for i in range(len(parameters)):
                 target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
-                test_case.assertEqual(target, par_value2[i])
+                test_case.assertEqual(target, par_value2[i], "The assertEqual between target and par_value2 isn't correct.")
 
             # Go back to the first value
             va.value = va_value1
             sleep(settletime)
             for i in range(len(parameters)):
                 target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
-                test_case.assertEqual(target, par_value1[i])
+                test_case.assertEqual(target, par_value1[i], "The second assertEqual between target and par_value1 isn't correct.")
 
     for i in range(len(parameters)):
         parameters[i].Target = init_values[i]  # return to the values form before test

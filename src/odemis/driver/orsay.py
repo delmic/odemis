@@ -67,6 +67,18 @@ NO_ERROR_VALUES = (None, "", "None", "none", 0, "0", "NoError")
 
 INTERLOCK_DETECTED_STR = "Interlock event detected"
 
+def recursive_getattr(obj, attr):
+    """
+    Get a named attribute from an object; getattr(x, 'y.z') is equivalent to x.y.z.
+    If a "." is included in the attribute name, recursively it will find the sub-attribute.
+
+    :param obj: Object whose which attribute is to be acquired.
+    :param attr (string): The (sub-) attribute.
+    :return: the value of the specified (sub-) attribute from the specified object.
+    """
+    for a in attr.split("."):
+        obj = getattr(obj, a)
+    return obj
 
 def get_orsay_param_connectors(obj):
     """
@@ -248,6 +260,14 @@ class OrsayComponent(model.HwComponent):
         Update the VA's. Should be called after reconnection to the server
         """
         self._updateProcessInfo()
+        # TODO to consistently pass the some tests an update of all the VAs in the orsay server is added. This
+        #  suggests that the subscription doesn't work properly. Maybe this should be checked or the update_VAs
+        #  should be run in a thread continuously
+        # for child in self.children.value:
+        #     try:
+        #         child.update_VAs()
+        #     except AttributeError:  # if the child does not have an update_VAs() method
+        #         pass  # no need to do anything
 
     def _connection_monitor(self):
         """
@@ -304,10 +324,6 @@ class OrsayComponent(model.HwComponent):
         """
         if parameter is None:
             parameter = self.datamodel.HybridPlatform.ProcessInfo
-        if parameter is not self.datamodel.HybridPlatform.ProcessInfo:
-            raise ValueError("Incorrect parameter passed to _updateProcessInfo. Parameter should be "
-                             "datamodel.HybridPlatform.ProcessInfo. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         currentProcessInfo = str(parameter.Actual)
@@ -405,10 +421,6 @@ class pneumaticSuspension(model.HwComponent):
         """
         if parameter is None:
             parameter = self._valve
-        if parameter is not self._valve:
-            raise ValueError("Incorrect parameter passed to _updatePower. Parameter should be "
-                             "datamodel.HybridPlatform.ValvePneumaticSuspension.IsOpen. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         valve_state = int(parameter.Actual)
@@ -434,10 +446,6 @@ class pneumaticSuspension(model.HwComponent):
         """
         if parameter is None:
             parameter = self._gauge
-        if parameter is not self._gauge:
-            raise ValueError("Incorrect parameter passed to _updatePressure. Parameter should be "
-                             "datamodel.HybridPlatform.Manometer2.Pressure. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         self.pressure._set_value(float(parameter.Actual), force_write=True)
@@ -450,12 +458,6 @@ class pneumaticSuspension(model.HwComponent):
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
         """
-        if parameter is not self.parent.datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState and parameter is \
-                not self.parent.datamodel.HybridPlatform.Manometer2.ErrorState and parameter is not None:
-            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
-                             "datamodel.HybridPlatform.ValvePneumaticSuspension.ErrorState or "
-                             "datamodel.HybridPlatform.Manometer2.ErrorState or None. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         eState = ""
@@ -578,10 +580,6 @@ class vacuumChamber(model.Actuator):
         """
         if parameter is None:
             parameter = self._chamber.VacuumStatus
-        if parameter is not self._chamber.VacuumStatus:
-            raise ValueError("Incorrect parameter passed to _updatePosition. Parameter should be "
-                             "datamodel.HybridPlatform.AnalysisChamber.VacuumStatus. Parameter passed is %s"
-                             % parameter.Name)
         if parameter.Actual == parameter.Target:
             logging.debug("Target vacuum state reached.")
             self._vacuumStatusReached.set()
@@ -610,10 +608,6 @@ class vacuumChamber(model.Actuator):
         """
         if parameter is None:
             parameter = self._chamber.Pressure
-        if parameter is not self._chamber.Pressure:
-            raise ValueError("Incorrect parameter passed to _updatePressure. Parameter should be "
-                             "datamodel.HybridPlatform.AnalysisChamber.Pressure. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         self.pressure._set_value(float(parameter.Actual), force_write=True)
@@ -671,12 +665,13 @@ class vacuumChamber(model.Actuator):
         """
         Called when Odemis is closed
         """
+        if self._executor:
+            self._executor.shutdown()
+            self._executor = None
+
         if self._chamber:
             self._chamber.VacuumStatus.Unsubscribe(self._updatePosition)
             self._chamber.Pressure.Unsubscribe(self._updatePressure)
-            if self._executor:
-                self._executor.shutdown()
-                self._executor = None
             self._chamber = None
 
 
@@ -751,12 +746,6 @@ class pumpingSystem(model.HwComponent):
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
         """
-        if parameter is not self._system.Manometer1.ErrorState and parameter is not self._system.TurboPump1.ErrorState \
-                and parameter is not None:
-            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
-                             "datamodel.HybridPlatform.PumpingSystem.Manometer1.ErrorState or "
-                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.ErrorState or None. "
-                             "Parameter passed is %s" % parameter.Name)
         if attr_name != "Actual":
             return
         eState = ""
@@ -783,10 +772,6 @@ class pumpingSystem(model.HwComponent):
         """
         if parameter is None:
             parameter = self._system.TurboPump1.Speed
-        if parameter is not self._system.TurboPump1.Speed:
-            raise ValueError("Incorrect parameter passed to _updateSpeed. Parameter should be "
-                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Speed. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         self.speed._set_value(float(parameter.Actual), force_write=True)
@@ -801,10 +786,6 @@ class pumpingSystem(model.HwComponent):
         """
         if parameter is None:
             parameter = self._system.TurboPump1.Temperature
-        if parameter is not self._system.TurboPump1.Temperature:
-            raise ValueError("Incorrect parameter passed to _updateTemperature. Parameter should be "
-                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Temperature. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         self.temperature._set_value(float(self._system.TurboPump1.Temperature.Actual), force_write=True)
@@ -819,10 +800,6 @@ class pumpingSystem(model.HwComponent):
         """
         if parameter is None:
             parameter = self._system.TurboPump1.Power
-        if parameter is not self._system.TurboPump1.Power:
-            raise ValueError("Incorrect parameter passed to _updatePower. Parameter should be "
-                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.Power. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         self.power._set_value(float(parameter.Actual), force_write=True)
@@ -837,10 +814,6 @@ class pumpingSystem(model.HwComponent):
         """
         if parameter is None:
             parameter = self._system.TurboPump1.SpeedReached
-        if parameter is not self._system.TurboPump1.SpeedReached:
-            raise ValueError("Incorrect parameter passed to _updateSpeedReached. Parameter should be "
-                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.SpeedReached. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         logging.debug("Speed reached changed to %s." % str(parameter.Actual))
@@ -856,10 +829,6 @@ class pumpingSystem(model.HwComponent):
         """
         if parameter is None:
             parameter = self._system.TurboPump1.IsOn
-        if parameter is not self._system.TurboPump1.IsOn:
-            raise ValueError("Incorrect parameter passed to _updateTurboPumpOn. Parameter should be "
-                             "datamodel.HybridPlatform.PumpingSystem.TurboPump1.IsOn. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         state = str(parameter.Actual).lower() == "true"
@@ -876,10 +845,6 @@ class pumpingSystem(model.HwComponent):
         """
         if parameter is None:
             parameter = self.parent.datamodel.HybridPlatform.PrimaryPumpState
-        if parameter is not self.parent.datamodel.HybridPlatform.PrimaryPumpState:
-            raise ValueError("Incorrect parameter passed to _updatePrimaryPumpOn. Parameter should be "
-                             "datamodel.HybridPlatform.PrimaryPumpState. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         state = str(parameter.Actual).lower() == "true"
@@ -896,10 +861,6 @@ class pumpingSystem(model.HwComponent):
         """
         if parameter is None:
             parameter = self._system.Manometer1.Pressure
-        if parameter is not self._system.Manometer1.Pressure:
-            raise ValueError("Incorrect parameter passed to _updateNitrogenPressure. Parameter should be "
-                             "datamodel.HybridPlatform.PumpingSystem.Manometer1.Pressure. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         self.nitrogenPressure._set_value(float(parameter.Actual), force_write=True)
@@ -967,9 +928,6 @@ class UPS(model.HwComponent):
         """
         if parameter is None:
             parameter = self._blevel
-        if parameter is not self._blevel:
-            raise ValueError("Incorrect parameter passed to _updateLevel. Parameter should be "
-                             "datamodel.HybridPlatform.UPS.UPScontroller.BatteryLevel")
         if attr_name != "Actual":
             return
         currentLevel = float(parameter.Actual)
@@ -1050,9 +1008,6 @@ class GIS(model.Actuator):
         """
         if parameter is None:
             parameter = self._errorPar
-        if parameter is not self._errorPar:
-            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
-                             "datamodel.HybridGIS.ErrorState. Parameter passed is %s." % parameter.Name)
         if attr_name != "Actual":
             return
         if self._errorPar.Actual not in NO_ERROR_VALUES:
@@ -1068,10 +1023,6 @@ class GIS(model.Actuator):
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
         """
-        if parameter not in [self._positionPar, self._reservoirPar, None]:
-            raise ValueError("Incorrect parameter passed to _updatePosition. Parameter should be "
-                             "datamodel.HybridGIS.PositionState, datamodel.HybridGIS.ReservoirState, or None. "
-                             "Parameter passed is %s." % parameter.Name)
         if attr_name == "Actual":
             arm_pos = self._positionPar.Actual
             gas_pos = self._reservoirPar.Actual
@@ -1199,8 +1150,11 @@ class GISReservoir(model.HwComponent):
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
+        logging.debug("Current param: %r", self._temperaturePar)
         self._gis = self.parent.datamodel.HybridGIS
         self._temperaturePar = self._gis.ReservoirTemperature
+
+        logging.debug("After param: %r", self._temperaturePar)
 
         self._gis.ErrorState.Subscribe(self._updateErrorState)
         self._gis.RodPosition.Subscribe(self._updateErrorState)
@@ -1231,10 +1185,6 @@ class GISReservoir(model.HwComponent):
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
         """
-        if parameter not in (self._gis.ErrorState, self._gis.RodPosition, None):
-            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be "
-                             "datamodel.HybridGIS.ErrorState, datamodel.HybridGIS.RodPosition, or None. "
-                             "Parameter passed is %s." % parameter.Name)
         if attr_name != "Actual":
             return
 
@@ -1269,11 +1219,12 @@ class GISReservoir(model.HwComponent):
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
         """
+        logging.debug("param id: %r", self._temperaturePar)
         if parameter is None:
             parameter = self._temperaturePar
         if parameter is not self._temperaturePar:
-            raise ValueError("Incorrect parameter passed to _updateTargetTemperature. Parameter should be "
-                             "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %s." % parameter.Name)
+            logging.warning("Incorrect parameter passed to _updateTargetTemperature. Parameter should be "
+                            "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %r." % parameter)
         if attr_name != "Target":
             return
         new_value = float(self._temperaturePar.Target)
@@ -1291,15 +1242,12 @@ class GISReservoir(model.HwComponent):
         """
         if parameter is None:
             parameter = self._temperaturePar
-        if parameter is not self._temperaturePar:
-            raise ValueError("Incorrect parameter passed to _updateTemperature. Parameter should be "
-                             "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %s." % parameter.Name)
-
         if float(self._temperaturePar.Actual) == float(self._temperaturePar.Target):
             logging.debug("Target temperature reached.")
 
         if attr_name != "Actual":
             return
+
         self.temperature._set_value(float(self._temperaturePar.Actual), force_write=True)
 
     def _updateTemperatureRegulation(self, parameter=None, attr_name="Actual"):
@@ -1313,10 +1261,6 @@ class GISReservoir(model.HwComponent):
         """
         # datamodel.HybridGIS.RegulationRushOn parameter is also available for extra fast (agressive) control of the
         # temperature, but this feature currently does not work and is not needed.
-        if parameter not in (self._gis.RegulationOn, None):
-            raise ValueError("Incorrect parameter passed to _updateTemperatureRegulation. Parameter should be "
-                             "datamodel.HybridGIS.RegulationOn, or None. "
-                             "Parameter passed is %s." % parameter.Name)
         if attr_name != "Actual":
             return
 
@@ -1339,9 +1283,6 @@ class GISReservoir(model.HwComponent):
         """
         if parameter is None:
             parameter = self._gis.ReservoirLifeTime
-        if parameter is not self._gis.ReservoirLifeTime:
-            raise ValueError("Incorrect parameter passed to _updateAge. Parameter should be "
-                             "datamodel.HybridGIS.ReservoirLifeTime. Parameter passed is %s." % parameter.Name)
         if attr_name != "Actual":
             return
         logging.debug("GIS reservoir lifetime updated to %f hours." % float(self._gis.ReservoirLifeTime.Actual))
@@ -1358,9 +1299,6 @@ class GISReservoir(model.HwComponent):
         """
         if parameter is None:
             parameter = self._gis.PrecursorType
-        if parameter is not self._gis.PrecursorType:
-            raise ValueError("Incorrect parameter passed to _updatePrecursorType. Parameter should be "
-                             "datamodel.HybridGIS.PrecursorType. Parameter passed is %s." % parameter.Name)
         if attr_name != "Actual":
             return
         logging.debug("Precursor type changed to %s." % self._gis.PrecursorType.Actual)
@@ -1406,9 +1344,10 @@ class GISReservoir(model.HwComponent):
 class OrsayParameterConnector:
     """
     Object that is connected to a VA and a parameter on the Orsay server.
+    If VA is not readonly, writing to the VA will write this value to the Orsay parameter's Target attribute.
     If VA is readonly, the VA will be kept up to date of the changes of the Orsay parameter, but force writing to the VA
     will not update the Orsay parameter.
-    If VA is not readonly, writing to the VA will write this value to the Orsay parameter's Target attribute.
+
 
     This class exists to prevent the need for copy-pasting similar code for each such connection that needs to be made.
     This class overwrites the setter of the VA, but does not use the getter. Instead it subscribes an update method to
@@ -1501,7 +1440,7 @@ class OrsayParameterConnector:
             if self._va_is_tuple:
                 new_range = [list(self._va.range[0]), list(self._va.range[1])]
             else:
-                new_range = [[self._va.range[0]], [self._va.range[1]]]
+                new_range = [self._va.range[0], self._va.range[1]]
 
             for i in range(len(self._parameters)):
                 p = self._parameters[i]
@@ -1517,7 +1456,10 @@ class OrsayParameterConnector:
                 else:
                     lowerbound = p.Min
                 if lowerbound is not None:  # if a lowerbound is defined in the server
-                    new_range[0][i] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
+                    if self._va_is_tuple:
+                        new_range[0][i] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
+                    else:
+                        new_range[0] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
                 # Search for an upperbound on the server
                 if self._maxpar:  # in case a minimum parameter is supplied
                     if self._maxpar[i].Actual is not None:
@@ -1530,12 +1472,15 @@ class OrsayParameterConnector:
                 else:
                     upperbound = p.Max
                 if upperbound is not None:  # if an upperbound is defined in the server
-                    new_range[1][i] = self._parameter_to_VA_value(upperbound)  # copy it to the va
+                    if self._va_is_tuple:
+                        new_range[1][i] = self._parameter_to_VA_value(upperbound)  # copy it to the va
+                    else:
+                        new_range[1] = self._parameter_to_VA_value(upperbound)  # copy it to the va
 
             if self._va_is_tuple:
-                new_range = (new_range[0][0], new_range[1][0])
+                new_range = (new_range[0], new_range[1])
             else:
-                new_range = (tuple(new_range[0]), tuple(new_range[1]))
+                new_range = tuple(new_range)
 
             # Set the range of the VA
             # Overwrite the VA value to make sure the current value is within the new range, so the new range can be
@@ -1575,13 +1520,6 @@ class OrsayParameterConnector:
             attr_name = self._attr_name
         if attr_name != self._attr_name:
             return
-
-        # Check that the value of the parameter argument makes sense
-        if parameter is not None and parameter not in self._parameters:
-            namesstring = ", ".join([p.Name for p in self._parameters])
-            msg = "Incorrect parameter passed. Excpected: %s. Received: %s." % (namesstring, parameter.Name)
-            logging.warning(msg)
-            raise ValueError(msg)
 
         # Determine the new value that the VA should get
         if self._va_is_tuple:
@@ -1698,7 +1636,7 @@ class FIBVacuum(model.HwComponent):
 
         self.DEVICES_WITH_ERROR_STATES = ("HybridGaugeCompressedAir",
                                           "HybridInterlockInChamberVac",
-                                          "HybridInterlockOutChamberVac",
+                                          "HybridPlatform.AnalysisChamber.ItlkOutChamberVac",
                                           "HybridInterlockOutHVPS",
                                           "HybridInterlockOutSED",
                                           "HybridIonPumpGunFIB",
@@ -1719,6 +1657,8 @@ class FIBVacuum(model.HwComponent):
         # SED will be shut down.
         self.interlockOutSEDTriggered = model.BooleanVA(False, setter=self._setInterlockOutSED)
 
+        self.gunPumpOn = model.BooleanVA(False)
+        self._gunPumpOnConnector = None
         self.columnPumpOn = model.BooleanVA(False)
         self._columnPumpOnConnector = None
         self.gunPressure = model.FloatContinuous(0, readonly=True, unit="Pa", range=VACUUM_PRESSURE_RNG)
@@ -1739,7 +1679,7 @@ class FIBVacuum(model.HwComponent):
         self._columnPump = self.parent.datamodel.HybridIonPumpColumnFIB
         self._gunPump = self.parent.datamodel.HybridIonPumpGunFIB
         self._interlockInChamber = self.parent.datamodel.HybridInterlockInChamberVac
-        self._interlockOutChamber = self.parent.datamodel.HybridInterlockOutChamberVac
+        self._interlockOutChamber = self.parent.datamodel.HybridPlatform.AnalysisChamber.ItlkOutChamberVac
         self._interlockOutHVPS = self.parent.datamodel.HybridInterlockOutHVPS
         self._interlockOutSED = self.parent.datamodel.HybridInterlockOutSED
 
@@ -1749,9 +1689,10 @@ class FIBVacuum(model.HwComponent):
         self._interlockOutHVPS.ErrorState.Subscribe(self._updateInterlockOutHVPSTriggered)
         self._interlockOutSED.ErrorState.Subscribe(self._updateInterlockOutSEDTriggered)
         for device in self.DEVICES_WITH_ERROR_STATES:
-            p = getattr(self.parent.datamodel, device).ErrorState
+            p = recursive_getattr(self.parent.datamodel, device).ErrorState
             p.Subscribe(self._updateErrorState)
 
+        self._gunPumpOnConnector = OrsayParameterConnector(self.gunPumpOn, self._gunPump.IsOn)
         self._columnPumpOnConnector = OrsayParameterConnector(self.columnPumpOn, self._columnPump.IsOn)
         self._gunPressureConnector = OrsayParameterConnector(self.gunPressure, self._gunPump.Pressure)
         self._columnPressureConnector = OrsayParameterConnector(self.columnPressure, self._columnPump.Pressure)
@@ -1779,18 +1720,14 @@ class FIBVacuum(model.HwComponent):
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
         """
-        errorParameters = (getattr(self.parent.datamodel, device).ErrorState
+        errorParameters = (recursive_getattr(self.parent.datamodel, device).ErrorState
                            for device in self.DEVICES_WITH_ERROR_STATES)
-        if parameter is not None and parameter not in errorParameters:
-            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or a FIB "
-                             "related ErrorState parameter. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
 
         eState = ""
         for device in self.DEVICES_WITH_ERROR_STATES:
-            this_state = getattr(self.parent.datamodel, device).ErrorState.Actual
+            this_state = recursive_getattr(self.parent.datamodel, device).ErrorState.Actual
             if this_state not in NO_ERROR_VALUES:
                 if eState != "":
                     eState += ", "
@@ -1812,10 +1749,6 @@ class FIBVacuum(model.HwComponent):
         """
         if parameter is None:
             parameter = self._interlockInChamber.ErrorState
-        if parameter != self._interlockInChamber.ErrorState:
-            raise ValueError("Incorrect parameter passed to _updateInterlockInChamberTriggered. Parameter should be "
-                             "None or HybridInterlockInChamberVac.ErrorState. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
 
@@ -1836,10 +1769,6 @@ class FIBVacuum(model.HwComponent):
         """
         if parameter is None:
             parameter = self._interlockOutChamber.ErrorState
-        if parameter != self._interlockOutChamber.ErrorState:
-            raise ValueError("Incorrect parameter passed to _updateInterlockOutChamberTriggered. Parameter should be "
-                             "None or HybridInterlockOutChamberVac.ErrorState. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
 
@@ -1861,10 +1790,6 @@ class FIBVacuum(model.HwComponent):
         """
         if parameter is None:
             parameter = self._interlockOutHVPS.ErrorState
-        if parameter != self._interlockOutHVPS.ErrorState:
-            raise ValueError("Incorrect parameter passed to _updateInterlockOutHVPSTriggered. Parameter should be "
-                             "None or HybridInterlockOutHVPS.ErrorState. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
 
@@ -1886,10 +1811,6 @@ class FIBVacuum(model.HwComponent):
         """
         if parameter is None:
             parameter = self._interlockOutSED.ErrorState
-        if parameter != self._interlockOutSED.ErrorState:
-            raise ValueError("Incorrect parameter passed to _updateInterlockOutSEDTriggered. Parameter should be "
-                             "None or HybridInterlockOutSED.ErrorState. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
 
@@ -1934,7 +1855,7 @@ class FIBVacuum(model.HwComponent):
         """
         if not value:
             self._interlockOutChamber.Reset.Target = 0
-            logging.debug("Attempting to reset the HybridInterlockOutChamberVac interlock.")
+            logging.debug("Attempting to reset the HybridPlatform.AnalysisChamber.ItlkOutChamberVac interlock.")
         return self.interlockOutChamberTriggered.value
 
     def _setInterlockOutHVPS(self, value):
@@ -2022,21 +1943,24 @@ class FIBSource(model.HwComponent):
         self._gunOnConnector = None
         self.lifetime = model.FloatContinuous(0, readonly=True, unit="Ah", range=(0, 10))
         self._lifetimeConnector = None
-        self.currentRegulation = model.BooleanVA(False, readonly=True)
+        # Make sure the microscope is in regulation mode
+        self.parent.datamodel.HVPSFloatingIon.BeamCurrent_Enabled.Target = True
+        self.currentRegulation = model.BooleanVA(True, readonly=True)
         self._currentRegulationConnector = None
         self.sourceCurrent = model.FloatContinuous(0, readonly=True, unit="A", range=(0, 1e-5))
         self._sourceCurrentConnector = None
         self.suppressorVoltage = model.FloatContinuous(0.0, unit="V", range=(-2e3, 2e3))
         self._suppressorVoltageConnector = None
-        self.heaterCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
-        self._heaterCurrentConnector = None
-        self.heater = model.BooleanVA(False, setter=self._changeHeater)
         self.acceleratorVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 3e4))
         self._acceleratorVoltageConnector = None
-        self.energyLink = model.BooleanVA(False)
-        self._energyLinkConnector = None
         self.extractorVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 12e3))
         self._extractorVoltageConnector = None
+        # Note: Currently unused and unsafe
+        # self.heaterCurrent = model.FloatContinuous(0, unit="A", range=(0, 5))
+        # self._heaterCurrentConnector = None
+        # self.heater = model.BooleanVA(False, setter=self._changeHeater)
+        # self.energyLink = model.BooleanVA(False)
+        # self._energyLinkConnector = None
 
         self.on_connect()
 
@@ -2050,8 +1974,8 @@ class FIBSource(model.HwComponent):
         self._ionColumn = self.parent.datamodel.IonColumnMCS
 
         # Subscribe to the parameter on the Orsay server
-        self._hvps.HeaterState.Subscribe(self._updateHeater)
         self._hvps.HeaterState.Subscribe(self._updateErrorState)
+        # self._hvps.HeaterState.Subscribe(self._updateHeater) # Note: Currently unused and unsafe
 
         self._gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
                                                        conversion={True: "ON", False: "OFF"})
@@ -2066,24 +1990,25 @@ class FIBSource(model.HwComponent):
         self._suppressorVoltageConnector = OrsayParameterConnector(self.suppressorVoltage, self._hvps.Suppressor,
                                                                    minpar=self._hvps.Suppressor_Minvalue,
                                                                    maxpar=self._hvps.Suppressor_Maxvalue)
-        self._heaterCurrentConnector = OrsayParameterConnector(self.heaterCurrent, self._hvps.Heater,
-                                                               minpar=self._hvps.Heater_Minvalue,
-                                                               maxpar=self._hvps.Heater_Maxvalue)
         self._acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy,
                                                                     minpar=self._hvps.Energy_Minvalue,
                                                                     maxpar=self._hvps.Energy_Maxvalue)
-        self._energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
-                                                            conversion={True: "ON", False: "OFF"})
         self._extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor,
                                                                   minpar=self._hvps.Extractor_Minvalue,
                                                                   maxpar=self._hvps.Extractor_Maxvalue)
+        # Note: Currently unused and unsafe
+        # self._heaterCurrentConnector = OrsayParameterConnector(self.heaterCurrent, self._hvps.Heater,
+        #                                                        minpar=self._hvps.Heater_Minvalue,
+        #                                                        maxpar=self._hvps.Heater_Maxvalue)
+        # self._energyLinkConnector = OrsayParameterConnector(self.energyLink, self._hvps.EnergyLink,
+        #                                                     conversion={True: "ON", False: "OFF"})
         self.update_VAs()
 
     def update_VAs(self):
         """
         Update the VA's. Should be called after reconnection to the server
         """
-        self._updateHeater()
+        # self._updateHeater() # Note: Currently unused and unsafe
         self._updateErrorState()
         for connector in get_orsay_param_connectors(self):
             connector.update_VA()
@@ -2096,10 +2021,6 @@ class FIBSource(model.HwComponent):
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
         """
-        if parameter not in (None, self._hvps.HeaterState):
-            raise ValueError("Incorrect parameter passed to _updateErrorState. Parameter should be None or the"
-                             "HVPSFloatingIon.HeaterState. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
 
@@ -2114,40 +2035,37 @@ class FIBSource(model.HwComponent):
         else:
             self.state._set_value(HwError(eState), force_write=True)
 
-    def _updateHeater(self, parameter=None, attr_name="Actual"):
-        """
-        Reads if the FIB source heater is on from the Orsay server and saves it in the heater VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attr_name: The name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._hvps.HeaterState
-        if parameter is not self._hvps.HeaterState:
-            raise ValueError("Incorrect parameter passed to _updateHeater. Parameter should be "
-                             "datamodel.HVPSFloatingIon.HeaterState. Parameter passed is %s"
-                             % parameter.Name)
-        if attr_name != "Actual":
-            return
-        heater_state = self._hvps.HeaterState.Actual
-        new_value = False
-        logging.debug("FIB source heater state is: %s." % heater_state)
-        if heater_state in (HEATER_ON, HEATER_RISING, HEATER_FALLING):  # alternative values: HEATER_OFF, HEATER_ERROR
-            new_value = True
-        self.heater._value = new_value  # to not call the setter
-        self.heater.notify(new_value)
-
-    def _changeHeater(self, goal):
-        """
-        Turns on the FIB source heater on the Orsay server if argument goal is True. Turns it off otherwise.
-
-        :param (bool) goal: Goal state of the heater: (True: "ON", False: "OFF")
-        :return (bool): Goal state of the heater as set to the server: (True: "ON", False: "OFF")
-        """
-        logging.debug("Setting FIB source heater to %s." % (HEATER_ON if goal else HEATER_OFF))
-        self._hvps.HeaterState.Target = HEATER_ON if goal else HEATER_OFF
-        return goal
+    # Note: Currently unused and unsafe
+    # def _updateHeater(self, parameter=None, attr_name="Actual"):
+    #     """
+    #     Reads if the FIB source heater is on from the Orsay server and saves it in the heater VA.
+    #     Gets called as callback by the Orsay server when the parameter changes value.
+    #
+    #     :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
+    #     :param (str) attr_name: The name of the attribute of parameter which was changed
+    #     """
+    #     if parameter is None:
+    #         parameter = self._hvps.HeaterState
+    #     if attr_name != "Actual":
+    #         return
+    #     heater_state = self._hvps.HeaterState.Actual
+    #     new_value = False
+    #     logging.debug("FIB source heater state is: %s." % heater_state)
+    #     if heater_state in (HEATER_ON, HEATER_RISING, HEATER_FALLING):  # alternative values: HEATER_OFF, HEATER_ERROR
+    #         new_value = True
+    #     self.heater._value = new_value  # to not call the setter
+    #     self.heater.notify(new_value)
+    #
+    # def _changeHeater(self, goal):
+    #     """
+    #     Turns on the FIB source heater on the Orsay server if argument goal is True. Turns it off otherwise.
+    # 
+    #     :param (bool) goal: Goal state of the heater: (True: "ON", False: "OFF")
+    #     :return (bool): Goal state of the heater as set to the server: (True: "ON", False: "OFF")
+    #     """
+    #     logging.debug("Setting FIB source heater to %s." % (HEATER_ON if goal else HEATER_OFF))
+    #     self._hvps.HeaterState.Target = HEATER_ON if goal else HEATER_OFF
+    #     return goal
 
     def terminate(self):
         """
@@ -2239,8 +2157,9 @@ class FIBBeam(model.HwComponent):
         self._xyRatioConnector = None
         self.mirrorImage = model.BooleanVA(False)  # True to mirror the retrieved image
         self._mirrorImageConnector = None
-        self.imageFromSteerers = model.BooleanVA(False)  # True to image from Steerers, False to image from Octopoles
-        self._imageFromSteerersConnector = None
+        # Note: Currently unused and unsafe
+        # self.imageFromSteerers = model.BooleanVA(False)  # True to image from Steerers, False to image from Octopoles
+        # self._imageFromSteerersConnector = None
         self.objectiveVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 2e4))
         self._objectiveVoltageConnector = None
         self.beamShift = model.TupleContinuous((0.0, 0.0), unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)])
@@ -2384,9 +2303,10 @@ class FIBBeam(model.HwComponent):
                                                          maxpar=self._ionColumn.ObjectiveXYRatio_Maxvalue)
         self._mirrorImageConnector = OrsayParameterConnector(self.mirrorImage, self._ionColumn.Mirror,
                                                              conversion={True: -1, False: 1})
-        self._imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
-                                                                   self._ionColumn.ObjectiveScanSteerer,
-                                                                   conversion={True: 1, False: 0})
+        # Note: Currently unused and unsafe
+        # self._imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
+        #                                                            self._ionColumn.ObjectiveScanSteerer,
+        #                                                            conversion={True: 1, False: 0})
         self._objectiveVoltageConnector = OrsayParameterConnector(self.objectiveVoltage, self._hvps.ObjectiveVoltage,
                                                                   minpar=self._hvps.ObjectiveVoltage_Minvalue,
                                                                   maxpar=self._hvps.ObjectiveVoltage_Maxvalue)
@@ -2495,10 +2415,6 @@ class FIBBeam(model.HwComponent):
         """
         if parameter is None:
             parameter = self._ionColumn.ImageSize
-        if parameter is not self._ionColumn.ImageSize:
-            raise ValueError("Incorrect parameter passed to _updateImageFormat. Parameter should be "
-                             "datamodel.IonColumnMCS.ImageSize. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
         state = self._ionColumn.ImageSize.Actual
@@ -2605,10 +2521,6 @@ class FIBBeam(model.HwComponent):
         """
         if parameter is None:
             parameter = self._ionColumn.ImageArea
-        if parameter is not self._ionColumn.ImageArea:
-            raise ValueError("Incorrect parameter passed to _updateTranslationResolution. Parameter should be "
-                             "datamodel.IonColumnMCS.ImageArea. Parameter passed is %s"
-                             % parameter.Name)
         if attr_name != "Actual":
             return
 
@@ -2686,10 +2598,6 @@ class Light(model.Emitter):
         """
         if parameter is None:
             parameter = self._parameter
-        if parameter is not self._parameter:
-            raise ValueError("Incorrect parameter passed to _updatePower. Parameter should be "
-                             "datamodel.HybridPlatform.AnalysisChamber.InfraredLight.State. Parameter passed is %s"
-                             % parameter.Name)
         if attributeName != "Actual":
             return
         light_state = 1.0 if self._parameter.Actual in (True, "True", "true", "1", "ON") else 0.0
@@ -2703,9 +2611,11 @@ class Light(model.Emitter):
         :param (float) goal: goal state of the light. 0 is off, anything else is on
         :param (float) return: goal
         """
-        logging.debug("Turning Chamber light %s." % "on" if goal[0] else "off")
-        self._parameter.Target = goal[0] != 0.0
-        return goal
+        power = int(goal[0])
+        logging.debug("Turning Chamber light %s." % "on" if power else "off")
+        self._parameter.Target = power
+        return [1.0 if power else 0.0]
+
 
     def terminate(self):
         """
