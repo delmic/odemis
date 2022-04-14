@@ -56,7 +56,8 @@ class TestFastEMCalibration(unittest.TestCase):
         try:
             import fastem_calibrations
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping the fastem tests, correct libraries to perform the tests are not available.\n"
+            raise unittest.SkipTest(f"Skipping the fastem tests, correct libraries "
+                                    f"to perform the tests are not available.\n"
                                     f"Got the error: {err}")
 
         if TEST_NOHW:
@@ -98,9 +99,9 @@ class TestFastEMCalibration(unittest.TestCase):
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
                          self.beamshift, self.det_rotator, calibrations)
 
-        e = f.result(timeout=900)
+        config = f.result(timeout=900)
 
-        self.assertIsNone(e)  # check no exceptions were returned
+        self.assertIsNotNone(config)  # check configuration dictionary is returned
         # check that z stage position is close to good position
         # Note: This accuracy is dependent on the value chosen for the magnification on the lens.
         numpy.testing.assert_allclose(self.stage.position.value["z"], self.good_focus, atol=2e-6)
@@ -118,15 +119,47 @@ class TestFastEMCalibration(unittest.TestCase):
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
                          self.beamshift, self.det_rotator, calibrations)
 
-        e = f.result(timeout=900)
+        config = f.result(timeout=900)
 
-        self.assertIsNone(e)  # check no exceptions were returned
+        self.assertIsNotNone(config)  # check configuration dictionary is returned
 
         # get the calibrated descanner offset
         descan_offset_calib = self.descanner.scanOffset.value
 
         # check the calibrated descan offset is different from the previous offset
         self.assertNotEqual(descan_offset_cur, descan_offset_calib)
+
+    def test_image_dark_gain(self):
+        """Run the dark offset and digital gain calibration. Can also be tested with simulator.
+        It calibrates the dark offset and digital gain per mppc detector cell."""
+
+        calibrations = [Calibrations.DARK_OFFSET, Calibrations.DIGITAL_GAIN]
+
+        # set current cell dark offset and cell digital gain
+        # (also for simulator the calibration will find values different from 0 and 1)
+        self.mppc.cellDarkOffset.value = \
+            tuple(tuple(0 for _ in range(0, self.mppc.shape[0])) for i in range(0, self.mppc.shape[1]))
+        self.mppc.cellDigitalGain.value = \
+            tuple(tuple(1 for _ in range(0, self.mppc.shape[0])) for i in range(0, self.mppc.shape[1]))
+
+        dark_offset_cur = self.mppc.cellDarkOffset.value
+        digital_gain_cur = self.mppc.cellDigitalGain.value
+
+        # Run the calibrations
+        f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
+                         self.beamshift, self.det_rotator, calibrations)
+
+        config = f.result(timeout=900)
+
+        self.assertIsNotNone(config)  # check configuration dictionary is returned
+
+        # get the calibrated dark offset and digital gain from the configuration
+        dark_offset_calib = config["mppc"]["cellDarkOffset"]
+        digital_gain_calib = config["mppc"]["cellDigitalGain"]
+
+        # check the calibrated values are different from the previous values
+        self.assertNotEqual(dark_offset_cur, dark_offset_calib)
+        self.assertNotEqual(digital_gain_cur, digital_gain_calib)
 
     def test_progress(self):
         """Check if some progress is reported during the optical autofocus calibration."""
@@ -140,9 +173,9 @@ class TestFastEMCalibration(unittest.TestCase):
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
-        e = f.result()
+        config = f.result()
 
-        self.assertIsNone(e)  # check no exceptions were returned
+        self.assertIsNotNone(config)  # check configuration dictionary is returned
         self.assertTrue(self.done)
         # at least one update per calibration plus once at start of calibration, plus once at end of calibration
         self.assertGreaterEqual(self.updates, 4)

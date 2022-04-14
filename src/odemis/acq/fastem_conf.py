@@ -143,3 +143,22 @@ def configure_scanner(scanner, mode):
                             scanner.rotation.value)
     else:  # code should never be reached
         raise ValueError("Invalid mode %s." % mode)
+
+
+def configure_detector(detector, roc):
+    """
+    Configure the detector by setting the calibrated parameters as stored for
+    the provided region of calibration (ROC). If calibrated parameters are not
+    available, the current settings on the detector will stay as is.
+    :param detector: (technolution.MPPC) The detector to be configured.
+    :param roc: (FASTEMROC) The region of calibration as selected on the scintillator,
+                which stores the calibrated settings if calibration was performed.
+    """
+    if "cellDarkOffset" in roc.value.parameters:
+        detector.cellDarkOffset.value = roc.value.parameters["cellDarkOffset"]
+    else:
+        logging.warning("Region of calibration doesn't have dark offset parameters.")
+    if "cellDigitalGain" in roc.value.parameters:
+        detector.cellDigitalGain.value = roc.value.parameters["cellDigitalGain"]
+    else:
+        logging.warning("Region of calibration doesn't have digital gain parameters.")

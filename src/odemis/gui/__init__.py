@@ -54,7 +54,7 @@ BORDER_COLOUR_UNFOCUS = "#000000"
 # Colours for special warnings
 ALERT_COLOUR = "#DD3939"
 
-# Colours for overlay selection selection boxes
+# Colours for overlay selection boxes
 SELECTION_COLOUR = FG_COLOUR_EDIT
 SELECTION_COLOUR_2ND = FG_COLOUR_2ND
 

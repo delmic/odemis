@@ -520,6 +520,7 @@ class LocalizationTab(Tab):
 
         return vpv
 
+    @call_in_wx_main
     def load_overview_data(self, data):
         # Create streams from data
         streams = data_to_static_streams(data)
@@ -1781,20 +1782,6 @@ class FastEMAcquisitionTab(Tab):
                                                                       view_ctrl=self.view_controller,
                                                                       )
 
-        # Project bar controller
-        self._projectbar_controller = project.FastEMProjectBarController(
-            tab_data,
-            panel.pnl_fastem_projects,
-            view_ctrl=self.view_controller,
-        )
-
-        # Controller for calibration panel 2
-        self._calibrationbar_controller = project.FastEMCalibrationRegionsController(
-            tab_data,
-            panel.pnl_fastem_calibration_2,
-            view_ctrl=self.view_controller,
-        )
-
         # Check if we deal with a real or simulated microscope. If it is a simulator,
         # we cannot run all calibrations yet.
         # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
@@ -1810,13 +1797,32 @@ class FastEMAcquisitionTab(Tab):
             # IMAGE_TRANSLATION_FINAL FIXME: add when we can update the good mp position and fix for max amplitude
 
         # Controller for calibration panel 1
-        self._alignment_controller = fastem_acq.FastEMCalibrationController(
+        self._calib_1_controller = fastem_acq.FastEMCalibrationController(
             tab_data,
             panel,
-            calibrations
+            calib_prefix="calib_1",
+            calibrations=calibrations
         )
 
-        # Controller for acquistion settings panel
+        # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController and
+        #  not here as a separate controller -> will reduce it here to only one calibration 2 controller
+        # Controller for regions of calibration 2
+        self._calib_2_region_controller = project.FastEMCalibrationRegionsController(
+            tab_data,
+            panel.calib_2_pnl_regions,
+            viewport=vp,
+        )
+
+        # Controller for calibration panel 2
+        self._calib_2_controller = fastem_acq.FastEMScintillatorCalibrationController(
+            tab_data,
+            panel,
+            calib_prefix="calib_2",
+            calibrations=[Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                          Calibrations.DARK_OFFSET, Calibrations.DIGITAL_GAIN]
+        )
+
+        # Controller for acquisition settings panel
         self._acq_settings_controller = settings.SettingsController(
             panel.pnl_acq_settings,
             ""  # default message, which is shown if no setting is available
@@ -1825,29 +1831,18 @@ class FastEMAcquisitionTab(Tab):
         self._acq_settings_controller.add_setting_entry(
             "dwellTime", tab_data.main.multibeam.dwellTime, tab_data.main.multibeam, dt_conf)
 
+        # Controller for the list of projects
+        self._project_list_controller = project.FastEMProjectListController(
+            tab_data,
+            panel.pnl_fastem_projects,
+            viewport=vp,
+        )
+
         # Acquisition controller
         self._acquisition_controller = fastem_acq.FastEMAcquiController(
             tab_data,
             panel,
-            self._projectbar_controller,
-            self._calibrationbar_controller
         )
-
-    @property
-    def streams_controller(self):
-        return self._streams_controller
-
-    @property
-    def projectbar_controller(self):
-        return self._projectbar_controller
-
-    @property
-    def acquisition_controller(self):
-        return self._acquisition_controller
-
-    @property
-    def calibrationbar_controller(self):
-        return self._calibrationbar_controller
 
     def Show(self, show=True):
         super(FastEMAcquisitionTab, self).Show(show)
@@ -1929,10 +1924,11 @@ class FastEMOverviewTab(Tab):
         sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         sem_stream_cont.stream_panel.show_remove_btn(False)
 
-        # Controller for calibration panel 1
-        self._alignment_controller = fastem_acq.FastEMCalibrationController(
+        # Controller for calibration panel
+        self._calib_controller = fastem_acq.FastEMCalibrationController(
             tab_data,
             panel,
+            calib_prefix="calib",
             calibrations=[Calibrations.OPTICAL_AUTOFOCUS]
         )
 
@@ -1948,14 +1944,6 @@ class FastEMOverviewTab(Tab):
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
         # TODO: add tool to zoom out (ie, all the scintillators, calling canvas.zoom_out())
-
-    @property
-    def streambar_controller(self):
-        return self._stream_controller
-
-    @property
-    def acquisition_controller(self):
-        return self._acquisition_controller
 
     def on_acquisition(self, is_acquiring):
         # Don't allow changes to acquisition/calibration ROIs during acquisition

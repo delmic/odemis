@@ -509,12 +509,14 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_acq_settings = xrc.XRCCTRL(self, "pnl_acq_settings")
-        self.pnl_fastem_calibration_1 = xrc.XRCCTRL(self, "pnl_fastem_calibration_1")
-        self.btn_align = xrc.XRCCTRL(self, "btn_align")
-        self.align_gauge_progress = xrc.XRCCTRL(self, "align_gauge_progress")
-        self.align_spacer_panel = xrc.XRCCTRL(self, "align_spacer_panel")
-        self.align_lbl_gauge = xrc.XRCCTRL(self, "align_lbl_gauge")
-        self.pnl_fastem_calibration_2 = xrc.XRCCTRL(self, "pnl_fastem_calibration_2")
+        self.calib_1_pnl_fastem = xrc.XRCCTRL(self, "calib_1_pnl_fastem")
+        self.calib_1_btn = xrc.XRCCTRL(self, "calib_1_btn")
+        self.calib_1_gauge = xrc.XRCCTRL(self, "calib_1_gauge")
+        self.calib_1_label = xrc.XRCCTRL(self, "calib_1_label")
+        self.calib_2_btn = xrc.XRCCTRL(self, "calib_2_btn")
+        self.calib_2_gauge = xrc.XRCCTRL(self, "calib_2_gauge")
+        self.calib_2_label = xrc.XRCCTRL(self, "calib_2_label")
+        self.calib_2_pnl_regions = xrc.XRCCTRL(self, "calib_2_pnl_regions")
         self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
         self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
@@ -558,11 +560,10 @@ class xrcpnl_tab_fastem_overview(wx.Panel):
         self.vp_fastem_overview = xrc.XRCCTRL(self, "vp_fastem_overview")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
-        self.pnl_fastem_optical_autofocus = xrc.XRCCTRL(self, "pnl_fastem_optical_autofocus")
-        self.btn_align = xrc.XRCCTRL(self, "btn_align")
-        self.align_gauge_progress = xrc.XRCCTRL(self, "align_gauge_progress")
-        self.align_spacer_panel = xrc.XRCCTRL(self, "align_spacer_panel")
-        self.align_lbl_gauge = xrc.XRCCTRL(self, "align_lbl_gauge")
+        self.calib_pnl_fastem = xrc.XRCCTRL(self, "calib_pnl_fastem")
+        self.calib_btn = xrc.XRCCTRL(self, "calib_btn")
+        self.calib_gauge = xrc.XRCCTRL(self, "calib_gauge")
+        self.calib_label = xrc.XRCCTRL(self, "calib_label")
         self.pnl_fastem_overview_streams = xrc.XRCCTRL(self, "pnl_fastem_overview_streams")
         self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
@@ -5458,12 +5459,12 @@ def __init_resources():
                             <bg>#555555</bg>
                         </object>
                       <object class="FoldPanelItem">
-                        <object class="wxPanel" name="pnl_fastem_calibration_1">
+                        <object class="wxPanel" name="calib_1_pnl_fastem">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <object class="wxBoxSizer">
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_align">
+                              <object class="ImageTextButton" name="calib_1_btn">
                                 <height>24</height>
                                 <face_colour>def</face_colour>
                                 <label>Calibrate</label>
@@ -5472,12 +5473,13 @@ def __init_resources():
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
+                              <option>0</option>
                               <flag>wxALL</flag>
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxGauge" name="align_gauge_progress">
-                                <size>-1,10</size>
+                              <object class="wxGauge" name="calib_1_gauge">
+                                <size>160,10</size>
                                 <range>100</range>
                                 <value>0</value>
                                 <hidden>1</hidden>
@@ -5486,25 +5488,18 @@ def __init_resources():
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <option>1</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxFIXED_MINSIZE</flag>
                               <border>18</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxPanel" name="align_spacer_panel">
-                              </object>
-                              <option>1</option>
-                              <flag>wxTOP</flag>
-                              <border>18</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText" name="align_lbl_gauge">
+                              <object class="wxStaticText" name="calib_1_label">
                                 <style>wxALIGN_RIGHT</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <style>wxALIGN_RIGHT</style>
+                              <option>1</option>
                               <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
                               <border>14</border>
                             </object>
@@ -5516,7 +5511,54 @@ def __init_resources():
                         <bg>#555555</bg>
                       </object>
                       <object class="FoldPanelItem">
-                        <object class="FastEMCalibrationBar" name="pnl_fastem_calibration_2">
+                        <object class="wxPanel">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="calib_2_btn">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Calibrate</label>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>0</option>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="calib_2_gauge">
+                                <size>160,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <hidden>1</hidden>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxFIXED_MINSIZE</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="calib_2_label">
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>14</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                        </object>
+                        <object class="FastEMCalibrationPanelHeader" name="calib_2_pnl_regions">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -5530,7 +5572,7 @@ def __init_resources():
                         <bg>#555555</bg>
                       </object>
                       <object class="FoldPanelItem">
-                        <object class="FastEMProjectBar" name="pnl_fastem_projects">
+                        <object class="FastEMProjectList" name="pnl_fastem_projects">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -5819,26 +5861,26 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
-                        <object class="wxPanel" name="pnl_fastem_optical_autofocus">
+                        <object class="wxPanel" name="calib_pnl_fastem">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <object class="wxBoxSizer">
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_align">
+                              <object class="ImageTextButton" name="calib_btn">
                                 <height>24</height>
                                 <face_colour>def</face_colour>
-                                <label>Optical Autofocus</label>
                                 <style>wxALIGN_CENTRE</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
+                              <option>0</option>
                               <flag>wxALL</flag>
                               <border>10</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxGauge" name="align_gauge_progress">
-                                <size>-1,10</size>
+                              <object class="wxGauge" name="calib_gauge">
+                                <size>160,10</size>
                                 <range>100</range>
                                 <value>0</value>
                                 <hidden>1</hidden>
@@ -5847,25 +5889,18 @@ def __init_resources():
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <option>1</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxFIXED_MINSIZE</flag>
                               <border>18</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxPanel" name="align_spacer_panel">
-                              </object>
-                              <option>1</option>
-                              <flag>wxTOP</flag>
-                              <border>18</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText" name="align_lbl_gauge">
+                              <object class="wxStaticText" name="calib_label">
                                 <style>wxALIGN_RIGHT</style>
                                 <XRCED>
                                   <assign_var>1</assign_var>
                                 </XRCED>
                               </object>
-                              <style>wxALIGN_RIGHT</style>
+                              <option>1</option>
                               <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
                               <border>14</border>
                             </object>

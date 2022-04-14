@@ -37,7 +37,9 @@ try:
         descan_gain,
         image_rotation_pre_align,
         image_rotation,
-        image_translation
+        image_translation,
+        dark_offset_correction,
+        digital_gain_correction
     )
     from fastem_calibrations.configure_hw import (
         get_config_asm,
@@ -73,9 +75,11 @@ class Calibrations(Enum):
     IMAGE_TRANSLATION_PREALIGN = image_translation_pre_align
     IMAGE_ROTATION_FINAL = image_rotation
     IMAGE_TRANSLATION_FINAL = image_translation
+    DARK_OFFSET = dark_offset_correction
+    DIGITAL_GAIN = digital_gain_correction
 
 
-def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations):
+def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations, stage_pos=None):
     """
     Start a calibration task for a given list of calibrations.
 
@@ -89,6 +93,8 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
     :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
     :param calibrations: (list[Calibrations]) List of calibrations that should be run.
+    :param stage_pos: (float, float) Stage position where the calibration should be run. If None,
+                      the calibration is run at the current stage position.
 
     :returns: (ProgressiveFuture) Alignment future object, which can be cancelled.
     """
@@ -100,7 +106,8 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # Create a task that runs the calibration and alignments.
-    task = CalibrationTask(f, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations)
+    task = CalibrationTask(f, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
+                           calibrations, stage_pos)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -127,7 +134,7 @@ class CalibrationTask(object):
     """
 
     def __init__(self, future, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
-                 calibrations):
+                 calibrations, stage_pos):
         """
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled.
                        (Exception or None): Exception raised during the calibration or None.
@@ -142,6 +149,8 @@ class CalibrationTask(object):
         :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
         :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
         :param calibrations: (list[Calibrations]) List of calibrations that should be run.
+        :param stage_pos: (float, float) Stage position where the calibration should be run. If None,
+                      the calibration is run at the current stage position.
         """
         self.asm_config = None
         self._scanner = scanner
@@ -156,6 +165,7 @@ class CalibrationTask(object):
         self._future = future
 
         self.calibrations = calibrations
+        self.stage_pos = stage_pos
 
         # List of calibrations to be executed. Used for progress update.
         self._calibrations_remaining = set(calibrations)
@@ -165,9 +175,27 @@ class CalibrationTask(object):
 
     def run(self):
         """
-        Runs a set of calibration procedures.
+        Runs a set of calibration procedures and return the calibrated settings.
         :returns:
-            (None) Calibrations successful.
+            self.asm_config: (nested dict) A dictionary containing factory and/or calibrated settings. Settings
+            that are calibrated or are overwriting factory settings. The content of the dict is:
+            multibeam:
+                scanOffset: (tuple) The x and y start of the scanning movement (start of scan ramp) of the multibeam
+                            scanner in arbitrary units.
+                scanAmplitude: (tuple) The x and y heights of the scan ramp of the multibeam scanner in arbitrary units.
+                dwellTime: (float) The acquisition time for one pixel within a cell image in seconds.
+                resolution: (tuple) The effective resolution of a single field image excluding overscanned pixels
+                                    in pixels.
+            descanner:
+                scanOffset: (tuple) The x and y start of the scanning movement (start of scan ramp) of the descanner
+                            in arbitrary units.
+                scanAmplitude: (tuple) The x and y heights of the scan ramp of the descanner in arbitrary units.
+            mppc:
+                cellCompleteResolution: (tuple) The resolution of a cell image including overscanned pixels in pixels.
+                cellTranslation: (tuple of tuples of shape mppc.shape) The origin for each cell image within the
+                                 overscanned cell image in pixels.
+                cellDarkOffset: (tuple of tuples of shape mppc.shape) The dark offset correction for each cell image.
+                cellDigitalGain: (tuple of tuples of shape mppc.shape) The digital gain correction for each cell image.
         :raise:
             Exception: If a calibration failed.
             CancelledError: If the calibration was cancelled.
@@ -186,6 +214,11 @@ class CalibrationTask(object):
 
             # reset beamshift
             self._beamshift.shift.value = (0, 0)
+
+            if self.stage_pos:
+                # move to region of calibration (ROC) position
+                sf = self._stage.moveAbs({'x': self.stage_pos[0], 'y': self.stage_pos[1]})
+                sf.result()  # wait until stage is at correct position
 
             # loop over calibrations in list (order in list is important!)
             for calib in self.calibrations:
@@ -227,10 +260,11 @@ class CalibrationTask(object):
                 configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config)
             logging.debug("Calibrations finished.")
 
+        return self.asm_config
+
     def run_calibrations(self, calibration):
         """
         Run a calibration.
-        Note: All calibrations can be run on bare scintillator.
         """
         if calibration == Calibrations.OPTICAL_AUTOFOCUS:
             autofocus_multiprobe.run_autofocus(self._scanner, self._multibeam, self._descanner, self._detector,
@@ -287,6 +321,20 @@ class CalibrationTask(object):
             d_offset = image_translation.run_image_translation(self._scanner, self._multibeam, self._descanner,
                                                                self._detector, self._dataflow, self._ccd)
             self.asm_config["descanner"]["scanOffset"] = d_offset
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
+
+        elif calibration == Calibrations.DARK_OFFSET:
+            dark_offset = dark_offset_correction.run_dark_offset(self._scanner, self._multibeam, self._descanner,
+                                                                 self._detector, self._dataflow)
+            self.asm_config["mppc"]["cellDarkOffset"] = dark_offset
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
+
+        elif calibration == Calibrations.DIGITAL_GAIN:
+            digital_gain = digital_gain_correction.run_digital_gain(self._scanner, self._multibeam, self._descanner,
+                                                                    self._detector, self._dataflow)
+            self.asm_config["mppc"]["cellDigitalGain"] = digital_gain
             configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
                           upload=False)
 

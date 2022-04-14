@@ -656,6 +656,9 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
           but with explicit bounding box, so we can zoom to a specific position.
         bbox (4 floats): bounding box to be shown, defined as minx, miny, maxx,
           maxy positions in m.
+
+        Note: Should be called from main GUI thread. Make sure caller of this method
+        is running in the main GUI thread.
         """
         # compute mpp so that the bbox fits exactly the visible part
         w, h = abs(bbox[2] - bbox[0]), abs(bbox[3] - bbox[1])  # m
@@ -676,7 +679,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.view.mpp.value = self.view.mpp.clip(1 / self.scale)
             self.view.view_pos.value = c
 
-        wx.CallAfter(self.request_drawing_update)
+        self.request_drawing_update()
 
     def _on_view_mpp(self, mpp):
         """ Called when the view.mpp is updated """
@@ -1836,9 +1839,9 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         overlay.active.value = True
         return overlay
 
-    def remove_roa_overlay(self, overlay):
+    def remove_overlay(self, overlay):
         """
-        overlay (FastEMROAOverlay): overlay to be deleted
+        overlay (FastEMROAOverlay or FastEMROAOverlay): overlay to be deleted
         """
         overlay.active.value = False  # deactivating the overlay avoids weird behaviour
         self.remove_world_overlay(overlay)
@@ -1859,6 +1862,9 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         """
         Zoom out to show all scintillators.
         raises ValueError, IndexError: in case it's called too early during GUI startup
+
+        Note: Should be called from main GUI thread. Make sure caller of this method
+        is running in the main GUI thread.
         """
         logging.debug("Zooming out to show all scintillators.")
         if self._tab_data_model:
