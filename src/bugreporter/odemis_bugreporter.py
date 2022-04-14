@@ -26,6 +26,8 @@ from __future__ import division, absolute_import
 import base64
 from collections import OrderedDict
 from concurrent import futures
+from concurrent.futures import Future
+import configparser
 import csv
 from datetime import datetime
 from future.moves.urllib.request import Request, urlopen
@@ -48,6 +50,9 @@ logging.getLogger().setLevel(logging.DEBUG)
 DEFAULT_CONFIG = {"LOGLEVEL": "1"}
 
 OS_TICKET_URL = "https://support.delmic.com/api/tickets.json"
+CONFIG_FN = "bugreporter.config"  # Configuration file
+NAMES_FN = "bugreporter_users.tsv"  # File to store the names and email address
+
 TEST_SUPPORT_TICKET = (os.environ.get("TEST_SUPPORT_TICKET", 0) != 0)
 RESPONSE_SUCCESS = 201
 MAX_USERS = 50
@@ -65,6 +70,18 @@ DESCRIPTION_DEFAULT_TXT = ("Ways to reproduce the problem:\n1.\n2.\n3.\n\nCurren
 BACKEND_RUNNING = 0
 BACKEND_STOPPED = 2
 BACKEND_STARTING = 3
+
+# Topic IDs are used to indicate which "department" will be taking care of the ticket.
+# They can be found from the urls at https://support.delmic.com/scp/helptopics.php
+# (you need to be admin), or in the source code of https://support.delmic.com/open.php .
+TOPIC_ID_DEFAULT = 10  # fallback to CL
+TOPIC_IDS = {
+    "cl": 10,  # CL solution (SECOM, SPARC...)
+    "test": 12,  # for testing only (no one receives these tickets messages!)
+    "asia": 13,  # Delmic Asia
+    "cryo": 14,  # Cryo solution (METEOR, ENZEL...)
+    "fast": 15,  # Fast imaging (FastEM...)
+}
 
 
 # The next to functions will be needed to parse odemis.conf
@@ -347,23 +364,26 @@ class OdemisBugreporter(object):
             logging.exception("Failed to store bug report")
             raise
 
-    def _set_description(self, name, email, subject, message):
+    def _set_description(self, name, email, subject, message, topic_id: int):
         """
         Saves the description parameters for the ticket creation in a txt file, compresses
         the file and calls self.create_ticket.
-        :arg name, email, summary, description: (String) arguments for corresponding dictionary
-        keys
+        :arg name, email, summary, description: (String) arguments for corresponding dictionary keys
+        topic_id (int): the topic ID (see TOPIC_IDS). If TEST_SUPPORT_TICKET is set,
+          it's overridden by the "test" topic.
         """
+        # Create ticket with special id when testing
+        if TEST_SUPPORT_TICKET:
+            logging.debug("Changing topic ID from %s to test ID", topic_id)
+            topic_id = TOPIC_IDS["test"]
+
         self._compress_files_f.result()
         report_description = {'name': name,
                               'email': email,
                               'subject': subject,
-                              'message': message}
-        # Create ticket with special id when testing
-        if TEST_SUPPORT_TICKET:
-            report_description['topicId'] = 12
-        else:
-            report_description['topicId'] = 10  # "Report a problem"
+                              'message': message,
+                              'topicId': topic_id
+        }
 
         description = (u'Name: %s\n' % name +
                        u'Email: %s\n' % email +
@@ -377,14 +397,15 @@ class OdemisBugreporter(object):
         wx.CallAfter(self.gui.wait_lbl.SetLabel, "Sending report...")
         self.create_ticket(api_key, report_description, [self.zip_fn])
 
-    def send_report(self, name, email, subject, message):
+    def send_report(self, name: str, email: str, subject: str, message: str, topic_id: int=TOPIC_ID_DEFAULT) -> Future:
         """
         Calls _set_description in a thread.
-        :arg name, email, summary, description: (String) arguments for corresponding dictionary
-        keys
+        :arg name, email, summary, description: (String) arguments for corresponding dictionary keys
+        topic_id (int): the topic ID (see TOPIC_IDS). If TEST_SUPPORT_TICKET is set,
+          it's overridden by the "test" topic.
         return Future (-> None): the handle to follow the report upload
         """
-        return self._executor.submit(self._set_description, name, email, subject, message)
+        return self._executor.submit(self._set_description, name, email, subject, message, topic_id)
 
 
 class BugreporterFrame(wx.Frame):
@@ -469,20 +490,49 @@ class BugreporterFrame(wx.Frame):
         # flag is set to False when the backspace is pressed
         self.make_suggestion = True
 
+        conf_dir = os.path.join(os.path.expanduser(u"~"), '.config', 'odemis')
+        if not os.path.exists(conf_dir):
+            # create the directory so that we can store the config files later
+            os.makedirs(conf_dir)
+        self._config_path = os.path.join(conf_dir, CONFIG_FN)
+        self._names_path = os.path.join(conf_dir, NAMES_FN)
+
+        self._topic_id = self._read_config()
+        logging.debug("Will use topic ID %s. Change by editing %s", self._topic_id, self._config_path)
+
         # Load known users, if not available make tsv file
         self.known_users = OrderedDict()
-        self.conf_path = os.path.join(os.path.expanduser(u"~"), '.config', 'odemis', 'bugreporter_users.tsv')
-        conf_dir = os.path.dirname(self.conf_path)
         try:
-            if not os.path.exists(conf_dir):
-                # create the directory so that we can store the config later
-                os.makedirs(conf_dir)
-            with open(self.conf_path) as f:
+            with open(self._names_path) as f:
                 reader = csv.reader(f, delimiter='\t')
                 for name, email in reader:
                     self.known_users[name] = email
         except (OSError, IOError) as ex:  # IOError is more generic than OSError, and only needed on Python 2
             logging.error("Failed to read known users: %s", ex)
+
+    def _read_config(self):
+        """
+        Read configuration from the bugreporter.config file, and return it
+        return:
+            topic_id (int): the topic ID to use to report bug. In the INI file,
+              it can be stored either as a string from TOPIC_IDS, or an int.
+        """
+        config = configparser.ConfigParser()
+        config.read(self._config_path)
+        topic_id = TOPIC_ID_DEFAULT
+        topic_str = config.get('REPORT', 'topic', fallback=str(TOPIC_ID_DEFAULT))
+        try:
+            if topic_str in TOPIC_IDS:
+                topic_id = TOPIC_IDS[topic_str]
+            else:  # Not a known department => maybe it's just an int?
+                val = int(topic_str)
+                if val <= 0:
+                    raise ValueError("Topic ID must be > 0")
+                topic_id = val
+        except Exception as ex:
+            logging.warning("Unknown topic ID '%s', falling back to %s. (%s)", topic_str, topic_id, ex)
+
+        return topic_id
 
     def store_user_info(self, name, email):
         """
@@ -505,7 +555,7 @@ class BugreporterFrame(wx.Frame):
         prev_items = list(self.known_users.items())
         self.known_users = OrderedDict([(name, email)] + prev_items)
         # Overwrite tsv file
-        with open(self.conf_path, 'w+') as f:
+        with open(self._names_path, 'w+') as f:
             writer = csv.writer(f, delimiter='\t')
             writer.writerows(self.known_users.items())
 
@@ -588,20 +638,18 @@ class BugreporterFrame(wx.Frame):
 
         # Store user info and pass description to bugreporter
         self.store_user_info(name, email)
-        f = self.bugreporter.send_report(name, email, summary, description)
+        f = self.bugreporter.send_report(name, email, summary, description, self._topic_id)
         f.add_done_callback(self._on_report_sent)
 
     def _on_report_sent(self, future):
         try:
             future.result()
-            # CallAfter doesn't work properly with the notifications for some
-            # unknown reason: the message almost immediately disappears. This
-            # doesn't happen with CallLater().
-            # wx.CallAfter(self._on_report_sent_successful)
-            wx.CallLater(0, self._on_report_sent_successful)
         except Exception as e:
             logging.exception("osTicket upload failed: %s", e)
             wx.CallAfter(self.open_failed_upload_dlg)
+        else:
+            # Show it went fine
+            wx.CallAfter(self._on_report_sent_successful)
 
     def on_close(self, _):
         """
@@ -626,15 +674,20 @@ class BugreporterFrame(wx.Frame):
         """
         Called when the report was successfully uploaded.
         It will show a pop-up to confirm to the user, and close the window
+        To be called in the main GUI thread.
         """
+        # Note: notify2 doesn't need to be called from the main GUI thread
         notify2.init("Odemis")
-        notif = notify2.Notification("")
-        notif.update("Odemis bug-report successfully uploaded",
+        notif = notify2.Notification("Odemis bug-report successfully uploaded",
                      "You will shortly receive a confirmation by email.",
                      "dialog-info")
         notif.show()
 
-        self.Destroy()
+        # On Ubuntu 18.04, with wxPython 4.0.1, the notification immediately hides
+        # if the application is closed. So we just hide the window, and wait a little
+        # while (5 s) before closing the window.
+        self.Hide()
+        wx.CallLater(5 * 1000, self.Destroy)
 
     def open_failed_upload_dlg(self):
         """

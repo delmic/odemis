@@ -144,7 +144,7 @@ class TestOdemisBugreporter(unittest.TestCase):
         if TEST_NO_SUPPORT_TICKET != 1:
             with open(TEST_KEY_PATH, 'r') as key_file:
                 api_key = key_file.read().strip('\n')
-    
+
             description = {
                 'name': 'Testingteam member',
                 'email': TEST_SUPPORT_TEAM_EMAIL,
@@ -171,6 +171,12 @@ class TestOdemisBugreporter(unittest.TestCase):
         os.remove(self.bugreporter.zip_fn)
 
     def test_window(self):
+        # Note: UIActionSimulator.Text() doesn't seem to work on wxPython 4.0.7,
+        # but it works again on wxPython 4.1. It worked on wxPython 4.0.1.
+        wx_ver = tuple(int(v) for v in wx.__version__.split("."))
+        if wx_ver < (4, 1, 0):
+            logging.warning("Test case is known to fail on wxPython 4.0.7 due to buggy UIActionSimulator.Text")
+
         bugreporter = OdemisBugreporter()
         # Special verison of .run(), which simulates inputs
         bugreporter._compress_files_f = bugreporter._executor.submit(bugreporter.compress_files)
@@ -184,7 +190,7 @@ class TestOdemisBugreporter(unittest.TestCase):
         # Fill up the form
         gui.name_ctrl.SetFocus()
         # TODO: how to simulate typing non ascii-characters? .Char() + modifiers?
-        # sim.Text(u"Tstingteam member")
+        # sim.Text(b"Tstingteam member")
         gui.name_ctrl.SetValue(u"TÉstingteam member")
         self.gui_loop(0.1)
 
@@ -194,11 +200,11 @@ class TestOdemisBugreporter(unittest.TestCase):
         self.gui_loop(0.1)
 
         gui.summary_ctrl.SetFocus()
-        sim.Text("Bugreporter test")
+        sim.Text(b"Bugreporter test")
         self.gui_loop(0.1)
 
         gui.description_ctrl.SetFocus()
-        sim.Text("This is a test")
+        sim.Text(b"This is a test")
         self.gui_loop(0.1)
 
         # Simulates a "click" on the button by pressing Enter
