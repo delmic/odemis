@@ -45,8 +45,12 @@ def _get_version_git():
         if ver.startswith("v"):
             ver = ver[1:]
         return ver
-    except EnvironmentError:
+    except OSError:
         raise LookupError("Unable to run git")
+    except subprocess.CalledProcessError as ex:
+        logging.warning("Failed to run git: %s", ex)
+        raise LookupError("Execution of git failed")
+
 
 def _get_version_setuptools():
     """
