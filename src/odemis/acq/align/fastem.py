@@ -56,6 +56,8 @@ except ImportError:
     image_translation_pre_align = None
     image_rotation = None
     image_translation = None
+    dark_offset_correction = None
+    digital_gain_correction = None
 
     fastem_calibrations = False
 
