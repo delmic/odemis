@@ -30,6 +30,8 @@ from concurrent.futures import CancelledError
 
 import numpy
 
+from odemis.acq.align.fastem import Calibrations, align, estimate_calibration_time
+
 try:
     from fastem_calibrations import (
         autofocus_multiprobe,
@@ -61,8 +63,8 @@ class FastEMROA(object):
     and detector.
     """
 
-    def __init__(self, name, coordinates, roc_2, roc_3, asm, multibeam, descanner, detector, overlap=0,
-                 pre_calibrate=False):
+    def __init__(self, name, coordinates, roc_2, roc_3, asm, multibeam, descanner, detector, overlap=0):
+
         """
         :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
                      the external storage.
@@ -81,7 +83,6 @@ class FastEMROA(object):
             The amount of overlap required between single fields. An overlap of 0.2 means that two neighboring fields
             overlap by 20%. By default, the overlap is 0, this means there is no overlap and one field is exactly next
             to the neighboring field.
-        :param pre_calibrate: (bool) If True run pre-calibrations before each ROA acquisition.
         """
         self.name = model.StringVA(name)
         self.coordinates = model.TupleContinuous(coordinates,
@@ -99,7 +100,6 @@ class FastEMROA(object):
         # Automatically updated when the coordinates change.
         self.field_indices = []
         self.overlap = overlap
-        self.pre_calibrate = pre_calibrate
         self.coordinates.subscribe(self.on_coordinates, init=True)
 
         # TODO need to check if megafield already exists, otherwise overwritten, subscribe whenever name is changed,
@@ -121,11 +121,6 @@ class FastEMROA(object):
         """
         field_time = self._detector.frameDuration.value + 1.5  # there is about 1.5 seconds overhead per field
         tot_time = (len(self.field_indices) + 1) * field_time  # +1 because the first field is acquired twice
-
-        if self.pre_calibrate:
-            # TODO replace with call to estimate calibration time in module for each calibrations
-            #  when code here replaced with calls to calibration manager
-            tot_time += 60  # add some extra time for the pre-calibrations
 
         return tot_time
 
@@ -218,7 +213,25 @@ class FastEMROC(object):
         self.parameters = None  # calibration object with all relevant parameters
 
 
-def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens):
+def estimate_acquisition_time(roa, pre_calibrations=None):
+    """
+    Computes the approximate time it will take to run the ROA (megafield) acquisition including pre-calibrations
+    if specified.
+
+    :param roa: (FastEMROA) The acquisition region object to be acquired (megafield).
+    :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA acquisition.
+                             Default is None.
+
+    :return (0 <= float): The estimated time for the ROA (megafield) acquisition in s including pre-calibrations.
+    """
+    tot_time = roa.estimate_acquisition_time()
+    if pre_calibrations:
+        tot_time += estimate_calibration_time(pre_calibrations)
+
+    return tot_time
+
+
+def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, pre_calibrations=None):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -239,6 +252,8 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
     :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
     :param lens: (static.OpticalLens) Optical lens component.
+    :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA acquisition.
+                             Default is None.
 
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
@@ -246,12 +261,13 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
                 (Exception or None): Exception raised during the acquisition or None.
     """
 
-    est_dur = roa.estimate_acquisition_time()
+    est_dur = estimate_acquisition_time(roa, pre_calibrations)
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
-    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, f)
+    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path,
+                           pre_calibrations, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -268,7 +284,8 @@ class AcquisitionTask(object):
     An ROA consists of multiple single field images.
     """
 
-    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path, future):
+    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path,
+                 pre_calibrations, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -287,6 +304,8 @@ class AcquisitionTask(object):
                     path as specified in the component.
                     The ASM will create the directory on the external storage, including the parent directories,
                     if they do not exist.
+        :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA
+                                 acquisition.
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future
                         is a tuple that contains:
                             (model.DataArray): The acquisition data, which depends on the value of the
@@ -305,7 +324,7 @@ class AcquisitionTask(object):
         self._rocs = [roa.roc_2.value, roa.roc_3.value]  # list of region of calibration objects
         self._path = path  # sub-directories on external storage
         self._future = future
-        self._pre_calibrate = roa.pre_calibrate
+        self._pre_calibrations = pre_calibrations
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
         self.megafield = {}
@@ -340,7 +359,7 @@ class AcquisitionTask(object):
         """
 
         # Get the estimated time for the roa.
-        total_roa_time = self._roa.estimate_acquisition_time()
+        total_roa_time = estimate_acquisition_time(self._roa, self._pre_calibrations)
 
         # No need to set the start time of the future: it's automatically done when setting its state to running.
         self._future.set_progress(end=time.time() + total_roa_time)  # provide end time to future
@@ -352,7 +371,7 @@ class AcquisitionTask(object):
         # Update the position of the first tile.
         self._pos_first_tile = self.get_pos_first_tile()
 
-        if self._pre_calibrate:
+        if self._pre_calibrations:
             # The pre-calibrations should run on a position that lies a full field
             # outside the ROA, therefore temporarily set the overlap to zero.
             overlap_init = self._roa.overlap
@@ -360,8 +379,7 @@ class AcquisitionTask(object):
             # Move the stage to the tile with index (-1, -1), to ensure the autofocus and image translation pre-align
             # are done to the top left of the first field, outside the region of acquisition to limit beam damage.
             self.field_idx = (-1, -1)
-            self.move_stage_to_next_tile()
-            self.pre_calibrate()
+            self.pre_calibrate(self._pre_calibrations)
             self._roa.overlap = overlap_init  # set back the overlap to the initial value
 
         # Move the stage to the first tile, to ensure the correct position is
@@ -456,82 +474,35 @@ class AcquisitionTask(object):
 
         logging.debug("Successfully acquired all fields of ROA.")
 
-    def pre_calibrate(self):
+    def pre_calibrate(self, pre_calibrations):
         """
         Run optical multiprobe autofocus and image translation pre-alignment before the ROA acquisition.
         The image translation pre-alignment adjusts the descanner.scanOffset VA such that the image of the
         multiprobe is roughly centered on the mppc detector. This function reads in the ASM configuration
         and makes sure all values, except the descanner offset, are set back after the calibrations are run.
+        The calibration is run at the stage position as indicated on the .field_indices attribute.
 
         NOTE: Canceling is currently not supported.
 
+        :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA
+                                 acquisition.
         """
         if not fastem_calibrations:
             raise ModuleNotFoundError("Need fastem_calibrations repository to run pre-calibrations.")
 
-        asm_config = None
+        logging.debug("Start pre-calibration.")
 
-        try:
-            logging.debug("Read initial Hw settings.")
-            asm_config = configure_hw.get_config_asm(self._multibeam, self._descanner, self._detector)
-            fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
+        stage_pos = self.get_abs_stage_movement()
 
-            # Set the beamshift to zero before adjusting the descanner offset, this ensures that the maximum beamshift
-            # range can be utilized when the pattern is centered on the mppc detector.
-            self._beamshift.shift.value = (0, 0)
+        f = align(self._scanner, self._multibeam,
+                  self._descanner, self._detector,
+                  self._stage, self._ccd,
+                  self._beamshift, None,  # no need for the detector rotator
+                  calibrations=pre_calibrations, stage_pos=stage_pos)
 
-            # Autofocus multiprobe ensures the beams are focused at the start of the ROA acquisition.
-            logging.debug("Running optical autofocus before ROA acquisition.")
-            autofocus_multiprobe.run_autofocus(self._scanner,
-                                               self._multibeam,
-                                               self._descanner,
-                                               self._detector,
-                                               self._detector.data,
-                                               self._ccd,
-                                               self._stage)
+        f.result()  # wait for the calibrations to be finished
 
-            configure_hw.configure_asm(self._multibeam,
-                                       self._descanner,
-                                       self._detector,
-                                       self._detector.data,
-                                       asm_config,
-                                       upload=False)
-            # Image translation pre-alignment ensures that the image of the multiprobe is roughly centered on the
-            # mppc detector.
-            logging.debug("Running image translation pre alignment before ROA acquisition.")
-            descanner_offset = image_translation_pre_align.run_image_translation_pre_align(self._scanner,
-                                                                                           self._multibeam,
-                                                                                           self._descanner,
-                                                                                           self._detector,
-                                                                                           self._detector.data,
-                                                                                           self._ccd)
-
-            # Set the descanner offset to the value calibrated with the image translation pre-alignment.
-            asm_config["descanner"]["scanOffset"] = descanner_offset
-            logging.debug(f"Descanner offset set to: {descanner_offset}")
-            # Blank the beam to reduce beam damage on the sample.
-            self._scanner.blanker.value = True
-
-        except Exception as ex:
-            logging.warning("Exception during pre-calibration of the ROA acquisition.",
-                            exc_info=True)
-            raise
-        finally:
-            # Blank the beam after the acquisition is done.
-            self._scanner.blanker.value = True
-            if asm_config is None:
-                logging.warning("Failed to retrieve asm configuration, configure_asm cannot be executed.")
-            else:
-                # put system into state ready for next task
-                # upload=False: it is enough to set calibrated values on HW during following acquisition
-                configure_hw.configure_asm(self._multibeam,
-                                           self._descanner,
-                                           self._detector,
-                                           self._detector.data,
-                                           asm_config,
-                                           upload=False)
-
-            logging.debug("Finish pre-calibration.")
+        logging.debug("Finish pre-calibration.")
 
     def image_received(self, dataflow, data):
         """

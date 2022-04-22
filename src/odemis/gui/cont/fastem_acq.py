@@ -42,6 +42,8 @@ import wx
 from odemis import model, dataio
 from odemis.acq import align, stream, fastem
 from odemis.acq.align import fastem as align_fastem
+from odemis.acq.align.fastem import Calibrations
+from odemis.acq.fastem import estimate_acquisition_time
 from odemis.acq.stream import FastEMOverviewStream
 from odemis.gui import FG_COLOUR_BUTTON
 from odemis.gui.util import get_picture_folder, call_in_wx_main, \
@@ -419,7 +421,8 @@ class FastEMAcquiController(object):
             acq_time = 0
             for p in projects:
                 for roa in p.roas.value:
-                    acq_time += roa.estimate_acquisition_time()
+                    acq_time += estimate_acquisition_time(roa, [Calibrations.OPTICAL_AUTOFOCUS,
+                                                                Calibrations.IMAGE_TRANSLATION_PREALIGN])
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
             txt = txt.format(units.readable_time(acq_time))
@@ -500,14 +503,16 @@ class FastEMAcquiController(object):
 
         # Acquire ROAs for all projects
         fs = {}
+        pre_calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         for p in self._tab_data_model.projects.value:
             ppath = os.path.join(self.path, p.name.value)  # <acquisition date>/<project name>
             for roa in p.roas.value:
                 f = fastem.acquire(roa, ppath, self._main_data_model.ebeam, self._main_data_model.multibeam,
                                    self._main_data_model.descanner, self._main_data_model.mppc,
                                    self._main_data_model.stage, self._main_data_model.ccd,
-                                   self._main_data_model.beamshift, self._main_data_model.lens)
-                t = roa.estimate_acquisition_time()
+                                   self._main_data_model.beamshift, self._main_data_model.det_rotator,
+                                   self._main_data_model.lens, pre_calibrations=pre_calibrations)
+                t = estimate_acquisition_time(roa, pre_calibrations)
                 fs[f] = t
 
         self.acq_future = model.ProgressiveBatchFuture(fs)

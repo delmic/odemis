@@ -154,6 +154,7 @@ def configure_detector(detector, rocs):
     :param rocs: (list of FastEMROC) The region of calibration as selected on the scintillator,
                  which stores the calibrated settings if calibration was performed.
     """
+
     # check all parameters are available
     if not any(roc.parameters and "cellDarkOffset" in roc.parameters for roc in rocs):
         logging.warning("Region of calibration doesn't have dark offset parameters.")
