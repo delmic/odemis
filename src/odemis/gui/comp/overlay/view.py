@@ -73,7 +73,7 @@ class CenteredLineOverlay(base.ViewOverlay):
         top = center[1] - size
         bottom = center[1] + size
 
-        ctx.set_line_width(1)
+        ctx.set_line_width(2)
 
         # Draw shadow
         ctx.set_source_rgba(0, 0, 0, 0.9)
@@ -94,7 +94,7 @@ class CenteredLineOverlay(base.ViewOverlay):
         left = center[0] - size
         right = center[0] + size
 
-        ctx.set_line_width(1)
+        ctx.set_line_width(2)
 
         # Draw shadow
         ctx.set_source_rgba(0, 0, 0, 0.9)
