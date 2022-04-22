@@ -160,7 +160,7 @@ class CalibrationTask(object):
         :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
         :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
         :param calibrations: (list[Calibrations]) List of calibrations that should be run.
-        :param stage_pos: (float, float) Stage position where the calibration should be run. If None,
+        :param stage_pos: (float, float) Stage position where the calibration should be run in meter. If None,
                       the calibration is run at the current stage position.
         """
         self.asm_config = None

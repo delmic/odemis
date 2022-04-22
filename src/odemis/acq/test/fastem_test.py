@@ -37,6 +37,8 @@ import odemis
 from fastem_calibrations import configure_hw
 from odemis import model
 from odemis.acq import fastem, stream
+from odemis.acq.align.fastem import Calibrations
+from odemis.acq.fastem import estimate_acquisition_time
 from odemis.util import driver, img, is_point_in_rect, test
 
 # * TEST_NOHW = 1: connected to the simulator or not connected to anything
@@ -190,10 +192,11 @@ class TestFastEMROA(unittest.TestCase):
             estimated_line_time = numpy.round(estimated_line_time + flyback, 9)
 
             # The estimated ROA time is the line time multiplied with the cell resolution and the number of fields.
-            estimated_roa_acq_time = estimated_line_time * cell_res[1] * n_fields
+            # Additionally, 1.5s overhead per field image and the first field image is acquired twice.
+            estimated_roa_acq_time = (estimated_line_time * cell_res[1] + 1.5) * (n_fields + 1)
 
             # get roa acquisition time
-            roa_acq_time = roa.estimate_acquisition_time()
+            roa_acq_time = estimate_acquisition_time(roa)
 
             self.assertAlmostEqual(estimated_roa_acq_time, roa_acq_time)
 
@@ -590,7 +593,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, future=None)
+                                          roa, path=None, pre_calibrations=None, future=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -664,7 +667,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, future=None)
+                                          roa, path=None, pre_calibrations=None, future=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -732,7 +735,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.ccd,
                                       self.beamshift, self.lens,
-                                      roa, path=None, future=None)
+                                      roa, path=None, pre_calibrations=None, future=None)
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
 
@@ -771,17 +774,21 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
         roa = fastem.FastEMROA(roa_name, coordinates, None, None,
                                self.asm, self.multibeam, self.descanner,
-                               self.mppc, pre_calibrate=True)
+                               self.mppc)
 
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.ccd,
                                       self.beamshift, self.lens,
-                                      roa, path=None, future=None)
+                                      roa, path=None, pre_calibrations=None, future=None)
 
         self.descanner.updateMetadata({model.MD_SCAN_GAIN: (5000, 5000)})
 
+        # Set the _pos_first_tile, which would normally be set in the run function.
+        task._pos_first_tile = task.get_pos_first_tile()
+        
         asm_config_orig = configure_hw.get_config_asm(self.multibeam, self.descanner, self.mppc)
-        task.pre_calibrate()
+        pre_calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
+        task.pre_calibrate(pre_calibrations=pre_calibrations)
         asm_config_current = configure_hw.get_config_asm(self.multibeam, self.descanner, self.mppc)
 
         # Verify that all settings, except the descanner scan offset, stay the same after running the pre-calibrations.
@@ -812,7 +819,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, future=None)
+                                          roa, path=None, pre_calibrations=None, future=None)
 
             pos_first_tile_actual = task.get_pos_first_tile()
 

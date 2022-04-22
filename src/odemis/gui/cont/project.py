@@ -289,7 +289,7 @@ class FastEMROAController(object):
         self.model = odemis.acq.fastem.FastEMROA(name, acqstream.UNDEFINED_ROI, roc_2, roc_3,
                                                  self._tab_data.main.asm, self._tab_data.main.multibeam,
                                                  self._tab_data.main.descanner, self._tab_data.main.mppc,
-                                                 acqui_conf.overlap, pre_calibrate=True)
+                                                 acqui_conf.overlap)
         self.model.coordinates.subscribe(self._on_coordinates)
         self.model.roc_2.subscribe(self._on_roc)
         self.model.roc_3.subscribe(self._on_roc)
