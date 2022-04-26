@@ -517,6 +517,10 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.calib_2_gauge = xrc.XRCCTRL(self, "calib_2_gauge")
         self.calib_2_label = xrc.XRCCTRL(self, "calib_2_label")
         self.calib_2_pnl_regions = xrc.XRCCTRL(self, "calib_2_pnl_regions")
+        self.calib_3_btn = xrc.XRCCTRL(self, "calib_3_btn")
+        self.calib_3_gauge = xrc.XRCCTRL(self, "calib_3_gauge")
+        self.calib_3_label = xrc.XRCCTRL(self, "calib_3_label")
+        self.calib_3_pnl_regions = xrc.XRCCTRL(self, "calib_3_pnl_regions")
         self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
         self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
@@ -5568,6 +5572,67 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <label>CALIBRATION 2</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem">
+                        <object class="wxPanel">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="calib_3_btn">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Calibrate</label>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>0</option>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="calib_3_gauge">
+                                <size>160,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <hidden>1</hidden>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxFIXED_MINSIZE</flag>
+                              <border>18</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="calib_3_label">
+                                <style>wxALIGN_RIGHT</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
+                              <border>14</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                        </object>
+                        <object class="FastEMCalibrationPanelHeader" name="calib_3_pnl_regions">
+                          <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>CALIBRATION 3</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>

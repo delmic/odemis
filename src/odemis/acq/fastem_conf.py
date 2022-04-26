@@ -145,20 +145,28 @@ def configure_scanner(scanner, mode):
         raise ValueError("Invalid mode %s." % mode)
 
 
-def configure_detector(detector, roc):
+def configure_detector(detector, rocs):
     """
     Configure the detector by setting the calibrated parameters as stored for
     the provided region of calibration (ROC). If calibrated parameters are not
     available, the current settings on the detector will stay as is.
     :param detector: (technolution.MPPC) The detector to be configured.
-    :param roc: (FASTEMROC) The region of calibration as selected on the scintillator,
-                which stores the calibrated settings if calibration was performed.
+    :param rocs: (list of FastEMROC) The region of calibration as selected on the scintillator,
+                 which stores the calibrated settings if calibration was performed.
     """
-    if "cellDarkOffset" in roc.value.parameters:
-        detector.cellDarkOffset.value = roc.value.parameters["cellDarkOffset"]
-    else:
+    # check all parameters are available
+    if not any(roc.parameters and "cellDarkOffset" in roc.parameters for roc in rocs):
         logging.warning("Region of calibration doesn't have dark offset parameters.")
-    if "cellDigitalGain" in roc.value.parameters:
-        detector.cellDigitalGain.value = roc.value.parameters["cellDigitalGain"]
-    else:
+    if not any(roc.parameters and "cellDigitalGain" in roc.parameters for roc in rocs):
         logging.warning("Region of calibration doesn't have digital gain parameters.")
+    if not any(roc.parameters and "cellTranslation" in roc.parameters for roc in rocs):
+        logging.warning("Region of calibration doesn't have cell translation parameters.")
+
+    for roc in rocs:
+        if roc.parameters and "cellDarkOffset" in roc.parameters:
+            detector.cellDarkOffset.value = roc.parameters["cellDarkOffset"]
+        if roc.parameters and "cellDigitalGain" in roc.parameters:
+            detector.cellDigitalGain.value = roc.parameters["cellDigitalGain"]
+        if roc.parameters and "cellTranslation" in roc.parameters:
+            detector.cellTranslation.value = roc.parameters["cellTranslation"]
+

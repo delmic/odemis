@@ -37,8 +37,8 @@ try:
         configure_hw
     )
     fastem_calibrations = True
-except ImportError:
-    logging.info("fastem_calibrations package not found")
+except ImportError as err:
+    logging.info("fastem_calibrations package not found with error: {}".format(err))
     fastem_calibrations = False
 
 from odemis import model, util
@@ -61,14 +61,18 @@ class FastEMROA(object):
     and detector.
     """
 
-    def __init__(self, name, coordinates, roc, asm, multibeam, descanner, detector, overlap=0, pre_calibrate=False):
+    def __init__(self, name, coordinates, roc_2, roc_3, asm, multibeam, descanner, detector, overlap=0,
+                 pre_calibrate=False):
         """
         :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
                      the external storage.
         :param coordinates: (float, float, float, float) xmin, ymin, xmax, ymax
                             Bounding box coordinates of the ROA in [m]. The coordinates are in the sample carrier
                             coordinate system, which corresponds to the component with role='stage'.
-        :param roc: (FastEMROC) Corresponding region of calibration (ROC).
+        :param roc_2: (FastEMROC) Corresponding region of calibration (ROC). Used for dark offset and digital
+                      gain calibration.
+        :param roc_3: (FastEMROC) Corresponding region of calibration (ROC). Used for the final scanner rotation,
+                      final scanning amplitude and cell translation (cell stitching) calibration (field corrections).
         :param asm: (technolution.AcquisitionServer) The acquisition server module component.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
         :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
@@ -84,7 +88,8 @@ class FastEMROA(object):
                                                  range=((-1, -1, -1, -1), (1, 1, 1, 1)),
                                                  cls=(int, float),
                                                  unit='m')
-        self.roc = model.VigilantAttribute(roc)
+        self.roc_2 = model.VigilantAttribute(roc_2)
+        self.roc_3 = model.VigilantAttribute(roc_3)
         self._asm = asm
         self._multibeam = multibeam
         self._descanner = descanner
@@ -297,7 +302,7 @@ class AcquisitionTask(object):
         self._beamshift = beamshift
         self._lens = lens
         self._roa = roa  # region of acquisition object
-        self._roc = roa.roc  # region of calibration object
+        self._rocs = [roa.roc_2.value, roa.roc_3.value]  # list of region of calibration objects
         self._path = path  # sub-directories on external storage
         self._future = future
         self._pre_calibrate = roa.pre_calibrate
@@ -372,7 +377,7 @@ class AcquisitionTask(object):
                           self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1)
             # configure the HW settings
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
-            fastem_conf.configure_detector(self._detector, self._roc)
+            fastem_conf.configure_detector(self._detector, self._rocs)
 
             dataflow.subscribe(self.image_received)
 
@@ -465,7 +470,6 @@ class AcquisitionTask(object):
         try:
             logging.debug("Read initial Hw settings.")
             asm_config = configure_hw.get_config_asm(self._multibeam, self._descanner, self._detector)
-
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
 
             # Set the beamshift to zero before adjusting the descanner offset, this ensures that the maximum beamshift

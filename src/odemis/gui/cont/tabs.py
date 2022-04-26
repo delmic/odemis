@@ -1792,8 +1792,7 @@ class FastEMAcquisitionTab(Tab):
             calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.SCAN_ROTATION_PREALIGN,
                             Calibrations.SCAN_AMPLITUDE_PREALIGN, Calibrations.DESCAN_GAIN_STATIC,
                             Calibrations.IMAGE_ROTATION_PREALIGN, Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                            Calibrations.IMAGE_ROTATION_FINAL,
-                            ]
+                            Calibrations.IMAGE_ROTATION_FINAL,]
             # IMAGE_TRANSLATION_FINAL FIXME: add when we can update the good mp position and fix for max amplitude
 
         # Controller for calibration panel 1
@@ -1811,15 +1810,45 @@ class FastEMAcquisitionTab(Tab):
             tab_data,
             panel.calib_2_pnl_regions,
             viewport=vp,
+            calib_prefix="calib_2",
         )
 
         # Controller for calibration panel 2
-        self._calib_2_controller = fastem_acq.FastEMScintillatorCalibrationController(
+        self._calib_2_controller = fastem_acq.FastEMCalibration2Controller(
             tab_data,
             panel,
             calib_prefix="calib_2",
             calibrations=[Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
                           Calibrations.DARK_OFFSET, Calibrations.DIGITAL_GAIN]
+        )
+
+        # Check if we deal with a real or simulated microscope. If it is a simulator,
+        # we cannot run all calibrations yet.
+        # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
+        # need to know that it's simulated otherwise we can never simulate an acquisition.
+        if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
+        else:  # it is a real microscope
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                            Calibrations.SCAN_ROTATION_FINAL,  # FIXME Calibrations.SCAN_AMPLITUDE_FINAL,
+                            Calibrations.CELL_TRANSLATION]
+
+        # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController and
+        #  not here as a separate controller -> will reduce it here to only one calibration 3 controller
+        # Controller for regions of calibration 3
+        self._calib_3_region_controller = project.FastEMCalibrationRegionsController(
+            tab_data,
+            panel.calib_3_pnl_regions,
+            viewport=vp,
+            calib_prefix="calib_3",
+        )
+
+        # Controller for calibration panel 3
+        self._calib_3_controller = fastem_acq.FastEMCalibration3Controller(
+            tab_data,
+            panel,
+            calib_prefix="calib_3",
+            calibrations=calibrations
         )
 
         # Controller for acquisition settings panel
@@ -1842,7 +1871,24 @@ class FastEMAcquisitionTab(Tab):
         self._acquisition_controller = fastem_acq.FastEMAcquiController(
             tab_data,
             panel,
+            calib_prefixes=["calib_2", "calib_3"]
         )
+
+        # FIXME where to put this code?
+        # set tooltips on the header of the respective panels
+        panel.calib_1_pnl_fastem.GetParent().GetParent() \
+            .SetToolTip("Optical path and pattern calibrations: Calibrating and focusing the optical path and the "
+                        "multiprobe pattern. Calibrating the scanning orientation and distance.")
+        panel.calib_2_pnl_regions.GetParent().GetParent() \
+            .SetToolTip("Dark offset and digital gain calibration (orange square): Correcting between cell images "
+                        "for differences in background noise and homogenizing across amplification differences.")
+        panel.calib_3_pnl_regions.GetParent().GetParent() \
+            .SetToolTip("Cell image calibration (green square): Fine-tuning the cell image size and the cell image "
+                        "orientation in respect to the scanning direction. Stitching of cell images into a single "
+                        "field image.")
+        # set tooltips on the buttons
+        panel.calib_2_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on empty scintillator.")
+        panel.calib_3_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on tissue.")
 
     def Show(self, show=True):
         super(FastEMAcquisitionTab, self).Show(show)

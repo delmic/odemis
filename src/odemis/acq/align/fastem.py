@@ -39,15 +39,18 @@ try:
         image_rotation,
         image_translation,
         dark_offset_correction,
-        digital_gain_correction
+        digital_gain_correction,
+        scan_rotation,
+        scan_amplitude,
+        cell_translation,
     )
     from fastem_calibrations.configure_hw import (
         get_config_asm,
         configure_asm
     )
     fastem_calibrations = True
-except ImportError:
-    logging.info("fastem_calibrations package not found")
+except ImportError as err:
+    logging.info("fastem_calibrations package not found with error: {}".format(err))
     autofocus_multiprobe = None
     scan_rotation_pre_align = None
     scan_amplitude_pre_align = None
@@ -58,6 +61,9 @@ except ImportError:
     image_translation = None
     dark_offset_correction = None
     digital_gain_correction = None
+    scan_rotation = None
+    scan_amplitude = None
+    cell_translation = None
 
     fastem_calibrations = False
 
@@ -79,6 +85,9 @@ class Calibrations(Enum):
     IMAGE_TRANSLATION_FINAL = image_translation
     DARK_OFFSET = dark_offset_correction
     DIGITAL_GAIN = digital_gain_correction
+    SCAN_ROTATION_FINAL = scan_rotation
+    SCAN_AMPLITUDE_FINAL = scan_amplitude
+    CELL_TRANSLATION = cell_translation
 
 
 def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations, stage_pos=None):
@@ -337,6 +346,28 @@ class CalibrationTask(object):
             digital_gain = digital_gain_correction.run_digital_gain(self._scanner, self._multibeam, self._descanner,
                                                                     self._detector, self._dataflow)
             self.asm_config["mppc"]["cellDigitalGain"] = digital_gain
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
+
+        elif calibration == Calibrations.SCAN_ROTATION_FINAL:
+            scan_rotation.run_scan_rotation(self._scanner, self._multibeam, self._descanner,
+                                            self._detector, self._dataflow)
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
+
+        elif calibration == Calibrations.SCAN_AMPLITUDE_FINAL:
+            s_offset, s_amplitude = scan_amplitude.run_scan_amplitude(self._scanner, self._multibeam, self._descanner,
+                                                                      self._detector, self._dataflow)
+            self.asm_config["multibeam"]["scanOffset"] = s_offset
+            self.asm_config["multibeam"]["scanAmplitude"] = s_amplitude
+            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
+                          upload=False)
+
+        elif calibration == Calibrations.CELL_TRANSLATION:
+            translation = cell_translation.run_cell_translation(self._scanner, self._multibeam, self._descanner,
+                                                                self._detector, self._dataflow,
+                                                                plot_cell_translation=True)
+            self.asm_config["mppc"]["cellTranslation"] = translation
             configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
                           upload=False)
 
