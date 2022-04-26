@@ -1,19 +1,26 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
 Created on 10 Dec 2013
 
-@author: Éric Piel
+@author: Éric Piel, Philip Winkler, Sabrina Rossberger
 
 Copyright © 2013-2022 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
 """
+
 from __future__ import division
 
 import collections
@@ -521,8 +528,8 @@ class ProgressiveBatchFuture(ProgressiveFuture):
         is updated accordingly.
 
         :param f: (ProgressiveFuture) A single sub-future.
-        :param start: (float) Start time of a single future in the batch future in seconds.
-        :param end: (float) End of a single future in the batch future in seconds.
+        :param start: (float) Start time of a single future in the batch future in seconds since epoch.
+        :param end: (float) End of a single future in the batch future in seconds since epoch.
         """
         if f.running():  # only care about the future which is currently running
             # For a running future it is of interest how much time is still needed for execution until finished.
