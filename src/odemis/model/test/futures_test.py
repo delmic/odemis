@@ -1,25 +1,32 @@
+#!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 10 Dec 2013
 
-@author: Éric Piel
+@author: Éric Piel, Sabrina Rossberger
 
-Copyright © 2013 Éric Piel, Delmic
+Copyright © 2013-2022 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
+"""
+
 from __future__ import division
 
 from concurrent.futures._base import CancelledError
 import logging
 from odemis.model._futures import ProgressiveFuture, CancellableFuture, \
-    CancellableThreadPoolExecutor, ParallelThreadPoolExecutor
+    CancellableThreadPoolExecutor, ParallelThreadPoolExecutor, ProgressiveBatchFuture
 from odemis.util import timeout
 import random
 import threading
@@ -196,17 +203,16 @@ class TestExecutor(unittest.TestCase):
         self.called += 1
 
 
-class TestFutures(unittest.TestCase):
+class TestCancellableFuture(unittest.TestCase):
+    """Test cancellable future."""
 
-    def testCancelWhileRunning(self):
-        """
-        Only tests a simple CancellableFuture
-        """
+    def test_cancel_while_running(self):
+        """Cancel future while running."""
         self.cancelled = 0
         future = CancellableFuture()
         future.task_canceller = self.cancel_task
 
-        # "start" the task
+        # "start" the task (set the future running)
         future.set_running_or_notify_cancel()
         self.assertEqual(self.cancelled, 0)
 
@@ -217,10 +223,8 @@ class TestFutures(unittest.TestCase):
 
         self.assertEqual(self.cancelled, 1)
 
-    def testCancelPreStart(self):
-        """
-        Check that canceller is not called if cancelled before starting
-        """
+    def test_cancel_pre_start(self):
+        """Check that canceller is not called if cancelled before starting."""
         self.cancelled = 0
         future = CancellableFuture()
         future.task_canceller = self.cancel_task
@@ -229,15 +233,13 @@ class TestFutures(unittest.TestCase):
         # try to cancel before running
         self.assertTrue(future.cancel())
         self.assertTrue(future.cancelled())
-        self.assertTrue(future.cancel()) # it's ok to cancel twice
+        self.assertTrue(future.cancel())  # it's ok to cancel twice
         self.assertRaises(CancelledError, future.result, 1)
 
-        self.assertEqual(self.cancelled, 0)
+        self.assertEqual(self.cancelled, 0)  # canceller should not be called
 
-    def testCancelPostEnd(self):
-        """
-        Check that canceller is not called if cancelled after end
-        """
+    def test_cancel_post_end(self):
+        """Check that canceller is not called if cancelled after end."""
         self.cancelled = 0
         future = CancellableFuture()
         future.task_canceller = self.cancel_task
@@ -248,90 +250,298 @@ class TestFutures(unittest.TestCase):
 
         # "end" the task
         future.set_result("boo")
-
         self.assertEqual(future.result(), "boo")
 
         # try to cancel after end
         self.assertFalse(future.cancel())
         self.assertFalse(future.cancelled())
 
-        # The result shouldn't change
+        # the result shouldn't change
         self.assertEqual(future.result(), "boo")
 
         self.assertEqual(self.cancelled, 0)
 
-    def testProgressiveFuture(self):
-        """
-        Only tests a simple ProgressiveFuture
-        """
-        self.cancelled = 0
-        self.start = None
-        self.end = None
-        future = ProgressiveFuture()
+    def cancel_task(self, future):
+        """Task canceller"""
+        self.cancelled += 1
+        return True
+
+
+class TestProgressiveFuture(unittest.TestCase):
+    """Test progressive future."""
+
+    def test_progress(self):
+        """Test progress update for future."""
+        self.start = None  # for the caller
+        self.end = None  # for the caller
+        now = time.time()
+        # start is default time now if not specified
+        future = ProgressiveFuture(end=now + 1)
         future.task_canceller = self.cancel_task
 
-        now = time.time()
-        # try to update progress
-        future.set_progress(end=now + 1)
+        # caller request future to indicate change in time estimation
         future.add_update_callback(self.on_progress_update)
-        future.set_progress(end=now + 2) # should say about 2 s left
+        # update the progress
+        future.set_progress(end=now + 2)
+        # check end time was updated
         self.assertEqual(self.end, now + 2)
-        # before being started, start should always be (a bit) in the future
+        # future not running yet, so start should be after "now"
         self.assertGreaterEqual(self.start, now)
 
-        # "start" the task
+        # "start" the task (set the future running)
         future.set_running_or_notify_cancel()
-        self.assertTrue(0 <= time.time() - self.start < 0.1)
-        time.sleep(0.1)
+        # the progress should be updated and thus .start should be updated now with the current time
+        expected_start = time.time()
+        self.assertTrue(expected_start - 0.1 <= self.start <= expected_start)
+
+        time.sleep(0.1)  # wait a bit
 
         now = time.time()
+        # while running, update the estimated ending time
         future.set_progress(end=now + 1)
-        self.assertTrue(0.9 <= self.end - time.time() < 1)
+        # the progress should be updated and thus .end should be in 1 sec from now
+        expected_end = now + 1
+        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end)
 
-        # try to cancel while running
+    def test_cancel_while_running(self):
+        """Test cancelling of future while running."""
+        self.cancelled = 0
+        self.start = None  # for the caller
+        self.end = None  # for the caller
+        now = time.time()
+        # start is default time now if not specified
+        future = ProgressiveFuture(end=now + 2)
+        future.task_canceller = self.cancel_task
+
+        # "start" the task (set the future running)
+        future.set_running_or_notify_cancel()
+
+        time.sleep(0.1)  # wait a bit
+
         future.cancel()
         self.assertTrue(future.cancelled())
-        self.assertRaises(CancelledError, future.result, 1)
-        self.assertLessEqual(self.end, time.time())
+        with self.assertRaises(CancelledError):
+            future.result(timeout=5)
+
         self.assertEqual(self.cancelled, 1)
 
-    def testPF_get_progress(self):
-        """
-        Tests set/get_progress of ProgressiveFuture
-        """
+    def test_get_progress(self):
+        """Tests retrieving the progress from the future."""
         f = ProgressiveFuture()
 
         now = time.time()
         start, end = now + 1, now + 2
-        # try to update progress
-        f.set_progress(start, end)
-        startf, endf = f.get_progress()
-        self.assertEqual(start, startf)
-        self.assertEqual(end, endf)
 
-        # "start" the task
-        f.set_running_or_notify_cancel()
-        startf, endf = f.get_progress()
-        self.assertLessEqual(startf, time.time())
-        self.assertAlmostEqual(startf + 1, endf)
-        self.assertAlmostEqual(endf, time.time() + 1, delta=0.1)
-        time.sleep(0.1)
+        f.set_progress(start, end)  # update progress
+        start_f, end_f = f.get_progress()  # retrieve progress
+        # check progress returned is same as progress set beforehand
+        self.assertEqual(start, start_f)
+        self.assertEqual(end, end_f)
+
+        # "start" the task (set the future running)
+        f.set_running_or_notify_cancel()  # updates start and end
+        start_f, end_f = f.get_progress()  # retrieve the progress
+        now = time.time()
+        # check that start is a tiny bit before now
+        self.assertLessEqual(start_f, time.time())
+        # check that expected duration is still 1s as task should take 1s
+        self.assertAlmostEqual(start_f + 1, end_f)
+        # check that the estimated end time of the futures has been updated
+        expected_end = now + 1
+        self.assertTrue(expected_end - 0.1 <= end_f <= expected_end + 0.1)  # end should be 1s in the future
+
+        time.sleep(0.1)  # wait a bit
 
         # "finish" the task
         f.set_result(None)
         self.assertTrue(f.done())
-        startf, endf = f.get_progress()
-        self.assertLessEqual(startf, time.time())
-        self.assertLessEqual(endf, time.time())
+        start_f, end_f = f.get_progress()
+        # check that start is now in the past as future started in the past
+        self.assertLessEqual(start_f, time.time())
+        # check that end is also now in the past as future already finished
+        self.assertLessEqual(end_f, time.time())
 
     def cancel_task(self, future):
+        """Task canceller"""
         self.cancelled += 1
         return True
 
     def on_progress_update(self, future, start, end):
+        """Called whenever some progress on the future is reported. Start and end time are updated."""
         self.start = start
         self.end = end
 
+
+class TestProgressiveBatchFuture(unittest.TestCase):
+    """Test progressive batch future."""
+
+    def test_progress(self):
+        """Test progress update of future."""
+        self.start = None  # for the caller
+        self.end = None  # for the caller
+        fs = {}
+        f1 = ProgressiveFuture()
+        f1.task_canceller = self.cancel_task
+        f2 = ProgressiveFuture()
+        f2.task_canceller = self.cancel_task
+        fs[f1] = 10  # estimated duration in seconds
+        fs[f2] = 15  # estimated duration in seconds
+        time_creation_batch_future = time.time()
+        batch_future = ProgressiveBatchFuture(fs)
+        batch_future.add_update_callback(self.on_progress_update)
+
+        # check estimated time for batch future is sum of estimated time for sub-futures
+        self.assertEqual(self.end - self.start, fs[f1] + fs[f2])
+
+        # "start" the sub-tasks; the batch task is already started at creation
+        f1.set_running_or_notify_cancel()
+
+        now = time.time()
+        f1.set_progress(end=now + 2)  # update the progress on one sub-future
+        # check that the estimated end time of the batch futures has been updated
+        expected_end = now + fs[f2] + 2
+        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
+        # check that the start of the batch future is after creation of batch future
+        self.assertGreaterEqual(self.start, time_creation_batch_future)
+
+        now = time.time()
+        f1.set_result(None)  # set sub-future done
+
+        # check estimated time of batch future is equal to f2
+        expected_end = now + fs[f2]
+        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
+
+        f2.set_running_or_notify_cancel()
+        # check time of batch future is still equal to f2 as future just started
+        expected_end = now + fs[f2]
+        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
+
+        now = time.time()
+        f2.set_progress(end=now + 10)  # update the progress on one sub-future
+        # check that the estimated end time of the batch futures has been updated
+        expected_end = now + 10
+        self.assertTrue(expected_end - 0.1 <= self.end <= expected_end + 0.1)
+
+        f2.set_result(None)  # set sub-future done
+
+        # check batch future automatically finished when all sub-futures finished
+        self.assertTrue(batch_future.done())
+        self.assertIsNone(batch_future.result())  # result of successful batch future is None
+
+    def test_cancel_while_running(self):
+        """Cancel batch future while running."""
+        self.cancelled = 0
+        fs = {}
+        f1 = ProgressiveFuture()
+        f1.task_canceller = self.cancel_task
+        f2 = ProgressiveFuture()
+        f2.task_canceller = self.cancel_task
+        fs[f1] = 10  # estimated duration in seconds
+        fs[f2] = 15  # estimated duration in seconds
+        batch_future = ProgressiveBatchFuture(fs)
+
+        # "start" the sub-task; the batch task is already started at creation
+        f1.set_running_or_notify_cancel()
+        self.assertEqual(self.cancelled, 0)
+
+        # try to cancel while running
+        self.assertTrue(batch_future.cancel())
+
+        self.assertTrue(batch_future.cancelled())  # check batch future cancelled
+        for f in fs:  # check all sub-futures are cancelled
+            self.assertTrue(f.cancelled())
+
+        with self.assertRaises(CancelledError):  # check result batch future
+            batch_future.result(timeout=5)
+        for f in fs:  # check result for sub-futures
+            with self.assertRaises(CancelledError):
+                f.result(timeout=5)
+
+        # only one sub-future should trigger the callback (the other future is not running yet or already finished)
+        self.assertEqual(self.cancelled, 1)  # one sub-futures should be cancelled
+
+    def test_cancel_pre_start(self):
+        """Check that canceller is not called if cancelled before starting."""
+        self.cancelled = 0
+        fs = {}
+        f1 = ProgressiveFuture()
+        f1.task_canceller = self.cancel_task
+        f2 = ProgressiveFuture()
+        f2.task_canceller = self.cancel_task
+        fs[f1] = 10  # estimated duration in seconds
+        fs[f2] = 15  # estimated duration in seconds
+        batch_future = ProgressiveBatchFuture(fs)
+        self.assertEqual(self.cancelled, 0)
+
+        # try to cancel before running
+        self.assertTrue(batch_future.cancel())
+
+        self.assertTrue(batch_future.cancelled())  # check batch future cancelled
+        for f in fs:  # check all sub-futures are cancelled
+            self.assertTrue(f.cancelled())
+
+        with self.assertRaises(CancelledError):  # check result batch future
+            batch_future.result(timeout=5)
+        for f in fs:  # check result for sub-futures
+            with self.assertRaises(CancelledError):
+                f.result(timeout=5)
+
+        self.assertTrue(batch_future.cancel())  # it's ok to cancel twice
+
+        self.assertEqual(self.cancelled, 0)
+
+    def test_cancel_post_end(self):
+        """Check that canceller is not called if cancelled after end."""
+        self.cancelled = 0
+        fs = {}
+        f1 = ProgressiveFuture()
+        f1.task_canceller = self.cancel_task
+        f2 = ProgressiveFuture()
+        f2.task_canceller = self.cancel_task
+        fs[f1] = 10  # estimated duration in seconds
+        fs[f2] = 15  # estimated duration in seconds
+        batch_future = ProgressiveBatchFuture(fs)
+
+        # "start" the sub-tasks; the batch task is already started at creation
+        # (Note: typically only one sub-future is run at a time)
+        f1.set_running_or_notify_cancel()
+        f2.set_running_or_notify_cancel()
+        self.assertEqual(self.cancelled, 0)
+
+        # "end" the sub-futures
+        f1.set_result(1)
+        f2.set_result(2)
+
+        # check batch future automatically finished when all sub-futures finished
+        self.assertTrue(batch_future.done())
+        self.assertIsNone(batch_future.result())  # result of successful batch future is None
+        self.assertEqual(f1.result(), 1)
+        self.assertEqual(f2.result(), 2)
+
+        # try to cancel after end
+        self.assertFalse(batch_future.cancel())
+
+        self.assertFalse(batch_future.cancelled())  # check batch future is not cancelled
+        for f in fs:  # check all sub-futures are not cancelled
+            self.assertFalse(f.cancelled())
+
+        # The result shouldn't change
+        self.assertIsNone(batch_future.result())
+        self.assertEqual(f1.result(), 1)
+        self.assertEqual(f2.result(), 2)
+
+        self.assertEqual(self.cancelled, 0)
+
+    def cancel_task(self, future):
+        """Task canceller. Called whenever a sub-future is cancelled."""
+        self.cancelled += 1
+        return True
+
+    def on_progress_update(self, future, start, end):
+        """Whenever there is a progress update, update start and end time."""
+        self.start = start
+        self.end = end
+
+
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
     unittest.main()

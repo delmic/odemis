@@ -2,18 +2,24 @@
 """
 Created on 10 Dec 2013
 
-@author: Éric Piel
+@author: Éric Piel, Philip Winkler, Sabrina Rossberger
 
 Copyright © 2013-2022 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License version 2 as published by the Free Software Foundation.
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
+You should have received a copy of the GNU General Public License along with
+Odemis. If not, see http://www.gnu.org/licenses/.
 """
+
 from __future__ import division
 
 import collections
@@ -509,35 +515,56 @@ class ProgressiveBatchFuture(ProgressiveFuture):
         start = time.time()  # start time of the batch future
         super().__init__(start=start, end=start + sum(self.futures.values()))
         self.set_running_or_notify_cancel()
+        self.task_canceller = self._cancel_all  # takes care of cancelling the task (=all sub-futures)
 
         for f in self.futures:
-            f.add_update_callback(self._on_future_update)  # called whenever set_progress of any single future is called
-            f.add_done_callback(self._on_future_done)  # called when future is done
+            f.add_update_callback(self._on_future_update)  # called whenever set_progress of a sub-future is called
+            f.add_done_callback(self._on_future_done)  # called when a sub-future is done
 
     def _on_future_update(self, f, start, end):
         """
-        Whenever progress on the single future is reported, the progress (or end) for the batch future
+        Whenever progress on the single sub-future is reported, the progress (or end) for the batch future
         is updated accordingly.
 
-        :param start: (float) Start time of a single future in the batch future in seconds.
-        :param end: (float) End of a single future in the batch future in seconds.
+        :param f: (ProgressiveFuture) A single sub-future.
+        :param start: (float) Start time of a single future in the batch future in seconds since epoch.
+        :param end: (float) End of a single future in the batch future in seconds since epoch.
         """
         if f.running():  # only care about the future which is currently running
-            self.futures[f] = end - start  # update the time estimation of the time left of that future
-            self.set_progress(end=self._estimate_end())  # set the progress for batch future
+            # For a running future it is of interest how much time is still needed for execution until finished.
+            # If the future is running, it is no longer of interest when the future has started (which is now in the
+            # past), but how much time is still needed between now and the estimated end.
+            now = time.time()
+            # Update the time estimation for the running future with the time still needed to finish this future
+            self.futures[f] = end - max(start, now)
+            self.set_progress(end=self._estimate_end())  # set the progress for batch future (all futures not done yet)
 
     def _on_future_done(self, f):
-        self.set_progress(end=self._estimate_end())
+        """
+        Called whenever a single sub-future is finished.
+        If all sub-futures are finished, the result on the batch future will be set (None).
+        If an exception occurred during the execution of the sub-future or the sub-future was cancelled,
+        the exception/cancellation will be propagated towards the batch future and handled there.
 
-        # Set exception if future failed and cancel all other futures
+        :param f: (ProgressiveFuture) A single sub-future.
+        """
+        self.set_progress(end=self._estimate_end())  # set the progress for batch future (all futures not done yet)
+
+        # Set exception if future failed and cancel all other sub-futures
         try:
             ex = f.exception()  # raises CancelledError if cancelled, otherwise returns error
             if ex:
                 self.cancel()
                 self.set_exception(ex)
+                return
         except CancelledError:
-            pass
+            if self.cancel():  # if cancelling works
+                return
+            else:
+                self.set_exception(CancelledError())  # if cancelling fails
+                return
 
+        # If everything is fine:
         # Set result if all futures are done
         if all(f.done() for f in self.futures):
             # always return None, it's not clear what the return value of a batch of tasks should be
@@ -551,19 +578,25 @@ class ProgressiveBatchFuture(ProgressiveFuture):
         run the remaining futures. Calculates the new end time based on the current
         time plus the estimated time for all futures that still need to be executed.
 
-        returns: (float) Newly estimated end time for the batch future.
+        :returns: (float) Newly estimated end time for the batch future.
         """
         # with f.done() only futures are taken into account that are not executed (finished) yet
         time_left = sum(t for f, t in self.futures.items() if not f.done())
 
         return time.time() + time_left
 
-    def cancel(self):
-        super().cancel()
-        fs = [f for f in self.futures if not f.done()]
+    def _cancel_all(self, f):
+        """
+        Cancel all sub-futures in the batch future, which are not finish yet.
+        :param f: (dict: ProgressiveFuture --> float) The batch future containing the sub-futures.
+        :returns: (boolean)
+            True: If all sub-futures, that were not yet finished, are successfully cancelled.
+            False: If no sub-future was left that could be cancelled.
+        """
+        fs = [f for f in self.futures if not f.done()]  # get all futures not finished yet
         logging.debug("Canceling %s futures.", len(fs))
         if not fs:
             return False  # nothing to cancel
         for f in fs:
-            f.cancel()
+            f.cancel()  # cancel all sub-futures
         return True
