@@ -233,6 +233,7 @@ class CalibrationTask(object):
 
             # loop over calibrations in list (order in list is important!)
             for calib in self.calibrations:
+                logging.debug("Starting calibration %s", calib)
                 # TODO return a sub-future when implemented for calibrations
                 self.run_calibration(calib)
 
@@ -253,6 +254,7 @@ class CalibrationTask(object):
 
                 # Update the time left for the calibrations remaining
                 self._future.set_progress(end=time.time() + self.estimate_calibration_time())
+                logging.debug("Finished calibration %s successfully", calib)
 
         except CancelledError:
             logging.debug("Calibration was cancelled.")

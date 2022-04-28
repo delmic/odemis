@@ -1660,22 +1660,35 @@ class SparcAcquisitionTab(Tab):
 
 class FastEMAcquisitionTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
+        """
+        FASTEM acquisition tab for calibrating the system and acquiring regions of
+        acquisition (ROAs), which are organized in projects.
 
-        # During creation, the following controllers are created:
-        #
-        # ViewPortController
-        #   Processes the given viewports by creating views for them, and
-        #   assigning them to their viewport.
-        #
-        # ProjectBarController
-        #   Manages the projects.
-        #
-        # CalibrationBarController
-        #   Manages the calibration regions.
-        #
-        # Acquisition Controller
-        #   Takes care of what happens after the "Start" button is pressed,
-        #   calls functions of the acquisition manager.
+        During creation, the following controllers are created:
+
+        ViewPortController
+          Processes the given viewports by creating views for them, and
+          assigning them to their viewport.
+
+        CalibrationController
+          Manages the calibration step 1 for all scintillators.
+        CalibrationRegions2Controller
+          Manages the calibration step 2 for dark offset/digital gain correction
+          per scintillator.
+        CalibrationRegions3Controller
+          Manages the calibration step 3 for single field corrections
+          per scintillator.
+
+        SettingsController
+          Manages the dwell time for the acquisition.
+
+        ProjectListController
+          Manages the projects.
+
+        AcquisitionController
+          Takes care of what happens after the "Start" button is pressed,
+          calls functions of the acquisition manager.
+        """
 
         tab_data = guimod.FastEMAcquisitionGUIData(main_data)
         super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)

@@ -4777,7 +4777,7 @@
                           <object class="wxFlexGridSizer">
                             <object class="sizeritem">
                               <object class="wxStaticText">
-                                <label>Total number of ROIs:</label>
+                                <label>Total number of ROAs:</label>
                                 <fg>#E5E5E5</fg>
                               </object>
                               <flag>wxTOP</flag>
