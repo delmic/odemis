@@ -346,6 +346,16 @@ class FastEMAcquiController(object):
         self._tab_data_model.is_calib_3_done.subscribe(self._on_va_change, init=True)
         self._main_data_model.is_acquiring.subscribe(self._on_va_change)
 
+        # update the estimated acquisition time when the dwell time changes
+        self._main_data_model.multibeam.dwellTime.subscribe(self._on_update_acquisition_time)
+
+    def _on_update_acquisition_time(self, _=None):
+        """
+        Callback that listens to changes that influence the estimated acquisition time
+        and updates the displayed acquisition time in the GUI accordingly.
+        """
+        self.update_acquisition_time()
+
     def _on_projects(self, projects):
         for p in projects:
             p.roas.subscribe(self._on_roas)
