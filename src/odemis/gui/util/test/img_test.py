@@ -572,7 +572,7 @@ class TestARExport(unittest.TestCase):
 
         try:
             import arpolarimetry
-        except:
+        except ModuleNotFoundError:
             # In case arpolarimetry is not present, the StaticARStream will not have a .polarimetry
             # attribute, so .image of the projection will not be updated and the testcase fails with a
             # timeout error.
