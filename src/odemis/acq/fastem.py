@@ -344,7 +344,10 @@ class AcquisitionTask(object):
 
         # No need to set the start time of the future: it's automatically done when setting its state to running.
         self._future.set_progress(end=time.time() + total_roa_time)  # provide end time to future
-        logging.info("Starting acquisition of mega field, with expected duration of %f s", total_roa_time)
+        logging.info(
+            "Starting acquisition of ROA %s, with expected duration of %f s and %s by %s fields.",
+            self._roa.name, total_roa_time, self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1
+        )
 
         # Update the position of the first tile.
         self._pos_first_tile = self.get_pos_first_tile()
@@ -373,8 +376,7 @@ class AcquisitionTask(object):
         dataflow = self._detector.data
 
         try:
-            logging.debug("Starting megafield acquisition of %s by %s fields.",
-                          self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1)
+            logging.debug("Configure hardware for acquisition.")
             # configure the HW settings
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
             fastem_conf.configure_detector(self._detector, self._rocs)
@@ -405,7 +407,7 @@ class AcquisitionTask(object):
             self._scanner.blanker.value = True
 
             # Finish the megafield also if an exception was raised, in order to enable a new acquisition.
-            logging.debug("Finish megafield acquisition.")
+            logging.debug("Finish ROA acquisition.")
             dataflow.unsubscribe(self.image_received)
 
         return self.megafield, exception
@@ -451,6 +453,8 @@ class AcquisitionTask(object):
             # Update the time left for the acquisition.
             expected_time = len(self._fields_remaining) * total_field_time
             self._future.set_progress(start=time.time(), end=time.time() + expected_time)
+
+        logging.debug("Successfully acquired all fields of ROA.")
 
     def pre_calibrate(self):
         """
@@ -603,6 +607,7 @@ class AcquisitionTask(object):
         """Move the stage to the next tile (field image) position."""
 
         pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
+        logging.debug(f"Moving to stage position x: {pos_hor}, y: {pos_vert}")
         f = self._stage.moveAbs({'x': pos_hor, 'y': pos_vert})  # move the stage
         timeout = 100
         try:
