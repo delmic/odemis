@@ -282,7 +282,7 @@ class TestEnzelMove(unittest.TestCase):
             f.result()
 
         # Move to alignment position
-        cryoSwitchAlignPosition(LOADING).result()
+        cryoSwitchAlignPosition(LOADING).result()  # First move to LOADING to allow next move
         self.check_move_aligner_to_target(ALIGNMENT)
 
         # from alignment to loading
