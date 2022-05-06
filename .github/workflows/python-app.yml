@@ -28,7 +28,12 @@ jobs:
         sudo mkdir /var/run/odemisd
         sudo chmod a+rw /var/run/odemisd
 
-    - name: Run tests from odemis.model
+    - name: Run tests from odemis.dataio
       run: |
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
-        python3 -m unittest discover -s src/odemis/model/test -p "*_test.py" --verbose
+        python3 -m unittest discover -s src/odemis/dataio/test -p "*_test.py" --verbose
+
+    - name: Run tests from odemis.acq.drift
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest discover -s src/odemis/acq/drift/test -p "*_test.py" --verbose
