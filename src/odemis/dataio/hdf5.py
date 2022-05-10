@@ -335,6 +335,11 @@ def _add_image_info(group, dataset, image):
             group["DimensionScaleY"].attrs["UNIT"] = "m"
             _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
 
+            # TODO: switch to new h5py syntax (however, it's only available from h5py v2.10,
+            # while Ubuntu 18.04 has h5py v2.7. On Ubuntu 20.04, this causes a warning.
+            # See https://docs.h5py.org/en/stable/high/dims.html
+            # group["DimensionScaleX"].make_scale("X")
+            # => add a "make_scale()" function, which calls the right one, based on hasattr?
             # Attach the scales to each dimensions (referenced by their label)
             dataset.dims.create_scale(group["DimensionScaleX"], "X")
             dataset.dims.create_scale(group["DimensionScaleY"], "Y")
