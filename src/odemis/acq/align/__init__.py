@@ -28,7 +28,6 @@ from .autofocus import AutoFocus, AutoFocusSpectrometer, Sparc2AutoFocus
 from .light import turnOnLight
 from .find_overlay import FindOverlay
 from .spot import AlignSpot, FindSpot
-from .fastem import align
 from odemis.util.img import Subtract
 
 
