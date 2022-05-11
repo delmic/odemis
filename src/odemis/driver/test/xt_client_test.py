@@ -434,7 +434,7 @@ class TestMicroscope(unittest.TestCase):
         """
         self.scanner.blanker = False
         # Start auto contrast brightness and check if it is running.
-        auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(self.detector.role)
+        auto_contrast_brightness_future = self.detector.applyAutoContrastBrightness()
         auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(self.scanner.channel)
         time.sleep(0.01)
         self.assertEqual(auto_contrast_brightness_state, True)
@@ -448,7 +448,7 @@ class TestMicroscope(unittest.TestCase):
         self.assertIsInstance(auto_contrast_brightness_future, ProgressiveFuture)
 
         # Test starting auto contrast brightness and cancelling directly
-        auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(self.detector.role)
+        auto_contrast_brightness_future = self.detector.applyAutoContrastBrightness()
         auto_contrast_brightness_future.cancel()
         time.sleep(1.0)  # Give microscope/simulator the time to update the state
         auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(self.scanner.channel)
@@ -458,7 +458,7 @@ class TestMicroscope(unittest.TestCase):
         # Start auto contrast brightness
         max_execution_time = 60  # Approximately 3 times the normal expected execution time (s)
         starting_time = time.time()
-        auto_contrast_brightness_future = self.scanner.applyAutoContrastBrightness(self.detector.role)
+        auto_contrast_brightness_future = self.detector.applyAutoContrastBrightness()
         time.sleep(0.5)  # Give microscope/simulator the time to update the state
         # Wait until the auto contrast brightness is finished
         auto_contrast_brightness_future.result(timeout=max_execution_time)
@@ -478,7 +478,7 @@ class TestMicroscope(unittest.TestCase):
         """
         self.scanner.blanker = False
         # Start auto focus and check if it is running.
-        autofocus_future = self.efocus.applyAutofocus(self.detector.role)
+        autofocus_future = self.efocus.applyAutofocus()
         autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
         self.assertEqual(autofocus_state, True)
         self.assertIsInstance(autofocus_future, ProgressiveFuture)
@@ -491,7 +491,7 @@ class TestMicroscope(unittest.TestCase):
         self.assertIsInstance(autofocus_future, ProgressiveFuture)
 
         # Test starting auto focus and cancelling directly
-        autofocus_future = self.efocus.applyAutofocus(self.detector.role)
+        autofocus_future = self.efocus.applyAutofocus()
         autofocus_future.cancel()
         time.sleep(1.0)  # Give microscope/simulator the time to update the state
         autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
@@ -501,7 +501,7 @@ class TestMicroscope(unittest.TestCase):
         # Start autofocus
         max_execution_time = 40  # Approximately 3 times the normal expected execution time (s)
         starting_time = time.time()
-        autofocus_future = self.efocus.applyAutofocus(self.detector.role)
+        autofocus_future = self.efocus.applyAutofocus()
         time.sleep(0.5)  # Give microscope/simulator the time to update the state
         autofocus_future.result(timeout=max_execution_time)  # Wait until the autofocus is finished
 
@@ -530,6 +530,20 @@ class TestMicroscope(unittest.TestCase):
         test.assert_tuple_almost_equal((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
         # set beamShift back to initial value
         self.scanner.beamShift.value = init_beam_shift
+
+    def test_contrast(self):
+        """Test setting the contrast."""
+        init_contrast = self.scanner.contrast.value
+        self.scanner.contrast.value += 0.01
+        self.assertEqual(self.scanner.contrast.value, init_contrast + 0.01)
+        self.scanner.contrast.value = init_contrast
+
+    def test_brightness(self):
+        """Test setting the brightness."""
+        init_brightness = self.scanner.brightness.value
+        self.scanner.brightness.value += 0.01
+        self.assertEqual(self.scanner.brightness.value, init_brightness + 0.01)
+        self.scanner.brightness.value = init_brightness
 
 
 class TestMicroscopeInternal(unittest.TestCase):
@@ -994,6 +1008,34 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertIsInstance(beamlet_index_info["range"]["y"], list)
         self.assertEqual(len(beamlet_index_info["range"]["x"]), 2)
         self.assertEqual(len(beamlet_index_info["range"]["y"]), 2)
+
+    def test_contrast(self):
+        """Test setting and getting the contrast."""
+        init_contrast = self.microscope.get_contrast()
+        new_contrast = init_contrast + 0.01
+        contrast_range = self.microscope.contrast_info()["range"]
+        if new_contrast < contrast_range[0]:
+            new_contrast = contrast_range[0] + 0.01
+        elif new_contrast > contrast_range[1]:
+            new_contrast = contrast_range[1] - 0.01
+        self.microscope.set_contrast(new_contrast)
+        self.assertAlmostEqual(new_contrast, self.microscope.get_contrast())
+        # Set dwell time back to initial value
+        self.microscope.set_contrast(init_contrast)
+
+    def test_brightness(self):
+        """Test setting and getting the brigthness."""
+        init_brightness = self.microscope.get_brightness()
+        new_brightness = init_brightness + 0.01
+        brightness_range = self.microscope.brightness_info()["range"]
+        if new_brightness < brightness_range[0]:
+            new_brightness = brightness_range[0] + 0.01
+        elif new_brightness > brightness_range[1]:
+            new_brightness = brightness_range[1] - 0.01
+        self.microscope.set_brightness(new_brightness)
+        self.assertAlmostEqual(new_brightness, self.microscope.get_brightness())
+        # Set dwell time back to initial value
+        self.microscope.set_brightness(init_brightness)
 
 
 class TestFIBScanner(unittest.TestCase):
