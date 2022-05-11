@@ -400,7 +400,7 @@ ENZEL-Sim: {
         # When Z is inverted, the range will be inverted too, as this describes the
         # the range as seen by the device. IOW, expect to read the opposite values when
         # using odemis --list-prop.
-        range: [ -0.0126437, 0.0075529 ],
+        range: [-0.0126437, 0.009],
         unit: 'm',
         channel: 1,
       },

@@ -97,7 +97,7 @@ class TestShamrockStatic(unittest.TestCase):
         dev.terminate()
 
 
-class TestSpectrograph(object):
+class SpectrographTestBaseClass:
     """
     Abstract class for testing the spectrograph.
     Subclass needs to inherit from unittest.TestCase too
@@ -454,7 +454,7 @@ class TestSpectrograph(object):
         self.assertIsInstance(self._px2wl, list)
 
 
-class TestShamrock(TestSpectrograph, unittest.TestCase):
+class TestShamrock(SpectrographTestBaseClass, unittest.TestCase):
     """
     Test the Shamrock alone
     """
@@ -573,7 +573,7 @@ class TestShamrock(TestSpectrograph, unittest.TestCase):
         # self.assertEqual(f12_actual, f11 + (f22 - f21))
 
 
-class TestShamrockAndCCD(TestSpectrograph, unittest.TestCase):
+class TestShamrockAndCCD(SpectrographTestBaseClass, unittest.TestCase):
     """
     Test the Shamrock + AndorSpec class
     """

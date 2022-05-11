@@ -731,7 +731,7 @@ class TestTiffIO(unittest.TestCase):
                 owl = im.metadata[model.MD_OUT_WL]  # nm
                 self.assertTrue((md[model.MD_OUT_WL][0] <= owl[0] and
                                  owl[1] <= md[model.MD_OUT_WL][-1]))
-                if model.MD_LIGHT_POWER in md and model.MD_LIGHT_POWER in im:
+                if model.MD_LIGHT_POWER in md and model.MD_LIGHT_POWER in im.metadata:
                     self.assertEqual(im.metadata[model.MD_LIGHT_POWER], md[model.MD_LIGHT_POWER])
 
                 self.assertAlmostEqual(im.metadata.get(model.MD_ROTATION, 0), md.get(model.MD_ROTATION, 0))
