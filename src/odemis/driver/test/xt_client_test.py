@@ -478,7 +478,7 @@ class TestMicroscope(unittest.TestCase):
         """
         self.scanner.blanker = False
         # Start auto focus and check if it is running.
-        autofocus_future = self.efocus.applyAutofocus()
+        autofocus_future = self.efocus.applyAutofocus(self.detector)
         autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
         self.assertEqual(autofocus_state, True)
         self.assertIsInstance(autofocus_future, ProgressiveFuture)
@@ -491,7 +491,7 @@ class TestMicroscope(unittest.TestCase):
         self.assertIsInstance(autofocus_future, ProgressiveFuture)
 
         # Test starting auto focus and cancelling directly
-        autofocus_future = self.efocus.applyAutofocus()
+        autofocus_future = self.efocus.applyAutofocus(self.detector)
         autofocus_future.cancel()
         time.sleep(1.0)  # Give microscope/simulator the time to update the state
         autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
@@ -501,7 +501,7 @@ class TestMicroscope(unittest.TestCase):
         # Start autofocus
         max_execution_time = 40  # Approximately 3 times the normal expected execution time (s)
         starting_time = time.time()
-        autofocus_future = self.efocus.applyAutofocus()
+        autofocus_future = self.efocus.applyAutofocus(self.detector)
         time.sleep(0.5)  # Give microscope/simulator the time to update the state
         autofocus_future.result(timeout=max_execution_time)  # Wait until the autofocus is finished
 
@@ -533,17 +533,17 @@ class TestMicroscope(unittest.TestCase):
 
     def test_contrast(self):
         """Test setting the contrast."""
-        init_contrast = self.scanner.contrast.value
-        self.scanner.contrast.value += 0.01
-        self.assertEqual(self.scanner.contrast.value, init_contrast + 0.01)
-        self.scanner.contrast.value = init_contrast
+        init_contrast = self.detector.contrast.value
+        self.detector.contrast.value += 0.01
+        self.assertEqual(self.detector.contrast.value, init_contrast + 0.01)
+        self.detector.contrast.value = init_contrast
 
     def test_brightness(self):
         """Test setting the brightness."""
-        init_brightness = self.scanner.brightness.value
-        self.scanner.brightness.value += 0.01
-        self.assertEqual(self.scanner.brightness.value, init_brightness + 0.01)
-        self.scanner.brightness.value = init_brightness
+        init_brightness = self.detector.brightness.value
+        self.detector.brightness.value += 0.01
+        self.assertEqual(self.detector.brightness.value, init_brightness + 0.01)
+        self.detector.brightness.value = init_brightness
 
 
 class TestMicroscopeInternal(unittest.TestCase):

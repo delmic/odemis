@@ -1372,7 +1372,7 @@ class StreamController(object):
         self.stream_panel.Enable(False)
         self.pause()
         self.pauseStream()
-        f = self.stream.focuser.applyAutofocus()
+        f = self.stream.focuser.applyAutofocus(self.stream.detector)
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main

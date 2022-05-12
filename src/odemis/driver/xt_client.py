@@ -1782,22 +1782,22 @@ class Detector(model.Detector):
         """
         Reads all the current settings from the Detector and reflects them on the VAs
         """
-        brightness = self.parent.get_brightness(self.channel)
+        brightness = self.parent.get_brightness(self._scanner.channel)
         if brightness != self.brightness.value:
             self.brightness._value = brightness
             self.brightness.notify(brightness)
-        contrast = self.parent.get_contrast(self.channel)
+        contrast = self.parent.get_contrast(self._scanner.channel)
         if contrast != self.contrast.value:
             self.contrast._value = contrast
             self.contrast.notify(contrast)
 
     def _setBrightness(self, brightness):
-        self.parent.set_brightness(brightness, self.channel)
-        return self.parent.get_brightness(self.channel)
+        self.parent.set_brightness(brightness, self._scanner.channel)
+        return self.parent.get_brightness(self._scanner.channel)
 
     def _setContrast(self, contrast):
-        self.parent.set_contrast(contrast, self.channel)
-        return self.parent.get_contrast(self.channel)
+        self.parent.set_contrast(contrast, self._scanner.channel)
+        return self.parent.get_contrast(self._scanner.channel)
 
     @isasync
     def applyAutoContrastBrightness(self):
@@ -1818,7 +1818,7 @@ class Detector(model.Detector):
         f._must_stop = threading.Event()  # Cancel of the current future requested
         f.task_canceller = self._cancelAutoContrastBrightness
         f._channel_name = self._scanner.channel
-        return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
+        return self._scanner._executor.submitf(f, self._applyAutoContrastBrightness, f)
 
     def _applyAutoContrastBrightness(self, future):
         """
@@ -2214,13 +2214,14 @@ class Focus(model.Actuator):
         self._pos_poll.start()
 
     @isasync
-    def applyAutofocus(self):
+    def applyAutofocus(self, detector):
         """
         Wrapper for running the autofocus functionality asynchronously. It sets the state of autofocus,
         the beam must be turned on and unblanked. Also a a reasonable manual focus is needed. When the image is too far
         out of focus, an incorrect focus can be found using the autofocus functionality.
         This call is non-blocking.
 
+        :param detector (str): Role of the detector.
         :return: Future object
         """
         # Create ProgressiveFuture and update its state
@@ -2230,7 +2231,7 @@ class Focus(model.Actuator):
         f._autofocus_lock = threading.Lock()
         f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelAutoFocus
-        f._channel_name = self.parent._scanner.channel
+        f._channel_name = detector._scanner.channel
         return self._executor.submitf(f, self._applyAutofocus, f)
 
     def _applyAutofocus(self, future):
