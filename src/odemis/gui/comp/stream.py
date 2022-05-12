@@ -1547,6 +1547,7 @@ class StreamBar(wx.Panel):
         self._sz.Detach(spanel)
         self.stream_panels.remove(spanel)
         spanel.Destroy()
+        spanel.Unbind(wx.EVT_WINDOW_DESTROY, source=spanel, handler=self.on_streamp_destroy)
 
     def clear(self):
         """
@@ -1554,7 +1555,8 @@ class StreamBar(wx.Panel):
         Must be called in the main GUI thread
         """
         for p in list(self.stream_panels):
-            # Only refit the (empty) bar after all streams are gone
+            # Prematurely stop listening to the Destroy event, to only refit the
+            # (empty) bar once, after all streams are gone.
             p.Unbind(wx.EVT_WINDOW_DESTROY, source=p, handler=self.on_streamp_destroy)
             self.remove_stream_panel(p)
 

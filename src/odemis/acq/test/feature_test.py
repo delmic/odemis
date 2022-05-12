@@ -39,11 +39,11 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         feature1 = CryoFeature("Feature-1", 0, 0, 0, 10)
         feature2 = CryoFeature("Feature-2", 1e-3, 1e-3, 2e-3, 20)
 
-        features = ListVA(value=[feature1, feature2])
+        features = [feature1, feature2]
         save_features("", features)
         r_features = read_features("")
-        self.assertEqual(len(features.value), len(r_features))
-        self.assertEqual(features.value[0].name.value, r_features[0].name.value)
+        self.assertEqual(len(features), len(r_features))
+        self.assertEqual(features[0].name.value, r_features[0].name.value)
 
 
 if __name__ == "__main__":

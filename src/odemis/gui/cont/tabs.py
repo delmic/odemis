@@ -404,15 +404,16 @@ class LocalizationTab(Tab):
         self._acquisition_controller = acqcont.CryoAcquiController(
             tab_data, panel, self)
 
-        self._acquired_stream_controller = streamcont.StreamBarController(
+        self._acquired_stream_controller = streamcont.CryoAcquiredStreamsController(
             tab_data,
-            panel.pnl_cryosecom_acquired,
+            feature_view=tab_data.views.value[1],
+            ov_view=tab_data.views.value[0],
+            stream_bar=panel.pnl_cryosecom_acquired,
             view_ctrl=self.view_controller,
             static=True,
         )
 
         self._feature_panel_controller = CryoFeatureController(tab_data, panel, self)
-        self.tab_data_model.main.currentFeature.subscribe(self._on_current_feature_changes)
         self.tab_data_model.streams.subscribe(self._on_acquired_streams)
         self.conf = conf.get_acqui_conf()
 
@@ -524,16 +525,14 @@ class LocalizationTab(Tab):
     def load_overview_data(self, data):
         # Create streams from data
         streams = data_to_static_streams(data)
-
-        view = self.tab_data_model.views.value[0]  # overview map view
         bbox = (None, None, None, None)  # ltrb in m
         for s in streams:
             s.name.value = "Overview " + s.name.value
-            self._show_acquired_stream(s, view)
             # Add the static stream to the streams list of the model and also to the overviewStreams to easily
             # distinguish between it and other acquired streams
             self.tab_data_model.overviewStreams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)
+            self._acquired_stream_controller.showOverviewStream(s)
 
             # Compute the total bounding box
             try:
@@ -554,33 +553,27 @@ class LocalizationTab(Tab):
         chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
         chamber_tab.load_overview_streams(streams)
 
-    def clear_live_streams(self):
+    def reset_live_streams(self):
         """
-        Clear the content of the live streams
-
-
+        Clear the content of the live streams. So the streams and their settings
+        are still available, but without any image.
         """
         live_streams = [stream for stream in self.tab_data_model.streams.value if isinstance(stream, LiveStream)]
         for stream in live_streams:
             if stream.raw:
                 stream.raw = []
                 stream.image.value = None
-                stream.histogram._value = numpy.empty(0)
-                stream.histogram.notify(stream.histogram._value)
+                stream.histogram._set_value(numpy.empty(0), force_write=True)
 
-    def clear_overview_streams(self, filter_stream_name=None):
+    def clear_acquired_streams(self):
         """
-        Remove overview map (Static) streams and clear them from view and panel.
-        @:param filter_stream_name: (StaticStream or None) the newly acquired stream name to filter on, None will remove all static streams
+        Remove overview map streams and feature streams, both from view and panel.
         """
-        for stream in self.tab_data_model.overviewStreams.value:
-            if filter_stream_name and stream.name.value != filter_stream_name:
-                continue
-            self._acquired_stream_controller.removeStreamPanel(stream)
+        self._acquired_stream_controller.clear()
 
     def _onAutofocus(self, active):
-        # Determine which stream is active
         if active:
+            # Determine which stream is active
             try:
                 self.curr_s = self.tab_data_model.streams.value[0]
             except IndexError:
@@ -591,37 +584,9 @@ class LocalizationTab(Tab):
 
             # run only if focuser is available
             if self.curr_s.focuser:
-                # TODO: maybe this can be done in a less hard-coded way
-                self.orig_hfw = None
-                self.orig_binning = None
-                self.orig_exposureTime = None
-                init_focus = None
                 emt = self.curr_s.emitter
                 det = self.curr_s.detector
-                # Set binning to 8 in case of optical focus to avoid high SNR
-                # and limit HFW in case of ebeam focus to avoid extreme brightness.
-                # Also apply ACB before focusing in case of ebeam focus.
-                if self.curr_s.focuser.role == "ebeam-focus" and self.main_data.role == "delphi":
-                    self.orig_hfw = emt.horizontalFoV.value
-                    emt.horizontalFoV.value = min(self.orig_hfw, AUTOFOCUS_HFW)
-                    f = det.applyAutoContrast()
-                    f.result()
-                    # Use the good initial focus value if known
-                    init_focus = self._state_controller.good_focus
-
-                    # TODO: for the DELPHI, it should also be possible to use the
-                    # opt_focus value from calibration as a "good value"
-                else:
-                    if model.hasVA(det, "binning"):
-                        self.orig_binning = det.binning.value
-                        det.binning.value = max(self.orig_binning, AUTOFOCUS_BINNING)
-                        if model.hasVA(det, "exposureTime"):
-                            self.orig_exposureTime = det.exposureTime.value
-                            bin_ratio = numpy.prod(self.orig_binning) / numpy.prod(det.binning.value)
-                            expt = self.orig_exposureTime * bin_ratio
-                            det.exposureTime.value = det.exposureTime.clip(expt)
-
-                self._autofocus_f = AutoFocus(det, emt, self.curr_s.focuser, good_focus=init_focus)
+                self._autofocus_f = AutoFocus(det, emt, self.curr_s.focuser)
                 self._autofocus_f.add_done_callback(self._on_autofocus_done)
             else:
                 # Should never happen as normally the menu/icon are disabled
@@ -632,16 +597,10 @@ class LocalizationTab(Tab):
 
     def _on_autofocus_done(self, future):
         self.tab_data_model.autofocus_active.value = False
-        if self.orig_hfw is not None:
-            self.curr_s.emitter.horizontalFoV.value = self.orig_hfw
-        if self.orig_binning is not None:
-            self.curr_s.detector.binning.value = self.orig_binning
-        if self.orig_exposureTime is not None:
-            self.curr_s.detector.exposureTime.value = self.orig_exposureTime
 
     def _on_current_stream(self, streams):
         """
-        Called when some VAs affecting the current stream change
+        Called when the current stream changes
         """
         # Try to get the current stream
         try:
@@ -653,17 +612,6 @@ class LocalizationTab(Tab):
             self.curr_s.should_update.subscribe(self._on_stream_update, init=True)
         else:
             wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, False)
-
-    def _on_stage_pos(self, pos):
-        """
-        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
-        :param pos: (dict str->float or None) updated position of the stage
-        """
-        if self.main_data.role == "enzel":
-            # TODO: IMAGING position should not be used on ENZEL anymore
-            guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[THREE_BEAMS, IMAGING])
-        elif self.main_data.role == "meteor":
-            guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[FM_IMAGING, SEM_IMAGING])
 
     def _on_stream_update(self, updated):
         """
@@ -683,53 +631,6 @@ class LocalizationTab(Tab):
         if not f_enable:
             self.tab_data_model.autofocus_active.value = False
         wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, f_enable)
-
-    def terminate(self):
-        super(LocalizationTab, self).terminate()
-        self.stage.position.unsubscribe(self._on_stage_pos)
-        # make sure the streams are stopped
-        for s in self.tab_data_model.streams.value:
-            s.is_active.value = False
-
-    def Show(self, show=True):
-        assert (show != self.IsShown())  # we assume it's only called when changed
-        super(LocalizationTab, self).Show(show)
-
-        if not show: # if localization tab is not chosen
-            # pause streams when not displayed
-            self._streambar_controller.pauseStreams()
-
-    def _show_acquired_stream(self, acquired_stream, selected_view):
-        """
-        Create a stream controller for the given stream and view and add it to the stream bar controller list of stream controllers
-        :param acquired_stream: the static stream to show
-        :param selected_view: the view to show it on
-        """
-        stream_cont = StreamController(self.panel.pnl_cryosecom_acquired, acquired_stream, self.tab_data_model,
-                                       show_panel=True, view=selected_view, sb_ctrl=self._acquired_stream_controller)
-        stream_cont.to_static_mode()
-        selected_view.addStream(acquired_stream)
-
-        stream_cont.stream_panel.set_visible(True)
-        stream_cont.stream_panel.show_remove_btn(True)
-        self._acquired_stream_controller.stream_controllers.append(stream_cont)
-
-    def _on_current_feature_changes(self, feature):
-        """
-        Handle switching the acquired streams appropriate to the current feature
-        :param feature: (CryoFeature or None) the newly selected current feature
-        """
-        self._acquired_stream_controller.clear(clear_model=False)
-        # show the feature streams on the acquired view
-        view = self.tab_data_model.views.value[1]
-        acquired_streams = feature.streams.value if feature else []
-        for stream in acquired_streams:
-            self._show_acquired_stream(stream, view)
-
-        # show the overview maps (if any) on the overview view
-        view = self.tab_data_model.views.value[0]
-        for stream in self.tab_data_model.overviewStreams.value:
-            self._show_acquired_stream(stream, view)
 
     def _on_acquired_streams(self, streams):
         """
@@ -756,13 +657,6 @@ class LocalizationTab(Tab):
                     if st in feature.streams.value:
                         feature.streams.value.remove(st)
 
-    @classmethod
-    def get_display_priority(cls, main_data):
-        if main_data.role in ("enzel", "meteor"):
-            return 2
-        else:
-            return None
-
     @call_in_wx_main
     def display_acquired_data(self, data):
         """
@@ -771,13 +665,33 @@ class LocalizationTab(Tab):
         """
         # get the top right view port
         view = self.tab_data_model.views.value[1]
+        self.tab_data_model.focussedView.value = view
         self.tab_data_model.select_current_position_feature()
         for s in data_to_static_streams(data):
             if self.tab_data_model.main.currentFeature.value:
                 s.name.value = self.tab_data_model.main.currentFeature.value.name.value + " - " + s.name.value
                 self.tab_data_model.main.currentFeature.value.streams.value.append(s)
-            self.tab_data_model.streams.value.insert(0, s)
-            self._show_acquired_stream(s, view)
+            self.tab_data_model.streams.value.insert(0, s)  # TODO: let addFeatureStream do that
+            self._acquired_stream_controller.showFeatureStream(s)
+
+    def _on_stage_pos(self, pos):
+        """
+        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        if self.main_data.role == "enzel":
+            # TODO: IMAGING position should not be used on ENZEL anymore
+            target = [THREE_BEAMS, IMAGING]
+        elif self.main_data.role == "meteor":
+            target = [FM_IMAGING, SEM_IMAGING]
+        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=target)
+
+    def terminate(self):
+        super(LocalizationTab, self).terminate()
+        self.stage.position.unsubscribe(self._on_stage_pos)
+        # make sure the streams are stopped
+        for s in self.tab_data_model.streams.value:
+            s.is_active.value = False
 
     @classmethod
     def get_display_priority(cls, main_data):
@@ -785,6 +699,15 @@ class LocalizationTab(Tab):
             return 2
         else:
             return None
+
+    def Show(self, show=True):
+        assert (show != self.IsShown())  # we assume it's only called when changed
+        super(LocalizationTab, self).Show(show)
+
+        if not show:  # if localization tab is not chosen
+            # pause streams when not displayed
+            self._streambar_controller.pauseStreams()
+
 
 class SecomStreamsTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -2789,9 +2712,10 @@ class CryoChamberTab(Tab):
     def _reset_project_data(self):
         try:
             localization_tab = self.tab_data_model.main.getTabByName("cryosecom-localization")
-            localization_tab.clear_overview_streams()
-            localization_tab.clear_live_streams()
+            localization_tab.clear_acquired_streams()
+            localization_tab.reset_live_streams()
             self.tab_data_model.main.features.value = []
+            self.tab_data_model.main.currentFeature.value = None
         except LookupError:
             logging.warning("Unable to find localization tab.")
 
