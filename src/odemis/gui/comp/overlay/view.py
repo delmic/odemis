@@ -54,26 +54,29 @@ class TextViewOverlay(base.ViewOverlay):
 # Shape type of CenteredLineOverlay
 CROSSHAIR, HORIZONTAL_LINE, VERTICAL_LINE = 0, 1, 2
 
+
 class CenteredLineOverlay(base.ViewOverlay):
     """ Render a static line (horizontal, vertical, crosshair) around the center of the view """
 
-    def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE, shape=CROSSHAIR):
+    def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE, shape=CROSSHAIR,
+                 thickness=gui.CENTERED_LINE_THICKNESS):
         base.ViewOverlay.__init__(self, cnvs)
 
         self.colour = conversion.hex_to_frgba(colour)
         self.size = size
+        self.thickness = thickness
         self.shape = shape
         if self.shape not in (CROSSHAIR, HORIZONTAL_LINE, VERTICAL_LINE):
             raise ValueError("Unknown shape input {}.".format(self.shape))
 
-    def _draw_vertical_line(self, ctx, center, size, colour):
+    def _draw_vertical_line(self, ctx, center, size, colour, thickness):
         """
         Draw vertical line around the center point
         """
         top = center[1] - size
         bottom = center[1] + size
 
-        ctx.set_line_width(2)
+        ctx.set_line_width(thickness)
 
         # Draw shadow
         ctx.set_source_rgba(0, 0, 0, 0.9)
@@ -87,14 +90,14 @@ class CenteredLineOverlay(base.ViewOverlay):
         ctx.line_to(center[0] + 0.5, bottom + 0.5)
         ctx.stroke()
 
-    def _draw_horizontal_line(self, ctx, center, size, colour):
+    def _draw_horizontal_line(self, ctx, center, size, colour, thickness):
         """
         Draw horizontal line around the center point
         """
         left = center[0] - size
         right = center[0] + size
 
-        ctx.set_line_width(2)
+        ctx.set_line_width(thickness)
 
         # Draw shadow
         ctx.set_source_rgba(0, 0, 0, 0.9)
@@ -108,22 +111,22 @@ class CenteredLineOverlay(base.ViewOverlay):
         ctx.line_to(right + 0.5, center[1] + 0.5)
         ctx.stroke()
 
-    def draw_crosshair(self, ctx, center, size, colour):
+    def draw_crosshair(self, ctx, center, size, colour, thickness):
         """
         Draw cross hair given Cairo context and center position
         """
-        self._draw_horizontal_line(ctx, center, size, colour)
-        self._draw_vertical_line(ctx, center, size, colour)
+        self._draw_horizontal_line(ctx, center, size, colour, thickness)
+        self._draw_vertical_line(ctx, center, size, colour, thickness)
 
     def draw(self, ctx):
         """ Draw a cross hair to the Cairo context """
         center = self.cnvs.get_half_view_size()
         if self.shape is CROSSHAIR:
-            self.draw_crosshair(ctx, center, size=self.size, colour=self.colour)
+            self.draw_crosshair(ctx, center, size=self.size, colour=self.colour, thickness=self.thickness)
         elif self.shape is HORIZONTAL_LINE:
-            self._draw_horizontal_line(ctx, center, size=center[0], colour=self.colour)
+            self._draw_horizontal_line(ctx, center, size=center[0], colour=self.colour, thickness=self.thickness)
         elif self.shape is VERTICAL_LINE:
-            self._draw_vertical_line(ctx, center, size=center[1], colour=self.colour)
+            self._draw_vertical_line(ctx, center, size=center[1], colour=self.colour, thickness=self.thickness)
 
 
 class PlayIconOverlay(base.ViewOverlay):
