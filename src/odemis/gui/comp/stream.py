@@ -1547,7 +1547,6 @@ class StreamBar(wx.Panel):
         self._sz.Detach(spanel)
         self.stream_panels.remove(spanel)
         spanel.Destroy()
-        spanel.Unbind(wx.EVT_WINDOW_DESTROY, source=spanel, handler=self.on_streamp_destroy)
 
     def clear(self):
         """
