@@ -54,7 +54,7 @@ from odemis.util.comp import compute_scanner_fov, get_fov_rect
 class CurrentPosCrossHairOverlay(WorldOverlay):
     """ Render a static cross hair to the current position of the stage"""
 
-    def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE):
+    def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE, thickness=gui.CROSSHAIR_THICKNESS):
         WorldOverlay.__init__(self, cnvs)
 
         if not hasattr(cnvs.view, "stage_pos"):
@@ -63,6 +63,9 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
 
         self.colour = conversion.hex_to_frgba(colour)
         self.size = size
+        self.thickness = thickness
+
+        self.crosshair = CenteredLineOverlay(self.cnvs)
 
     @call_in_wx_main
     def _current_pos_updated(self, _):
@@ -90,7 +93,7 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """ Draw a cross hair to the Cairo context """
         center = self._get_current_stage_buffer_pos()
-        CenteredLineOverlay(self.cnvs).draw_crosshair(ctx, center, size=self.size, colour=self.colour)
+        self.crosshair.draw_crosshair(ctx, center, size=self.size, colour=self.colour, thickness=self.thickness)
 
 
 class StagePointSelectOverlay(WorldOverlay):
