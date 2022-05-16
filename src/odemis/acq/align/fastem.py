@@ -234,7 +234,7 @@ class CalibrationTask(object):
             # loop over calibrations in list (order in list is important!)
             for calib in self.calibrations:
                 # TODO return a sub-future when implemented for calibrations
-                self.run_calibrations(calib)
+                self.run_calibration(calib)
 
                 # def _pass_future_progress(sub_f, start, end):
                 #     f.set_progress(start, end)
@@ -273,95 +273,76 @@ class CalibrationTask(object):
 
         return self.asm_config
 
-    def run_calibrations(self, calibration):
+    def run_calibration(self, calibration):
         """
         Run a calibration.
         """
         if calibration == Calibrations.OPTICAL_AUTOFOCUS:
             calibration.value.run(self._scanner, self._multibeam, self._descanner, self._detector,
                                   self._dataflow, self._ccd, self._stage)
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.SCAN_ROTATION_PREALIGN:
             calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                   self._detector, self._dataflow, self._ccd)
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.SCAN_AMPLITUDE_PREALIGN:
             s_offset, s_amplitude = calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                                           self._detector, self._dataflow, self._ccd)
             self.asm_config["multibeam"]["scanOffset"] = s_offset
             self.asm_config["multibeam"]["scanAmplitude"] = s_amplitude
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.DESCAN_GAIN_STATIC:
             calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                   self._detector, self._dataflow, self._ccd)
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.IMAGE_ROTATION_PREALIGN:
             calibration.value.run(self._scanner, self._multibeam, self._descanner, self._detector,
                                   self._dataflow, self._ccd, self._det_rotator)
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.IMAGE_TRANSLATION_PREALIGN:
             d_offset = calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                              self._detector, self._dataflow, self._ccd)
             self.asm_config["descanner"]["scanOffset"] = d_offset
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.IMAGE_ROTATION_FINAL:
             calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                   self._detector, self._dataflow, self._det_rotator)
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.IMAGE_TRANSLATION_FINAL:
             d_offset = calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                              self._detector, self._dataflow, self._ccd)
             self.asm_config["descanner"]["scanOffset"] = d_offset
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.DARK_OFFSET:
             dark_offset = calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                                 self._detector, self._dataflow)
             self.asm_config["mppc"]["cellDarkOffset"] = dark_offset
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.DIGITAL_GAIN:
             digital_gain = calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                                  self._detector, self._dataflow)
             self.asm_config["mppc"]["cellDigitalGain"] = digital_gain
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.SCAN_ROTATION_FINAL:
             calibration.value.run(self._scanner, self._multibeam, self._descanner, self._detector, self._dataflow)
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.SCAN_AMPLITUDE_FINAL:
             s_offset, s_amplitude = calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                                           self._detector, self._dataflow)
             self.asm_config["multibeam"]["scanOffset"] = s_offset
             self.asm_config["multibeam"]["scanAmplitude"] = s_amplitude
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
 
         elif calibration == Calibrations.CELL_TRANSLATION:
             translation = calibration.value.run(self._scanner, self._multibeam, self._descanner, self._detector,
                                                 self._dataflow, plot_cell_translation=True)
             self.asm_config["mppc"]["cellTranslation"] = translation
-            configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config,
-                          upload=False)
+
+        else:
+            raise ValueError(f"Unknown calibration {calibration.name}.")
+
+        # TODO only needed for an acquisition -> move to acquisition code by reading the calibrated values
+        #  from the respective MD (implement similar method to get_config_asm)
+        configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config, upload=False)
 
     def cancel(self, future):
         """
