@@ -23,13 +23,11 @@ from __future__ import division
 
 import math
 from numpy import fft
-from numpy import random
 import numpy
 from odemis.acq.align.shift import MeasureShift
 from odemis.dataio import hdf5
 import os
 import unittest
-
 
 DATA_DIR = os.path.dirname(__file__)
 
@@ -40,6 +38,10 @@ class TestMeasureShift(unittest.TestCase):
     """
     # @unittest.skip("skip")
     def setUp(self):
+        # TODO: use a separate generator, once we only support numpy v1.17+:
+        # rng = numpy.random.default_rng(0)
+        numpy.random.seed(0)  # Set the seed to a fixed value, for making test cases reproducible
+
         # Input
         self.data = hdf5.read_data(os.path.join(DATA_DIR, "example_input.h5"))
         C, T, Z, Y, X = self.data[0].shape
@@ -61,11 +63,12 @@ class TestMeasureShift(unittest.TestCase):
         Nr = fft.ifftshift(array_nr)
         Nc = fft.ifftshift(array_nc)
         [Nc, Nr] = numpy.meshgrid(Nc, Nr)
-        self.data_random_drifted = fft.ifft2(fft.fft2(self.data[0]) * numpy.power(math.e,
-        				z * 2 * math.pi * (self.deltar * Nr / nr + self.deltac * Nc / nc)))
+        self.data_random_drifted = fft.ifft2(fft.fft2(self.data[0])
+                                             * numpy.power(math.e, z * 2 * math.pi * (self.deltar * Nr / nr + self.deltac * Nc / nc))
+                                            ).real
 
         # Noisy inputs
-        noise = random.normal(0, 3000, self.data[0].size)
+        noise = numpy.random.normal(0, 3000, self.data[0].size)
         noise_array = noise.reshape(self.data[0].shape[0], self.data[0].shape[1])
 
         self.data_noisy = self.data[0] + noise_array
@@ -81,16 +84,16 @@ class TestMeasureShift(unittest.TestCase):
         Nr = fft.ifftshift(array_nr)
         Nc = fft.ifftshift(array_nc)
         [Nc, Nr] = numpy.meshgrid(Nc, Nr)
-        self.small_data_random_drifted = fft.ifft2(fft.fft2(self.small_data) * numpy.power(math.e,
-        				z * 2 * math.pi * (self.small_deltar * Nr / nr + self.small_deltac * Nc / nc)))
+        self.small_data_random_drifted = fft.ifft2(fft.fft2(self.small_data)
+                                                   * numpy.power(math.e, z * 2 * math.pi * (self.small_deltar * Nr / nr + self.small_deltac * Nc / nc))
+                                                  ).real
 
         # Small noisy inputs
-        small_noise = random.normal(0, 3000, self.small_data.size)
+        small_noise = numpy.random.normal(0, 3000, self.small_data.size)
         small_noise_array = small_noise.reshape(self.small_data.shape[0], self.small_data.shape[1])
 
         self.small_data_noisy = self.small_data + small_noise_array
         self.small_data_random_drifted_noisy = self.small_data_random_drifted + small_noise_array
-
 
     # @unittest.skip("skip")
     def test_identical_inputs(self):
