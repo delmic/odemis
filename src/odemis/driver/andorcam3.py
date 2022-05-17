@@ -1311,6 +1311,7 @@ class AndorCam3(model.DigitalCamera):
                     if re.match(pattern, gs):
                         gains[gain] = gs
                         self._gain_to_idx[gain] = idx
+                        break
                 else:
                     logging.warning("Unhandled gain %s", gs)
         except ATError:
