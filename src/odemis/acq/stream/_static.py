@@ -344,7 +344,7 @@ class StaticFluoStream(Static2DStream):
                 unit = None
             else:
                 unit = "m"
-                default_tint = conversion.wave2rgb(numpy.mean(em_range))
+                default_tint = conversion.wavelength2rgb(numpy.mean(em_range))
             self.emission = VigilantAttribute(em_range, unit=unit,
                                               readonly=True)
         except KeyError:

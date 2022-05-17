@@ -31,49 +31,38 @@ from odemis import model
 import re
 import yaml
 
-# Inspired by code from:
-# http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
-# based on:
-# http://www.physics.sfasu.edu/astro/colour/spectra.html
-def wave2rgb(wavelength):
-    """
-    Convert a wavelength into a (r,g,b) value
-    wavelength (0<float): wavelength in m
-    return (3-tupe int in 0..255): RGB value
-    """
-    w = wavelength * 1e9
-    # outside of the visible spectrum, use fixed colour
-    w = min(max(w, 350), 780)
 
-    # colour
-    if 350 <= w < 440:
-        r = -(w - 440) / (440 - 350)
-        g = 0
-        b = 1
-    elif 440 <= w < 490:
-        r = 0
-        g = (w - 440) / (490 - 440)
-        b = 1
-    elif 490 <= w < 510:
-        r = 0
-        g = 1
-        b = -(w - 510) / (510 - 490)
-    elif 510 <= w < 580:
-        r = (w - 510) / (580 - 510)
-        g = 1
-        b = 0
-    elif 580 <= w < 645:
-        r = 1
-        g = -(w - 645) / (645 - 580)
-        b = 0
-    elif 645 <= w <= 780:
-        r = 1
-        g = 0
-        b = 0
+def wavelength2rgb(wavelength):
+    """
+    Convert a wavelength into a (r, g, b) value
+    wavelength (0 < float): wavelength in m
+    return (3-tuple int in 0..255): RGB value
+
+    Notes:
+    Inspired by code from:
+    http://codingmess.blogspot.nl/2009/05/conversion-of-wavelength-in-nanometers.html
+    based on:
+    http://www.physics.sfasu.edu/astro/color/spectra.html
+    """
+    wavelength *= 1e9  # Convert the wavelength from [m] to [nm]
+
+    # maps w to a single color value between 0 and 255 for r1 > r2 and between 255 and 0 for r1 < r2
+    w2color = lambda w, r1, r2: abs(-round((w - r2) / abs((r2 - r1)) * 255))
+
+    if wavelength < 440:
+        # min for clipping below 350; outside the visible spectrum use purple as a fixed colour
+        red = min(w2color(wavelength, 350, 440), 255)
+        return red, 0, 255  # red changes from 255 to 0 with blue 255 (purple to blue)
+    elif wavelength < 490:
+        return 0, w2color(wavelength, 490, 440), 255  # green changes from 0 to 255 with blue 255 (blue to turquoise)
+    elif wavelength < 510:
+        return 0, 255, w2color(wavelength, 490, 510)  # blue changes from 255 to 0 with green 255 (turquoise to green)
+    elif wavelength < 580:
+        return w2color(wavelength, 580, 510), 255, 0  # red changes from 0 to 255 with green 255 (green to yellow)
+    elif wavelength < 645:
+        return 255, w2color(wavelength, 580, 645), 0  # green changes from 255 to 0 with red 255 (yellow to red)
     else:
-        logging.warning("Unable to compute RGB for wavelength %d", w)
-
-    return int(round(255 * r)), int(round(255 * g)), int(round(255 * b))
+        return 255, 0, 0  # outside the visible spectrum use red as a fixed colour
 
 
 def hex_to_rgb(hex_str):
@@ -168,6 +157,7 @@ def hex_to_frgba(hex_str, af=1.0):
     :rtype : (float, float, float, float)
     """
     return rgba_to_frgba(hex_to_rgba(hex_str, int(af * 255)))
+
 
 # String -> VA conversion helper
 def convert_to_object(s):
@@ -345,8 +335,8 @@ def get_tile_md_pos(i, tile_size, tileda, origda):
     tile_shape = [tileda.shape[dims.index('X')], tileda.shape[dims.index('Y')]]
     # center of the tile in pixels
     tile_center_pixels = numpy.array([
-        i[0] * tile_size[0] + tile_shape[0]/2,
-        i[1] * tile_size[1] + tile_shape[1]/2]
+        i[0] * tile_size[0] + tile_shape[0] / 2,
+        i[1] * tile_size[1] + tile_shape[1] / 2]
     )
     # convert to the original image coordinates
     tile_center_pixels *= tile_ps / orig_ps
@@ -458,6 +448,7 @@ def get_img_transformation_md(mat, timage, src_img):
 
     return metadata
 
+
 class JsonExtraEncoder(json.JSONEncoder):
     """Support for data types that JSON default encoder
     does not do.
@@ -482,4 +473,3 @@ class JsonExtraEncoder(json.JSONEncoder):
             return obj.decode()
 
         return json.JSONEncoder.default(self, obj)
-

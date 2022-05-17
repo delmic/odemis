@@ -1094,7 +1094,7 @@ class FluoStream(CameraStream):
         self.power.clip_on_range = True
         self.power.subscribe(self._onPower)
         # Colouration of the image
-        self.tint.value = conversion.wave2rgb(center_em)
+        self.tint.value = conversion.wavelength2rgb(center_em)
         self.tint.subscribe(self._onTint)
 
     def _onActive(self, active):
@@ -1538,4 +1538,3 @@ class RGBCameraStream(CameraStream):
             self.image.value = rgbim
         except Exception:
             logging.exception("Updating %s image", self.__class__.__name__)
-
