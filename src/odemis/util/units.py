@@ -66,20 +66,22 @@ def round_significant(x, n):
     return round(x, int(n - math.ceil(math.log10(abs(x)))))
 
 
-def round_down_significant(x, n):
+def round_down_significant(x: float, n: int) -> float:
     """
-    Round a number to n significant figures making sure it's smaller
+    Round a number to n significant figures making sure it's smaller.
+    It rounds towards 0, so for negative numbers the absolute value is also reduced.
+    x: the value to round
+    n (>=1): number of significant figures to keep
+    returns: the rounded value
+    Example:
+        round_down_significant(136, 2) -> 130
+        round_down_significant(-0.136, 2) -> -0.13
     """
     if x == 0:
         return 0
 
     exp = n - math.ceil(math.log10(abs(x)))
-    if x > 0:
-        ret = math.floor(x * 10 ** exp) / (10 ** exp)
-    else:
-        ret = math.ceil(x * 10 ** exp) / (10 ** exp)
-    # assert(abs(ret) <= abs(x))
-    return ret
+    return math.trunc(x * 10 ** exp) / (10 ** exp)
 
 
 def get_si_scale(x):
