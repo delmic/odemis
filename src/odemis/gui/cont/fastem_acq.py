@@ -607,6 +607,8 @@ class FastEMCalibrationController:
 
         self._on_calibration_state()  # update the controls in the panel
 
+        logging.debug("Starting calibration step %s", self._calib_prefix)
+
         # Start alignment
         f = align.fastem.align(self._main_data_model.ebeam, self._main_data_model.multibeam,
                                self._main_data_model.descanner, self._main_data_model.mppc,
@@ -631,13 +633,15 @@ class FastEMCalibrationController:
         try:
             future.result()  # wait until the calibration is done
             getattr(self, "is_" + self._calib_prefix + "_done").value = True  # allow acquiring ROAs
+            logging.debug("Finished calibration step %s successfully", self._calib_prefix)
             self._update_calibration_controls("Calibration successful")
         except CancelledError:
             getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
+            logging.debug("Calibration step %s cancelled.", self._calib_prefix)
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
         except Exception as ex:
             getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
-            logging.exception("Calibration failed with %s.", ex)
+            logging.exception("Calibration step %s failed with %s.", (self._calib_prefix, ex))
             self._update_calibration_controls("Calibration failed")
 
     @call_in_wx_main
@@ -717,14 +721,13 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
     def on_calibrate(self, evt):
         """
         Start or cancel the calibrations for all set regions of calibrations (ROC) when the calibration
-        button is triggered. A progressive future for all rocs is created.
+        button is triggered. A progressive future for all ROCs is created.
         :param evt: (GenButtonEvent) Button triggered.
         """
         # check if cancelled
         if self._tab_data.is_calibrating.value:
             logging.debug("Calibration was cancelled.")
             align_fastem._executor.cancel()  # all the rest will be handled by on_alignment_done()
-            # FIXME cancelling does not yet display the correct label in the gui
             return
 
         # calibrate
@@ -742,6 +745,7 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
                 # check if calibration region (ROC) on scintillator is set (undefined = not set)
                 roc = self.calibration_regions.value[roc_num]
                 if roc.coordinates.value != stream.UNDEFINED_ROI:
+                    logging.debug("Starting calibration step %s for ROC number %s", self._calib_prefix, roc_num)
 
                     # calculate the center position of the ROC (half field right/bottom
                     # compared to top/left corner in view)
@@ -787,10 +791,12 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         try:
             config = future.result()  # wait until the calibration is done
             self.save_calibrated_settings(roc_num, config)  # save calibrated
+            logging.debug("Finished calibration step %s successfully for ROC number %s", self._calib_prefix, roc_num)
         except CancelledError:
             pass  # nothing to do here, callback of batch future takes care of everything
         except Exception as ex:
-            logging.exception("Calibration failed with %s.", ex)  # callback of batch future takes care of the rest
+            logging.exception("Calibration step %s failed for ROC number %s with exception: %s.",
+                              self._calib_prefix, roc_num, ex)  # callback of batch future takes care of the rest
 
     def _on_batch_calibrations_done(self, batch_future):
         """
@@ -804,13 +810,15 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         try:
             batch_future.result()  # wait until the calibration is done
             getattr(self, "is_" + self._calib_prefix + "_done").value = True  # allow acquiring ROAs
+            logging.debug("Finished calibration step %s successfully.", self._calib_prefix)
             self._update_calibration_controls("Calibration successful")
         except CancelledError:
             getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
+            logging.debug("Calibration step %s cancelled.", self._calib_prefix)
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
         except Exception as ex:
             getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
-            logging.exception("Calibration failed with %s.", ex)
+            logging.exception("Calibration step %s failed with %s.", (self._calib_prefix, ex))
             self._update_calibration_controls("Calibration failed")
 
     @call_in_wx_main
@@ -823,7 +831,7 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         if not self._main_data_model.active_scintillators.value:
             self._update_calibration_controls("No scintillator loaded (go to Chamber tab).", False)
         else:
-            # check if at least one roc was selected (undefined = not set)
+            # check if at least one ROC was selected (undefined = not set)
             if any(roc.coordinates.value != stream.UNDEFINED_ROI
                    for roc in self.calibration_regions.value.values()):
                 self._update_calibration_controls()
@@ -832,7 +840,7 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
 
     def save_calibrated_settings(self, _):
         """
-        Save the calibrated settings on the region of calibration (roc) object.
+        Save the calibrated settings on the region of calibration (ROC) object.
         """
         pass
 
@@ -870,7 +878,7 @@ class FastEMCalibration2Controller(FastEMScintillatorCalibrationController):
 
     def save_calibrated_settings(self, roc_num, config):
         """
-        Save the calibrated settings on the region of calibration (roc) object.
+        Save the calibrated settings on the region of calibration (ROC) object.
         :param roc_num: (int) The number of the region of calibration.
         :param config: (nested dict) Dictionary containing various calibrated settings.
         """
@@ -901,7 +909,7 @@ class FastEMCalibration3Controller(FastEMScintillatorCalibrationController):
 
     def save_calibrated_settings(self, roc_num, config):
         """
-        Save the calibrated settings on the region of calibration (roc) object.
+        Save the calibrated settings on the region of calibration (ROC) object.
         :param roc_num: (int) The number of the region of calibration.
         :param config: (nested dict) Dictionary containing various calibrated settings.
         """

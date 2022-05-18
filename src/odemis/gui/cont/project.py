@@ -343,8 +343,7 @@ class FastEMROAController(object):
     # already running in main GUI thread as it receives event from GUI
     def _on_combobox(self, _):
         num = self.panel.calibration_ctrl.GetSelection() + 1
-        self.model.roc_2.value = self._tab_data.regions_calib_2.value[num]  # FIXME not generic enough?
-        # TODO add for roc_3
+        self.model.roc_2.value = self._tab_data.regions_calib_2.value[num]
         logging.debug("ROA calibration changed to %s.", self.model.roc_2.value.name.value)
 
     # already running in main GUI thread as it receives event from GUI
@@ -468,8 +467,8 @@ class FastEMCalibrationRegionsController(object):
         # Only enable buttons for scintillators which have been selected in the chamber tab
         tab_data.main.active_scintillators.subscribe(self._on_active_scintillators)
 
-        tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable calib button during acquisition
-        tab_data.is_calibrating.subscribe(self._on_is_acquiring)  # enable/disable calib button during calibration
+        tab_data.main.is_acquiring.subscribe(self._on_is_calibrating)  # enable/disable calib button during acquisition
+        tab_data.is_calibrating.subscribe(self._on_is_calibrating)  # enable/disable calib button during calibration
 
     # already running in main GUI thread as it receives event from GUI
     def _on_button(self, evt):
@@ -508,7 +507,7 @@ class FastEMCalibrationRegionsController(object):
     def _on_coordinates(self, _=None):
         """
         Checks that the region of calibration (ROC) buttons are up-to-date (synchronize model with GUI).
-        Whenever the list of active scintillators changes and or a roc is selected/deselected, the
+        Whenever the list of active scintillators changes and or a ROC is selected/deselected, the
         buttons are updated/enabled/disabled accordingly.
         """
         rocs = self.calibration_regions.value
@@ -517,7 +516,7 @@ class FastEMCalibrationRegionsController(object):
         for num, b in self.panel.buttons.items():
             roc = rocs[num]
 
-            # scintillator selected, but undefined roc
+            # scintillator selected, but undefined ROC
             if num in active_scintillators and roc.coordinates.value == acqstream.UNDEFINED_ROI:
                 b.Enable(True)
                 b.SetLabel("?")
@@ -540,7 +539,7 @@ class FastEMCalibrationRegionsController(object):
         """
         Called when the list of active scintillators has changed. If a scintillator becomes inactive,
         the coordinates of the corresponding region of calibration (ROC) are reset. The calibration
-        panel containing the roc buttons are updated.
+        panel containing the ROC buttons are updated.
         :param scintillators: (list of int) A list of active (loaded) scintillators as indicated in the chamber tab.
         """
         for num, b in self.panel.buttons.items():
@@ -552,7 +551,7 @@ class FastEMCalibrationRegionsController(object):
         self._on_coordinates()
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def _on_is_acquiring(self, mode):
+    def _on_is_calibrating(self, mode):
         """
         Enable or disable the calibration panel depending on whether
         a calibration or acquisition is already ongoing or not.
