@@ -1474,6 +1474,9 @@ class Scanner(model.Emitter):
                 logging.warning("Failed to cancel auto brightness contrast: %s", error_msg)
                 return False
 
+    def prepareForScan(self):
+        pass
+
 
 class FibScanner(model.Emitter):
     """
@@ -1500,6 +1503,17 @@ class FibScanner(model.Emitter):
         self._shape = (4096, 4096)
         res = self._shape[:2]
         self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
+
+    def prepareForScan(self):
+        """
+        Make sure the scan mode is in "full_frame" and not in "external"
+        """
+        if self.parent.get_scan_mode() != "full_frame":
+            self.parent.set_scan_mode("full_frame")
+            current_mode = self.parent.get_scan_mode()
+            if current_mode != "full_frame":
+                raise HwError("Couldn't set full_frame as scan mode on the XT client mode. Current mode is: %s",
+                              current_mode)
 
 
 class Detector(model.Detector):
@@ -1570,6 +1584,7 @@ class Detector(model.Detector):
                 while True:
                     if self._acq_should_stop():
                         break
+                    self._scanner.prepareForScan()  # In case of the FIB make sure the mode isn't in external
                     self.parent.set_channel_state(self._scanner.channel, True)
                     if hasattr(self._scanner, "blanker"):
                         # TODO: When the acquisition ends, if blanker is set to automatic (None), we need to activate

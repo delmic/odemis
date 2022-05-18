@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with Ode
 from __future__ import division
 
 from past.builtins import long
+from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor
 import gc
 import logging
@@ -30,7 +31,7 @@ from odemis.acq.align import FindEbeamCenter
 
 from odemis.acq import fastem_conf
 from odemis.model import MD_POS_COR, VigilantAttributeBase, hasVA
-from odemis.util import img, conversion, fluo
+from odemis.util import img, conversion, fluo, executeAsyncTask
 import threading
 import time
 import weakref
@@ -54,6 +55,9 @@ class LiveStream(Stream):
         self._forcemd = forcemd
 
         self.is_active.subscribe(self._onActive)
+
+        # Allows to stop the acquisition after a single frame, also interrupts ongoing acquisitions if set to True.
+        self.single_frame_acquisition = model.BooleanVA(False)
 
         # Region of interest as left, top, right, bottom (in ratio from the
         # whole area of the emitter => between 0 and 1)
@@ -84,8 +88,8 @@ class LiveStream(Stream):
         """ Called when the Stream is activated or deactivated by setting the
         is_active attribute
         """
-        # Make sure the stream is prepared before really activate it
         if active:
+            # Make sure the stream is prepared before really activate it
             if not self._prepared:
                 logging.debug("Preparing stream before activating it as it wasn't prepared")
                 self._prep_future = self._prepare()
@@ -99,6 +103,13 @@ class LiveStream(Stream):
             logging.debug(msg, self._detector.name)
             self._dataflow.unsubscribe(self._onNewData)
 
+    def getSingleFrame(self):
+        """
+        Overwritten by children if they have a dedicated method to get a single frame otherwise the default
+        dataflow.get() is used.
+        """
+        return self._dataflow.get()
+
     def _startAcquisition(self, future=None):
         if not self.is_active.value or (future and future.cancelled()):
             logging.info("Not activating %s, as it was stopped before the preparation finished",
@@ -110,7 +121,17 @@ class LiveStream(Stream):
         if not self.should_update.value:
             logging.info("Trying to activate stream while it's not "
                          "supposed to update")
-        self._dataflow.subscribe(self._onNewData)
+
+        if self.single_frame_acquisition.value:
+            def on_new_data(future):
+                self._onNewData(self._dataflow, future.result())
+
+            single_frame_future = futures.Future()
+            single_frame_future.add_done_callback(on_new_data)
+            executeAsyncTask(single_frame_future, self.getSingleFrame)
+
+        else:
+            self._dataflow.subscribe(self._onNewData)
 
     def _updateAcquisitionTime(self):
         """
@@ -199,6 +220,9 @@ class LiveStream(Stream):
 
         self._shouldUpdateHistogram()
         self._shouldUpdateImage()
+
+        if self.single_frame_acquisition.value:  # After updating the stream stop the acquisition.
+            self.is_active.value = False
 
     def _onBackground(self, data):
         """Called when the background is changed"""
@@ -316,7 +340,8 @@ class ScannerStream(LiveStream):
 
     def _applyROI(self):
         """
-        Update the scanning area of the SEM according to the roi
+        Update the scanning area of the SEM according to the roi.
+        Doesn't do anything if no writable resolution/translation VA's are defined on the scanner.
         Note: should only be called when active (because it directly modifies
           the hardware settings)
         """
@@ -479,6 +504,7 @@ class FIBStream(ScannerStream):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_FIB
         super().__init__(name, detector, dataflow, emitter, **kwargs)
+
 
 MTD_EBEAM_SHIFT = "Ebeam shift"
 MTD_MD_UPD = "Metadata update"

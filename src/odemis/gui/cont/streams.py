@@ -3058,6 +3058,98 @@ class SparcStreamsController(StreamBarController):
             if model.hasVA(s, "useScanStage"):
                 s.useScanStage.value = use
 
+class EnzelAlignmentStreamsBarController:
+    def __init__(self, tab_data):
+        self.tab_data = tab_data
+        # Deactivate all the current streams.
+        for stream in tab_data.streams.value:
+            stream.is_active.value = False
+            stream.should_update.value = False
+
+        self._scheduler_subscriptions = {}
+        for stream in tab_data.streams.value:
+            self._scheduleStream(stream)
+
+    def _scheduleStream(self, stream):
+        """ Add a stream to be managed by the update scheduler.
+        stream (Stream): the stream to add. If it's already scheduled, it's fine.
+        """
+        # Create an adapted subscriber for the scheduler
+        def detectUpdate(updated, stream=stream):
+            self._onStreamUpdate(stream, updated)
+
+        self._scheduler_subscriptions[stream] = detectUpdate
+        stream.should_update.subscribe(detectUpdate)
+
+    @call_in_wx_main
+    def _onStreamUpdate(self, activated_stream, updated):
+        # First pause then play the activated stream
+        for stream, cb in self._scheduler_subscriptions.items():
+            if stream is not activated_stream:
+                stream.is_active.value = False
+                stream.should_update.unsubscribe(cb)  # don't inform us of that change
+                stream.should_update.value = False
+                logging.info("Stopping stream %s", stream)
+                stream.should_update.subscribe(cb)
+
+        if isinstance(activated_stream, acqstream.FIBStream):
+            if updated:
+                self._refreshStream((activated_stream))
+                logging.info("Preventing wear on the sample by stopping the FIB stream directly after starting it.")
+                # Wait so also for extremely short dwell times allow the user to see that the play button was activated.
+                time.sleep(0.5)
+                activated_stream.should_update.value = False
+                return
+
+        for stream in self._scheduler_subscriptions.keys():
+            if stream is activated_stream:
+                stream.is_active.value = updated
+                if updated:
+                    logging.info("Activating the stream %s", activated_stream)
+
+    def pauseAllStreams(self):
+        """
+        Pauses all the streams the StreamBarController controls
+        """
+        for stream, cb in self._scheduler_subscriptions.items():
+            stream.is_active.value = False
+            stream.should_update.unsubscribe(cb)  # don't inform us of that change
+            stream.should_update.value = False
+            logging.info("Stopping stream %s", stream)
+            stream.should_update.subscribe(cb)
+
+    def refreshStreams(self, streams):
+        """
+        Refreshes the streams provided in the input, then replays the currently playing stream
+
+        :param stream (tuples/list of stream objects): stream which will be refreshed/updated
+        """
+        # Find the current active stream
+        active_stream = None
+        for stream in self._scheduler_subscriptions.keys():
+            if stream.is_active.value:
+                active_stream = stream
+            
+        self.pauseAllStreams()
+
+        # Refresh the streams one by one.
+        for stream in streams:
+            self._refreshStream(stream)
+
+        if active_stream:  # If no stream was active we don't mind.
+            active_stream.should_update.value = True  # Continue playing the active stream.
+
+    def _refreshStream(self, stream):
+        """
+        Updates a stream by acquiring a single frame and then pausing the stream again.
+
+        :param stream (Stream): stream which is refreshed
+        """
+        stream.is_active.value = True
+        if not stream.single_frame_acquisition.value:
+            stream.getSingleFrame()
+            stream.is_active.value = False
+
 
 class FastEMStreamsController(StreamBarController):
     """
