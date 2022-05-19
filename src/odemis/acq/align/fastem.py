@@ -31,8 +31,8 @@ try:
     from fastem_calibrations import (
         autofocus_multiprobe,
         scan_rotation_pre_align,
-        scan_amplitude_pre_align,
         descan_gain,
+        scan_amplitude_pre_align,
         image_translation_pre_align,
         descan_gain,
         image_rotation_pre_align,
@@ -53,8 +53,8 @@ except ImportError as err:
     logging.info("fastem_calibrations package not found with error: {}".format(err))
     autofocus_multiprobe = None
     scan_rotation_pre_align = None
-    scan_amplitude_pre_align = None
     descan_gain = None
+    scan_amplitude_pre_align = None
     image_rotation_pre_align = None
     image_translation_pre_align = None
     image_rotation = None
@@ -77,8 +77,8 @@ class Calibrations(Enum):
     """
     OPTICAL_AUTOFOCUS = autofocus_multiprobe
     SCAN_ROTATION_PREALIGN = scan_rotation_pre_align
-    SCAN_AMPLITUDE_PREALIGN = scan_amplitude_pre_align
     DESCAN_GAIN_STATIC = descan_gain
+    SCAN_AMPLITUDE_PREALIGN = scan_amplitude_pre_align
     IMAGE_ROTATION_PREALIGN = image_rotation_pre_align
     IMAGE_TRANSLATION_PREALIGN = image_translation_pre_align
     IMAGE_ROTATION_FINAL = image_rotation
@@ -287,15 +287,15 @@ class CalibrationTask(object):
             calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                   self._detector, self._dataflow, self._ccd)
 
+        elif calibration == Calibrations.DESCAN_GAIN_STATIC:
+            calibration.value.run(self._scanner, self._multibeam, self._descanner,
+                                  self._detector, self._dataflow, self._ccd)
+
         elif calibration == Calibrations.SCAN_AMPLITUDE_PREALIGN:
             s_offset, s_amplitude = calibration.value.run(self._scanner, self._multibeam, self._descanner,
                                                           self._detector, self._dataflow, self._ccd)
             self.asm_config["multibeam"]["scanOffset"] = s_offset
             self.asm_config["multibeam"]["scanAmplitude"] = s_amplitude
-
-        elif calibration == Calibrations.DESCAN_GAIN_STATIC:
-            calibration.value.run(self._scanner, self._multibeam, self._descanner,
-                                  self._detector, self._dataflow, self._ccd)
 
         elif calibration == Calibrations.IMAGE_ROTATION_PREALIGN:
             calibration.value.run(self._scanner, self._multibeam, self._descanner, self._detector,
