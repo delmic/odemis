@@ -2221,7 +2221,8 @@ class Focus(model.Actuator):
         out of focus, an incorrect focus can be found using the autofocus functionality.
         This call is non-blocking.
 
-        :param detector (str): Role of the detector.
+        :param detector: (model.Detector)
+            Detector component that stores information about which channel to use for autofocusing.
         :return: Future object
         """
         # Create ProgressiveFuture and update its state
@@ -2700,6 +2701,10 @@ class XTTKFocus(Focus):
     def applyAutofocus(self, detector):
         """
         Wrapper for autofocus flash function, non-blocking.
+
+        :param detector: (model.Detector)
+            The detector is unused for XTTK focusing, because it is not possible to select a channel for flash focusing.
+        :return: Future object
         """
         est_start = time.time() + 0.1
         f = ProgressiveFuture(start=est_start,

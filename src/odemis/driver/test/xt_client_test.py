@@ -545,6 +545,38 @@ class TestMicroscope(unittest.TestCase):
         self.assertEqual(self.detector.brightness.value, init_brightness + 0.01)
         self.detector.brightness.value = init_brightness
 
+    @unittest.skipIf(TEST_NOHW, 'Contrast and brightness do not change on the simulated hardware.')
+    def test_brightness_contrast(self):
+        """Test that changing the contrast and brightness updates the image correctly."""
+        # Test that for brightness and contrast 1 all values in the image are equal to 255
+        init_brightness = self.detector.brightness.value
+        init_contrast = self.detector.contrast.value
+        self.detector.brightness = 1
+        self.detector.contrast = 1
+        image = self.microscope.get_latest_image(self.scanner.channel)
+        numpy.testing.assert_array_equal(image, 255)
+
+        # Test that decreasing the brightness results in a darker image
+        self.detector.brightness = 0.5
+        darker_image = self.microscope.get_latest_image(self.scanner.channel)
+        self.assertGreater(numpy.sum(image), numpy.sum(darker_image))
+
+        # Test that for brightness and contrast 0 all values in the image are equal to 0
+        self.detector.brightness = 0
+        self.detector.contrast = 0
+        image = self.microscope.get_latest_image(self.scanner.channel)
+        numpy.testing.assert_array_equal(image, 0)
+
+        # Test that increasing the brightness and contrast results in a lighter image
+        self.detector.brightness = 0.5
+        self.detector.contrast = 0.5
+        lighter_image = self.microscope.get_latest_image(self.scanner.channel)
+        self.assertGreater(numpy.sum(lighter_image), numpy.sum(image))
+
+        # Set back initial values
+        self.detector.brightness.value = init_brightness
+        self.detector.contrast.value = init_contrast
+
 
 class TestMicroscopeInternal(unittest.TestCase):
     """
