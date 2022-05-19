@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division
 
+import json
 import logging
 import math
 import os
@@ -32,13 +33,14 @@ from datetime import datetime
 from unittest.mock import Mock
 
 import numpy
+from odemis.acq.acqmng import SettingsObserver
 
 import odemis
 from fastem_calibrations import configure_hw
 from odemis import model
 from odemis.acq import fastem, stream
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import estimate_acquisition_time
+from odemis.acq.fastem import estimate_acquisition_time, SETTINGS_SELECTION
 from odemis.util import driver, img, is_point_in_rect, test
 
 # * TEST_NOHW = 1: connected to the simulator or not connected to anything
@@ -593,7 +595,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, pre_calibrations=None, future=None)
+                                          roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -667,7 +669,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, pre_calibrations=None, future=None)
+                                          roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -735,7 +737,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.ccd,
                                       self.beamshift, self.lens,
-                                      roa, path=None, pre_calibrations=None, future=None)
+                                      roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
 
@@ -758,8 +760,9 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         try:
             import fastem_calibrations
         except ImportError as err:
-            raise unittest.SkipTest(f"Skipping 'test_pre_calibrate', correct libraries to perform this test are not available.\n"
-                                    f"Got the error: {err}")
+            raise unittest.SkipTest(
+                f"Skipping 'test_pre_calibrate', correct libraries to perform this test are not available.\n"
+                f"Got the error: {err}")
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
 
@@ -779,13 +782,13 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.ccd,
                                       self.beamshift, self.lens,
-                                      roa, path=None, pre_calibrations=None, future=None)
+                                      roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
 
         self.descanner.updateMetadata({model.MD_SCAN_GAIN: (5000, 5000)})
 
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
-        
+
         asm_config_orig = configure_hw.get_config_asm(self.multibeam, self.descanner, self.mppc)
         pre_calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         task.pre_calibrate(pre_calibrations=pre_calibrations)
@@ -819,7 +822,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, pre_calibrations=None, future=None)
+                                          roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
 
             pos_first_tile_actual = task.get_pos_first_tile()
 
@@ -828,6 +831,35 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             pos_first_tile_expected = (xmin + res_x / 2 * px_size_x,
                                        ymax - res_y / 2 * px_size_y)
             self.assertEqual(pos_first_tile_actual, pos_first_tile_expected)
+
+    def test_calibration_metadata(self):
+        """Test the correct calibration metadata is returned."""
+        original_md = self.mppc.getMetadata().get(model.MD_EXTRA_SETTINGS, "")
+
+        # Create the settings observer to store the settings on the metadata
+        settings_obs = SettingsObserver(model.getComponents())
+
+        roa = fastem.FastEMROA("roa_name", (0, 0, 0, 0), None, None,
+                               self.asm, self.multibeam, self.descanner,
+                               self.mppc)
+        task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
+                                      self.mppc, self.stage, self.ccd,
+                                      self.beamshift, self.lens,
+                                      roa, path=None, pre_calibrations=None, future=None,
+                                      settings_obs=settings_obs)
+
+        # Test that _create_acquisition_metadata() sets the settings from the selection
+        acquisition_md = task._create_acquisition_metadata()
+        self.assertEqual(acquisition_md.keys(), SETTINGS_SELECTION.keys())
+
+        # Verify that by getting the acquisition metadata, the correct metadata is set on the mppc.
+        self.mppc.updateMetadata({model.MD_EXTRA_SETTINGS: ""})
+        acquisition_md = task._create_acquisition_metadata()
+        mppc_extra_settings = json.loads(self.mppc.getMetadata().get(model.MD_EXTRA_SETTINGS))
+        self.assertEqual(acquisition_md.keys(), mppc_extra_settings.keys())
+
+        # Set back original metadata on the mppc
+        self.mppc.updateMetadata({model.MD_EXTRA_SETTINGS: original_md})
 
 
 class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
