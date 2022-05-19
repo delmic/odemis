@@ -118,8 +118,8 @@ class AcquisitionServer(model.HwComponent):
 
         # Test the connection with the host and stop any acquisition if already one was in progress
         try:
-            self.asmApiPostCall("/scan/finish_mega_field", 204) # Stop acquisition
-            self.asmApiGetCall("/scan/clock_frequency", 200) # Test connection from ASM to SAM
+            self.asmApiPostCall("/scan/finish_mega_field", 204)  # Stop acquisition
+            self.asmApiGetCall("/scan/clock_frequency", 200)  # Test connection from ASM to SAM
 
         except Exception as error:
             logging.warning("First try to connect with the ASM host was not successful.\n"
@@ -297,7 +297,7 @@ class AcquisitionServer(model.HwComponent):
             response = self.asmApiGetCall(item_name, 200)
             if response >= max_queue_fill:
                 self.state._set_value(HwError("The offload queue is full, filling rate is: %s percent." % response),
-                                     force_write=True)
+                                      force_write=True)
                 logging.error(" Fill rate of the queue in percent: 0 .. 100. When the connection with the external "
                               "storage is lost, images will be stored in the offload queue. When the queue fill level "
                               "is nearly 100 percent, field scanning is not possible anymore.\n"
@@ -524,7 +524,7 @@ class AcquisitionServer(model.HwComponent):
         # This can happen, when for example an extra '@' is used after the first one. Then the parser works
         # incorrectly and sub-elements are NoneType objects.
         if not url_parser.scheme or not url_parser.username or not url_parser.password \
-           or not url_parser.hostname or not url_parser.path:
+                or not url_parser.hostname or not url_parser.path:
             raise ValueError("URL %s scheme is incorrect. Must be of format: "
                              "'ftp://username:password@127.0.0.1:5000/directory/sub-directory'." % url)
 
@@ -581,8 +581,8 @@ class EBeamScanner(model.Emitter):
         mppcDetectorShape = MPPC.SHAPE
         # size of a single field image (excluding overscanned pixels)
         self.resolution = model.ResolutionVA((6400, 6400),
-                                             ((12*mppcDetectorShape[0], 12*mppcDetectorShape[1]),
-                                              (1000*mppcDetectorShape[0], 1000*mppcDetectorShape[1])),
+                                             ((12 * mppcDetectorShape[0], 12 * mppcDetectorShape[1]),
+                                              (1000 * mppcDetectorShape[0], 1000 * mppcDetectorShape[1])),
                                              setter=self._setResolution)
         self._shape = self.resolution.range[1]
         # TODO: Dwell time is currently set at a maximum of 40 micro seconds because we cannot calibrate as long as
@@ -790,7 +790,7 @@ class EBeamScanner(model.Emitter):
         resolution = numpy.array(self.parent._mppc.cellCompleteResolution.value)
         # calculate the gradient (gain); number of steps from start to end of scanning ramp is resolution -1
         gradient = tuple(scan_amplitude / (resolution - 1))
-        
+
         return gradient
 
     def _setDwellTime(self, dwell_time):
@@ -1100,14 +1100,17 @@ class MPPC(model.Detector):
 
         # Cell acquisition parameters
         self.cellTranslation = model.TupleVA(
-                tuple(tuple((50, 50) for i in range(0, self.shape[0])) for i in range(0, self.shape[1])),
-                setter=self._setCellTranslation)
+            tuple(tuple((50, 50) for i in range(0, self.shape[0])) for i in range(0, self.shape[1])),
+            setter=self._setCellTranslation
+        )
         self.cellDarkOffset = model.TupleVA(
-                tuple(tuple(0 for i in range(0, self.shape[0])) for i in range(0, self.shape[1]))
-                , setter=self._setCellDarkOffset)
+            tuple(tuple(0 for i in range(0, self.shape[0])) for i in range(0, self.shape[1]))
+            , setter=self._setCellDarkOffset
+        )
         self.cellDigitalGain = model.TupleVA(
-                tuple(tuple(1.2 for i in range(0, self.shape[0])) for i in range(0, self.shape[1])),
-                setter=self._setCellDigitalGain)
+            tuple(tuple(1.2 for i in range(0, self.shape[0])) for i in range(0, self.shape[1])),
+            setter=self._setCellDigitalGain
+        )
 
         # The minimum of the cell resolution cannot be lower than the minimum effective cell size.
         self.cellCompleteResolution = model.ResolutionVA((900, 900), ((12, 12), (1000, 1000)))
@@ -1150,7 +1153,7 @@ class MPPC(model.Detector):
                 break
 
         if self._acq_thread:
-            self.acq_queue.put(("terminate", ))
+            self.acq_queue.put(("terminate",))
             self._acq_thread.join(5)
 
     def _assembleMegafieldMetadata(self):
@@ -1279,10 +1282,10 @@ class MPPC(model.Detector):
                             #  not yet loaded on the ASM when trying to retrieve it.
                             time.sleep(0.5)
                             resp = self.parent.asmApiGetCall(
-                                    "/scan/field?x=%d&y=%d&thumbnail=%s" %
-                                    (field_data.position_x, field_data.position_y,
-                                     str(DATA_CONTENT_TO_ASM[dataContent]).lower()),
-                                    200, raw_response=True, stream=True)
+                                "/scan/field?x=%d&y=%d&thumbnail=%s" %
+                                (field_data.position_x, field_data.position_y,
+                                 str(DATA_CONTENT_TO_ASM[dataContent]).lower()),
+                                200, raw_response=True, stream=True)
                             resp.raw.decode_content = True  # handle spurious Content-Encoding
                             img = Image.open(BytesIO(base64.b64decode(resp.raw.data)))
 
@@ -1394,7 +1397,7 @@ class MPPC(model.Detector):
         A new mega field can be started. The call triggers the post processing process to generate and offload
         additional zoom levels.
         """
-        self.acq_queue.put(("stop", ))
+        self.acq_queue.put(("stop",))
 
     def cancelAcquistion(self, execution_wait=0.2):
         """
@@ -1408,7 +1411,7 @@ class MPPC(model.Detector):
             except queue.Empty:
                 break
 
-        self.acq_queue.put(("stop", ))
+        self.acq_queue.put(("stop",))
 
         if execution_wait > 30:
             logging.error("Failed to cancel the acquisition. MPPC detector is terminated.")
@@ -1587,10 +1590,11 @@ class MPPC(model.Detector):
 
                 if not isinstance(eff_origin[0], int) or not isinstance(eff_origin[1], int):
                     raise ValueError(
-                            "An incorrect type is used for the cell translation coordinates of cell (%s, %s).\n"
-                            "Type expected is: '(%s, %s)' type received '(%s, %s)'\n"
-                            "Cell translation parameter values remain unchanged." %
-                            (row, column, int, int, type(eff_origin[0]), type(eff_origin[1])))
+                        "An incorrect type is used for the cell translation coordinates of cell (%s, %s).\n"
+                        "Type expected is: '(%s, %s)' type received '(%s, %s)'\n"
+                        "Cell translation parameter values remain unchanged." %
+                        (row, column, int, int, type(eff_origin[0]), type(eff_origin[1]))
+                    )
 
                 if eff_origin[0] < 0 or eff_origin[1] < 0:
                     raise ValueError("Please use a minimum of 0 cell translation coordinates of cell (%s, %s).\n"
@@ -1841,7 +1845,7 @@ class AsmApiException(Exception):
             elif hasattr(response, "content"):
                 self._errorMessageResponse(url, status_code, reason, expected_status, status_code, response.content)
             else:
-                self._emptyResponse(url, status_code, reason, expected_status,)
+                self._emptyResponse(url, status_code, reason, expected_status)
 
         # Also log the error so it is easier to find it back when the error was received in the log
         logging.error(self._error)
@@ -1868,7 +1872,7 @@ class AsmApiException(Exception):
                        "Error status code '%s' with the message: '%s'\n" %
                        (url, status_code, reason, expected_status, error_code, error_message))
 
-    def _emptyResponse(self, url, status_code, reason, expected_status,):
+    def _emptyResponse(self, url, status_code, reason, expected_status):
         """
         Defines the error message if the response received from the ASM does not contain the proper error
         information.
