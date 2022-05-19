@@ -511,7 +511,8 @@ class FastEMAcquiController(object):
                                    self._main_data_model.descanner, self._main_data_model.mppc,
                                    self._main_data_model.stage, self._main_data_model.ccd,
                                    self._main_data_model.beamshift, self._main_data_model.lens,
-                                   pre_calibrations=pre_calibrations)
+                                   pre_calibrations=pre_calibrations,
+                                   settings_obs=self._main_data_model.settings_obs)
                 t = estimate_acquisition_time(roa, pre_calibrations)
                 fs[f] = t
 

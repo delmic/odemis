@@ -45,7 +45,6 @@ import numpy
 from odemis import model
 from odemis.driver.technolution import AcquisitionServer, convertRange, AsmApiException, DATA_CONTENT_TO_ASM, \
     VOLT_RANGE, I16_SYM_RANGE
-from odemis.util import almost_equal
 from odemis.util import test
 from technolution_asm.models import CalibrationLoopParameters
 from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData

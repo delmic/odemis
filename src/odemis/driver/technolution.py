@@ -1175,41 +1175,43 @@ class MPPC(model.Detector):
         X_descan_setpoints = self._descanner.getXAcqSetpoints()
         Y_descan_setpoints = self._descanner.getYAcqSetpoints()
 
+        custom_data = self.getMetadata().get(model.MD_EXTRA_SETTINGS, "")  # if no custom metadata, pass an empty string
+
         megafield_metadata = \
             MegaFieldMetaData(
-                    mega_field_id=os.path.basename(self.filename.value),
-                    storage_directory=os.path.dirname(self.filename.value),
-                    custom_data="No_custom_data",
-                    stage_position_x=float(stage_position[0]),
-                    stage_position_y=float(stage_position[1]),
-                    # Convert pixels size from meters to nanometers
-                    pixel_size=int(self._scanner.pixelSize.value[0] * 1e9),
-                    dwell_time=self._scanner.getTicksDwellTime(),
-                    x_scan_to_acq_delay=scan_to_acq_delay,
-                    x_scan_delay=self._scanner.getTicksScanDelay()[0],
-                    x_cell_size=self.cellCompleteResolution.value[0],
-                    x_eff_cell_size=eff_cell_size[0],
-                    y_cell_size=self.cellCompleteResolution.value[1],
-                    y_eff_cell_size=eff_cell_size[1],
-                    # y_prescan_lines is not available on EA1
-                    # y_prescan_lines=self._scanner.getTicksScanDelay()[1],
-                    x_scan_gain=self._scanner.getGradientScanVolt()[0],
-                    y_scan_gain=self._scanner.getGradientScanVolt()[1],
-                    x_scan_offset=self._scanner.getCenterScanVolt()[0],
-                    y_scan_offset=self._scanner.getCenterScanVolt()[1],
-                    x_descan_setpoints=X_descan_setpoints,
-                    y_descan_setpoints=Y_descan_setpoints,
-                    # Descan offset is set to zero and is currently unused. The offset is implemented via the setpoints.
-                    x_descan_offset=0,
-                    y_descan_offset=0,
-                    scan_rotation=self._scanner.rotation.value,
-                    descan_rotation=self._descanner.rotation.value,
-                    # Reshape cell parameters such that the order of the cells is from left to right, then top to
-                    # bottom. So the cells in the upper line are numbered 0..7, the bottom line 56..63.
-                    cell_parameters=[CellParameters(translation[0], translation[1], darkOffset, digitalGain)
-                                     for translation, darkOffset, digitalGain in
-                                     zip(cellTranslation, cellDarkOffset, cellDigitalGain)],
-                    sensor_over_voltage=self.overVoltage.value
+                mega_field_id=os.path.basename(self.filename.value),
+                storage_directory=os.path.dirname(self.filename.value),
+                custom_data=custom_data,
+                stage_position_x=float(stage_position[0]),
+                stage_position_y=float(stage_position[1]),
+                # Convert pixels size from meters to nanometers
+                pixel_size=int(self._scanner.pixelSize.value[0] * 1e9),
+                dwell_time=self._scanner.getTicksDwellTime(),
+                x_scan_to_acq_delay=scan_to_acq_delay,
+                x_scan_delay=self._scanner.getTicksScanDelay()[0],
+                x_cell_size=self.cellCompleteResolution.value[0],
+                x_eff_cell_size=eff_cell_size[0],
+                y_cell_size=self.cellCompleteResolution.value[1],
+                y_eff_cell_size=eff_cell_size[1],
+                # y_prescan_lines is not available on EA1
+                # y_prescan_lines=self._scanner.getTicksScanDelay()[1],
+                x_scan_gain=self._scanner.getGradientScanVolt()[0],
+                y_scan_gain=self._scanner.getGradientScanVolt()[1],
+                x_scan_offset=self._scanner.getCenterScanVolt()[0],
+                y_scan_offset=self._scanner.getCenterScanVolt()[1],
+                x_descan_setpoints=X_descan_setpoints,
+                y_descan_setpoints=Y_descan_setpoints,
+                # Descan offset is set to zero and is currently unused. The offset is implemented via the setpoints.
+                x_descan_offset=0,
+                y_descan_offset=0,
+                scan_rotation=self._scanner.rotation.value,
+                descan_rotation=self._descanner.rotation.value,
+                # Reshape cell parameters such that the order of the cells is from left to right, then top to
+                # bottom. So the cells in the upper line are numbered 0..7, the bottom line 56..63.
+                cell_parameters=[CellParameters(translation[0], translation[1], darkOffset, digitalGain)
+                                 for translation, darkOffset, digitalGain in
+                                 zip(cellTranslation, cellDarkOffset, cellDigitalGain)],
+                sensor_over_voltage=self.overVoltage.value
             )
         return megafield_metadata
 

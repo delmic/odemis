@@ -20,7 +20,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-
+import json
 import logging
 import math
 import os
@@ -30,7 +30,7 @@ from concurrent.futures import CancelledError
 
 import numpy
 
-from odemis.acq.align.fastem import Calibrations, align, estimate_calibration_time
+from odemis.acq.align.fastem import align, estimate_calibration_time
 
 try:
     from fastem_calibrations import (
@@ -53,6 +53,36 @@ from odemis.acq import fastem_conf
 
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
+
+# TODO: Normally we do not use component names in code, only roles. Store in the roles in the SETTINGS_SELECTION,
+#  and at init lookup the role -> name conversion (using model.getComponent(role=role)).
+# Selection of components, VAs and values to save with the ROA acquisition, structured: {component: {VA: value}}
+SETTINGS_SELECTION = {
+    'Beam Shift Controller': ['shift', ],
+    'Detector Rotator': ['position',
+                         'referenced',
+                         'speed', ],
+    'Mirror Descanner': ['clockPeriod',
+                         'physicalFlybackTime',
+                         'rotation',
+                         'scanAmplitude',
+                         'scanOffset', ],
+    'MultiBeam Scanner': ['clockPeriod',
+                          'dwellTime',
+                          'rotation',
+                          'scanAmplitude',
+                          'scanDelay',
+                          'scanOffset', ],
+    'MultiBeam Scanner XT': ['accelVoltage',
+                             'beamShiftTransformationMatrix',
+                             'multiprobeRotation',
+                             'patternStigmator',
+                             'power',
+                             'rotation', ],
+    'Sample Stage': ['position',
+                     'referenced',
+                     'speed']
+}
 
 
 class FastEMROA(object):
@@ -231,7 +261,8 @@ def estimate_acquisition_time(roa, pre_calibrations=None):
     return tot_time
 
 
-def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, pre_calibrations=None):
+def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift,
+            lens, pre_calibrations=None, settings_obs=None):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -254,11 +285,15 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
     :param lens: (static.OpticalLens) Optical lens component.
     :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA acquisition.
                              Default is None.
+    :param settings_obs: (SettingsObserver) VAs of all components of which some will be
+                         integrated in the acquired ROA as metadata. Default is None,
+                         if None the metadata will not be updated.
 
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
                 (model.DataArray): The acquisition data, which depends on the value of the detector.dataContent VA.
                 (Exception or None): Exception raised during the acquisition or None.
+
     """
 
     est_dur = estimate_acquisition_time(roa, pre_calibrations)
@@ -267,7 +302,7 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
     task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path,
-                           pre_calibrations, f)
+                           pre_calibrations, settings_obs, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -285,7 +320,7 @@ class AcquisitionTask(object):
     """
 
     def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path,
-                 pre_calibrations, future):
+                 pre_calibrations, settings_obs, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -306,6 +341,8 @@ class AcquisitionTask(object):
                     if they do not exist.
         :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA
                                  acquisition.
+        :param settings_obs: (SettingsObserver) VAs of all components of which some will be
+                             integrated in the acquired ROA as metadata. If None the metadata will not be updated.
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future
                         is a tuple that contains:
                             (model.DataArray): The acquisition data, which depends on the value of the
@@ -325,6 +362,7 @@ class AcquisitionTask(object):
         self._path = path  # sub-directories on external storage
         self._future = future
         self._pre_calibrations = pre_calibrations
+        self._settings_obs = settings_obs
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
         self.megafield = {}
@@ -389,6 +427,9 @@ class AcquisitionTask(object):
 
         # set the sub-directories (<acquisition date>/<project name>) and megafield id
         self._detector.filename.value = os.path.join(self._path, self._roa.name.value)
+
+        if self._settings_obs:
+            self._create_acquisition_metadata()
 
         exception = None
         dataflow = self._detector.data
@@ -627,6 +668,26 @@ class AcquisitionTask(object):
         self._beamshift.shift.value = (cur_beam_shift_pos + shift_m)
 
         logging.debug("New beam shift m: {}".format(self._beamshift.shift.value))
+
+    def _create_acquisition_metadata(self):
+        """
+        Get the acquisition metadata based on the SETTINGS_SELECTION.
+
+        :return: (dict)
+            Nested dictionary containing the current components, VAs and values: {component: {VA: value}}
+        """
+        settings = self._settings_obs.get_all_settings()
+
+        selected_settings = {}
+        for comp, vas in SETTINGS_SELECTION.items():
+            if comp in settings:
+                selected_settings[comp] = {va: settings[comp][va] for va in vas if va in settings[comp]}
+            else:
+                logging.info(f"Cannot find component {comp} in the settings observer, "
+                             f"VAs from this component will not be stored")
+
+        self._detector.updateMetadata({model.MD_EXTRA_SETTINGS: json.dumps(selected_settings)})
+        return selected_settings
 
 
 ########################################################################################################################
