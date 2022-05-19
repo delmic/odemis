@@ -1737,13 +1737,17 @@ class FastEMAcquisitionTab(Tab):
         # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
         # need to know that it's simulated otherwise we can never simulate an acquisition.
         if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
-            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                            Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:  # it is a real microscope
-            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.SCAN_ROTATION_PREALIGN,
-                            Calibrations.SCAN_AMPLITUDE_PREALIGN, Calibrations.DESCAN_GAIN_STATIC,
-                            Calibrations.IMAGE_ROTATION_PREALIGN, Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                            Calibrations.IMAGE_ROTATION_FINAL,]
-            # IMAGE_TRANSLATION_FINAL FIXME: add when we can update the good mp position and fix for max amplitude
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                            Calibrations.SCAN_ROTATION_PREALIGN,
+                            Calibrations.SCAN_AMPLITUDE_PREALIGN,
+                            Calibrations.DESCAN_GAIN_STATIC,
+                            Calibrations.IMAGE_ROTATION_PREALIGN,
+                            Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                            Calibrations.IMAGE_ROTATION_FINAL,
+                            Calibrations.IMAGE_TRANSLATION_FINAL]
 
         # Controller for calibration panel 1
         self._calib_1_controller = fastem_acq.FastEMCalibrationController(
@@ -1768,8 +1772,10 @@ class FastEMAcquisitionTab(Tab):
             tab_data,
             panel,
             calib_prefix="calib_2",
-            calibrations=[Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                          Calibrations.DARK_OFFSET, Calibrations.DIGITAL_GAIN]
+            calibrations=[Calibrations.OPTICAL_AUTOFOCUS,
+                          Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                          Calibrations.DARK_OFFSET,
+                          Calibrations.DIGITAL_GAIN]
         )
 
         # Check if we deal with a real or simulated microscope. If it is a simulator,
@@ -1777,10 +1783,13 @@ class FastEMAcquisitionTab(Tab):
         # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
         # need to know that it's simulated otherwise we can never simulate an acquisition.
         if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
-            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                            Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:  # it is a real microscope
-            calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                            Calibrations.SCAN_ROTATION_FINAL,  # FIXME Calibrations.SCAN_AMPLITUDE_FINAL,
+            calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                            Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                            Calibrations.SCAN_ROTATION_FINAL,
+                            Calibrations.SCAN_AMPLITUDE_FINAL,
                             Calibrations.CELL_TRANSLATION]
 
         # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController and
