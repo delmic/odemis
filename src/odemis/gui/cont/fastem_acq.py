@@ -641,7 +641,7 @@ class FastEMCalibrationController:
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
         except Exception as ex:
             getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
-            logging.exception("Calibration step %s failed with %s.", (self._calib_prefix, ex))
+            logging.exception("Calibration step %s failed with exception: %s.", self._calib_prefix, ex)
             self._update_calibration_controls("Calibration failed")
 
     @call_in_wx_main
@@ -818,7 +818,7 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
         except Exception as ex:
             getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
-            logging.exception("Calibration step %s failed with %s.", (self._calib_prefix, ex))
+            logging.exception("Calibration step %s failed with exception: %s.", self._calib_prefix, ex)
             self._update_calibration_controls("Calibration failed")
 
     @call_in_wx_main
