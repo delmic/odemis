@@ -98,7 +98,7 @@ REFPROC_STD = "Standard"  # Use the standard reference search built in the contr
 REFPROC_FAKE = "FakeReferencing"  # was used for simulator when it didn't support referencing
 
 # Model number (int) of devices tested
-KNOWN_MODELS = {1140, 3110, 6110, 3214}
+KNOWN_MODELS = {1140, 3110, 6110, 3214, 1211}
 KNOWN_MODELS_CAN = {'PD-1240', 'PD-1240-fake'}
 # These models report the velocity/accel in internal units of the TMC429
 USE_INTERNAL_UNIT_429 = {1110, 1140, 3110, 6110}
