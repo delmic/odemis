@@ -21,19 +21,25 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import collections.abc
+import copy
 import logging
+import math
 import os
+import socket
+import threading
 import time
 import unittest
 import itertools
+import numpy
 
 from math import pi
 from time import sleep
+
 from odemis.driver import orsay
+from odemis.driver.orsay import PRESET_MASK_NAME
 from odemis.model import HwError
 from odemis import model
-from odemis.util import timeout
-from odemis.util.test import assert_pos_almost_equal
+from odemis.util import timeout, almost_equal, testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -51,6 +57,7 @@ CONFIG_LIGHT = {"name": "light", "role": "light"}
 CONFIG_SCANNER = {"name": "scanner", "role": "scanner"}
 CONFIG_FOCUS = {"name": "focus", "role": "focus", "rng": (-2e-3, 2e-3)}
 CONFIG_FIBAPERTURE = {"name": "fib-aperture", "role": "fib-aperture"}
+CONFIG_DETECTOR = {"name": "detector", "role": "detector"}
 
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
@@ -68,7 +75,7 @@ CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.30.101",
                              "scanner": CONFIG_SCANNER,
                              "focus": CONFIG_FOCUS,
                              "fib-aperture": CONFIG_FIBAPERTURE,
-                             }
+                             "detector": CONFIG_DETECTOR},
                 }
 
 NO_SERVER_MSG = "TEST_NOHW is set. No server to contact."
@@ -1069,11 +1076,44 @@ class TestOrsayParameterConnector(unittest.TestCase):
 
         minpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Minvalue
         maxpar = self.datamodel.HVPSFloatingIon.BeamCurrent_Maxvalue
-        orsay.OrsayParameterConnector(va, self.datamodel.HVPSFloatingIon.BeamCurrent,
-                                      minpar=minpar, maxpar=maxpar)
+        orsay.OrsayParameterConnector(va, self.datamodel.HVPSFloatingIon.BeamCurrent, minpar=minpar, maxpar=maxpar)
         sleep(0.5)
         self.assertEqual(va.range[0], float(minpar.Target))
         self.assertEqual(va.range[1], float(maxpar.Target))
+
+    def test_conversion_functions(self):
+        """
+        Testing the conversion function from VA to Parameter and back.
+        Uses the fib beam rotation VA to test this function
+        """
+        for child in self.oserver.children.value:
+            if child.name == CONFIG_FIBBEAM["name"]:
+                fibbeam = child
+
+        # Make sure this variable isn't saved to the attribute anymore
+        init_conversion_func = copy.deepcopy(fibbeam._rot_conversion_functions)
+
+        # Check that the conversion functions can only be used with two callables.
+        with self.assertRaises(ValueError):
+            fibbeam._rot_conversion_functions = 1
+            fibbeam.on_connect()
+
+        # Reset the original values and a correct connector
+        fibbeam._rot_conversion_functions = copy.deepcopy(init_conversion_func)  # copy to prevent overwriting init_conversion_func
+        fibbeam.on_connect()
+
+        with self.assertRaises(ValueError):
+            fibbeam._rot_conversion_functions["par2va"] = 1
+            fibbeam.on_connect()
+
+        # Reset the original values and a correct connector
+        fibbeam._rot_conversion_functions = init_conversion_func
+        fibbeam.on_connect()
+
+        connector_test(self, self.fibbeam.rotation, fibbeam._ionColumn.ObjectiveScanAngle,
+                       [(0.0, 0.0), (0.5*math.pi, 0.5*math.pi), (1.5*math.pi, -0.5*math.pi)],
+                        hw_safe=True, settletime=1)
+
 
 # TODO Currently not tested due to vacuum issues FIB vacuum
 class TestFIBVacuum(unittest.TestCase):
@@ -1321,7 +1361,7 @@ class TestFIBSource(unittest.TestCase):
     def test_acceleratorVoltage(self):
         """Check that the acceleratorVoltage VA is updated correctly"""
         connector_test(self, self.fib_source.acceleratorVoltage, self.fib_source._hvps.Energy,
-                       [(10.0, 10.0), (0.0, 0.0)], hw_safe=True, settletime=1)
+                       [(30e3, 30e3), (15e3, 15e3), (0.0, 0.0)], hw_safe=True, settletime=1)
 
     # Note: Currently unused and unsafe
     # def test_heaterCurrent(self):
@@ -1498,7 +1538,7 @@ class TestFIBBeam(unittest.TestCase):
 
     def test_horizontalFOV(self):
         """Check that the horizontalFOV VA is updated correctly"""
-        connector_test(self, self.fibbeam.horizontalFOV, self.fibbeam._ionColumn.ObjectiveFieldSize,
+        connector_test(self, self.fibbeam.horizontalFov, self.fibbeam._ionColumn.ObjectiveFieldSize,
                        [(1e-4, 1e-4), (5e-6, 5e-6)], hw_safe=True, settletime=1)
 
     def test_measuringCurrent(self):
@@ -1528,8 +1568,10 @@ class TestFIBBeam(unittest.TestCase):
 
     def test_rotation(self):
         """Check that the rotation VA is updated correctly"""
+        init_conversion_func = self.fibbeam._rot_conversion_functions
         connector_test(self, self.fibbeam.rotation, self.fibbeam._ionColumn.ObjectiveScanAngle,
-                       [(0.1, 0.1), (0.0, 0.0)], hw_safe=True, settletime=1)
+                       [(0.0, 0.0), (0.5*math.pi, 0.5*math.pi), (1.5*math.pi, -0.5*math.pi)],
+                        hw_safe=True, settletime=1)
 
     def test_dwellTime(self):
         """Check that the dwellTime VA is updated correctly"""
@@ -1840,6 +1882,277 @@ class TestScanner(unittest.TestCase):
 
         self.fibbeam.blanker.value = init_value  # return to initial value
 
+    def test_scale(self):
+        init_format = self.fibbeam.imageFormat.value
+        init_scale = self.scanner.scale.value
+
+        self.scanner.scale.value = (1.0, 1.0)
+        sleep(1)
+        self.assertEqual(self.fibbeam._ionColumn.ImageSize.Actual, "1024 1024")
+        self.assertEqual(self.fibbeam.imageFormat.value, (1024, 1024))
+
+        self.scanner.scale.value = (2.0, 2.0)
+        sleep(1)
+        self.assertEqual(self.fibbeam._ionColumn.ImageSize.Actual, "512 512")
+        self.assertEqual(self.fibbeam.imageFormat.value, (512, 512))
+
+        self.fibbeam.imageFormat.value = (1024, 1024)  # Set using the VA for format correctly
+        sleep(1)
+        self.assertEqual(self.scanner.scale.value, (1.0, 1.0))
+
+        self.fibbeam.imageFormat.value = (512, 512)  # Set using the VA for format correctly
+        sleep(1)
+        self.assertEqual(self.scanner.scale.value, (2.0, 2.0))
+
+        # return to values of before test
+        self.fibbeam.imageFormat.value = init_format
+        self.scanner.scale.value = init_scale
+
+    def test_accelVoltage(self):
+        init_value = self.scanner.accelVoltage.value
+
+        connector_test(self, self.scanner.accelVoltage,
+                       self.fibbeam._hvps.Energy,
+                       [(0.0, 0.0), (3e4, 3e4), (10e3, 10e3), (1, 1)],
+                       hw_safe=True, settletime=3)
+
+        self.scanner.accelVoltage.value = init_value
+
+    def test_getAllPresetData(self):
+        all_preset_data = self.scanner.getAllPresetData()
+
+        # Test for each preset saved in the dict if the values are correct.
+        for preset_data in all_preset_data.values():
+            preset = self.oserver.preset_manager.GetPreset(preset_data["name"])
+            self.assertEqual(preset_data["aperture_number"],
+                             self.scanner._getApertureNmbrFromPreset(preset))
+            self.assertEqual(preset_data["condenser_voltage"],
+                             self.scanner._getCondenserVoltageFromPreset(preset))
+
+
+    def test_getApertureNmbrFromPreset(self):
+        """
+        This test uses the standard preset defined in "preset_name". This preset is set at the end of the test and is
+        expected to have an aperture defined.
+        """
+        preset_name = "Odemis_test_preset"
+        if preset_name not in [p.get("name") for p in self.scanner.parent.preset_manager.GetAllPresets().iter("Preset")]:
+            self.skipTest(f"This test requires the preset {preset_name} to be defined on the machine.")
+
+        full_preset = self.oserver.preset_manager.GetPreset(preset_name)
+        aperture_number_preset = self.scanner._getApertureNmbrFromPreset(full_preset)
+
+        # TODO Remove try except if Orsay fixed LoadPreset to not time out.
+        try:
+            self.oserver.preset_manager.LoadPreset(preset_name, PRESET_MASK_NAME)
+        except socket.timeout:
+            time.sleep(90)  # TODO Wait long enough to finish the preset loading process
+
+        for _ in range(90):
+            time.sleep(1)
+            if almost_equal(aperture_number_preset,
+                            int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target)):
+                break
+
+        self.assertEqual(aperture_number_preset,
+                         int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target))
+
+    def test_getCondenserVoltageFromPreset(self):
+        """
+        This test uses the standard preset defined in "preset_name". This preset is set at the end of the test and is
+        expected to have a condenser voltage defined.
+        """
+        preset_name = "Odemis_test_preset"
+        if preset_name not in [p.get("name") for p in self.scanner.parent.preset_manager.GetAllPresets().iter("Preset")]:
+            self.skipTest(f"This test requires the preset {preset_name} to be defined on the machine.")
+
+        full_preset = self.oserver.preset_manager.GetPreset(preset_name)
+        condenser_voltage = self.scanner._getCondenserVoltageFromPreset(full_preset)
+
+        # TODO Remove try except if Orsay fixed LoadPreset to not time out.
+        try:
+            self.oserver.preset_manager.LoadPreset(preset_name, PRESET_MASK_NAME)
+        except socket.timeout:
+            time.sleep(90)  # TODO Wait long enough to finish the preset loading process
+
+        for _ in range(90):
+            time.sleep(1)
+            if almost_equal(condenser_voltage,
+                            float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target)):
+                break
+
+        self.assertAlmostEqual(condenser_voltage,
+                               float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target))
+
+    def test_getPresetSetting(self):
+        """
+        This test uses the standard preset defined in "preset_name". This preset is set at the end of the test and is
+        expected to have an aperture and condenser voltage defined.
+        """
+        preset_name = "Odemis_test_preset"
+
+        full_preset = self.oserver.preset_manager.GetPreset(preset_name)
+        condenser_voltage = float(self.scanner.getPresetSetting(full_preset, 'HVPSFloatingIon', "CondensorVoltage", tag="Target"))
+        aperture_number_preset = int(self.scanner.getPresetSetting(full_preset, 'HybridAperture', "SelectedDiaph", tag="Target"))
+
+        # TODO Remove try except if Orsay fixed LoadPreset to not time out.
+        try:
+            self.oserver.preset_manager.LoadPreset(full_preset, PRESET_MASK_NAME)
+        except socket.timeout:
+            time.sleep(90)  # TODO Wait long enough to finish the preset loading process
+
+        for _ in range(90):
+            time.sleep(1)
+            if almost_equal(condenser_voltage, float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target)) and\
+               almost_equal(aperture_number_preset, int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target)):
+                break
+
+        self.assertAlmostEqual(condenser_voltage,
+                               float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target))
+        self.assertEqual(aperture_number_preset,
+                         int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target))
+
+
+class TestDetector(unittest.TestCase):
+    """
+    Test for the Detector class
+    """
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest(NO_SERVER_MSG)
+
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        cls.datamodel = cls.oserver.datamodel
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_FIBBEAM["name"]:
+                cls.fibbeam = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+            elif child.name == CONFIG_DETECTOR["name"]:
+                cls.detector = child
+
+        cls._init_dwellTime = cls.fibbeam.dwellTime.value
+        cls.fibbeam.dwellTime.value = min(cls.fibbeam.dwellTime.choices)  # Speeds up the test cases
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.fibbeam.dwellTime.value = cls._init_dwellTime
+
+    def test_receiveImage(self):
+        image = self.detector.receiveLatestImage()
+        self.assertIsInstance(image, model.DataArray)
+        self.assertEqual(image.dtype, numpy.uint16)
+        self.assertEqual(image.shape, self.fibbeam.imageFormat.value)
+
+    def test_contrast(self):
+        """
+        Copied from the fib beam, the VA is tested on that component
+        """
+        init_contrast = self.detector.contrast.value
+        self.assertTrue(model.hasVA(self.detector, "contrast"))
+
+        self.fibbeam.contrast.value = min(self.fibbeam.contrast.range)
+        self.assertEqual(self.detector.contrast.value, min(self.fibbeam.contrast.range))
+
+        self.detector.contrast.value = max(self.detector.contrast.range)
+        self.assertEqual(self.fibbeam.contrast.value, max(self.fibbeam.contrast.range))
+
+        # Set back the original value
+        self.detector.contrast.value = init_contrast
+
+    def test_brightness(self):
+        """
+        Copied from the fib beam, the VA is tested on that component
+        """
+        init_brightness = self.detector.brightness.value
+        self.assertTrue(model.hasVA(self.detector, "brightness"))
+
+        self.fibbeam.brightness.value = min(self.fibbeam.brightness.range)
+        self.assertEqual(self.detector.brightness.value, min(self.fibbeam.brightness.range))
+
+        self.detector.brightness.value = max(self.detector.brightness.range)
+        self.assertEqual(self.fibbeam.brightness.value, max(self.fibbeam.brightness.range))
+
+        # Set back the original value
+        self.detector.brightness.value = init_brightness
+
+
+class TestDataflow(unittest.TestCase):
+    """
+    Test for the Detector class
+    """
+    @classmethod
+    def setUpClass(cls):
+        """
+        Setup the Orsay client
+        """
+        if TEST_NOHW == 1:
+            raise unittest.SkipTest(NO_SERVER_MSG)
+
+        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
+        cls.datamodel = cls.oserver.datamodel
+        for child in cls.oserver.children.value:
+            if child.name == CONFIG_FIBBEAM["name"]:
+                cls.fibbeam = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+            elif child.name == CONFIG_DETECTOR["name"]:
+                cls.detector = child
+
+        cls.dataflow = cls.detector.data
+        cls._init_dwellTime = cls.fibbeam.dwellTime.value
+        cls.fibbeam.dwellTime.value = min(cls.fibbeam.dwellTime.choices)  # Speeds up the test cases
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.fibbeam.dwellTime.value = cls._init_dwellTime
+
+    def test_get(self):
+        self.scanner.blanker.value = False
+        image = self.dataflow.get(asap=False)
+        self.assertIsInstance(image, model.DataArray)
+        self.assertEqual(image.dtype, numpy.uint16)
+        self.assertEqual(image.shape, self.fibbeam.imageFormat.value)
+
+        # Test with asap = True
+        image = self.dataflow.get(asap=True)
+        self.assertIsInstance(image, model.DataArray)
+        self.assertEqual(image.dtype, numpy.uint16)
+        self.assertEqual(image.shape, self.fibbeam.imageFormat.value)
+        self.scanner.blanker.value = True
+
+    def test_get_varying_dwell_time(self):
+        self.skipTest(f"By default this test is skipped. It test the functionality on changing dwell times. User input is required")
+
+        self.scanner.blanker.value = False
+        fast = min(self.fibbeam.dwellTime.choices)  # The default use is the shortest dwellTime
+        slow = max(self.fibbeam.dwellTime.choices)  # The default use is the longest dwellTime
+        for img_number, dwellTime in enumerate([fast, slow, fast, slow, fast, slow, fast]):
+            self.fibbeam.dwellTime.value = dwellTime
+
+            def display_image(img, img_number):
+                import cv2
+                cv2.imwrite(f"Img {img_number} with dwell time {dwellTime} at time {round(time.time())}.png", img)
+
+            if img_number in (4, 6):  # Also check if the get method works with consecutive calls
+                thread_thing = threading.Thread(target=self.dataflow.get, name="test")
+                thread_thing.deamon = True
+                thread_thing.start()
+                time.sleep(2)
+
+            image = self.dataflow.get(asap=False)
+            self.assertIsInstance(image, model.DataArray)
+            self.assertEqual(image.dtype, numpy.uint16)
+            self.assertEqual(image.shape, self.fibbeam.imageFormat.value)
+            # display_image(image, img_number)  # Don't save by default
+            time.sleep(2)  # Wait in between get calls.
+
+        self.scanner.blanker.value = True
+
 
 class TestFocus(unittest.TestCase):
     """
@@ -2027,32 +2340,32 @@ class TestFIBAperture(unittest.TestCase):
         # Test position X
         f = self.fib_aperture.moveAbs({"x": 5e-4, "y": init_y_pos})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": 5e-4, "y": init_y_pos}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": 5e-4, "y": init_y_pos}, atol=1e-7)
 
         f = self.fib_aperture.moveAbs({"x": -5e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": -5e-4, "y": init_y_pos}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": -5e-4, "y": init_y_pos}, atol=1e-7)
 
         f = self.fib_aperture.moveAbs({"x": 1e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": 1e-4, "y": init_y_pos}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": 1e-4, "y": init_y_pos}, atol=1e-7)
 
         # Test position Y
         f = self.fib_aperture.moveAbs({"x": init_x_pos, "y": 5e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": 5e-4}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": 5e-4}, atol=1e-7)
 
         f = self.fib_aperture.moveAbs({"y": -5e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": -5e-4}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": -5e-4}, atol=1e-7)
 
         f = self.fib_aperture.moveAbs({"y": 1e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": 1e-4}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": 1e-4}, atol=1e-7)
 
         f = self.fib_aperture.moveAbs({"x": init_x_pos, "y": init_y_pos})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
 
     def testMoveRel(self):
         init_x_pos = float(self._hybridAperture.XPosition.Actual)
@@ -2060,29 +2373,29 @@ class TestFIBAperture(unittest.TestCase):
         # Test position X
         f = self.fib_aperture.moveRel({"x": 5e-4, "y": 0})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos + 5e-4, "y": init_y_pos}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos + 5e-4, "y": init_y_pos}, atol=1e-7)
 
         f = self.fib_aperture.moveRel({"x": -5e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
 
         # Test position Y
         f = self.fib_aperture.moveRel({"x": 0, "y": 5e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos + 5e-4}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos + 5e-4}, atol=1e-7)
 
         f = self.fib_aperture.moveRel({"y": - 5e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
 
         # Move both at the same time
         f = self.fib_aperture.moveRel({"x": 5e-4, "y": 5e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos + 5e-4, "y": init_y_pos + 5e-4}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos + 5e-4, "y": init_y_pos + 5e-4}, atol=1e-7)
 
         f = self.fib_aperture.moveRel({"x": -5e-4, "y": -5e-4})
         f.result()
-        assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
+        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
 
     def testReferenced(self):
         """
@@ -2214,22 +2527,24 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
             for a in attributes:
                 setattr(parameters[i], a, par_value1[i])
         sleep(settletime)
-        test_case.assertEqual(va.value, va_value1, "The assertEqual between va.value and va_value1 isn't correct.")
+        test_case.assertAlmostEqual(va.value, va_value1, places=10,
+                                    msg="The assertEqual between va.value and va_value1 isn't correct.")
 
         # Go to the second value
         for i in range(len(parameters)):
             for a in attributes:
                 setattr(parameters[i], a, par_value2[i])
         sleep(settletime)
-        test_case.assertEqual(va.value, va_value2, "The assertEqual between va.value and va_value2 isn't correct.")
+        test_case.assertAlmostEqual(va.value, va_value2, places=10,
+                                    msg="The assertEqual between va.value and va_value2 isn't correct.")
 
         # Go back to the first value
         for i in range(len(parameters)):
             for a in attributes:
                 setattr(parameters[i], a, par_value1[i])
         sleep(settletime)
-        test_case.assertEqual(va.value, va_value1,
-                              "The second assertEqual between va.value and va_value1 isn't correct.")
+        test_case.assertAlmostEqual(va.value, va_value1,  places=10,
+                                    msg="The second assertEqual between va.value and va_value1 isn't correct.")
 
     if not readonly:
         # write to the VA, check that the Parameter follows
@@ -2239,24 +2554,27 @@ def connector_test(test_case, va, parameters, valuepairs, readonly=False, hw_saf
             sleep(settletime)
             for i in range(len(parameters)):
                 target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
-                test_case.assertEqual(target, par_value1[i],
-                                      "The assertEqual between target and par_value1 isn't correct.")
+                test_case.assertAlmostEqual(target, par_value1[i],
+                                      places=10,
+                                            msg="The assertEqual between target and par_value1 isn't correct.")
 
             # Go to the second value
             va.value = va_value2
             sleep(settletime)
             for i in range(len(parameters)):
                 target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
-                test_case.assertEqual(target, par_value2[i],
-                                      "The assertEqual between target and par_value2 isn't correct.")
+                test_case.assertAlmostEqual(target, par_value2[i],
+                                      places=10,
+                                            msg="The assertEqual between target and par_value2 isn't correct.")
 
             # Go back to the first value
             va.value = va_value1
             sleep(settletime)
             for i in range(len(parameters)):
                 target = type(par_value1[i])(parameters[i].Target)  # needed since many parameter values are strings
-                test_case.assertEqual(target, par_value1[i],
-                                      "The second assertEqual between target and par_value1 isn't correct.")
+                test_case.assertAlmostEqual(target, par_value1[i],
+                                      places=10,
+                                            msg="The second assertEqual between target and par_value1 isn't correct.")
 
     for i in range(len(parameters)):
         parameters[i].Target = init_values[i]  # return to the values form before test

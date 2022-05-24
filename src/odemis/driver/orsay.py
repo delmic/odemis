@@ -21,8 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import collections.abc
 from odemis import model, util
-from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, \
-    InstantaneousFuture
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, InstantaneousFuture, roattribute, \
+    MD_PIXEL_SIZE
 from odemis.util import almost_equal
 from odemis.util.weak import WeakMethod
 from ConsoleClient.Communication.Connection import Connection
@@ -34,6 +34,7 @@ import logging
 import inspect
 from math import pi
 import math
+import numpy
 
 VALVE_UNDEF = -1
 VALVE_TRANSIT = 0
@@ -123,8 +124,9 @@ class OrsayComponent(model.HwComponent):
         except Exception as ex:
             msg = "Failed to connect to Orsay server: %s. Check the network connection to the Orsay server." % str(ex)
             raise HwError(msg)
-        time.sleep(1)  # allow for the connection to be made and the datamodel to be loaded
+        time.sleep(1)  # allow for the connection to be made and the datamodel and preset manager to be loaded
         self.datamodel = None
+        self.preset_manager = None
 
         self.processInfo = model.StringVA("", readonly=True)  # Contains a lot of information about the currently 
         # running process and a wide range thereof. For example it will show which valves are being closed and when 
@@ -240,6 +242,15 @@ class OrsayComponent(model.HwComponent):
             self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._scanner)
 
+        # create the detector child
+        try:
+            kwargs = children["detector"]
+        except (KeyError, TypeError):
+            logging.info(no_child_msg % "detector")
+        else:
+            self._detector = Detector(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._detector)
+
         # create the FIB Focus child
         try:
             kwargs = children["focus"]
@@ -264,6 +275,7 @@ class OrsayComponent(model.HwComponent):
         Needs to be called after connection and reconnection to the server.
         """
         self.datamodel = self._device.datamodel
+        self.preset_manager = self._device.PresetManager
         self.datamodel.HybridPlatform.ProcessInfo.Subscribe(self._updateProcessInfo)
 
         self.update_VAs()
@@ -1369,7 +1381,8 @@ class OrsayParameterConnector:
     not be the case if the getter was used.
     """
 
-    def __init__(self, va, parameter, attr_name="Actual", conversion=None, factor=None, minpar=None, maxpar=None):
+    def __init__(self, va, parameter, attr_name="Actual", mapping=None, conversion_funcs=None, factor=None, minpar=None,
+                 maxpar=None):
         """
         Initialise the Connector
 
@@ -1380,8 +1393,10 @@ class OrsayParameterConnector:
             can contain a Tuple of equal length.
         :param (string) attr_name: The name of the attribute of parameter the va should be synchronised with.
             Defaults to "Actual".
-        :param (dict or None) conversion: A dict mapping values of the VA (dict keys) to values of the parameter (dict
+        :param (dict or None) mapping: A dict mapping values of the VA (dict keys) to values of the parameter (dict
             values). If None is supplied, factor can be used, or no special conversion is applied.
+        :param (dict or None) conversion_funcs: A dict containing the keys "va2par" and "par2va" which contain functions
+            to convert the values from the VA to the Orsay Parameter and vice versa.
         :param (float or None) factor: Specifies a conversion factor between the value of the parameter and the value of
             the va, such that VA = factor * Parameter. factor is only used for float type va's (or tuples of floats) and
             only if conversion is None. If neither conversion nor factor is supplied, no special conversion is
@@ -1397,6 +1412,11 @@ class OrsayParameterConnector:
             dictates the maximum of the first parameter in parameters. Make sure to supply both minpar and maxpar, or
             neither, but never just one of the two.
         """
+        if (mapping, conversion_funcs, factor).count(None) < 2:
+            logging.warning("Received multiple inputs transforming the Orsay parameter value, only one the "
+                            "keyword arguments 'mapping, conversion_func and factor' should be defined.\n"
+                            "Using the first keyword argument in the order 'mapping, conversion_funcs, factor'.")
+
         # The following parameters will get their values below
         self._parameters = None  # list of parameters to connect to
         self._attr_name = None  # equal to attr_name argument, but None when not connected
@@ -1405,7 +1425,16 @@ class OrsayParameterConnector:
         self._va_value_type = None  # contains the type (int, float, str, etc.) of the va. If the va is a tuple, it
         # contains the type of the values contained in the tuple.
 
-        self._conversion = conversion
+        self._mapping = mapping
+        if conversion_funcs is not None:
+            if not isinstance(conversion_funcs,
+                              dict) or "par2va" not in conversion_funcs or "va2par" not in conversion_funcs:
+                raise ValueError("Incorrect value or type provided for the keyword argument conversion_funcs."
+                                 "Should be a dict containting the keys 'par2va' and 'va2par'")
+            elif not callable(conversion_funcs["par2va"]) or not callable(conversion_funcs["va2par"]):
+                raise ValueError("The dict for the conversion_funcs does not contain callable functions."
+                                 "The values for the keys 'par2va' and 'va2par' must be callable")
+        self._conversion_funcs = conversion_funcs
         self._minpar = minpar
         self._maxpar = maxpar
 
@@ -1447,6 +1476,8 @@ class OrsayParameterConnector:
         self._factor = None
         if self._va_value_type == float:
             self._factor = factor
+        else:
+            logging.warning("Cannot apply a conversion factor to a non int type VA")
 
         # If the VA has a range, check the Orsay server if a range of the parameter is specified and copy this range
         if hasattr(self._va, "range"):
@@ -1580,11 +1611,13 @@ class OrsayParameterConnector:
         :param (any) va_value: The value of the VA. Its type depends on the VA type
         :return (any): The corresponding value of the parameter. Type depends on the parameter type
         """
-        if self._conversion is not None:  # if a conversion dict is supplied
+        if self._mapping is not None:  # if a conversion dict is supplied
             try:
-                return self._conversion[va_value]
+                return self._mapping[va_value]
             except KeyError:
                 logging.warning("Conversion dictionary does not contain key %s, using it as-is.", va_value)
+        elif self._conversion_funcs is not None:
+            return self._conversion_funcs["va2par"](va_value)
         elif self._factor:
             return va_value / self._factor
         return va_value
@@ -1597,14 +1630,15 @@ class OrsayParameterConnector:
         :param (any) par_value: The value of the parameter. Its type depends on the parameter type. Often a string
         :return (any): The corresponding value of the VA. Type depends on the VA type
         """
-        if self._conversion is not None:  # if a conversion dict is supplied
-            for key, value in self._conversion.items():
+        if self._mapping is not None:  # if a conversion dict is supplied
+            for key, value in self._mapping.items():
                 if value == type(value)(par_value):
                     return key
             logging.warning("Conversion dictionary does not contain a key for value %s, using it as-is.", par_value)
-
-        # Assure that the returned value is of the same type as the VA, even if the par_value is a string
-        if self._va_value_type == float:
+        elif self._conversion_funcs is not None:
+            return self._conversion_funcs["par2va"](par_value)
+        elif self._va_value_type == float:
+            # Assure that the returned value is of the same type as the VA, even if the par_value is a string
             new_value = float(par_value)
             if self._factor:
                 new_value *= self._factor
@@ -1964,7 +1998,7 @@ class FIBSource(model.HwComponent):
         self._sourceCurrentConnector = None
         self.suppressorVoltage = model.FloatContinuous(0.0, unit="V", range=(-2e3, 2e3))
         self._suppressorVoltageConnector = None
-        self.acceleratorVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 3e4))
+        self.acceleratorVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 30e3))
         self._acceleratorVoltageConnector = None
         self.extractorVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 12e3))
         self._extractorVoltageConnector = None
@@ -1982,7 +2016,6 @@ class FIBSource(model.HwComponent):
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
-
         self._hvps = self.parent.datamodel.HVPSFloatingIon
         self._ionColumn = self.parent.datamodel.IonColumnMCS
 
@@ -1991,7 +2024,7 @@ class FIBSource(model.HwComponent):
         # self._hvps.HeaterState.Subscribe(self._updateHeater) # Note: Currently unused and unsafe
 
         self._gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
-                                                       conversion={True: "ON", False: "OFF"})
+                                                       mapping={True: "ON", False: "OFF"})
         self._lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime,
                                                           minpar=self._hvps.SourceLifeTime_Minvalue,
                                                           maxpar=self._hvps.SourceLifeTime_Maxvalue)
@@ -2004,11 +2037,12 @@ class FIBSource(model.HwComponent):
                                                                    minpar=self._hvps.Suppressor_Minvalue,
                                                                    maxpar=self._hvps.Suppressor_Maxvalue)
         self._acceleratorVoltageConnector = OrsayParameterConnector(self.acceleratorVoltage, self._hvps.Energy,
-                                                                    minpar=self._hvps.Energy_Minvalue,
-                                                                    maxpar=self._hvps.Energy_Maxvalue)
+                                                                  minpar=self._hvps.Energy_Minvalue,
+                                                                  maxpar=self._hvps.Energy_Maxvalue)
         self._extractorVoltageConnector = OrsayParameterConnector(self.extractorVoltage, self._hvps.Extractor,
                                                                   minpar=self._hvps.Extractor_Minvalue,
                                                                   maxpar=self._hvps.Extractor_Maxvalue)
+
         # Note: Currently unused and unsafe
         # self._heaterCurrentConnector = OrsayParameterConnector(self.heaterCurrent, self._hvps.Heater,
         #                                                        minpar=self._hvps.Heater_Minvalue,
@@ -2072,7 +2106,7 @@ class FIBSource(model.HwComponent):
     # def _changeHeater(self, goal):
     #     """
     #     Turns on the FIB source heater on the Orsay server if argument goal is True. Turns it off otherwise.
-    # 
+    #
     #     :param (bool) goal: Goal state of the heater: (True: "ON", False: "OFF")
     #     :return (bool): Goal state of the heater as set to the server: (True: "ON", False: "OFF")
     #     """
@@ -2116,13 +2150,13 @@ class FIBBeam(model.HwComponent):
         + imageFromSteerers: BooleanVA, True to image from Steerers, False to image from Octopoles
         + objectiveVoltage: FloatContinuous, unit="V", range=(0.0, 2e4)
         + beamShift: TupleContinuous Float, unit=m, range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
-        + horizontalFOV: FloatContinuous, unit="m", range=(0.0, 1.0)
+        + horizontalFov: FloatContinuous, unit="m", range=(0.0, 1.0)
         + measuringCurrent: BooleanVA
         + current: FloatContinuous, readonly, unit="A", range=(0.0, 1.0e-5)
         + videoDelay: FloatContinuous, unit="s", range=(0, 1e-3)
         + flybackTime: FloatContinuous, unit="s", range=(0, 1e-3)
         + blankingDelay:  FloatContinuous, unit="s", range=(0, 1e-3)
-        + rotation: FloatContinuous, unit="rad", range=(-pi, pi)
+        + rotation: FloatContinuous, unit="rad", range=(0, 2*pi)
         + dwellTime: FloatEnumerated, unit="s", choices=(1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7)
         + contrast: FloatContinuous, unit="", range=(0, 1)
         + brightness: FloatContinuous, unit="", range=(0, 1)
@@ -2177,8 +2211,8 @@ class FIBBeam(model.HwComponent):
         self._objectiveVoltageConnector = None
         self.beamShift = model.TupleContinuous((0.0, 0.0), unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)])
         self._beamShiftConnector = None
-        self.horizontalFOV = model.FloatContinuous(0.0, unit="m", range=(0.0, 1.0))
-        self._horizontalFOVConnector = None
+        self.horizontalFov = model.FloatContinuous(0.0, unit="m", range=(0.0, 1.0))
+        self._horizontalFovConnector = None
         self.measuringCurrent = model.BooleanVA(False)
         self._measuringCurrentConnector = None
         self.current = model.FloatContinuous(0.0, readonly=True, unit="A", range=(0.0, 1.0e-5))
@@ -2189,8 +2223,11 @@ class FIBBeam(model.HwComponent):
         self._flybackTimeConnector = None
         self.blankingDelay = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
         self._blankingDelayConnector = None
-        self.rotation = model.FloatContinuous(0.0, unit="rad", range=(-pi, pi))
+        self.rotation = model.FloatContinuous(0.0, unit="rad", range=(0, 2 * pi))
         self._rotationConnector = None
+        self._rot_conversion_functions = {
+            "va2par": util.wrap_to_mpi_ppi,
+            "par2va": lambda rotation: float(rotation) % (2 * math.pi)}
         self.dwellTime = model.FloatEnumerated(1e-7, unit="s",
                                                choices={1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7})
         self._dwellTimeConnector = None
@@ -2253,7 +2290,7 @@ class FIBBeam(model.HwComponent):
         self._sed = self.parent.datamodel.Sed
 
         self._blankerConnector = OrsayParameterConnector(self.blanker, self._ionColumn.BlankingState,
-                                                         conversion={True: "LOCAL", False: "OFF", None: "SOURCE"})
+                                                         mapping={True: "LOCAL", False: "OFF", None: "SOURCE"})
         self._blankerVoltageConnector = OrsayParameterConnector(self.blankerVoltage, self._ionColumn.BlankingVoltage,
                                                                 minpar=self._ionColumn.BlankingVoltage_Minvalue,
                                                                 maxpar=self._ionColumn.BlankingVoltage_Maxvalue)
@@ -2262,13 +2299,11 @@ class FIBBeam(model.HwComponent):
                                                                   maxpar=self._hvps.CondensorVoltage_Maxvalue)
         self._objectiveStigmatorConnector = OrsayParameterConnector(self.objectiveStigmator,
                                                                     [self._ionColumn.ObjectiveStigmatorX,
-                                                                     self._ionColumn.ObjectiveStigmatorY],
-                                                                    minpar=[
-                                                                        self._ionColumn.ObjectiveStigmatorX_Minvalue,
-                                                                        self._ionColumn.ObjectiveStigmatorY_Minvalue],
-                                                                    maxpar=[
-                                                                        self._ionColumn.ObjectiveStigmatorX_Maxvalue,
-                                                                        self._ionColumn.ObjectiveStigmatorY_Maxvalue])
+                                                                     self._ionColumn.ObjectiveStigmatorY], minpar=[
+                self._ionColumn.ObjectiveStigmatorX_Minvalue,
+                self._ionColumn.ObjectiveStigmatorY_Minvalue], maxpar=[
+                self._ionColumn.ObjectiveStigmatorX_Maxvalue,
+                self._ionColumn.ObjectiveStigmatorY_Maxvalue])
         self._intermediateStigmatorConnector = OrsayParameterConnector(self.intermediateStigmator,
                                                                        [self._ionColumn.IntermediateStigmatorX,
                                                                         self._ionColumn.IntermediateStigmatorY],
@@ -2294,9 +2329,8 @@ class FIBBeam(model.HwComponent):
                                                                       self._ionColumn.CondensorSteerer1ShiftY_Minvalue],
                                                               maxpar=[self._ionColumn.CondensorSteerer1ShiftX_Maxvalue,
                                                                       self._ionColumn.CondensorSteerer1ShiftY_Maxvalue])
-        self._steererTiltConnector = OrsayParameterConnector(self.steererTilt,
-                                                             [self._ionColumn.CondensorSteerer1TiltX,
-                                                              self._ionColumn.CondensorSteerer1TiltY],
+        self._steererTiltConnector = OrsayParameterConnector(self.steererTilt, [self._ionColumn.CondensorSteerer1TiltX,
+                                                                                self._ionColumn.CondensorSteerer1TiltY],
                                                              minpar=[self._ionColumn.CondensorSteerer1TiltX_Minvalue,
                                                                      self._ionColumn.CondensorSteerer1TiltY_Minvalue],
                                                              maxpar=[self._ionColumn.CondensorSteerer1TiltX_Maxvalue,
@@ -2315,11 +2349,11 @@ class FIBBeam(model.HwComponent):
                                                          minpar=self._ionColumn.ObjectiveXYRatio_Minvalue,
                                                          maxpar=self._ionColumn.ObjectiveXYRatio_Maxvalue)
         self._mirrorImageConnector = OrsayParameterConnector(self.mirrorImage, self._ionColumn.Mirror,
-                                                             conversion={True: -1, False: 1})
+                                                             mapping={True: -1, False: 1})
         # Note: Currently unused and unsafe
         # self._imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
         #                                                            self._ionColumn.ObjectiveScanSteerer,
-        #                                                            conversion={True: 1, False: 0})
+        #                                                            mapping={True: 1, False: 0})
         self._objectiveVoltageConnector = OrsayParameterConnector(self.objectiveVoltage, self._hvps.ObjectiveVoltage,
                                                                   minpar=self._hvps.ObjectiveVoltage_Minvalue,
                                                                   maxpar=self._hvps.ObjectiveVoltage_Maxvalue)
@@ -2329,26 +2363,26 @@ class FIBBeam(model.HwComponent):
                                                                    self._ionColumn.ObjectiveShiftY_Minvalue],
                                                            maxpar=[self._ionColumn.ObjectiveShiftX_Maxvalue,
                                                                    self._ionColumn.ObjectiveShiftY_Maxvalue])
-        self._horizontalFOVConnector = OrsayParameterConnector(self.horizontalFOV, self._ionColumn.ObjectiveFieldSize,
+        self._horizontalFovConnector = OrsayParameterConnector(self.horizontalFov, self._ionColumn.ObjectiveFieldSize,
                                                                minpar=self._ionColumn.ObjectiveFieldSize_Minvalue,
                                                                maxpar=self._ionColumn.ObjectiveFieldSize_Maxvalue)
         self._measuringCurrentConnector = OrsayParameterConnector(self.measuringCurrent, self._ionColumn.FaradayStart,
-                                                                  conversion={True: 1, False: 0})
+                                                                  mapping={True: 1, False: 0})
         self._currentConnector = OrsayParameterConnector(self.current, self._ionColumn.FaradayCurrent,
                                                          minpar=self._ionColumn.FaradayCurrent_Minvalue,
                                                          maxpar=self._ionColumn.FaradayCurrent_Maxvalue)
         self._videoDelayConnector = OrsayParameterConnector(self.videoDelay, self._ionColumn.VideoDelay)
         self._flybackTimeConnector = OrsayParameterConnector(self.flybackTime, self._ionColumn.FlybackTime)
         self._blankingDelayConnector = OrsayParameterConnector(self.blankingDelay, self._ionColumn.BlankingDelay)
-        self._rotationConnector = OrsayParameterConnector(self.rotation, self._ionColumn.ObjectiveScanAngle)
+        self._rotationConnector = OrsayParameterConnector(self.rotation, self._ionColumn.ObjectiveScanAngle,
+                                                          conversion_funcs=self._rot_conversion_functions)
         self._dwellTimeConnector = OrsayParameterConnector(self.dwellTime, self._ionColumn.PixelTime,
                                                            minpar=self._ionColumn.PixelTime_Minvalue,
                                                            maxpar=self._ionColumn.PixelTime_Maxvalue)
         self._contrastConnector = OrsayParameterConnector(self.contrast, self._sed.PMT, factor=0.01)
         self._brightnessConnector = OrsayParameterConnector(self.brightness, self._sed.Level, factor=0.01)
-        self._imagingModeConnector = OrsayParameterConnector(self.imagingMode,
-                                                             self._datamodel.Scanner.OperatingMode,
-                                                             conversion={True: 1, False: 0})
+        self._imagingModeConnector = OrsayParameterConnector(self.imagingMode, self._datamodel.Scanner.OperatingMode,
+                                                             mapping={True: 1, False: 0})
         # Subscribe to the parameter on the Orsay server
         self._ionColumn.ImageSize.Subscribe(self._updateImageFormat)
         self._ionColumn.ImageArea.Subscribe(self._updateTranslationResolution)
@@ -2481,7 +2515,7 @@ class FIBBeam(model.HwComponent):
         the image area, which is the format the Orsay server takes. The setter also adjusts the size of the image area
         (resolution VA) to prevent the new translation from placing part of the image area outside of the image format.
         """
-        with self.updatingImageArea:  # translation and resolution cannot be updated simultaniously
+        with self.updatingImageArea:  # translation and resolution cannot be updated simultaneously
             self.imageAreaUpdated.clear()
 
             new_translation = list(value)
@@ -2637,7 +2671,7 @@ class Light(model.Emitter):
             self._parameter.Unsubscribe(self._updatePower)
             self._parameter = None
 
-
+PRESET_MASK_NAME = "Odemis-preset-mask"
 class Scanner(model.Emitter):
     """
     Represents the Focused Ion Beam (FIB) from Orsay Physics.
@@ -2648,6 +2682,7 @@ class Scanner(model.Emitter):
     resolution is updated, when resolution is changed, the translation is recentered
     etc. Similarly it subscribes to the VAs of scale and magnification in order
     to update the pixel size.
+
     """
 
     def __init__(self, name, role, parent, **kwargs):
@@ -2655,22 +2690,327 @@ class Scanner(model.Emitter):
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • power: IntEnumerated, choices={0: "off", 1: "on"}
         • blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
+        • horizontalFov: FloatContinuous, unit="m", range=(0.0, 1.0)
+        • scale: VAEnumerate, choices={(1.0, 1.0), (2.0, 2.0)}
+        • resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
+        • translation: TupleContinuous Float, unit="px", range=[(-512.0, -512.0), (512.0, 512.0)]
+        • rotation: FloatContinuous, unit="rad", range=(0, 2*pi)
+        • acceleratorVoltage: FloatContinuous, unit="V", range=(0.0, 3e4)
+        • dwellTime: FloatEnumerated, unit="s", choices=(1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7)
+        • pixelSize: TupleContinuous, unit="m", range=((0.0, 0.0), (1 / 1024, 1 / 1024)))
         """
-
         super().__init__(name, role, parent=parent, **kwargs)
+        self._shape = (1024, 1024)
 
+        if not hasattr(self.parent, "_fib_beam"):
+            raise ValueError(f"To create a Orsay scanner component the parent should also have the FIBBeam child.")
         self._fib_beam = self.parent._fib_beam  # reference to the FIBBeam object
+
+        if not hasattr(self.parent, "_fib_source"):
+            raise ValueError(f"To create a Orsay scanner component the parent should also have the FIBSource child.")
         self._fib_source = self.parent._fib_source  # reference to the FIBSource object
-        # In case there is no such sibling, let it raise an exception
 
         self.blanker = self._fib_beam.blanker
         self.power = self._fib_source.gunOn
+
+        self.horizontalFov = self._fib_beam.horizontalFov
+        self.scale = model.VAEnumerated((self.shape[0] / self._fib_beam.imageFormat.value[0],
+                                         self.shape[1] / self._fib_beam.imageFormat.value[1]),
+                                        unit="", choices={(1.0, 1.0), (2.0, 2.0)},
+                                        setter=self._setScale)
+        self._fib_beam.imageFormat.subscribe(self._listenerImageFormat)  # Subscribe to update the scale when the image format changes.
+
+        self.resolution = self._fib_beam.resolution
+        self.translation = self._fib_beam.translation
+
+        self.rotation = self._fib_beam.rotation
+        self.accelVoltage = self._fib_source.acceleratorVoltage
+
+        self.dwellTime = self._fib_beam.dwellTime
+        self.pixelSize = model.VigilantAttribute((self._fib_beam.horizontalFov.value / self.shape[0],
+                                                  self._fib_beam.horizontalFov.value / self.shape[1]),
+                                                  unit="m", readonly=True)
+        # Update the pixel size in
+        self.scale.subscribe(self._updatePixelSize)
+        self._fib_beam.horizontalFov.subscribe(self._updatePixelSize, init=True)
+
+        # Find all available presets:
+        self.presetData = self.getAllPresetData()
+
+        # Create a preset mask with only the relevant parameters for the presets.
+        relevant_parameters = (self.parent.datamodel.HybridAperture.SelectedDiaph,
+                               self.parent.datamodel.HybridAperture.XPosition,
+                               self.parent.datamodel.HybridAperture.YPosition,
+                               self.parent.datamodel.HVPSFloatingIon.CondensorVoltage,
+                               self.parent.datamodel.HVPSFloatingIon.ObjectiveVoltage,
+                               self.parent.datamodel.IonColumnMCS.ObjectiveStigmatorX,
+                               self.parent.datamodel.IonColumnMCS.ObjectiveStigmatorY,
+                               self.parent.datamodel.Sed.PMT,
+                               self.parent.datamodel.Sed.Level,
+                               )
+        # In case the preset mask already exist it is automatically overwritten.
+        self.parent.preset_manager.CreatePresetMask(PRESET_MASK_NAME, *relevant_parameters)
+
+        # TODO K.K. The specs of the high level aperture/preset describe the implementation of the probe current Use the
+        #  currently selected preset and combine with the faraday cup measurements and make an attribute/VA of the
+        #  probe current
 
     def terminate(self):
         """
         Called when Odemis is closed
         """
         pass
+
+    def getAllPresetData(self):
+        """
+        Retrieves presets from the Orsay server which allows to set a specified probe current. It retrieves for each
+        preset the settings aperture_number and condensor_voltage. And deduces the matching probe current for these
+        settings via the name of the preset. The preset name should be formated as follows: CURRENTpA_EXTRA_INFO (
+        e.g. '20pA_20um25200V').
+        :return (dict with dicts): Contains the probe current which have a matching presets and a ditch with the
+                                   matching the preset_name, aperture number, and condenser voltage as value.
+                                     {current1: {"name1": name1, "aperture_number1": aperture_number1,
+                                      "condenser_voltage1": condenser_voltage1}, current2: {"name2": name2, etc.
+        """
+        preset_data = {}
+        for preset in self.parent.preset_manager.GetAllPresets().iter("Preset"):
+            preset_name = preset.get("name")
+            if "_" not in preset_name:
+                logging.warning(f"The preset {preset_name} could not not be converted for use in Odemis. It "
+                                f"missed the necessary formatting. Presets naming for the probe current should be "
+                                f"formatted as follows: CURRENTpA_EXTRA_INFO (e.g. '20pA_20um25200V')")
+                continue
+            full_preset = self.parent.preset_manager.GetPreset(preset.get("name"))
+            current = preset_name[:preset_name.find("_")]
+
+            try:
+                preset_data.update({current:
+                                            {"name": preset_name,
+                                             "aperture_number": self._getApertureNmbrFromPreset(full_preset),
+                                             "condenser_voltage": self._getCondenserVoltageFromPreset(full_preset)}})
+            except LookupError as ex:
+                logging.warning(f"Failed to import preset {preset_name} due to missing required setting.", ex)
+        return preset_data
+
+    def getPresetSetting(self, preset, sub_comp, setting, tag="Target"):
+        """
+        Get a setting from a preset XML ElementTree
+
+        :param preset (xml.etree.ElementTree.Element): Full preset XML ElementTree including sub elements with all sub
+        components
+        :param sub_comp (str): Name of the sub component
+        :param setting (str): Name of the parameter with the setting
+        :param tag (str): tag specifying the value to obtain (Most likely 'Target' or for example 'Max', 'Min',
+        'AtTarget', 'Tolerance')
+        :return (None/Str): Value found for the setting and None if no value is found.
+        """
+        for c in preset:
+            # Only interested in presets which actually defined the right component
+            if c.get("Name") == sub_comp:
+                for s in c:
+                    if s.get("Name") == setting:
+                        for t in s:
+                            if t.tag == tag:
+                                return t.text
+        else:
+            logging.warning(f"Did not find any value for the preset {preset}, with component {sub_comp} "
+                            f"and the setting {setting} using the tag {tag}.")
+            return None
+
+    def _getApertureNmbrFromPreset(self, preset):
+        """
+        Get the aperture number from a given preset.
+
+        :param preset (xml.etree.ElementTree.Element): Full preset XML ElementTree including sub elements with all sub
+        components
+        :return (str): Value found for the setting
+        :raises LookupError if no condenser voltage is found for a preset
+        """
+        aperture_number = self.getPresetSetting(preset, 'HybridAperture', "SelectedDiaph", tag="Target")
+        if aperture_number:
+            return int(aperture_number)
+        else:
+            raise LookupError(f"No aperture number preset found, None type was returned.")
+
+    def _getCondenserVoltageFromPreset(self, preset):
+        """
+        Get the condenser voltage from a given preset.
+
+        :param preset (xml.etree.ElementTree.Element): Full preset XML ElementTree including sub elements with all sub
+        components
+        :return (str): Value found for the setting
+        :raises LookupError if no condenser voltage is found for a preset
+        """
+        condenser_voltage = self.getPresetSetting(preset, 'HVPSFloatingIon', "CondensorVoltage", tag="Target")
+        if condenser_voltage:
+            return float(condenser_voltage)
+        else:
+            raise LookupError(f"No condenser voltage preset found, None type was returned.")
+
+    def _listenerImageFormat(self, image_format):
+        scale = (self.shape[0] / image_format[0],
+                self.shape[1] / image_format[1])
+        if scale != self.scale.value:
+            self.scale._value = scale  # Don't call the setter
+            self.scale.notify(scale)  # Do inform all the subscribers.
+
+    def _setScale(self, scale):
+        self.parent._fib_beam.imageFormat.value = (self.shape[0] / scale[0],
+                                                   self.shape[1] / scale[1])
+        return scale
+
+    def _updatePixelSize(self, _):
+        """
+        Updates the pixel size VA and the pixel size metadata
+        """
+        self.pixelSize._set_value((self._fib_beam.horizontalFov.value/self.shape[0],
+                                   self._fib_beam.horizontalFov.value / self.shape[1]), force_write=True)
+        self._metadata[MD_PIXEL_SIZE] = self.pixelSize.value
+
+class Detector(model.Detector):
+    """
+    Represents the sensor for acquiring the image data.
+    """
+    SHAPE = (16384,)
+
+    def __init__(self, name, role, parent, **kwargs):
+        super(Detector, self).__init__(name, role, parent=parent, **kwargs)
+
+        if not hasattr(self.parent, "_fib_beam"):
+            raise ValueError(f"To create a Orsay Detector component the parent should also have the FIBBeam child.")
+        self._fib_beam = self.parent._fib_beam  # reference to the FIBBeam object
+
+        if not hasattr(self.parent, "_scanner"):
+            raise ValueError(f"To create a Orsay Detector component the parent should also have the scanner child.")
+        self._scanner = self.parent._scanner  # reference to the scanner object
+
+        self.contrast = self._fib_beam.contrast
+        self.brightness = self._fib_beam.brightness
+
+        self.data = Dataflow(self, self._fib_beam)
+
+    def receiveLatestImage(self):
+        """
+        Acquires the latest image from the Orsay server and converts it to a data array with type uint 16
+        :return (DataArray): Latest image acquired
+        """
+        metadata = self._metadata.copy()
+        metadata.update(self._scanner._metadata)
+        # TODO check if the estimate for MD_ACQ_DATE can be improved
+        scanning_time = self._scanner.dwellTime.value * self._scanner.resolution.value[0] * self._scanner.resolution.value[1]
+        metadata[model.MD_ACQ_DATE] = time.time() - scanning_time
+        image = self.parent.datamodel.Miss.AcquireFullImageScanOne()
+        decomposed_byte_image = numpy.frombuffer(image, dtype=numpy.uint16)
+        image_size = (int(len(decomposed_byte_image)**0.5), int(len(decomposed_byte_image)**0.5)) # Assume images are square
+        uint16image = decomposed_byte_image.reshape(image_size)
+
+        return model.DataArray(uint16image, metadata)
+
+
+class Dataflow(model.DataFlow):
+    """
+    Represents image acquisition using the Orsay server.
+    """
+
+    def __init__(self, detector, fib_beam):
+        super().__init__(self)
+        self._detector = detector
+        self._fib_beam = fib_beam
+        self._datamodel = detector.parent.datamodel
+
+    def start_generate(self):
+        self._datamodel.Miss.ImageTrackingNumberScanOne.Subscribe(self._listenerImageTrackNumber)
+        self._fib_beam.imagingMode.value = True
+
+    def stop_generate(self):
+        self._fib_beam.imagingMode.value = False
+        self._datamodel.Miss.ImageTrackingNumberScanOne.Unsubscribe(self._listenerImageTrackNumber)
+
+    # TODO Currently if two times .get(asap=False) is called consecutive the first call will stop the imaging meaning
+    #  the second runs into a timeout. For asap=True this is not a problem because it uses the next image available.
+    #  An implementation direction for a fix for this would be to move all the behaviour in the get method to
+    #  start/stop_generate. By using the parent class get method automatically the class deals with other subscribers.
+    def get(self, asap=True):
+        # The server increases ImageTrackingNumberScanOne by 1 every time it *starts* a scan
+        init_img_nbr = int(self._datamodel.Miss.ImageTrackingNumberScanOne.Actual)
+
+        if asap and self._fib_beam.imagingMode.value:
+            # If we want the next image (ASAP), and the FIB is already scanning, we just need to
+            # wait until the next image start to know that the current image is ready
+            goal_image_nbr = init_img_nbr + 1
+        else:
+            # Either the system is not scanning, or we want an image that will be started after now.
+            # In this case, starting the acquisition (or completing the current scan) will increase the image
+            # number by 1, and the start of the second image indicates the image is fully acquired.
+            goal_image_nbr = init_img_nbr + 2
+        logging.debug("Starting acquisition with im number %s, will wait until %s", init_img_nbr, goal_image_nbr)
+        is_received = threading.Event()
+
+        def wait_single_image_acq(parameter=None, attributeName="Actual"):
+            """
+            Callback function for the Orsay server parameter "ImageTrackingNumberScanOne". Stops the acquisition
+            after acquiring a full image after the first callback. Because the ImageTrackingNumberScanOne bumps
+            at the start of a scan, and because of some hardware peculiarities when scanning a full image scan, a
+            fully scanned image with the latest dwell time can only be guaranteed when the image is scanned for
+            the second time.
+
+            :param parameter: "Required by the Orsay Server"
+            :param attributeName: "Required by the Orsay Server"
+            """
+            if parameter is None or attributeName != "Actual":
+                return
+
+            current_img_nbr = int(parameter.Actual)
+            logging.debug("Image number incremented to %d", current_img_nbr)
+
+            # The hardware acquired only a full image if the ImageTrackingNumberScanOne has increased by at least 1
+            if current_img_nbr >= goal_image_nbr:
+                self._datamodel.Miss.ImageTrackingNumberScanOne.Unsubscribe(wait_single_image_acq)
+                is_received.set()
+
+                # TODO: implement to only stop if there are no other subscribers
+                self._fib_beam.imagingMode.value = False
+                logging.debug("Image number %d received, completing the acquisition", current_img_nbr)
+
+
+        self._datamodel.Miss.ImageTrackingNumberScanOne.Subscribe(wait_single_image_acq)
+        self._fib_beam.imagingMode.value = True  # Start the acquisition
+
+        # Check scanning started after turning the scanner on, otherwise restart the scanning process and try again.
+        time.sleep(0.3)
+        for _ in range(5):
+            time.sleep(0.1)
+            if int(self._datamodel.Miss.ImageTrackingNumberScanOne.Actual) == init_img_nbr:
+                logging.debug("Acquisition didn't start, retrying acquisition")
+                self._fib_beam.imagingMode.value = False
+                time.sleep(1)
+                self._fib_beam.imagingMode.value = True
+                time.sleep(0.3)
+
+        # Wait at least for 60 seconds or 150% of the scanning time with the maximum resolution.
+        # 60 seconds might seem long but this is needed for simulator for any image with a dwell time > 1um s
+        time_out = max(60, self._fib_beam.dwellTime.value * 1024**2 * 1.5)
+        if not is_received.wait(timeout=time_out):
+            self._fib_beam.imagingMode.value = False  # Stop imaging
+            raise TimeoutError(f"The scanning process didn't finish within the expected time. Try restarting the "
+                               f"server. With the time out {time_out} s.")
+        return self._detector.receiveLatestImage()  # Return the acquired image
+
+    def _listenerImageTrackNumber(self, parameter=None, attributeName="Actual"):
+        """
+        Callback function for the Orsay server parameter "ImageTrackingNumberScanOne".
+        Notifies all subscribed listeners with the latest image.
+
+        :param parameter: "Required by the Orsay Server"
+        :param attributeName: "Required by the Orsay Server"
+        """
+        if parameter is None or attributeName != "Actual":
+            return
+        try:
+            image = self._detector.receiveLatestImage()
+        except Exception:  # Make sure the listener is not desubscribed when it fails.
+            logging.exception("Failed to receive the latest image.")
+        self.notify(image)
 
 
 class Focus(model.Actuator):
@@ -2843,7 +3183,7 @@ class FIBAperture(model.Actuator):
         self._updatePosition()
         for connector in get_orsay_param_connectors(self):
             connector.update_VA()
-            
+
         self.connectApertureDict()
         self._referencedListener()
 
@@ -2903,7 +3243,7 @@ class FIBAperture(model.Actuator):
             # Subscribe to and update the value Lifetime
             param = recursive_getattr(self._hybridAperture, f"Aperture{aprtr_nmbr}.Lifetime")
             self._addApertureListener(aprtr_nmbr, "Lifetime", param)
-            
+
             # Subscribe to and update the value Size
             param = recursive_getattr(self._hybridAperture, f"Aperture{aprtr_nmbr}.Size")
             self._addApertureListener(aprtr_nmbr, "Size", param)
