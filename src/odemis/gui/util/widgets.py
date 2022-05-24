@@ -254,7 +254,7 @@ class AxisConnector(object):
         logging.debug("Disconnecting AxisConnector")
         if self.value_ctrl:
             for event in self.change_events:
-                self.value_ctrl.Unbind(event, self._on_value_change)
+                self.value_ctrl.Unbind(event, handler=self._on_value_change)
         self.comp.position.unsubscribe(self._on_pos_change)
 
 
