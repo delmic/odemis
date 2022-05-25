@@ -335,9 +335,13 @@ class CalibrationTask(object):
             self.asm_config["multibeam"]["scanAmplitude"] = s_amplitude
 
         elif calibration == Calibrations.CELL_TRANSLATION:
-            translation = calibration.value.run(self._scanner, self._multibeam, self._descanner, self._detector,
-                                                self._dataflow, plot_cell_translation=True)
+            translation, resolution, cell_complete_resolution = calibration.value.run(self._scanner, self._multibeam,
+                                                                                      self._descanner, self._detector,
+                                                                                      self._dataflow,
+                                                                                      plot_cell_translation=True)
             self.asm_config["mppc"]["cellTranslation"] = translation
+            self.asm_config["multibeam"]["resolution"] = resolution
+            self.asm_config["mppc"]["cellCompleteResolution"] = cell_complete_resolution
 
         else:
             raise ValueError(f"Unknown calibration {calibration.name}.")
