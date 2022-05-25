@@ -1093,6 +1093,84 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.start_auto_lens_centering_flash()
 
+    def set_contrast(self, contrast, channel_name='electron1'):
+        """
+        Set the contrast of the scanned image to a specified factor.
+
+        Parameters
+        ----------
+        contrast: float
+            Value the brightness should be set to as a factor between 0 and 1.
+        channel_name: str
+            Name of one of the electron channels.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.set_contrast(contrast, channel_name)
+
+    def get_contrast(self, channel_name='electron1'):
+        """
+        Get the contrast of the scanned image.
+
+        Parameters
+        ----------
+        channel_name: str
+            Name of one of the electron channels.
+
+        Returns
+        -------
+        contrast: float
+            Returns value of current contrast as a factor between 0 and 1.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_contrast(channel_name)
+
+    def contrast_info(self):
+        """Returns the contrast unit [-] and range [0, 1]."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.contrast_info()
+
+    def set_brightness(self, brightness, channel_name='electron1'):
+        """
+        Set the brightness of the scanned image to a specified factor.
+
+        Parameters
+        ----------
+        brightness: float
+            Value the brightness should be set to as a factor between 0 and 1.
+        channel_name: str
+            Name of one of the electron channels.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.set_brightness(brightness, channel_name)
+
+    def get_brightness(self, channel_name='electron1'):
+        """
+        Get the brightness of the scanned image.
+
+        Parameters
+        ----------
+        channel_name: str
+            Name of one of the electron channels.
+
+        Returns
+        -------
+        brightness: float
+            Returns value of current brightness as a factor between 0 and 1.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.get_brightness(channel_name)
+
+    def brightness_info(self):
+        """Returns the brightness unit [-] and range [0, 1]."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.brightness_info()
+
 
 class Scanner(model.Emitter):
     """
@@ -1417,66 +1495,6 @@ class Scanner(model.Emitter):
         self.parent.set_scan_mode(scan_mode)
         return external
 
-    @isasync
-    def applyAutoContrastBrightness(self, detector):
-        """
-        Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It
-        automatically sets the contrast and the brightness via XT, the beam must be turned on and unblanked. Auto
-        contrast brightness functionality works best if there is a feature visible in the image. This call is
-        non-blocking.
-
-        :param detector (str): Role of the detector.
-        :return: Future object
-
-        """
-        # Create ProgressiveFuture and update its state
-        est_start = time.time() + 0.1
-        f = ProgressiveFuture(start=est_start,
-                              end=est_start + 20)  # Rough time estimation
-        f._auto_contrast_brighness_lock = threading.Lock()
-        f._must_stop = threading.Event()  # Cancel of the current future requested
-        f.task_canceller = self._cancelAutoContrastBrightness
-        f._channel_name = self.channel
-        return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
-
-    def _applyAutoContrastBrightness(self, future):
-        """
-        Starts applying auto contrast brightness and checks if the process is finished for the ProgressiveFuture object.
-        :param future (Future): the future to start running.
-        """
-        channel_name = future._channel_name
-        with future._auto_contrast_brighness_lock:
-            if future._must_stop.is_set():
-                raise CancelledError()
-            self.parent.set_auto_contrast_brightness(channel_name, XT_RUN)
-            time.sleep(0.5)  # Wait for the auto contrast brightness to start
-
-        # Wait until the microscope is no longer performing auto contrast brightness
-        while self.parent.is_running_auto_contrast_brightness(channel_name):
-            future._must_stop.wait(0.1)
-            if future._must_stop.is_set():
-                raise CancelledError()
-
-    def _cancelAutoContrastBrightness(self, future):
-        """
-        Cancels the auto contrast brightness. Non-blocking.
-        :param future (Future): the future to stop.
-        :return (bool): True if it successfully cancelled (stopped) the move.
-        """
-        future._must_stop.set()  # Tell the thread taking care of auto contrast brightness it's over.
-
-        with future._auto_contrast_brighness_lock:
-            logging.debug("Cancelling auto contrast brightness")
-            try:
-                self.parent.set_auto_contrast_brightness(future._channel_name, XT_STOP)
-                return True
-            except OSError as error_msg:
-                logging.warning("Failed to cancel auto brightness contrast: %s", error_msg)
-                return False
-
-    def prepareForScan(self):
-        pass
-
 
 class FibScanner(model.Emitter):
     """
@@ -1547,8 +1565,27 @@ class Detector(model.Detector):
         else:
             raise ValueError("No Scanner available")
 
+        brightness_info = self.parent.brightness_info()
+        self.brightness = model.FloatContinuous(
+            self.parent.get_brightness(),
+            brightness_info["range"],
+            unit=brightness_info["unit"],
+            setter=self._setBrightness)
+
+        contrast_info = self.parent.contrast_info()
+        self.contrast = model.FloatContinuous(
+            self.parent.get_contrast(),
+            contrast_info["range"],
+            unit=contrast_info["unit"],
+            setter=self._setContrast)
+
         self._genmsg = queue.Queue()  # GEN_*
         self._generator = None
+
+        # Refresh regularly the values, from the hardware, starting from now
+        self._updateSettings()
+        self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling detector")
+        self._va_poll.start()
 
     def terminate(self):
         if self._generator:
@@ -1740,6 +1777,83 @@ class Detector(model.Detector):
             self._scanner = self.parent._fib_scanner
 
         return scanner_name
+
+    def _updateSettings(self):
+        """
+        Reads all the current settings from the Detector and reflects them on the VAs
+        """
+        brightness = self.parent.get_brightness(self._scanner.channel)
+        if brightness != self.brightness.value:
+            self.brightness._value = brightness
+            self.brightness.notify(brightness)
+        contrast = self.parent.get_contrast(self._scanner.channel)
+        if contrast != self.contrast.value:
+            self.contrast._value = contrast
+            self.contrast.notify(contrast)
+
+    def _setBrightness(self, brightness):
+        self.parent.set_brightness(brightness, self._scanner.channel)
+        return self.parent.get_brightness(self._scanner.channel)
+
+    def _setContrast(self, contrast):
+        self.parent.set_contrast(contrast, self._scanner.channel)
+        return self.parent.get_contrast(self._scanner.channel)
+
+    @isasync
+    def applyAutoContrastBrightness(self):
+        """
+        Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It
+        automatically sets the contrast and the brightness via XT, the beam must be turned on and unblanked. Auto
+        contrast brightness functionality works best if there is a feature visible in the image. This call is
+        non-blocking.
+
+        :return: Future object
+
+        """
+        # Create ProgressiveFuture and update its state
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 20)  # Rough time estimation
+        f._auto_contrast_brightness_lock = threading.Lock()
+        f._must_stop = threading.Event()  # Cancel of the current future requested
+        f.task_canceller = self._cancelAutoContrastBrightness
+        f._channel_name = self._scanner.channel
+        return self._scanner._executor.submitf(f, self._applyAutoContrastBrightness, f)
+
+    def _applyAutoContrastBrightness(self, future):
+        """
+        Starts applying auto contrast brightness and checks if the process is finished for the ProgressiveFuture object.
+        :param future (Future): the future to start running.
+        """
+        channel_name = future._channel_name
+        with future._auto_contrast_brightness_lock:
+            if future._must_stop.is_set():
+                raise CancelledError()
+            self.parent.set_auto_contrast_brightness(channel_name, XT_RUN)
+            time.sleep(0.5)  # Wait for the auto contrast brightness to start
+
+        # Wait until the microscope is no longer performing auto contrast brightness
+        while self.parent.is_running_auto_contrast_brightness(channel_name):
+            future._must_stop.wait(0.1)
+            if future._must_stop.is_set():
+                raise CancelledError()
+
+    def _cancelAutoContrastBrightness(self, future):
+        """
+        Cancels the auto contrast brightness. Non-blocking.
+        :param future (Future): the future to stop.
+        :return (bool): True if it successfully cancelled (stopped) the move.
+        """
+        future._must_stop.set()  # Tell the thread taking care of auto contrast brightness it's over.
+
+        with future._auto_contrast_brightness_lock:
+            logging.debug("Cancelling auto contrast brightness")
+            try:
+                self.parent.set_auto_contrast_brightness(future._channel_name, XT_STOP)
+                return True
+            except OSError as error_msg:
+                logging.warning("Failed to cancel auto brightness contrast: %s", error_msg)
+                return False
 
 
 # Very approximate values
@@ -2107,8 +2221,8 @@ class Focus(model.Actuator):
         out of focus, an incorrect focus can be found using the autofocus functionality.
         This call is non-blocking.
 
-        :param detector (str): Role of the detector.
-        :param state (str):  "run", or "stop"
+        :param detector: (model.Detector)
+            Detector component that stores information about which channel to use for autofocusing.
         :return: Future object
         """
         # Create ProgressiveFuture and update its state
@@ -2118,7 +2232,7 @@ class Focus(model.Actuator):
         f._autofocus_lock = threading.Lock()
         f._must_stop = threading.Event()  # cancel of the current future requested
         f.task_canceller = self._cancelAutoFocus
-        f._channel_name = self.parent._scanner.channel
+        f._channel_name = detector._scanner.channel
         return self._executor.submitf(f, self._applyAutofocus, f)
 
     def _applyAutofocus(self, future):
@@ -2587,6 +2701,10 @@ class XTTKFocus(Focus):
     def applyAutofocus(self, detector):
         """
         Wrapper for autofocus flash function, non-blocking.
+
+        :param detector: (model.Detector)
+            The detector is unused for XTTK focusing, because it is not possible to select a channel for flash focusing.
+        :return: Future object
         """
         est_start = time.time() + 0.1
         f = ProgressiveFuture(start=est_start,

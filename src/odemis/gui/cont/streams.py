@@ -1380,7 +1380,7 @@ class StreamController(object):
         self.stream_panel.Enable(False)
         self.pause()
         self.pauseStream()
-        f = self.stream.emitter.applyAutoContrastBrightness(self.stream.detector)
+        f = self.stream.detector.applyAutoContrastBrightness()
         f.add_done_callback(self._on_autofunction_done)
 
     @call_in_wx_main
