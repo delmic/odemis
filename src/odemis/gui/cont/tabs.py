@@ -2742,7 +2742,20 @@ class CryoChamberTab(Tab):
         """
         root_dir = os.path.dirname(self.conf.pj_last_path)
         np = create_projectname(root_dir, self.conf.pj_ptn, count=self.conf.pj_count)
-        os.mkdir(np)
+        try:
+            os.mkdir(np)
+        except OSError:
+            # If for some reason it's not possible to create the new folder, for
+            # example because it's on a remote folder which is not connected anymore,
+            # don't completely fail, but just try something safe.
+            logging.exception("Failed to create expected project folder %s, will fallback to default folder", np)
+            pj_last_path = self.conf.default.get("project", "pj_last_path")
+            root_dir = os.path.dirname(pj_last_path)
+            pj_ptn = self.conf.default.get("project", "pj_ptn")
+            pj_count = self.conf.default.get("project", "pj_count")
+            np = create_projectname(root_dir, pj_ptn, count=pj_count)
+            os.mkdir(np)
+
         self._change_project_conf(np)
 
     def _reset_project_data(self):
