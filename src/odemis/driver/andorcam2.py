@@ -22,16 +22,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 from __future__ import division
 
-from past.builtins import basestring
 from ctypes import *
 import ctypes  # for fake AndorV2DLL
 import gc
 import logging
+import math
 import numpy
 from odemis import model, util, dataio
 from odemis.model import HwError, oneway
 from odemis.util import img
 import os
+from past.builtins import basestring
 import queue
 import random
 import sys
@@ -1723,14 +1724,26 @@ class AndorCam2(model.DigitalCamera):
             return max_size
 
         # smaller than the whole sensor
-        size = (min(size_req[0], max_size[0]), min(size_req[1], max_size[1]))
+        size = [min(size_req[0], max_size[0]), min(size_req[1], max_size[1])]
 
         # bigger than the minimum
-        min_spixels = c_int()
-        self.atcore.GetMinimumImageLength(byref(min_spixels))
-        size = (max(min_spixels.value, size[0]), max(min_spixels.value, size[1]))
+        min_pixels = c_int()
+        self.atcore.GetMinimumImageLength(byref(min_pixels))
+        if size[0] * size[1] < min_pixels.value:
+            logging.info("Increasing resolution %s as camera must send at least %d pixels",
+                         size, min_pixels.value)
+            # Increase horizontally first (arbitrarily)
+            size[0] = min(math.ceil(min_pixels.value / size[1]), max_size[0])
 
-        return size
+            # Increase vertically (if still needed)
+            if size[0] * size[1] < min_pixels.value:
+                size[1] = min(math.ceil(min_pixels.value / size[0]), max_size[1])
+
+                if size[0] * size[1] < min_pixels.value:
+                    raise ValueError(f"Impossible to find a resolution large enough "
+                                     f"with binning {self._binning} to get {min_pixels.value} pixels")
+
+        return tuple(size)
 
     def setExposureTime(self, value):
         """
