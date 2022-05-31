@@ -117,8 +117,14 @@ class TestUnits(unittest.TestCase):
         values = [((1.0,), "1 second"),
                   ((0,), "0 second"),
                   ((3601,), "1 hour and 1 second"),
-                  ((12.350,), "12 seconds and 350 ms"),
+                  ((12.350,), "12 seconds and 350 milliseconds"),
+                  ((12.3501,), "12 seconds, 350 milliseconds and 100 microseconds"),
+                  ((1e-6,), "1 microsecond"),
+                  ((12 + 50e-6,), "12 seconds and 50 microseconds"),
                   ((3 * 24 * 60 * 60 + 12 * 60,), "3 days and 12 minutes"),
+                  ((12 + 50e-6, False), "12 s and 50 µs"),
+                  ((3 * 24 * 60 * 60 + 12 * 60, False), "3 d and 12 min"),
+                  ((1e-6, False), "1 µs"),
                   ]
         for (i, eo) in values:
             o = units.readable_time(*i)
