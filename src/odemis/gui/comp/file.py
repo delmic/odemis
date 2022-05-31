@@ -94,6 +94,7 @@ class FileBrowser(wx.Panel):
         box = wx.BoxSizer(wx.HORIZONTAL)
 
         self.text_ctrl = wx.TextCtrl(self, style=wx.BORDER_NONE | wx.TE_READONLY)
+        self.text_ctrl.MinSize = (-1, 20)
         self.text_ctrl.SetForegroundColour(odemis.gui.FG_COLOUR_EDIT)
         self.text_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_MAIN)
         self.text_ctrl.Bind(wx.EVT_TEXT, self.on_changed)

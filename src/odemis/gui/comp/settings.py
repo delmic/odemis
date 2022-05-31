@@ -150,14 +150,16 @@ class SettingsPanel(wx.Panel):
             if selectable:
                 value_ctrl = wx.TextCtrl(self, value=value,
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
+                value_ctrl.MinSize = (-1, 20)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                                  flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+                                  flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
             else:
                 value_ctrl = wx.StaticText(self, label=value)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
-                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), flag=wx.ALL, border=5)
+                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                                  flag=wx.BOTTOM | wx.TOP, border=5)
         else:
             value_ctrl = None
 
@@ -178,13 +180,15 @@ class SettingsPanel(wx.Panel):
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = wx.TextCtrl(self, value=str(value or ""),
                                  style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE | (wx.TE_READONLY if readonly else 0))
+        value_ctrl.MinSize = (-1, 20)
+
         if readonly:
             value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
         else:
             value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
         self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
-                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+                          flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         return lbl_ctrl, value_ctrl
 
@@ -351,7 +355,7 @@ class SettingsPanel(wx.Panel):
 
         self.gb_sizer.Add(value_ctrl,
                           (self.num_rows, 1),
-                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+                          flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
                           border=5)
 
         return lbl_ctrl, value_ctrl
