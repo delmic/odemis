@@ -3361,7 +3361,7 @@ class AnalysisTab(Tab):
                                message="Choose a file to load",
                                defaultDir=path,
                                defaultFile="",
-                               style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST,
+                               style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE,
                                wildcard=wildcards)
 
         # Show the dialog and check whether is was accepted or cancelled
@@ -3369,16 +3369,17 @@ class AnalysisTab(Tab):
             return False
 
         # Detect the format to use
-        filename = os.fsdecode(dialog.GetPath())
-        if extend:
-            logging.debug("Extending the streams with file %s", filename)
-        else:
-            logging.debug("Current file set to %s", filename)
-
         fmt = formats[dialog.GetFilterIndex()]
 
-        # popup.show_message(self.main_frame, "Opening file")
-        self.load_data(filename, fmt, extend=extend)
+        for filename in dialog.GetPaths():
+            if extend:
+                logging.debug("Extending the streams with file %s", filename)
+            else:
+                logging.debug("Current file set to %s", filename)
+
+            self.load_data(filename, fmt, extend=extend)
+            extend = True  # If multiple files loaded, the first one is considered main one
+
         return True
 
     def on_file_open_button(self, _):
