@@ -93,7 +93,7 @@ def transform_coordinates(value, xlower, xupper, ylower, yupper):
     """
     value = (value[0] * 1e6, value[1] * 1e6)  # value in µm
 
-    # This transformation was provided as example code from Thermofischer (the variable names are slightly modified
+    # This transformation was provided as example code from ThermoFisher (the variable names are slightly modified
     # to fit the coding style of this driver, the rest of the calculation is identical).
     dc_xupper = value[0] * xupper[0] + value[1] * yupper[0]
     dc_xlower = value[0] * xlower[0] + value[1] * ylower[0]
@@ -107,8 +107,9 @@ def transform_coordinates(value, xlower, xupper, ylower, yupper):
 
     for current in [currLX, currLY, currUX, currUY]:
         if not C_MIN_DBL_SHIFT <= current <= C_MAX_DBL_SHIFT:
-            raise ValueError("Beam deflection %s exceeds limits (%s, %s) of DC coils."
-                             % (current, C_MIN_DBL_SHIFT, C_MAX_DBL_SHIFT))
+            raise ValueError("Beam deflection %s exceeds limits (%s, %s) of DC coils. "
+                             "Trying to set [xupper, xlower, yupper, ylower] values: %s"
+                             % (current, C_MIN_DBL_SHIFT, C_MAX_DBL_SHIFT, [currUX, currLX, currUY, currLY]))
 
     rawLX = current_to_raw(currLX)
     rawUX = current_to_raw(currUX)
