@@ -54,7 +54,7 @@ from odemis.gui.conf.util import create_setting_entry, create_axis_entry, Settin
 from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.util import fluo
-from odemis.util.conversion import wave2rgb
+from odemis.util.conversion import wavelength2rgb
 from odemis.util.fluo import to_readable_band, get_one_center
 from odemis.util.units import readable_str
 
@@ -549,9 +549,9 @@ class StreamController(object):
                 ewl, self.stream.emission.choices)
 
             # use peak values to pick the best tint and set the wavelength colour
-            xcol = wave2rgb(xwl)
+            xcol = wavelength2rgb(xwl)
             self._btn_excitation.set_colour(xcol)
-            ecol = wave2rgb(ewl)
+            ecol = wavelength2rgb(ewl)
             self._btn_emission.set_colour(ecol)
             self.stream.tint.value = ecol
         else:
@@ -727,7 +727,7 @@ class StreamController(object):
             if self._dye_prev_ewl_center == ewl_center:
                 return
             self._dye_prev_ewl_center = ewl_center
-            colour = wave2rgb(ewl_center)
+            colour = wavelength2rgb(ewl_center)
             logging.debug("Synchronising tint to %s", colour)
             self.stream.tint.value = colour
 
@@ -845,11 +845,11 @@ class StreamController(object):
             self.stream_panel.header_change_callback = self._on_new_dye_name
 
         center_wl = fluo.get_one_center_ex(self.stream.excitation.value, self.stream.emission.value)
-        self._add_excitation_ctrl(wave2rgb(center_wl))
+        self._add_excitation_ctrl(wavelength2rgb(center_wl))
 
         # Emission
         center_wl = fluo.get_one_center_em(self.stream.emission.value, self.stream.excitation.value)
-        self._add_emission_ctrl(wave2rgb(center_wl))
+        self._add_emission_ctrl(wavelength2rgb(center_wl))
 
     def _onExcitationChannelChange(self, _):
         """
@@ -872,7 +872,7 @@ class StreamController(object):
         """
         if center_wl_color is None:
             center_wl = fluo.get_one_center(self.stream.excitation.value)
-            center_wl_color = wave2rgb(center_wl)
+            center_wl_color = wavelength2rgb(center_wl)
 
         band = to_readable_band(self.stream.excitation.value)
         readonly = self.stream.excitation.readonly or len(self.stream.excitation.choices) <= 1
@@ -916,7 +916,7 @@ class StreamController(object):
 
                 if self._dye_xwl is None and self._btn_excitation:
                     # no dye info? use hardware settings
-                    colour = wave2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
+                    colour = wavelength2rgb(fluo.get_one_center_ex(value, self.stream.emission.value))
                     self._btn_excitation.set_colour(colour)
                 else:
                     self.update_peak_label_fit(self._lbl_exc_peak,
@@ -925,7 +925,7 @@ class StreamController(object):
 
                 # also update emission colour as it's dependent on excitation when multi-band
                 if self._dye_ewl is None and self._btn_emission:
-                    colour = wave2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
+                    colour = wavelength2rgb(fluo.get_one_center_em(self.stream.emission.value, value))
                     self._btn_emission.set_colour(colour)
 
             se = SettingEntry(name="excitation", va=self.stream.excitation, stream=self.stream,
@@ -950,7 +950,7 @@ class StreamController(object):
                 center_wl_color = None
             else:
                 center_wl = fluo.get_one_center(self.stream.emission.value)
-                center_wl_color = wave2rgb(center_wl)
+                center_wl_color = wavelength2rgb(center_wl)
 
         r = self.stream_panel.add_dye_emission_ctrl(band, readonly, center_wl_color)
         lbl_ctrl, value_ctrl, self._lbl_em_peak, self._btn_emission = r
@@ -990,7 +990,7 @@ class StreamController(object):
                     logging.error("No existing label found for value %s", value)
 
                 if self._dye_ewl is None:  # no dye info? use hardware settings
-                    colour = wave2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
+                    colour = wavelength2rgb(fluo.get_one_center_em(value, self.stream.excitation.value))
                     self._btn_emission.set_colour(colour)
                 else:
                     self.update_peak_label_fit(self._lbl_em_peak,
@@ -998,7 +998,7 @@ class StreamController(object):
                                                self._dye_ewl, value)
                 # also update excitation colour as it's dependent on emission when multiband
                 if self._dye_xwl is None:
-                    colour = wave2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
+                    colour = wavelength2rgb(fluo.get_one_center_ex(self.stream.excitation.value, value))
                     self._btn_excitation.set_colour(colour)
 
             se = SettingEntry(name="emission", va=self.stream.emission, stream=self.stream,

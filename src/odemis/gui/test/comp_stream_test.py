@@ -96,7 +96,7 @@ class FakeFluoStream(FluoStream):
             # one (fixed) multi-band
             choices={(100e-9, 150e-9), (500e-9, 520e-9), (600e-9, 650e-9)},
             unit="m")
-        default_tint = conversion.wave2rgb(488e-9)
+        default_tint = conversion.wavelength2rgb(488e-9)
         self.tint = model.VigilantAttribute(default_tint, unit="RGB")
 
         self.histogram._edges = (0, 0)
