@@ -695,6 +695,13 @@ class Event(EventBase):
         """
         return not not self._listeners # = not empty
 
+    def get_type(self):
+        """
+        Return the class of the object. Used to work-around Pyro's proxy limitation,
+        when checking whether a trigger is a HwTrigger or a standard one.
+        """
+        return type(self)
+
     def subscribe(self, listener):
         """
         Register a callback function to be called when the Event is changed
@@ -730,6 +737,20 @@ class Event(EventBase):
         Equivalent to __getstate__() of the proxy version
         """
         return Pyro4.core.pyroObjectSerializer(self)[2]
+
+
+class HwTrigger(Event):
+    """
+    Special type of Event used to signal that a DataFlow should be synchronized
+    on a hardware event (eg, a TTL signal received by the hardware).
+    Using it to actually notify() is not allowed, as it's the physical trigger
+    that should do that.
+    """
+    # TODO: add a "name" argument/attribute to allow differentiating between multiple
+    # hardware triggers on the same component?
+
+    def notify(self):
+        raise ValueError("A HwTrigger cannot be used to send events in software")
 
 
 class EventProxy(EventBase, Pyro4.Proxy):
