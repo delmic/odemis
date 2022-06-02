@@ -32,7 +32,12 @@ Light: {
     role: ccd,
     init: {
         device: 0, # 0 is almost always correct
+        # hw_trigger_invert: True,  # Trigger activated on falling edge (= blanker going from high to low)
         # shutter_times: [10.e-3, 10.e-3], # s, opening/closing times (also forces)
+    },
+    properties: {
+        targetTemperature: 25,  # °C, to disable active cooling
+        fanSpeed: 0,  # To disable the fan
     }
 }
 

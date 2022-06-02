@@ -24,15 +24,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
+from odemis import model
 from odemis.driver import andorcam2
 import os
+import time
 import unittest
 from unittest.case import skip
 
 from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchronized
 
-logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
-logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG,
+                    format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s",
+                    force=True)  # Overwrite the default logging set by importing other module
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
@@ -43,6 +46,7 @@ CLASS = andorcam2.AndorCam2
 
 KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
               # emgains=[[10e6, 1, 50], [1e6, 1, 150]]  # For EM-CCDs
+              hw_trigger_invert=True,
               )
 KWARGS_SIM = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
                   emgains=[[10e6, 1, 50], [1e6, 1, 150]],
@@ -85,6 +89,102 @@ class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     """
     camera_type = CLASS
     camera_kwargs = KWARGS
+
+
+class TestAndorCam2HwTrigger(unittest.TestCase):
+    """
+    Test the synchronizedOn(Event) interface with a hardware trigger.
+
+    Note: on the simulator, this is weak as the simulator simulate a trigger
+    immediately when the camera is ready.
+    On the real hardware, the camera "fire" input should be connected to a external
+    TTL signal generating 0/+4V square waves.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.camera = CLASS(**KWARGS)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.camera.terminate()
+
+    def setUp(self):
+        self.left = 0
+        self.acq_dates = []
+        self.rcv_dates = []
+
+    def tearDown(self):
+        self.camera.data.synchronizedOn(None)
+        self.camera.dropOldFrames.value = True
+
+    def test_trigger_single_shot(self):
+        """
+        Configure hw trigger, and check we receive images with .get()
+        """
+        self.camera.exposureTime.value = 0.01  # s
+        self.camera.data.synchronizedOn(self.camera.hardwareTrigger)
+
+        # 10x one shot
+        for i in range(10):
+            im = self.camera.data.get()
+            logging.debug("Got one image of shape %s", im.shape)
+
+        self.camera.data.synchronizedOn(None)
+
+    def test_trigger_continuous(self):
+        """
+        Configure hw trigger, and check we receive images with .subscribe()
+        """
+        exp = 0.01  # s
+        number = 100  # number of frames to acquire
+
+        # Expected trigger period, it must be longer than the "accumulate" time
+        trigger_period = 0.2  # s
+
+        self.camera.exposureTime.value = exp  # s
+        # TODO: do full vertical binning (in another test), for shorter readout
+        # binning = (1, self.camera.binning.range[1][1])
+        binning = self.camera.binning.range[0]
+        self.camera.binning.value = binning
+        self.camera.dropOldFrames.value = False
+        self.camera.data.synchronizedOn(self.camera.hardwareTrigger)
+
+        self.left = number
+
+        start = time.time()
+        timeout = start + number * trigger_period * 1.3 + 1
+        # Acquire, and wait until everything is received (or waited long enough)
+        self.camera.data.subscribe(self.receive_image)
+
+        # Check frame_period is shorter than the trigger, otherwise some triggers
+        # will be missed.
+        time.sleep(0.1)
+        self.assertGreater(trigger_period, self.camera.framePeriod.value)
+
+        while self.left > 0:
+            time.sleep(exp / 10)
+            if time.time() > timeout:
+                self.fail(f"Still {self.left} images to acquire after {time.time() - start} s")
+
+        print(f"Images acquired at: {self.acq_dates}")
+        print(f"Images received at: {self.rcv_dates}")
+        rcv_diff = [b - a for a, b in zip(self.rcv_dates[:-1], self.rcv_dates[1:])]
+        print(f"Images received diff: {rcv_diff}")
+        self.assertEqual(len(self.acq_dates), number)
+        self.assertEqual(self.left, 0)
+
+        self.camera.data.synchronizedOn(None)
+
+    def receive_image(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        self.rcv_dates.append(time.time())
+        self.acq_dates.append(image.metadata[model.MD_ACQ_DATE])
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_image)
 
 
 #@skip("simple")
