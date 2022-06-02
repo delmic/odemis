@@ -46,18 +46,16 @@ The microscope component can have as role:
 ------------------------------------------
  * optical: for an optical microscope (only)
  * sem: an SEM (only)
- * secom
- * cryo-secom
+ * secom: A SECOMv1 or SECOMv2
+ * delphi: a DELPHI
+ * meteor: a METEOR
+ * enzel: an ENZEL
  * sparc: SPARCv1
  * sparc-simplex: a SPARC without any alignment controls (deprecated)
  * sparc2: SPARCv2
- * delphi
 
 Roles of components found in the DELPHI/SECOM system:
 -----------------------------------------------------
-.. TODO missing components SECOM:
-.. TODO * filter: Emission filter on the optical path to select a specific wavelength band. It has an axis: band.
-.. TODO * focus: Changes the distance between the sample and the optical detectors. It has one axis: z.
 .. TODO additional missing components in SECOM confocal:
 .. TODO * det-selector: Mirror to switch between ..
 .. TODO * time-correlator: A one-dimension detector with "T", the time, as dimension. It reports the energy emission over time (from a specific event).
@@ -72,6 +70,8 @@ Emitters:
 
 Actuators:
  * stage: Moves the sample. It can have up to 3 linear axes (x, y, z) and 3 rotational axes (rx, ry, rz).
+ * focus: Changes the distance between the sample and the optical detectors. It has one axis: z.
+ * filter: Emission filter on the optical path to select a specific wavelength band. It has an axis: band.
  * ebeam-focus: Changes the focus position of the e-beam. It has one axis: z.
  * chamber: Manages the pressure and/or sample loading. It must have a "vacuum" axis to switch between the different vacuum states.
    If it also has a sensor to read the actual pressure, it should be provided on the .pressure VA.
@@ -93,9 +93,9 @@ Detectors:
 System:
  * lens: Defines the optical parameters (e.g magnification) of the optical path.
 
-Roles of components found in the CryoSECOM (ENZEL) system:
-----------------------------------------------------------
-The role of the microscope is cryo-secom.
+Roles of components found in the ENZEL system:
+----------------------------------------------
+The role of the microscope is *enzel*.
 
 Emitters:
  * e-beam: Electron beam of the SEM to scan the sample.
@@ -103,44 +103,73 @@ Emitters:
 
 Actuators:
  * ebeam-focus: Changes the focus position of the e-beam. It has one axis: z. 
- * filter: Emission filter to select a specific wavelength band.
+ * filter: Emission filter to select a specific wavelength band. It has one axis: band.
  * stigmator: Controls the rotation of the astigmatic lens. It has one axis rz.
 
- * stage: Moves the sample. It has 3 linear axes (x, y, z) and 2 rotational axes (rx, rz). Stage component has the following metadata:
-  
-    1. FAV_POS_DEACTIVE: Loading/unloading position.
-    2. FAV_POS_ACTIVE: Imaging position.
-    3. FAV_POS_COATING: Coating position of the gas injection system (GIS). 
-    4. POS_ACTIVE_RANGE: The allowed position range during the FM/SEM imaging.  
-    5. ION_BEAM_TO_SAMPLE_ANGLE: Angle of the e-beam with the sample when rx = 0.
-    6. FAV_POS_SEM_IMAGING: The position for SEM imaging consisting of 5 axes.
-    7. FAV_POS_ALIGN: The initial position to start the alignment from.
-   
+ * stage: Moves the sample. It has 3 linear axes (x, y, z) and 2 rotational axes (rx, rz).
+   The component has the following metadata:
+
+    #. FAV_POS_DEACTIVE: Loading/unloading position.
+    #. FAV_POS_ACTIVE: Imaging position.
+    #. FAV_POS_COATING: Coating position of the gas injection system (GIS).
+    #. POS_ACTIVE_RANGE: The allowed position range during the FM/SEM imaging.
+    #. FAV_POS_SEM_IMAGING: The position for SEM imaging consisting of 5 axes.
+    #. FAV_POS_ALIGN: The initial position to start the alignment from.
+    #. ION_BEAM_TO_SAMPLE_ANGLE: Angle of the e-beam with the sample when rx = 0.
+
  * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. It has one metadata:
   
-    1. FAV_POS_ACTIVE: The latest focus position for optical microscopy. 
-   
+    #. FAV_POS_ACTIVE: The latest focus position for optical microscopy.
+
  * align: Alignment actuator. It has 2 axes: x and y. It has three metadata:
-  
-    1. FAV_POS_ACTIVE: The position corresponding to alignment. 
-    2. FAV_POS_DEACTIVE: The safe position to go such that the stage cannot hit the objective lens. 
-    3. FAV_POS_ALIGN: The default position when doing alignment. 
+
+    #. FAV_POS_ACTIVE: The position corresponding to alignment.
+    #. FAV_POS_DEACTIVE: The safe position to go such that the stage cannot hit the objective lens.
+    #. FAV_POS_ALIGN: The default position when doing alignment.
 
 Detectors:
  * se-detector: Secondary electron detector of the SEM. 
- * ccd: The main optical pixelated detector. 
+ * ccd: The main optical pixelated detector.
 
 System:
  * sample-thermostat: Controls the temperature of the sample finely. The metadata are:
 
-    1. SAFE_REL_RANGE: Safe operating temperature range relative to target temperature.
-    2. SAFE_SPEED_RANGE: Safe operating speed range. 
+    #. SAFE_REL_RANGE: Safe operating temperature range relative to target temperature.
+    #. SAFE_SPEED_RANGE: Safe operating speed range.
 
  * cooler: Controls the starting and stopping of the cooling process by changing the temperature setpoint of the cryo-stage.
  * lens: Defines the optical parameters (e.g magnification) of the optical path. 
 
+Roles of components found in the METEOR system:
+-----------------------------------------------
+The role of the microscope is *meteor*.
+
+Emitters:
+ * light: Controls the excitation light of the fluorescence microscope.
+
+Actuators:
+ * filter: Emission filter to select a specific wavelength band.
+ * stigmator: (optional) Controls the rotation of the astigmatic lens. It has one axis rz.
+ * stage: Moves the sample. It has 3 linear axes (x, y, z) and 2 rotational axes (rx, rz).
+   The component has the following metadata:
+
+    #. FAV_POS_DEACTIVE: Loading/unloading position.
+    #. FAV_POS_COATING: Coating position of the gas injection system (GIS).
+    #. FM_IMAGING_RANGE: The allowed position range during the FM imaging.
+    #. SEM_IMAGING_RANGE: The allowed position range during the SEM imaging.
+
+ * focus: Changes the distance between the sample and the optical detectors. It has one axis: z. It has one metadata:
+
+    #. FAV_POS_ACTIVE: The latest focus position for optical microscopy.
+
+Detectors:
+ * ccd: The main optical pixelated detector.
+ * lens: Defines the optical parameters (e.g magnification) of the optical path.
+
 Roles of components found in the SPARCv1/SPARCv2 system:
 --------------------------------------------------------
+The role of the microscope is *sparc* or *sparc2*.
+
 Emitters:
  * e-beam: Electron beam of the SEM to scan the sample (emitter).
 
