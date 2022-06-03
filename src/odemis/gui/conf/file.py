@@ -258,7 +258,7 @@ class AcquisitionConfig(Config):
 
         # Define the default settings for the project parameters
         self.default.add_section("project")
-        self.default.set("project", "pj_last_path", ACQUI_PATH)
+        self.default.set("project", "pj_last_path", ACQUI_PATH + "/")
         self.default.set("project", "pj_ptn", u"{datelng}-{timelng}")
         self.default.set("project", "pj_count", "0")
 
@@ -342,7 +342,7 @@ class AcquisitionConfig(Config):
         lp = self.get("project", "pj_last_path")
         # Check that it (still) exists, and if not, fallback to the default
         if not os.path.isdir(lp):
-            lp = ACQUI_PATH
+            lp = ACQUI_PATH + "/"
         return lp
 
     @pj_last_path.setter
