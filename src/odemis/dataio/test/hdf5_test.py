@@ -262,6 +262,7 @@ class TestHDF5IO(unittest.TestCase):
         size = (512, 256)
         metadata3d = {model.MD_SW_VERSION: "1.0-test",
                     model.MD_HW_NAME: "fake spec",
+                    model.MD_HW_VERSION: "Spec v3",
                     model.MD_DESCRIPTION: "test3d",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
@@ -272,7 +273,8 @@ class TestHDF5IO(unittest.TestCase):
                     model.MD_IN_WL: (500e-9, 520e-9),  # m
                     }
         metadata = {model.MD_SW_VERSION: "1.0-test",
-                    model.MD_HW_NAME: "",  # check empty unicode strings
+                    model.MD_HW_NAME: "",  # check empty strings
+                    model.MD_HW_NAME: "vÉ",  # check unicode
                     model.MD_DESCRIPTION: "test",
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BPP: 12,
@@ -312,6 +314,8 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(imr.metadata[model.MD_POS], metadata3d[model.MD_POS])
         self.assertEqual(imr.metadata[model.MD_PIXEL_SIZE], metadata3d[model.MD_PIXEL_SIZE])
         self.assertEqual(imr.metadata[model.MD_ACQ_DATE], metadata3d[model.MD_ACQ_DATE])
+        self.assertEqual(imr.metadata[model.MD_HW_NAME], metadata3d[model.MD_HW_NAME])
+        self.assertEqual(imr.metadata[model.MD_HW_VERSION], metadata3d[model.MD_HW_VERSION])
 
         self.assertEqual(imr[0, 0, 0], 0)
         self.assertEqual(imr[-1, 0, 0], end)
@@ -324,7 +328,8 @@ class TestHDF5IO(unittest.TestCase):
         dtype = numpy.uint8
         size = (3, 512, 256) # C, X, Y
         metadata = {model.MD_SW_VERSION: "1.0-test",
-                    model.MD_DESCRIPTION: u"test",
+                    model.MD_HW_NAME: "",  # check empty strings
+                    model.MD_HW_VERSION: "vÉ",  # check unicode
                     model.MD_ACQ_DATE: time.time(),
                     model.MD_BINNING: (1, 2), # px, px
                     model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
@@ -359,6 +364,8 @@ class TestHDF5IO(unittest.TestCase):
         self.assertEqual(im.metadata[model.MD_POS], md[model.MD_POS])
         self.assertEqual(im.metadata[model.MD_PIXEL_SIZE], md[model.MD_PIXEL_SIZE])
         self.assertEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE])
+        self.assertEqual(im.metadata[model.MD_HW_NAME], md[model.MD_HW_NAME])
+        self.assertEqual(im.metadata[model.MD_HW_VERSION], md[model.MD_HW_VERSION])
 
     def testMetadata(self):
         """

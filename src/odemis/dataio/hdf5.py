@@ -698,6 +698,10 @@ def _parse_physical_data(pdgroup, da):
         read_metadata(pdgroup, i, md, "EmissionCurrentOverTime", model.MD_EBEAM_CURRENT_TIME,
                       converter=numpy.ndarray.tolist,
                       bad_states=(ST_INVALID, ST_DEFAULT))
+
+        read_metadata(pdgroup, i, md, "HardwareName", model.MD_HW_NAME, converter=read_str)
+        read_metadata(pdgroup, i, md, "HardwareVersion", model.MD_HW_VERSION, converter=read_str)
+
         # angle resolved
         read_metadata(pdgroup, i, md, "PolePosition", model.MD_AR_POLE, converter=tuple)
         read_metadata(pdgroup, i, md, "XMax", model.MD_AR_XMAX, converter=float)
@@ -1042,6 +1046,10 @@ def _add_image_metadata(group, image, mds):
     # (only meaningful for AR/SPARC)
     pf, st_pf = [], []
 
+    # Hardware info
+    hw_name, st_hw_name = [], []
+    hw_version, st_hw_version = [], []
+
     # Polarization: position (string) of polarization analyzer
     # (only meaningful for AR/SPARC with polarization analyzer)
     pol, st_pol = [], []
@@ -1076,6 +1084,10 @@ def _add_image_metadata(group, image, mds):
         append_metadata(st_hd, hd, md, model.MD_AR_HOLE_DIAMETER, default_value=0)
         append_metadata(st_fd, fd, md, model.MD_AR_FOCUS_DISTANCE, default_value=0)
         append_metadata(st_pf, pf, md, model.MD_AR_PARABOLA_F, default_value=0)
+
+        append_metadata(st_hw_name, hw_name, md, model.MD_HW_NAME)
+        append_metadata(st_hw_version, hw_version, md, model.MD_HW_VERSION)
+
         # polarization analyzer
         append_metadata(st_pol, pol, md, model.MD_POL_MODE)
         append_metadata(st_posqwp, posqwp, md, model.MD_POL_POS_QWP, default_value=0)
@@ -1097,6 +1109,10 @@ def _add_image_metadata(group, image, mds):
     set_metadata(gp, "HoleDiameter", st_hd, hd)
     set_metadata(gp, "FocusDistance", st_fd, fd)
     set_metadata(gp, "ParabolaF", st_pf, pf)
+    # Hardware info
+    set_metadata(gp, "HardwareName", st_hw_name, hw_name)
+    set_metadata(gp, "HardwareVersion", st_hw_version, hw_version)
+
     # polarization analyzer
     set_metadata(gp, "Polarization", st_pol, pol)
     set_metadata(gp, "QuarterWavePlate", st_posqwp, posqwp)
