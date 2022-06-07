@@ -136,7 +136,16 @@ def stop_backend():
     model._core._microscope = None  # force reset of the microscope for next connection
 
     if status != driver.BACKEND_STOPPED:
-        raise IOError("Backend failed to stop, now %s" % status)
+        logging.warning("Backend failed to stop, will run 'sudo odemis-stop' to kill it.")
+        # TODO this is a temporary fix for stopping the back-end. When a better solution is found, remove this.
+        try:
+            ret = subprocess.run(["sudo", "odemis-stop"], timeout=60)
+        except subprocess.TimeoutExpired as err:
+            raise TimeoutError(f"Timeout while tying to stop odemis backend, with error: {err}")
+
+        if ret.returncode != 0:
+            status = driver.get_backend_status()
+            raise IOError("Backend failed to stop, now %s" % status)
 
 
 def assert_pos_almost_equal(actual, expected, match_all=True, *args, **kwargs):
