@@ -31,6 +31,7 @@ def filter_test_log(log_txt):
     """
     Filters a log file to only include the parts with a failure warning etc.
     Text regarding progress and passed tests are excluded.
+    If the output log is too long the middle part of the logged is not returned.
 
     :param log (str): String with the log of a single test file.
     :return (str): filtered log
@@ -54,6 +55,7 @@ def filter_test_log(log_txt):
         comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_zoom FAILED [ 88%]
         comp_canvas_test.py::TestDblMicroscopeCanvas::test_zoom_move PASSED      [100%]
 
+
         =================================== FAILURES ===================================
         /home/kleijwegt/development/odemis/src/odemis/gui/test/comp_canvas_test.py:742: AssertionError: Tuples differ: (0, 128, 127) != (0, 76, 179)
         /home/kleijwegt/development/odemis/src/odemis/gui/test/comp_canvas_test.py:501: AssertionError: Tuples differ: (0, 128, 127) != (0, 76, 179)
@@ -74,9 +76,11 @@ def filter_test_log(log_txt):
     test_results = test_results.lstrip("\n")  # Remove preceding empty lines
     # Only display when there is more to tell than just passed test cases (meaning failures, warning etc.)
     if "\n" in test_results:  # Only a message with multiple lines contains interesting information.
-        if len(test_results) > 3500:
-            test_results = test_results[0:3500] + \
-                           "\n \t--logging message is too long for the default summary report, it is stopped here -- \n\n"
+        if len(test_results) > 2000:
+            test_results = test_results[0:1000] + \
+                           "\n\n \t--The middle part of the logging message is not displayed because it is too long for the default summary report. -- \n\n" + \
+                            test_results[-2000:] + \
+                           "\n \t--Logging message is too long for the default summary report, the middle part is not displayed -- \n\n"
         return test_results
 
 
