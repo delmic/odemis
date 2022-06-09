@@ -1431,6 +1431,7 @@ class Scanner(model.Emitter):
 
         """
         if blank is None:
+            # TODO Blanker should explicitly be set based on whether we are scanning or not.
             return None
 
         if blank:
@@ -1495,6 +1496,20 @@ class Scanner(model.Emitter):
         self.parent.set_scan_mode(scan_mode)
         return external
 
+    def prepareForScan(self):
+        """
+        Make sure the beam is unblanked when the blanker is in 'auto' mode before starting to scan.
+        """
+        if self.blanker.value is None:
+            self.parent.unblank_beam()
+
+    def finishScan(self):
+        """
+        Make sure the beam is blanked when the blanker is in 'auto' mode at the end of scanning.
+        """
+        if self.blanker.value is None:
+            self.parent.blank_beam()
+
 
 class FibScanner(model.Emitter):
     """
@@ -1524,14 +1539,24 @@ class FibScanner(model.Emitter):
 
     def prepareForScan(self):
         """
-        Make sure the scan mode is in "full_frame" and not in "external"
+        Make sure the scan mode is in "full_frame" and not in "external" before starting to scan.
         """
+        # Currently the XT interface autoblanks the FIB, control of the FIB blanker is
+        # not supported so we do not blank the beam at the start and end of the scan.
+
+        # Note: ideally this would be based on an external VA, which when put to
+        # 'auto' would switch to full frame at the start of a scan.
         if self.parent.get_scan_mode() != "full_frame":
             self.parent.set_scan_mode("full_frame")
             current_mode = self.parent.get_scan_mode()
             if current_mode != "full_frame":
                 raise HwError("Couldn't set full_frame as scan mode on the XT client mode. Current mode is: %s",
                               current_mode)
+
+    def finishScan(self):
+        """Call when done with scanning."""
+        # We do not change the scan mode, because it is fine to leave it in full frame.
+        pass
 
 
 class Detector(model.Detector):
@@ -1603,9 +1628,7 @@ class Detector(model.Detector):
             self._generator.start()
 
     def stop_generate(self):
-        if hasattr(self._scanner, "blanker"):
-            if self._scanner.blanker.value is None:
-                self.parent.blank_beam()
+        self._scanner.finishScan()
         self._genmsg.put(GEN_STOP)
 
     def _acquire(self):
@@ -1621,14 +1644,10 @@ class Detector(model.Detector):
                 while True:
                     if self._acq_should_stop():
                         break
-                    self._scanner.prepareForScan()  # In case of the FIB make sure the mode isn't in external
+                    # TODO When switching e-beam <--> FIB, handle calling finishScan on the old scanner and
+                    #  prepareForScan on the new scanner.
+                    self._scanner.prepareForScan()
                     self.parent.set_channel_state(self._scanner.channel, True)
-                    if hasattr(self._scanner, "blanker"):
-                        # TODO: When the acquisition ends, if blanker is set to automatic (None), we need to activate
-                        #  the blanker again. That should also happen when switching e-beam <--> FIB, but currently
-                        #  the FIB blanker is not supported via the XT interface.
-                        if self._scanner.blanker.value is None:
-                            self.parent.unblank_beam()
                     # The channel needs to be stopped to acquire an image, therefore immediately stop the channel.
                     self.parent.set_channel_state(self._scanner.channel, False)
 
