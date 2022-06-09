@@ -35,7 +35,9 @@ from odemis.driver import xt_client
 from odemis.model import ProgressiveFuture, NotSettableError
 from odemis.util import test
 
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(level=logging.DEBUG,
+                    format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s",
+                    force=True)
 
 # Accept three values for TEST_NOHW
 # * TEST_NOHW = 1: not connected to anything => skip most of the tests
@@ -352,9 +354,14 @@ class TestMicroscope(unittest.TestCase):
         im = self.detector.data.get()
         duration = time.time() - start
         self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
-        self.assertGreaterEqual(duration, expected_duration,
-                                "Error execution took %f s, less than exposure time %d." % (
-                                    duration, expected_duration))
+
+        if TEST_NOHW != 'sim':
+            # The basic simulator does not simulate the right execution time.
+            self.assertGreaterEqual(
+                duration,
+                expected_duration,
+                "Error execution took %f s, less than exposure time %d." % (duration, expected_duration)
+            )
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
         # Set back dwell time to initial value
         self.scanner.dwellTime.value = init_dwell_time
@@ -432,7 +439,7 @@ class TestMicroscope(unittest.TestCase):
         """
         Test for the auto contrast brightness functionality.
         """
-        self.scanner.blanker = False
+        self.scanner.blanker.value = False
         # Start auto contrast brightness and check if it is running.
         auto_contrast_brightness_future = self.detector.applyAutoContrastBrightness()
         auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(self.scanner.channel)
@@ -470,13 +477,13 @@ class TestMicroscope(unittest.TestCase):
 
         auto_contrast_brightness_state = self.microscope.is_running_auto_contrast_brightness(self.scanner.channel)
         self.assertEqual(auto_contrast_brightness_state, False)
-        self.scanner.blanker = True
+        self.scanner.blanker.value = True
 
     def test_apply_autofocus(self):
         """
         Test for the auto functionality of the autofocus.
         """
-        self.scanner.blanker = False
+        self.scanner.blanker.value = False
         # Start auto focus and check if it is running.
         autofocus_future = self.efocus.applyAutofocus(self.detector)
         autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
@@ -512,7 +519,7 @@ class TestMicroscope(unittest.TestCase):
 
         autofocus_state = self.microscope.is_autofocusing(self.scanner.channel)
         self.assertEqual(autofocus_state, False)
-        self.scanner.blanker = True
+        self.scanner.blanker.value = True
 
     def test_set_beam_shift(self):
         """Setting the beam shift."""
@@ -1203,9 +1210,14 @@ class TestDualModeMicroscope(unittest.TestCase):
         im = self.detector.data.get()
         duration = time.time() - start
         self.assertEqual(im.shape, self.scanner.resolution.value[::-1])
-        self.assertGreaterEqual(duration, expected_duration,
-                                "Error execution took %f s, less than exposure time %d." % (
-                                    duration, expected_duration))
+
+        if TEST_NOHW != 'sim':
+            # The basic simulator does not simulate the right execution time.
+            self.assertGreaterEqual(
+                duration,
+                expected_duration,
+                "Error execution took %f s, less than exposure time %d." % (duration, expected_duration)
+            )
         self.assertIn(model.MD_DWELL_TIME, im.metadata)
         self.assertEqual(im.metadata[model.MD_DWELL_TIME], self.scanner.dwellTime.value)
         expected_pixel_size = numpy.array(self.scanner.pixelSize.value) * numpy.array(self.scanner.scale.value)
