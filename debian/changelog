@@ -1,3 +1,15 @@
+odemis (3.1.8-1) xenial; urgency=medium
+
+  * New version: 3.1.8
+  * Main bug fixes:
+    - Fix building the developper documentation on Ubuntu 20.04
+    - Fix bug reporter sometimes not showing a confirmation of the reception
+  * Improvements:
+    - Bug reporter can be internally set to send to a different department
+    - New image in Windows installer
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 09 Jun 2022 13:16:10 +0200
+
 odemis (3.1.7-1) xenial; urgency=medium
 
   * New version: 3.1.7
