@@ -40,7 +40,8 @@ from odemis.acq.stream import Stream, StreamTree, RGBSpatialProjection, DataProj
 from odemis.gui.conf import get_general_conf, get_acqui_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
-                          MD_POS, InstantaneousFuture, hasVA, StringEnumerated)
+                          MD_POS, InstantaneousFuture, hasVA, StringEnumerated,
+    MD_CALIB)
 from odemis.gui.log import observe_comp_state
 import os
 import threading
@@ -158,6 +159,7 @@ class MainGUIData(object):
         "focus": "focus",
         "spec-ded-focus": "spec_ded_focus",
         "pinhole": "pinhole",
+        "stigmator": "stigmator",
         "ebeam-focus": "ebeam_focus",
         "overview-focus": "overview_focus",
         "mirror": "mirror",
@@ -217,6 +219,7 @@ class MainGUIData(object):
         self.stage_bare = None # stage in the chamber referential
         self.focus = None  # actuator to change the camera focus
         self.pinhole = None  # actuator to change the pinhole (confocal SECOM)
+        self.stigmator = None  # actuator to change the optical astigmatism (METEOR/ENZEL)
         self.aligner = None  # actuator to align ebeam/ccd (SECOM)
         self.laser_mirror = None  # the scanner on confocal SECOM
         self.time_correlator = None  # life-time measurement on SECOM-FLIM or SPARC
@@ -750,6 +753,22 @@ class CryoLocalizationGUIData(CryoGUIData):
         self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
         self.zPos.clip_on_range = True
         self.streams.subscribe(self._on_stream_change, init=True)
+
+        if main.stigmator:
+            # stigmator should have a "MD_CALIB" containing a dict[float, dict],
+            # where the key is the stigmator angle (rad), and the value contains
+            # the calibration to pass to z_localization.determine_z_position().
+            calib = main.stigmator.getMetadata().get(MD_CALIB)
+            if not calib:
+                logging.warning("stigmator component present, but no MD_CALIB, Z localization will be disabled")
+
+            angles = frozenset(calib.keys())
+            rng = main.stigmator.axes["rz"].range
+            for a in angles:
+                if not rng[0] <= a <= rng[1]:
+                    raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
+
+            self.stigmatorAngle = model.FloatEnumerated(min(angles), choices=angles)
 
     def _updateZParams(self):
         # Calculate the new range of z pos
