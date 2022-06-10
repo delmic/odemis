@@ -678,11 +678,12 @@ class ARPolarimetryProjection(ARProjection):
                 # select a color map based on the data
                 if pol_pos in [MD_POL_EPHI, MD_POL_ETHETA, MD_POL_EX, MD_POL_EY, MD_POL_EZ]:
                     data = numpy.abs(cache_raw[pol_pos])
-                    try:
-                        plotorder = int(numpy.log10(data.max()))
-                    except OverflowError:
-                        # Note: Error is raised, when bg image and image are the same
-                        # (-> cannot convert float infinity to integer)
+                    max_val = data.max()
+                    if max_val > 0:
+                        plotorder = int(math.log10(max_val))
+                    else:
+                        # max_val == 0, because bg image and image are the same
+                        # Let's not make too much fuss about it.
                         plotorder = 0
 
                     cache_raw[pol_pos] = data / 10 ** plotorder
