@@ -45,7 +45,7 @@ import weakref
 GEN_START = "S"  # Start acquisition
 GEN_STOP = "E"  # Don't acquire image anymore
 GEN_TERM = "T"  # Stop the generator
-GEN_UNSYNC = "U"  # Synchronisation stopped
+GEN_RESYNC = "R"  # Synchronisation stopped
 # There are also floats, which are used to indicate a trigger (containing the time the trigger was sent)
 
 # Type of software trigger to use
@@ -2121,15 +2121,18 @@ class AndorCam2(model.DigitalCamera):
     def set_trigger(self, sync):
         """
         Specify if the acquisition should be synchronized or not.
+        Not thread-safe!
         sync (TRIG_NONE, TRIG_SW, TRIG_HW): Type of trigger
         """
+        old_sync = self._synchronized
         self._synchronized = sync
-        if sync == TRIG_NONE:
-            # Just to make sure to not wait forever for it
-            logging.debug("Sending unsynchronisation event")
-            self._genmsg.put(GEN_UNSYNC)
-        else:
-            logging.debug("Acquisition now set to synchronized mode %s", sync)
+
+        if sync != old_sync:
+            # To make sure the generator is not wait forever for a trigger
+            logging.debug("Sending resynchronisation event")
+            self._genmsg.put(GEN_RESYNC)
+
+        logging.debug("Acquisition now set to synchronized mode %s", sync)
 
     @oneway
     def onEvent(self):
@@ -2148,7 +2151,7 @@ class AndorCam2(model.DigitalCamera):
     #  STOP       |      .      |  Stopped    | Stopped    |    Stopped      |
     #  TERM       |    Final    |   Final     |  Final     |    Final        |
     # If the acquisition is not synchronized, then the Trigger event in Ready for
-    # acq is considered as a "null" event: it's immediately switched to acquiring.
+    # acq is considered as a "null" event: it's discarded.
 
     def _get_acq_msg(self, **kwargs):
         """
@@ -2157,7 +2160,7 @@ class AndorCam2(model.DigitalCamera):
         raises queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
-        if (msg in (GEN_START, GEN_STOP, GEN_TERM, GEN_UNSYNC) or
+        if (msg in (GEN_START, GEN_STOP, GEN_TERM, GEN_RESYNC) or
               isinstance(msg, float)):
             logging.debug("Acq received message %s", msg)
         else:
@@ -2186,7 +2189,8 @@ class AndorCam2(model.DigitalCamera):
         Indicate whether the acquisition should stop now or can keep running.
         Non blocking.
         Note: it expects that the acquisition is running.
-        return (bool): True if needs to stop, False if can continue
+        return (GEN_STOP, GEN_RESYNC, or False): False if can continue,
+           GEN_STOP if should stop, GEN_RESYNC if continue but with different sync mode
         raise TerminationRequested: if a terminate message was received
         """
         while True:
@@ -2197,21 +2201,25 @@ class AndorCam2(model.DigitalCamera):
                 return False
 
             if msg == GEN_STOP:
-                return True
+                return GEN_STOP
             elif msg == GEN_TERM:
                 raise TerminationRequested()
             elif isinstance(msg, float):  # trigger
                 # The trigger arrived too early, let's keep it for later
                 self._old_triggers.insert(0, msg)
+            elif msg == GEN_RESYNC:
+                # Indicate the acquisition mode (might) have changed
+                return GEN_RESYNC
             else:  # Anything else shouldn't really happen
-                logging.warning("Skipped message %s as acquisition is waiting for trigger", msg)
+                logging.warning("Skipped message %s as acquisition is waiting for data", msg)
 
     def _acq_wait_trigger(self):
         """
         Block until a trigger is received, or a stop message.
         Note: it expects that the acquisition is running. Also, if some triggers
         were recently received, it'll use the oldest once first.
-        return (bool): True if needs to stop, False if a trigger is received
+        return (GEN_STOP, GEN_RESYNC, or True): True if a trigger is received,
+          GEN_STOP if should stop, GEN_RESYNC if continue but with different sync mode
         raise TerminationRequested: if a terminate message was received
         """
         try:
@@ -2225,19 +2233,16 @@ class AndorCam2(model.DigitalCamera):
                 if msg == GEN_TERM:
                     raise TerminationRequested()
                 elif msg == GEN_STOP:
-                    return True
-                elif msg == GEN_UNSYNC or isinstance(msg, float):  # float = trigger
-                    # Trick to handle the DataFlow being unsynchronized while we
-                    # are waiting for trigger: we simulate a trigger by using GEN_UNSYNC
+                    return GEN_STOP
+                elif msg == GEN_RESYNC:
+                    return GEN_RESYNC
+                elif isinstance(msg, float):  # float = trigger
                     trigger = msg
                     break
                 else: # Anything else shouldn't really happen
                     logging.warning("Skipped message %s as acquisition is waiting for trigger", msg)
 
-        if trigger == GEN_UNSYNC:
-            logging.debug("End of synchronisation")
-        else:
-            logging.debug("Received trigger after %s s", time.time() - trigger)
+        logging.debug("Received trigger after %s s", time.time() - trigger)
         return False
 
     def _acq_wait_data(self, timeout):
@@ -2245,14 +2250,16 @@ class AndorCam2(model.DigitalCamera):
         Block until a data (ie, an image) is received, or a stop message.
         Note: it expects that the acquisition is running.
         timeout (0<float): how long to wait for new data (s)
-        return (bool): True if needs to stop, False if data is ready
+        return (GEN_STOP, GEN_RESYNC, or False): False if can continue,
+           GEN_STOP if should stop, GEN_RESYNC if continue but with different sync mode
         raise TerminationRequested: if a terminate message was received
         """
         tstart = time.time()
         tend = tstart + timeout
         while True:
-            if self._acq_should_stop():
-                return True
+            should_stop = self._acq_should_stop()
+            if should_stop:
+                return should_stop
 
             # No message => wait for an image for a short while
             try:
@@ -2337,20 +2344,32 @@ class AndorCam2(model.DigitalCamera):
 
                 if trigger_mode == TRIG_NONE or trigger_mode == TRIG_HW:
                     # No synchronisation or external sync -> just check it shouldn't stop
-                    if self._acq_should_stop():
+                    msg = self._acq_should_stop()
+                    if msg == GEN_RESYNC:
+                        logging.debug("Acquisition resynchronized")
+                        continue
+                    elif msg == GEN_STOP:
                         logging.debug("Acquisition cancelled")
                         break
                 elif trigger_mode == TRIG_SW:
                     # Wait for trigger
-                    if self._acq_wait_trigger():
-                        # True = Stop requested
+                    msg = self._acq_wait_trigger()
+                    if msg == GEN_RESYNC:
+                        logging.debug("Acquisition resynchronized")
+                        continue
+                    elif msg == GEN_STOP:
+                        logging.debug("Acquisition cancelled")
                         break
                     # Trigger received => start the acquisition
                     self.atcore.SendSoftwareTrigger()
                 elif trigger_mode == TRIG_FAKE:
                     # Wait for trigger
-                    if self._acq_wait_trigger():
-                        # True = Stop requested
+                    msg = self._acq_wait_trigger()
+                    if msg == GEN_RESYNC:
+                        logging.debug("Acquisition resynchronized")
+                        continue
+                    elif msg == GEN_STOP:
+                        logging.debug("Acquisition cancelled")
                         break
                     # Trigger received => start the acquisition
                     self.atcore.StartAcquisition()
@@ -2375,7 +2394,13 @@ class AndorCam2(model.DigitalCamera):
                 try:
                     # Wait for the acquisition to be received
                     logging.debug("Waiting for %g s", twait)
-                    if self._acq_wait_data(twait):
+                    should_stop = self._acq_wait_data(twait)
+                    if should_stop == GEN_RESYNC:
+                        # TODO: only for hw trigger (because the trigger might not have yet been received
+                        # In case of software trigger, the acquisition already started, so it's fine to continue waiting.
+                        logging.debug("Acquisition unsynchronized")
+                        continue
+                    elif should_stop == GEN_STOP:
                         logging.debug("Acquisition cancelled")
                         break
 
@@ -2421,7 +2446,8 @@ class AndorCam2(model.DigitalCamera):
                 # stopped, changed settings, and started again, while we were
                 # retrieving the image. Let's not send an image with the old
                 # settings in such case.
-                if self._acq_should_stop():
+                # No need to check for resync event, as the image is already acquired.
+                if self._acq_should_stop() == GEN_STOP:
                     logging.debug("Acquisition cancelled")
                     break
 
@@ -2621,6 +2647,7 @@ class AndorCam2DataFlow(model.DataFlow):
         """
         model.DataFlow.__init__(self)
         self._sync_event = None # synchronization Event
+        self._sync_lock = threading.Lock()  # To ensure only one sync change at a time
         self.component = weakref.ref(camera)
         self._prev_max_discard = self._max_discard
 
@@ -2651,33 +2678,34 @@ class AndorCam2DataFlow(model.DataFlow):
           disable synchronization.
         The DataFlow can be synchronize only with one Event at a time.
         """
-        if self._sync_event == event:
-            return
+        with self._sync_lock:
+            if self._sync_event == event:
+                return
 
-        comp = self.component()
-        if comp is None:
-            return
+            comp = self.component()
+            if comp is None:
+                return
 
-        if self._sync_event:
-            self._sync_event.unsubscribe(comp)
-            self.max_discard = self._prev_max_discard
+            if self._sync_event:
+                self._sync_event.unsubscribe(comp)
+                self.max_discard = self._prev_max_discard
 
-        self._sync_event = event
-        if self._sync_event:
-            # if the df is synchronized, the subscribers probably don't want to
-            # skip some data => disable discarding data
-            self._prev_max_discard = self._max_discard
-            # TODO: does it help? I'm pretty sure that 0MQ doesn't really change any behaviour
-            self.max_discard = 0
-            if issubclass(self._sync_event.get_type(), model.HwTrigger):
-                # Special case for the hardware trigger: we don't actually synchronize
-                # the data flow, as the camera itself will receive the event.
-                comp.set_trigger(TRIG_HW)
-            else:
-                comp.set_trigger(TRIG_SW)
-                self._sync_event.subscribe(comp)
-        else:  # Non synchronized
-            comp.set_trigger(False)
+            self._sync_event = event
+            if self._sync_event:
+                # If the DF is synchronized, the subscribers probably don't want to
+                # skip some data => disable discarding data
+                self._prev_max_discard = self._max_discard
+                # TODO: does it help? I'm pretty sure that 0MQ doesn't really change any behaviour
+                self.max_discard = 0
+                if issubclass(self._sync_event.get_type(), model.HwTrigger):
+                    # Special case for the hardware trigger: we don't actually synchronize
+                    # the data flow, as the camera itself will receive the event.
+                    comp.set_trigger(TRIG_HW)
+                else:
+                    comp.set_trigger(TRIG_SW)
+                    self._sync_event.subscribe(comp)
+            else:  # Non synchronized
+                comp.set_trigger(False)
 
 # Only for testing/simulation purpose
 # Very rough version that is just enough so that if the wrapper behaves correctly,
@@ -3120,6 +3148,12 @@ class FakeAndorV2DLL(object):
             triggered = self._swTrigger.wait(timeout)
             if not triggered:
                 raise AndorV2Error(20024, "No new data, simulated acquisition aborted")
+
+        # Uncomment to simulate a camera with hardware trigger not receiving any trigger
+        # elif self._trigger_mode == AndorV2DLL.TM_EXTERNAL:
+        #     # Pretend it never comes in
+        #     time.sleep(timeout)
+        #     raise AndorV2Error(20024, "No new data, simulated acquisition aborted")
 
         # Wait till image is acquired
         left = self.acq_end - time.time()

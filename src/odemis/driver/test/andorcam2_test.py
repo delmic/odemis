@@ -58,6 +58,7 @@ if TEST_NOHW:
     CLASS = CLASS_SIM
     KWARGS = KWARGS_SIM
 
+
 #@skip("simple")
 class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
     """
@@ -135,6 +136,9 @@ class TestAndorCam2HwTrigger(unittest.TestCase):
     def test_trigger_continuous(self):
         """
         Configure hw trigger, and check we receive images with .subscribe()
+
+        Note: on a real hardware, the camera trigger should receive triggers
+        regularly (ex: 10Hz)
         """
         exp = 0.01  # s
         number = 100  # number of frames to acquire
@@ -185,6 +189,82 @@ class TestAndorCam2HwTrigger(unittest.TestCase):
         self.left -= 1
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
+
+    def test_sw_hw_trigger_switch(self):
+        """
+        Check that going from SW to HW trigger while acquiring does immediately
+        the switch (ie, no need to stop/start acquisition)
+
+        Note: on a real hardware, the camera trigger should receive triggers
+        regularly (ex: 10Hz)
+        """
+        self.camera.exposureTime.value = 0.01  # s
+        self.camera.data.synchronizedOn(self.camera.softwareTrigger)
+
+        self.left = 10  # big number
+
+        # Start acquisition, without sending trigger -> no image should come
+        self.camera.data.subscribe(self.receive_image)
+        time.sleep(1)
+        self.assertEqual(len(self.rcv_dates), 0)
+
+        # Send a trigger => data should come (very soon)
+        self.camera.softwareTrigger.notify()
+        time.sleep(0.2)
+        self.assertEqual(len(self.rcv_dates), 1)
+
+        # Nothing more coming
+        time.sleep(1)
+        self.assertEqual(len(self.rcv_dates), 1)
+
+        # Switching to hardware trigger. On the simulator, that's simulated by
+        # a trigger just after waiting for the data. So the behaviour is actually
+        # the same as no trigger.
+        self.camera.data.synchronizedOn(self.camera.hardwareTrigger)
+        time.sleep(1)  # a couple of hw triggers coming in
+        self.assertGreater(len(self.rcv_dates), 1)
+
+        self.camera.data.unsubscribe(self.receive_image)
+
+        self.camera.data.synchronizedOn(None)
+
+    def test_hw_sw_trigger_switch(self):
+        """
+        Check that going from HW to SW trigger while acquiring does immediately
+        the switch (ie, no need to stop/start acquisition)
+
+        Note: on a real hardware, the camera trigger should NOT receive triggers.
+        """
+        if TEST_NOHW:
+            self.skipTest("Simulator simulate HW trigger by constantly generating data, not compatible")
+
+        self.camera.exposureTime.value = 0.01  # s
+        self.camera.data.synchronizedOn(self.camera.hardwareTrigger)
+
+        self.left = 10  # big number
+
+        # Start acquisition, without sending trigger -> no image should come
+        self.camera.data.subscribe(self.receive_image)
+        time.sleep(1)
+        self.assertEqual(len(self.rcv_dates), 0)
+
+        # Switch to software trigger => still no data coming
+        self.camera.data.synchronizedOn(self.camera.softwareTrigger)
+        time.sleep(1)
+        self.assertEqual(len(self.rcv_dates), 0)
+
+        # Send a trigger => data should come (very soon)
+        self.camera.softwareTrigger.notify()
+        time.sleep(0.2)
+        self.assertEqual(len(self.rcv_dates), 1)
+
+        # Nothing more coming
+        time.sleep(1)
+        self.assertEqual(len(self.rcv_dates), 1)
+
+        self.camera.data.unsubscribe(self.receive_image)
+
+        self.camera.data.synchronizedOn(None)
 
 
 #@skip("simple")
