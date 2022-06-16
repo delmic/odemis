@@ -364,7 +364,7 @@ class OdemisBugreporter(object):
             logging.exception("Failed to store bug report")
             raise
 
-    def _set_description(self, name, email, subject, message, topic_id: int):
+    def _set_description(self, name, email, subject, message, topic_id):
         """
         Saves the description parameters for the ticket creation in a txt file, compresses
         the file and calls self.create_ticket.
@@ -397,7 +397,7 @@ class OdemisBugreporter(object):
         wx.CallAfter(self.gui.wait_lbl.SetLabel, "Sending report...")
         self.create_ticket(api_key, report_description, [self.zip_fn])
 
-    def send_report(self, name: str, email: str, subject: str, message: str, topic_id: int=TOPIC_ID_DEFAULT) -> Future:
+    def send_report(self, name, email, subject, message, topic_id=TOPIC_ID_DEFAULT):
         """
         Calls _set_description in a thread.
         :arg name, email, summary, description: (String) arguments for corresponding dictionary keys
