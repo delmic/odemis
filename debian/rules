@@ -18,13 +18,13 @@ override_dh_installdocs:
 	make -C doc/develop/ images # To build dependencies (eg: SVG -> PDF)
 
 	# build & install multiple doc in multiple formats
-	python setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder html --version $(VER) --release $(VER)
+	python3 setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder html --version $(VER) --release $(VER)
 	# HTML is build/doc/develop/html/ , but rename so that it looks like ../develop-html
 	mv build/doc/develop/html/ build/doc/develop/develop-html
 	dh_installdocs build/doc/develop/develop-html
 	
 	# rst -> latex -> pdf
-	python setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder latex --version $(VER) --release $(VER)
+	python3 setup.py build_sphinx --source-dir doc/develop/ --build-dir build/doc/develop/ --builder latex --version $(VER) --release $(VER)
 	make -C build/doc/develop/latex all-pdf # PDF is build/doc/develop/latex/odemis-develop.pdf
 	dh_installdocs build/doc/develop/latex/odemis-develop.pdf
 	
