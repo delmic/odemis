@@ -1,3 +1,11 @@
+odemis (3.1.9-1) xenial; urgency=medium
+
+  * New version: 3.1.9
+  * Main bug fixed:
+    - Fix bug reporter Python 2 compatibility
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 16 Jun 2022 10:14:28 +0200
+
 odemis (3.1.8-1) xenial; urgency=medium
 
   * New version: 3.1.8
