@@ -326,11 +326,16 @@ def readable_time(seconds, full=True):
         logging.debug("Converting time longer than a month.")
 
     second, subsec = divmod(seconds, 1)
-    msec = round(subsec * 1e3)
-    if msec == 1000:
-        msec = 0
+    msec, submsec = divmod(subsec, 1e-3)
+    usec = round(submsec * 1e6)
+    if usec >= 1000:
+        usec -= 1000
+        msec += 1
+    if msec >= 1000:
+        msec -= 1000
         second += 1
-    if second == 0 and msec == 0:
+
+    if second == 0 and msec == 0 and usec == 0:
         # exactly 0 => special case
         if full:
             return u"0 second"
@@ -366,7 +371,16 @@ def readable_time(seconds, full=True):
             result.append(u"%d s" % (second,))
 
     if msec:
-        result.append(u"%d ms" % msec)
+        if full:
+            result.append(u"%d millisecond%s" % (msec, u"" if msec == 1 else u"s"))
+        else:
+            result.append(u"%d ms" % msec)
+
+    if usec:
+        if full:
+            result.append(u"%d microsecond%s" % (usec, u"" if usec == 1 else u"s"))
+        else:
+            result.append(u"%d µs" % usec)
 
     if len(result) == 1:
         # simple case
