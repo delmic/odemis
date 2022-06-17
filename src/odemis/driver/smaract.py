@@ -24,20 +24,20 @@ provided by SmarAct. This must be installed on the system for this actuator to r
 refer to the SmarAct readme for Linux installation instructions.
 '''
 from __future__ import division
+
 from concurrent.futures import CancelledError, TimeoutError
-
-import os
-import logging
-import time
-import math
-from ctypes import *
 import copy
-import threading
-
+from ctypes import *
+import logging
+import math
 from odemis import model
 from odemis import util
-from odemis.util import driver, RepeatingTimer, almost_equal
 from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, VigilantAttribute, roattribute
+from odemis.util import driver, RepeatingTimer, almost_equal
+import os
+import threading
+import time
+from typing import Optional, Dict
 
 
 def add_coord(pos1, pos2):
@@ -58,7 +58,7 @@ def add_coord(pos1, pos2):
     return ret
 
 
-class Pose(Structure):
+class Smarpod_Pose(Structure):
     """
     SmarPod Pose Structure (C Struct used by DLL)
 
@@ -74,7 +74,7 @@ class Pose(Structure):
         ]
     
     def __add__(self, o):
-        pose = Pose()
+        pose = Smarpod_Pose()
         pose.positionX = self.positionX + o.positionX
         pose.positionY = self.positionY + o.positionY
         pose.positionZ = self.positionZ + o.positionZ
@@ -84,7 +84,7 @@ class Pose(Structure):
         return pose
 
     def __sub__(self, o):
-        pose = Pose()
+        pose = Smarpod_Pose()
         pose.positionX = self.positionX - o.positionX
         pose.positionY = self.positionY - o.positionY
         pose.positionZ = self.positionZ - o.positionZ
@@ -93,53 +93,51 @@ class Pose(Structure):
         pose.rotationZ = self.rotationZ - o.rotationZ
         return pose
 
+    def __str__(self):
+        return "SmarPod_Pose. x: %f, y: %f, z: %f, rx: %f, ry: %f, rz: %f" % \
+            (self.positionX, self.positionY, self.positionZ,
+             self.rotationX, self.rotationY, self.rotationZ)
 
-def pose_to_dict(pose):
-    """
-    Convert a Pose (C structure) to a coordinate dictionary (str) -> (double)
-        pose: a Pose (C struct)
-    returns: Coordinate dictionary (str) -> (double) of axis name to value
-    """
-    pos = {}
-    pos['x'] = pose.positionX
-    pos['y'] = pose.positionY
-    pos['z'] = pose.positionZ
+    def asdict(self):
+        """
+        Convert the pose to a coordinate dictionary
+        returns (dict str -> float): Coordinates as axis name -> value.
+          Distance is in meters, and rotation are in radians.
+        """
+        # Note: internally, the system uses meters for positions and degrees for rotation
+        pos = {
+            'x': self.positionX,
+            'y': self.positionY,
+            'z': self.positionZ,
+            'rx': math.radians(self.rotationX),
+            'ry': math.radians(self.rotationY),
+            'rz': math.radians(self.rotationZ)
+        }
+        return pos
 
-    # Note: internally, the system uses metres and degrees for rotation
-    pos['rx'] = math.radians(pose.rotationX)
-    pos['ry'] = math.radians(pose.rotationY)
-    pos['rz'] = math.radians(pose.rotationZ)
-    return pos
-
-
-def dict_to_pose(pos, base=Pose()):
-    """
-    Convert a coordinate dictionary (str) -> (double) to a Pose C struct
-        pos: Coordinate dictionary (str) -> (double) of axis name to value
-        base: a Pose that is used as a base in case you don't want to initialize
-            the C struct to unknown values in the case where not all axes
-            are defined in the pos dict.
-    returns: a Pose (C struct)
-    raises ValueError if an unsupported axis name is input
-    """
-
-    # Note: internally, the system uses metres and degrees for rotation
-    for an, v in pos.items():
-        if an == "x":
-            base.positionX = v
-        elif an == "y":
-            base.positionY = v
-        elif an == "z":
-            base.positionZ = v
-        elif an == "rx":
-            base.rotationX = math.degrees(v)
-        elif an == "ry":
-            base.rotationY = math.degrees(v)
-        elif an == "rz":
-            base.rotationZ = math.degrees(v)
-        else:
-            raise ValueError("Invalid axis")
-    return base
+    def update(self, pos):
+        """
+        Changes the values of some of the axes.
+        pos (dict str -> float): Coordinates as axis name -> value. Not all axes have
+          to be defined. Distance is in meters, and rotation are in radians.
+        raises ValueError if an unsupported axis name is input
+        """
+        # Note: internally, the system uses meters for positions and degrees for rotation
+        for an, v in pos.items():
+            if an == "x":
+                self.positionX = v
+            elif an == "y":
+                self.positionY = v
+            elif an == "z":
+                self.positionZ = v
+            elif an == "rx":
+                self.rotationX = math.degrees(v)
+            elif an == "ry":
+                self.rotationY = math.degrees(v)
+            elif an == "rz":
+                self.rotationZ = math.degrees(v)
+            else:
+                raise ValueError(f"Invalid axis {an}")
 
 
 class SmarPodDLL(CDLL):
@@ -148,104 +146,111 @@ class SmarPodDLL(CDLL):
     all the functions automatically.
     """
     
-    hwModel = c_long(10001)  # specifies the SmarPod 110.45 S (nano)
-
     # Status
-    SMARPOD_OK = 0
-    SMARPOD_OTHER_ERROR = 1
-    SMARPOD_SYSTEM_NOT_INITIALIZED_ERROR = 2
-    SMARPOD_NO_SYSTEMS_FOUND_ERROR = 3
-    SMARPOD_INVALID_PARAMETER_ERROR = 4
-    SMARPOD_COMMUNICATION_ERROR = 5
-    SMARPOD_UNKNOWN_PROPERTY_ERROR = 6
-    SMARPOD_RESOURCE_TOO_OLD_ERROR = 7
-    SMARPOD_FEATURE_UNAVAILABLE_ERROR = 8
-    SMARPOD_INVALID_SYSTEM_LOCATOR_ERROR = 9
-    SMARPOD_QUERYBUFFER_SIZE_ERROR = 10
-    SMARPOD_COMMUNICATION_TIMEOUT_ERROR = 11
-    SMARPOD_DRIVER_ERROR = 12
-    SMARPOD_STATUS_CODE_UNKNOWN_ERROR = 500
-    SMARPOD_INVALID_ID_ERROR = 501
-    SMARPOD_INITIALIZED_ERROR = 502
-    SMARPOD_HARDWARE_MODEL_UNKNOWN_ERROR = 503
-    SMARPOD_WRONG_COMM_MODE_ERROR = 504
-    SMARPOD_NOT_INITIALIZED_ERROR = 505
-    SMARPOD_INVALID_SYSTEM_ID_ERROR = 506
-    SMARPOD_NOT_ENOUGH_CHANNELS_ERROR = 507
-    SMARPOD_INVALID_CHANNEL_ERROR = 508
-    SMARPOD_CHANNEL_USED_ERROR = 509
-    SMARPOD_SENSORS_DISABLED_ERROR = 510
-    SMARPOD_WRONG_SENSOR_TYPE_ERROR = 511
-    SMARPOD_SYSTEM_CONFIGURATION_ERROR = 512
-    SMARPOD_SENSOR_NOT_FOUND_ERROR = 513
-    SMARPOD_STOPPED_ERROR = 514
-    SMARPOD_BUSY_ERROR = 515
-    SMARPOD_NOT_REFERENCED_ERROR = 550
-    SMARPOD_POSE_UNREACHABLE_ERROR = 551
+    OK = 0
+    OTHER_ERROR = 1
+    SYSTEM_NOT_INITIALIZED_ERROR = 2
+    NO_SYSTEMS_FOUND_ERROR = 3
+    INVALID_PARAMETER_ERROR = 4
+    COMMUNICATION_ERROR = 5
+    UNKNOWN_PROPERTY_ERROR = 6
+    RESOURCE_TOO_OLD_ERROR = 7
+    FEATURE_UNAVAILABLE_ERROR = 8
+    INVALID_SYSTEM_LOCATOR_ERROR = 9
+    QUERYBUFFER_SIZE_ERROR = 10
+    COMMUNICATION_TIMEOUT_ERROR = 11
+    DRIVER_ERROR = 12
+    STATUS_CODE_UNKNOWN_ERROR = 500
+    INVALID_ID_ERROR = 501
+    INITIALIZED_ERROR = 502
+    HARDWARE_MODEL_UNKNOWN_ERROR = 503
+    WRONG_COMM_MODE_ERROR = 504
+    NOT_INITIALIZED_ERROR = 505
+    INVALID_SYSTEM_ID_ERROR = 506
+    NOT_ENOUGH_CHANNELS_ERROR = 507
+    INVALID_CHANNEL_ERROR = 508
+    CHANNEL_USED_ERROR = 509
+    SENSORS_DISABLED_ERROR = 510
+    WRONG_SENSOR_TYPE_ERROR = 511
+    SYSTEM_CONFIGURATION_ERROR = 512
+    SENSOR_NOT_FOUND_ERROR = 513
+    STOPPED_ERROR = 514
+    BUSY_ERROR = 515
+    NOT_REFERENCED_ERROR = 550
+    POSE_UNREACHABLE_ERROR = 551
+    COMMAND_OVERRIDDEN_ERROR = 552
+    ENDSTOP_REACHED_ERROR = 553
+    NOT_STOPPED_ERROR = 554
+    COULD_NOT_REFERENCE_ERROR = 555
+    COULD_NOT_CALIBRATE_ERROR = 556
 
-    # Defines
-    SMARPOD_SENSORS_DISABLED = c_uint(0)
-    SMARPOD_SENSORS_ENABLED = c_uint(1)
-    SMARPOD_SENSORS_POWERSAVE = c_uint(2)
+    # For SensorPowerMode
+    SENSORS_DISABLED = 0
+    SENSORS_ENABLED = 1
+    SENSORS_POWERSAVE = 2
 
-    # property symbols
-    SMARPOD_FREF_METHOD = c_uint(1000)
-    SMARPOD_FREF_ZDIRECTION = c_uint(1002)
-    SMARPOD_FREF_XDIRECTION = c_uint(1003)
-    SMARPOD_FREF_YDIRECTION = c_uint(1004)
-    SMARPOD_PIVOT_MODE = c_uint(1010)
-    SMARPOD_FREF_AND_CAL_FREQUENCY = c_uint(1020)
-    SMARPOD_POSITIONERS_MIN_SPEED = c_uint(1100)
+    # Property symbols
+    FREF_METHOD = 1000
+    FREF_ZDIRECTION = 1002
+    FREF_XDIRECTION = 1003
+    FREF_YDIRECTION = 1004
+    PIVOT_MODE = 1010
+    REF_AND_CAL_FREQUENCY = 1020
+    POSITIONERS_MIN_SPEED = 1100  # double
+
+    # For PivotMode
+    PIVOT_RELATIVE = 0
+    PIVOT_FIXED = 1
 
     # move-status constants
-    SMARPOD_STOPPED = c_uint(0)
-    SMARPOD_HOLDING = c_uint(1)
-    SMARPOD_MOVING = c_uint(2)
-    SMARPOD_CALIBRATING = c_uint(3)
-    SMARPOD_REFERENCING = c_uint(4)
-    SMARPOD_STANDBY = c_uint(5)
+    STOPPED = 0
+    HOLDING = 1
+    MOVING = 2
+    CALIBRATING = 3
+    REFERENCING = 4
+    STANDBY = 5
     
-    SMARPOD_HOLDTIME_INFINITE = c_uint(60000)
+    HOLDTIME_INFINITE = 60000
 
     err_code = {
-0: "OK",
-1: "OTHER_ERROR",
-2: "SYSTEM_NOT_INITIALIZED_ERROR",
-3: "NO_SYSTEMS_FOUND_ERROR",
-4: "INVALID_PARAMETER_ERROR",
-5: "COMMUNICATION_ERROR",
-6: "UNKNOWN_PROPERTY_ERROR",
-7: "RESOURCE_TOO_OLD_ERROR",
-8: "FEATURE_UNAVAILABLE_ERROR",
-9: "INVALID_SYSTEM_LOCATOR_ERROR",
-10: "QUERYBUFFER_SIZE_ERROR",
-11: "COMMUNICATION_TIMEOUT_ERROR",
-12: "DRIVER_ERROR",
-500: "STATUS_CODE_UNKNOWN_ERROR",
-501: "INVALID_ID_ERROR",
-503: "HARDWARE_MODEL_UNKNOWN_ERROR",
-504: "WRONG_COMM_MODE_ERROR",
-505: "NOT_INITIALIZED_ERROR",
-506: "INVALID_SYSTEM_ID_ERROR",
-507: "NOT_ENOUGH_CHANNELS_ERROR",
-510: "SENSORS_DISABLED_ERROR",
-511: "WRONG_SENSOR_TYPE_ERROR",
-512: "SYSTEM_CONFIGURATION_ERROR",
-513: "SENSOR_NOT_FOUND_ERROR",
-514: "STOPPED_ERROR",
-515: "BUSY_ERROR",
-550: "NOT_REFERENCED_ERROR",
-551: "POSE_UNREACHABLE_ERROR",
-552: "COMMAND_OVERRIDDEN_ERROR",
-553: "ENDSTOP_REACHED_ERROR",
-554: "NOT_STOPPED_ERROR",
-555: "COULD_NOT_REFERENCE_ERROR",
-556: "COULD_NOT_CALIBRATE_ERROR",
-        }
+        0: "OK",
+        1: "OTHER_ERROR",
+        2: "SYSTEM_NOT_INITIALIZED_ERROR",
+        3: "NO_SYSTEMS_FOUND_ERROR",
+        4: "INVALID_PARAMETER_ERROR",
+        5: "COMMUNICATION_ERROR",
+        6: "UNKNOWN_PROPERTY_ERROR",
+        7: "RESOURCE_TOO_OLD_ERROR",
+        8: "FEATURE_UNAVAILABLE_ERROR",
+        9: "INVALID_SYSTEM_LOCATOR_ERROR",
+        10: "QUERYBUFFER_SIZE_ERROR",
+        11: "COMMUNICATION_TIMEOUT_ERROR",
+        12: "DRIVER_ERROR",
+        500: "STATUS_CODE_UNKNOWN_ERROR",
+        501: "INVALID_ID_ERROR",
+        503: "HARDWARE_MODEL_UNKNOWN_ERROR",
+        504: "WRONG_COMM_MODE_ERROR",
+        505: "NOT_INITIALIZED_ERROR",
+        506: "INVALID_SYSTEM_ID_ERROR",
+        507: "NOT_ENOUGH_CHANNELS_ERROR",
+        510: "SENSORS_DISABLED_ERROR",
+        511: "WRONG_SENSOR_TYPE_ERROR",
+        512: "SYSTEM_CONFIGURATION_ERROR",
+        513: "SENSOR_NOT_FOUND_ERROR",
+        514: "STOPPED_ERROR",
+        515: "BUSY_ERROR",
+        550: "NOT_REFERENCED_ERROR",
+        551: "POSE_UNREACHABLE_ERROR",
+        552: "COMMAND_OVERRIDDEN_ERROR",
+        553: "ENDSTOP_REACHED_ERROR",
+        554: "NOT_STOPPED_ERROR",
+        555: "COULD_NOT_REFERENCE_ERROR",
+        556: "COULD_NOT_CALIBRATE_ERROR",
+    }
 
     def __init__(self):
         if os.name == "nt":
-            raise NotImplemented("Windows not yet supported")
+            raise NotImplementedError("Windows not yet supported")
             # WinDLL.__init__(self, "libsmarpod.dll")  # TODO check it works
             # atmcd64d.dll on 64 bits
         else:
@@ -264,11 +269,11 @@ class SmarPodDLL(CDLL):
     @staticmethod
     def sp_errcheck(result, func, args):
         """
-        Analyse the retuhwModelrn value of a call and raise an exception in case of
+        Analyse the return value of a call and raise an exception in case of
         error.
         Follows the ctypes.errcheck callback convention
         """
-        if result != SmarPodDLL.SMARPOD_OK:
+        if result != SmarPodDLL.OK:
             raise SmarPodError(result)
 
         return result
@@ -291,119 +296,203 @@ class SmarPodError(Exception):
 
 class SmarPod(model.Actuator):
     
-    def __init__(self, name, role, locator, ref_on_init=False, actuator_speed=0.1,
-                 axes=None, **kwargs):
+    def __init__(self, name: str, role: str, locator: str, hwmodel: int=10001,
+                 axes: dict=None, ref_on_init: bool=False,
+                 speed: float=1e-3, accel: float=1e-3,
+                 hold_time=float("inf"), **kwargs):
         """
         A driver for a SmarAct SmarPod Actuator.
-        This driver uses a DLL provided by SmarAct which connects via
+        This driver uses the SmarPod DLL provided by SmarAct which connects via
         USB or TCP/IP using a locator string.
 
-        name: (str)
-        role: (str)
-        locator: (str) Use "fake" for a simulator.
-            For a real device, MCS controllers with USB interface can be addressed with the
+        name:
+        role:
+        locator: Use "fake" for a simulator.
+            For a real device, MCS2 controllers with USB interface can be addressed with the
             following locator syntax:
-                usb:id:<id>
-            where <id> is the first part of a USB devices serial number which
-            is printed on the MCS controller.
-            If the controller has a TCP/IP connection, use:
-                network:<ip>:<port>
-        ref_on_init: (bool) determines if the controller should automatically reference
-            on initialization
-        actuator_speed: (double) the default speed (in m/s) of the actuators
-        axes: dict str (axis name) -> dict (axis parameters)
+                usb:sn:<serialnumber>
+            where <serialnumber> is the serial number of an MCS2 controller.
+            Be aware that on Linux, a udev rules must be added to disable the standard
+            tty driver from connecting to the device.
+            If the controller has a TCP/IP connection, use one of:
+                network:<ipv4>
+                network:sn:<serialnumber>
+        hwmodel: the hardware model code (typically between 10000 and 10100)
+        axes (dict str (axis name) -> dict (axis parameters)):
+            Typically, axes are x, y, z, rx, ry, rz
             axis parameters: {
                 range: [float, float], default is -1 -> 1
                 unit: (str) default will be set to 'm'
             }
+        ref_on_init: determines if the controller should automatically reference
+            on initialization
+        speed: the maximum speed (in m/s) of a point on the stage
+        accel: the maximum acceleration (in m/s²) of a point on the stage
+        hold_time (float>=0): the hold time, in seconds, for the actuator after the target position is reached.
+            Default is infinite (float('inf') in Python, .inf in YAML). Can be also set to 0 to disable hold.
         """
         if not axes:
             raise ValueError("Needs at least 1 axis.")
 
-        if locator != "fake":
-            self.core = SmarPodDLL()
-        else:
+        if hold_time < 0:
+            raise ValueError(f"hold_time should be > 0, but got {hold_time}")
+        self._hold_time = hold_time
+
+        if locator == "fake":
             self.core = FakeSmarPodDLL()
+        else:
+            self.core = SmarPodDLL()
             
         # Not to be mistaken with axes which is a simple public view
         self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
-        self._locator = c_char_p(locator.encode("ascii"))
-        self._options = c_char_p("".encode("ascii"))  # In the current version, this must be an empty string.
 
-        for axis_name, axis_par in axes.items():
+        for axis_name, param in axes.items():
             try:
-                axis_range = axis_par['range']
+                axis_range = param['range']
             except KeyError:
                 logging.info("Axis %s has no range. Assuming (-1, 1)", axis_name)
                 axis_range = (-1, 1)
 
             try:
-                axis_unit = axis_par['unit']
+                axis_unit = param['unit']
             except KeyError:
                 logging.info("Axis %s has no unit. Assuming m", axis_name)
                 axis_unit = "m"
 
             ad = model.Axis(canAbs=True, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
-            
-            
+
         # Connect to the device
         self._id = c_uint()
-        self.core.Smarpod_Open(byref(self._id), SmarPodDLL.hwModel, self._locator, self._options)
+        try:
+            self.core.Smarpod_Open(byref(self._id), c_ulong(hwmodel),
+                                   c_char_p(locator.encode("ascii")),
+                                   c_char_p(b""))  # last arg is unused
+        except SmarPodError as ex:
+            if ex.errno == SmarPodDLL.NO_SYSTEMS_FOUND_ERROR:
+                raise model.HwError("Failed to find device, check it is connected and turned on") from ex
+            raise
+
         logging.debug("Successfully connected to SmarPod Controller ID %d", self._id.value)
-        self.core.Smarpod_SetSensorMode(self._id, SmarPodDLL.SMARPOD_SENSORS_ENABLED)
+        self.core.Smarpod_SetSensorMode(self._id, SmarPodDLL.SENSORS_ENABLED)
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
         # Add metadata
-        self._swVersion = self.GetSwVersion()
+        self._swVersion = "%u.%u.%u" % self.GetDLLVersion()
         self._metadata[model.MD_SW_VERSION] = self._swVersion
         logging.debug("Using SmarPod library version %s", self._swVersion)
 
         self.position = model.VigilantAttribute({}, readonly=True)
+        self._updatePosition()
+
+        # For now we always set the pivot point to "fixed" mode.
+        # When the stage moves, the pivot point does not, which is useful if
+        # needed to rotate around external object (eg, a lens).
+        self.Set_ui(SmarPodDLL.PIVOT_MODE, SmarPodDLL.PIVOT_FIXED)
+        self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
-        referenced = c_int()
-        self.core.Smarpod_IsReferenced(self._id, byref(referenced))
+        # Use a default actuator speed
+        self.SetSpeed(speed)
+        self.speed = VigilantAttribute({}, unit="m/s", readonly=True)
+        self._updateSpeed()
+        self.SetAcceleration(accel)
+        self._accel = self.GetAcceleration()
+
+        referenced = self.IsReferenced()
         # define the referenced VA from the query
-        axes_ref = {a: referenced.value for a, i in self.axes.items()}
+        axes_ref = {a: referenced for a in self.axes}
         # VA dict str(axis) -> bool
         self.referenced = model.VigilantAttribute(axes_ref, readonly=True)
         # If ref_on_init, referenced immediately.
-        if referenced.value:
+        if referenced:
             logging.debug("SmarPod is referenced")
         else:
-            logging.warning("SmarPod is not referenced. The device will not function until referencing occurs.")
             if ref_on_init:
-                self.reference().result()
+                self.reference(set(axes_ref.keys()))  # will reference in background
+            else:
+                logging.warning("SmarPod is not referenced. The device will not function until referencing occurs.")
 
-        # Use a default actuator speed
-        self._set_speed(actuator_speed)
-        self._speed = self._get_speed()
-        self._accel = self.GetAcceleration()
-
-        self._updatePosition()
+        self._update_position_timer = RepeatingTimer(1.0, self._updatePositionInBackground)
+        self._update_position_timer.start()
 
     def terminate(self):
+        self._update_position_timer.cancel()
+
+        if self._executor:
+            self.Stop()
+            self._executor.shutdown()
+            self._executor = None
+            self.core.Smarpod_Close(self._id)
+
         # should be safe to close the device multiple times if terminate is called more than once.
-        self.core.Smarpod_Close(self._id)
         super(SmarPod, self).terminate()
+
+    def updateMetadata(self, md):
+        if model.MD_PIVOT_POS in md:
+            pivot = md[model.MD_PIVOT_POS]
+            if not (isinstance(pivot, dict) and set(pivot.keys()) == {"x", "y", "z"}):
+                raise ValueError("Invalid metadata, should be a coordinate dictionary with x, y, z keys but got %s." % (pivot,))
+
+            logging.debug("Updating pivot point to %s.", pivot)
+            self.SetPivot(pivot)
+
+        super().updateMetadata(md)
         
-    def GetSwVersion(self):
+    def GetDLLVersion(self):
         """
-        Request the software version from the DLL file
+        Request the software version of the DLL file
+        return (int, int, int): major, minor, update version numbers
         """
         major = c_uint()
         minor = c_uint()
         update = c_uint()
         self.core.Smarpod_GetDLLVersion(byref(major), byref(minor), byref(update))
-        ver = "%u.%u.%u" % (major.value, minor.value, update.value)
-        return ver
+        return major.value, minor.value, update.value
 
-    def _is_referenced(self):
+    def Set_ui(self, property: int, value: int):
+        """
+        Set a property of type unsigned integer
+        property (> 0): the ID of the property (typically, between 1000 and 1100)
+        value (> 0): the value to set
+        """
+        self.core.Smarpod_Set_ui(self._id, c_uint(property), c_uint(value))
+
+    def Set_d(self, property: int, value: float):
+        """
+        Set a property of type double float
+        property (> 0): the ID of the property (typically, between 1000 and 1100)
+        value: the value to set
+        """
+        self.core.Smarpod_Set_d(self._id, c_uint(property), c_double(value))
+
+    # Note: There is also getter/setter for "integer" properties, but there are no such properties
+
+    def Get_ui(self, property: int) -> int:
+        """
+        Reads a property of type unsigned integer
+        property (> 0): the ID of the property (typically, between 1000 and 1100)
+        return value (> 0): the value of the property
+        """
+        value = c_uint()
+        self.core.Smarpod_Get_ui(self._id, c_uint(property), byref(value))
+        return value.value
+
+    def Get_d(self, property: int) -> float:
+        """
+        Reads a property of type double float
+        property (> 0): the ID of the property (typically, between 1000 and 1100)
+        return value (> 0): the value of the property
+        """
+        value = c_double()
+        self.core.Smarpod_Get_d(self._id, c_uint(property), byref(value))
+        return value.value
+
+    def IsReferenced(self):
         """
         Ask the controller if it is referenced
         """
@@ -415,38 +504,42 @@ class SmarPod(model.Actuator):
         """
         Gets the move status from the controller.
         Returns:
-            SmarPodDLL.SMARPOD_MOVING is returned if moving
-            SmarPodDLL.SMARPOD_STOPPED when stopped
-            SmarPodDLL.SMARPOD_HOLDING when holding between moves
-            SmarPodDLL.SMARPOD_CALIBRATING when calibrating
-            SmarPodDLL.SMARPOD_REFERENCING when referencing
-            SmarPodDLL.SMARPOD_STANDBY
+            SmarPodDLL.MOVING is returned if moving
+            SmarPodDLL.STOPPED when stopped
+            SmarPodDLL.HOLDING when holding between moves
+            SmarPodDLL.CALIBRATING when calibrating
+            SmarPodDLL.REFERENCING when referencing
+            SmarPodDLL.STANDBY
         """
         status = c_uint()
         self.core.Smarpod_GetMoveStatus(self._id, byref(status))
-        return status
+        return status.value
 
     def Move(self, pos, hold_time=0, block=False):
         """
-        Move to pose command.
+        Move to pose command. It is possible and safe to call it if a previous
+          movement has been called in non-blocking mode.
         pos: (dict str -> float) axis name -> position
             This is converted to the pose C-struct which is sent to the SmarPod DLL
-        hold_time: (float) specify in seconds how long to hold after the move.
+        hold_time: (float >=0) specify in seconds how long to hold after the move.
             If set to float(inf), will hold forever until a stop command is issued.
         block: (bool) Set to True if the function should block until the move completes
 
         Raises: SmarPodError if a problem occurs
         """
-        # convert into a smartpad pose
-        newPose = dict_to_pose(pos, self.GetPose())
+        # convert into a SmarpodPose
+        newPose = self.GetPose()
+        newPose.update(pos)
+
+        if hold_time < 0:
+            raise ValueError(f"hold_time should be >= 0, is {hold_time}")
 
         if hold_time == float("inf"):
-            ht = SmarPodDLL.SMARPOD_HOLDTIME_INFINITE
+            ht = SmarPodDLL.HOLDTIME_INFINITE
         else:
-            ht = c_uint(int(hold_time * 1000.0))
+            ht = int(hold_time * 1000)
 
-        # Use an infiinite holdtime and non-blocking (final argument)
-        self.core.Smarpod_Move(self._id, byref(newPose), ht, c_int(block))
+        self.core.Smarpod_Move(self._id, byref(newPose), c_uint(ht), c_int(block))
 
     def GetPose(self):
         """
@@ -454,7 +547,7 @@ class SmarPod(model.Actuator):
 
         returns: (dict str -> float): axis name -> position
         """
-        pose = Pose()
+        pose = Smarpod_Pose()
         self.core.Smarpod_GetPose(self._id, byref(pose))
         return pose
 
@@ -465,41 +558,60 @@ class SmarPod(model.Actuator):
         logging.debug("Stopping...")
         self.core.Smarpod_Stop(self._id)
 
-    def _set_speed(self, value):
+    def SetSpeed(self, value: Optional[float]):
         """
         Set the speed of the SmarPod motion
-        value: (double) indicating speed for all axes
+        value: (float or None) the maximum velocity (m/s) of the fastest moving positioner,
+          the other positioners move so that points on the stage move at constant
+          speed.
+          If None, disable speed control: all positioners go at the maximum speed
         """
+        # TODO: allow to pass None to disable constant speed
         logging.debug("Setting speed to %f", value)
-        # the second argument (1) turns on speed control.
-        self.core.Smarpod_SetSpeed(self._id, c_int(1), c_double(value))
+        if value is None:  # Disable speed control
+            self.core.Smarpod_SetSpeed(self._id, c_int(0), c_double(0))
+        else:
+            # the second argument (1) turns on speed control.
+            self.core.Smarpod_SetSpeed(self._id, c_int(1), c_double(value))
 
-    def _get_speed(self):
+    def GetSpeed(self) -> Optional[float]:
         """
-        Returns (double) the speed of the SmarPod motion
+        Returns (float or None) the speed of the SmarPod motion.
+          If speed control is disabled, it returns None.
         """
         speed_control = c_int()
         speed = c_double()
         self.core.Smarpod_GetSpeed(self._id, byref(speed_control), byref(speed))
-        return speed.value
+        if speed_control.value:
+            return speed.value
+        else:
+            return None
 
-    def SetAcceleration(self, value):
+    def SetAcceleration(self, value: Optional[float]):
         """
         Set the acceleration of the SmarPod motion
-        value: (double) indicating acceleration for all axes
+        value: (float or None) indicating acceleration for all axes.
+          If None, disable acceleration control: speed is kept constant
         """
         logging.debug("Setting acceleration to %f", value)
-        # Passing 1 enables acceleration control.
-        self.core.Smarpod_SetAcceleration(self._id, c_int(1), c_double(value))
+        if value is None:  # Disable acceleration control
+            self.core.Smarpod_SetAcceleration(self._id, c_int(0), c_double(0))
+        else:
+            # Passing 1 enables acceleration control.
+            self.core.Smarpod_SetAcceleration(self._id, c_int(1), c_double(value))
 
-    def GetAcceleration(self):
+    def GetAcceleration(self) -> Optional[float]:
         """
-        Returns (double) the acceleration of the SmarPod motion
+        Returns (float or None) the acceleration of the SmarPod motion
+          If acceleration control is disabled, it return None.
         """
         acceleration_control = c_int()
         acceleration = c_double()
         self.core.Smarpod_GetAcceleration(self._id, byref(acceleration_control), byref(acceleration))
-        return acceleration.value
+        if acceleration_control.value:
+            return acceleration.value
+        else:
+            return None
     
     def IsPoseReachable(self, pos):
         """
@@ -508,32 +620,75 @@ class SmarPod(model.Actuator):
         returns: true if the pose is reachable - false otherwise.
         """
         reachable = c_int()
-        self.core.Smarpod_IsPoseReachable(self._id, byref(dict_to_pose(pos)), byref(reachable))
+        newPose = self.GetPose()
+        newPose.update(pos)
+        self.core.Smarpod_IsPoseReachable(self._id, byref(newPose), byref(reachable))
         return bool(reachable.value)
-    
-    def stop(self, axes=None):
+
+    def SetPivot(self, piv_dict: Dict[str, float]):
         """
-        Stop the SmarPod controller and update position
+        Set the pivot point of the device
+
+        piv_dict: Position dictionary, with 'x', 'y', 'z' position.
         """
-        self.Stop()
-        self._updatePosition()
+        pivot = (c_double * 3)(piv_dict["x"], piv_dict["y"], piv_dict["z"])
+        self.core.Smarpod_SetPivot(self._id, pivot)
+
+    def GetPivot(self) -> Dict[str, float]:
+        """
+        Get the pivot point from the controller
+
+        returns: position as axis name -> position of axis
+        """
+        pivot = (c_double * 3)()
+        self.core.Smarpod_GetPivot(self._id, pivot)
+        return {'x': pivot[0], 'y': pivot[1], 'z': pivot[2]}
+
+    def _updatePositionInBackground(self):
+        """
+        Callback to update the position regularly in background in a separate thread
+        """
+        try:
+            # Don't update if not referenced, as it cannot read the position,
+            # and would just log a warning instead.
+            if any(self.referenced.value.values()):
+                self._updatePosition()
+        except Exception:
+            logging.exception("Failed to update the position")
 
     def _updatePosition(self):
         """
         update the position VA
         """
         try:
-            p = pose_to_dict(self.GetPose())
+            p = self.GetPose().asdict()
         except SmarPodError as ex:
-            if ex.errno == SmarPodDLL.SMARPOD_NOT_REFERENCED_ERROR:
+            if ex.errno == SmarPodDLL.NOT_REFERENCED_ERROR:
                 logging.warning("Position unknown because SmarPod is not referenced")
-                p = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+                p = {a: 0 for a in self.axes}
             else:
                 raise
 
         p = self._applyInversion(p)
         logging.debug("Updated position to %s", p)
         self.position._set_value(p, force_write=True)
+
+    def _updateSpeed(self):
+        """
+        update the speed
+        """
+        # The set speed is the maximum speed of the positioners, not the axes
+        # (which are composed by movements from several positioners), but let's
+        # just approximate it as the same speed on all linear axes
+        s = {}
+        speed = self.GetSpeed()
+        if speed is not None:
+            for axis_name, axis_def in self.axes.items():
+                if axis_def.unit == "m":
+                    s[axis_name] = speed
+
+        logging.debug("Updated speed to %s", s)
+        self.speed._set_value(s, force_write=True)
 
     def _createMoveFuture(self, ref=False):
         """
@@ -543,20 +698,20 @@ class SmarPod(model.Actuator):
         f = CancellableFuture()
         f._moving_lock = threading.Lock()  # taken while moving
         f._must_stop = threading.Event()  # cancel of the current future requested
-        f._was_stopped = False  # if cancel was successful
-        if not ref:
-            f.task_canceller = self._cancelCurrentMove
-        else:
-            f.task_canceller = self._cancelReference
+        f.task_canceller = self._cancelCurrentMove
         return f
 
     @isasync
-    def reference(self, _=None):
+    def reference(self, axes):
         """
-        reference usually takes axes as an argument. However, the SmarPod references all
-        axes together so this argument is extraneous.
+        axes (set of str): Typically, this contains the set of axes to reference.
+          However, as the SmarPod references all axes together, as long as axes
+          contains (only) valid axes, all axes are referenced.
+        returns (Future): object to control the reference request
         """
-        f = self._createMoveFuture(ref=True)
+        self._checkReference(axes)
+
+        f = self._createMoveFuture()
         self._executor.submitf(f, self._doReference, f)
         return f
 
@@ -568,37 +723,42 @@ class SmarPod(model.Actuator):
             IOError: if referencing failed due to hardware
             CancelledError if was cancelled
         """
-        # Reset reference so that if it fails, it states the axes are not
-        # referenced (anymore)
-        with future._moving_lock:
-            try:
-                # set the referencing for all axes to fals
+        try:
+            with future._moving_lock:
+                if future._must_stop.is_set():
+                    raise CancelledError()
+                # Reset reference so that if it fails, it states the axes are not
+                # referenced (anymore)
                 self.referenced._value = {a: False for a in self.axes.keys()}
 
-                # The SmarPod references all axes at once. This function blocks
-                self.core.Smarpod_FindReferenceMarks(self._id)
+            # The SmarPod references all axes at once. This function blocks
+            logging.debug("Starting reference procedure")
+            self.core.Smarpod_FindReferenceMarks(self._id)
 
-                if self._is_referenced():
-                    self.referenced._value = {a: True for a in self.axes.keys()}
-                    self._updatePosition()
-                    logging.info("Referencing successful.")
+            if self.IsReferenced():
+                logging.info("Referencing successful.")
+                self.referenced._value = {a: True for a in self.axes.keys()}
 
-            except SmarPodError as ex:
-                future._was_stopped = True
-                # This occurs if a stop command interrupts referencing
-                if ex.errno == SmarPodDLL.SMARPOD_STOPPED_ERROR:
-                    logging.info("Referencing stopped: %s", ex)
-                    raise CancelledError()
-                else:
-                    raise
-            except Exception:
-                logging.exception("Referencing failure")
+        except SmarPodError as ex:
+            # This occurs if a stop command interrupts referencing
+            if ex.errno == SmarPodDLL.STOPPED_ERROR:
+                logging.info("Referencing stopped: %s", ex)
+                raise CancelledError()
+            else:
+                logging.error("Referencing failed: %s", ex)
                 raise
-            finally:
-                # We only notify after updating the position so that when a listener
-                # receives updates both values are already updated.
-                # read-only so manually notify
-                self.referenced.notify(self.referenced.value)
+        except CancelledError:
+            logging.debug("Referencing canceled")
+            raise  # No fuss, pass it as-is
+        except Exception:
+            logging.exception("Referencing failure")
+            raise
+        finally:
+            self._updatePosition()
+            # We only notify after updating the position so that when a listener
+            # receives updates both values are already updated.
+            # read-only so manually notify
+            self.referenced.notify(self.referenced.value)
 
     @isasync
     def moveAbs(self, pos):
@@ -616,6 +776,19 @@ class SmarPod(model.Actuator):
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
 
+    def _estimateMoveDuration(self, new_pos) -> float:
+        """
+        Estimate the maximum duration of a move
+        new_pos: (dict str -> float): axis name -> absolute target position
+        returns: the duration of the move in seconds
+        """
+        pos = self._applyInversion(self.position.value)
+        # TODO: Calculate an estimated move duration
+        # Probably using the speed + accel on the translation could work as a
+        # conservative estimate for translation moves. However for the rotational
+        # moves that's harder. => Just use a hard-coded value for rotations
+        return 30  # s
+
     def _doMoveAbs(self, future, pos):
         """
         Blocking and cancellable absolute move
@@ -626,24 +799,30 @@ class SmarPod(model.Actuator):
             CancelledError: if cancelled before the end of the move
         """
         last_upd = time.time()
-        dur = 30  # TODO: Calculate an estimated move duration
+        dur = self._estimateMoveDuration(pos)
         end = time.time() + dur
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
         timeout = last_upd + max_dur
 
-        with future._moving_lock:
-            self.Move(pos)
+        try:
+            # Start the move
+            with future._moving_lock:
+                if future._must_stop.is_set():
+                    raise CancelledError()
+                self.Move(pos, self._hold_time, block=False)
+
+            # Wait until the move is done
             while not future._must_stop.is_set():
                 status = self.GetMoveStatus()
                 # check if move is done
-                if status.value == SmarPodDLL.SMARPOD_STOPPED.value:
+                if status == SmarPodDLL.STOPPED:
                     break
 
                 now = time.time()
                 if now > timeout:
                     logging.warning("Stopping move due to timeout after %g s.", max_dur)
-                    self.stop()
+                    self.Stop()
                     raise TimeoutError("Move is not over after %g s, while "
                                        "expected it takes only %g s" %
                                        (max_dur, dur))
@@ -658,17 +837,30 @@ class SmarPod(model.Actuator):
                 sleept = max(0.001, min(left / 2, 0.1))
                 future._must_stop.wait(sleept)
             else:
-                self.stop()
-                future._was_stopped = True
                 raise CancelledError()
+        except SmarPodError as ex:
+            if ex.errno == MC_5DOF_DLL.SA_MC_ERROR_CANCELED:
+                logging.debug("Movement stopped: %s", ex)
+                raise CancelledError()
+            elif future._must_stop.is_set():
+                raise CancelledError()
+            else:
+                logging.error("Move failed: %s", ex)
+                raise
+        except CancelledError:
+            logging.debug("Movement canceled")
+            raise  # No fuss, pass it as-is
+        except Exception:
+            logging.exception("Move failure")
+            raise
+        finally:
+            self._updatePosition()
 
-        self._updatePosition()
-
-        logging.debug("move successfully completed")
+        logging.debug("Move successfully completed")
 
     def _cancelCurrentMove(self, future):
         """
-        Cancels the current move (both absolute or relative). Non-blocking.
+        Cancels the current move (both absolute, relative, or referencing). Non-blocking.
         future (Future): the future to stop. Unused, only one future must be
          running at a time.
         return (bool): True if it successfully cancelled (stopped) the move.
@@ -680,26 +872,9 @@ class SmarPod(model.Actuator):
 
         future._must_stop.set()  # tell the thread taking care of the move it's over
         with future._moving_lock:
-            if not future._was_stopped:
-                logging.debug("Canceling failed")
-            self._updatePosition()
-            return future._was_stopped
+            self.Stop()
 
-    def _cancelReference(self, future):
-        # The difficulty is to synchronize correctly when:
-        #  * the task is just starting (about to request axes to move)
-        #  * the task is finishing (about to say that it finished successfully)
-        logging.debug("Canceling current referencing")
-
-        self.Stop()
-        future._must_stop.set()  # tell the thread taking care of the referencing it's over
-
-        # Synchronise with the ending of the future
-        with future._moving_lock:
-
-            if not future._was_stopped:
-                logging.debug("Cancelling failed")
-            return future._was_stopped
+        return True
 
     @isasync
     def moveRel(self, shift):
@@ -719,8 +894,34 @@ class SmarPod(model.Actuator):
         """
         Do a relative move by converting it into an absolute move
         """
-        pos = add_coord(self.position.value, shift)
+        pos = self._applyInversion(add_coord(self.position.value, shift))
         self._doMoveAbs(future, pos)
+
+    def stop(self, axes=None):
+        """
+        Stop the SmarPod controller and update position
+        """
+        self.Stop()
+        self._executor.cancel()
+        self._updatePosition()
+
+    @staticmethod
+    def scan():
+        """
+        Search for connected devices
+        return (list of 2-tuple: name (str), args (dict))
+        """
+        core = SmarPodDLL()
+        systems = create_string_buffer(4096)
+        bufferSize = c_size_t(len(systems))
+        core.Smarpod_FindSystems(c_char_p(b""), byref(systems), byref(bufferSize))
+        locators = systems.value.decode("latin1")
+
+        ret = []
+        for locator in locators.split("\n"):  # TODO: check which character is used to separate locators
+            # Use the ID or SN (ie, last part of the locator) as name
+            ret.append((locator.split(":")[-1], {"locator": locator}))
+        return ret
 
 # Only for testing/simulation purpose
 # Very rough version that is just enough so that if the wrapper behaves correctly,
@@ -747,14 +948,18 @@ class FakeSmarPodDLL(object):
     """
 
     def __init__(self):
-        self.pose = Pose()
-        self.target = Pose()
-        self.properties = {}
+        self.pose = Smarpod_Pose()
+        self.target = Smarpod_Pose()
+        self.properties = {
+            SmarPodDLL.PIVOT_MODE: SmarPodDLL.PIVOT_RELATIVE
+        }
         self._speed = c_double(0)
-        self._speed_control = c_int()
-        self._accel_control = c_int()
+        self._speed_control = c_int(0)
+        self._accel_control = c_int(0)
         self._accel = c_double(0)
         self.referenced = False
+
+        self._pivot = [0, 0, 0]
 
         # Specify ranges
         self._range = {}
@@ -785,7 +990,8 @@ class FakeSmarPodDLL(object):
     DLL functions (fake)
     These functions are provided by the real SmarPod DLL
     """
-    def Smarpod_Open(self, id, timeout, locator, options):
+
+    def Smarpod_Open(self, p_id, model, locator, options):
         pass
 
     def Smarpod_Close(self, id):
@@ -796,16 +1002,15 @@ class FakeSmarPodDLL(object):
 
     def Smarpod_FindReferenceMarks(self, id):
         self.stopping.clear()
-        time.sleep(0.5)
-        if self.stopping.is_set():
+        if self.stopping.wait(2):
             self.referenced = False
-            raise SmarPodError(SmarPodDLL.SMARPOD_STOPPED_ERROR)
+            raise SmarPodError(SmarPodDLL.STOPPED_ERROR)
         else:
             self.referenced = True
 
     def Smarpod_IsPoseReachable(self, id, p_pos, p_reachable):
         reachable = _deref(p_reachable, c_int)
-        pos = _deref(p_pos, Pose)
+        pos = _deref(p_pos, Smarpod_Pose)
         if self._pose_in_range(pos):
             reachable.value = 1
         else:
@@ -817,7 +1022,7 @@ class FakeSmarPodDLL(object):
 
     def Smarpod_Move(self, id, p_pose, hold_time, block):
         self.stopping.clear()
-        pose = _deref(p_pose, Pose)
+        pose = _deref(p_pose, Smarpod_Pose)
         if self._pose_in_range(pose):
             self._current_move_finish = time.time() + 1.0
             self.target.positionX = pose.positionX
@@ -827,26 +1032,26 @@ class FakeSmarPodDLL(object):
             self.target.rotationY = pose.rotationY
             self.target.rotationZ = pose.rotationZ
         else:
-            raise SmarPodError(SmarPodDLL.SMARPOD_POSE_UNREACHABLE_ERROR)
+            raise SmarPodError(SmarPodDLL.POSE_UNREACHABLE_ERROR)
 
     def Smarpod_GetPose(self, id, p_pose):
-        pose = _deref(p_pose, Pose)
+        pose = _deref(p_pose, Smarpod_Pose)
         pose.positionX = self.pose.positionX
         pose.positionY = self.pose.positionY
         pose.positionZ = self.pose.positionZ
         pose.rotationX = self.pose.rotationX
         pose.rotationY = self.pose.rotationY
         pose.rotationZ = self.pose.rotationZ
-        return SmarPodDLL.SMARPOD_OK
+        return SmarPodDLL.OK
 
     def Smarpod_GetMoveStatus(self, id, p_status):
         status = _deref(p_status, c_int)
 
         if time.time() > self._current_move_finish:
             self.pose = copy.copy(self.target)
-            status.value = SmarPodDLL.SMARPOD_STOPPED.value
+            status.value = SmarPodDLL.STOPPED
         else:
-            status.value = SmarPodDLL.SMARPOD_MOVING.value
+            status.value = SmarPodDLL.MOVING
 
     def Smarpod_Stop(self, id):
         self.stopping.set()
@@ -879,6 +1084,41 @@ class FakeSmarPodDLL(object):
         update = _deref(p_update, c_uint)
         update.value = 3
 
+    def Smarpod_GetPivot(self, id, pivot):
+        for i in range(3):
+            pivot[i] = self._pivot[i]
+        return SmarPodDLL.OK
+
+    def Smarpod_SetPivot(self, id, pivot):
+        for i in range(3):
+            self._pivot[i] = pivot[i]
+        return SmarPodDLL.OK
+
+    def Smarpod_Set_ui(self, id, prop, val):
+        if not prop.value in self.properties:
+            raise SmarPodError(SmarPodDLL.INVALID_PARAMETER_ERROR, "error")
+
+        self.properties[prop.value] = val
+
+    def Smarpod_Set_d(self, id, prop, val):
+        if not prop.value in self.properties:
+            raise SmarPodError(SmarPodDLL.INVALID_PARAMETER_ERROR, "error")
+
+        self.properties[prop.value] = val
+
+    def Smarpod_Get_ui(self, id, prop, p_val):
+        if not prop.value in self.properties:
+            raise SmarPodError(SmarPodDLL.INVALID_PARAMETER_ERROR, "error")
+
+        val = _deref(p_val, c_uint)
+        val.value = self.properties[prop.value].value
+
+    def Smarpod_Get_d(self, id, prop, p_val):
+        if not prop.value in self.properties:
+            raise SmarPodError(SmarPodDLL.INVALID_PARAMETER_ERROR, "error")
+
+        val = _deref(p_val, c_double)
+        val.value = self.properties[prop.value].value
 
 """
 Classes associated with the SmarAct MC 5DOF Controller (custom for Delmic)
@@ -998,7 +1238,7 @@ class SA_MC_Pose(Structure):
             elif an == "rz":
                 self.rz = math.degrees(v)
             else:
-                raise ValueError("Invalid axis")
+                raise ValueError(f"Invalid axis {an}")
 
 
 class MC_5DOF_DLL(CDLL):
@@ -1180,8 +1420,8 @@ class MC_5DOF(model.Actuator):
             Is set to the same value for all channels.
         settle_time (float>=0): extra waiting time after a move, to ensure that
           vibrations are entirely stopped on the sample.
-        linear_speed: (double) the default speed (in m/s) of the linear actuators
-        rotary_speed: (double) the default speed (in rad/s) of the rotary actuators
+        linear_speed: (float) the default speed (in m/s) of the linear actuators
+        rotary_speed: (float) the default speed (in rad/s) of the rotary actuators
         axes: dict str (axis name) -> dict (axis parameters)
             The following axes must all be present:
             x, y, z, rx, rz
@@ -1424,28 +1664,28 @@ class MC_5DOF(model.Actuator):
 
     def get_linear_speed(self):
         """
-        Returns (double) the linear speed of the SA_MC motion in m/s
+        Returns (float) the linear speed of the SA_MC motion in m/s
         """
         return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES)
 
     def set_linear_speed(self, value):
         """
         Set the linear speed of the SA_MC motion on all axes
-        value: (double) indicating speed for all axes in m/s
+        value: (float) indicating speed for all axes in m/s
         """
         logging.debug("Setting linear speed to %f", value)
         self.SetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_LINEAR_AXES, value)
 
     def get_rotary_speed(self):
         """
-        Returns (double) the rotary speed of the SA_MC motion in deg/s
+        Returns (float) the rotary speed of the SA_MC motion in deg/s
         """
         return self.GetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES)
 
     def set_rotary_speed(self, value):
         """
         Set the rotary speed of the SA_MC motion for all axes
-        value: (double) indicating speed for all axes in deg/s
+        value: (float) indicating speed for all axes in deg/s
         """
         logging.debug("Setting rotary speed to %f", value)
         self.SetProperty_f64(MC_5DOF_DLL.SA_MC_PKEY_MAX_SPEED_ROTARY_AXES, value)
@@ -1533,11 +1773,13 @@ class MC_5DOF(model.Actuator):
         return f
 
     @isasync
-    def reference(self, _=None):
+    def reference(self, axes):
         """
         reference usually takes axes as an argument. However, the SA_MC references all
         axes together so this argument is extraneous.
         """
+        self._checkReference(axes)
+
         f = self._createMoveFuture()
         self._executor.submitf(f, self._doReference, f)
         return f
@@ -1638,7 +1880,7 @@ class MC_5DOF(model.Actuator):
         new_pos: (dict str -> float): axis name -> absolute target position
         returns: the duration of the move in seconds
         """
-        pos = self.position.value
+        pos = self._applyInversion(self.position.value)
         return max(
             abs(new_pos.get('x', 0) - pos['x']) / self.linear_speed,
             abs(new_pos.get('y', 0) - pos['y']) / self.linear_speed,
@@ -2539,11 +2781,11 @@ class MCS2(model.Actuator):
         locator: (str) Use "fake" for a simulator.
             For a real device, MCS controllers with USB interface can be addressed with the
             following locator syntax:
-                usb:id:<id>
-            where <id> is the first part of a USB devices serial number which
-            is printed on the MCS controller.
-            If the controller has a TCP/IP connection, use:
-                network:<ip>:<port>
+                usb:sn:<serialnumber>
+            where <serialnumber> is the serial number of an MCS2 controller.
+            If the controller has a TCP/IP connection, use one of:
+                network:<ipv4>
+                network:sn:<serialnumber>
         ref_on_init: (bool) determines if the controller should automatically reference
             on initialization
         hold_time (float): the hold time, in seconds, for the actuator after the target position is reached.
@@ -2867,7 +3109,7 @@ class MCS2(model.Actuator):
     def _set_speed(self, channel, value):
         """
         Set the speed of the SA_CTL motion
-        value: (double) indicating speed for all axes in m/s
+        value: (float) indicating speed for all axes in m/s
         """
         logging.debug("Setting speed to %f", value)
         # convert value to pm/s for the controller
@@ -2876,7 +3118,7 @@ class MCS2(model.Actuator):
 
     def _get_speed(self, channel):
         """
-        Returns (double) the linear speed of the SA_CTL motion in m/s
+        Returns (float) the linear speed of the SA_CTL motion in m/s
         """
         # value is given in pm/s
         speed = self.GetProperty_i64(SA_CTLDLL.SA_CTL_PKEY_MOVE_VELOCITY, channel)
@@ -2886,7 +3128,7 @@ class MCS2(model.Actuator):
     def _set_accel(self, channel, value):
         """
         Set the speed of the SA_CTL motion
-        value: (double) indicating speed for all axes
+        value: (float) indicating speed for all axes
         """
         logging.debug("Setting accel to %f", value)
         # convert value to pm/s2 for the controller

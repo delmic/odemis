@@ -22,6 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division
 
 import logging
+import math
 from odemis.driver import smaract
 from odemis.util import test
 import os
@@ -44,10 +45,9 @@ COMP_ARGS = {
     }
 
 CONFIG_SMARTPOD = {"name": "SmarPod",
-        "role": "",
-        "ref_on_init": True,
-        "actuator_speed": 0.1,  # m/s
-        "locator": "usb:ix:0",
+        "role": "test",
+        "locator": "usb:sn:MCS2-00001614",
+        "hwmodel": 10074,  # CLS-32.17.1.D-S
         "axes": {
             'x': {
                 'range': [-0.2, 0.2],
@@ -62,18 +62,22 @@ CONFIG_SMARTPOD = {"name": "SmarPod",
                 'unit': 'm',
             },
             'rx': {
-                'range': [-0.785, 0.785],
+                'range': [-0.35, 0.35],
                 'unit': 'rad',
             },
             'ry': {
-                'range': [-0.785, 0.785],
+                'range': [-0.35, 0.35],
                 'unit': 'rad',
             },
             'rz': {
-                'range': [-0.785, 0.785],
+                'range': [-0.61, 0.61],
                 'unit': 'rad',
             },
         },
+        "ref_on_init": False,
+        "speed": 0.004,  # m/s
+        "accel": 0.004,  # m/s²
+        "hold_time": 1,  # s
 }
 
 if TEST_NOHW:
@@ -88,10 +92,15 @@ class TestSmarPod(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         cls.dev = smaract.SmarPod(**CONFIG_SMARTPOD)
+        # Same are ref_on_init, but blocks until the referencing is done
+        cls.dev.reference(cls.dev.axes.keys()).result()
 
     @classmethod
     def tearDownClass(cls):
         cls.dev.terminate()
+
+    def test_simple(self):
+        print(self.dev.axes)
 
     def test_exception_pickling(self):
         """
@@ -104,14 +113,15 @@ class TestSmarPod(unittest.TestCase):
 
     def test_reference_cancel(self):
         # Test canceling referencing
-        f = self.dev.reference()
+        f = self.dev.reference(self.dev.axes.keys())
         time.sleep(0.1)
         f.cancel()
 
         for a, i in self.dev.referenced.value.items():
             self.assertFalse(i)
 
-        f = self.dev.reference()
+        # Run the referencing normally, it should work again
+        f = self.dev.reference(self.dev.axes.keys())
         f.result()
 
         for a, i in self.dev.referenced.value.items():
@@ -127,8 +137,8 @@ class TestSmarPod(unittest.TestCase):
 
     def test_move_abs(self):
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0.0005}
-        pos2 = {'x':-0.0102, 'y': 0, 'z': 0.0, 'rx': 0.0001, 'ry': 0.0001, 'rz': 0}
-        pos3 = {'x': 0.0102, 'y':-0.00002, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
+        pos2 = {'x':-0.00102, 'y': 0, 'z': 0.0, 'rx': 0.0001, 'ry': 0.0001, 'rz': 0}
+        pos3 = {'x': 0.00102, 'y':-0.00002, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}
         # test where not all axes are defined
         pos4 = {'x': 1e-3, 'rx': 1e-5, 'ry': 0, 'rz': 0}
 
@@ -167,10 +177,12 @@ class TestSmarPod(unittest.TestCase):
         self.assertNotEqual(round(difference, 4), 0)
 
     def test_move_rel(self):
+        self.dev.reference(self.dev.axes.keys()).result()
+
         # Test relative moves
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'ry': 0, 'rz': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 0.01, 'y':-0.001, 'ry':-0.0003, 'rz': 0}
+        shift = {'x': 2e-3, 'y':-1e-3, 'ry':-0.0003, 'rz': 0}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
@@ -178,13 +190,37 @@ class TestSmarPod(unittest.TestCase):
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
-        shift = {'z':-0.000001, 'rx': 0.00001, 'ry':-0.000001, 'rz':-0.00001}
+        shift = {'x':-100e-6, 'z':-10e-6, 'rx': 0.0001, 'rz':-0.01}
         self.dev.moveRel(shift)
         self.dev.moveRel(shift)
         self.dev.moveRel(shift).result()
 
         new_pos = smaract.add_coord(smaract.add_coord(smaract.add_coord(old_pos, shift), shift), shift)
         test.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
+
+    def test_pivot_set(self):
+        # Check that the pivot position is available from the beginning
+        old_pivot = self.dev.getMetadata()[model.MD_PIVOT_POS]
+        self.assertEqual(old_pivot.keys(), {"x", "y", "z"})
+
+        try:
+            # Test setting the pivot to some value through metadata
+            old_pos = self.dev.position.value
+            new_pivot = {'x': 0.005, 'y': 0.005, 'z': 0.001}
+            self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
+            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            self.dev.moveRelSync({"x": 0})  # WARNING: this can cause a move!
+            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+
+            old_pos = self.dev.position.value
+            new_pivot = {'x': 0.001, 'y':-0.005, 'z': 0.001}
+            self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
+            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            self.dev.moveRelSync({"x": 0})  # WARNING: this can cause a move!
+            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+        finally:
+            self.dev.updateMetadata({model.MD_PIVOT_POS: old_pivot})
+            self.dev.moveRelSync({"x": 0})
 
 
 CONFIG_5DOF = {"name": "5DOF",
@@ -252,14 +288,14 @@ class Test5DOF(unittest.TestCase):
 
         # TODO: Still fails
         # Test canceling referencing
-        f = self.dev.reference()
+        f = self.dev.reference({"x"})
         time.sleep(0.1)
         f.cancel()
 
         for a, i in self.dev.referenced.value.items():
             self.assertFalse(i)
 
-        f = self.dev.reference()
+        f = self.dev.reference({"x"})
         f.result()
 
         for a, i in self.dev.referenced.value.items():
@@ -403,7 +439,7 @@ class Test5DOF(unittest.TestCase):
         de_pos = {'x': 3.5801e-4, 'y': 0, 'z': 1e-3, 'rx':-1.2e-6, 'rz': 0.0}
         self.dev.updateMetadata({model.MD_FAV_POS_DEACTIVE: de_pos})
 
-        f = self.dev.reference()
+        f = self.dev.reference({"x"})
         f.result()
 
         for a, i in self.dev.referenced.value.items():
