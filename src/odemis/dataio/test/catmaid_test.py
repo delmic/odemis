@@ -31,6 +31,8 @@ from odemis.dataio import AuthenticationError
 from odemis.dataio.catmaid import open_data
 
 
+# FIXME if we start using catmaid, make sure the test cases are independent of external servers.
+@unittest.skip("Skip unittests as the external servers are often down, and we do not use catmaid yet.")
 class TestCatmaid(unittest.TestCase):
 
     def test_open_data_virtualflybrain(self):
