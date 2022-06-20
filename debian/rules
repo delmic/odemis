@@ -2,8 +2,12 @@
 
 VER := $(shell dpkg-parsechangelog | sed -n 's/^Version: *\([^-]\+\)-.\+/\1/p')
 
+#export DH_VERBOSE=1
+export PYBUILD_NAME=odemis
+export PYBUILD_DISABLE=test
+
 %:
-	dh $@ --with python3 --with sphinxdoc
+	dh $@ --with python3 --with sphinxdoc --buildsystem=pybuild
 
 override_dh_auto_install:
 	python3 setup.py install --root debian/odemis --install-layout=deb
@@ -38,3 +42,8 @@ override_dh_compress:
 	# make sure it doesn't compress example scripts and PDF files
 	dh_compress -X.py -X.m -X .pdf
 
+# TODO: needed?
+override_dh_auto_clean:
+	dh_auto_clean
+	# Remove the cython build C files
+	find src/odemis/util/ -name \*.c -exec rm {} \+
