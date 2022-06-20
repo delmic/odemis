@@ -94,9 +94,10 @@ class RepetitionStream(LiveStream):
         #  * Rep set: Rep (as requested) + ROI (current) → PxS (updated)
         #    The repetition is adjusted to fit the hardware limits
 
-        # If no local exposureTime VA is requested, automatically provide an integrationTime VA,
+        # If no local or hw exposureTime VA is requested, automatically provide an integrationTime VA,
         # which allows longer exposure by doing image integration.
-        if "exposureTime" not in kwargs.get("detvas", {}) and model.hasVA(detector, "exposureTime"):
+        if ("exposureTime" not in (kwargs.get("detvas", set()) | kwargs.get("hwdetvas", set()))
+            and model.hasVA(detector, "exposureTime")):
             self._hwExpTime = self.detector.exposureTime.value
             # Number of images that need to be acquired for the requested exposure time.
             # If not integration time, default is 1 image.

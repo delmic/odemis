@@ -117,6 +117,12 @@ HW_SETTINGS_CONFIG = {
             ("pointSpreadFunctionSize", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("dropOldFrames", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("framePeriod", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
             # Advanced settings for andorcam2
             ("verticalReadoutRate", {
                 "control_type": odemis.gui.CONTROL_NONE,
@@ -330,6 +336,12 @@ HW_SETTINGS_CONFIG = {
             ("pointSpreadFunctionSize", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
+            ("dropOldFrames", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("framePeriod", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
             # Advanced settings for andorcam2
             ("verticalReadoutRate", {
                 "control_type": odemis.gui.CONTROL_NONE,
@@ -432,6 +444,12 @@ HW_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             ("pointSpreadFunctionSize", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("dropOldFrames", {
+                "control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("framePeriod", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             # Advanced settings for andorcam2
