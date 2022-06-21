@@ -2613,7 +2613,7 @@ class AndorCam2(model.DigitalCamera):
         """
         List all the available cameras.
         Note: it's not recommended to call this method when cameras are being used
-        return (list of 2-tuple: name (strin), device number (int))
+        return (list of 2-tuple: name (str), args (dict))
         """
         # Get "system" device
         if _fake:
