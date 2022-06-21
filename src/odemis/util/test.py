@@ -159,7 +159,7 @@ def assert_pos_almost_equal(actual, expected, match_all=True, *args, **kwargs):
 
     for k in expected.keys():
         if not util.almost_equal(actual[k], expected[k], *args, **kwargs):
-            raise AssertionError("Position %s != %s" % (actual, expected))
+            raise AssertionError("Position (%s differs) %s != %s" % (k, actual, expected))
 
 
 def assert_pos_not_almost_equal(actual, expected, match_all=True, *args, **kwargs):
