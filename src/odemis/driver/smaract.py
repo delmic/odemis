@@ -1007,7 +1007,7 @@ class MC_5DOF_DLL(CDLL):
     all the functions automatically.
     """
 
-    hwModel = 22000  # specifies the SA_MC 110.45 S (nano)
+    hwModel = 22000  # The only supported hardware (Delmic specific)
 
     # SmarAct MC error codes
 
@@ -1325,7 +1325,8 @@ class MC_5DOF(model.Actuator):
             deactive_pos = md[model.MD_FAV_POS_DEACTIVE]
             if not isinstance(deactive_pos, dict) or not set(deactive_pos.keys()) <= set(self.axes.keys()):
                 raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (deactive_pos,))
-        super(MC_5DOF, self).updateMetadata(md)
+
+        super().updateMetadata(md)
 
     # API Calls
     # Functions to set the property values in the controller, categorized by data type
@@ -2061,8 +2062,6 @@ class SA_CTLDLL(CDLL):
     all the functions automatically.
     """
 
-    hwModel = 0  # specifies the SA_CTL 110.45 S (nano)
-
     # SmarAct MCS2 error codes
     SA_CTL_ERROR_NONE = 0x0000
     SA_CTL_ERROR_UNKNOWN_COMMAND = 0x0001
@@ -2485,7 +2484,7 @@ class SA_CTLDLL(CDLL):
 
     def __init__(self):
         if os.name == "nt":
-            raise NotImplemented("Windows not yet supported")
+            raise NotImplementedError("Windows not yet supported")
             # WinDLL.__init__(self, "libSA_CTL.dll")  # TODO check it works
             # atmcd64d.dll on 64 bits
         else:
@@ -2671,6 +2670,8 @@ class MCS2(model.Actuator):
         self._updateAccel()
 
     def terminate(self):
+        self._update_position_timer.cancel()
+
         # should be safe to close the device multiple times if terminate is called more than once.
         if self._executor:
             self.stop()
@@ -2678,7 +2679,6 @@ class MCS2(model.Actuator):
             self._executor = None
             self.core.SA_CTL_Close(self._id)
 
-        self._update_position_timer.cancel()
         super(MCS2, self).terminate()
 
     def updateMetadata(self, md):
@@ -3629,7 +3629,7 @@ class SA_SIDLL(CDLL):
 
     def __init__(self):
         if os.name == "nt":
-            raise NotImplemented("Windows not yet supported")
+            raise NotImplementedError("Windows not yet supported")
             # WinDLL.__init__(self, "libSA_si.dll")  # TODO check it works
             # atmcd64d.dll on 64 bits
         else:
