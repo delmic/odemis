@@ -1894,15 +1894,15 @@ def _get_stream_legend_text(md):
         if model.MD_DWELL_TIME in md:
             captions.append(u"Dwell time: %s" % units.readable_str(md[model.MD_DWELL_TIME], "s", sig=3))
         if model.MD_LENS_MAG in md:
-            captions.append(u"%s x" % units.readable_str(md[model.MD_LENS_MAG], sig=2))
+            captions.append(u"Magnification: %s x" % units.readable_str(md[model.MD_LENS_MAG], sig=2))
         if model.MD_FILTER_NAME in md:
             captions.append(md[model.MD_FILTER_NAME])
         if model.MD_LIGHT_POWER in md:
-            captions.append(units.readable_str(md[model.MD_LIGHT_POWER], "W", sig=3))
+            captions.append("Power: %s" % units.readable_str(md[model.MD_LIGHT_POWER], "W", sig=3))
         if model.MD_EBEAM_VOLTAGE in md:
-            captions.append(units.readable_str(abs(md[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
+            captions.append("Accel: %s" % units.readable_str(abs(md[model.MD_EBEAM_VOLTAGE]), "V", sig=3))
         if model.MD_EBEAM_CURRENT in md:
-            captions.append(units.readable_str(md[model.MD_EBEAM_CURRENT], "A", sig=3))
+            captions.append("Current: %s" % units.readable_str(md[model.MD_EBEAM_CURRENT], "A", sig=3))
         if model.MD_IN_WL in md:
             captions.append(u"Excitation: %s" % units.readable_str(numpy.average(md[model.MD_IN_WL]), "m", sig=3))
         if model.MD_POS in md:
