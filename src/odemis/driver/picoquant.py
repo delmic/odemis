@@ -441,7 +441,7 @@ class PH300(model.Detector):
                  **kwargs):
         """
         device (None or str): serial number (eg, 1020345) of the device to use
-          or None if any device is fine.
+          or None if any device is fine. Use "fake" to simulate a device.
         dependencies (dict str -> Component): shutters components (shutter0 and shutter1 are valid)
         children (dict str -> kwargs): the names of the detectors (detector0 and
          detector1 are valid)
@@ -1104,7 +1104,7 @@ class HH400(model.Detector):
                  shutter_axes=None, **kwargs):
         """
         device (None or str): serial number (eg, 1020345) of the device to use
-          or None if any device is fine.
+          or None if any device is fine. Use "fake" to simulate a device.
         dependencies (dict str -> Component): shutters components (shutter0 through
          shutter8 are valid. shutter0 corresponds to the sync signal)
         children (dict str -> kwargs): the names of the detectors (detector0 through
