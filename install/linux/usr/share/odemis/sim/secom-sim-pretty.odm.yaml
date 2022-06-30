@@ -61,7 +61,7 @@ Spectra: {
 "Nikon Super Duper": {
     class: static.OpticalLens,
     role: lens,
-    init: {mag: 192.31}, # ratio to get the sim-ccd image to the right size
+    init: {mag: 60},
     affects: ["Andor SimCam"]
 }
 
