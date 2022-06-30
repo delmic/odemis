@@ -6,7 +6,7 @@ ENZEL-Sim: {
         "Sample Thermostat", "Cooler Controller",
         "SEM E-beam Full", "SEM Detector Full",
         "SEM Detector", "EBeam Control",
-        "EBeam Focus", "EBeam Detector",
+        "EBeam Focus", "FIB Detector",
         "Light Source", "Filter Wheel", "Stigmator",
         "Camera", "Optical Objective",
         "5DOF Stage", "Stage Global",
@@ -122,7 +122,7 @@ ENZEL-Sim: {
         scanner: "EBeam Control",
         fib-scanner: "Fib Scanner",
         focus: "EBeam Focus",
-        detector: "EBeam Detector",
+        detector: "FIB Detector",
     },
 }
 
@@ -134,7 +134,6 @@ ENZEL-Sim: {
     },
 }
 
-
 "EBeam Control": {
     # Internal child of "SEM XT connection", so no class
     role:  null,
@@ -143,7 +142,7 @@ ENZEL-Sim: {
     },
 }
 
-"EBeam Detector": {
+"FIB Detector": {
   role: se-detector-ion,
 }
 
@@ -233,6 +232,7 @@ ENZEL-Sim: {
     },
     metadata: {
         POS_COR: 0.0  # rad, adjustment needed for 0 = no astigmatism
+        # Add CALIB for Z localization calibration: stigmator angle -> calibration
     },
 }
 

@@ -338,8 +338,10 @@ class MainGUIData(object):
             required_roles = []
             if self.role in ("secom", "delphi", "enzel"):
                 required_roles += ["e-beam", "light", "stage", "focus"]
-                if self.role == "secom":
+                if self.role in ("secom", "enzel"):
                     required_roles += ["align", "se-detector"]
+                if self.role == "enzel":
+                    required_roles += ["ion-beam", "se-detector-ion"]
             elif self.role == "meteor":
                 required_roles += ["light", "stage", "focus"]
             elif self.role in ("sparc", "sparc2"):
