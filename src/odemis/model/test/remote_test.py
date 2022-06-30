@@ -577,6 +577,32 @@ class RemoteTest(unittest.TestCase):
         time.sleep(0.1)
         self.assertEqual(number, self.count)
 
+    def test_hw_trigger(self):
+        """
+        Check that the hw trigger can be detected as hardware trigger, and cannot
+        be used for software synchronization
+        """
+        dfs = self.comp.datas
+
+        # Not allowed to use a HwTrigger to notify (via software call)
+        with self.assertRaises(ValueError):
+            self.comp.hwTrigger.notify()
+
+        # Check get_type() works as expected
+        self.assertTrue(issubclass(self.comp.hwTrigger.get_type(), model.HwTrigger))
+        self.assertTrue(issubclass(self.comp.hwTrigger.get_type(), model.Event))
+
+        # This should be fine (but cannot be tested more)
+        dfs.synchronizedOn(self.comp.hwTrigger)
+
+        self.assertEqual(dfs.get_event_type(), "hw")
+
+        dfs.synchronizedOn(self.comp.startAcquire)
+        self.assertEqual(dfs.get_event_type(), "sw")
+
+        dfs.synchronizedOn(None)
+        self.assertEqual(dfs.get_event_type(), None)
+
 #    @unittest.skip("simple")
     def test_dataflow_stridden(self):
         # test that stridden array can be passed (even if less efficient)
@@ -845,6 +871,7 @@ class MyComponent(model.Component):
         self.executor = futures.ThreadPoolExecutor(max_workers=1)
         self.number_futures = 0
         self.startAcquire = model.Event() # triggers when the acquisition of .data starts
+        self.hwTrigger = model.HwTrigger()
         self.data = FakeDataFlow(sae=self.startAcquire)
         self.datas = SynchronizableDataFlow()
 
@@ -1072,6 +1099,17 @@ class SynchronizableDataFlow(model.DataFlow):
 
     def get_max_lat(self):
         return self.max_lat
+
+    def get_event_type(self):
+        """
+        return "sw", "hw" or None
+        """
+        if self._sync_event is None:
+            return None
+        elif issubclass(self._sync_event.get_type(), model.HwTrigger):
+            return "hw"
+        else:
+            return "sw"
 
     @oneway
     def onEvent(self, triggert=None):

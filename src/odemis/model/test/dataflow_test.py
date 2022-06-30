@@ -78,6 +78,7 @@ class SynchronizableDataFlow(model.DataFlow):
         self._sync_event = None
         self.max_lat = []
         self._got_event = threading.Event()
+        self.hwTrigger = model.HwTrigger()
     
     @oneway
     def onEvent(self, triggert=None):
@@ -307,7 +308,7 @@ class TestDataFlow(unittest.TestCase):
         number = 3
         self.left = number
         self.df.subscribe(self.receive_data)
-        
+
         for i in range(number):
             # end early if it's already finished
             if self.left == 0:
@@ -329,9 +330,37 @@ class TestDataFlow(unittest.TestCase):
 
         # check that an error is raised when subscribing to the dataflow
         with self.assertRaises(FakeDataFlowException):
-            im = self.df.subscribe(self.receive_data)
+            self.df.subscribe(self.receive_data)
         # check that the listener was properly unsubscribed from the df
         self.assertEqual(len(self.df._listeners), 0)
+
+    def test_hw_trigger(self):
+        df = SynchronizableDataFlow()
+
+        simpleEvent = model.Event()
+
+        # Not allowed to use a HwTrigger to notify (via software call)
+        with self.assertRaises(ValueError):
+            df.hwTrigger.notify()
+
+        # This should be fine (but cannot be tested more)
+        df.synchronizedOn(df.hwTrigger)
+
+        # Check get_type() works as expected
+        # (it's easy without remote connection...)
+        self.assertTrue(issubclass(df.hwTrigger.get_type(), model.HwTrigger))
+        self.assertTrue(issubclass(df.hwTrigger.get_type(), model.Event))
+
+        self.assertFalse(issubclass(simpleEvent.get_type(), model.HwTrigger))
+        self.assertTrue(issubclass(simpleEvent.get_type(), model.Event))
+
+        # Check that the DataFlow waits for the trigger (and never generates any
+        # data as the hw trigger doesn't ever fire)
+        self.left = 10
+        df.subscribe(self.receive_data)
+        time.sleep(1)
+        df.unsubscribe(self.receive_data)
+        self.assertEqual(self.left, 10)
 
 
 if __name__ == "__main__":
