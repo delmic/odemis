@@ -338,8 +338,10 @@ class MainGUIData(object):
             required_roles = []
             if self.role in ("secom", "delphi", "enzel"):
                 required_roles += ["e-beam", "light", "stage", "focus"]
-                if self.role == "secom":
+                if self.role in ("secom", "enzel"):
                     required_roles += ["align", "se-detector"]
+                if self.role == "enzel":
+                    required_roles += ["ion-beam", "se-detector-ion"]
             elif self.role == "meteor":
                 required_roles += ["light", "stage", "focus"]
             elif self.role in ("sparc", "sparc2"):
@@ -759,16 +761,16 @@ class CryoLocalizationGUIData(CryoGUIData):
             # where the key is the stigmator angle (rad), and the value contains
             # the calibration to pass to z_localization.determine_z_position().
             calib = main.stigmator.getMetadata().get(MD_CALIB)
-            if not calib:
+            if calib:
+                angles = frozenset(calib.keys())
+                rng = main.stigmator.axes["rz"].range
+                for a in angles:
+                    if not rng[0] <= a <= rng[1]:
+                        raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
+
+                self.stigmatorAngle = model.FloatEnumerated(min(angles), choices=angles)
+            else:
                 logging.warning("stigmator component present, but no MD_CALIB, Z localization will be disabled")
-
-            angles = frozenset(calib.keys())
-            rng = main.stigmator.axes["rz"].range
-            for a in angles:
-                if not rng[0] <= a <= rng[1]:
-                    raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
-
-            self.stigmatorAngle = model.FloatEnumerated(min(angles), choices=angles)
 
     def _updateZParams(self):
         # Calculate the new range of z pos

@@ -5,6 +5,7 @@ ENZEL-Sim: {
         "Sample Thermostat", "Cooler Controller",
         "SEM E-beam Full", "SEM Detector",
         "EBeam Focus",
+        "FIB Scanner", "FIB Detector",
         "Light Source", "Filter Wheel", "Stigmator",
         "Camera", "Optical Objective", "Global 5DOF Aligner",
         "Objective Aligner", "Optical Focus",
@@ -140,6 +141,30 @@ ENZEL-Sim: {
     role: ebeam-focus,
     affects: ["SEM Detector"],
 }
+
+# Simulated FIB: typically this is provided by the SEM class too, but here, we just use
+# another fake SEM.
+
+"Fake FIB": {
+    class: simsem.SimSEM,
+    role: null,
+    init: {
+        image: "sparc-etd-gold-balls.h5", # any large 16 bit image is fine
+    },
+    children: {
+        scanner: "FIB Scanner",
+        detector0: "FIB Detector",
+    },
+}
+
+"FIB Scanner": {
+    role: "ion-beam",
+}
+
+"FIB Detector": {
+  role: se-detector-ion,
+}
+
 
 "Light Source": {
     class: lle.FakeLLE,
