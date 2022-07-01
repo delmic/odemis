@@ -31,7 +31,7 @@ import math
 import numpy
 from odemis import model, dataio
 from odemis.acq import stream, path, acqmng, stitching
-from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, FocusingMethod
+from odemis.acq.stitching import FocusingMethod, WEAVER_MEAN, REGISTER_IDENTITY
 from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.acq.stream import SEMStream, CameraStream, EMStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
@@ -1067,7 +1067,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
                                                      log_path=self.filename_tiles,
-                                                     weaver=WEAVER_COLLAGE_REVERSE,
+                                                     weaver=WEAVER_MEAN,
+                                                     registrar=REGISTER_IDENTITY,
                                                      zlevels=zlevels,
                                                      focusing_method=focus_mtd)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
@@ -1247,4 +1248,3 @@ def ShowChamberFileDialog(parent, projectname):
     path = dialog.GetDirectory()
     fn = dialog.GetFilename()
     return os.path.join(path, fn)
-

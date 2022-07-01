@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import logging
+import math
 import os
 import random
 import time
@@ -33,7 +34,7 @@ from odemis import model
 from odemis.acq.stitching import CollageWeaver, MeanWeaver, CollageWeaverReverse, WEAVER_MEAN, WEAVER_COLLAGE_REVERSE, \
     WEAVER_COLLAGE
 from odemis.dataio import find_fittest_converter
-from odemis.util.img import ensure2DImage
+from odemis.util.img import ensure2DImage, rotate_img_metadata
 from stitching_test import decompose_image
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -66,6 +67,7 @@ class WeaverBaseTest:
             model.MD_EXP_TIME: 1.2,  # s
             model.MD_IN_WL: (500e-9, 520e-9),  # m
             model.MD_DIMS: "YX",
+            model.MD_ROTATION: 0,
         }
         intile = model.DataArray(img12, md)
 
@@ -92,6 +94,7 @@ class WeaverBaseTest:
             model.MD_POS: (10e-3, 30e-3),  # m
             model.MD_DWELL_TIME: 1.2e-6,  # s
             model.MD_DIMS: "YX",
+            model.MD_ROTATION: 0,
         }
         intile = model.DataArray(img8, md8)
 
@@ -188,6 +191,35 @@ class WeaverBaseTest:
         outd = weaver.getFullImage()
 
         numpy.testing.assert_equal(outd, exp_out)
+
+    def test_rotated_tiles(self):
+        """Verify that the correct rotation is set on the weaved image."""
+        numTiles = [2, 3, 4]
+        overlap = 0.4
+        rotation = math.radians(5)
+        if self.weaver_type == WEAVER_COLLAGE:
+            weaver_class = CollageWeaver
+        elif self.weaver_type == WEAVER_COLLAGE_REVERSE:
+            weaver_class = CollageWeaverReverse
+        elif self.weaver_type == WEAVER_MEAN:
+            weaver_class = MeanWeaver
+
+        for img in IMGS:
+            conv = find_fittest_converter(img)
+            img = conv.read_data(img)[0]
+            img = ensure2DImage(img)
+            for n in numTiles:
+                [tiles, _] = decompose_image(img, overlap, n, "horizontalZigzag", False)
+                weaver = weaver_class()
+
+                for t in tiles:
+                    t.metadata[model.MD_ROTATION] = rotation
+                    weaver.addTile(t)
+
+                # The content of the weaved image will be bad looking, because the rotation is not taken into
+                # account when decomposing the image into tiles.
+                weaved_img = weaver.getFullImage()
+                self.assertEqual(weaved_img.metadata[model.MD_ROTATION], rotation)
 
 
 class TestCollageWeaver(WeaverBaseTest, unittest.TestCase):

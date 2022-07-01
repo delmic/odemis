@@ -67,10 +67,21 @@ class Weaver(with_metaclass(ABCMeta, object)):
         Assembles the tiles into a large image.
         return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box of the tiles.
         """
+        rotation = self.tiles[0].metadata.get(model.MD_ROTATION, 0)
+        center_of_rot = self.tiles[0].metadata[model.MD_POS]
+
+        tiles = []
+        # Rotate all tiles by the inverse of the rotation, such that each tile is aligned with the horizontal axis.
+        for tile in self.tiles:
+            tiles.append(img.rotate_img_metadata(tile, -rotation, center_of_rot))
+        self.tiles = tiles
+
         self.tbbx_px, self.gbbx_px, self.gbbx_phy = self.get_bounding_boxes(self.tiles)
         im = self.weave_tiles()
         md = self.get_final_metadata(self.tiles[0].metadata.copy())
-        return model.DataArray(im, md)
+        weaved_image = img.rotate_img_metadata(model.DataArray(im, md), rotation, center_of_rot)
+
+        return weaved_image
 
     @abstractmethod
     def weave_tiles(self):
