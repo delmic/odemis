@@ -33,7 +33,7 @@ import cv2
 import copy
 from odemis.model import DataArray
 from odemis.model import MD_DWELL_TIME, MD_EXP_TIME, TINT_FIT_TO_RGB, TINT_RGB_AS_IS
-from odemis.util import get_best_dtype_for_acc
+from odemis.util import get_best_dtype_for_acc, transform
 from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
 from typing import Tuple
 
@@ -982,6 +982,35 @@ def mergeTiles(tiles):
     result.metadata[model.MD_POS] = getCenterOfTiles(tiles, result_shape[:2])
 
     return result
+
+
+def rotate_img_metadata(image, rotation, center_of_rot):
+    """
+    Updates the metadata of an image to rotate its position around a given center of rotation.
+
+    :param image: (DataArray) The image for which the metadata will be rotated
+    :param rotation: (float) [rad] Rotation by which to rotate the image, positive value is counter-clockwise rotation.
+    :param center_of_rot: (float, float) [m] Center of rotation (x, y), in the  same coordinate system as MD_POS of the
+                                         image.
+    :returns: (DataArray) The image with the metadata MD_POS and MD_ROTATION updated, the input data remains unchanged:
+        MD_POS: old position + shift based on input rotation [m]
+        MD_ROTATION: new rotation + input rotation [rad]
+    """
+    img = DataArray(image, image.metadata.copy())
+    pos = img.metadata[model.MD_POS]
+
+    transl = transform.RigidTransform(translation=center_of_rot)
+    rot = transform.RigidTransform(rotation=rotation)
+
+    # Translate so that the center of rotation is at (0,0), because the rigid transform rotates around (0, 0)
+    p1 = transl.inverse().apply(pos)
+    p2 = rot.apply(p1)  # rotate the position
+    p = transl.apply(p2)  # translate back to the original center
+
+    img.metadata[model.MD_POS] = (p[0], p[1])
+    original_rotation = img.metadata.get(model.MD_ROTATION, 0)
+    img.metadata[model.MD_ROTATION] = original_rotation + rotation
+    return img
 
 
 def getBoundingBox(content):

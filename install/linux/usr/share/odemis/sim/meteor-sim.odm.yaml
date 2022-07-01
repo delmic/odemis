@@ -144,6 +144,7 @@ METEOR-Sim: {
         # To change what the "good" focus position is on the simulator
         # It's needed for not using the initial value, which is at deactive position.
          FAV_POS_ACTIVE: {'z': 1.7e-3},  # good focus position
+         ROTATION: -0.099484,  # [rad] (=-5.7°)
     },
 }
 
@@ -215,8 +216,7 @@ METEOR-Sim: {
         # Loading position to retract lens
         FAV_POS_DEACTIVE: {'z': -11.5e-3},
         # Initial active position (close from the sample, but not too close, for safety)
-        FAV_POS_ACTIVE: {'z': 1.5e-3}
+        FAV_POS_ACTIVE: {'z': 1.69e-3}
     },
     affects: ["Camera"],
 }
-

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 19 Sep 2012
 
 @author: piel
@@ -18,25 +18,26 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division, print_function
 
-from builtins import range
 import logging
-import numpy
-from odemis import model
-from odemis.dataio import tiff
-from odemis.util import img, get_best_dtype_for_acc
-from odemis.util.img import Bin, mean_within_circle
+import math
 import os
 import time
 import unittest
-from unittest.case import skip
+from builtins import range
+
+import numpy
+
+from odemis import model
+from odemis.dataio import tiff
+from odemis.util import img, get_best_dtype_for_acc, testing
+from odemis.util.img import Bin, mean_within_circle
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 
-# @skip("faster")
 class TestFindOptimalRange(unittest.TestCase):
     """
     Test findOptimalRange
@@ -121,7 +122,6 @@ class TestFindOptimalRange(unittest.TestCase):
 
             logging.info("shortcut took %g s, while full took %g s", dur_sc, dur_full)
             self.assertLessEqual(dur_sc, dur_full)
-
 
     def test_auto_vs_manual(self):
         """
@@ -748,6 +748,7 @@ class TestRGB2Greyscale(unittest.TestCase):
         self.assertEqual(gsim.shape, rgbim.shape[0:2])
         self.assertEqual(gsim[1, 1], 254)
 
+
 class TestRescaleHQ(unittest.TestCase):
 
     def test_simple(self):
@@ -1148,8 +1149,42 @@ class TestMergeTiles(unittest.TestCase):
         
         os.remove(FILENAME)
 
+
+class TestRotateImage(unittest.TestCase):
+
+    def test_rotate_img_metadata(self):
+        """
+        Verify that rotating an image around a center of rotation results in
+        the correct metadata being set on the image.
+        """
+
+        # Expected position calculated with the equation:
+        # exp_pos_x = cos(alpha) * (pos_x - cor_x) - sin(alpha) * (pos_y - cor_y) + cor_y
+        # exp_pos_y = sin(alpha) * (pos_x - cor_x) + sin(alpha) * (pos_y - cor_y) + cor_y
+        test_data = [
+            # pos:  {center of rot, rotation,  expected position}
+            {"pos": (0, 0), "cor": (0, 0), "rot": 10, "exp_pos": (0, 0)},
+            {"pos": (0, 1), "cor": (0, 0), "rot": 90, "exp_pos": (-1, 0)},
+            {"pos": (0, 1), "cor": (0, 0), "rot": -90, "exp_pos": (1, 0)},
+            {"pos": (123e-6, 24e-7), "cor": (123.0e-6, 2.4e-6), "rot": 5.7, "exp_pos": (123.0e-6, 2.4e-6)},
+            {"pos": (123e-6, 24e-7), "cor": (10.0e-6, 24e-6), "rot": 5.7, "exp_pos": (1.24586586e-4, 1.37299314e-05)},
+            {"pos": (123e-6, 24e-7), "cor": (10.0e-6, 24e-6), "rot": -5.7, "exp_pos": (1.20295973e-4, -8.7163320e-06)},
+        ]
+
+        data = numpy.ones((51, 76))
+        for t in test_data:
+            md = {model.MD_POS: t["pos"]}
+            image = model.DataArray(data, md)
+            rotation = math.radians(t["rot"])
+            center_of_rot = t["cor"]
+            rotated_img = img.rotate_img_metadata(image, rotation, center_of_rot)
+
+            self.assertEqual(rotation, rotated_img.metadata[model.MD_ROTATION])
+            testing.assert_tuple_almost_equal(t["exp_pos"], rotated_img.metadata[model.MD_POS])
+            numpy.testing.assert_array_equal(image, rotated_img)  # The data should not change, only the metadata.
+
 # TODO: test guessDRange()
+
 
 if __name__ == "__main__":
     unittest.main()
-
