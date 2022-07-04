@@ -389,17 +389,17 @@ ENZEL-Sim: {
     # Allowed range when in FM/SEM imaging mode. The X/Y ranges are also used
     # as default area for the overview acquisition.
     # X/Y range is small, to fit the limited simulated range of the camera
-    POS_ACTIVE_RANGE: { 'x': [-23.e-6, 23.e-6], 'y': [-33.e-6, 33.e-6], 'z': [0.0, 0.003]},
+    POS_ACTIVE_RANGE: { 'x': [ -0.003, 0.003 ], 'y': [ -0.003, 0.003 ], 'z': [ -0.003, 0.002 ], } ,
     # Initial position to start alignment from
-    FAV_POS_ALIGN: { 'rx': 0.4886, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.001 },
+    FAV_POS_ALIGN: {'x': 0.0016,  'y': -0.00159,  'z': 0.00175, 'rx': -0.4735,  'rz': -0.01745},
     # Initial position when going to FM/SEM imaging.
     # It should be within the ACTIVE_RANGE
-    FAV_POS_ACTIVE: { 'rx': 0.4886, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.002 },
+    FAV_POS_ACTIVE: {'x': 0.0015,  'y': -0.00159,  'z': 0.00175, 'rx': -0.4735,  'rz': -0.01745},
     # SEM Imaging position (unused)
     # TODO: once the acq/move.py function doesn't enforce its presence, remove
-    FAV_POS_SEM_IMAGING: { 'rx': 0, 'rz': 0, 'x': 0.0, 'y': 0.00, 'z': 0.00 },
+    FAV_POS_SEM_IMAGING: { 'rx': 0, 'rz': 0, 'x': 0.000155140624,  'y': -0.002652449291,  'z': 0.001037265119, },
     # Loading position
-    FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 0, 'x': 0.015, 'y': 0.0052, 'z': -0.0068 },
+    FAV_POS_DEACTIVE: { 'x': 0.01500, 'y': 0.000163, 'z': 0.00059618, 'rx': 0.0, 'rz': 0.0 },
     # GIS coating position
     FAV_POS_COATING: { 'rx': 0.4363, 'rz': 0.0, 'x': 0.01, 'y': 0.001, 'z': 0.00 },
     ION_BEAM_TO_SAMPLE_ANGLE: -0.6632 # rad, 38°
