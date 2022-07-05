@@ -5,8 +5,7 @@ ENZEL-Sim: {
     children: [
         "Sample Thermostat", "Cooler Controller",
         "SEM E-beam Full", "SEM Detector Full",
-        "SEM Detector", "EBeam Control",
-        "EBeam Focus", "FIB Detector",
+        "XT E-beam Focus", "FIB Detector",
         "Light Source", "Filter Wheel", "Stigmator",
         "Camera", "Optical Objective",
         "5DOF Stage", "Stage Global",
@@ -45,7 +44,7 @@ ENZEL-Sim: {
     children: {"detector": "SEM Detector Full"},
     dependencies: {
         external: "SEM E-beam",
-        internal: "EBeam Control"
+        internal: "XT E-beam Control"
     },
     properties: {
         scale: [8, 8],#  (ratio) : start with a pretty fast scan
@@ -61,7 +60,6 @@ ENZEL-Sim: {
     dependencies: {
         external: "SEM Detector",
     },
-    affects: ["SEM Detector", "Camera"],
 }
 
 # Analog connection to the SEM, using a DAQ board, for controlling the beam position and receiving the ETD signal.
@@ -97,7 +95,7 @@ ENZEL-Sim: {
         # 4 = Status led
         scanning_ttl: {4: True}, # output ports -> True (indicate scanning) or False (indicate parked)
         settle_time: 0.8e-6, # s
-        hfw_nomag: 0.28, # m, must be the same as in EBeam control, 20211215: 0.2293
+        hfw_nomag: 0.28, # m, must be the same as in XT E-beam Control, 20211215: 0.2293
     },
 }
 
@@ -119,22 +117,22 @@ ENZEL-Sim: {
       address: "PYRO:Microscope@0.0.0.0:4242",
     },
     children: {
-        scanner: "EBeam Control",
+        scanner: "XT E-beam Control",
         fib-scanner: "Fib Scanner",
-        focus: "EBeam Focus",
+        focus: "XT E-beam Focus",
         detector: "FIB Detector",
     },
 }
 
 "Fib Scanner": {
     # Internal child of "SEM XT connection", so no class
-    role: "ion-beam",
+    role: ion-beam,
     init: {
       #        hfw_nomag: 0.2293,  # Must be the same as in SEM E-beam
     },
 }
 
-"EBeam Control": {
+"XT E-beam Control": {
     # Internal child of "SEM XT connection", so no class
     role:  null,
     init: {
@@ -146,10 +144,10 @@ ENZEL-Sim: {
   role: se-detector-ion,
 }
 
-"EBeam Focus": {
+"XT E-beam Focus": {
     # Internal child of "SEM XT connection", so no class
     role: ebeam-focus,
-    affects: ["SEM Detector"],
+    affects: ["SEM Detector Full"],
 }
 
 "Light Source": {
@@ -410,7 +408,6 @@ ENZEL-Sim: {
     speed: 0.003,  # m/s
     accel: 0.003,  # m/s²
     hold_time: 1,  # s, default = infinite (.inf)
-    pos_deactive_after_ref: True,  # Automatically go to safe position after successful referencing
     axes: {
       'x': {
         range: [ -0.0114001, 0.0112466 ],
