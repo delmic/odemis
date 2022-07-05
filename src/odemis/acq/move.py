@@ -25,7 +25,7 @@ from __future__ import division
 import copy
 import logging
 import threading
-from asyncio import CancelledError
+from concurrent.futures import CancelledError
 from concurrent.futures._base import CANCELLED, RUNNING, FINISHED
 
 import numpy
@@ -157,22 +157,23 @@ def _getCurrentEnzelPositionLabel(current_pos, stage):
     # Check the stage is near the coating position
     if _isNearPosition(current_pos, stage_coating, stage.axes):
         return COATING
-    # Check the stage is near the alignment position
-    if _isNearPosition(current_pos, stage_alignment, stage.axes):
-        return ALIGNMENT
     # Check the stage X,Y,Z are within the active range and on the tilted plane -> imaging position
     if _isInRange(
         current_pos, stage_active_range, {'x', 'y', 'z'}
     ):
         if _isNearPosition(current_pos, {'rx': stage_active['rx']}, {'rx'}):
-            if _isNearPosition(current_pos, {'z': stage_active['z']-SAFETY_MARGIN_5DOF}, {'z'}):
-                return THREE_BEAMS
-            return IMAGING
+            return THREE_BEAMS
         elif _isNearPosition(current_pos, {'rx': stage_sem_imaging['rx']}, {'rx'}):
             return SEM_IMAGING
+
     # Check the stage is near the loading position
     if _isNearPosition(current_pos, stage_deactive, stage.axes):
         return LOADING
+
+    # Check the stage is near the alignment position (= 3 beams but really safe)
+    # Only report this position if it's not considered THREE_BEAMS
+    if _isNearPosition(current_pos, stage_alignment, stage.axes):
+        return ALIGNMENT
 
     # TODO: refine loading path to be between any move from loading to active range?
     # Check the current position is near the line between DEACTIVE and ACTIVE
@@ -221,7 +222,7 @@ def getCurrentPositionLabel(current_pos, stage):
     Determine where lies the current stage position
     :param current_pos: (dict str->float) Current position of the stage
     :param stage: (Actuator) the stage component 
-    :return: (int) a value representing stage position from the constants LOADING, IMAGING, TILTED, COATING..etc
+    :return: (int) a value representing stage position from the constants LOADING, THREE_BEAMS, COATING, etc.
     """
     role = model.getMicroscope().role
     if role == 'enzel':
@@ -236,7 +237,7 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     Determine the current aligner position
     :param current_pos: (dict str->float) Current position of the stage
     :param align: Lens stage (aligner) that's being controlled
-    :return: (int) a value representing stage position from the constants LOADING, IMAGING, TILTED, COATING..etc
+    :return: (int) a value representing stage position from the constants LOADING, THREE_BEAMS, COATING, etc.
     """
     align_md = align.getMetadata()
     align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
@@ -247,18 +248,18 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     if not all(align.referenced.value.values()):
         return UNKNOWN
 
-    if _isNearPosition(current_pos, align_alignment, align.axes):
-        return ALIGNMENT
-
-    if _isNearPosition(current_pos, three_beams, align.axes):
-        return THREE_BEAMS
-
-    if _isNearPosition(current_pos, align_active, align.axes):
-        return IMAGING
-
     # Check the stage is near the loading position
     if _isNearPosition(current_pos, align_deactive, align.axes):
         return LOADING
+
+    # Anywhere around POS_ACTIVE, is THREE_BEAMS
+    # As POS_ACTIVE is updated every time the aligner is moved, it's typically
+    # exactly at POS_ACTIVE.
+    # TODO: should have a POS_ACTIVE_RANGE to define the whole region
+    if (_isNearPosition(current_pos, align_active, align.axes) or
+        _isNearPosition(current_pos, three_beams, align.axes)
+       ):
+        return THREE_BEAMS
 
     # Check the current position is near the line between DEACTIVE and ACTIVE
     imaging_progress = getMovementProgress(current_pos, align_deactive, align_active)
@@ -441,7 +442,7 @@ def _doCryoSwitchAlignPosition(future, align, target):
     Do the actual switching procedure for the Cryo lens stage (align) between loading, imaging and alignment positions
     :param future: cancellable future of the move
     :param align: wrapper for optical objective (lens aligner)
-    :param target: target position either one of the constants LOADING, IMAGING and ALIGNMENT
+    :param target: target position either one of the constants LOADING, THREE_BEAMS and ALIGNMENT
     """
     try:
         target_name = POSITION_NAMES[target]
@@ -787,71 +788,6 @@ def transformFromMeteorToSEM(pos, stage):
     transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
     transformed_pos.update(sem_pos_active)
     return transformed_pos
-
-
-def cryoTiltSample(rx, rz=0):
-    """
-    Provide the ability to switch between imaging and tilted position, withing bumping into anything.
-    Imaging position is considered when rx and rz are equal 0, otherwise it's considered tilting
-    :param rx: (float) rotation movement in x axis
-    :param rz: (float) rotation movement in z axis
-    :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control raising the ValueError exception
-    """
-    # Get the stage and align components from the backend components
-    stage = model.getComponent(role='stage')
-    align = model.getComponent(role='align')
-
-    f = model.CancellableFuture()
-    f.task_canceller = _cancelCryoMoveSample
-    f._task_state = RUNNING
-    f._task_lock = threading.Lock()
-    f._running_subf = model.InstantaneousFuture()
-    # Run in separate thread
-    executeAsyncTask(f, _doCryoTiltSample, args=(f, stage, align, rx, rz,))
-    return f
-
-
-def _doCryoTiltSample(future, stage, align, rx, rz):
-    """
-    Do the actual tilting procedure for the Cryo sample stage
-    :param future: cancellable future of the move
-    :param stage: sample stage that's being controlled
-    :param align: aligner for optical lens
-    :param rx: (float) rotation movement in x axis
-    :param rz: (float) rotation movement in z axis
-    """
-    try:
-        stage_md = stage.getMetadata()
-        align_md = align.getMetadata()
-        stage_active_range = stage_md[model.MD_POS_ACTIVE_RANGE]
-        align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
-        current_pos = stage.position.value
-
-        # Check that the stage X,Y,Z are within the limits
-        if not _isInRange(current_pos, stage_active_range, {'x', 'y', 'z'}):
-            raise ValueError("Current position is out of active range.")
-        # To hold the ordered sub moves list to perform the tilting/imaging move
-        sub_moves = []
-        # Park aligner to safe position before any movement
-        if not _isNearPosition(align.position.value, align_deactive, align.axes):
-            cryoSwitchAlignPosition(LOADING).result()
-
-        sub_moves.append((stage, {'rz': rz}))
-        sub_moves.append((stage, {'rx': rx}))
-
-        for component, sub_move in sub_moves:
-            run_sub_move(future, component, sub_move)
-    except CancelledError:
-        logging.info("_doCryoTiltSample cancelled.")
-    except Exception as exp:
-        logging.exception("Failure to move to position rx={}, rz={}.".format(rx, rz))
-        raise
-    finally:
-        with future._task_lock:
-            if future._task_state == CANCELLED:
-                raise CancelledError()
-            future._task_state = FINISHED
-
 
 def _cancelCryoMoveSample(future):
     """
