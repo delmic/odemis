@@ -28,6 +28,7 @@ import functools
 import gc
 import locale
 import logging
+import threading
 import time
 from builtins import str
 from collections import OrderedDict
@@ -3143,13 +3144,25 @@ class EnzelAlignmentStreamsBarController:
     def _refreshStream(self, stream):
         """
         Updates a stream by acquiring a single frame and then pausing the stream again.
+        It blocks until the stream has received the new frame.
 
         :param stream (Stream): stream which is refreshed
         """
+        # We need to block until one image has been acquired --> wait until .image is renewed
+
+        is_received = threading.Event()
+        def receive_one_image(img):
+            is_received.set()
+
+        stream.image.subscribe(receive_one_image)
         stream.is_active.value = True
-        if not stream.single_frame_acquisition.value:
-            stream.getSingleFrame()
-            stream.is_active.value = False
+
+        # As soon as .image has changed, we can stop the stream.
+        # Note that streams with single_frame_acquisition set only acquire a single frame by default. The stream is
+        # then also turned to inactive by the stream itself.
+        if not is_received.wait(100):
+            logging.warning("No image received after 100s")
+        stream.is_active.value = False
 
 
 class FastEMStreamsController(StreamBarController):

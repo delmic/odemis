@@ -24,6 +24,7 @@ from __future__ import division
 
 import copy
 import logging
+import math
 import threading
 from asyncio import CancelledError
 from concurrent.futures._base import CANCELLED, RUNNING, FINISHED
@@ -643,6 +644,17 @@ def _doCryoSwitchSamplePosition(future, target):
                     if future._task_state == CANCELLED:
                         logging.info("Cancelling aligner movement...")
                         raise CancelledError()
+
+                # If the stage rotates a lot, move it first to a safe position (Moving it in X and RZ is sufficient)
+                if abs(current_pos["rx"] - target_pos[target]["rx"]) > math.radians(2):
+                    sub_move_dict = filter_dict({"rz"}, target_pos[LOADING])
+                    logging.debug("Moving %s to a safe rotation position in RZ axis, to %s.", stage.name, sub_move_dict)
+                    run_sub_move(future, stage, sub_move_dict)
+
+                    sub_move_dict = filter_dict({"x"}, target_pos[LOADING])
+                    logging.debug("Moving %s to a safe position in X axis, to %s.", stage.name, sub_move_dict)
+                    run_sub_move(future, stage, sub_move_dict)
+
                 for sub_move in sub_moves:
                     sub_move_dict = filter_dict(sub_move, target_pos[target])
                     logging.debug("Moving %s to %s.", stage.name, sub_move_dict)

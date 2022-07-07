@@ -270,13 +270,12 @@ ENZEL-Sim: {
 
 # Special component to only provide the X/Y axis of the optical lens to align it with the e-beam lens
 "Objective Aligner": {
-  class: actuator.ConvertStage,
+  class: actuator.MultiplexActuator,
   role: align,
   affects: [ "Camera" ],
-  dependencies: {orig: "3DOF Stage"},
+  dependencies: { "x": "3DOF Stage", "y": "Tilted 3DOF YZ", "z": "Tilted 3DOF YZ" },
   init: {
-    axes: ["x", "y", "z"],
-    rotation: [-0.4887, 0, 0] # rad , -28°]
+    axes_map: { "x": "x", "y": "x", "z": "y" },
   },
   metadata: {
     # Default position at init corresponding to (approximately) aligned
@@ -294,14 +293,13 @@ ENZEL-Sim: {
 }
 # Special component to provide control of the 5DOF in a global reference frame (works only with rx = 28 degrees)
 "Stage Global": {
-  class: actuator.ConvertStage,
+  class: actuator.MultiplexActuator,
   role: stage-global,
   affects: [ "Camera", "SEM E-beam Full" ],
-  dependencies: {orig: "5DOF Stage" },
+  dependencies: { "x": "5DOF Stage", "y": "Stage YZ Global", "z": "Stage YZ Global" },
   init: {
-    axes: ["x", "y", "z"],
-    rotation: [0.4887, 0, 0], # rad , 28°]
-  },
+      axes_map: { "x": "x", "y": "x", "z": "y" },
+  }
 }
 
 # Axes should be synchronized with the camera
@@ -351,12 +349,12 @@ ENZEL-Sim: {
     POS_ACTIVE_RANGE: { 'x': [ -0.003, 0.003 ], 'y': [ -0.003, 0.003 ], 'z': [ -0.003, 0.002 ], } ,
     # Initial position when going to FM/SEM imaging.
     # It should be within the ACTIVE_RANGE
-    FAV_POS_ACTIVE: { 'x': 0.000155140624,  'y': -0.002652449291,  'z': 0.001037265119, 'rx': -0.45916826,  'rz': -0.00628953565 },
+    FAV_POS_ACTIVE: {'x': 0.0015,  'y': -0.00159,  'z': 0.00175, 'rx': -0.4735,  'rz': -0.01745},
     # Loading position
     FAV_POS_DEACTIVE: { 'x': 0.01500, 'y': 0.000163, 'z': 0.00059618, 'rx': 0.0, 'rz': 0.0 },
     # GIS coating position
     FAV_POS_COATING: { 'x': 0.001, 'y': -0.0012, 'z': -0.001, 'rx': 0.348, 'rz': -0.00628953565 },
-    FAV_POS_ALIGN: { 'x': 0.000175100624,  'y': -0.002602449291,  'z': 0.00102, 'rx': -0.45916826,  'rz': -0.00628953565 },
+    FAV_POS_ALIGN: {'x': 0.0016,  'y': -0.00159,  'z': 0.00175, 'rx': -0.4735,  'rz': -0.01745},
     # SEM Imaging position
     FAV_POS_SEM_IMAGING: { 'rx': 0, 'rz': 0, 'x': 0.000155140624,  'y': -0.002652449291,  'z': 0.001037265119, },
     ION_BEAM_TO_SAMPLE_ANGLE: -0.6632, # rad, 38°
@@ -374,6 +372,33 @@ ENZEL-Sim: {
   persistent: {
     metadata: [ FAV_POS_ACTIVE ],
   },
+}
+
+# Provides control of the stage in a global reference frame for the axis Y and Z when the stage is tilted
+"Stage YZ Global": {
+  class: actuator.ConvertStage,
+  role: null,
+  dependencies: {
+    "under": "5DOF Stage"
+  },
+  init: {
+    axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+    # TODO: Check the correct angle sign
+    rotation: 0.4887, # rad , 28°
+  },
+}
+
+"Tilted 3DOF YZ":  {
+    class: actuator.ConvertStage,
+    role: null,
+    dependencies: {
+        "under": "3DOF Stage"
+    },
+    init: {
+        axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+        rotation: -0.4887, # rad , -28°
+    },
+    affects: [ "Camera" ],
 }
 
 "3DOF Stage": {

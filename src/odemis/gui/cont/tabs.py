@@ -110,7 +110,7 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
 from odemis.model import getVAs
-from odemis.util import units, spot, limit_invocation
+from odemis.util import units, spot, limit_invocation, almost_equal
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.filename import guess_pattern, create_projectname
 from odemis.util.units import decompose_si_prefix, readable_str
@@ -2939,33 +2939,19 @@ class CryoChamberTab(Tab):
         Updates the milling control with the changed angle position.
         :param pos: (float) value of rx
        """
-        rx_value = math.degrees(pos)
-        self.panel.ctrl_rx.Value = readable_str(rx_value, unit="°", sig=3)
+        current_angle = math.degrees(pos)
+        # When the user is typing (and HasFocus() == True) dont updated the value to prevent overwriting the user input
+        if not self.panel.ctrl_rx.HasFocus() \
+                and not almost_equal(self.panel.ctrl_rx.GetValue(), current_angle, atol=1e-3):
+            self.panel.ctrl_rx.SetValue(current_angle)
 
     def _milling_ctrl_changed(self):
         """
         Called when the milling control value is changed.
         Used to return the correct rx angle value.
-        :return: (float or None) The calculated rx angle from the milling ctrl
+        :return: (float) The calculated rx angle from the milling ctrl
         """
-        rx_angle = self._get_milling_angle_value()
-        if rx_angle is None:
-            return
-        return rx_angle
-
-    def _get_milling_angle_value(self):
-        """
-        Get the corresponding angle value from its designated UI control
-        :returns (float or None) the tilt angle value in radians
-        """
-        try:
-            # Read the angle value from the ctrl and convert its value to radians
-            angle_value, _, _ = decompose_si_prefix(self.panel.ctrl_rx.Value, unit="°")
-            angle_value = math.radians(float(angle_value))
-            return angle_value
-        except ValueError as error:
-            logging.error(error)
-            return
+        return math.radians(self.panel.ctrl_rx.GetValue())
 
     def _on_aligner_btn(self, evt):
         """
@@ -4730,7 +4716,7 @@ class EnzelAlignTab(Tab):
         doc_path = pkg_resources.resource_filename("odemis.gui", "doc/enzel_z_alignment.html")
         self.panel.html_alignment_doc.LoadPage(doc_path)
 
-        self.panel.controls_step_size_slider.SetRange(100e-9, 10e-6)
+        self.panel.controls_step_size_slider.SetRange(100e-9, 100e-6)
         self.panel.controls_step_size_slider.set_position_value(100e-9)
 
         self.panel.pnl_z_align_controls.Show(True)
