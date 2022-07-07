@@ -285,11 +285,19 @@ class AttrDict(dict):
 
 
 @call_in_wx_main
-def enable_tab_on_stage_position(button, stage, pos, target):
+def enable_tab_on_stage_position(button, stage, pos, target, tooltip=None):
     """
     Enable the given tab button if the stage is in target position, disable it otherwise
     :param button: (Button) the Tab button to enable/disable
     :param pos: (dict str->float) current position to check its label
     :param target: (list) target position labels for which the tab button is enabled [IMAGING, FM_IMAGING]
+    :param tooltip: (str or None) Tooltip message to show when disabled
     """
-    button.Enable(getCurrentPositionLabel(pos, stage) in target)
+    within_target = getCurrentPositionLabel(pos, stage) in target
+    button.Enable(within_target)
+
+    if tooltip is not None:
+        if not within_target:
+            button.SetToolTip(tooltip)
+        else:
+            button.SetToolTip(None)

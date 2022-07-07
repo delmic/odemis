@@ -51,7 +51,7 @@ from odemis.gui.comp.popup import show_message
 from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
-from odemis.model import getVAs, VAEnumerated
+from odemis.model import getVAs, VAEnumerated, InstantaneousFuture
 from odemis.util.filename import guess_pattern, create_projectname, create_filename
 
 import odemis.acq.stream as acqstream
@@ -66,16 +66,12 @@ import odemis.gui.util.align as align
 from odemis import dataio, model
 from odemis.acq import calibration, leech
 from odemis.acq.align import AutoFocus
-from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
-from odemis.acq.move import getCurrentPositionLabel, IMAGING, ALIGNMENT
-from odemis.gui.conf.util import create_axis_entry
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.move import GRID_1, LOADING, IMAGING, COATING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel, \
+from odemis.acq.move import GRID_1, LOADING, COATING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel, \
     FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, POSITION_NAMES, THREE_BEAMS, \
-    get3beamsSafePos, SAFETY_MARGIN_5DOF
-from odemis.acq.move import cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
+    get3beamsSafePos, SAFETY_MARGIN_5DOF, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
     CLStream, EMStream, \
     ARStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
@@ -476,13 +472,17 @@ class LocalizationTab(Tab):
             sem_stream_cont = self._streambar_controller.addStream(sem_stream, add_to_view=True)
             sem_stream_cont.stream_panel.show_remove_btn(False)
 
+        # Only enable the tab when the stage is at the right position
         if self.main_data.role == "enzel":
-            self.stage = self.tab_data_model.main.stage
+            self._stage = self.tab_data_model.main.stage
+            self._allowed_targets = [THREE_BEAMS, ALIGNMENT, SEM_IMAGING]
         elif self.main_data.role == "meteor":
             # The stage is in the FM referential, but we care about the stage-bare
             # in the SEM referential to move between positions
-            self.stage = self.tab_data_model.main.stage_bare
-        self.stage.position.subscribe(self._on_stage_pos, init=True)
+            self._allowed_targets= [FM_IMAGING, SEM_IMAGING]
+            self._stage = self.tab_data_model.main.stage_bare
+
+        main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
 
     @property
     def settingsbar_controller(self):
@@ -497,9 +497,7 @@ class LocalizationTab(Tab):
         Create views depending on the actual hardware present
         return OrderedDict: as needed for the ViewPortController
         """
-
-        # both SEM and optical are present on the cryosecom
-        logging.info("Creating combined SEM/Optical viewport layout")
+        # Acquired data at the top, live data at the bottom
         vpv = collections.OrderedDict([
             (viewports[0],  # focused view
              {
@@ -527,13 +525,6 @@ class LocalizationTab(Tab):
               "stream_classes": LiveStream,
               }),
         ])
-
-        # Add connection to SEM hFoV if possible (on SEM-only views)
-        if main_data.ebeamControlsMag:
-            for vp, v in vpv.items():
-                if v.get("stream_classes") == EMStream:
-                    v["fov_hw"] = main_data.ebeam
-                    vp.canvas.fit_view_to_next_image = False
 
         return vpv
 
@@ -690,21 +681,28 @@ class LocalizationTab(Tab):
             self.tab_data_model.streams.value.insert(0, s)  # TODO: let addFeatureStream do that
             self._acquired_stream_controller.showFeatureStream(s)
 
+    def _on_acquisition(self, is_acquiring):
+        # When acquiring, the tab is automatically disabled and should be left as-is
+        # In particular, that's the state when moving between positions in the
+        # Chamber tab, and the tab should wait for the move to be complete before
+        # actually be enabled.
+        if is_acquiring:
+            self._stage.position.unsubscribe(self._on_stage_pos)
+        else:
+            self._stage.position.subscribe(self._on_stage_pos, init=True)
+
     def _on_stage_pos(self, pos):
         """
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
         :param pos: (dict str->float or None) updated position of the stage
         """
-        if self.main_data.role == "enzel":
-            # TODO: IMAGING position should not be used on ENZEL anymore
-            target = [THREE_BEAMS, IMAGING]
-        elif self.main_data.role == "meteor":
-            target = [FM_IMAGING, SEM_IMAGING]
-        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=target)
+        guiutil.enable_tab_on_stage_position(self.button, self._stage, pos,
+                                             self._allowed_targets,
+                                             tooltip="Localization can only be performed in the three beams or SEM imaging modes")
 
     def terminate(self):
         super(LocalizationTab, self).terminate()
-        self.stage.position.unsubscribe(self._on_stage_pos)
+        self._stage.position.unsubscribe(self._on_stage_pos)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
@@ -2440,21 +2438,16 @@ class ChamberTab(Tab):
         return None
 
 
-# Default Milling angle and range for cryo-based microscopes
-DEFAULT_MILLING_ANGLE = math.radians(10)  # rad
-MILLING_ANGLE_RANGE = (math.radians(5), math.radians(25))
-
-
 class CryoChamberTab(Tab):
     def __init__(self, name, button, panel, main_frame, main_data):
-        """ CryoSECOM chamber view tab """
+        """ Chamber view tab for ENZEL and METEOR"""
 
         tab_data = guimod.CryoChamberGUIData(main_data)
         super(CryoChamberTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("CHAMBER")
 
         # future to handle the move
-        self._move_future = model.CancellableFuture()
+        self._move_future = InstantaneousFuture()
         # create the tiled area view and its controller to show on the chamber tab
         vpv = collections.OrderedDict([
             (panel.vp_overview_map,
@@ -2483,12 +2476,13 @@ class CryoChamberTab(Tab):
             self._stage = self.tab_data_model.main.stage
             self._start_pos = self._stage.position.value
             self._end_pos = self._start_pos
-            # Show current position of the stage via the progress bar
-            self._stage.position.subscribe(self._update_progress_bar, init=False)
-            self._stage.position.subscribe(self._on_stage_pos)
+            self._current_position, self._target_position = None, None
+
             # get the stage and its meta data
             stage_metadata = self._stage.getMetadata()
 
+            # TODO: this is not anymore the milling angle (rx - ION_BEAM_TO_SAMPLE_ANGLE),
+            # but directly the rx value, so the name of the control should be updated
             # Define axis connector to link milling angle to UI float ctrl
             self.milling_connector = AxisConnector('rx', self._stage, panel.ctrl_rx, pos_2_ctrl=self._milling_angle_changed,
                                                 ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
@@ -2522,11 +2516,11 @@ class CryoChamberTab(Tab):
                 self.panel.btn_switch_zero_tilt_imaging: ["icon/ico_sem_orange.png", "icon/ico_sem_green.png"],
                 self.panel.btn_switch_align: ["icon/ico_lens_orange.png", "icon/ico_lens_green.png"],
                 self.panel.btn_switch_coating: ["icon/ico_coating_orange.png", "icon/ico_coating_green.png"]}
+            self._grid_btns = ()
             # Check stage FAV positions in its metadata, and store them in respect to their movement
             if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
-                raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE and FAV_POS_COATING metadata.')
+                raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE or FAV_POS_COATING metadata.')
             self.target_position_metadata = {LOADING: stage_metadata[model.MD_FAV_POS_DEACTIVE],
-                                             IMAGING: stage_metadata[model.MD_FAV_POS_ACTIVE],
                                              ALIGNMENT: stage_metadata[model.MD_FAV_POS_ALIGN],
                                              SEM_IMAGING: stage_metadata[model.MD_FAV_POS_SEM_IMAGING],
                                              COATING: stage_metadata[model.MD_FAV_POS_COATING],
@@ -2545,38 +2539,22 @@ class CryoChamberTab(Tab):
             self._show_advanced_va_connector = VigilantAttributeConnector(tab_data.show_advaned,
                                                                         self.panel.btn_switch_advanced,
                                                                         events=wx.EVT_BUTTON,
-                                                                        ctrl_2_va=self._btn_show_advaned_toggled,
+                                                                        ctrl_2_va=self._btn_show_advanced_toggled,
                                                                         va_2_ctrl=self._on_show_advanced)
 
-            # Event binding for tab controls
-            panel.btn_switch_loading.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-            panel.btn_switch_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-            panel.btn_switch_zero_tilt_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-            panel.btn_switch_align.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-            panel.btn_switch_coating.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+            # Event binding for move control
             panel.stage_align_btn_p_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
             panel.stage_align_btn_m_aligner_x.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
             panel.stage_align_btn_p_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
             panel.stage_align_btn_m_aligner_y.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
             panel.stage_align_btn_p_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
             panel.stage_align_btn_m_aligner_z.Bind(wx.EVT_BUTTON, self._on_aligner_btn)
-            panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
-
-            # Determine and show current position of the stage
-            self._current_position, self._target_position = None, None
-            self._enable_movement_controls()
-            if self._current_position in self.position_btns:
-                pos_button = next(button for pos, button in self.position_btns.items() if pos == self._current_position)
-                self._toggle_switch_buttons(pos_button)
-            self._show_warning_msg(None)
 
         elif self._role == 'meteor':
             self._stage = self.tab_data_model.main.stage_bare
             # start and end position are used for the gauge progress bar
             self._start_pos = self._end_pos = None
-            # Show current position of the stage via the progress bar
-            self._stage.position.subscribe(self._update_progress_bar, init=False)
-            self._stage.position.subscribe(self._on_stage_pos)
+
             # metadata
             stage_metadata = self._stage.getMetadata()
             # check for the metadata of meteor stage positions
@@ -2590,22 +2568,28 @@ class CryoChamberTab(Tab):
                 raise ValueError("The stage misses the 'FM_IMAGING_RANGE' metadata.")
             if not model.MD_POS_COR in stage_metadata:
                 raise ValueError("The stage misses the 'POS_COR' metadata.")
+
             # Fail early when required axes are not found on the focuser positions metadata
             focuser = self.tab_data_model.main.focus
             focus_md = focuser.getMetadata()
             required_axis = {'z'}
             for fmd_key, fmd_value in focus_md.items():
                 if fmd_key in [model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE] and not required_axis.issubset(fmd_value.keys()):
-                    raise ValueError("Focuser %s metadata does not have the required axes %s." % (list(focus_md.keys())[list(focus_md.values()).index(fmd_value)], required_axis))
+                    raise ValueError(f"Focuser {fmd_key} metadata ({fmd_value}) does not have the required axes {required_axis}.")
+
             # the meteor buttons
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
-                                GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
+                                  GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
+            self._grid_btns = (self.panel.btn_switch_grid1, self.panel.btn_switch_grid2)
+
             # buttons icons of meteor
             self.btn_toggle_icons = {
-                self.panel.btn_switch_sem_imaging: "icon/ico_sem_green.png",
-                self.panel.btn_switch_fm_imaging: "icon/ico_meteorimaging_green.png",
-                self.panel.btn_switch_grid2: "icon/ico_meteorgrid_green.png",
-                self.panel.btn_switch_grid1: "icon/ico_meteorgrid_green.png"}
+                self.panel.btn_switch_sem_imaging: ["icon/ico_sem_orange.png", "icon/ico_sem_green.png"],
+                self.panel.btn_switch_fm_imaging: ["icon/ico_meteorimaging_orange.png", "icon/ico_meteorimaging_green.png"],
+                self.panel.btn_switch_grid1: ["icon/ico_meteorgrid_orange.png", "icon/ico_meteorgrid_green.png"],
+                self.panel.btn_switch_grid2: ["icon/ico_meteorgrid_orange.png", "icon/ico_meteorgrid_green.png"]
+            }
+
             # hide some of enzel widgets
             panel.btn_switch_loading.Hide()
             panel.btn_switch_imaging.Hide()
@@ -2616,17 +2600,16 @@ class CryoChamberTab(Tab):
             panel.btn_switch_advanced.Hide()
             panel.ctrl_rx.Hide()
             panel.pnl_advanced_align.Hide()
-            # Event binding for tab controls
-            panel.btn_switch_sem_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-            panel.btn_switch_fm_imaging.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-            panel.btn_switch_grid1.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-            panel.btn_switch_grid2.Bind(wx.EVT_BUTTON, self._on_switch_btn)
-            panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
 
-            # Determine and show current position of the stage
-            self._enable_movement_controls()
-            self._toggle_switch_buttons()
-            self._show_warning_msg(None)
+        # Event binding for position control
+        for btn in self.btn_toggle_icons.keys():
+            btn.Bind(wx.EVT_BUTTON, self._on_switch_btn)
+
+        panel.btn_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
+        # Show current position of the stage via the progress bar
+        self._stage.position.subscribe(self._update_progress_bar, init=False)
+        self._stage.position.subscribe(self._on_stage_pos, init=True)
+        self._show_warning_msg(None)
 
     def _get_overview_view(self):
         overview_view = next(
@@ -2794,15 +2777,13 @@ class CryoChamberTab(Tab):
         self.panel.gauge_move.Refresh()
 
     @call_in_wx_main
-    def _on_stage_pos(self, _):
+    def _on_stage_pos(self, pos):
         """ Called every time the stage moves, to update the state of the chamber tab buttons. """
-        if self._role == 'meteor':
-            self._toggle_switch_buttons()
-            self._enable_movement_controls()
-            self._control_warning_msg()
-        elif self._role == 'enzel':
-            # We want to keep advanced panel enabled/disabled on stage position
-            self._enable_movement_controls(check_advanced=False)
+        # Don't update the buttons while the stage is going to a new position
+        if not self._move_future.done():
+            return
+
+        self._update_movement_controls()
 
     def _control_warning_msg(self):
         # show/hide the warning msg
@@ -2839,25 +2820,33 @@ class CryoChamberTab(Tab):
         """
         if self._role == 'enzel':
             for button in self.position_btns.values():
-                button.SetValue(1) if button == currently_pressed else button.SetValue(0)
+                button.SetValue(button == currently_pressed)
         elif self._role == "meteor":
-            current_pos_label = getCurrentPositionLabel(self._stage.position.value, self._stage)
-            current_grid_label = getCurrentGridLabel(self._stage.position.value, self._stage)
-            self.position_btns[GRID_1].SetValue(current_grid_label == GRID_1)
-            self.position_btns[GRID_2].SetValue(current_grid_label == GRID_2)
-            self.position_btns[SEM_IMAGING].SetValue(current_pos_label == SEM_IMAGING)
-            self.position_btns[FM_IMAGING].SetValue(current_pos_label == FM_IMAGING)
+            for pos, button in self.position_btns.items():
+                if pos in (SEM_IMAGING, FM_IMAGING):
+                    button.SetValue(button == currently_pressed)
 
-    def _enable_movement_controls(self, check_advanced=True):
+    def _toggle_grid_buttons(self, currently_pressed=None):
+        """
+        Toggle currently pressed button (if any) and untoggle rest of grid buttons
+        """
+        # METEOR-only code for now
+        for pos, button in self.position_btns.items():
+            if pos in (GRID_1, GRID_2):
+                button.SetValue(button == currently_pressed)
+
+    def _update_movement_controls(self):
         """
         Enable/disable chamber move controls (position and stage) based on current move
         """
         # Get current movement (including unknown and on the path)
         self._current_position = getCurrentPositionLabel(self._stage.position.value, self._stage)
         self._enable_position_controls(self._current_position)
-        # Enable stage advanced controls on sem imaging
-        if self._role == 'enzel' and check_advanced:
+        if self._role == 'enzel':
+            # Enable stage advanced controls on sem imaging
             self._enable_advanced_controls(self._current_position == SEM_IMAGING)
+        elif self._role == 'meteor':
+            self._control_warning_msg()
 
     def _enable_position_controls(self, current_position=None):
         """
@@ -2865,8 +2854,8 @@ class CryoChamberTab(Tab):
         """
         if self._role == 'enzel':
             # Define which button to disable in respect to the current move
-            disable_buttons = {LOADING: (), THREE_BEAMS: (), IMAGING: (), ALIGNMENT: (COATING, SEM_IMAGING), COATING: (ALIGNMENT, SEM_IMAGING),
-                               SEM_IMAGING: (COATING,), LOADING_PATH: (ALIGNMENT, COATING, SEM_IMAGING)}
+            disable_buttons = {LOADING: (), THREE_BEAMS: (), ALIGNMENT: (), COATING: (),
+                               SEM_IMAGING: (), LOADING_PATH: (ALIGNMENT, COATING, SEM_IMAGING)}
             for movement, button in self.position_btns.items():
                 if current_position == UNKNOWN:
                     # If at unknown position, only allow going to LOADING position
@@ -2875,25 +2864,37 @@ class CryoChamberTab(Tab):
                     button.Disable()
                 else:
                     button.Enable()
+
             # The move button should turn green only if current move is known and not cancelled
-            if current_position in self.position_btns.keys() and not self._cancel:
-                currently_pressed = self.position_btns[current_position]
-                self._toggle_switch_buttons(currently_pressed)
-                currently_pressed.icon_on = img.getBitmap(self.btn_toggle_icons[currently_pressed][1])
-                currently_pressed.Refresh()
+            if current_position in self.position_btns and not self._cancel:
+                btn = self.position_btns[current_position]
+                btn.icon_on = img.getBitmap(self.btn_toggle_icons[btn][1])
+                btn.Refresh()
+                self._toggle_switch_buttons(btn)
             else:
                 self._toggle_switch_buttons(currently_pressed=None)
         elif self._role == 'meteor':
             # enabling/disabling meteor buttons
             for _, button in self.position_btns.items():
                 button.Enable(current_position != UNKNOWN)
-            # turn on the leds on 2 buttons: imaging button and one of the grids button
+
+            # turn on (green) the current position button green
+            if current_position in self.position_btns:
+                btn = self.position_btns[current_position]
+                btn.icon_on = img.getBitmap(self.btn_toggle_icons[btn][1])
+                btn.Refresh()
+                self._toggle_switch_buttons(btn)
+            else:
+                self._toggle_switch_buttons(currently_pressed=None)
+
             current_grid_label = getCurrentGridLabel(self._stage.position.value, self._stage)
-            if current_position in self.position_btns.keys() and current_grid_label in self.position_btns.keys():
-                self.position_btns[current_position].icon_on = img.getBitmap(self.btn_toggle_icons[self.position_btns[current_position]])
-                self.position_btns[current_position].Refresh()
-                self.position_btns[current_grid_label].icon_on = img.getBitmap(self.btn_toggle_icons[self.position_btns[current_grid_label]])
-                self.position_btns[current_grid_label].Refresh()
+            if current_grid_label in self.position_btns:
+                btn = self.position_btns[current_grid_label]
+                btn.icon_on = img.getBitmap(self.btn_toggle_icons[btn][1])
+                btn.Refresh()
+                self._toggle_grid_buttons(btn)
+            else:
+                self._toggle_grid_buttons(currently_pressed=None)
 
     def _enable_advanced_controls(self, enable=True):
         """
@@ -2904,14 +2905,7 @@ class CryoChamberTab(Tab):
         for button in self.btn_aligner_axes.keys():
             button.Enable(enable)
 
-    def _pause_axis_connectors(self, pause=True):
-        """
-        Pause angle axis connectors (when leaving/entering milling mode)
-        :param pause: (bool) True to pause, False to resume
-        """
-        self.milling_connector.pause() if pause else self.milling_connector.resume()
-
-    def _btn_show_advaned_toggled(self):
+    def _btn_show_advanced_toggled(self):
         """
         Get the value of advanced button for _show_advanced_va_connector ctrl_2_va
         """
@@ -2972,22 +2966,31 @@ class CryoChamberTab(Tab):
         Event handling for the position panel buttons
         """
         self._cancel = False
-        self._previous_position = self._current_position
         target_button = evt.theButton
-        if self._role == "meteor":
-            target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button])
-        elif self._role == "enzel":
-            target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][0])
         move_future = self._perform_switch_position_movement(target_button)
         if move_future is None:
             target_button.SetValue(0)
             return
+
         # Set the tab's move_future and attach its callback
         self._move_future = move_future
         self._move_future.add_done_callback(self._on_move_done)
-        # Toggle the current button (yellow) and enable cancel
-        self._toggle_switch_buttons(target_button)
+
+        self.panel.gauge_move.Value = 0
+
+        # Indicate we are "busy" (disallow changing tabs)
+        self.tab_data_model.main.is_acquiring.value = True
+
+        # Toggle the current button (orange) and enable cancel
+        target_button.icon_on = img.getBitmap(self.btn_toggle_icons[target_button][0])  # orange
+        if target_button in self._grid_btns:
+            self._toggle_grid_buttons(target_button)
+        else:
+            self._toggle_switch_buttons(target_button)
+
         self._show_warning_msg(None)
+        if self._role == 'enzel':
+            self._enable_advanced_controls(False)
         self.panel.btn_cancel.Enable()
 
     @call_in_wx_main
@@ -3003,9 +3006,12 @@ class CryoChamberTab(Tab):
             if not isinstance(ex, CancelledError):
                 logging.warning("Failed to move stage: %s", ex)
 
+        self.tab_data_model.main.is_acquiring.value = False
+
         self.panel.btn_cancel.Disable()
-        # Get currently pressed button (if any) then re-enable the tab controls
-        self._enable_movement_controls()
+        # Get currently pressed button (if any)
+        self._update_movement_controls()
+
         # After the movement is done, set start, end and target position to None
         # That way any stage moves from outside the the chamber tab are not considered
         self._target_position = None
@@ -3020,7 +3026,7 @@ class CryoChamberTab(Tab):
         self._move_future.cancel()
         self.panel.btn_cancel.Disable()
         self._cancel = True
-        self._enable_movement_controls()
+        self._update_movement_controls()
         logging.info("Stage move cancelled.")
 
     def _perform_switch_position_movement(self, target_button):
@@ -3030,39 +3036,42 @@ class CryoChamberTab(Tab):
         :return (CancellableFuture or None): cancellable future of the move
         """
         # Only proceed if there is no currently running target_position
-        if self._move_future._state == RUNNING:
+        if not self._move_future.done():
             return
+
         # Get the required target_position from the pressed button
         self._target_position = next((m for m in self.position_btns.keys() if target_button == self.position_btns[m]),
                                      None)
         if self._target_position is None:
-            return
+            logging.error("Unknown target button: %s", target_button)
+            return None
+
         # define the start position
         self._start_pos = current_pos = self._stage.position.value
         current_position = getCurrentPositionLabel(current_pos, self._stage)
 
         if self._role == 'enzel':
-            # target_position metadata has the end positions for all movements except milling
+            # target_position metadata has the end positions for all movements
             if self._target_position in self.target_position_metadata.keys():
                 if (
                     current_position is LOADING
                     and not self._display_insertion_stick_warning_msg()
                 ):
-                    return
+                    return None
                 self._end_pos = self.target_position_metadata[self._target_position]
 
         elif self._role == 'meteor':
             # determine the end position for the gauge
             self._end_pos = getTargetPosition(self._target_position, self._stage)
             if not self._end_pos:
-                return
+                return None
             if (
                 self._target_position in [FM_IMAGING, SEM_IMAGING]
                 and current_position in [LOADING, SEM_IMAGING, FM_IMAGING]
                 and not self._display_meteor_pos_warning_msg(self._end_pos)
 
             ):
-                return
+                return None
         return cryoSwitchSamplePosition(self._target_position)
 
     def _display_insertion_stick_warning_msg(self):
@@ -3095,7 +3104,7 @@ class CryoChamberTab(Tab):
         :return (CancellableFuture or None): cancellable future of the move
         """
         # Only proceed if there is no currently running movement
-        if self._move_future._state == RUNNING:
+        if not self._move_future.done():
             target_button.SetValue(0)
             return
         # Get the movement text symbol like +X, -X, +Y..etc from the currently pressed button
@@ -3134,7 +3143,7 @@ class CryoChamberTab(Tab):
         """
         if self._current_position is LOADING:
             return True
-        if self._move_future._state == RUNNING and self._target_position is LOADING:
+        if self._move_future.running() and self._target_position is LOADING:
             return self._confirm_terminate_dialog(
                 "The sample is still moving to the loading position, are you sure you want to close Odemis?"
             )
@@ -4113,10 +4122,6 @@ class SecomAlignTab(Tab):
 
         self.tab_data_model.tool.subscribe(self._onTool, init=True)
         main_data.chamberState.subscribe(self.on_chamber_state, init=True)
-        # stage will be used to listen to position changes (to enable/disable the tab in the right positions)
-        self.stage = self.tab_data_model.main.stage
-        if main_data.role == "cryo-secom":
-            self.stage.position.subscribe(self._on_stage_pos, init=True)
 
     def _on_ccd_should_update(self, update):
         """
@@ -4175,7 +4180,6 @@ class SecomAlignTab(Tab):
 
     def terminate(self):
         super(SecomAlignTab, self).terminate()
-        self.stage.position.unsubscribe(self._on_stage_pos)
         # make sure the streams are stopped
         for s in self.tab_data_model.streams.value:
             s.is_active.value = False
@@ -4408,15 +4412,6 @@ class SecomAlignTab(Tab):
         best_mpp = self._sem_view.mpp.clip(best_mpp)
         self._sem_view.mpp.value = best_mpp
 
-    def _on_stage_pos(self, pos):
-        """
-        Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
-        :param pos: (dict str->float or None) updated position of the stage
-        """
-        if self.tab_data_model.main.role == "meteor":
-            pos = self.tab_data_model.main.stage_bare.position.value
-        guiutil.enable_tab_on_stage_position(self.button, self.stage, pos, target=[IMAGING])
-
     def _on_align_pos(self, pos):
         """
         Called when the aligner is moved (and the tab is shown)
@@ -4625,8 +4620,8 @@ class EnzelAlignTab(Tab):
         # Bind the custom alignment button to set the latest alignment defined by the user
         panel.btn_custom_alignment.Bind(wx.EVT_BUTTON, self._on_click_custom_alignment)
 
-        # Set the stage condition on which the tab is enabled.
-        self._stage.position.subscribe(self._on_stage_pos, init=True)
+        # Disable the tab when the stage is not at the right position
+        main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
 
     def terminate(self):
         super().terminate()
@@ -4941,19 +4936,25 @@ class EnzelAlignTab(Tab):
                 if not bottom["stream"] in view.stream_tree:
                     view.addStream(bottom["stream"])  # Only add streams to a view on which it hasn't been displayed.
 
-    @call_in_wx_main
+    def _on_acquisition(self, is_acquiring):
+        # When acquiring, the tab is automatically disabled and should be left as-is
+        # In particular, that's the state when moving between positions in the
+        # Chamber tab, and the tab should wait for the move to be complete before
+        # actually be enabled.
+        if is_acquiring:
+            self._stage.position.unsubscribe(self._on_stage_pos)
+        else:
+            self._stage.position.subscribe(self._on_stage_pos, init=True)
+
     def _on_stage_pos(self, pos):
         """
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
 
         :param pos: (dict str->float or None) updated position of the stage
         """
-        guiutil.enable_tab_on_stage_position(self.button, self._stage, pos, target=[ALIGNMENT, IMAGING, THREE_BEAMS])
-        # Display a tooltip whenever the tab cannot be clicked.
-        if getCurrentPositionLabel(self._stage.position.value, self._stage) not in (ALIGNMENT, IMAGING, THREE_BEAMS):
-            self.button.SetToolTip("Alignment can only be performed in the three beams mode")
-        else:
-            self.button.SetToolTip(None)
+        targets = (ALIGNMENT, THREE_BEAMS)
+        guiutil.enable_tab_on_stage_position(self.button, self._stage, pos, targets,
+                                             tooltip="Alignment can only be performed in the three beams mode")
 
     @classmethod
     def get_display_priority(cls, main_data):

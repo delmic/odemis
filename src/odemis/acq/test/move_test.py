@@ -22,10 +22,10 @@ from odemis import model
 from odemis import util
 import odemis
 from odemis.acq.move import (ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRID_1, GRID_2,
-                             LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH,
+                             LOADING, ALIGNMENT, COATING, LOADING_PATH,
                              RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel,
                              cryoSwitchAlignPosition, getCurrentAlignerPositionLabel,
-                             _getDistance, SCALING_FACTOR, getRotationMatrix, cryoTiltSample,
+                             _getDistance, SCALING_FACTOR, getRotationMatrix,
                              cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel, get3beamsSafePos,
                              SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS)
 from odemis.util import test
@@ -43,7 +43,7 @@ METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 
 class TestEnzelMove(unittest.TestCase):
     """
-    Test cryoSwitchSamplePosition and cryoTiltSample functions
+    Test cryoSwitchSamplePosition functions
     """
     backend_was_running = False
 
@@ -91,12 +91,6 @@ class TestEnzelMove(unittest.TestCase):
         # Align should be parked
         test.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 
-        # Get the stage to imaging position
-        cryoSwitchSamplePosition(IMAGING).result()
-        test.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS, match_all=False)
-        # align should be in active position
-        test.assert_pos_almost_equal(align.position.value, self.align_active, atol=ATOL_LINEAR_POS)
-
         # Get the stage to coating position
         f = cryoSwitchSamplePosition(COATING)
         f.result()
@@ -140,7 +134,7 @@ class TestEnzelMove(unittest.TestCase):
                                      atol=ATOL_LINEAR_POS)
 
         # Get the stage to imaging position
-        f = cryoSwitchAlignPosition(IMAGING)
+        f = cryoSwitchAlignPosition(THREE_BEAMS)
         f.result()
         test.assert_pos_almost_equal(align.position.value, self.align_active,
                                      atol=ATOL_LINEAR_POS)
@@ -151,42 +145,6 @@ class TestEnzelMove(unittest.TestCase):
         test.assert_pos_almost_equal(align.position.value, self.align_alignment,
                                      atol=ATOL_LINEAR_POS)
 
-    def test_tilting_procedures(self):
-        """
-        Test moving the sample stage from imaging position to tilting position and back to imaging
-        """
-        stage = self.stage
-        align = self.aligner
-        # Test tilting from imaging
-        # Get the stage to imaging position
-        cryoSwitchSamplePosition(LOADING).result()
-        cryoSwitchSamplePosition(IMAGING).result()
-
-        # Tilt the stage on rx only
-        f = cryoTiltSample(rx=self.rx_angle)
-        f.result()
-        test.assert_pos_almost_equal(stage.position.value, {'rx': self.rx_angle},
-                                     match_all=False,
-                                     atol=ATOL_ROTATION_POS)
-
-        # Tilt the stage on rx and rz
-        f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
-        f.result()
-        test.assert_pos_almost_equal(stage.position.value, {'rx': self.rx_angle, 'rz': self.rz_angle},
-                                     match_all=False,
-                                     atol=ATOL_ROTATION_POS)
-        # align should be in deactive position
-        test.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
-
-    def test_invalid_switch_movements(self):
-        """
-        Test it's not possible to do some disallowed switch movements
-        """
-        # Test tilting from loading
-        cryoSwitchSamplePosition(LOADING).result()
-        with self.assertRaises(ValueError):
-            f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
-            f.result()
 
     def test_cancel_loading(self):
         """
@@ -194,7 +152,7 @@ class TestEnzelMove(unittest.TestCase):
         """
         stage = self.stage
         cryoSwitchSamplePosition(LOADING).result()
-        f = cryoSwitchSamplePosition(IMAGING)
+        f = cryoSwitchSamplePosition(THREE_BEAMS)
         time.sleep(2)
         cancelled = f.cancel()
         self.assertTrue(cancelled)
@@ -209,21 +167,6 @@ class TestEnzelMove(unittest.TestCase):
         self.assertTrue(cancelled)
         test.assert_pos_not_almost_equal(stage.position.value, self.stage_coating,
                                          atol=ATOL_LINEAR_POS)
-
-    def test_cancel_tilting(self):
-        """
-        Test cryoTiltSample movement cancellation is handled correctly
-        """
-        stage = self.stage
-        cryoSwitchSamplePosition(LOADING).result()
-        cryoSwitchSamplePosition(IMAGING).result()
-        f = cryoTiltSample(rx=self.rx_angle, rz=self.rz_angle)
-        time.sleep(2)
-        cancelled = f.cancel()
-        self.assertTrue(cancelled)
-        test.assert_pos_not_almost_equal(stage.position.value, {'rx': self.rx_angle, 'rz': self.rz_angle},
-                                         match_all=False,
-                                         atol=ATOL_ROTATION_POS)
 
     def test_get_progress(self):
         """
@@ -259,7 +202,7 @@ class TestEnzelMove(unittest.TestCase):
         self.check_move_aligner_to_target(LOADING)
 
         # Move to imaging position and cancel the movement before reaching there
-        f = cryoSwitchAlignPosition(IMAGING)
+        f = cryoSwitchAlignPosition(THREE_BEAMS)
         time.sleep(5)
         f.cancel()
         pos_label = getCurrentAlignerPositionLabel(aligner.position.value, aligner)
@@ -274,7 +217,7 @@ class TestEnzelMove(unittest.TestCase):
         self.assertEqual(pos_label, UNKNOWN)
         # moving to either imaging/alignment positions shouldn't be allowed
         with self.assertRaises(ValueError):
-            f = cryoSwitchAlignPosition(IMAGING)
+            f = cryoSwitchAlignPosition(THREE_BEAMS)
             f.result()
 
         with self.assertRaises(ValueError):
@@ -289,7 +232,7 @@ class TestEnzelMove(unittest.TestCase):
         cryoSwitchAlignPosition(LOADING).result()
 
         # Move to imaging position
-        self.check_move_aligner_to_target(IMAGING)
+        self.check_move_aligner_to_target(THREE_BEAMS)
 
     def check_move_aligner_to_target(self, target):
         f = cryoSwitchAlignPosition(target)
@@ -308,7 +251,7 @@ class TestEnzelMove(unittest.TestCase):
         self.assertEqual(pos_label, LOADING)
 
         # Move to imaging position and cancel the movement before reaching there
-        f = cryoSwitchSamplePosition(IMAGING)
+        f = cryoSwitchSamplePosition(THREE_BEAMS)
         # abit long wait for the loading-imaging referencing to finish
         time.sleep(7)
         f.cancel()
@@ -317,9 +260,9 @@ class TestEnzelMove(unittest.TestCase):
 
         # Move to imaging position
         cryoSwitchSamplePosition(LOADING).result()
-        cryoSwitchSamplePosition(IMAGING).result()
+        cryoSwitchSamplePosition(THREE_BEAMS).result()
         pos_label = getCurrentPositionLabel(stage.position.value, stage)
-        self.assertEqual(pos_label, IMAGING)
+        self.assertEqual(pos_label, THREE_BEAMS)
 
         # Move to alignment
         f = cryoSwitchSamplePosition(ALIGNMENT)
@@ -352,7 +295,7 @@ class TestEnzelMove(unittest.TestCase):
         Test behaviour of smaract 5dof stage when the linear axes are near the maximum range
         """
         # 1. Move to imaging position
-        cryoSwitchSamplePosition(IMAGING).result()
+        cryoSwitchSamplePosition(THREE_BEAMS).result()
         # 2. Move the stage linear axes to their max range + move rx from 0
         cryoSwitchAlignPosition(LOADING).result()
         self.stage.moveAbs({'x': self.stage.axes['x'].range[1], 'y': self.stage.axes['y'].range[1], 'z': self.stage.axes['z'].range[1], 'rx': 0.15}).result()
