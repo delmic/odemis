@@ -1,0 +1,56 @@
+SmarPod-6DoF: {
+    class: Microscope,
+    role: brightfield,
+    children: [Stage],
+}
+
+"Stage": {
+    class: smaract.SmarPod,
+    role: stage,
+    init: {
+#        locator: "fake",  # For simulator
+        locator: "usb:sn:MCS2-00001614",  # Indicate the serial number. Start with "network" for ethernet connection, and "usb" for USB connection.
+        # Note: on USB connection, the default linux driver must be disabled/disconnected, with a udev rule
+        ref_on_init: False, # set to True if certain that the referencing cannot hit anything
+        hold_time: 1,  # s, default = infinite (.inf)
+        speed: 0.01,  # m/s
+        accel: 0.01,  # m/s²
+        hwmodel: 10074,  # CLS-32.17.1.D-S
+        # TODO: check the ranges for the real hardware
+        axes: {
+            'x': {
+                'range': [-0.2, 0.2],
+                'unit': 'm',
+            },
+            'y': {
+                'range': [-0.2, 0.2],
+                'unit': 'm',
+            },
+            'z': {
+                'range': [-0.1, 0.1],
+                'unit': 'm',
+            },
+            'rx': {
+                'range': [-0.35, 0.35],
+                'unit': 'rad',
+            },
+            'ry': {
+                'range': [-0.35, 0.35],
+                'unit': 'rad',
+            },
+            'rz': {
+                'range': [-0.61, 0.61],
+                'unit': 'rad',
+            },
+        },
+    },
+    metadata: {
+        # To change the default center of rotation.
+#        PIVOT_POS: {
+#            # TODO, calibrate
+#            'x': -0.10,
+#            'y': -0.00695913,
+#            'z': 0.04112563,
+#        },
+    },
+}
