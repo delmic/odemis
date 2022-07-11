@@ -1755,7 +1755,7 @@ class ASMDataFlow(model.DataFlow):
     """
 
     def __init__(self, mppc):
-        super(ASMDataFlow, self).__init__(self)
+        super().__init__()
 
         # Make mppc object an private attribute (which is used to call the start, next, stop and get methods)
         self._mppc = mppc
