@@ -38,6 +38,7 @@ def export(filename, data):
     Write a CSV file:
         - If the given data is spectrum data write it as series of wavelength->intensity
         - If the given data is time data write it as series of time->intensity
+        - If the given data is angle data write it as series of angle (°)->intensity
         - If the given data is a line spectrum data then write it as distance/wavelength array
         - If the given data is AR data then just dump the theta/phi array
         - If the given data is temporal spectrum data then dump the time/wavelength array
@@ -48,77 +49,118 @@ def export(filename, data):
     raises:
         ValueError in case the spectrum does not contain wavelength metadata.
     '''
-    if data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_SPECTRUM:
-        dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
-        if dims == "C" and data.ndim == 1:
-            spectrum_range, unit = spectrum.get_spectrum_range(data)
-            if unit == "m":
-                spectrum_range = [s * 1e9 for s in spectrum_range]
-                unit = "nm"
+    acq_type = data.metadata.get(model.MD_ACQ_TYPE, None)
+    dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
 
-            logging.debug("Exporting spectrum data to CSV")
+    if dims == "C" and data.ndim == 1:
+        logging.debug("Exporting spectrum data to CSV")
+        if acq_type != model.MD_AT_SPECTRUM:
+            logging.warning("Data seems to be spectrum, but acq_type is %s", acq_type)
 
-            if unit == "nm":
-                # turn range to nm
-                spectrum_tuples = [(s, d) for s, d in zip(spectrum_range, data)]
-                headers = ['# wavelength (nm)', 'intensity']
-            else:
-                logging.info("Exporting spectrum without wavelength information")
-                spectrum_tuples = data.reshape(data.shape[0], 1)
-                headers = ['# intensity']
-
-            with open(filename, 'w', newline='') as fd:
-                csv_writer = csv.writer(fd)
-                csv_writer.writerow(headers)
-                csv_writer.writerows(spectrum_tuples)
-
-        elif dims == "T" and data.ndim == 1:
-            logging.debug("Exporting chronogram data to CSV")
-            time_range, unit = spectrum.get_time_range(data)
-            if unit == "s":
-                # Adjust range values to ps
-                time_range = [t * 1e12 for t in time_range]
-                unit = "ps"
-                time_tuples = [(s, d) for s, d in zip(time_range, data)]
-                headers = ['# Time (ps)', 'intensity']
-            else:
-                logging.info("Exporting chronogram without time list information")
-                time_tuples = data.reshape(data.shape[0], 1)
-                headers = ['# intensity']
-
-            with open(filename, 'w', newline='') as fd:
-                csv_writer = csv.writer(fd)
-                csv_writer.writerow(headers)
-                csv_writer.writerows(time_tuples)
-
-        elif data.ndim == 2 and dims == "XC":
-            logging.debug("Exporting spectrum-line data to CSV")
-
-            spectrum_range, unit = spectrum.get_spectrum_range(data)
-            if unit == "m":
-                spectrum_range = [s * 1e9 for s in spectrum_range]
-                unit = "nm"
-
-            # attach distance as first row
-            line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
-            distance_lin = numpy.linspace(0, line_length, data.shape[0])
-            distance_lin.shape = (distance_lin.shape[0], 1)
-            data = numpy.append(distance_lin, data, axis=1)
-
-            # Data should be in the form of (X, C+1), with the first row and column the
-            # distance_from_origin\wavelength
-            with open(filename, 'w', newline='') as fd:
-                csv_writer = csv.writer(fd)
-                # Set the 'header' in the 0,0 element
-                first_row = ['distance_from_origin(m)\\wavelength(' + unit + ')'] + spectrum_range
-                csv_writer.writerow(first_row)
-                # dump the array
-                csv_writer.writerows(data)
+        spectrum_range, unit = spectrum.get_spectrum_range(data)
+        if unit == "m":
+            # turn range to nm
+            spectrum_range = [s * 1e9 for s in spectrum_range]
+            spectrum_tuples = [(s, d) for s, d in zip(spectrum_range, data)]
+            headers = ['# wavelength (nm)', 'intensity']
         else:
-            raise ValueError("Unknown type of data to be exported as CSV")
+            logging.info("Exporting spectrum without wavelength information")
+            spectrum_tuples = data.reshape(data.shape[0], 1)
+            headers = ['# intensity']
+
+        with open(filename, 'w', newline='') as fd:
+            csv_writer = csv.writer(fd)
+            csv_writer.writerow(headers)
+            csv_writer.writerows(spectrum_tuples)
+
+    elif dims == "T" and data.ndim == 1:
+        logging.debug("Exporting chronogram data to CSV")
+        time_range, unit = spectrum.get_time_range(data)
+        if unit == "s":
+            # Adjust range values to ps
+            time_range = [t * 1e12 for t in time_range]
+            unit = "ps"
+            time_tuples = [(s, d) for s, d in zip(time_range, data)]
+            headers = ['# Time (ps)', 'intensity']
+        else:
+            logging.info("Exporting chronogram without time list information")
+            time_tuples = data.reshape(data.shape[0], 1)
+            headers = ['# intensity']
+
+        with open(filename, 'w', newline='') as fd:
+            csv_writer = csv.writer(fd)
+            csv_writer.writerow(headers)
+            csv_writer.writerows(time_tuples)
+
+    elif dims == "A" and data.ndim == 1:
+        logging.debug("Exporting angle data to CSV")
+        angle_range, unit_a = spectrum.get_angle_range(data)
+        if unit_a == "rad":
+            unit_a = "°"
+            angle_range = [math.degrees(theta) for theta in angle_range]  # Convert radians to degrees
+            angle_tuples = [(s, d) for s, d in zip(angle_range, data)]
+            headers = ['# Angle (°)', 'intensity']
+        else:
+            logging.info("Exporting angle without theta list information")
+            angle_tuples = data.reshape(data.shape[0], 1)
+            headers = ['# intensity']
+
+        with open(filename, 'w', newline='') as fd:
+            csv_writer = csv.writer(fd)
+            csv_writer.writerow(headers)
+            csv_writer.writerows(angle_tuples)
+
+    elif acq_type == model.MD_AT_AR:
+        logging.debug("Exporting AR data to CSV")
+        # Data should be in the form of (Y+1, X+1), with the first row and column the angles
+        with open(filename, 'w', newline='') as fd:
+            csv_writer = csv.writer(fd)
+
+            # TODO: put theta/phi angles in metadata? Read back from MD theta/phi and then add as additional line/column
+            # add the phi and theta values as an extra line/column in order to be displayed in the csv-file
+            # attach theta as first column
+            theta_lin = numpy.linspace(0, math.pi / 2, data.shape[0])
+            data = numpy.append(theta_lin.reshape(theta_lin.shape[0], 1), data, axis=1)
+            # attach phi as first row
+            phi_lin = numpy.linspace(0, 2 * math.pi, data.shape[1] - 1)
+            phi_lin = numpy.append([[0]], phi_lin.reshape(1, phi_lin.shape[0]), axis=1)
+            data = numpy.append(phi_lin, data, axis=0)
+
+            # Set the 'header' in the 0,0 element
+            first_row = ['theta\\phi[rad]'] + [d for d in data[0, 1:]]
+            csv_writer.writerow(first_row)
+            # dump the array
+            csv_writer.writerows(data[1:,:])
+
+    elif data.ndim == 2 and dims == "XC":
+        logging.debug("Exporting spectrum-line data to CSV")
+
+        spectrum_range, unit = spectrum.get_spectrum_range(data)
+        if unit == "m":
+            spectrum_range = [s * 1e9 for s in spectrum_range]
+            unit = "nm"
+
+        # attach distance as first row
+        line_length = data.shape[0] * data.metadata[model.MD_PIXEL_SIZE][1]
+        distance_lin = numpy.linspace(0, line_length, data.shape[0])
+        distance_lin.shape = (distance_lin.shape[0], 1)
+        data = numpy.append(distance_lin, data, axis=1)
+
+        # Data should be in the form of (X, C+1), with the first row and column the
+        # distance_from_origin\wavelength
+        with open(filename, 'w', newline='') as fd:
+            csv_writer = csv.writer(fd)
+            # Set the 'header' in the 0,0 element
+            first_row = ['distance_from_origin(m)\\wavelength(' + unit + ')'] + spectrum_range
+            csv_writer.writerow(first_row)
+            # dump the array
+            csv_writer.writerows(data)
         
-    elif data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_TEMPSPECTRUM:
+    elif data.ndim == 2 and dims == "TC":
         logging.debug("Exporting temporal spectrum data to CSV")
+        if acq_type != model.MD_AT_TEMPSPECTRUM:
+            logging.warning("Data seems to be temporal spectrum, but acq_type is %s", acq_type)
+
         spectrum_range, unit_c = spectrum.get_spectrum_range(data)
         if unit_c == "m":
             spectrum_range = [s * 1e9 for s in spectrum_range]
@@ -136,8 +178,10 @@ def export(filename, data):
             csv_writer.writerow(headers)
             csv_writer.writerows(rows)
 
-    elif data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_EK:
+    elif data.ndim == 2 and dims == "AC":
         logging.debug("Exporting angular spectrum data to CSV")
+        if acq_type != model.MD_AT_EK:
+            logging.warning("Data seems to be EK, but acq_type is %s", acq_type)
 
         spectrum_range, unit_c = spectrum.get_spectrum_range(data)
         if unit_c == "m":
@@ -150,35 +194,13 @@ def export(filename, data):
             angle_range = [math.degrees(theta) for theta in angle_range]  # Convert radians to degrees
             assert len(angle_range) == len(data)
 
-            headers = ["angle(" + unit_a + ")\\wavelength(" + unit_c + ")"] + spectrum_range
-            rows = [(t,) + tuple(d) for t, d in zip(angle_range, data)]
+        headers = ["angle(" + unit_a + ")\\wavelength(" + unit_c + ")"] + spectrum_range
+        rows = [(t,) + tuple(d) for t, d in zip(angle_range, data)]
 
         with open(filename, 'w') as fd:
             csv_writer = csv.writer(fd)
             csv_writer.writerow(headers)
             csv_writer.writerows(rows)
 
-    elif data.metadata.get(model.MD_ACQ_TYPE, None) == model.MD_AT_AR:
-        logging.debug("Exporting AR data to CSV")
-        # Data should be in the form of (Y+1, X+1), with the first row and column the angles
-        with open(filename, 'w', newline='') as fd:
-            csv_writer = csv.writer(fd)
-
-            # TODO: put theta/phi angles in metadata? Read back from MD theta/phi and then add as additional line/column
-            # add the phi and theta values as an extra line/column in order to be displayed in the csv-file
-            # attach theta as first column
-            theta_lin = numpy.linspace(0, math.pi / 2, data.shape[0])
-            data = numpy.append(theta_lin.reshape(theta_lin.shape[0], 1), data, axis=1)
-            # attach phi as first row
-            phi_lin = numpy.linspace(0, 2 * math.pi, data.shape[1]-1)
-            phi_lin = numpy.append([[0]], phi_lin.reshape(1, phi_lin.shape[0]), axis=1)
-            data = numpy.append(phi_lin, data, axis=0)
-
-            # Set the 'header' in the 0,0 element
-            first_row = ['theta\\phi[rad]'] + [d for d in data[0, 1:]]
-            csv_writer.writerow(first_row)
-            # dump the array
-            csv_writer.writerows(data[1:, :])
-            
     else:
-        raise ValueError("Unknown acquisition type of data to be exported as CSV")
+        raise ValueError(f"Unknown acquisition type {acq_types} of data (dims = {dims}) to be exported as CSV")
