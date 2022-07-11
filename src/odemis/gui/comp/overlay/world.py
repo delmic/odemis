@@ -218,9 +218,9 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 if CAN_DRAG in self.cnvs.abilities:
                     StagePointSelectOverlay.on_dbl_click(self, evt)
                 else:
-                    super().on_dbl_click(self, evt)
+                    super().on_dbl_click(evt)
         else:
-            super().on_dbl_click(self, evt)
+            super().on_dbl_click(evt)
 
     def on_left_down(self, evt):
         """
@@ -245,7 +245,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     self.tab_data.main.currentFeature.value = feature
                 evt.Skip()
         else:
-            super().on_left_down(self, evt)
+            super().on_left_down(evt)
 
     def on_left_up(self, evt):
         """
