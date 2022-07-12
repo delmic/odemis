@@ -1521,7 +1521,7 @@ class MC_5DOF(model.Actuator):
         if referenced:
             logging.debug("SA_MC is referenced")
         elif ref_on_init:
-            self.reference()  # will reference now in background.
+            self.reference(self.axes.keys())  # will reference now in background.
 
         # Use a default actuator speed
         self.linear_speed = linear_speed
