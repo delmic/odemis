@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 6 Feb 2013
 
 @author: piel
@@ -18,30 +18,28 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
-from concurrent.futures._base import CancelledError
 import logging
-from unittest import mock
-
-import numpy
-from odemis import model
-import odemis
-from odemis.acq import acqmng
-from odemis.driver import xt_client
-from odemis.driver.test.xt_client_test import CONFIG_FIB_SEM, CONFIG_FIB_SCANNER, CONFIG_DETECTOR
-from odemis.util import test
 import os
 import time
 import unittest
-from unittest.case import skip
+from concurrent.futures._base import CancelledError
+from unittest import mock
 
-from odemis.acq.leech import ProbeCurrentAcquirer
+import numpy
+
+import odemis
 import odemis.acq.path as path
 import odemis.acq.stream as stream
+from odemis import model
+from odemis.acq import acqmng
 from odemis.acq.acqmng import SettingsObserver, acquireZStack
-from odemis.driver.tmcm import TMCLController
+from odemis.acq.leech import ProbeCurrentAcquirer
+from odemis.driver import xt_client
+from odemis.driver.test.xt_client_test import CONFIG_FIB_SEM, CONFIG_FIB_SCANNER, CONFIG_DETECTOR
+from odemis.util import test
 from odemis.util.comp import generate_zlevels
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -50,6 +48,21 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
+
+# Accept three values for TEST_NOHW
+# * TEST_NOHW = 1: not connected to anything => skip most of the tests
+# * TEST_NOHW = sim: xtadapter/server_sim.py running on localhost
+# * TEST_NOHW = 0 (or anything else): connected to the real hardware
+TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
+if TEST_NOHW == "sim":
+    pass
+elif TEST_NOHW == "0":
+    TEST_NOHW = False
+elif TEST_NOHW == "1":
+    TEST_NOHW = True
+else:
+    raise ValueError("Unknown value of environment variable TEST_NOHW=%s" % TEST_NOHW)
+
 
 class Fake0DDetector(model.Detector):
     """
@@ -61,6 +74,7 @@ class Fake0DDetector(model.Detector):
         self.data = Fake0DDataFlow()
         self._shape = (float("inf"),)
 
+
 class Fake0DDataFlow(model.DataFlow):
     """
     Mock object just sufficient for the ProbeCurrentAcquirer
@@ -68,6 +82,7 @@ class Fake0DDataFlow(model.DataFlow):
     def get(self):
         da = model.DataArray([1e-12], {model.MD_ACQ_DATE: time.time()})
         return da
+
 
 class TestNoBackend(unittest.TestCase):
     # No backend, and only fake streams that don't generate anything
@@ -83,11 +98,6 @@ class FIBStreamacquisitionTest(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        # Accept three values for TEST_NOHW
-        # * TEST_NOHW = 1: not connected to anything => skip most of the tests
-        # * TEST_NOHW = sim: xtadapter/server_sim.py running on localhost
-        # * TEST_NOHW = 0 (or anything else): connected to the real hardware
-        TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
         if TEST_NOHW is True:
             raise unittest.SkipTest("No hardware available.")
 
