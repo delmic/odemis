@@ -909,7 +909,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                                                           focusing_method=focus_mtd)
 
         txt = "The estimated acquisition time is {}."
-        txt = txt.format(units.readable_time(acq_time))
+        txt = txt.format(units.readable_time(math.ceil(acq_time)))
         self.lbl_acqestimate.SetLabel(txt)
 
     def get_fov(self, s):
