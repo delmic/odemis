@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 21 Dec 2015
 
 @author: Kimon Tsitsikas
@@ -13,20 +13,19 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 from __future__ import division
 
 import logging
-from odemis import model
-from odemis.driver import scanner, xt_client
-from odemis.driver import semcomedi
-from odemis.driver import simsem
 import os
 import threading
 import time
 import unittest
-from unittest.case import skip
 
+from odemis import model
+from odemis.driver import scanner, xt_client
+from odemis.driver import semcomedi
+from odemis.driver import simsem
 
 logger = logging.getLogger().setLevel(logging.DEBUG)
 
@@ -63,6 +62,21 @@ CONFIG_SEM_XT = {"name": "sem", "role": "null", "address": "PYRO:Microscope@loca
                                "detector": CONFIG_DETECTOR,
                                }
                  }
+
+# Accept three values for TEST_NOHW
+# * TEST_NOHW = 1: not connected to anything => skip most of the tests
+# * TEST_NOHW = sim: xtadapter/server_sim.py running on localhost
+# * TEST_NOHW = 0 (or anything else): connected to the real hardware
+TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
+if TEST_NOHW == "sim":
+    pass
+elif TEST_NOHW == "0":
+    TEST_NOHW = False
+elif TEST_NOHW == "1":
+    TEST_NOHW = True
+else:
+    raise ValueError("Unknown value of environment variable TEST_NOHW=%s" % TEST_NOHW)
+
 
 class TestScanner(unittest.TestCase):
     """
@@ -250,6 +264,7 @@ class TestDetector(unittest.TestCase):
             dataflow.unsubscribe(self.receive_image)
             self.acq_done.set()
 
+
 class TestDetectorHw(unittest.TestCase):
     """
     Test Scanner class
@@ -257,6 +272,9 @@ class TestDetectorHw(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No hardware available.")
+
         cls.sem_int = xt_client.SEM(**CONFIG_SEM_XT)
         cls.sem_ext = semcomedi.SEMComedi(**CONFIG_SEM_EXT)
 
