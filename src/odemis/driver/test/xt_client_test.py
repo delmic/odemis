@@ -36,8 +36,7 @@ from odemis.model import ProgressiveFuture, NotSettableError
 from odemis.util import test
 
 logging.basicConfig(level=logging.DEBUG,
-                    format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s",
-                    force=True)
+                    format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 # Accept three values for TEST_NOHW
 # * TEST_NOHW = 1: not connected to anything => skip most of the tests
