@@ -1807,7 +1807,8 @@ class AndorCam2(model.DigitalCamera):
             return max_size
 
         # smaller than the whole sensor
-        size = [min(size_req[0], max_size[0]), min(size_req[1], max_size[1])]
+        size = [max(1, min(size_req[0], max_size[0])),
+                max(1, min(size_req[1], max_size[1]))]
 
         # bigger than the minimum
         min_pixels = c_int()
