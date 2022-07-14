@@ -165,7 +165,7 @@ class TestAndorCam2HwTrigger(unittest.TestCase):
         # Check frame_period is shorter than the trigger, otherwise some triggers
         # will be missed.
         time.sleep(0.1)
-        self.assertGreater(trigger_period, self.camera.framePeriod.value)
+        self.assertGreater(trigger_period, self.camera.frameDuration.value)
 
         while self.left > 0:
             time.sleep(exp / 10)
