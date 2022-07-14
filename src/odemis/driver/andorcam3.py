@@ -230,16 +230,16 @@ class AndorCam3(model.DigitalCamera):
         try:
             self.Open(device)
         except Exception as exp:
-            logging.error("Failed to initialise Andor camera %d", device)
+            logging.error("Failed to initialise Andor camera %d: %s", device, exp)
             if isinstance(exp, ATError):
                 if exp.errno == 6: # OUTOFRANGE
                     raise HwError("Failed to find Andor camera %d, check that it "
                                   "is turned on and connected to the computer." %
                                   device)
-                elif exp.errno in (10, 38): # CONNECTION, DEVICEINUSE
-                    raise HwError("Failed to initialise Andor camera %d, try to "
+                elif exp.errno in (10, 17, 38):  # CONNECTION, COMM, DEVICEINUSE
+                    raise HwError("Failed to initialise camera %d, try "
                                   "turning it off, waiting for 10 s and turning "
-                                  "in on again." % device)
+                                  "it on again." % device)
 
             raise
         if device is None:
