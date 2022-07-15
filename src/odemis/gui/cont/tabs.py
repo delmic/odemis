@@ -5353,14 +5353,14 @@ class Sparc2AlignTab(Tab):
         super(Sparc2AlignTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("ALIGNMENT")
 
-        if main_data.lens_mover:
-            # Reference and move the lens to its default position
-            if not main_data.lens_mover.referenced.value["x"]:
-                # TODO: have the actuator automatically reference on init?
-                f = main_data.lens_mover.reference({"x"})
-                f.add_done_callback(self._moveLensToActive)
-            else:
-                self._moveLensToActive()
+        # Typically the actuators are automatically referenced at back-end init.
+        # But if that's not the case, let's try to do it now.
+        for lens_act in (main_data.lens_mover, main_data.lens_switch):
+            if lens_act and not lens_act.referenced.value["x"]:
+                logging.info("%s not referenced, will reference it now", lens_act.name)
+                f = lens_act.reference({"x"})
+                on_ref = partial(self._on_reference_end, comp=lens_act)
+                f.add_done_callback(on_ref)
 
         if main_data.fibaligner:
             # Reference and move the fiber aligner Y to its default position (if
@@ -5378,14 +5378,6 @@ class Sparc2AlignTab(Tab):
                         self._moveFibAlignerToActive()
                 except Exception:
                     logging.exception("Failed to move fiber aligner to %s", fib_fav_pos)
-
-        if main_data.lens_switch:
-            # reference and move the lens to its default position
-            if not main_data.lens_switch.referenced.value["x"]:
-                f = main_data.lens_switch.reference({"x"})
-                f.add_done_callback(self._moveLensSwitchToActive)
-            else:
-                self._moveLensSwitchToActive()
 
         # Documentation text on the right panel for alignment
         self.doc_path = pkg_resources.resource_filename("odemis.gui", "doc/sparc2_header.html")
@@ -5996,21 +5988,16 @@ class Sparc2AlignTab(Tab):
         txt_ss.SetForegroundColour(odemis.gui.FG_COLOUR_MAIN)
         self._txt_ss = txt_ss
 
-    def _moveLensToActive(self, f=None):
+    def _on_reference_end(self, f, comp):
         """
-        Move the first lens (lens-mover) to its default active position
-        f (future): future of the referencing
+        Called at the end of a referencing move, to report any error.
+        f (Future): the Future corresponding to the referencing
+        comp (Component): component which was referencing
         """
-        if f:
-            f.result()  # to fail & log if the referencing failed
-
-        lm = self.tab_data_model.main.lens_mover
         try:
-            lpos = lm.getMetadata()[model.MD_FAV_POS_ACTIVE]
-        except KeyError:
-            logging.exception("Lens-mover actuator has no metadata FAV_POS_ACTIVE")
-            return
-        lm.moveAbs(lpos)
+            f.result()
+        except Exception as ex:
+            logging.error("Referencing of %s failed: %s", comp.name, ex)
 
     def _moveFibAlignerToActive(self, f=None):
         """
@@ -6027,22 +6014,6 @@ class Sparc2AlignTab(Tab):
             logging.exception("Fiber aligner actuator has no metadata FAV_POS_ACTIVE")
             return
         fiba.moveAbs(fpos)
-
-    def _moveLensSwitchToActive(self, f=None):
-        """
-        Move the second lens (lens-switch) to its default active position
-        f (future): future of the referencing
-        """
-        if f:
-            f.result()  # to fail & log if the referencing failed
-
-        ls = self.tab_data_model.main.lens_switch
-        try:
-            lpos = ls.getMetadata()[model.MD_FAV_POS_ACTIVE]
-        except KeyError:
-            logging.exception("Lens-switch actuator has no metadata FAV_POS_ACTIVE")
-            return
-        ls.moveAbs(lpos)
 
     def _onClickAlignButton(self, evt):
         """ Called when one of the Mirror/Optical fiber button is pushed
