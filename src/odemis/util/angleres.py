@@ -296,7 +296,7 @@ def AngleResolved2Rectangular(data, output_size, hole=True):
     theta_data, phi_data, intensity_data, circle_mask_dilated = _ExtractAngleInformation(data, hole)
 
     # extend the data range to take care of edge effects during interpolation step
-    # extend the range of phi from 0 - 2pi to -2pi to 2pi to take care of periodicity of phi
+    # extend the range of phi from 0 - 2pi to -2pi to 4pi to take care of periodicity of phi
     # Note: Don't try to extend the image left and right by an amount < pi.
     # It will lead to the mentioned problems with the interpolation (even pi is not enough).
     # e.g. don't try the following - it produces edge effects...
@@ -309,14 +309,13 @@ def AngleResolved2Rectangular(data, output_size, hole=True):
     # circle_mask_dilated_2 = numpy.append(numpy.append(circle_mask_dilated[:, -num:], circle_mask_dilated, axis=1),
     #                                      circle_mask_dilated[:, :num], axis=1)
 
-    # So triple the data for theta, intensity and mask, and extend phi to cover the range from -2pi to +2pi
+    # So triple the data for theta, intensity and mask, and extend phi to cover the range from -2pi to +4pi
     # for interpolation only use the data from -pi to +3pi, which is sufficient to take care of most edge effects
-    low_border = int(phi_data.shape[1] - phi_data.shape[1] / 2 + 1)
-    high_border = int(phi_data.shape[1] * 2 + phi_data.shape[1] / 2 - 1)
+    low_border = int(phi_data.shape[1] - phi_data.shape[1] / 2 - 1)
+    high_border = int(phi_data.shape[1] * 2 + phi_data.shape[1] / 2 + 1)
 
-    phi_data_doubled = numpy.append(
-        numpy.append(phi_data - 2 * math.pi, phi_data, axis=1),
-        phi_data + 2 * math.pi, axis=1)[:, low_border: high_border]  # -pi to +3pi
+    phi_data_doubled = numpy.concatenate((phi_data - 2 * math.pi, phi_data, phi_data + 2 * math.pi),
+                                         axis=1)[:, low_border: high_border]  # -pi to +3pi
     theta_data_doubled = numpy.tile(theta_data, (1, 3))[:, low_border: high_border]
     intensity_data_doubled = numpy.tile(intensity_data, (1, 3))[:, low_border: high_border]
     circle_mask_dilated_doubled = numpy.tile(circle_mask_dilated, (1, 3))[:, low_border: high_border]
