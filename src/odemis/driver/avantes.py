@@ -1154,8 +1154,9 @@ class FakeAvantesDLL(object):
 
         # Stop the callback as soon as we've received enough data
         if self._meas_nmsr > 0 and self._ndata_notified >= self._meas_nmsr:
-            self._meas_timer.cancel()
-            self._meas_timer = None
+            if self._meas_timer:
+                self._meas_timer.cancel()
+                self._meas_timer = None
             self._meas_cb = None
 
     def AVS_Measure(self, hdev, callback, nmsr):
