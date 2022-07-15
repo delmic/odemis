@@ -71,9 +71,9 @@ class SEMCLCCDStream(SEMCCDMDStream):
             md[MD_DIMS] = "YX"
             md[MD_DESCRIPTION] = self._streams[n].name.value
             # Make sure it doesn't contain metadata related to AR
-            for k in (model.MD_AR_POLE, model.MD_AR_FOCUS_DISTANCE,
-                      model.MD_AR_HOLE_DIAMETER, model.MD_AR_PARABOLA_F,
-                      model.MD_AR_XMAX, model.MD_ROTATION):
+            for k in (model.MD_AR_POLE, model.MD_AR_MIRROR_BOTTOM, model.MD_AR_MIRROR_TOP,
+                      model.MD_AR_FOCUS_DISTANCE, model.MD_AR_HOLE_DIAMETER, model.MD_AR_PARABOLA_F,
+                      model.MD_AR_XMAX, model.MD_ROTATION, model.MD_WL_LIST):
                 md.pop(k, None)
 
             da = numpy.zeros(shape=(rep[1], rep[0]), dtype=raw_data.dtype)

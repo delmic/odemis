@@ -46,7 +46,8 @@ class OpticalLens(model.HwComponent):
     """
 
     def __init__(self, name, role, mag, mag_choices=None, na=0.95, ri=1,
-                 pole_pos=None, x_max=None, hole_diam=None,
+                 pole_pos=None, mirror_pos_top=None, mirror_pos_bottom=None,
+                 x_max=None, hole_diam=None,
                  focus_dist=None, parabola_f=None, rotation=None,
                  configurations=None, **kwargs):
         """
@@ -59,6 +60,13 @@ class OpticalLens(model.HwComponent):
         pole_pos (2 floats >= 0): position of the pole on the CCD (in px, without
           binning, with the top-left pixel as origin).
           Used for angular resolved imaging on SPARC (only). cf MD_AR_POLE
+        mirror_pos_top (2 floats): position of the top of the mirror dependent
+          of the wavelength. It's defined in px and px/m, without binning, with
+          the top-left pixel as origin. With the 2 floats named a and b, the line
+          is defined as a + b * wl (wavelength is in m)
+          cf MD_AR_MIRROR_TOP
+        mirror_pos_bottom (2 floats): same as mirror_pos_top, but for the bottom.
+          cf MD_AR_MIRROR_BOTTOM
         x_max (float): the distance between the parabola origin and the cutoff
           position (in meters). Used for angular resolved imaging on SPARC (only).
           cf MD_AR_XMAX
@@ -109,6 +117,31 @@ class OpticalLens(model.HwComponent):
                                                       range=((0, 0), (1e6, 1e6)),
                                                       cls=numbers.Real,
                                                       unit="px")
+        # mirrorPositionTop and mirrorPositionBottom are similar. They represent
+        # a line on the CCD as a function of the wavelength (increasing along the X axis).
+        # So it's two values, a & b, which define a line as px = a + b * wl.
+        # Where px has origin at the top of the CCD. The typical image has a field
+        # in the order ~100 nm. So the a & b values can get quite large, especially
+        # when the user is playing with drawing the lines. Hence, we put very large
+        # range. The main goal of using a TupleContinuous over a TupleVA is to
+        # check it's 2 floats.
+        if mirror_pos_top is not None:
+            if (not isinstance(pole_pos, collections.Iterable) or
+                len(pole_pos) != 2 or any(not isinstance(v, numbers.Real) for v in mirror_pos_top)):
+                raise ValueError("pole_pos must be 2 floats, got %s" % mirror_pos_top)
+            self.mirrorPositionTop = model.TupleContinuous(tuple(mirror_pos_top),
+                                                      range=((-1e18, -1e18), (1e18, 1e18)),
+                                                      cls=numbers.Real,
+                                                      unit="px, px/m")
+        if mirror_pos_bottom is not None:
+            if (not isinstance(pole_pos, collections.Iterable) or
+                len(pole_pos) != 2 or any(not isinstance(v, numbers.Real) for v in mirror_pos_bottom)):
+                raise ValueError("pole_pos must be 2 floats, got %s" % mirror_pos_bottom)
+            self.mirrorPositionBottom = model.TupleContinuous(tuple(mirror_pos_bottom),
+                                                      range=((-1e18, -1e18), (1e18, 1e18)),
+                                                      cls=numbers.Real,
+                                                      unit="px, px/m")
+
         if x_max is not None:
             self.xMax = model.FloatVA(x_max, unit="m")
         if hole_diam is not None:

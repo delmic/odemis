@@ -147,31 +147,56 @@ class TestCalculateTicks(unittest.TestCase):
 
     def test_nonlinearity(self):
         # Given a totally non-linear value_range for a specific tick_spacing,
-        # none of the pixel values is equally spaced.
-        value_range = [0, 1, 3, 4, 8, 20]
+        # none of the pixel values is equally spaced (if every tick is in a range)
+        value_range = numpy.log(numpy.linspace(1, 100, 200))  # 200 ticks, to have enough precision
         csize = (500, 600)
-        pixel = []
         ticks = calculate_ticks(value_range, csize, wx.HORIZONTAL, csize[0] / 10)
-        for tick in ticks:
-            pos_px, tick_value = tick
-            pixel.append(pos_px)
-        for i in range(0, len(pixel) - 2):
-            self.assertNotEqual(abs(pixel[i + 1] - pixel[i]), abs(pixel[i + 2] - pixel[i + 1]),
-                                "Non-linear pixel spacing")
+        pixels = [pos_px for pos_px, _ in ticks]
+
+        # All distances are different => when removing duplicate distances,
+        # there should still be as many of them.
+        dist = [a - b for a, b in zip(pixels[:-1], pixels[1:])]
+        self.assertEqual(len(set(dist)), len(dist), "Unexpected linear spacing in {ticks}")
 
         # Given a partial non-linear value_range, some non-linearity is observed in the computed pixel values
         value_range = [0, 1, 2, 4, 8, 16]
         csize = (500, 600)
+        ticks = calculate_ticks(value_range, csize, wx.VERTICAL, csize[1] / 10)
+        pixels = [pos_px for pos_px, _ in ticks]
 
-        pixels = []
-        ticks = calculate_ticks(value_range, csize, wx.VERTICAL, csize[0] / 10)
-        for tick in ticks:
-            pos_px, tick_value = tick
-            pixels.append(pos_px)
+        # There should be at least 2 distances (between ticks) not equal
+        dist = [a - b for a, b in zip(pixels[:-1], pixels[1:])]
+        self.assertGreater(len(set(dist)), 1, "Unexpected linear spacing in {ticks}")
 
-        for i in range(0, 2):
-            self.assertNotEqual(abs(pixels[i + 1] - pixels[i]), abs(pixels[i + 2] - pixels[i + 1]),
-                               "Non-linear pixel spacing")
+    def test_nan(self):
+        """
+        Test calculate_tick when there are NaN at the beginning and/or end of the range
+        In such case, no tick should be shown for the NaN range, and the actual ticks
+        should be positioned proportionally, including the NaN values.
+        """
+        # Bigger than first half is empty => all ticks should be in the second half
+        value_range = [numpy.nan] * 5 + [0, 1, 2, 3]
+        csize = (500, 600)
+        ticks = calculate_ticks(value_range, csize, wx.HORIZONTAL, csize[0] / 10)
+        self.assertGreaterEqual(len(ticks), 2)  # There should be at least 2 ticks
+        for pos_px, val in ticks:
+            self.assertTrue(csize[0] / 2 < pos_px < csize[0], f"pos_px = {pos_px}")  # Every tick should be within the second half
+            self.assertTrue(0 <= val <= 3)  # Every tick value should be within the value_range
+
+        # Vertical: the first values are at the "bottom" = large pixel values
+        ticks = calculate_ticks(value_range, csize, wx.VERTICAL, csize[1] / 10)
+        self.assertGreaterEqual(len(ticks), 2)  # There should be at least 2 ticks
+        for pos_px, val in ticks:
+            self.assertTrue(0 < pos_px < csize[1] / 2, f"pos_px = {pos_px}")  # Every tick should be within the first half
+            self.assertTrue(0 <= val <= 3)  # Every tick value should be within the value_range
+
+        # Reversed vertical
+        value_range = value_range[::-1]
+        ticks = calculate_ticks(value_range, csize, wx.VERTICAL, csize[1] / 10)
+        self.assertGreaterEqual(len(ticks), 2)  # There should be at least 2 ticks
+        for pos_px, val in ticks:
+            self.assertTrue(csize[1] / 2 < pos_px < csize[1], f"pos_px = {pos_px}")  # Every tick should be within the first half
+            self.assertTrue(0 <= val <= 3)  # Every tick value should be within the value_range
 
 
 class TestARExport(unittest.TestCase):

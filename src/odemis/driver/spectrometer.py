@@ -50,8 +50,6 @@ class CompositedSpectrometer(model.Detector):
        max resolution is 1.
      * the maximum binning can be bigger than the maximum resolution (but not
        of the shape).
-     * the metadata has an additional entry MD_WL_LIST which indicates the
-       wavelength associated to each pixel.
     '''
 
     def __init__(self, name, role, dependencies, **kwargs):
@@ -141,11 +139,6 @@ class CompositedSpectrometer(model.Detector):
         if not model.hasVA(self, "exposureTime"):
             logging.warning("Spectrometer %s has no exposureTime VA", name)
 
-        sp.position.subscribe(self._onPositionUpdate)
-        self.resolution.subscribe(self._onResBinning)
-        self.binning.subscribe(self._onResBinning)
-        self._updateWavelengthList()
-
         # Indicate the data contains spectrum on the "fast" dimension
         self._metadata[model.MD_DIMS] = "XC"
 
@@ -155,23 +148,6 @@ class CompositedSpectrometer(model.Detector):
         md = self._detector.getMetadata().copy()
         md.update(self._metadata)
         return md
-
-    def _onPositionUpdate(self, pos):
-        """
-        Called when the wavelength position or grating (ie, groove density)
-          of the spectrograph is changed.
-        """
-        self._updateWavelengthList()
-
-    def _onResBinning(self, value):
-        self._updateWavelengthList()
-
-    def _updateWavelengthList(self):
-        npixels = self.resolution.value[0]
-        pxs = self.pixelSize.value[0] * self.binning.value[0]
-        wll = self._spectrograph.getPixelToWavelength(npixels, pxs)
-        md = {model.MD_WL_LIST: wll}
-        self.updateMetadata(md)
 
     def _setBinning(self, binning):
         """

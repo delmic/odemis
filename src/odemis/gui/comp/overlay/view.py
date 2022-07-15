@@ -30,6 +30,7 @@ import numbers
 import numpy
 from odemis import util
 from odemis.gui.comp.overlay.base import Label, Vec, ViewOverlay
+from odemis.gui.util import img
 from odemis.gui.util.conversion import change_brightness
 from odemis.util import peak
 import wx
@@ -591,7 +592,7 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
             val = self.cnvs.pos_x_to_val_x(x, snap=False), None
         else:
             y = max(1, min(self.view_height, y))
-            val = self.cnvs.pos_to_val((x, y), snap=False)
+            val = self.cnvs.pos_to_val((x, y))
 
         self.val.value = val
 
@@ -610,24 +611,10 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
                 h_draw = True
                 v_draw = True
 
-            # Adapt the significant numbers based on how different are all the
-            # values.
-            # TODO: once the range is always available, don't use the value type.
-            def guess_sig(v, rng):
-                if rng is None or rng[0] == rng[1]:
-                    # Can't use range => rely on the type
-                    # TODO: instead of not rounding for integers, readable_str
-                    # should have an option to use all the digits which are
-                    # written any way. Ex 163.54nm+sig=2 -> 163nm (instead of 160nm).
-                    return None if isinstance(v, numbers.Integral) else 3
-                else:
-                    ratio_rng = max(abs(r) for r in rng) / (rng[1] - rng[0])
-                    return 2 + math.ceil(math.log10(ratio_rng) + 0.5)
-
             self.x_label = units.readable_str(val[0], self.cnvs.unit_x,
-                                              guess_sig(val[0], self.cnvs.range_x))
+                                              img.guess_sig_num_rng(self.cnvs.range_x, val[0]))
             self.y_label = units.readable_str(val[1], self.cnvs.unit_y,
-                                              guess_sig(val[1], self.cnvs.range_x))
+                                              img.guess_sig_num_rng(self.cnvs.range_y, val[1]))
 
             ctx.set_line_width(self.line_width)
             ctx.set_dash([3])

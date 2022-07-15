@@ -608,3 +608,114 @@ def _figure2data(figure):
 
     return image
 
+
+def ExtractThetaList(data):
+    """
+    Extracts the list of theta values given the mirror parameters. More specifically, given that
+    the slit is closed and focused on the center of the mirror and based on the mirror geometry,
+    the detector plane is calculated and the list of angles is derived.
+
+    : param data (model.DataArray): The data array containing the image that was projected on the
+    detector after being reflected in the parabolic mirror and passing the grating. Shape is (x, y).
+
+    Returns: the list of angles (in radians) with length equal to data.shape[0], corresponding
+      to the pixels at the center wavelength. A mask, calculated from
+    the parameters of the mirror, is applied on the data to place NaN values in the positions outside of
+    the detector plane. The angle list should be within the range [-90, 90] in degrees, approximately
+    [-1.6, 1.6] in radians. Theoretically, the values are within the range [90, 90] (degrees) for φ = 90°
+    and φ = 180°, given that the slit is close and focused on the center of the mirror.
+    For displaying reasons, we display the angles from negative values to positive values.
+    """
+    # For now, return the MD_THETA_LIST for the center wl.
+    # If we eventually interpolate (and crop) the data to the top and bottom
+    # lines, the function could take the wl as an extra argument. Or it'd always
+    # return the values at the center, and another function would map these values
+    # to the top/bottom position for each wavelength.
+    try:
+        wl_list = data.metadata[model.MD_WL_LIST]
+        line_top = data.metadata[model.MD_AR_MIRROR_TOP]
+        line_bottom = data.metadata[model.MD_AR_MIRROR_BOTTOM]
+    except KeyError:
+        raise ValueError("Metadata required: MD_MIRROR_*, MD_WL_LIST")
+
+    # Note: the mirror is actually seen upside-down (cf CCD pixel positions)
+    #                                                        CCD
+    #                                                         | shape[1]
+    #                                        _____/           | top
+    #                                  _____/                 |
+    #                             ____/                       |
+    #                         ___/                            |
+    #                     ___/                                |
+    #                  _ /                                    |
+    # Mirror        __/                                       |
+    #             _/                                          |
+    #           _/                                            |
+    #         _/ \--------------------------------------------| px index -> θ
+    #       _/    \                                           |
+    #      /       \                                          |
+    #     /         \ θ_                                      |
+    #    /           \/ :                                     |
+    #   |             \ :                                     |
+    #  |               \:                                     | bottom
+    # __________________x___________________________________  | 0
+
+    # This should return something like:
+    # NaN, NaN, -78.5°, -30°, -7.5°, 0°, 5°, 15°, 30°, 38°, 43°, NaN, NaN
+
+    focus_dist = data.metadata.get(model.MD_AR_FOCUS_DISTANCE, AR_FOCUS_DISTANCE)
+    x_max = data.metadata.get(model.MD_AR_XMAX, AR_XMAX)  # optical axis
+    parabola_f = data.metadata.get(model.MD_AR_PARABOLA_F, AR_PARABOLA_F)
+
+    # The lines (are expressed as a, b), and define the pixel position as px = a + b * wl
+    # where the pixel index starts from 0, at the top of the image.
+    # The "top" line has therefore a larger pixel index than the "bottom" line.
+    wl = wl_list[data.shape[1] // 2]  # wavelength at the middle (approximately)
+    top_px = line_top[0] + line_top[1] * wl  # px (float)
+    bottom_px = line_bottom[0] + line_bottom[1] * wl  # px (float)
+
+    # Computes the position of the mirror hole compared to the top and bottom
+    # of the mirror (theoretically), as a ratio. This allows to place the
+    # pole line at the right position relative to the top and bottom lines.
+    a = 1 / (4 * parabola_f)
+    hole_height = math.sqrt(parabola_f / a)  # m
+    bottom_phys = focus_dist  # m
+    top_phys = math.sqrt(x_max / a)  # m
+
+    # All the values between the bottom and top of the mirror.
+    # Do a linear interpolation based on top_px -> top_phys / bottom_px -> bottom_phys
+    # to get for each (vertical) pixel the vertical distance from the sample.
+    a_px2pos = (top_phys - bottom_phys) / (top_px - bottom_px)
+    b_px2pos = bottom_phys - a_px2pos * bottom_px
+    indices = numpy.linspace(0, data.shape[0] - 1, data.shape[0])
+    y_pos = a_px2pos * indices + b_px2pos
+
+    # convert each distance to an angle
+    xfocus = a * y_pos ** 2 - parabola_f
+    theta = numpy.arccos(y_pos / numpy.sqrt(xfocus ** 2 + y_pos ** 2))
+
+    # Creates mask in Cartesian coordinates. Purpose of the mask is to place NaN
+    # in the positions that cannot be read from the detector.
+    mask = numpy.ones(data.shape[0], dtype=bool)
+    mask[:max(0, int(bottom_px))] = False
+    mask[max(0, int(top_px) + 1):] = False
+    # This should be equivalent (but slower)
+    # mask[(y_pos < bottom_phys)] = False
+    # mask[(y_pos > top_phys)] = False
+
+    # Uses the hole position to update the theta data to be within the range
+    # [-90, 90] after applying the mask. Theoretically, the values are within
+    # the range [90 -> 0 -> 90] for φ = 0° and φ = 180°, given that the slit is
+    # closed and focused on the center of the mirror. For displaying reasons, we
+    # display the angles from negative (for φ = 0°, bottom side) to positive
+    # (for φ = 180°, top side) angle values.
+    pos_ratio = (top_phys - hole_height) / (top_phys - bottom_phys)
+    pole_y = top_px + (bottom_px - top_px) * pos_ratio  # px (float)
+    theta[:int(pole_y)] *= -1
+
+    # Uses the mask to set to NaN the angles that cannot be read from the detector.
+    theta_data_masked = numpy.where(mask, theta, numpy.nan)
+    # Converts the array to a list (to be saved in MD_THETA_LIST)
+    theta_data = theta_data_masked.tolist()
+
+    return theta_data
+

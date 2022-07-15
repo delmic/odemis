@@ -81,6 +81,7 @@ MD_EBEAM_CURRENT_TIME = "Electron beam emission current over time"
 
 MD_WL_LIST = "Wavelength list"  # m... (list of float), wavelength for each pixel. The list is the same length as the C dimension
 MD_TIME_LIST = "Time list"  # sec (array) containing the corrections for the timestamp corresponding to each px
+MD_THETA_LIST = "Theta list"  # rad (array) containing the theta values
 
 # Deprecrated: use MD_TIME_LIST
 MD_PIXEL_DUR = "Pixel duration"  # Time duration of a 'pixel' along the time dimension
@@ -99,12 +100,15 @@ MD_AT_OVV_FULL = "Full overview"
 MD_AT_OVV_TILES = "Built-up overview"
 MD_AT_HISTORY = "History"
 MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
+MD_AT_EK = "AR Spectrum"
 MD_AT_TEMPORAL = "Temporal"
 MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
 
 BAND_PASS_THROUGH = "pass-through"  # Special "filter" name when there is no filter: all light passes
 
 MD_AR_POLE = "Angular resolved pole position"  # px, px (tuple of float), position of pole (aka hole center) in raw acquisition of SPARC AR
+MD_AR_MIRROR_TOP = "Line of the mirror top"  # px, px/m (tuple of floats), position of the top of the mirror dependent on the wavelength.
+MD_AR_MIRROR_BOTTOM = "Line of the mirror bottom"  # px, px/m (tuple of floats), position of the bottom of the mirror dependent on the wavelength.
 MD_AR_XMAX = "Polar xmax"  # m, the distance between the parabola origin and the cutoff position
 MD_AR_HOLE_DIAMETER = "Hole diameter"  # m, diameter the hole in the mirror
 MD_AR_FOCUS_DISTANCE = "Focus distance"  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample

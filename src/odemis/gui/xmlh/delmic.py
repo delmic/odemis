@@ -158,10 +158,13 @@ msvps = [
     ('ARAcquiViewport', xh_delmic.ARAcquiViewportXmlHandler),
     ('PointSpectrumViewport', xh_delmic.PointSpectrumViewportXmlHandler),
     ('ChronographViewport', xh_delmic.ChronographViewportXmlHandler),
+    ('ThetaViewport', xh_delmic.ThetaViewportXmlHandler),
     ('ARLiveViewport', xh_delmic.ARLiveViewportXmlHandler),
+    ('EKLiveViewport', xh_delmic.EKLiveViewportXmlHandler),
     ('AngularResolvedViewport', xh_delmic.AngularResolvedViewportXmlHandler),
     ('LineSpectrumViewport', xh_delmic.LineSpectrumViewportXmlHandler),
     ('TemporalSpectrumViewport', xh_delmic.TemporalSpectrumViewportXmlHandler),
+    ('AngularSpectrumViewport', xh_delmic.AngularSpectrumViewportXmlHandler),
 ]
 
 for i, (name, handler) in enumerate(msvps):

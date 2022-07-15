@@ -31,6 +31,7 @@ from concurrent.futures._base import CancelledError
 from functools import partial
 import logging
 import math
+import numpy
 from odemis import gui, model, util
 from odemis.acq.stream import EMStream, SpectrumStream, \
     StaticStream, CLStream, FluoStream, \
@@ -40,7 +41,7 @@ from odemis.gui.comp import miccanvas, overlay
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE
 from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
 from odemis.gui.comp.overlay.world import CurrentPosCrossHairOverlay, CryoFeatureOverlay, \
-    StagePointSelectOverlay
+    StagePointSelectOverlay, MirrorArcOverlay, EKOverlay
 from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN, CryoChamberGUIData
 from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
@@ -876,6 +877,8 @@ class ARLiveViewport(LiveViewport):
         if self.bottom_legend:
             self.bottom_legend.bmp_slider_right.SetBitmap(getBitmap("icon/ico_blending_goal.png"))
 
+        self.mirror_ol = MirrorArcOverlay(self.canvas)
+
     def setView(self, view, tab_data):
         super(ARLiveViewport, self).setView(view, tab_data)
         view.lastUpdate.subscribe(self._on_stream_update, init=True)
@@ -895,14 +898,52 @@ class ARLiveViewport(LiveViewport):
 
     def show_mirror_overlay(self, activate=True):
         """ Activate the mirror overlay to enable user manipulation """
-        self.canvas.add_world_overlay(self.canvas.mirror_ol)
+        self.canvas.add_world_overlay(self.mirror_ol)
         if activate:
-            self.canvas.mirror_ol.active.value = True
+            self.mirror_ol.active.value = True
 
     def hide_mirror_overlay(self):
         """ Deactivate the mirror overlay to disable user manipulation """
-        self.canvas.mirror_ol.active.value = False
-        self.canvas.remove_world_overlay(self.canvas.mirror_ol)
+        self.mirror_ol.active.value = False
+        self.canvas.remove_world_overlay(self.mirror_ol)
+
+
+class EKLiveViewport(LiveViewport):
+    """
+    LiveViewport dedicated to show EK images.
+    Never allow to move/zoom, and do not show pause icon if no stream.
+    """
+
+    canvas_class = miccanvas.SparcARCanvas
+
+    def __init__(self, *args, **kwargs):
+        super(EKLiveViewport, self).__init__(*args, **kwargs)
+        # TODO: should be done on the fly by _checkMergeSliderDisplay()
+        # change SEM icon to Goal
+        if self.bottom_legend:
+            self.bottom_legend.bmp_slider_right.SetBitmap(getBitmap("icon/ico_blending_goal.png"))
+
+        self.ek_ol = EKOverlay(self.canvas)
+
+    def setView(self, view, tab_data):
+        super(EKLiveViewport, self).setView(view, tab_data)
+        view.lastUpdate.subscribe(self._on_stream_update, init=True)
+
+    def _on_stream_update(self, _):
+        """ Hide the play icon overlay if no stream are present """
+        show = len(self._view.stream_tree) > 0
+        self.canvas.play_overlay.show = show
+
+    def show_ek_overlay(self, activate=True):
+        """ Activate the ek overlay to enable user manipulation """
+        self.canvas.add_world_overlay(self.ek_ol)
+        if activate:
+            self.ek_ol.active.value = True
+
+    def hide_ek_overlay(self):
+        """ Deactivate the ek overlay to disable user manipulation """
+        self.ek_ol.active.value = False
+        self.canvas.remove_world_overlay(self.ek_ol)
 
 
 class ARAcquiViewport(ARLiveViewport):
@@ -1883,6 +1924,73 @@ class ChronographViewport(NavigablePlotViewport):
         self.Refresh()
 
 
+class ThetaViewport(NavigablePlotViewport):
+    """
+    Shows the angle graph of a OD detector reading -> bar plot + legend
+    Legends are angle/intensity.
+    Intensity is between min/max of data.
+    """
+
+    def setView(self, view, tab_data):
+        super(ThetaViewport, self).setView(view, tab_data)
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Angle")
+        wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+
+    def _connect_projection(self, proj):
+        super(ThetaViewport, self)._connect_projection(proj)
+        if proj:
+            # Show "count / angle" if we know the data is normalized
+            im = proj.image.value
+            if im is not None and im.metadata.get(model.MD_DET_TYPE) == model.MD_DT_NORMAL:
+                wx.CallAfter(self.left_legend.SetToolTip, "Count per angle")
+            else:
+                wx.CallAfter(self.left_legend.SetToolTip, "Intensity")
+
+    def _on_new_data(self, data):
+        """Called when a new data is available.
+        data: 1D numpy array, with possibly metadata MD_THETA_LIST, a list of theta values, of the
+        same length
+        """
+        if data is not None and data.size:
+            angle_list, unit_a = spectrum.get_angle_range(data)
+
+            if unit_a == "rad":
+                unit_a = "°"
+                angle_list = [math.degrees(angle) for angle in angle_list]  # Converts radians to degrees
+
+            # Note: here, oppositely to AngularSpectrumViewport, the legend is always
+            # linear, and the values are displayed at a non-fixed interval
+            # (ie, each bar can have a different width).
+            range_x = min(angle_list), max(angle_list)
+            if not self.hrange_lock.value or self.hrange.value is None:
+                display_xrange = util.find_plot_content(angle_list, data)
+            else:
+                display_xrange = self.hrange.value
+
+            range_y = (float(min(data)), float(max(data)))  # float() to avoid numpy arrays
+            if not self.vrange_lock.value or self.vrange.value is None:
+                # Put the data axis with -5% of min and +5% of max:
+                # the margin hints the user the display is not clipped
+                data_width = range_y[1] - range_y[0]
+                if data_width == 0:
+                    display_yrange = (0, range_y[1] * 1.05)
+                else:
+                    display_yrange = (max(0, range_y[0] - data_width * 0.05),
+                               range_y[1] + data_width * 0.05)
+            else:
+                display_yrange = self.vrange.value
+
+            self.canvas.set_1d_data(angle_list, data, unit_x=unit_a, range_x=range_x, range_y=range_y,
+                                    display_xrange=display_xrange, display_yrange=display_yrange)
+            self.hrange.value = display_xrange
+            self.vrange.value = display_yrange
+            self.bottom_legend.unit = unit_a
+
+        else:
+            self.clear()
+        self.Refresh()
+
+
 # TODO: share some code with PlotViewPort
 class TwoDViewPort(ViewPort):
     """
@@ -2053,16 +2161,93 @@ class TemporalSpectrumViewport(TwoDViewPort):
     def _on_new_data(self, data):
         if data is not None and data.size:
             wl, unit_x = spectrum.get_spectrum_range(data)
-            spectrum_range = (min(wl), max(wl))
             times, unit_y = spectrum.get_time_range(data)
-            time_range = (max(times), min(times))  # inverted, to show the 0 at the top
+            times = times[::-1]   # inverted, to show 0 at the top
 
-            self.canvas.set_2d_data(data, unit_x, unit_y, spectrum_range, time_range)
+            self.canvas.set_2d_data(data, unit_x, unit_y, wl, times)
 
             self.bottom_legend.unit = unit_x
             self.left_legend.unit = unit_y
             self.bottom_legend.range = wl  # the list of wavelengths
-            self.left_legend.range = times[::-1]   # inverted, to show 0 at the top
+            self.left_legend.range = times
+        else:
+            self.clear()
+        self.Refresh()
+
+
+class AngularSpectrumViewport(TwoDViewPort):
+    """
+    Shows an angular spectrum image from a 2D CCD camera with angle along the
+    vertical axis and wavelength along the horizontal axis.
+    """
+
+    def __init__(self, *args, **kwargs):
+        super(AngularSpectrumViewport, self).__init__(*args, **kwargs)
+        self.canvas.markline_overlay.val.subscribe(self._on_overlay_selection)
+
+    def _on_overlay_selection(self, pos):
+        """
+        Called whenever the markline position of the overlay changes, to set
+        the selected wavelength & angle in the stream (so that the SinglePoint
+        projections are updated).
+        """
+        if self._stream:
+            if hasattr(self._stream, "selected_wavelength"):
+                self._stream.selected_wavelength.value = pos[0]
+            if hasattr(self._stream, "selected_angle"):
+                if self._stream.selected_angle.unit == "rad":
+                    angle = math.radians(pos[1])
+                else:
+                    angle = pos[1]
+                # Use clip() as converting back and forth between rad and degrees
+                # causes floating point error which might go out of range on the
+                # min/max values.
+                self._stream.selected_angle.value = self._stream.selected_angle.clip(angle)
+
+    def setView(self, view, tab_data):
+        super(AngularSpectrumViewport, self).setView(view, tab_data)
+        wx.CallAfter(self.bottom_legend.SetToolTip, "Wavelength")
+        wx.CallAfter(self.left_legend.SetToolTip, "Angle")
+
+    def connect_stream(self, projs):
+        super(AngularSpectrumViewport, self).connect_stream(projs)
+        stream, proj = self._stream, self._projection
+
+        if hasattr(stream, "selected_angle") and hasattr(stream, "selected_wavelength"):
+            self.canvas.add_view_overlay(self.canvas.markline_overlay)
+            pos = self.canvas.markline_overlay.val
+            if stream.selected_angle.unit == "rad":
+                angle = math.degrees(stream.selected_angle.value)
+            else:
+                angle = stream.selected_angle.value
+            pos.value = (stream.selected_wavelength.value, angle)  # (m, degrees)
+        else:
+            # Hide the line overlay if not useful. Especially, for the raw EK data
+            # the angles list contains NaNs which this overlay doesn't support.
+            self.canvas.remove_view_overlay(self.canvas.markline_overlay)
+
+    def _on_new_data(self, data):
+        if data is not None and data.size:
+            wl, unit_x = spectrum.get_spectrum_range(data)
+
+            angles, unit_a = spectrum.get_angle_range(data)
+            if unit_a == "rad":  # Converts radians to degrees
+                unit_a = "°"
+                angles = [math.degrees(angle) for angle in angles]
+
+            # The first angles in THETA_LIST are always considered negative (and
+            # correspond to the bottom of the mirror, which is seen at the top of the CCD)
+            angles = angles[::-1]  # invert, as the first value should be at the top
+
+            # Note: the data from StaticStreams should normally already have the NaN
+            # angles removed. However, the live image has NaNs in the
+            # angles. So we need to be aware of them.
+            self.canvas.set_2d_data(data, unit_x, unit_a, wl, angles)
+
+            self.bottom_legend.unit = unit_x
+            self.left_legend.unit = unit_a
+            self.bottom_legend.range = wl
+            self.left_legend.range = angles
         else:
             self.clear()
         self.Refresh()

@@ -876,6 +876,8 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_POS: (1e-3, -30e-3),  # m
                      model.MD_EXP_TIME: 1.2,  # s
                      model.MD_AR_POLE: (253.1, 65.1),  # px
+                     model.MD_AR_MIRROR_TOP: (1253.1, 65.1),  # px, px/m
+                     model.MD_AR_MIRROR_BOTTOM: (254, -451845.48),  # px, px/m
                      model.MD_AR_XMAX: 12e-3,
                      model.MD_AR_HOLE_DIAMETER: 0.6e-3,
                      model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
@@ -915,6 +917,10 @@ class TestTiffIO(unittest.TestCase):
             self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
             if model.MD_AR_POLE in md:
                 numpy.testing.assert_allclose(im.metadata[model.MD_AR_POLE], md[model.MD_AR_POLE])
+            if model.MD_AR_MIRROR_TOP in md:
+                numpy.testing.assert_allclose(im.metadata[model.MD_AR_MIRROR_TOP], md[model.MD_AR_MIRROR_TOP])
+            if model.MD_AR_MIRROR_BOTTOM in md:
+                numpy.testing.assert_allclose(im.metadata[model.MD_AR_MIRROR_BOTTOM], md[model.MD_AR_MIRROR_BOTTOM])
             if model.MD_AR_XMAX in md:
                 self.assertAlmostEqual(im.metadata[model.MD_AR_XMAX], md[model.MD_AR_XMAX])
             if model.MD_AR_HOLE_DIAMETER in md:

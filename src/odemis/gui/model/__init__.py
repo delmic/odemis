@@ -167,6 +167,7 @@ class MainGUIData(object):
         "align": "aligner",
         "fiber-aligner": "fibaligner",
         "lens-mover": "lens_mover",  # lens1 of SPARCv2
+        "lens-switch": "lens_switch",  # lens2 of SPARCv2. Supports EK if has FAV_POS_ACTIVE
         "spec-selector": "spec_sel",
         "pcd-selector": "pcd_sel",
         "chamber": "chamber",
@@ -249,6 +250,7 @@ class MainGUIData(object):
         self.spec_ded_focus = None  # focus on spectrograph dedicated (SPARCv2)
         self.monochromator = None  # 0D detector behind the spectrograph
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
+        self.lens_switch = None  # actuator to align the lens2 (SPARCv2)
         self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)
         self.pcd_sel = None  # actuator to activate the path to the probe current
         self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
@@ -482,6 +484,18 @@ class MainGUIData(object):
         else:
             raise LookupError("Failed to find tab %s among %d defined tabs" %
                               (name, len(self.tab.choices)))
+
+    def isAngularSpectrumSupported(self):
+        """
+        Detects whether the SPARC supports Angular Spectrum acquisition.
+        It only makes sense on SPARCv2. "Simple/old" systems didn't support it.
+        If lens-switch has MD_FAV_POS_ACTIVE, it's a sign that it's supported.
+        return (bool): True if the SPARC supports EK imaging
+        """
+        if not self.ccds or not self.lens_switch:
+            return False
+        md = self.lens_switch.getMetadata()
+        return (model.MD_FAV_POS_ACTIVE in md)
 
 
 class MicroscopyGUIData(with_metaclass(ABCMeta, object)):
@@ -923,15 +937,18 @@ class AnalysisGUIData(MicroscopyGUIData):
         ar_file = self._conf.get("calibration", "ar_file")
         spec_bck_file = self._conf.get("calibration", "spec_bck_file")
         temporalspec_bck_file = self._conf.get("calibration", "temporalspec_bck_file")
+        angularspec_bck_file = self._conf.get("calibration", "angularspec_bck_file")
         spec_file = self._conf.get("calibration", "spec_file")
         self.ar_cal = StringVA(ar_file) # a unicode
         self.spec_bck_cal = StringVA(spec_bck_file) # a unicode
         self.temporalspec_bck_cal = StringVA(temporalspec_bck_file)  # a unicode
+        self.angularspec_bck_cal = StringVA(angularspec_bck_file)
         self.spec_cal = StringVA(spec_file)  # a unicode
 
         self.ar_cal.subscribe(self._on_ar_cal)
         self.spec_bck_cal.subscribe(self._on_spec_bck_cal)
         self.temporalspec_bck_cal.subscribe(self._on_temporalspec_bck_cal)
+        self.angularspec_bck_cal.subscribe(self._on_angularspec_bck_cal)
         self.spec_cal.subscribe(self._on_spec_cal)
 
         self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
@@ -966,6 +983,9 @@ class AnalysisGUIData(MicroscopyGUIData):
     def _on_temporalspec_bck_cal(self, fn):
         self._conf.set("calibration", "temporalspec_bck_file", fn)
 
+    def _on_angularspec_bck_cal(self, fn):
+        self._conf.set("calibration", "angularspec_bck_file", fn)
+
     def _on_spec_cal(self, fn):
         self._conf.set("calibration", "spec_file", fn)
 
@@ -990,6 +1010,7 @@ class ActuatorGUIData(MicroscopyGUIData):
                   "aligner": (1e-6, [100e-9, 1e-4], "aligner", None),
                   "fibaligner": (50e-6, [5e-6, 500e-6], "fibaligner", None),
                   "lens_mover": (50e-6, [5e-6, 500e-6], "lens_mover", None),
+                  "lens_switch": (50e-6, [5e-6, 500e-6], "lens_switch", None),
                   # There is not way to change the spec_focus stepsize in the GUI.
                   # On the typical SPARCv2, the smallest step is ~10µm, anything below will not move.
                   "spec_focus": (100e-6, [1e-6, 1000e-6], "spectrograph", {"focus"}),
@@ -1123,7 +1144,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Mode values are different from the modes of the OpticalPathManager
-        amodes = ["lens-align", "mirror-align", "center-align", "streak-align", "fiber-align"]
+        amodes = ["lens-align", "mirror-align", "lens2-align", "center-align", "ek-align", "streak-align", "fiber-align"]
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
@@ -1134,18 +1155,39 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         if not main.spectrograph or not main.lens_mover:
             amodes.remove("lens-align")
 
+        if not main.spectrograph or not main.lens_switch:
+            amodes.remove("lens2-align")
+
         if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
             # This is different from the polePosition of the lens, which is in
             # pixels from the top-left corner of the AR image.
             self.polePositionPhysical = model.TupleContinuous((0, 0),
                                            ((-1, -1), (1, 1)), unit="m",
-                                           cls=(int, long, float),
+                                           cls=(int, float),
                                            setter=self._setPolePosPhysical)
 
             main.lens.polePosition.subscribe(self._onPolePosCCD, init=True)
+
+            if model.hasVA(main.lens, "mirrorPositionTop") and model.hasVA(main.lens, "mirrorPositionBottom"):
+                self.mirrorPositionTopPhys = model.TupleContinuous((100e-6, 0),
+                                           ((-1e18, -1e18), (1e18, 1e18)), unit="m",
+                                           cls=(int, float),
+                                           setter=self._setMirrorPosTopPhysical
+                                           )
+                self.mirrorPositionBottomPhys = model.TupleContinuous((-100e-6, 0),
+                                           ((-1e18, -1e18), (1e18, 1e18)), unit="m",
+                                           cls=(int, float),
+                                           setter=self._setMirrorPosBottomPhysical
+                                           )
+
+                main.lens.mirrorPositionTop.subscribe(self._onMirrorPosTopCCD, init=True)
+                main.lens.mirrorPositionBottom.subscribe(self._onMirrorPosBottomCCD, init=True)
+            else:
+                amodes.remove("ek-align")
         else:
             amodes.remove("center-align")
+            amodes.remove("ek-align")
 
         if main.fibaligner is None:
             amodes.remove("fiber-align")
@@ -1155,13 +1197,17 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 
-    def _posToCCD(self, posphy):
+    def _posToCCD(self, posphy, absolute: bool=True, clip: bool=True):
         """
         Convert position from physical coordinates to CCD coordinates (top-left
          pixel is 0, 0).
         Note: it will clip the coordinates to fit within the CCD
         posphy (float, float)
-        return (0<=int, 0<=int)
+        absolute: if True, will adjust from origin being at the center to the origin
+          being at the top-left. Otherwise, only the scale is adjusted.
+        clip: if True, limit the value to within the CCD boundaries, and round to
+          an int. Otherwise the value returned will be two floats.
+        return (0<=int or float, 0<=int or float)
         """
         # We need to convert to the _image_ pixel size (not sensor), and they
         # are different due to the lens magnification.
@@ -1177,24 +1223,29 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         res = self.main.ccd.shape[0:2]
 
         # Convert into px referential (Y is inverted)
-        posc_px = (posphy[0] / pxs[0], -posphy[1] / pxs[1])
-        # Convert into the referential with the top-left corner as origin
-        posccd = (posc_px[0] + (res[0] - 1) / 2, posc_px[1] + (res[1] - 1) / 2)
+        posccd = (posphy[0] / pxs[0], -posphy[1] / pxs[1])
 
-        # Round to int, and clip to within CCD
-        posccd = (max(0, min(int(round(posccd[0])), res[0] - 1)),
-                  max(0, min(int(round(posccd[1])), res[1] - 1)))
+        if absolute:
+            # Convert into the referential with the top-left corner as origin
+            posccd = (posccd[0] + (res[0] - 1) / 2, posccd[1] + (res[1] - 1) / 2)
 
-        if not 0 <= posccd[0] < res[0] or not 0 <= posccd[1] < res[1]:
-            logging.warning("Pos %s out of the CCD", posccd)
+        if clip:
+            if not 0 <= posccd[0] < res[0] or not 0 <= posccd[1] < res[1]:
+                logging.warning("Pos %s out of the CCD", posccd)
+
+            # Round to int, and clip to within CCD
+            posccd = (max(0, min(int(round(posccd[0])), res[0] - 1)),
+                      max(0, min(int(round(posccd[1])), res[1] - 1)))
 
         return posccd
 
-    def _posToPhysical(self, posccd):
+    def _posToPhysical(self, posccd, absolute: bool=True):
         """
         Convert position from CCD coordinates to physical coordinates.
         Note: it conciders the physical origin to be at the center of the CCD.
         posccd (int, int)
+        absolute: if True, will adjust from origin being at the center to the origin
+          being at the top-left. Otherwise, only the scale is adjusted.
         return (float, float)
         """
         md = self.main.ccd.getMetadata()
@@ -1209,10 +1260,26 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         res = self.main.ccd.shape[0:2]
 
         # Convert into the referential with the center as origin
-        posc_px = (posccd[0] - (res[0] - 1) / 2, posccd[1] - (res[1] - 1) / 2)
+        if absolute:
+            posccd = (posccd[0] - (res[0] - 1) / 2, posccd[1] - (res[1] - 1) / 2)
+
         # Convert into world referential (Y is inverted)
-        posc = (posc_px[0] * pxs[0], -posc_px[1] * pxs[1])
+        posc = (posccd[0] * pxs[0], -posccd[1] * pxs[1])
         return posc
+
+    def _lineToCCD(self, linephy):
+        a, b = linephy
+        # Both values are in Y: as px = a + b * wl
+        _, a_px = self._posToCCD((0, a), absolute=True, clip=False)  # To px from the top
+        _, b_px = self._posToCCD((0, b), absolute=False, clip=False)  # To px/wl
+        return a_px, b_px
+
+    def _lineToPhysical(self, lineccd):
+        a_px, b_px = lineccd
+        # Both values are in Y: as px = a + b * wl
+        _, a = self._posToPhysical((0, a_px), absolute=True)  # To m from the center
+        _, b = self._posToPhysical((0, b_px), absolute=False)  # To px/wl
+        return a, b
 
     def _setPolePosPhysical(self, posphy):
         posccd = self._posToCCD(posphy)
@@ -1232,6 +1299,42 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # Update without calling the setter
         self.polePositionPhysical._value = posphy
         self.polePositionPhysical.notify(posphy)
+
+    def _setMirrorPosTopPhysical(self, linephy):
+        lineccd = self._lineToCCD(linephy)
+        logging.debug("Updated CCD mirror top pos to %s px (= %s m)", lineccd, linephy)
+
+        self.main.lens.mirrorPositionTop.unsubscribe(self._onMirrorPosTopCCD)
+        self.main.lens.mirrorPositionTop.value = lineccd
+        self.main.lens.mirrorPositionTop.subscribe(self._onMirrorPosTopCCD)
+
+        return linephy
+
+    def _onMirrorPosTopCCD(self, lineccd):
+        linephy = self._lineToPhysical(lineccd)
+        logging.debug("Updated world mirror top pos to %s m (= %s px)", linephy, lineccd)
+
+        # Update without calling the setter
+        self.mirrorPositionTopPhys._value = linephy
+        self.mirrorPositionTopPhys.notify(linephy)
+
+    def _setMirrorPosBottomPhysical(self, linephy):
+        lineccd = self._lineToCCD(linephy)
+        logging.debug("Updated CCD mirror bottom pos to %s px (= %s m)", lineccd, linephy)
+
+        self.main.lens.mirrorPositionBottom.unsubscribe(self._onMirrorPosBottomCCD)
+        self.main.lens.mirrorPositionBottom.value = lineccd
+        self.main.lens.mirrorPositionBottom.subscribe(self._onMirrorPosBottomCCD)
+
+        return linephy
+
+    def _onMirrorPosBottomCCD(self, lineccd):
+        linephy = self._lineToPhysical(lineccd)
+        logging.debug("Updated world mirror bottom pos to %s m (= %s px)", linephy, lineccd)
+
+        # Update without calling the setter
+        self.mirrorPositionBottomPhys._value = linephy
+        self.mirrorPositionBottomPhys.notify(linephy)
 
 
 class FastEMMainGUIData(MainGUIData):

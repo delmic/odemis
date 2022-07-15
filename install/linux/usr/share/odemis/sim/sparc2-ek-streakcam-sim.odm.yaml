@@ -4,11 +4,13 @@ SPARC2: {
     role: sparc2,
     children: ["SEM E-beam", "SEM Detector", "Calibration Light",
                "Optical Path Properties", "Spectrometer Vis-NIR",
-               "Camera", "Spectrometer IR", "CL Detector",
+               "Camera", "CL Detector", "Spectrograph",
                "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
                "Mirror Actuators", "Mirror Actuators in XY referential",
                "Slit", "CL Selector", "CL Filter Wheel",
-               "Lens1 Mover", "Lens2 Switch"],
+               "Lens1 Mover", "Lens2 Switch",
+               "Streak Readout CCD", "Streak Delay Generator", "Streak Unit",
+               "Streak Lens"],
 }
 
 # Light (lamp with known spectrum)
@@ -16,7 +18,7 @@ SPARC2: {
     class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR"],
 }
 
 "Power Control Unit": {
@@ -25,25 +27,19 @@ SPARC2: {
     init: {
         port: "/dev/fake", # for simulator
         pin_map: {"Calibration Light": 0, "CL PMT control unit": 3,
-                  "Camera": 4, "Spectral Camera": 5, "Spectrograph": 6,
+                  "Camera": 4, "Spectrograph": 6,
                   "Optical Actuators": 2},
         delay: { # Time it takes before a component is accessible
-            "Calibration Light": 0, # To turn on/off the light, it's immediate
+            "Calibration Light": 3, # s, the light takes some time to actually turn on
             "CL PMT control unit": 0,
-            "Camera": 3,
-            "Spectral Camera": 3,
-            "Spectrograph": 5,
+            "Camera": 1,
+            "Spectrograph": 1,
             "Optical Actuators": 1
         },
         init: { # Which component to power on from the very beginning (to save time)
             "Camera": True,
-            "Spectral Camera": True,
             "Spectrograph": True,
             "Optical Actuators": True
-        },
-        termination: { # Which component to power off (or on) at the end
-            "Calibration Light": False, # make sure it's turned off
-            "Spectrograph": False,
         },
     }
 }
@@ -76,18 +72,14 @@ SPARC2: {
         limits: [[0, 5], [0, 5]],  # V
         park: [0, 0], # V
         settle_time: 5.e-6, # s
-        scan_active_delay: 0.5, # s
         hfw_nomag: 0.25, # m
-        # output ports -> True (high when scanning) or False (high when parked)
-        # + property name + True (high when set to True) or False (high when set to False)
-        scanning_ttl: {4: True, 2: [True, "external"], 3: [False, "blanker", True]},
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Spectrometer IR", "Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Camera"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -142,56 +134,117 @@ SPARC2: {
     role: ccd,
     power_supplier: "Power Control Unit",
     init: {
-      device: "fake",
-      image: "sparc-ar.h5", # only for simulator
-      transp: [1, 2],
+       device: "fake",
+       image: "ccd-ek.h5", # only for simulator
     },
 }
 
-# "Camera": {
-#     class: simcam.Camera,
-#     role: ccd,
-#     power_supplier: "Power Control Unit",
-#     init: {
-#         image: "sparc-ar-mirror-align.h5", # only for simulator
-#     },
-#     dependencies: {
-#         focus: "Spectrograph focus",
-#     },
-# }
-
 "Spectrometer Vis-NIR": {
     class: spectrometer.CompositedSpectrometer,
-    role: spectrometer-integrated,
+    role: spectrometer,
     dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
     init: {
         transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
     },
 }
 
-# On some configuration, there is a dedicated camera for the acquisition of the
-# spectra, otherwise 'Camera' is used.
-"Spectral Camera": {
-    class: andorcam2.AndorCam2,
-    role: sp-ccd,
-    power_supplier: "Power Control Unit",
+# simple simulated streak camera
+"Streak Camera": {
+    class: simstreakcam.StreakCamera,
+    role: streak-cam,
     init: {
-        device: "fake",
-        transp: [-1, 2], # if mirrored on X axis
-        image: "sparc-spec-sim.h5", # only for simulator
     },
-    properties: {
-        targetTemperature: -60, # °C
+    children: {
+        readoutcam: "Streak Readout CCD",
+        delaybox: "Streak Delay Generator",
+        streakunit: "Streak Unit"
+    },
+    dependencies: {
+        spectrograph: "Spectrograph"
     },
 }
 
-"Spectrometer IR": {
-    class: spectrometer.CompositedSpectrometer,
-    role: spectrometer,
-    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
-    properties: {
-        binning: [4, 100],
+# for testing with real HW
+#"Streak Camera": {
+#    class: hamamatsurx.StreakCamera,
+#    role: streak-cam,
+#    init: {
+#        host: "172.16.4.2",  # Braunschweig System
+#        port: 1001
+#    },
+#    children: {
+#        readoutcam: "Streak Readout CCD",
+#        delaybox: "Streak Delay Generator",
+#        streakunit: "Streak Unit"
+#    },
+#    dependencies: {
+#        spectrograph: "Spectrograph"
+#    },
+#}
+
+"Streak Readout CCD": {
+    role: streak-ccd,
+    init: {
+        image: "sparc-ar-mirror-align.h5",  # only for simulator!  TODO replace with streak image
+#       device: 0,
+        transp: [-1, 2], # if mirrored on X axis
     },
+#    dependencies: {spectrograph: "Spectrograph"},
+    # TODO does not work for now as modelgen says no component named spectrograph found
+}
+
+"Streak Unit": {
+    role: streak-unit,
+    init: {
+    },
+    affects: ["Streak Readout CCD"],
+}
+
+"Streak Delay Generator": {
+    role: streak-delay,
+    init: {
+    },
+    metadata: {
+        TIME_RANGE_TO_DELAY: {
+          # timeRange (s) -> triggerDelay (s)
+            1.0e-09: 7.99e-9,  # 1ns
+            2.e-09: 9.63e-9,  # 2ns
+            5.e-09: 3.32e-8,  # 5ns
+            1.e-08: 4.59e-8,  # 10ns
+            2.e-08: 6.64e-8,  # 20ns
+            5.e-08: 1.02e-7,  # 50ns
+            1.e-07: 1.69e-7,  # 100ns
+            2.e-07: 3.02e-7,  # 200ns
+            5.e-07: 7.31e-7,  # 500ns
+            1.e-06: 1.39e-6,  # 1us
+            2.e-06: 2.69e-6,  # 2us
+            5.e-06: 7.02e-6,  # 5us
+            1.e-05: 1.38e-5,  # 10us
+            2.e-05: 2.67e-5,  # 20us
+            5.e-05: 8.16e-5,  # 50us
+            1.e-04: 1.61e-4,  # 100us
+            2.e-04: 3.20e-4,  # 200us
+            5.e-04: 7.98e-4,  # 500us
+            1.e-03: 1.62e-3,  # 1ms
+            2.e-03: 3.18e-3,  # 2ms
+            5.e-03: 7.88e-3,  # 5ms
+            1.e-02: 1.54e-2,  # 10ms
+        },
+    },
+    affects: ["Streak Unit", "Streak Readout CCD"],
+}
+
+"Streak Lens": {
+    class: static.OpticalLens,
+    role: streak-lens,
+    init: {
+        mag: 0.476,  # set default value
+        mag_choices: [1, 0.476],  # second is de-magnifying: 0.476 = 1/2.1
+    },
+    persistent: {
+        properties: [magnification],
+    },
+    affects: ["Streak Readout CCD"],
 }
 
 "Spectrograph": {
@@ -209,9 +262,10 @@ SPARC2: {
             4: "polariser",
             6: "pass-through"
         },
-        fstepsize: 10.9e-6, # m, size of one focus step
+        fstepsize: 10.9e-6, # m, size of one focus step (very roughly)
+        rng: {"focus": [10.9e-6, 4.9e-3]},  # the hardware has an issue, and cannot go further than 4.9mm (instead of the standard 6.5 mm)
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Streak Readout CCD"],
 }
 
 "Spectrograph focus": {
@@ -221,7 +275,7 @@ SPARC2: {
     init: {
         axes_map: {"z": "focus"},
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Streak Readout CCD"],
 }
 
 # Provide the mirror (aka port selector) of the spectrograph as a separate component
@@ -232,11 +286,11 @@ SPARC2: {
     init: {
         axis_name: "flip-out",
         positions: {
-            0: ["Camera", "Spectrometer Vis-NIR"],
-            1.5707963267948966: ["Spectral Camera", "Spectrometer IR"],
+            0: ["Streak Readout CCD"],
+            1.5707963267948966: ["Camera", "Spectrometer Vis-NIR"],
         },
     },
-    affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+    affects: ["Camera", "Streak Readout CCD", "Spectrometer Vis-NIR"],
 }
 
 # Provide the filter wheel of the spectrograph as a separate component
@@ -247,7 +301,7 @@ SPARC2: {
     init: {
         axes_map: {"band": "band"},
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Streak Readout CCD"],
 }
 
 "Optical Path Properties": {
@@ -255,11 +309,7 @@ SPARC2: {
     role: lens,
     # Standard mirror config
     init: {
-       configurations: {
-        "Mirror up": {pole_pos: [458, 519],  focus_dist: 0.5e-3},
-        "Mirror down": {pole_pos: [634, 652],  focus_dist: -0.5e-3}
-       },
-       mag: 0.31, # ratio
+       mag: 0.34, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
        pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
@@ -269,10 +319,7 @@ SPARC2: {
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
        rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
-    persistent: {
-        properties: [configuration, polePosition],
-    },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Streak Readout CCD"]
 }
 
 # Controller for the motors moving the various parts of the optical box
@@ -286,7 +333,6 @@ SPARC2: {
         axes: ["l1", "l2", "cl-sel", "fw", "slit"],
         # These values are adapted to make the simulator roughly the same speed
         ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5, 5.e-9], # m/µstep, excepted for the fw: rad/µstep
-        unit: ["m", "m", "m", "rad", "m"],
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},
         inverted: ["l2"],
@@ -306,20 +352,24 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": 0.0045} # m
     },
-    affects: ["Lens2 Switch"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Streak Readout CCD"],
 }
 
 # The second lens of Plate 1, either to working or parking position
 "Lens2 Switch": {
-    class: actuator.FixedPositionsActuator,
+    class: actuator.MultiplexActuator,
     role: "lens-switch",
     dependencies: {"x": "Optical Actuators"},
     init: {
-        axis_name: "l2",
-        positions: {
-            4.e-3: "on",
-            0.02: "off", # completely out of the path
-        },
+        axes_map: {"x": "l2"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Position away
+        FAV_POS_DEACTIVE: {"x": 0.02}, # m
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 4.0e-3}, # m
+        POS_ACTIVE_RANGE: {"x": [-1.e-3, 1.e-3]},  # relative min/max from the active position when doing EK-scanning
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR", "CL Detector"],
 }
@@ -336,7 +386,7 @@ SPARC2: {
             -0.0012: "off", # opening based on the small slit
         },
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Streak Readout CCD"],
 }
 
 # Mirror in Plate 2, selects between spectrometer and cl-detector
@@ -351,7 +401,7 @@ SPARC2: {
             0.01: ["Spec CCD Flipper"]
         },
     },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR", "CL Detector"],
+    affects: ["Camera", "Spectrometer Vis-NIR", "Streak Readout CCD", "CL Detector"],
 }
 
 "CL Filter Wheel": {
@@ -383,16 +433,12 @@ SPARC2: {
         address: null,
         axes: ["s", "l"],
         ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
-        rng: [[-1.e-3, 1.e-3], [0, 51.e-3]],  # m, min/max
         refproc: "Standard",
         refswitch: {"s": 0, "l": 0},
     },
     metadata: {
         # Default position of the mirror engaged (will be improved during alignment)
-        FAV_POS_ACTIVE: {"l": 48.e-3, "s": 1.e-3},  # m, m
-    },
-    persistent: {
-        metadata: [FAV_POS_ACTIVE],
+        FAV_POS_ACTIVE: {"l": 70.e-3, "s": 5.e-3},  # m, m
     },
 }
 

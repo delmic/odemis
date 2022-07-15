@@ -21,9 +21,13 @@ from __future__ import division
 
 import csv
 import logging
-import numpy
+import math
 from odemis import model
+from odemis.model import MD_THETA_LIST
 from odemis.util import spectrum, img, find_closest, almost_equal
+from typing import Tuple
+
+import numpy
 
 
 # AR calibration data is a background image. The file format expected is a
@@ -250,7 +254,8 @@ def get_spectrum_efficiency(das):
 def apply_spectrum_corrections(data, bckg=None, coef=None):
     """
     Apply the background correction and the spectrum efficiency compensation
-    factors to the given data if applicable.
+    factors to the given data if applicable. In case the MD_THETA_LIST is present,
+    remove NaN values before applying the above factors.
     If the wavelength of the calibration doesn't cover the whole data wavelength,
     the missing wavelength is filled by the same value as the border. Wavelength
     in-between points is linearly interpolated.
@@ -269,6 +274,9 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
         CTZYX = C1111 (spectrum), CTZYX = CT111 (temporal spectrum) or CTZYX = 1T111 (time correlator).
     :param coef: (None or DataArray of at least 5 dims) The coefficient data, with CTZXY = C1111.
     :returns: (DataArray) Same shape as original data. Can have dtype=float.
+      If MD_THETA_LIST is present and contains NaN values (which is typical), then
+      the A dimension (theta angles) is shorten by removing the indices where the
+      theta is NaN. The MD_THETA_LIST is updated to only contain the part with numbers.
     """
 
     # handle time correlator data (chronograph) data
@@ -330,6 +338,13 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
 
             data = img.Subtract(data, bckg)
 
+    # Remove NaN values from the theta list, if exists, and update the calibrated data to have the same length
+    if model.MD_THETA_LIST in data.metadata:
+        angle_range, _ = spectrum.get_angle_range(data)
+        angles, data = filter_nan_from_data(angle_range, data)
+        data = model.DataArray(data, data.metadata.copy())
+        data.metadata[MD_THETA_LIST] = angles
+
     if coef is not None:
         # Check if we have any wavelength information in data.
         if model.MD_WL_LIST not in data.metadata:
@@ -356,6 +371,22 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
         data = data * calib_fitted  # will keep metadata from data
 
     return data
+
+
+def filter_nan_from_data(l: list, data: model.DataArray) -> Tuple[list, model.DataArray]:
+    """
+    Filters out NaN values from the list, and filters out the same indices in the data.
+    l (list of floats of length N): typically the MD_THETA_LIST
+    data (DataArray of floats with shape .N...): Typically the whole angular spectrum data of shape CAZYX
+    return l, data, without the NaNs in l, and the corresponding indices in data removed
+    """
+    if len(l) != data.shape[1]:
+        raise ValueError(f"l has length {len(l)} != data second dimension {data.shape}.")
+
+    l = numpy.array(l)
+    not_nan_mask = ~numpy.isnan(l)
+    # data is expected to be CAZYX => so filter second dimension
+    return l[not_nan_mask], data[:, not_nan_mask]
 
 
 def write_trigger_delay_csv(filename, trig_delays):

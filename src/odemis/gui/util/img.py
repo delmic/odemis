@@ -23,30 +23,36 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Some helper functions to convert/manipulate images
 
 from __future__ import division
-from past.builtins import basestring
-import threading
+
 import cairo
 import logging
 import math
+import numbers
 import numpy
 from odemis import model
+from odemis.acq.stream import RGBProjection, RGBSpatialProjection, \
+    SinglePointTemporalProjection, SinglePointAngularProjection, DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.overlay.base import Label
-from odemis.util import intersect, fluo, img, units
-import time
-import wx
-import odemis.acq.stream as acqstream
-from odemis.util import spectrum
-import odemis.gui.img as guiimg
-from odemis.acq.stream import RGBProjection, RGBSpatialProjection,\
-    SinglePointTemporalProjection, DataProjection
-from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.model import DataArrayShadow
+from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
+from odemis.util import intersect, fluo, img, units
+from odemis.util import spectrum
+from past.builtins import basestring
+import threading
+import time
+from typing import Tuple, Optional
+import wx
+
+import odemis.acq.stream as acqstream
+import odemis.gui.img as guiimg
+
 
 BAR_PLOT_COLOUR = (0.5, 0.5, 0.5)
 CROP_RES_LIMIT = 1024
 MAX_RES_FACTOR = 5  # upper limit resolution factor to exported image
 MIN_AR_SIZE = 800  # px, minimum size the AR image is exported
+TICKS_PER_AXIS = 10  # rough number of ticks to show on axes
 SPEC_PLOT_SIZE = 1024
 SPEC_SCALE_WIDTH = 150  # ticks + text vertically
 SPEC_SCALE_HEIGHT = 100  # ticks + text horizontally
@@ -833,16 +839,49 @@ def ar_to_export_data(projections, raw=False):
             return next(iter(data_dict.values()))
 
 
+def guess_sig_num_rng(rng: list, v: numbers.Real=None) -> Optional[int]:
+    """
+    Guess a significant numbers to keep in values to display for being user-friendly
+    rng (None or list of float with len>=2): the range of values to be shown.
+      Only the first and last are cared of. In case of a list, it may contain NaNs,
+      in which case they are omitted.
+    v (Real): if passed, and the range is not informative, the type will be used
+      to guess the significant numbers
+    return: the number of figures to keep, or None if all should be kept
+    """
+    if rng is None:
+        rng = [0, 0]
+
+    minr = numpy.nanmin(rng)
+    maxr = numpy.nanmax(rng)
+    if minr == maxr:
+        # Can't use range => rely on the type
+        return None if isinstance(v, numbers.Integral) else 3
+    else:
+        # Compare the biggest value displayed (with or without the "-" sign) to
+        # the range of values. If they are very different, we want to include
+        # more significant numbers. (ex, rng = [17999, 18003], we need at least 5
+        # significant numbers, and even more if floating point => return 7)
+        max_abs = max(abs(minr), abs(maxr))
+        ratio_rng = max_abs / (maxr - minr)
+        return 2 + math.ceil(math.log10(ratio_rng) + 0.5)
+
+
 def value_to_pixel(value, pixel_space, value_range, orientation):
     """
-    Map range value to legend pixel position
+    Map value within a range to pixel position on an axis
 
     value (float): value to map
     pixel_space (int): length of space available to draw, in pixels
     value_range (list of floats of len>=2): values at linearly spread intervals
-    orientation (int): legend orientation
+      The values have to be either in increasing order or decreasing order.
+      It may contain a series of NaN at the beginning and at the end. In this case,
+      the NaN are considered empty space.
+    orientation (wx.VERTICAL or wx.HORIZONTAL): legend orientation
+       When vertical, going from bottom to top.
+       When horizontal, going from left to right.
 
-    returns (int): pixel position
+    returns (0<=int<pixel_space): pixel position
     """
     if pixel_space is None:
         return None
@@ -850,13 +889,31 @@ def value_to_pixel(value, pixel_space, value_range, orientation):
     if None in value_range:
         return None
 
-    assert value_range[0] <= value <= value_range[-1] or value_range[-1] <= value <= value_range[0]
+    # Handle NaN before and after by taking them away, and running the interpolation
+    # only within the "finite" part of value_range. Then, we have to just shift
+    # the position by the space taken by the NaNs at the beginning.
+    # Note that another way to handle it would be to replace the NaNs by the same
+    # value as the first finite value (left) and last one (right), then numpy.interp()
+    # would almost return the correct pixel... we'd just need to handle explicitly
+    # the cases of the min or max are requested. Eventually, this is about as
+    # complicated, and would required creating new arrays.
+    i_first, i_last = find_first_last_finite_indices(value_range)
+    value_range_finite = value_range[i_first:i_last + 1]
+    assert value_range_finite[0] <= value <= value_range_finite[-1] or value_range_finite[-1] <= value <= value_range_finite[0]
+
+    # If no NaNs, pixel_space_finite == pixel_space
+    pixel_space_finite = pixel_space * (1 + i_last - i_first) / len(value_range)
 
     # if going from big to small, reverse temporarily from small to big and we'll
     # reverse the result at the end
-    reverse = value_range[0] > value_range[-1]
+    reverse = value_range_finite[0] > value_range_finite[-1]
     if reverse:
-        value_range = value_range[::-1]
+        value_range_finite = value_range_finite[::-1]
+        # nan_shift is 0 if i_last is the last value
+        nan_shift = pixel_space * (len(value_range) - (i_last + 1)) / len(value_range)
+    else:
+        # nan_shift is 0 if i_first is the first value
+        nan_shift = pixel_space * i_first / len(value_range)
 
     # Find the two points in the range which are the closest value, then linearly interpolate
     # Example       |----------------|-----------------|
@@ -864,7 +921,10 @@ def value_to_pixel(value, pixel_space, value_range, orientation):
     # value:                                 ^50
     # pixel space:  0                                  1000
     # pixel pos:                             722
-    pos_px = numpy.interp(value, value_range, numpy.linspace(0, pixel_space, len(value_range)))
+    pos_px = numpy.interp(value,
+                          value_range_finite,
+                          numpy.linspace(0, pixel_space_finite - 1, len(value_range_finite)))
+    pos_px += nan_shift
 
     # For historical reasons, vertically, we report 0 at the end / bottom, unless
     # of course, it's reversed
@@ -877,11 +937,69 @@ def value_to_pixel(value, pixel_space, value_range, orientation):
     return int(round(pos_px))
 
 
+def pixel_to_value(pos_px, pixel_space, value_range, orientation):
+    """
+    Map a position along an axis representing a range to its value.
+    It does the opposite of value_to_pixel()
+
+    pos_px (0<=int<pixel_space): position
+    pixel_space (int): length of space available to draw, in pixels
+    value_range (list of floats of len>=2): values at linearly spread intervals
+      The values have to be either in increasing order or decreasing order.
+      There shouldn't be any NaN or inf.
+    orientation (wx.VERTICAL or wx.HORIZONTAL): orientation
+       When vertical, going from bottom to top.
+       When horizontal, going from left to right.
+
+    returns (float): value
+    """
+    if pixel_space is None:
+        return None
+
+    if None in value_range:
+        return None
+
+    if math.nan in value_range or math.inf in value_range:
+        raise ValueError("value_range contains NaN or inf, which is not supported")
+
+    assert 0 <= pos_px <= pixel_space - 1
+
+    # if going from big to small, reverse temporarily from small to big and we'll
+    # reverse the result at the end
+    reverse = value_range[0] > value_range[-1]
+    if reverse:
+        value_range = value_range[::-1]
+
+    # For historical reasons, vertically, we report 0 at the end / bottom, unless
+    # of course, it's reversed
+    if orientation == wx.VERTICAL:
+        reverse = not reverse
+
+    if reverse:
+        pos_px = (pixel_space - 1) - pos_px
+
+    # Find the two values in the range which are the nearest to the proportional
+    # position of the pixel in the pixel space.
+
+    # Find the two points in the range which are the closest value, then linearly interpolate
+    # Example       |----------------|-----------------|
+    # pixel space:  0                                  1000
+    # pixel pos:                             ^722
+    # value range:  1                10                100
+    # value:                                 50
+    val = numpy.interp(pos_px, numpy.linspace(0, pixel_space - 1, len(value_range)), value_range)
+
+    return val
+
+
 def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     """
     Calculate which values in the range to represent as ticks on the axis
 
-    value_range (list of floats of len>=2): values at linearly spread intervals
+    value_range (list of floats of len>=2): values at linearly spread intervals.
+      It must be ordered, either increasing or decreasing.
+      It may contain a series of NaN at the beginning and at the end. In this case,
+      the NaN are considered empty space.
     client_size (int > 0, int > 0): number of pixels in X,Y
     orientation (wx.HORIZONTAL or wx.VERTICAL): legend orientation
     tick_spacing (float > 0): approximate space between ticks (number of pixels)
@@ -893,9 +1011,6 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         logging.info("Trying to compute legend tick without range")
         return None
 
-    min_val = min(value_range[0], value_range[-1])
-    max_val = max(value_range[0], value_range[-1])
-
     # Get the horizontal/vertical space in pixels
     if orientation == wx.HORIZONTAL:
         pixel_space = client_size[0]
@@ -905,6 +1020,11 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
         # Don't display ticks too close from the border
         pixel_space = client_size[1]
         min_pixel = 10
+
+    # Skip the NaNs. We don't check that the NaNs are just on the border. We
+    # just assume it's so, and if not, the output will be incorrect.
+    min_val = numpy.nanmin(value_range)
+    max_val = numpy.nanmax(value_range)
 
     # Range width
     value_space = abs(max_val - min_val)
@@ -943,15 +1063,14 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
 
     tick_values = [min_val] if min_val == 0 else []
     cur_val = first_val
-
-    if min_val < max_val:
-        while cur_val < max_val:
-            tick_values.append(cur_val)
-            cur_val += value_step
-    else:
-        while cur_val > max_val:
-            tick_values.append(cur_val)
-            cur_val -= value_step
+    while cur_val < max_val:
+        tick_values.append(cur_val)
+        cur_val += value_step
+    if len(tick_values) < 2:
+        logging.debug("Only got ticks %s, while wanted at least %d, will fallback to min/max as axis ticks",
+                      tick_values, num_ticks)
+        # Fallback to something that work always:
+        tick_values = [min_val, max_val]
 
     ticks = []
     min_margin = (tick_spacing / 4)
@@ -975,6 +1094,28 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     tick_list = ticks
 
     return tick_list
+
+
+def find_first_last_finite_indices(l: list) -> Tuple[int, int]:
+    """
+    l (list of floats)
+    return int, int: the indices of the first value non NaN and last value non NaN
+    raise IndexError: if all values are NaNs
+    """
+    first_finite = 0
+    for i, v in enumerate(l):
+        if math.isfinite(v):
+            first_finite = i
+            break
+    else:
+        raise IndexError(f"All {len(l)} values are NaN")
+
+    for i, v in enumerate(l[::-1]):
+        if math.isfinite(v):
+            last_finite = len(l) - i - 1
+            break
+
+    return first_finite, last_finite
 
 
 def draw_scale(value_range, client_size, orientation, tick_spacing,
@@ -1296,7 +1437,7 @@ def spectrum_to_export_data(proj, raw, vp=None):
         text_colour = (0, 0, 0)
 
         # Draw bottom horizontal scale legend
-        tick_spacing = client_size[0] // 6
+        tick_spacing = client_size[0] // TICKS_PER_AXIS
         font_size = client_size[0] * SPEC_FONT_SIZE
         scale_x_draw = draw_scale(range_x, (client_size[0], SPEC_SCALE_HEIGHT), wx.HORIZONTAL,
                               tick_spacing, text_colour, unit, font_size, "Wavelength")
@@ -1390,7 +1531,7 @@ def chronogram_to_export_data(proj, raw, vp=None):
         text_colour = (0, 0, 0)
 
         # Draw bottom horizontal scale legend
-        tick_spacing = client_size[0] // 4
+        tick_spacing = client_size[0] // TICKS_PER_AXIS
         font_size = client_size[0] * SPEC_FONT_SIZE
         scale_x_draw = draw_scale(range_x, (client_size[0], SPEC_SCALE_HEIGHT), wx.HORIZONTAL,
                               tick_spacing, text_colour, unit, font_size, "Time")
@@ -1403,7 +1544,103 @@ def chronogram_to_export_data(proj, raw, vp=None):
         data_with_legend = numpy.append(scale_x_draw, data_with_legend, axis=0)
 
         # Draw left vertical scale legend
-        tick_spacing = client_size[1] // 6
+        tick_spacing = client_size[1] // TICKS_PER_AXIS
+        scale_y_draw = draw_scale(range_y, (SPEC_SCALE_WIDTH, client_size[1]), wx.VERTICAL,
+                              tick_spacing, text_colour, "cts", font_size, "Intensity")
+
+        # Extend y scale bar to fit the height of the bar plot with the x scale bars attached
+        extend = numpy.full((SPEC_SCALE_HEIGHT, SPEC_SCALE_WIDTH, 4), 255, dtype=numpy.uint8)
+        scale_y_draw = numpy.append(scale_y_draw, extend, axis=0)
+        scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :], scale_y_draw, axis=0)
+        data_with_legend = numpy.append(scale_y_draw, data_with_legend, axis=1)
+
+        # Draw right vertical scale legend
+        scale_y_draw = draw_scale(range_y, (SMALL_SCALE_WIDTH, client_size[1]), wx.VERTICAL,
+                              tick_spacing, text_colour, "cts", font_size, None,
+                              mirror=True)
+
+        # Extend y scale bar to fit the height of the bar pl
+        # ot with the x scale bars attached
+        scale_y_draw = numpy.append(scale_y_draw, extend[:, :SMALL_SCALE_WIDTH], axis=0)
+        scale_y_draw = numpy.append(extend[:SMALL_SCALE_WIDTH, :SMALL_SCALE_WIDTH], scale_y_draw, axis=0)
+        data_with_legend = numpy.append(data_with_legend, scale_y_draw, axis=1)
+
+        spec_plot = model.DataArray(data_with_legend)
+        spec_plot.metadata[model.MD_DIMS] = 'YXC'
+        return spec_plot
+
+
+def theta_to_export_data(proj, raw, vp=None):
+    """
+    Creates either the raw or the representation as shown in the viewport in the GUI of the theta data plot for export.
+    :param proj: (SinglePointAngularProjection) A theta projection.
+    :param raw: (boolean) If True, returns raw representation.
+    :param vp: (Viewport or None) The viewport selected for export to get the data displayed
+               in the viewport.
+    :returns: (model.DataArray) The data array to export.
+    """
+    if not isinstance(proj, SinglePointAngularProjection):
+        raise ValueError("Trying to export an angle spectrum of an invalid projection")
+
+    if raw:  # csv
+        data = proj.projectAsRaw()
+        if data is None:
+            raise LookupError("No pixel selected to pick a angle")
+        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EK
+        return data
+    else:  # tiff, png
+        spec = proj.image.value
+        if spec is None:
+            raise LookupError("No pixel selected to pick a angle")
+        angle_range, unit_a = spectrum.get_angle_range(spec)
+        if unit_a == "rad":
+            unit_a = "°"
+            angle_range = [math.degrees(angle) for angle in angle_range]  # Converts radians to degrees
+
+        # Draw spectrum bar plot
+        fill_colour = BAR_PLOT_COLOUR
+        client_size = (SPEC_PLOT_SIZE, SPEC_PLOT_SIZE)
+        data_to_draw = numpy.full((client_size[1], client_size[0], 4), 255, dtype=numpy.uint8)
+        surface = cairo.ImageSurface.create_for_data(
+            data_to_draw, cairo.FORMAT_ARGB32, client_size[0], client_size[1])
+        ctx = cairo.Context(surface)
+
+        if vp is not None:
+            # Limit to the displayed ranges
+            range_x = vp.hrange.value
+            range_y = vp.vrange.value
+            angle_range, spec = clip_data_window(range_x, range_y, angle_range, spec)
+        else:
+            # calculate data characteristics
+            min_x = min(angle_range)
+            max_x = max(angle_range)
+            min_y = min(spec)
+            max_y = max(spec)
+            range_x = (min_x, max_x)
+            range_y = (min_y, max_y)
+
+        data = list(zip(angle_range, spec))
+        bar_plot(ctx, data, range_x, range_y, client_size, fill_colour)
+
+        # Differentiate the scale bar colour so the user later on
+        # can easily change the bar plot or the scale bar colour
+        text_colour = (0, 0, 0)
+
+        # Draw bottom horizontal scale legend
+        tick_spacing = client_size[0] // TICKS_PER_AXIS
+        font_size = client_size[0] * SPEC_FONT_SIZE
+        scale_x_draw = draw_scale(range_x, (client_size[0], SPEC_SCALE_HEIGHT), wx.HORIZONTAL,
+                              tick_spacing, text_colour, unit_a, font_size, "Angle")
+        data_with_legend = numpy.append(data_to_draw, scale_x_draw, axis=0)
+
+        # Draw top horizontal scale legend
+        scale_x_draw = draw_scale(range_x, (client_size[0], SMALL_SCALE_WIDTH), wx.HORIZONTAL,
+                              tick_spacing, text_colour, unit_a, font_size, None,
+                              mirror=True)
+        data_with_legend = numpy.append(scale_x_draw, data_with_legend, axis=0)
+
+        # Draw left vertical scale legend
+        tick_spacing = client_size[1] // TICKS_PER_AXIS
         scale_y_draw = draw_scale(range_y, (SPEC_SCALE_WIDTH, client_size[1]), wx.VERTICAL,
                               tick_spacing, text_colour, "cts", font_size, "Intensity")
 
@@ -1493,6 +1730,41 @@ def temporal_spectrum_to_export_data(proj, raw):
                                  )
 
 
+def angular_spectrum_to_export_data(proj, raw):
+    """
+    Creates either the raw or the representation as shown in the viewport in the GUI
+    of the angular spectrum data for export.
+    :param proj: (RGBSpatialSpectrumProjection) An angular spectrum projection.
+    :param raw: (boolean) If True, returns raw representation.
+    :returns: (model.DataArray) The data array to export.
+    """
+    if raw:  # csv0
+        data = proj.projectAsRaw()
+        if data is None:
+            raise LookupError("No pixel selected to pick an angular-spectrum")
+        data.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EK
+        return data
+    else:  # tiff, png
+        spec = proj.image.value
+        if spec is None:
+            raise LookupError("No pixel selected to pick an angular-spectrum")
+        spectrum_range, wl_unit = spectrum.get_spectrum_range(spec)
+        angle_range, unit_a = spectrum.get_angle_range(spec)
+        if unit_a == "rad":
+            unit_a = "°"
+            angle_range = [math.degrees(angle) for angle in angle_range]  # Convert radians to degrees
+
+        return _draw_image_graph(spec,
+                                 size=(SPEC_PLOT_SIZE, SPEC_PLOT_SIZE),
+                                 xrange=spectrum_range,
+                                 xunit=wl_unit,
+                                 xtitle="Wavelength",
+                                 yrange=angle_range[::-1],  # reversed to show the low angles at the top
+                                 yunit=unit_a,
+                                 ytitle="Angle",
+                                 )
+
+
 def _draw_image_graph(im, size, xrange, xunit, xtitle, yrange, yunit, ytitle, flip=0):
     """
     Draw the given RGB image into a X/Y plot
@@ -1527,7 +1799,7 @@ def _draw_image_graph(im, size, xrange, xunit, xtitle, yrange, yunit, ytitle, fl
 
     # Draw top/bottom horizontal (wavelength) legend
     text_colour = (0, 0, 0)  # black
-    tick_spacing = size[0] // 4
+    tick_spacing = size[0] // TICKS_PER_AXIS  # px, rough goal
     font_size = size[0] * SPEC_FONT_SIZE
     scale_x_draw = draw_scale(xrange, (size[0], SPEC_SCALE_HEIGHT), wx.HORIZONTAL,
                               tick_spacing, text_colour, xunit, font_size, xtitle)
@@ -1540,7 +1812,7 @@ def _draw_image_graph(im, size, xrange, xunit, xtitle, yrange, yunit, ytitle, fl
     data_with_legend = numpy.append(scale_x_draw, data_with_legend, axis=0)
 
     # Draw left vertical (distance) legend
-    tick_spacing = size[1] // 6
+    tick_spacing = size[1] // TICKS_PER_AXIS
     scale_y_draw = draw_scale(yrange, (SPEC_SCALE_WIDTH, size[1]), wx.VERTICAL,
                               tick_spacing, text_colour, yunit, font_size, ytitle)
     # Extend y scale bar to fit the height of the bar plot with the x scale bar attached

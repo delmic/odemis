@@ -765,6 +765,90 @@ STREAM_SETTINGS_CONFIG = {
                 "choices": util.format_band_choices,
             }),
         )),
+    stream.AngularSpectrumSettingsStream:
+        OrderedDict((
+            ("integrationTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "type": "float",
+                "accuracy": 2,
+                "tooltip": u"Readout camera exposure time.",
+            }),
+            ("integrationCounts", {
+                "tooltip": u"Number of images that are integrated, if requested exposure"
+                           u"time exceeds the camera exposure time limit.",
+            }),
+            ("wavelength", {
+                "tooltip": "Center wavelength of the spectrograph",
+                "control_type": odemis.gui.CONTROL_FLT,
+                "range": (0.0, 1900e-9),
+                "key_step_min": 1e-9,
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit."
+            }),
+            ("filter", {  # from filter
+                "choices": util.format_band_choices,
+            }),
+            ("spectrum_binning", {
+                "label": "Spectrum binning",
+                "tooltip": "Horizontal binning of the CCD",
+                "control_type": odemis.gui.CONTROL_RADIO,
+            }),
+            ("angular_binning", {
+                "label": "Angular binning",
+                "tooltip": "Vertical binning of the CCD",
+                "control_type": odemis.gui.CONTROL_RADIO,
+            }),
+            ("polarization", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+            }),
+            ("acquireAllPol", {
+                "control_type": odemis.gui.CONTROL_CHECK,
+                "label": "All polarizations",
+                "tooltip": u"Record all possible polarization positions sequentially in one acquisition."
+            }),
+        )),
+    stream.AngularSpectrumAlignmentStream:
+        OrderedDict((
+            ("integrationTime", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+                "scale": "log",
+                "type": "float",
+                "accuracy": 2,
+                "tooltip": u"Readout camera exposure time.",
+            }),
+            ("integrationCounts", {
+                "tooltip": u"Number of images that are integrated, if requested exposure"
+                           u"time exceeds the camera exposure time limit.",
+            }),
+            ("wavelength", {
+                "tooltip": "Center wavelength of the spectrograph",
+                "control_type": odemis.gui.CONTROL_FLT,
+                "range": (0.0, 1900e-9),
+                "key_step_min": 1e-9,
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit."
+            }),
+            ("filter", {  # from filter
+                "choices": util.format_band_choices,
+            }),
+            ("spectrum_binning", {
+                "label": "Spectrum binning",
+                "tooltip": "Horizontal binning of the CCD",
+                "control_type": odemis.gui.CONTROL_RADIO,
+            }),
+            ("angular_binning", {
+                "label": "Angular binning",
+                "tooltip": "Vertical binning of the CCD",
+                "control_type": odemis.gui.CONTROL_RADIO,
+            }),
+        )),
     # For DEBUG
 #     stream.StaticSpectrumStream:
 #         OrderedDict((

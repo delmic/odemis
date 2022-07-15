@@ -88,6 +88,13 @@ TemporalSpectrumStream.register(TemporalSpectrumSettingsStream)
 TemporalSpectrumStream.register(SEMTemporalSpectrumMDStream)
 
 
+class AngularSpectrumStream(ABC):
+    pass
+
+AngularSpectrumStream.register(AngularSpectrumSettingsStream)
+AngularSpectrumStream.register(SEMAngularSpectrumMDStream)
+
+
 class ARStream(ABC):
     pass
 
@@ -96,7 +103,7 @@ ARStream.register(StaticARStream)
 ARStream.register(SEMARMDStream)
 
 NON_SPATIAL_STREAMS = (ARStream, SpectrumStream, TemporalSpectrumStream, MonochromatorSettingsStream,
-                       ScannedTCSettingsStream, ScannedFluoMDStream, OverlayStream)
+                       AngularSpectrumStream, ScannedTCSettingsStream, ScannedFluoMDStream, OverlayStream)
 
 
 # TODO: make it like a VA, so that it's possible to know when it changes

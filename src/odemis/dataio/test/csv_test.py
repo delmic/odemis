@@ -108,6 +108,51 @@ class TestCSVIO(unittest.TestCase):
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
 
+    def testExportTheta(self):
+        """Try simple angle export"""
+        size = (153,)
+        dtype = numpy.uint16
+        md = {model.MD_THETA_LIST: numpy.linspace(-1.5, 1.4, size[0]),
+              model.MD_ACQ_TYPE: model.MD_AT_EK,
+              model.MD_DIMS: "A"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+        data += 56
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 153)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
+    def testExportThetaNoMD(self):
+        """Try simple angle export when THETA_LIST is missing"""
+        size = (153,)
+        dtype = numpy.uint16
+        md = {model.MD_ACQ_TYPE: model.MD_AT_EK,
+              model.MD_DIMS: "A"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+        data += 56
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 153)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
     def testExportChronogram(self):
         """Try simple chronogram export"""
         size = (150,)
@@ -182,6 +227,50 @@ class TestCSVIO(unittest.TestCase):
         md = {model.MD_PIXEL_SIZE: (None, 4.2e-06),
               model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
               model.MD_DIMS: "XC"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 5)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
+    def testExportEK(self):
+        """Try simple angular spectrum export"""
+        size = (340, 1024)
+        dtype = numpy.float
+        md = {model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(size[-1])],
+              model.MD_THETA_LIST: numpy.linspace(-1.5, 1.4, size[-2]),
+              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
+              model.MD_DIMS: "AC"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 5)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
+    def testExportEKNoMD(self):
+        """Try simple angular spectrum export missing WL_LIST and THETA_LIST"""
+        size = (340, 1024)
+        dtype = numpy.float
+        md = {model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
+              model.MD_DIMS: "AC"}
         data = model.DataArray(numpy.zeros(size, dtype), md)
 
         # export
