@@ -2634,6 +2634,25 @@ class CryoChamberTab(Tab):
         self._stage.position.subscribe(self._on_stage_pos, init=True)
         self._show_warning_msg(None)
 
+        # Show temperature control, if available
+        if main_data.sample_thermostat:
+            panel.pnl_temperature.Show()
+
+            # Connect the heating VA to a checkbox. It's a little tricky, because
+            # it's actually a VAEnumerated, but we only want to assign two values
+            # off/on.
+            self._vac_sample_target_tmp = VigilantAttributeConnector(
+                main_data.sample_thermostat.heating, self.panel.ctrl_sample_heater,
+                va_2_ctrl=self._on_sample_heater,
+                ctrl_2_va=self._sample_heater_to_va,
+                events=wx.EVT_CHECKBOX
+                )
+
+            # Connect the .targetTemperature
+            self._vac_sample_target_tmp = VigilantAttributeConnector(main_data.sample_thermostat.targetTemperature,
+                                                                     self.panel.ctrl_sample_target_tmp,
+                                                                     events=wx.EVT_COMMAND_ENTER)
+
     def _get_overview_view(self):
         overview_view = next(
             (view for view in self.tab_data_model.views.value if isinstance(view, guimod.FeatureOverviewView)), None)
@@ -3155,6 +3174,41 @@ class CryoChamberTab(Tab):
         # Add 1% margin for hardware slight errors
         margin = (range[1] - range[0]) * 0.01
         return (range[0] - margin) <= pos <= (range[1] + margin)
+
+    def _on_sample_heater(self, heating: int):
+        """
+        Called when sample_thermostat.heating changes, to update the "Sample heater"
+          checkbox.
+        Converts from several values to boolean.
+        Must be called in the main GUI thread.
+        heating: new heating value
+        """
+        # Use MD_FAV_POS_DEACTIVE with the "heating" key to get the off value,
+        # and fallback to using the min of the choices.
+        md = self.tab_data_model.main.sample_thermostat.getMetadata()
+        heating_choices = self.tab_data_model.main.sample_thermostat.heating.choices.keys()
+        val_off = md.get(model.MD_FAV_POS_DEACTIVE, {}).get("heating", min(heating_choices))
+
+        # Any value above the "off" value is considered on (and vice-versa)
+        self.panel.ctrl_sample_heater.SetValue(heating > val_off)
+
+    def _sample_heater_to_va(self):
+        """
+        Called to read the "Sample heater" checkbox and return the corresponding
+        value to set sample_thermostat.heating
+        return (int): value to set in .heating
+        """
+        # Use the MD_FAV_POS_ACTIVE/MD_FAV_POS_DEACTIVE with the "heating" key.
+        # If it's not there, fallback to using the min or max value of the choices
+        md = self.tab_data_model.main.sample_thermostat.getMetadata()
+        heating_choices = self.tab_data_model.main.sample_thermostat.heating.choices.keys()
+
+        if self.panel.ctrl_sample_heater.GetValue():
+            val_on = md.get(model.MD_FAV_POS_ACTIVE, {}).get("heating", max(heating_choices))
+            return val_on
+        else:
+            val_off = md.get(model.MD_FAV_POS_DEACTIVE, {}).get("heating", min(heating_choices))
+            return val_off
 
     def Show(self, show=True):
         Tab.Show(self, show=show)
