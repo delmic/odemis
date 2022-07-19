@@ -492,10 +492,11 @@ class MainGUIData(object):
         If lens-switch has MD_FAV_POS_ACTIVE, it's a sign that it's supported.
         return (bool): True if the SPARC supports EK imaging
         """
-        if not self.ccds or not self.lens_switch:
+        if not self.ccds or not self.lens_switch or not self.lens:
             return False
-        md = self.lens_switch.getMetadata()
-        return (model.MD_FAV_POS_ACTIVE in md)
+
+        if model.hasVA(self.lens, "mirrorPositionTop") and model.hasVA(self.lens, "mirrorPositionBottom"):
+            return True
 
 
 class MicroscopyGUIData(with_metaclass(ABCMeta, object)):
@@ -1169,7 +1170,7 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
             main.lens.polePosition.subscribe(self._onPolePosCCD, init=True)
 
-            if model.hasVA(main.lens, "mirrorPositionTop") and model.hasVA(main.lens, "mirrorPositionBottom"):
+            if main.isAngularSpectrumSupported():
                 self.mirrorPositionTopPhys = model.TupleContinuous((100e-6, 0),
                                            ((-1e18, -1e18), (1e18, 1e18)), unit="m",
                                            cls=(int, float),
@@ -1183,6 +1184,11 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
                 main.lens.mirrorPositionTop.subscribe(self._onMirrorPosTopCCD, init=True)
                 main.lens.mirrorPositionBottom.subscribe(self._onMirrorPosBottomCCD, init=True)
+
+                # Check that the lens-switch has the right metadata
+                md = main.lens_switch.getMetadata()
+                if not {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()):
+                    raise ValueError("lens-switch should have FAV_POS_ACTIVE and FAV_POS_DEACTIVE")
             else:
                 amodes.remove("ek-align")
         else:

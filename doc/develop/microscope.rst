@@ -183,10 +183,11 @@ Actuators:
  * lens-mover: Allows to position lens 1 within the optical path perpendicular to the optical axis.
    Lens 1 focuses the incoming collimated light. It has an axis: x.
  * lens-switch: Switches lens 2 between two positions (on: within light path; off: outside of light path).
-   Lens 2 is used to further focus the light coming from lens 1. It has an axis: x or rx.
-   If the axis has only two choices, then the SPARC doesn't support Ek imaging.
-   If the axis is linear and has metadata FAV_POS_ACTIVE and FAV_POS_DEACTIVE, it
-   supports Ek imaging. It should then also provide POS_ACTIVE_RANGE to indicate
+   Lens 2 is used to further focus the light coming from lens 1.
+   It has an axis: x or rx.
+   If the SPARC doesn't support Ek imaging, the axis can have just two choices: "on" and "off".
+   If Ek imaging is supported, the axis should have a continuous range,
+   and the metadata FAV_POS_ACTIVE and FAV_POS_DEACTIVE. It should then also provide POS_ACTIVE_RANGE to indicate
    the whole scanning range during Ek scanning.
  * brightlight: Is used to calibrate the position offset between the two detectors, the grating offset and
    the focus (mirror) within the spectrograph.
@@ -250,6 +251,8 @@ Detectors:
 System:
  * lens: Contains parameters concerning the parabolic mirror and the lens system.
    If it has a polePosition VA, then the microscope is considered supporting Angular Resolved acquisition.
+   If it has a mirrorPositionTop and mirrorPositionBottom VAs, then the microscope
+   is considered supporting Ek (angular spectrum) acquisition.
  * power-control: Power supply for the hardware components (e.g., ccd, sp-ccd,
    polarization filters, lens actuators, spectrograph).
 
