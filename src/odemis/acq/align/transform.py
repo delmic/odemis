@@ -59,7 +59,7 @@ def CalculateTransform(optical_coordinates, electron_coordinates, skew=False):
         u_array[list_len: 2 * list_len, 0] = electron_array[:, 1]
 
         # Calculate matrix R, R = X\U
-        r_array, resid, rank, s = numpy.linalg.lstsq(x_array, u_array)
+        r_array, resid, rank, s = numpy.linalg.lstsq(x_array, u_array, rcond=None)
         # if r_array[1][0] == 0:
         #    r_array[1][0] = 1
         translation_x = -r_array[2][0]
@@ -79,7 +79,7 @@ def CalculateTransform(optical_coordinates, electron_coordinates, skew=False):
         u_array = electron_array
 
         # We know that X*T=U
-        t_inv, resid, rank, s = numpy.linalg.lstsq(x_array, u_array)
+        t_inv, resid, rank, s = numpy.linalg.lstsq(x_array, u_array, rcond=None)
         translation_xy = t_inv[2, :]
         theta = math.atan2(t_inv[1, 0], t_inv[1, 1])
         scaling_x = t_inv[0, 0] * math.cos(theta) - t_inv[0, 1] * math.sin(theta)
