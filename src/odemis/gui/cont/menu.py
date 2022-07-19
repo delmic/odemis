@@ -183,7 +183,11 @@ class MenuController(object):
         self._main_frame.menu_item_reset_finealign.Enable(False)
 
     def _on_reset_overview(self, _):
-        self._main_data.tab.value.overview_controller.reset_ovv()
+        """
+        Empty the overview view (on SECOM)
+        """
+        live_tab = self._main_data.getTabByName("secom_live")
+        live_tab.overview_controller.reset_ovv()
 
     def _get_current_stream(self):
         """
