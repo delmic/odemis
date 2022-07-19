@@ -35,7 +35,8 @@ from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchr
 
 logging.basicConfig(level=logging.DEBUG,
                     format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s",
-                    force=True)  # Overwrite the default logging set by importing other module
+                    # force=True  # Overwrite the default logging set by importing other module (Py 3.8+)
+                    )
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware

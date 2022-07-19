@@ -557,297 +557,302 @@ class AndorCam2(model.DigitalCamera):
             self.Initialize()
         logging.info("Opened device %s successfully", device)
 
-        model.DigitalCamera.__init__(self, name, role, **kwargs)
-
-        # Describe the camera
-        # up-to-date metadata to be included in dataflow
-        hw_name = self.getModelName()
-        self._metadata[model.MD_HW_NAME] = hw_name
-        caps = self.GetCapabilities()
-        if caps.CameraType not in AndorCapabilities.CameraTypes:
-            logging.warning("This driver has not been tested for this camera type %d", caps.CameraType)
-
-        # drivers/hardware info
-        self._swVersion = self.getSwVersion()
-        self._metadata[model.MD_SW_VERSION] = self._swVersion
-        hwv = self.getHwVersion()
-        self._metadata[model.MD_HW_VERSION] = hwv
-        self._hwVersion = "%s (%s)" % (hw_name, hwv)
-        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
-
-        resolution = self.GetDetector()
-        self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
-
-        # If SW trigger not supported by the camera, a slower acquisition trigger
-        # procedure (TRIG_FAKE) will be used when DataFlow is synchronized.
-        self._supports_soft_trigger = False
-
-        # Store the hw_trigger_invert as it'll be set by _setStaticSettings()
-        if not hw_trigger_invert in (True, False):
-            raise ValueError(f"hw_trigger_invert should be either True or False, "
-                             f"got {hw_trigger_invert}.")
-
-        self._hw_trigger_invert = hw_trigger_invert
-
-        # setup everything best (fixed)
-        # image (6 ints), exposure, readout, gain, shutter, synchronized
-        self._prev_settings = [None, None, None, None, None, None]
-        self._setStaticSettings()
-        self._shape = resolution + (2 ** self._getMaxBPP(),)
-
-        # put the detector pixelSize
-        psize = self.GetPixelSize()
-        psize = self._transposeSizeToUser((psize[0] * 1e-6, psize[1] * 1e-6)) # m
-        self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
-        self._metadata[model.MD_SENSOR_PIXEL_SIZE] = psize
-
-        # Strong cooling for low (image) noise
-        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
-            if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
-                trange = self.GetTemperatureRange()
-            else:
-                trange = (-275, 25)
-            self._hw_temp_range = trange
-            # Always support 25°C, to disable the cooling
-            trange = (trange[0], max(trange[1], 25))
-            self.targetTemperature = model.FloatContinuous(trange[0], trange, unit=u"°C",
-                                                           setter=self._setTargetTemperature)
-            self._setTargetTemperature(trange[0], force=True)
-
-            try:
-                # Stop cooling on shutdown. That's especially important for
-                # water-cooled cameras in case the user also stops the water-
-                # cooling after stopping Odemis. In such case, cooling down the
-                # sensor could result in over-heating of the camera.
-                self.atcore.SetCoolerMode(0)
-            except AndorV2Error:
-                logging.info("Couldn't change the cooler mode for shutdown", exc_info=True)
-
-        if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
-            # fan speed = ratio to max speed, with max speed by default
-            self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
-                                                  setter=self._setFanSpeed)
-            self._setFanSpeed(1.0, force=True)
-
-        self._binning = (1, 1) # px, horizontal, vertical
-        self._image_rect = (1, resolution[0], 1, resolution[1])
-        if resolution[1] == 1:
-            # If limit is obvious, indicate it via the VA range
-            min_res = (self.GetMinimumImageLength(), 1)
-        else:
-            min_res = (1, 1)
-        # need to be before binning, as it is modified when changing binning
-        self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
-                                             (self._transposeSizeToUser(min_res),
-                                              self._transposeSizeToUser(resolution)),
-                                             setter=self._setResolution)
-        self._setResolution(self._transposeSizeToUser(resolution))
-
-        maxbin = self.GetMaximumBinnings(AndorV2DLL.RM_IMAGE)
-        self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
-                                          (self._transposeSizeToUser((1, 1)),
-                                           self._transposeSizeToUser(maxbin)),
-                                          setter=self._setBinning)
-
-        # default values try to get live microscopy imaging more likely to show something
-        maxexp = c_float()
-        self.atcore.GetMaximumExposure(byref(maxexp))
-        range_exp = (1e-6, maxexp.value) # s
-        self._exposure_time = 1.0 # s
-        self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
-                                                  unit="s", setter=self.setExposureTime)
-
-        # The total duration of a frame acquisition (IOW, the time between two frames).
-        # It's a little longer than the exposure time. (Corresponds to "accumulate" on the Andor 2 SDK).
-        # WARNING: for now it's only updated when the camera is acquiring.
-        # TODO: We probably could do better by having the acquisition thread still
-        # updating the camera settings when not acquiring (ie, idle).
-        self.framePeriod = model.FloatVA(self._exposure_time, unit="s", readonly=True)
-
-        # To control the acquisition thread behaviour when several new frames
-        # are available (because the driver is slower than the hardware).
-        # When True, it will only pass the latest frame (useful for live view)
-        # and discard the rest. When False it will try to pass every frame
-        # acquired (only works reliably if the frame rate is only temporarily too high).
-        self.dropOldFrames = model.BooleanVA(True)
-
-        # Clara: 0 = conventional (less noise), 1 = Extended Near Infra-Red => 0
-        # iXon Ultra: 0 = EMCCD (more sensitive), 1 = conventional (bigger well) => 0
-        self._output_amp = 0
-
-        ror_choices = self._getReadoutRates()
-        self._readout_rate = max(ror_choices) # default to fast acquisition
-        self.readoutRate = model.FloatEnumerated(self._readout_rate, ror_choices,
-                                                 unit="Hz", setter=self._setReadoutRate)
-
-        # Note: the following VAs are extra ones just for advanced usage, and
-        # are only to be used with full understanding. It is not supported to
-        # modify them while acquiring (unless the SDK does support it).
-        # * verticalReadoutRate
-        # * verticalClockVoltage
-        # * emGain
-        # * countConvert
-        # * countConvertWavelength
-
-        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_VREADOUT):
-            # Allows to tweak the vertical readout rate. Normally, we use the
-            # recommended one, but higher speeds can be used, given that the voltage
-            # is increased. The drawback of higher clock voltage is that it can
-            # introduce extra noise.
-            try:
-                vror_choices = self._getVerticalReadoutRates()
-            except AndorV2Error as ex:
-                # Some cameras report SETFUNCTION_VREADOUT but don't actually support it (as of SDK 2.100)
-                if ex.errno == 20991:  # DRV_NOT_SUPPORTED
-                    logging.debug("VSSpeed cannot be set, will not provide control for it")
-                    vror_choices = {None}
-                else:
-                    raise
-            if len(vror_choices) > 1:  # Some cameras have just one "choice" => no need
-                vror_choices.add(None)  # means "use recommended rate"
-                self.verticalReadoutRate = model.VAEnumerated(None, vror_choices,
-                                               unit="Hz", setter=self._setVertReadoutRate)
-
-        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_VSAMPLITUDE):
-            vamps = self._getVerticalAmplitudes()
-            # 0 should always be in the available amplitudes, as it means "normal"
-            self.verticalClockVoltage = model.IntEnumerated(0, vamps,
-                                                setter=self._setVertAmplitude)
-
-        gain_choices = set(self.GetPreAmpGains())
-        self._gain = min(gain_choices) # default to low gain = less noise
-        self.gain = model.FloatEnumerated(self._gain, gain_choices, unit="",
-                                          setter=self.setGain)
-
-        # For EM CCD cameras only: tuple 2 floats -> int
-        self._lut_emgains = {} # (readout rate, gain) -> EMCCD gain
-        emgains = emgains or []
         try:
-            for (rr, gain, emgain) in emgains:
-                # get exact values
-                exc_rr = util.find_closest(rr, ror_choices)
-                exc_gain = util.find_closest(gain, gain_choices)
-                if (not util.almost_equal(exc_rr, rr) or
-                    not util.almost_equal(exc_gain, gain)):
-                    logging.warning("Failed to find RR/gain couple (%s Hz / %s) "
-                                    "in the device properties (%s/%s)",
-                                    rr, gain, ror_choices, gain_choices)
-                    continue
-                if not 1 <= emgain <= 300 or not isinstance(emgain, int):
-                    raise ValueError("emgain must be 1 <= integer <= 300, but "
-                                     "got %s" % (emgain,))
-                if (exc_rr, exc_gain) in self._lut_emgains:
-                    raise ValueError("emgain defined multiple times RR=%s Hz, "
-                                     "gain=%s." % (exc_rr, exc_gain))
-                self._lut_emgains[(exc_rr, exc_gain)] = emgain
-        except (TypeError, AttributeError):
-            raise ValueError("Failed to parse emgains, which must be in the "
-                             "form [[rr, gain, emgain], ...]: '%s'" % (emgains,))
+            model.DigitalCamera.__init__(self, name, role, **kwargs)
 
-        if self.hasSetFunction(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
-            # Allow to manually change the EM gain, while using the "automatic"
-            # LUT selection when it's set to "None". 0 disable the EMCCD mode.
-            # => create choices as None, 0, 3, 50, 100...
-            emgrng = self.GetEMGainRange()
-            emgc = set(i for i in range(0, emgrng[1], 50) if i > emgrng[0])
-            if self._lut_emgains:
-                emgc.add(None)
-                emgain = None
+            # Describe the camera
+            # up-to-date metadata to be included in dataflow
+            hw_name = self.getModelName()
+            self._metadata[model.MD_HW_NAME] = hw_name
+            caps = self.GetCapabilities()
+            if caps.CameraType not in AndorCapabilities.CameraTypes:
+                logging.warning("This driver has not been tested for this camera type %d", caps.CameraType)
+
+            # drivers/hardware info
+            self._swVersion = self.getSwVersion()
+            self._metadata[model.MD_SW_VERSION] = self._swVersion
+            hwv = self.getHwVersion()
+            self._metadata[model.MD_HW_VERSION] = hwv
+            self._hwVersion = "%s (%s)" % (hw_name, hwv)
+            self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
+
+            resolution = self.GetDetector()
+            self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(resolution)
+
+            # If SW trigger not supported by the camera, a slower acquisition trigger
+            # procedure (TRIG_FAKE) will be used when DataFlow is synchronized.
+            self._supports_soft_trigger = False
+
+            # Store the hw_trigger_invert as it'll be set by _setStaticSettings()
+            if not hw_trigger_invert in (True, False):
+                raise ValueError(f"hw_trigger_invert should be either True or False, "
+                                 f"got {hw_trigger_invert}.")
+
+            self._hw_trigger_invert = hw_trigger_invert
+
+            # setup everything best (fixed)
+            # image (6 ints), exposure, readout, gain, shutter, synchronized
+            self._prev_settings = [None, None, None, None, None, None]
+            self._setStaticSettings()
+            self._shape = resolution + (2 ** self._getMaxBPP(),)
+
+            # put the detector pixelSize
+            psize = self.GetPixelSize()
+            psize = self._transposeSizeToUser((psize[0] * 1e-6, psize[1] * 1e-6))  # m
+            self.pixelSize = model.VigilantAttribute(psize, unit="m", readonly=True)
+            self._metadata[model.MD_SENSOR_PIXEL_SIZE] = psize
+
+            # Strong cooling for low (image) noise
+            if self.hasSetFunction(AndorCapabilities.SETFUNCTION_TEMPERATURE):
+                if self.hasGetFunction(AndorCapabilities.GETFUNCTION_TEMPERATURERANGE):
+                    trange = self.GetTemperatureRange()
+                else:
+                    trange = (-275, 25)
+                self._hw_temp_range = trange
+                # Always support 25°C, to disable the cooling
+                trange = (trange[0], max(trange[1], 25))
+                self.targetTemperature = model.FloatContinuous(trange[0], trange, unit=u"°C",
+                                                               setter=self._setTargetTemperature)
+                self._setTargetTemperature(trange[0], force=True)
+
+                try:
+                    # Stop cooling on shutdown. That's especially important for
+                    # water-cooled cameras in case the user also stops the water-
+                    # cooling after stopping Odemis. In such case, cooling down the
+                    # sensor could result in over-heating of the camera.
+                    self.atcore.SetCoolerMode(0)
+                except AndorV2Error:
+                    logging.info("Couldn't change the cooler mode for shutdown", exc_info=True)
+
+            if self.hasFeature(AndorCapabilities.FEATURES_FANCONTROL):
+                # fan speed = ratio to max speed, with max speed by default
+                self.fanSpeed = model.FloatContinuous(1.0, (0.0, 1.0), unit="",
+                                                      setter=self._setFanSpeed)
+                self._setFanSpeed(1.0, force=True)
+
+            self._binning = (1, 1)  # px, horizontal, vertical
+            self._image_rect = (1, resolution[0], 1, resolution[1])
+            if resolution[1] == 1:
+                # If limit is obvious, indicate it via the VA range
+                min_res = (self.GetMinimumImageLength(), 1)
             else:
-                # 50 is normally safe, and forces the EM gain active, so count convert works
-                emgain = min(50, emgrng[1])
-            emgc.add(0)  # to disable the EMCCD mode
-            emgc.add(emgrng[0])
-            emgc.add(emgrng[1])
-            self.emGain = model.VAEnumerated(emgain, choices=emgc,
-                                             setter=self._setEMGain)
-            self._setEMGain(emgain)
-        elif self._lut_emgains:
-            raise ValueError("Camera doesn't support EM gain")
+                min_res = (1, 1)
+            # need to be before binning, as it is modified when changing binning
+            self.resolution = model.ResolutionVA(self._transposeSizeToUser(resolution),
+                                                 (self._transposeSizeToUser(min_res),
+                                                  self._transposeSizeToUser(resolution)),
+                                                 setter=self._setResolution)
+            self._setResolution(self._transposeSizeToUser(resolution))
 
-        # To activate special feature of the SDK: allows to directly convert the
-        # values as an electron or photon counts.
-        # Note: there are extra restrictions on when it's actually possible to
-        # convert (eg, no-cropping, baseline clamp active)
-        # cf IsCountConvertModeAvailable()
-        if self.hasFeature(AndorCapabilities.FEATURES_COUNTCONVERT):
-            # Note: it's available on Clara, excepted the old ones.
-            self.countConvert = model.IntEnumerated(0, choices={0: "counts", 1: "electrons", 2: "photons"},
-                                                    setter=self._setCountConvert)
-            wlrng = self.GetCountConvertWavelengthRange()
-            self.countConvertWavelength = model.FloatContinuous(wlrng[0],
-                                                range=wlrng,
-                                                unit="m",
-                                                setter=self._setCountConvertWavelength)
+            maxbin = self.GetMaximumBinnings(AndorV2DLL.RM_IMAGE)
+            self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
+                                              (self._transposeSizeToUser((1, 1)),
+                                               self._transposeSizeToUser(maxbin)),
+                                              setter=self._setBinning)
 
-        # To control the shutter: select the maximum frequency, aka minimum
-        # period for the shutter. If it the acquisition time is below, the
-        # shutter stays open all the time. So:
-        # 0 => shutter always auto
-        # > 0 => shutter auto if exp time + readout > period, otherwise opened
-        # big value => shutter always opened
-        if self.hasShutter(shutter_times is not None):
-            if shutter_times is None:
-                shutter_times = (0, 0)
-            elif not all(0 <= s < 10 for s in shutter_times):
-                raise ValueError("shutter_times must be between 0 and 10s")
-            self._shutter_optime, self._shutter_cltime = shutter_times
+            # default values try to get live microscopy imaging more likely to show something
+            maxexp = c_float()
+            self.atcore.GetMaximumExposure(byref(maxexp))
+            range_exp = (1e-6, maxexp.value)  # s
+            self._exposure_time = 1.0  # s
+            self.exposureTime = model.FloatContinuous(self._exposure_time, range_exp,
+                                                      unit="s", setter=self.setExposureTime)
 
-            self._shutter_period = 0.1
-            ct = caps.CameraType
-            if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
-                # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
-                self._shutter_period = maxexp.value
+            # The total duration of a frame acquisition (IOW, the time between two frames).
+            # It's a little longer than the exposure time. (Corresponds to "accumulate" on the Andor 2 SDK).
+            # WARNING: for now it's only updated when the camera is acquiring.
+            # TODO: We probably could do better by having the acquisition thread still
+            # updating the camera settings when not acquiring (ie, idle).
+            self.framePeriod = model.FloatVA(self._exposure_time, unit="s", readonly=True)
 
-            self.shutterMinimumPeriod = model.FloatContinuous(self._shutter_period,
-                                              (0, maxexp.value), unit="s",
-                                              setter=self._setShutterPeriod)
-        else:
-            if shutter_times:
-                raise ValueError("No shutter found but shutter times defined")
-            # To make sure the (non-existent) shutter doesn't limit the exposure time
-            self.SetShutter(1, 0, 0, 0)
-            self._shutter_period = None
+            # To control the acquisition thread behaviour when several new frames
+            # are available (because the driver is slower than the hardware).
+            # When True, it will only pass the latest frame (useful for live view)
+            # and discard the rest. When False it will try to pass every frame
+            # acquired (only works reliably if the frame rate is only temporarily too high).
+            self.dropOldFrames = model.BooleanVA(True)
 
-        current_temp = self.GetTemperature()
-        self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
-        self._metadata[model.MD_SENSOR_TEMP] = current_temp
-        self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
-                                              "AndorCam2 temperature update")
-        self.temp_timer.start()
+            # Clara: 0 = conventional (less noise), 1 = Extended Near Infra-Red => 0
+            # iXon Ultra: 0 = EMCCD (more sensitive), 1 = conventional (bigger well) => 0
+            self._output_amp = 0
 
-        self._acq_thread = None  # Thread or None
-        # Queue to control the acquisition thread
-        self._genmsg = queue.Queue()  # GEN_* or float
-        # Queue of all synchronization events received (typically max len 1)
-        # This is in case the client sends multiple triggers before one image
-        # is received.
-        self._old_triggers = []
-        self._synchronized = False  # True if the acquisition must wait for an Event trigger
-        self._num_no_gc = 0  # how many times the garbage collector was skipped
+            ror_choices = self._getReadoutRates()
+            self._readout_rate = max(ror_choices)  # default to fast acquisition
+            self.readoutRate = model.FloatEnumerated(self._readout_rate, ror_choices,
+                                                     unit="Hz", setter=self._setReadoutRate)
 
-        # For temporary stopping the acquisition (kludge for the andorshrk
-        # SR303i which cannot communicate during acquisition)
-        self.hw_lock = threading.RLock()  # to be held during DRV_ACQUIRING (or shrk communicating)
-        # append None to request for a temporary stop acquisition. Like an
-        # atomic counter, but Python has no atomic counter and lists are atomic.
-        self.request_hw = []
+            # Note: the following VAs are extra ones just for advanced usage, and
+            # are only to be used with full understanding. It is not supported to
+            # modify them while acquiring (unless the SDK does support it).
+            # * verticalReadoutRate
+            # * verticalClockVoltage
+            # * emGain
+            # * countConvert
+            # * countConvertWavelength
 
-        self.data = AndorCam2DataFlow(self)
-        # Convenience event for the user to connect and fire. It is also a way to
-        # indicate that the DataFlow supports synchronization.
-        self.softwareTrigger = model.Event()
+            if self.hasSetFunction(AndorCapabilities.SETFUNCTION_VREADOUT):
+                # Allows to tweak the vertical readout rate. Normally, we use the
+                # recommended one, but higher speeds can be used, given that the voltage
+                # is increased. The drawback of higher clock voltage is that it can
+                # introduce extra noise.
+                try:
+                    vror_choices = self._getVerticalReadoutRates()
+                except AndorV2Error as ex:
+                    # Some cameras report SETFUNCTION_VREADOUT but don't actually support it (as of SDK 2.100)
+                    if ex.errno == 20991:  # DRV_NOT_SUPPORTED
+                        logging.debug("VSSpeed cannot be set, will not provide control for it")
+                        vror_choices = {None}
+                    else:
+                        raise
+                if len(vror_choices) > 1:  # Some cameras have just one "choice" => no need
+                    vror_choices.add(None)  # means "use recommended rate"
+                    self.verticalReadoutRate = model.VAEnumerated(None, vror_choices,
+                                                   unit="Hz", setter=self._setVertReadoutRate)
 
-        if caps.TriggerModes & AndorCapabilities.TRIGGERMODE_EXTERNAL:
-            # Special event to indicate the acquisition should be triggered via the
-            # TTL input on the camera. Only works if the event is used with the Andorcam2.
-            # TODO: check the detection works properly when remote. Possibly we could
-            # extend Event() to support a constant in order to make events more distinguishable from each other.
-            self.hardwareTrigger = model.HwTrigger()
-        else:
-            logging.info("Camera does not support external trigger")
+            if self.hasSetFunction(AndorCapabilities.SETFUNCTION_VSAMPLITUDE):
+                vamps = self._getVerticalAmplitudes()
+                # 0 should always be in the available amplitudes, as it means "normal"
+                self.verticalClockVoltage = model.IntEnumerated(0, vamps,
+                                                    setter=self._setVertAmplitude)
 
-        logging.debug("Camera component ready to use.")
+            gain_choices = set(self.GetPreAmpGains())
+            self._gain = min(gain_choices)  # default to low gain = less noise
+            self.gain = model.FloatEnumerated(self._gain, gain_choices, unit="",
+                                              setter=self.setGain)
+
+            # For EM CCD cameras only: tuple 2 floats -> int
+            self._lut_emgains = {}  # (readout rate, gain) -> EMCCD gain
+            emgains = emgains or []
+            try:
+                for (rr, gain, emgain) in emgains:
+                    # get exact values
+                    exc_rr = util.find_closest(rr, ror_choices)
+                    exc_gain = util.find_closest(gain, gain_choices)
+                    if (not util.almost_equal(exc_rr, rr) or
+                        not util.almost_equal(exc_gain, gain)):
+                        logging.warning("Failed to find RR/gain couple (%s Hz / %s) "
+                                        "in the device properties (%s/%s)",
+                                        rr, gain, ror_choices, gain_choices)
+                        continue
+                    if not 1 <= emgain <= 300 or not isinstance(emgain, int):
+                        raise ValueError("emgain must be 1 <= integer <= 300, but "
+                                         "got %s" % (emgain,))
+                    if (exc_rr, exc_gain) in self._lut_emgains:
+                        raise ValueError("emgain defined multiple times RR=%s Hz, "
+                                         "gain=%s." % (exc_rr, exc_gain))
+                    self._lut_emgains[(exc_rr, exc_gain)] = emgain
+            except (TypeError, AttributeError):
+                raise ValueError("Failed to parse emgains, which must be in the "
+                                 "form [[rr, gain, emgain], ...]: '%s'" % (emgains,))
+
+            if self.hasSetFunction(AndorCapabilities.SETFUNCTION_EMCCDGAIN):
+                # Allow to manually change the EM gain, while using the "automatic"
+                # LUT selection when it's set to "None". 0 disable the EMCCD mode.
+                # => create choices as None, 0, 3, 50, 100...
+                emgrng = self.GetEMGainRange()
+                emgc = set(i for i in range(0, emgrng[1], 50) if i > emgrng[0])
+                if self._lut_emgains:
+                    emgc.add(None)
+                    emgain = None
+                else:
+                    # 50 is normally safe, and forces the EM gain active, so count convert works
+                    emgain = min(50, emgrng[1])
+                emgc.add(0)  # to disable the EMCCD mode
+                emgc.add(emgrng[0])
+                emgc.add(emgrng[1])
+                self.emGain = model.VAEnumerated(emgain, choices=emgc,
+                                                 setter=self._setEMGain)
+                self._setEMGain(emgain)
+            elif self._lut_emgains:
+                raise ValueError("Camera doesn't support EM gain")
+
+            # To activate special feature of the SDK: allows to directly convert the
+            # values as an electron or photon counts.
+            # Note: there are extra restrictions on when it's actually possible to
+            # convert (eg, no-cropping, baseline clamp active)
+            # cf IsCountConvertModeAvailable()
+            if self.hasFeature(AndorCapabilities.FEATURES_COUNTCONVERT):
+                # Note: it's available on Clara, excepted the old ones.
+                self.countConvert = model.IntEnumerated(0, choices={0: "counts", 1: "electrons", 2: "photons"},
+                                                        setter=self._setCountConvert)
+                wlrng = self.GetCountConvertWavelengthRange()
+                self.countConvertWavelength = model.FloatContinuous(wlrng[0],
+                                                    range=wlrng,
+                                                    unit="m",
+                                                    setter=self._setCountConvertWavelength)
+
+            # To control the shutter: select the maximum frequency, aka minimum
+            # period for the shutter. If it the acquisition time is below, the
+            # shutter stays open all the time. So:
+            # 0 => shutter always auto
+            # > 0 => shutter auto if exp time + readout > period, otherwise opened
+            # big value => shutter always opened
+            if self.hasShutter(shutter_times is not None):
+                if shutter_times is None:
+                    shutter_times = (0, 0)
+                elif not all(0 <= s < 10 for s in shutter_times):
+                    raise ValueError("shutter_times must be between 0 and 10s")
+                self._shutter_optime, self._shutter_cltime = shutter_times
+
+                self._shutter_period = 0.1
+                ct = caps.CameraType
+                if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
+                    # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
+                    self._shutter_period = maxexp.value
+
+                self.shutterMinimumPeriod = model.FloatContinuous(self._shutter_period,
+                                                  (0, maxexp.value), unit="s",
+                                                  setter=self._setShutterPeriod)
+            else:
+                if shutter_times:
+                    raise ValueError("No shutter found but shutter times defined")
+                # To make sure the (non-existent) shutter doesn't limit the exposure time
+                self.SetShutter(1, 0, 0, 0)
+                self._shutter_period = None
+
+            current_temp = self.GetTemperature()
+            self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
+            self._metadata[model.MD_SENSOR_TEMP] = current_temp
+            self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
+                                                  "AndorCam2 temperature update")
+            self.temp_timer.start()
+
+            self._acq_thread = None  # Thread or None
+            # Queue to control the acquisition thread
+            self._genmsg = queue.Queue()  # GEN_* or float
+            # Queue of all synchronization events received (typically max len 1)
+            # This is in case the client sends multiple triggers before one image
+            # is received.
+            self._old_triggers = []
+            self._synchronized = False  # True if the acquisition must wait for an Event trigger
+            self._num_no_gc = 0  # how many times the garbage collector was skipped
+
+            # For temporary stopping the acquisition (kludge for the andorshrk
+            # SR303i which cannot communicate during acquisition)
+            self.hw_lock = threading.RLock()  # to be held during DRV_ACQUIRING (or shrk communicating)
+            # append None to request for a temporary stop acquisition. Like an
+            # atomic counter, but Python has no atomic counter and lists are atomic.
+            self.request_hw = []
+
+            self.data = AndorCam2DataFlow(self)
+            # Convenience event for the user to connect and fire. It is also a way to
+            # indicate that the DataFlow supports synchronization.
+            self.softwareTrigger = model.Event()
+
+            if caps.TriggerModes & AndorCapabilities.TRIGGERMODE_EXTERNAL:
+                # Special event to indicate the acquisition should be triggered via the
+                # TTL input on the camera. Only works if the event is used with the Andorcam2.
+                # TODO: check the detection works properly when remote. Possibly we could
+                # extend Event() to support a constant in order to make events more distinguishable from each other.
+                self.hardwareTrigger = model.HwTrigger()
+            else:
+                logging.info("Camera does not support external trigger")
+
+            logging.debug("Camera component ready to use.")
+        except Exception as ex:
+            logging.error("Failed to complete initialization (%s), will shutdown camera", ex)
+            self.Shutdown()
+            raise
 
     def _setStaticSettings(self):
         """
@@ -1802,7 +1807,8 @@ class AndorCam2(model.DigitalCamera):
             return max_size
 
         # smaller than the whole sensor
-        size = [min(size_req[0], max_size[0]), min(size_req[1], max_size[1])]
+        size = [max(1, min(size_req[0], max_size[0])),
+                max(1, min(size_req[1], max_size[1]))]
 
         # bigger than the minimum
         min_pixels = c_int()
