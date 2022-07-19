@@ -46,8 +46,10 @@ COMP_ARGS = {
 
 CONFIG_SMARTPOD = {"name": "SmarPod",
         "role": "test",
-        "locator": "usb:sn:MCS2-00001614",
-        "hwmodel": 10074,  # CLS-32.17.1.D-S
+        # "locator": "usb:sn:MCS2-00001614",
+        "locator": "network:sn:MCS2-00010357",
+        # "hwmodel": 10074,  # CLS-32.17.1.D-S
+        "hwmodel": 10077,  # CLS-32.1-D-SC
         "axes": {
             'x': {
                 'range': [-0.2, 0.2],
