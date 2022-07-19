@@ -28,7 +28,8 @@ ENZEL-Sim: {
     metadata: {
         # TODO: Change values from test to real values
         SAFE_REL_RANGE: [-5, 5],  # °C, safe operating range relative to targetTemperature
-        SAFE_SPEED_RANGE: [-0.5, 0.5] # °C/s, safe operating speed
+        SAFE_SPEED_RANGE: [-0.5, 0.5], # °C/s, safe operating speed
+        FAV_POS_ACTIVE: {"heating": 2},  # Value to use when turning on the heater
     },
 }
 

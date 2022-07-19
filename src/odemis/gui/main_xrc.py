@@ -455,6 +455,9 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.stage_align_btn_p_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_z")
         self.stage_align_btn_m_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_z")
         self.btn_switch_align = xrc.XRCCTRL(self, "btn_switch_align")
+        self.pnl_temperature = xrc.XRCCTRL(self, "pnl_temperature")
+        self.ctrl_sample_heater = xrc.XRCCTRL(self, "ctrl_sample_heater")
+        self.ctrl_sample_target_tmp = xrc.XRCCTRL(self, "ctrl_sample_target_tmp")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.vp_overview_map = xrc.XRCCTRL(self, "vp_overview_map")
 
@@ -5674,6 +5677,107 @@ def __init_resources():
 						<flag>wxBOTTOM|wxEXPAND</flag>
 						<border>5</border>
 					</object>
+                    <object class="sizeritem">
+                        <object class="wxPanel" name="pnl_temperature">
+                            <hidden>1</hidden>
+                            <fg>#E5E5E5</fg>
+                            <bg>#444444</bg>
+                            <XRCED>
+                                <assign_var>1</assign_var>
+                            </XRCED>
+                            <object class="wxBoxSizer">
+                               <orient>wxVERTICAL</orient>
+                               <object class="sizeritem">
+                                   <object class="wxStaticText">
+                                       <label>Temperature</label>
+                                       <fg>#E5E5E5</fg>
+                                       <font>
+                                           <size>16</size>
+                                           <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                       </font>
+                                   </object>
+                                   <flag>wxBOTTOM|wxALL</flag>
+                                   <border>5</border>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxBoxSizer">
+                                        <orient>wxHORIZONTAL</orient>
+                                        <object class="sizeritem">
+                                            <object class="wxStaticText">
+                                                <label>Sample heater</label>
+                                                <fg>#BFBFBF</fg>
+                                                <XRCED>
+                                                    <assign_var>1</assign_var>
+                                                </XRCED>
+                                                <font>
+                                                    <size>12</size>
+                                                    <encoding>UTF-8</encoding>
+                                                </font>
+                                            </object>
+                                            <flag>wxTOP|wxLEFT|wxRIGHT</flag>
+                                            <border>5</border>
+                                        </object>
+                                        <object class="sizeritem">
+                                            <object class="wxCheckBox" name="ctrl_sample_heater">
+                                                <label/>
+                                                <fg>#E5E5E5</fg>
+	                                            <XRCED>
+                                                    <assign_var>1</assign_var>
+                                                </XRCED>
+                                            </object>
+		                                    <option>0</option>
+		                                    <flag>wxTOP|wxLEFT</flag>
+		                                    <border>5</border>
+		                                </object>
+                                    </object>
+                                </object>
+                                <object class="sizeritem">
+                                    <object class="wxBoxSizer">
+                                        <orient>wxHORIZONTAL</orient>
+                                        <object class="sizeritem">
+                                            <object class="wxStaticText">
+                                                <label>Target temperature</label>
+                                                <fg>#BFBFBF</fg>
+                                                <XRCED>
+                                                    <assign_var>1</assign_var>
+                                                </XRCED>
+                                                <font>
+                                                    <size>12</size>
+                                                    <encoding>UTF-8</encoding>
+                                                </font>
+                                            </object>
+                                            <flag>wxTOP|wxLEFT</flag>
+                                            <border>5</border>
+                                        </object>
+                                        <object class="sizeritem">
+                                            <object class="UnitFloatCtrl" name="ctrl_sample_target_tmp">
+                                                <size>-1,20</size>
+                                                <value>-100</value>
+                                                <accuracy>3</accuracy>
+                                                <key_step>0.1</key_step>
+                                                <unit>°C</unit>
+                                                <scale>linear</scale>
+                                                <accuracy>2</accuracy>
+                                                <font>
+                                                    <size>12</size>
+                                                    <encoding>UTF-8</encoding>
+                                                </font>
+                                                <style>wxBORDER_NONE</style>
+                                                <XRCED>
+                                                    <assign_var>1</assign_var>
+                                                </XRCED>
+                                            </object>
+                                            <orient>wxEXPAND</orient>
+                                            <flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+                                            <border>5</border>
+                                        </object>
+                                    </object>
+                                </object>
+                            </object>
+                        </object>
+                        <flag>wxBOTTOM|wxEXPAND</flag>
+                        <border>5</border>
+                    </object>
 					<object class="spacer">
 						<option>1</option>
 						<flag>wxEXPAND</flag>
