@@ -347,7 +347,10 @@ class MainGUIData(object):
             elif self.role == "meteor":
                 required_roles += ["light", "stage", "focus"]
             elif self.role in ("sparc", "sparc2"):
-                required_roles += ["e-beam", "mirror", "lens"]
+                # SPARCv1 can also work without a lens
+                required_roles += ["e-beam", "mirror"]
+                if self.role == "sparc2":
+                    required_roles += ["lens"]
             elif self.role == "mbsem":
                 required_roles += ["e-beam", "stage"]
 
