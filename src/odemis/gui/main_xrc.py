@@ -8102,7 +8102,7 @@ def __init_resources():
                     <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="ImageTextToggleButton" name="btn_press">
-                          <size>114,-1</size>
+                          <size>130,-1</size>
                           <icon>img_icon_ico_press_png</icon>
                           <height>48</height>
                           <face_colour>def</face_colour>
