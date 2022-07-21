@@ -1043,6 +1043,7 @@ class Stage(model.Actuator):
         self._position = {}
 
         rng = [-0.5, 0.5]
+        # TODO: use StgGetLimits and StgGetMotorized
         axes_def["x"] = model.Axis(unit="m", range=rng)
         axes_def["y"] = model.Axis(unit="m", range=rng)
         axes_def["z"] = model.Axis(unit="m", range=rng)

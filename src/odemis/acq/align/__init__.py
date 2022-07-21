@@ -79,7 +79,7 @@ def FindEbeamCenter(ccd, detector, escan):
                 coord = FindSpot(img, sensitivity_limit=10)
             except LookupError:
                 # spot was not found, subtract background and try again
-                logging.debug("Subtracting background image")
+                logging.debug("Subtracting background image (exp = %g s)", exp)
                 detector.data.unsubscribe(discard_data)
                 bg_image = ccd.data.get(asap=False)
                 detector.data.subscribe(discard_data)

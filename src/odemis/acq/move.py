@@ -199,7 +199,7 @@ def _getCurrentMeteorPositionLabel(current_pos, stage):
     """
     Detects the current stage position of meteor 
     current_pos (dict str->float): position of the stage 
-    stage (Actuator): the stage component 
+    stage (Actuator): the stage-bare component
     returns a label LOADING, SEM_IMAGIN, FM_IMAGING or UNKNOWN
     """
     # meta data of meteor stage positions 

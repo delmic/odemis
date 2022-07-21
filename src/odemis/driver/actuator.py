@@ -776,10 +776,11 @@ class Convert3DStage(ConvertStage):
     def __init__(self, name, role, dependencies, axes,
                  rotation=(0, 0, 0), scale=(1, 1, 1), translation=(0, 0, 0), **kwargs):
         """
-        dependencies (dict str -> actuator): name to objective lens actuator
+        dependencies (dict str -> actuator): name (anything is fine) to "original" actuator
         axes (list of 3 strings): names of the axes for x, y and z
         scale (None tuple of 3 floats): scale factor from exported to original position
         rotation (tuple of 3 floats): rz, ry, rx (Tait–Bryan) angles using extrinsic rotations (in radians)
+          applied in the order rz, ry, rx from exported to original position
         translation (None or tuple of 3 floats): translation offset (in m)
         """
         assert len(axes) == 3
@@ -852,7 +853,7 @@ class Convert3DStage(ConvertStage):
         update the position VA when the dep's position is updated
         """
         vpos_dep = [pos_dep[self._axes_dep["x"]],
-                     pos_dep[self._axes_dep["y"]],
+                    pos_dep[self._axes_dep["y"]],
                     pos_dep[self._axes_dep["z"]]]
         vpos = self._convertPosFromdep(vpos_dep)
         # it's read-only, so we change it via _value
