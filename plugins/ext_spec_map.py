@@ -89,10 +89,10 @@ class ExternalAcquisition:
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
 
         self.frameOverhead = model.FloatContinuous(0, range=(0, 1000), unit="s", readonly=True)
-        if model.hasVA(spec, "framePeriod"):
-            self.frameDuration = spec.framePeriod
+        if model.hasVA(spec, "frameDuration"):
+            self.frameDuration = spec.frameDuration
         else:
-            logging.warning("Spectrometer doesn't provide framePeriod, frame duration will not be precise")
+            logging.warning("Spectrometer doesn't provide frameDuration, frame duration will not be precise")
             # TODO: if not present, fall back to exposure time + readout rate * resolution
             self.frameDuration = model.FloatContinuous(0, range=(0, 1000), unit="s", readonly=True)
             # self.stream.exposureTime.subscribe(self._update_exp_dur)
@@ -136,10 +136,10 @@ class ExternalAcquisition:
         """
         Shows how long the acquisition takes.
         """
-        frame_p = self.spectrometer.framePeriod.value
+        frame_p = self.spectrometer.frameDuration.value
         overhead = frame_p - self.stream.exposureTime.value
-        if overhead < 0:  # it's wrong, probably because the framePeriod hasn't been updated
-            logging.warning("Frame period probably incorrect, play the stream to update it")
+        if overhead < 0:  # it's wrong, probably because the frameDuration hasn't been updated
+            logging.warning("Frame duration probably incorrect, play the stream to update it")
             overhead = 0
         overhead = math.ceil(overhead * 1e3) * 1e-3  # round-up to the ms
 

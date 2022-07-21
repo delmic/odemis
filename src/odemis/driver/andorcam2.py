@@ -663,7 +663,7 @@ class AndorCam2(model.DigitalCamera):
             # WARNING: for now it's only updated when the camera is acquiring.
             # TODO: We probably could do better by having the acquisition thread still
             # updating the camera settings when not acquiring (ie, idle).
-            self.framePeriod = model.FloatVA(self._exposure_time, unit="s", readonly=True)
+            self.frameDuration = model.FloatVA(self._exposure_time, unit="s", readonly=True)
 
             # To control the acquisition thread behaviour when several new frames
             # are available (because the driver is slower than the hardware).
@@ -2069,7 +2069,7 @@ class AndorCam2(model.DigitalCamera):
         readout = im_res[0] * im_res[1] * self._metadata[model.MD_READOUT_TIME] # s
         # accumulate should be approximately same as exposure + readout => play safe
         duration = max(accumulate, exposure + readout)
-        self.framePeriod._set_value(duration, force_write=True)
+        self.frameDuration._set_value(duration, force_write=True)
 
         logging.debug("Exposure time = %f s (asked %f s), readout = %f, accumulate time = %f, kinetic = %f, expecting duration = %f",
                       exposure, self._exposure_time, readout, accumulate, kinetic, duration)

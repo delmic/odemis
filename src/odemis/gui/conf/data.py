@@ -120,7 +120,7 @@ HW_SETTINGS_CONFIG = {
             ("dropOldFrames", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
-            ("framePeriod", {
+            ("frameDuration", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             # Advanced settings for andorcam2
@@ -339,7 +339,7 @@ HW_SETTINGS_CONFIG = {
             ("dropOldFrames", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
-            ("framePeriod", {
+            ("frameDuration", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             # Advanced settings for andorcam2
@@ -449,7 +449,7 @@ HW_SETTINGS_CONFIG = {
             ("dropOldFrames", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
-            ("framePeriod", {
+            ("frameDuration", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
             # Advanced settings for andorcam2
