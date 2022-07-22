@@ -1275,6 +1275,10 @@ class AngularSpectrumAlignmentStream(AngularSpectrumSettingsStream):
         del self.pixelSize
         del self.repetition
 
+    def _onMagnification(self, mag):
+        # Override, to not update the pixelSize (as the parent does)
+        pass
+
     def _onNewData(self, dataflow, data):
         if self.wl_inverted:
             data = data[:,::-1, ...]  # invert C
