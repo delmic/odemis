@@ -133,7 +133,7 @@ dist = setup(name='Odemis',
                            'odemis.gui': ["doc/*.html"],
                            'odemis.driver': ["*.tiff", "*.h5", "*.eds"],
                           },
-             ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx"))),
+             ext_modules=cythonize(glob.glob(os.path.join("src", "odemis", "util", "*.pyx")), language_level=3),
              scripts=scripts,
              data_files=data_files,  # not officially in setuptools, but works as for distutils
              include_dirs=[numpy.get_include()],
