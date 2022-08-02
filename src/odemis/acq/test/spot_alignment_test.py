@@ -29,7 +29,7 @@ import odemis
 from odemis.acq import align, stream, acqmng
 from odemis.dataio import hdf5
 from odemis.driver.actuator import ConvertStage
-from odemis.util import test, mock
+from odemis.util import testing, mock
 import os
 import time
 import unittest
@@ -53,7 +53,7 @@ class TestAlignment(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(SECOM_LENS_CONFIG)
+            testing.start_backend(SECOM_LENS_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -82,7 +82,7 @@ class TestAlignment(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:

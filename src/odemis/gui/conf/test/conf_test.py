@@ -26,7 +26,7 @@ from past.builtins import basestring
 import logging
 import odemis.gui.conf.file as conffile
 import odemis.gui as gui
-from odemis.util import test
+from odemis.util import testing
 import os
 import shutil
 import unittest
@@ -196,7 +196,7 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
         back_calib = conf.get_sh_calib(shid)
         for o, b in zip(orig_calib, back_calib):
             if isinstance(o, tuple):
-                test.assert_tuple_almost_equal(o, b)
+                testing.assert_tuple_almost_equal(o, b)
             else:
                 self.assertAlmostEqual(o, b)
 
@@ -208,7 +208,7 @@ class CalibrationConfigTest(ConfigTest, unittest.TestCase):
         back_calib = conf.get_sh_calib(shid)
         for o, b in zip(orig_calib, back_calib):
             if isinstance(o, tuple):
-                test.assert_tuple_almost_equal(o, b)
+                testing.assert_tuple_almost_equal(o, b)
             else:
                 self.assertAlmostEqual(o, b)
 

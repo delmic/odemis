@@ -33,7 +33,7 @@ from odemis import model
 
 from odemis.driver import xt_client
 from odemis.model import ProgressiveFuture, NotSettableError
-from odemis.util import test
+from odemis.util import testing
 
 logging.basicConfig(level=logging.DEBUG,
                     format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -43,6 +43,7 @@ logging.basicConfig(level=logging.DEBUG,
 # * TEST_NOHW = sim: xtadapter/server_sim.py running on localhost
 # * TEST_NOHW = 0 (or anything else): connected to the real hardware
 TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
+
 if TEST_NOHW == "sim":
     pass
 elif TEST_NOHW == "0":
@@ -528,12 +529,12 @@ class TestMicroscope(unittest.TestCase):
         new_beam_shift_y = beam_shift_range[0][1] + 1e-6
         self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
         time.sleep(0.1)
-        test.assert_tuple_almost_equal((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
+        testing.assert_tuple_almost_equal((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
         # Test it still works for different values.
         new_beam_shift_x = beam_shift_range[0][0] + 1e-6
         new_beam_shift_y = beam_shift_range[1][1] - 1e-6
         self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
-        test.assert_tuple_almost_equal((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
+        testing.assert_tuple_almost_equal((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
         # set beamShift back to initial value
         self.scanner.beamShift.value = init_beam_shift
 

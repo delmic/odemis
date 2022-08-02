@@ -26,8 +26,7 @@ from odemis import model
 import odemis
 from odemis.acq import path, stream
 from odemis.acq.path import ACQ_QUALITY_BEST, ACQ_QUALITY_FAST
-from odemis.util import test
-from odemis.util.test import assert_pos_almost_equal
+from odemis.util import testing
 import os
 import time
 import unittest
@@ -69,7 +68,7 @@ class SimPathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC_CONFIG)
+            testing.start_backend(SPARC_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -98,7 +97,7 @@ class SimPathTestCase(unittest.TestCase):
 #         logging.debug("Current number of threads: %d", threading.active_count())
 #         for t in threading.enumerate():
 #             print "Thread %d: %s" % (t.ident, t.name)
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -179,7 +178,7 @@ class MonashPathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(MONASH_CONFIG)
+            testing.start_backend(MONASH_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -207,7 +206,7 @@ class MonashPathTestCase(unittest.TestCase):
         if cls.backend_was_running:
             return
         del cls.optmngr  # To garbage collect it
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -308,7 +307,7 @@ class SpecPathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPEC_CONFIG)
+            testing.start_backend(SPEC_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -330,7 +329,7 @@ class SpecPathTestCase(unittest.TestCase):
         if cls.backend_was_running:
             return
         del cls.optmngr  # To garbage collect it
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -396,7 +395,7 @@ class Sparc2PathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC2_CONFIG)
+            testing.start_backend(SPARC2_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -429,7 +428,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         if cls.backend_was_running:
             return
         del cls.optmngr  # To garbage collect it
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -512,7 +511,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
-        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # CL intensity mode
         self.optmngr.setPath("cli").result()
@@ -527,7 +526,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.slit, "spectral")
         self.assert_pos_as_in_mode(self.specgraph, "spectral")
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
-        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # setting mirror-align
         self.optmngr.setPath("mirror-align").result()
@@ -562,7 +561,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         self.focus.moveRel({"z": 1e-3}).result()
         chamber_focus = self.focus.position.value
-        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # Check the focus is back after changing to previous mode
         self.optmngr.setPath("mirror-align").result()
@@ -630,7 +629,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.slit, "ar")
         self.assert_pos_as_in_mode(self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
-        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam)
@@ -667,7 +666,7 @@ class Sparc2PathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.specgraph, "spectral")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
-        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # Check the focus is remembered before going to chamber-view
         orig_focus = self.focus.position.value
@@ -695,7 +694,7 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC2_POLARIZATIONANALYZER_CONFIG)
+            testing.start_backend(SPARC2_POLARIZATIONANALYZER_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -727,7 +726,7 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         if cls.backend_was_running:
             return
         del cls.optmngr  # To garbage collect it
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -789,7 +788,7 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.slit, "ar")
         self.assert_pos_as_in_mode(self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
-        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # setting spectral
         # move analyzer to pos that is different from requested pos in next mode
@@ -800,7 +799,7 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.assert_pos_as_in_mode(self.slit, "spectral")
         self.assert_pos_as_in_mode(self.specgraph, "spectral")
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
-        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # setting chamber-view
         # move analyzer to pos that is different from requested pos in mode spectral
@@ -815,7 +814,7 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.assertEqual(fbands[self.filter.position.value["band"]], "pass-through")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.focus.moveRel({"z": 1e-3}).result()
-        assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
 #   @skip("simple")
     def test_set_path_stream(self):
@@ -876,7 +875,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC2_EXT_SPEC_CONFIG)
+            testing.start_backend(SPARC2_EXT_SPEC_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -906,7 +905,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         if cls.backend_was_running:
             return
         del cls.optmngr  # To garbage collect it
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -1108,7 +1107,7 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC2_4SPEC_CONFIG)
+            testing.start_backend(SPARC2_4SPEC_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -1142,7 +1141,7 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
         if cls.backend_was_running:
             return
         del cls.optmngr  # To garbage collect it
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -1364,7 +1363,7 @@ class SecomPathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SECOM_CONFIG)
+            testing.start_backend(SECOM_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -1388,7 +1387,7 @@ class SecomPathTestCase(unittest.TestCase):
         if cls.backend_was_running:
             return
         del cls.optmngr  # To garbage collect it
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -1481,7 +1480,7 @@ class SecomFlimPathTestCase(unittest.TestCase):
                                     f"Got error: {err}")
 
         try:
-            test.start_backend(SECOM_FLIM_CONFIG)
+            testing.start_backend(SECOM_FLIM_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -1508,7 +1507,7 @@ class SecomFlimPathTestCase(unittest.TestCase):
         if cls.backend_was_running:
             return
         del cls.optmngr  # To garbage collect it
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -1516,13 +1515,13 @@ class SecomFlimPathTestCase(unittest.TestCase):
 
     def test_set_path_stream(self):
         self.optmngr.setPath("confocal").result()
-        assert_pos_almost_equal(self.detsel.position.value, {"rx": 0}, atol=1e-3)
+        testing.assert_pos_almost_equal(self.detsel.position.value, {"rx": 0}, atol=1e-3)
 
         self.optmngr.setPath("flim").result()
-        assert_pos_almost_equal(self.detsel.position.value, {"rx": 3.14}, atol=1e-3)
+        testing.assert_pos_almost_equal(self.detsel.position.value, {"rx": 3.14}, atol=1e-3)
 
         self.optmngr.setPath("flim-setup").result()
-        assert_pos_almost_equal(self.detsel.position.value, {"rx": 3.14}, atol=1e-3)
+        testing.assert_pos_almost_equal(self.detsel.position.value, {"rx": 3.14}, atol=1e-3)
 
     def test_guess_mode(self):
         # test guess mode for ar

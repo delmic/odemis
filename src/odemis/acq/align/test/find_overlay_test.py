@@ -26,7 +26,7 @@ import logging
 from odemis import model, dataio
 from odemis.acq import align
 from odemis.driver import semcomedi, andorcam2
-from odemis.util import test
+from odemis.util import testing
 import os
 import time
 import unittest

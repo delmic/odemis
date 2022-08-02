@@ -24,7 +24,7 @@ from __future__ import division
 import logging
 from odemis import model
 import odemis
-from odemis.util import test
+from odemis.util import testing
 from odemis.util.driver import getSerialDriver, speedUpPyroConnect, readMemoryUsage, \
     get_linux_version
 import os
@@ -51,7 +51,7 @@ class TestDriver(unittest.TestCase):
 
     def test_speedUpPyroConnect(self):
         try:
-            test.start_backend(SECOM_CONFIG)
+            testing.start_backend(SECOM_CONFIG)
             need_stop = True
         except LookupError:
             logging.info("A running backend is already found, will not stop it")
@@ -66,7 +66,7 @@ class TestDriver(unittest.TestCase):
 
         time.sleep(2)
         if need_stop:
-            test.stop_backend()
+            testing.stop_backend()
 
     def test_memoryUsage(self):
         m = readMemoryUsage()

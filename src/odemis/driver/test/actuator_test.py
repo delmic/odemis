@@ -33,7 +33,7 @@ from odemis.driver import simulated, tmcm, smaract
 from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
     CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
     LinkedHeightFocus, DualChannelPositionSensor, LinkedAxesActuator, Convert3DStage
-from odemis.util import test
+from odemis.util import testing
 import os
 import time
 import unittest
@@ -205,7 +205,7 @@ class TestCoupledStage(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(DELPHI_CONFIG)
+            testing.start_backend(DELPHI_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -224,7 +224,7 @@ class TestCoupledStage(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -248,13 +248,13 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0}, atol=1e-7)
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -265,13 +265,13 @@ class TestCoupledStage(unittest.TestCase):
                               model.MD_PIXEL_SIZE_COR: (10, 10)})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-05, "y": 2e-05}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-05, "y": 2e-05}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0}, atol=1e-7)
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -282,13 +282,13 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-2e-06, "y": 1e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x":-2e-06, "y": 1e-06}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0}, atol=1e-7)
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -299,18 +299,18 @@ class TestCoupledStage(unittest.TestCase):
                               model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveRel({"x": 0, "y": 0})  # synchronize stages again
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0}, atol=1e-7)
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0}, atol=1e-7)
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -321,13 +321,13 @@ class TestCoupledStage(unittest.TestCase):
                               model.MD_PIXEL_SIZE_COR: (10, 10)})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-1e-05, "y":-2e-05}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x":-1e-05, "y":-2e-05}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x": 0, "y": 0}, atol=1e-7)
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
@@ -349,8 +349,8 @@ class TestCoupledStage(unittest.TestCase):
                               model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
 
         # scaling
@@ -359,8 +359,8 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-05, "y": 2e-05}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 1e-05, "y": 2e-05}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
 
         # rotation
@@ -369,8 +369,8 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x":-2e-06, "y": 1e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x":-2e-06, "y": 1e-06}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
 
         # offset
@@ -379,8 +379,8 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
 
         # offset + scaling
@@ -389,15 +389,15 @@ class TestCoupledStage(unittest.TestCase):
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (10, 10)})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
-        test.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
+        testing.assert_pos_almost_equal(align.position.value, {"x": 1e-06, "y": 2e-06}, atol=1e-7)
+        testing.assert_pos_almost_equal(sem_stage.position.value, {"x": 0, "y": 0}, atol=1e-7)
         self.assertXYAlmostEqual(tmcm.position.value, {"x":-1e-06, "y":-2e-06}, atol=1e-7)
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
 
     def assertXYAlmostEqual(self, actual, expected, *args, **kwargs):
         pos = {"x": actual["x"], "y": actual["y"]}
-        test.assert_pos_almost_equal(pos, expected, *args, **kwargs)
+        testing.assert_pos_almost_equal(pos, expected, *args, **kwargs)
 
     def test_reference(self):
         """
@@ -437,13 +437,13 @@ class TestConvertStage(unittest.TestCase):
 
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"a":-2.1213203435596424e-06,
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a":-2.1213203435596424e-06,
                                                          "b": 7.071067811865477e-07})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0})
 
     def test_reference(self):
         dependency = tmcm.TMCLController(name="test", role="test",
@@ -483,20 +483,20 @@ class TestConvertStage(unittest.TestCase):
         # start with just scale
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              scale=(10, 10))
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         # Speed should be 10x *smaller*, as it'd take 10x longer to move to given position
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6})
 
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
 
         # TODO: set back metadata to scale 1
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1)})
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-05, "y": 2e-05})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-05, "y": 2e-05})
 
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 10e-6, "y": 20e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 10e-6, "y": 20e-6})
 
     # @skip("skip")
     def test_move_rel(self):
@@ -504,81 +504,81 @@ class TestConvertStage(unittest.TestCase):
 
         # no transformation
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"])
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # scaling
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              scale=(10, 10))
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
         # only one axis at a time (to check missing axis doesn't do weird move)
         f = stage.moveRel({"x": 1e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 0})
         f = stage.moveRel({"y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06})
         f = stage.moveRel({"x":-1e-06, "y":-2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # rotation
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              rotation=math.pi / 2)
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
         self.assertEqual(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x":-2e-06, "y": 1e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x":-2e-06, "y": 1e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # offset
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06))
-        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # offset + scaling
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06),
                              scale=(10, 10))
-        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
     # @skip("skip")
     def test_move_abs(self):
@@ -587,87 +587,87 @@ class TestConvertStage(unittest.TestCase):
 
         # no transformation
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"])
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6})
         dependency.speed.value = {"x": 2e-6, "y": 5e-6}
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6})
 
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
 
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # scaling
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              scale=(10, 10))
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         # Speed should be 10x *smaller*, as it'd take 10x longer to move to given position
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 0.2e-6, "y": 0.5e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 0.2e-6, "y": 0.5e-6})
 
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
         # only one axis at a time (to check missing axis doesn't do weird move)
         f = stage.moveAbs({"x": 1e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # rotation
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              rotation=math.pi / 2)
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         # Speed axes should be inverted & positive!
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 5e-6, "y": 2e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 5e-6, "y": 2e-6})
 
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x":-2e-06, "y": 1e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x":-2e-06, "y": 1e-06})
         f = stage.moveAbs({"x": 1e-06})  # Test only move only one axis
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x":-2e-06, "y": 1e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x":-2e-06, "y": 1e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # offset
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06))
-        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         # Speed should not be affected by offset
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6})
 
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveAbs({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
         # offset + scaling
         stage = ConvertStage("conv", "align", {"orig": dependency}, axes=["x", "y"],
                              translation=(1e-06, 2e-06),
                              scale=(10, 10))
-        test.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x":-1e-06, "y":-2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05})
 
 class TestConvert3DStage(unittest.TestCase):
     # @skip("skip")
@@ -676,79 +676,79 @@ class TestConvert3DStage(unittest.TestCase):
 
         # no transformation
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"])
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06, "z": 3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06, "z": -3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
         # rotation
         # RZ (xy axes)
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"],
                                rotation=(math.pi / 2, 0, 0))
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06, "z": 0})
         f.result()
         self.assertEqual(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": -2e-06, "y": 1e-06, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": -2e-06, "y": 1e-06, "z": 0})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
         # RY (xz axes)
         stage.updateMetadata({model.MD_ROTATION_COR: (0, math.pi / 2, 0)})
         f = stage.moveRel({"x": 1e-06, "y": 0, "z": 2e-06})
         f.result()
         self.assertEqual(stage.position.value, {"x": 1e-06, "y": 0, "z": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 2e-06, "y": 0, "z": -1e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 2e-06, "y": 0, "z": -1e-06})
 
         f = stage.moveRel({"x": -1e-06, "y": 0, "z": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
         # RX (yz axes)
         stage.updateMetadata({model.MD_ROTATION_COR: (0, 0, math.pi / 2)})
         f = stage.moveRel({"x": 0, "y": 1e-06, "z": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 1e-06, "z": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": -2e-06, "z": 1e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 1e-06, "z": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": -2e-06, "z": 1e-06})
         f = stage.moveRel({"x": 0, "y": -1e-06, "z": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
         # offset
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"],
                                translation=(1e-06, 2e-06, 3e-06))
-        test.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06, "z": 3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06, "z": -3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
         # offset + scaling
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"],
                                translation=(1e-06, 2e-06, 3e-06),
                                scale=(10, 10, 10))
-        test.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06, "z": 3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06, "z": 30e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06, "z": 30e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06, "z": -3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
     # @skip("skip")
     def test_move_abs(self):
@@ -757,83 +757,83 @@ class TestConvert3DStage(unittest.TestCase):
 
         # no transformation
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"])
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6, "z": 5e-6})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6, "z": 5e-6})
         dependency.speed.value = {"x": 2e-6, "y": 5e-6, "z": 10e-6}
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6, "z": 10e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 2e-6, "y": 5e-6, "z": 10e-6})
 
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06, "z": 3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
 
         f = stage.moveAbs({"x": 0, "y": 0, "z": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
         # scaling
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"],
                                scale=(10, 10, 10))
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
         # Speed should be 10x *smaller*, as it'd take 10x longer to move to given position
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 0.2e-6, "y": 0.5e-6, "z": 1.0e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 0.2e-6, "y": 0.5e-6, "z": 1.0e-6})
 
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06, "z": 3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05, "z": 3e-05})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05, "z": 3e-05})
         # only one axis at a time (to check missing axis doesn't do weird move)
         f = stage.moveAbs({"x": 1e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05, "z": 3e-05})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05, "z": 3e-05})
         f = stage.moveAbs({"x": 0, "y": 0, "z": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
         # rotation
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"],
                                rotation=(math.pi / 2, 0, 0))
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
 
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": -2e-06, "y": 1e-06, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": -2e-06, "y": 1e-06, "z": 0})
         f = stage.moveAbs({"x": 1e-06})  # Test only move only one axis
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": -2e-06, "y": 1e-06, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": -2e-06, "y": 1e-06, "z": 0})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
         # offset
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"],
                                translation=(1e-06, 2e-06, 3e-06))
-        test.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
         f = stage.moveAbs({"x": 0, "y": 0, "z": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
 
         f = stage.moveAbs({"x": -1e-06, "y": -2e-06, "z": -3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0, "z": 0})
 
         # offset + scaling
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"],
                                translation=(1e-06, 2e-06, 3e-06),
                                scale=(10, 10, 10))
-        test.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": -1e-06, "y": -2e-06, "z": -3e-06})
         f = stage.moveAbs({"x": 0, "y": 0, "z": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06, "z": 30e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 10e-06, "y": 20e-06, "z": 30e-06})
 
     def test_ab_rotation(self):
         """
@@ -846,37 +846,37 @@ class TestConvert3DStage(unittest.TestCase):
 
         f = stage.moveRel({"x": 1e-06, "y": 2e-06, "z": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 7.071067811865477e-07,
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 7.071067811865477e-07,
                                                                  "b": -2.1213203435596424e-06, "c": 0})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06, "z": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0, "c": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0, "c": 0})
 
         # RY (xz axes)
         stage.updateMetadata({model.MD_ROTATION_COR: (math.radians(0), math.radians(-135), math.radians(0))})
         f = stage.moveRel({"x": 1e-06, "y": 0, "z": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 0, "z": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": -2.1213203435596424e-06,
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 0, "z": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": -2.1213203435596424e-06,
                                                                  "b": 0, "c": -7.071067811865477e-07})
         f = stage.moveRel({"x": -1e-06, "y": 0, "z": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0, "c": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0, "c": 0})
 
         # RX (yz axes)
         stage.updateMetadata({model.MD_ROTATION_COR: (math.radians(0), math.radians(0), math.radians(-135))})
         f = stage.moveRel({"x": 0, "y": 1e-06, "z": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 1e-06, "z": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value,
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 1e-06, "z": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value,
                                      {"a": 0, "b": 7.071067811865477e-07, "c": -2.1213203435596424e-06})
         f = stage.moveRel({"x": 0, "y": -1e-06, "z": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0, "c": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0, "c": 0})
 
     def test_reference(self):
         dependency = tmcm.TMCLController(name="test", role="test",
@@ -916,20 +916,20 @@ class TestConvert3DStage(unittest.TestCase):
         # start with just scale
         stage = Convert3DStage("conv", "align", {"orig": dependency}, axes=["x", "y", "z"],
                                scale=(10, 10, 10))
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0, "z": 0})
         # Speed should be 10x *smaller*, as it'd take 10x longer to move to given position
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6, "z": 3e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 1e-6, "y": 2e-6, "z": 3e-6})
 
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06, "z": 3e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05, "z": 3e-05})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06, "z": 3e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-05, "y": 2e-05, "z": 3e-05})
 
         # TODO: set back metadata to scale 1
         stage.updateMetadata({model.MD_PIXEL_SIZE_COR: (1, 1, 1)})
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-05, "y": 2e-05, "z": 3e-05})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-05, "y": 2e-05, "z": 3e-05})
 
-        test.assert_pos_almost_equal(stage.speed.value, {"x": 10e-6, "y": 20e-6, "z": 30e-6})
+        testing.assert_pos_almost_equal(stage.speed.value, {"x": 10e-6, "y": 20e-6, "z": 30e-6})
 
 class TestAntiBacklashActuator(unittest.TestCase):
 
@@ -940,34 +940,34 @@ class TestAntiBacklashActuator(unittest.TestCase):
 
         # moves should just go the same positions
         # abs
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveAbs({"x": 0, "y": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
         f = stage.moveAbs({"x": -23e-06, "y": -15e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x":-23e-06, "y":-15e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x":-23e-06, "y":-15e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x":-23e-06, "y":-15e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x":-23e-06, "y":-15e-06})
 
         # rel
         f = stage.moveAbs({"x": 0, "y": 0})
         f = stage.moveRel({"x": 1e-06, "y": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": 0, "y": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 1e-06, "y": 2e-06})
         f = stage.moveRel({"x": -1e-06, "y": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"x": 0, "y": 0})
 
     def test_limited_backlash(self):
         """
@@ -979,39 +979,39 @@ class TestAntiBacklashActuator(unittest.TestCase):
 
         # moves should just go the same positions
         # abs
-        test.assert_pos_almost_equal(stage.position.value, {"a": 0, "b": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"a": 0, "b": 0})
         f = stage.moveAbs({"a": 1e-06, "b": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 2e-06})
         f = stage.moveAbs({"b": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 0})
         f = stage.moveAbs({"a": -23e-06, "b": -15e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"a":-23e-06, "b":-15e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"a":-23e-06, "b":-15e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"a":-23e-06, "b":-15e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a":-23e-06, "b":-15e-06})
         f = stage.moveAbs({"a": -20e-06}) # negative position but positive move
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"a":-20e-06, "b":-15e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"a":-20e-06, "b":-15e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"a":-20e-06, "b":-15e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a":-20e-06, "b":-15e-06})
 
         # rel
         f = stage.moveAbs({"a": 0})
         f = stage.moveAbs({"b": 0})
         f = stage.moveRel({"a": 1e-06, "b": 2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 2e-06})
         f = stage.moveRel({"a": 0, "b": 0})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 2e-06})
+        testing.assert_pos_almost_equal(stage.position.value, {"a": 1e-06, "b": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 1e-06, "b": 2e-06})
         f = stage.moveRel({"a": -1e-06, "b": -2e-06})
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, {"a": 0, "b": 0})
-        test.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0})
+        testing.assert_pos_almost_equal(stage.position.value, {"a": 0, "b": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0})
 
     def test_error(self):
         dependency = simulated.Stage("stage", "test", axes=["a", "b"])
@@ -1055,7 +1055,7 @@ class TestAntiBacklashActuator(unittest.TestCase):
         # see ~ 16 moves. If only an antibacklash at the last move
         # (or integrated in last move), we should see 11 or 12 moves.
         self.assertLessEqual(self.called, 12)
-        test.assert_pos_almost_equal(dependency.position.value, orig_pos)
+        testing.assert_pos_almost_equal(dependency.position.value, orig_pos)
         stage.terminate()
 
     def _on_position(self, pos):
@@ -1756,16 +1756,16 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
         # return
         # Only the z axis downward
         target_pos = {'z': -1 * self.target_value}
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # Move all axes (focus won't be moved)
         target_pos = {'x': self.target_value, 'y': self.target_value, 'z': self.target_value, 'rx': self.target_value, 'rz': self.target_value}
@@ -1775,16 +1775,16 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # move all axes back to 0 (focus won't change)
         target_pos = {'x': 0, 'y': 0, 'z': 0, 'rx': 0, 'rz': 0}
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # Put focus back in active, so it can be adjusted if needed
         f = focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE])
@@ -1794,8 +1794,8 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveAbs(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
     def test_move_rel(self):
         """
@@ -1815,16 +1815,16 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         target_pos = {'z': -1 * self.target_value}
         expected_pos = {'z': 0}  # Moving up then down returning to 0
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         mov = {'x': self.target_value, 'y': self.target_value, 'z': self.target_value,
                'rx': self.target_value, 'rz': self.target_value}
@@ -1834,8 +1834,8 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveRel(mov)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # move all axes (focus won't change)
         mov = {'x': -1 * self.target_value, 'y': -1 * self.target_value, 'z': -1 * self.target_value,
@@ -1844,8 +1844,8 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveRel(mov)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         f = focus.moveAbs({'z': focus.axes['z'].range[1] / 2})
         f.result()
@@ -1855,8 +1855,8 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_foc = focus.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(stage.position.value, expected_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
 
         # Move focus to lowest point
         f = focus.moveAbs({'z': focus.axes['z'].range[0]})
@@ -1867,8 +1867,8 @@ class TestLinkedHeightActuator(unittest.TestCase):
         initial_lens = self.lens_stage.position.value
         f = stage.moveRel(target_pos)
         f.result()
-        test.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
-        test.assert_pos_not_almost_equal(self.lens_stage.position.value, initial_lens, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(focus.position.value, initial_foc, atol=ATOL_LENS)
+        testing.assert_pos_not_almost_equal(self.lens_stage.position.value, initial_lens, atol=ATOL_LENS)
 
     def test_focus_direct_movement(self):
         """
@@ -1880,7 +1880,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         # Go to absolute position
         target_pos = {'z': self.target_value}
         focus.moveAbs(target_pos).result()
-        test.assert_pos_almost_equal(focus.position.value, target_pos, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(focus.position.value, target_pos, atol=ATOL_LENS)
 
         # Move with relative shift
         target_shift = {'z': -self.target_value}
@@ -1906,7 +1906,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         f = stage.moveAbs(target_pos)
         f.result()
         # Stage should have reached the target rx position
-        test.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
         # And now trying to move the focus to active range won't be allowed
         with self.assertRaises(ValueError):
             focus.moveAbs(focus.getMetadata()[model.MD_FAV_POS_ACTIVE]).result()
@@ -1924,13 +1924,13 @@ class TestLinkedHeightActuator(unittest.TestCase):
         min_range = {'z': focus.axes['z'].range[0]}
         f = focus.moveAbs(min_range)
         f.result()
-        test.assert_pos_almost_equal(focus.getMetadata()[model.MD_FAV_POS_ACTIVE], min_range, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(focus.getMetadata()[model.MD_FAV_POS_ACTIVE], min_range, atol=ATOL_LENS)
 
         # Move focus to range max
         max_range = {'z': focus.axes['z'].range[1]}
         f = focus.moveAbs(max_range)
         f.result()
-        test.assert_pos_almost_equal(focus.getMetadata()[model.MD_FAV_POS_ACTIVE], max_range, atol=ATOL_LENS)
+        testing.assert_pos_almost_equal(focus.getMetadata()[model.MD_FAV_POS_ACTIVE], max_range, atol=ATOL_LENS)
 
         # Move focus on the range edge by a tiny bit, assert it's not allowed
         max_range_extra_margin = {'z': focus.axes['z'].range[1] + focus.axes['z'].range[1] * 0.02}
@@ -2032,7 +2032,7 @@ class TestLinkedHeightActuator(unittest.TestCase):
         # Assert that initial position is not reached (during focus adjustment)
         time.sleep(0.01)  # give some time to update all the positions
         logging.debug(focus.position.value)
-        test.assert_pos_not_almost_equal(focus.position.value, initial_foc_pos, atol=ATOL_LENS)
+        testing.assert_pos_not_almost_equal(focus.position.value, initial_foc_pos, atol=ATOL_LENS)
 
         move_to_initial_position()
         target_pos = {'z': self.target_value}  # To move stage first
@@ -2045,8 +2045,8 @@ class TestLinkedHeightActuator(unittest.TestCase):
         # Assert that stage position is neither initial nor target positions
         time.sleep(0.01)  # give some time to update all the positions
         logging.debug(stage.position.value)
-        test.assert_pos_not_almost_equal(initial_stage_pos, stage.position.value, atol=ATOL_STAGE)
-        test.assert_pos_not_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
+        testing.assert_pos_not_almost_equal(initial_stage_pos, stage.position.value, atol=ATOL_STAGE)
+        testing.assert_pos_not_almost_equal(stage.position.value, target_pos, match_all=False, atol=ATOL_STAGE)
 
         # 3. Cancel after the movements are finished
         move_to_initial_position()
@@ -2112,7 +2112,7 @@ class TestLinkedAxesActuator(unittest.TestCase):
         linked_axes = self.linked_axes
         linked_axes.updateMetadata({model.MD_POS_COR: [0, 0, 0]})
         linked_axes.updateMetadata({model.MD_CALIB: [[1, 0], [0, 1], [0, 0]]})
-        test.assert_pos_almost_equal(self.dep_stage.position.value, linked_axes.position.value,  atol=ATOL_STAGE, match_all=False)
+        testing.assert_pos_almost_equal(self.dep_stage.position.value, linked_axes.position.value,  atol=ATOL_STAGE, match_all=False)
 
     def test_move_abs(self):
         """
@@ -2125,11 +2125,11 @@ class TestLinkedAxesActuator(unittest.TestCase):
         subpos["y"] += 50e-6
         f = linked_axes.moveAbs(subpos)
         f.result()
-        test.assert_pos_almost_equal(linked_axes.position.value, subpos, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(linked_axes.position.value, subpos, atol=ATOL_STAGE)
         # Return to original position
         f = linked_axes.moveAbs(p)
         f.result()
-        test.assert_pos_almost_equal(linked_axes.position.value, p, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(linked_axes.position.value, p, atol=ATOL_STAGE)
 
     def test_move_rel(self):
         """
@@ -2142,7 +2142,7 @@ class TestLinkedAxesActuator(unittest.TestCase):
         self.assertNotEqual(linked_axes.position.value, pos)
         f = linked_axes.moveRel({"x": -2e-6, "y": -3e-6})
         f.result()
-        test.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
         # Test if relative movement would go out of range
         f = linked_axes.moveRel({"x": -2e-3})
         f.result()
@@ -2178,11 +2178,11 @@ class TestLinkedAxesActuator(unittest.TestCase):
         f.cancel()
 
         self.assertNotEqual(linked_axes.position.value, pos)
-        test.assert_pos_not_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+        testing.assert_pos_not_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
 
         f = linked_axes.moveAbs(pos)  # Back to orig pos
         f.result()
-        test.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
 
         # Same thing, but using stop() method
         pos = linked_axes.position.value.copy()
@@ -2192,12 +2192,12 @@ class TestLinkedAxesActuator(unittest.TestCase):
 
         exppos = pos.copy()
         exppos["x"] += 5e-3
-        test.assert_pos_not_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
-        test.assert_pos_not_almost_equal(linked_axes.position.value, exppos, atol=ATOL_STAGE)
+        testing.assert_pos_not_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+        testing.assert_pos_not_almost_equal(linked_axes.position.value, exppos, atol=ATOL_STAGE)
 
         f = linked_axes.moveAbs(pos)  # Back to orig pos
         f.result()
-        test.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
+        testing.assert_pos_almost_equal(linked_axes.position.value, pos, atol=ATOL_STAGE)
 
 
 class TestDualChannelPositionSensor(unittest.TestCase):

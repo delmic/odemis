@@ -45,7 +45,7 @@ import numpy
 from odemis import model
 from odemis.driver.technolution import AcquisitionServer, convertRange, AsmApiException, DATA_CONTENT_TO_ASM, \
     VOLT_RANGE, I16_SYM_RANGE
-from odemis.util import test
+from odemis.util import testing
 from technolution_asm.models import CalibrationLoopParameters
 from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
 
@@ -472,7 +472,7 @@ class TestEBeamScanner(unittest.TestCase):
         self.assertIsInstance(center, tuple)
         self.assertIsInstance(center[0], float)
         self.assertEqual(len(center), 2)  # x and y
-        test.assert_tuple_almost_equal(center, exp_center, places=10)
+        testing.assert_tuple_almost_equal(center, exp_center, places=10)
 
     def test_getGradientScanVolt(self):
         """Check that gradient of the scanning ramp is correctly calculated based on the
@@ -493,7 +493,7 @@ class TestEBeamScanner(unittest.TestCase):
         self.assertIsInstance(gradient, tuple)
         self.assertIsInstance(gradient[0], float)
         self.assertEqual(len(gradient), 2)  # x and y
-        test.assert_tuple_almost_equal(gradient, exp_gradient, places=10)
+        testing.assert_tuple_almost_equal(gradient, exp_gradient, places=10)
 
     def test_pixelSize_VA(self):
         """Testing the pixel size VA. Physical size of one pixel."""

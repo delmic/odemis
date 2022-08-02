@@ -38,8 +38,7 @@ from odemis.dataio import tiff
 from odemis.driver import simcam
 from odemis.model import MD_POL_NONE, MD_POL_HORIZONTAL, MD_POL_VERTICAL, \
     MD_POL_POSDIAG, MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, DataArrayShadow, TINT_FIT_TO_RGB
-from odemis.util import test, conversion, img, spectrum, find_closest
-from odemis.util.test import assert_array_not_equal
+from odemis.util import testing, conversion, img, spectrum, find_closest
 import os
 from past.builtins import long
 import threading
@@ -138,7 +137,7 @@ class StreamTestCase(unittest.TestCase):
             exp_roi_size = [rep[0] * pxs / phy_size[0],
                             rep[1] * pxs / phy_size[1]]
             roi_size = [new_roi[2] - new_roi[0], new_roi[3] - new_roi[1]]
-            test.assert_tuple_almost_equal(roi_size, exp_roi_size,
+            testing.assert_tuple_almost_equal(roi_size, exp_roi_size,
                              msg="with roi = %s => %s" % (roi, new_roi))
             self.assertTrue(new_roi[0] >= 0 and new_roi[1] >= 0 and
                             new_roi[2] <= 1 and new_roi[3] <= 1,
@@ -465,7 +464,7 @@ class SECOMTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SECOM_CONFIG)
+            testing.start_backend(SECOM_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -485,7 +484,7 @@ class SECOMTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -695,7 +694,7 @@ class SECOMConfocalTestCase(unittest.TestCase):
                                     f"Got error: {err}")
 
         try:
-            test.start_backend(SECOM_CONFOCAL_CONFIG)
+            testing.start_backend(SECOM_CONFOCAL_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -721,7 +720,7 @@ class SECOMConfocalTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -922,7 +921,7 @@ class SPARCTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC_CONFIG)
+            testing.start_backend(SPARC_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -943,7 +942,7 @@ class SPARCTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -1210,10 +1209,10 @@ class SPARCTestCase(unittest.TestCase):
         time.sleep(1)  # Wait long enough so that there is a new image
         im1 = specs.image.value
         self.assertIsInstance(im1, model.DataArray)
-        assert_array_not_equal(im0, im1)
+        testing.assert_array_not_equal(im0, im1)
         time.sleep(2)
         im2 = specs.image.value
-        assert_array_not_equal(im1, im2)
+        testing.assert_array_not_equal(im1, im2)
 
         # wait until it's over
         data = f.result(timeout)
@@ -1534,7 +1533,7 @@ class SPARC2TestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC2_CONFIG)
+            testing.start_backend(SPARC2_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -1558,7 +1557,7 @@ class SPARC2TestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -2240,7 +2239,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC2STREAK_CONFIG)
+            testing.start_backend(SPARC2STREAK_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -2263,7 +2262,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -2637,7 +2636,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         data = f.result(timeout)
 
         # Check if the image changed (live update is working)
-        assert_array_not_equal(im1, im2)
+        testing.assert_array_not_equal(im1, im2)
 
     def test_streak_acq(self):
         """Test acquisition with streak camera"""
@@ -2978,7 +2977,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC2POL_CONFIG)
+            testing.start_backend(SPARC2POL_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -2997,7 +2996,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -3093,7 +3092,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
                 im2 = ars.image.value
                 logging.debug("New live image is of shape %s", im2.shape)
                 # Check if the image changed (live update is working)
-                assert_array_not_equal(im1, im2)
+                testing.assert_array_not_equal(im1, im2)
 
             # sas.raw: array containing as first entry the sem scan image for the scanning positions,
             # rest are ar images
@@ -3515,7 +3514,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(TIME_CORRELATOR_CONFIG)
+            testing.start_backend(TIME_CORRELATOR_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -3541,7 +3540,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -3652,7 +3651,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         data = f.result()
 
         # Check if the image changed (live update is working)
-        assert_array_not_equal(im1, im2)
+        testing.assert_array_not_equal(im1, im2)
 
 
 # @skip("faster")
@@ -3666,7 +3665,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC_CONFIG)
+            testing.start_backend(SPARC_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -3692,7 +3691,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -4164,7 +4163,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # Check it's a RGB DataArray
         self.assertEqual(im2d1.shape[2], 3)
-        assert_array_not_equal(im2d0, im2d1)
+        testing.assert_array_not_equal(im2d0, im2d1)
 
         logging.info("testing image background correction")
         # test background correction from image
@@ -4182,7 +4181,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d2.shape[2], 3)
         # check if the .image VA has been updated
-        assert_array_not_equal(im2d1, im2d2)
+        testing.assert_array_not_equal(im2d1, im2d2)
 
     def test_ar_das(self):
         """Test StaticARStream with a DataArrayShadow"""
@@ -4266,7 +4265,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         self.assertEqual(im2d1.shape[2], 3)  # RGB DataArray
         # check that the .image VA has been updated
-        assert_array_not_equal(im2d0, im2d1)
+        testing.assert_array_not_equal(im2d0, im2d1)
 
         ###################################################################
         # testing background correction
@@ -4288,7 +4287,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         self.assertEqual(im2d2.shape[2], 3)  # RGB DataArray
         # check that the bg image has been applied, ie the .image VA has been updated
-        assert_array_not_equal(im2d1, im2d2)
+        testing.assert_array_not_equal(im2d1, im2d2)
 
         ###################################################################
         # 1 bg image but have six images -> should raise an error
@@ -4328,7 +4327,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         im2d1 = ars_raw_pj.image.value
         # check if the bg image has been applied and the .image VA has been updated
-        assert_array_not_equal(im2d0, im2d1)
+        testing.assert_array_not_equal(im2d0, im2d1)
 
     def test_arpolarimetry(self):
         """Test StaticARStream with ARPolarimetryProjection projection."""
@@ -4390,7 +4389,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(img_vis_2.shape[2], 3)
         # check if the .image VA has been updated
-        assert_array_not_equal(img_vis_1, img_vis_2)
+        testing.assert_array_not_equal(img_vis_1, img_vis_2)
 
         ###################################################################
         # testing background correction is applied visualized data
@@ -4405,7 +4404,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         self.assertEqual(img_vis_3.shape[2], 3)  # RGB DataArray
         # check if the bg image has been applied and the .image VA has been updated
-        assert_array_not_equal(img_vis_2, img_vis_3)
+        testing.assert_array_not_equal(img_vis_2, img_vis_3)
 
     def test_ar_large_image(self):
         """Test StaticARStream with a large image to trigger resizing."""
@@ -4440,7 +4439,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         im2d1 = ars_raw_pj.image.value
         # check if the bg image has been applied and the .image VA has been updated
-        assert_array_not_equal(im2d0, im2d1)
+        testing.assert_array_not_equal(im2d0, im2d1)
 
     def _create_spectrum_data(self):
         """Create spectrum data."""
@@ -4660,7 +4659,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d_effcorr.shape, spec.shape[-2:] + (3,))
         # check image different from previous image after bg correction, and different from efficiency corr. image
-        assert_array_not_equal(im2d_effcorr, prev_im2d)
+        testing.assert_array_not_equal(im2d_effcorr, prev_im2d)
 
         # apply background image correction
         specs.background.value = bckg
@@ -4670,8 +4669,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d_bgcorr.shape, spec.shape[-2:] + (3,))
         # check image different from previous image after bg correction, and different from efficiency corr. image
-        assert_array_not_equal(im2d_bgcorr, im2d_effcorr)
-        assert_array_not_equal(im2d_bgcorr, prev_im2d)
+        testing.assert_array_not_equal(im2d_bgcorr, im2d_effcorr)
+        testing.assert_array_not_equal(im2d_bgcorr, prev_im2d)
 
     def _create_temporal_spectrum_data(self):
         """Create temporal spectrum data."""
@@ -4781,7 +4780,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d_effcorr.shape, temporalspectrum.shape[-2:] + (3,))
         # check image different from previous image after efficiency correction
-        assert_array_not_equal(im2d_effcorr, prev_im2d)
+        testing.assert_array_not_equal(im2d_effcorr, prev_im2d)
 
         # apply bg correction
         tss.background.value = bckg
@@ -4791,8 +4790,8 @@ class StaticStreamsTestCase(unittest.TestCase):
         # Check it's a RGB DataArray
         self.assertEqual(im2d_bgcorr.shape, temporalspectrum.shape[-2:] + (3,))
         # check image different from previous image after bg correction, and different from efficiency corr. image
-        assert_array_not_equal(im2d_bgcorr, im2d_effcorr)
-        assert_array_not_equal(im2d_bgcorr, prev_im2d)
+        testing.assert_array_not_equal(im2d_bgcorr, im2d_effcorr)
+        testing.assert_array_not_equal(im2d_bgcorr, prev_im2d)
 
     def test_temporal_spectrum_false_calib_bg(self):
         """Test StaticSpectrumStream background image correction

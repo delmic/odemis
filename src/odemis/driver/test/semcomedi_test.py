@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from __future__ import division, print_function
 from odemis import model
 from odemis.driver import semcomedi
-from odemis.util import test
+from odemis.util import testing
 import Pyro4
 import comedi
 import copy
@@ -253,7 +253,7 @@ class TestSEM(unittest.TestCase):
         # scale up
         self.scanner.scale.value = (16, 16)
         exp_res = (max_res[0] // 16, max_res[1] // 16)
-        test.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
+        testing.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
         self.scanner.translation.value = (-1, 1)
         self.assertEqual(self.scanner.translation.value, (0, 0))
 
@@ -261,18 +261,18 @@ class TestSEM(unittest.TestCase):
         exp_res = (max_res[0] // 32, max_res[1] // 32)
         self.scanner.resolution.value = exp_res
         self.scanner.translation.value = (-1, 1)
-        test.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
+        testing.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
         self.assertEqual(self.scanner.translation.value, (-1, 1))
 
         # change scale to some float
         self.scanner.resolution.value = (max_res[0] // 16, max_res[1] // 16)
         self.scanner.scale.value = (1.5, 2.3)
         exp_res = (max_res[0] // 1.5, max_res[1] // 2.3)
-        test.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
+        testing.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
         self.assertEqual(self.scanner.translation.value, (0, 0))
 
         self.scanner.scale.value = (1, 1)
-        test.assert_tuple_almost_equal(self.scanner.resolution.value, max_res, delta=2.1)
+        testing.assert_tuple_almost_equal(self.scanner.resolution.value, max_res, delta=2.1)
         self.assertEqual(self.scanner.translation.value, (0, 0))
 
         # Then, check metadata fits with the expectations
@@ -287,7 +287,7 @@ class TestSEM(unittest.TestCase):
         # normal acquisition
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
-        test.assert_tuple_almost_equal(im.metadata[model.MD_POS], center)
+        testing.assert_tuple_almost_equal(im.metadata[model.MD_POS], center)
 
         # shift a bit
         # reduce the size of the image so that we can have translation
@@ -299,13 +299,13 @@ class TestSEM(unittest.TestCase):
 
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
-        test.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
+        testing.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
 
         # only one point
         self.scanner.resolution.value = (1,1)
         im = self.sed.data.get()
         self.assertEqual(im.shape, self.scanner.resolution.value[-1::-1])
-        test.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
+        testing.assert_tuple_almost_equal(im.metadata[model.MD_POS], exp_pos)
 
 
 #     @unittest.skip("simple")

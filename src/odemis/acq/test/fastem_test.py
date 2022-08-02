@@ -41,7 +41,7 @@ from odemis import model
 from odemis.acq import fastem, stream
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import estimate_acquisition_time, SETTINGS_SELECTION
-from odemis.util import driver, img, is_point_in_rect, test
+from odemis.util import driver, img, is_point_in_rect, testing
 
 # * TEST_NOHW = 1: connected to the simulator or not connected to anything
 # * TEST_NOHW = 0: connected to the real hardware, the backend should be running
@@ -62,7 +62,7 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
-            test.start_backend(FASTEM_CONFIG)
+            testing.start_backend(FASTEM_CONFIG)
         elif driver.get_backend_status() != driver.BACKEND_RUNNING:
             raise IOError("Backend controlling a real hardware should be started before running this test case")
 
@@ -139,7 +139,7 @@ class TestFastEMROA(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
-            test.start_backend(FASTEM_CONFIG_ASM)
+            testing.start_backend(FASTEM_CONFIG_ASM)
         elif driver.get_backend_status() != driver.BACKEND_RUNNING:
             raise IOError("Backend controlling a real hardware should be started before running this test case")
 
@@ -314,7 +314,7 @@ class TestFastEMAcquisition(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
-            test.start_backend(FASTEM_CONFIG_ASM)
+            testing.start_backend(FASTEM_CONFIG_ASM)
         elif driver.get_backend_status() != driver.BACKEND_RUNNING:
             raise IOError("Backend controlling a real hardware should be started before running this test case")
 
@@ -553,7 +553,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
-            test.start_backend(FASTEM_CONFIG_ASM)
+            testing.start_backend(FASTEM_CONFIG_ASM)
         elif driver.get_backend_status() != driver.BACKEND_RUNNING:
             raise IOError("Backend controlling a real hardware should be started before running this test case")
 

@@ -29,7 +29,7 @@ import logging
 from odemis import model
 import odemis
 from odemis.cli import main
-from odemis.util import test
+from odemis.util import testing
 import os
 import re
 import subprocess
@@ -117,7 +117,7 @@ class TestWithBackend(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SECOM_CONFIG)
+            testing.start_backend(SECOM_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -139,7 +139,7 @@ class TestWithBackend(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def tearDown(self):
         # Delete files created by tests

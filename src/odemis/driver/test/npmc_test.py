@@ -26,7 +26,7 @@ from __future__ import division
 import logging
 from odemis.driver import npmc
 import odemis.model as model
-from odemis.util import test
+from odemis.util import testing
 import os
 import time
 import unittest
@@ -131,7 +131,7 @@ class TestNPMC(unittest.TestCase):
             f = self.dev.moveAbs(new_pos)
             f.result()
             exp_pos["x"] = pos
-            test.assert_pos_almost_equal(self.dev.position.value, exp_pos, **COMP_ARGS)
+            testing.assert_pos_almost_equal(self.dev.position.value, exp_pos, **COMP_ARGS)
 
     def test_position_rel(self):
         """
@@ -146,7 +146,7 @@ class TestNPMC(unittest.TestCase):
             old_pos = self.dev.position.value
             f = self.dev.moveRel(new_shift)
             f.result()
-            test.assert_pos_almost_equal(add_coord(old_pos, new_shift), self.dev.position.value, **COMP_ARGS)
+            testing.assert_pos_almost_equal(add_coord(old_pos, new_shift), self.dev.position.value, **COMP_ARGS)
 
     def _getRealPosition(self):
         """
@@ -175,14 +175,14 @@ class TestNPMC(unittest.TestCase):
         old_pos = self.dev.position.value
         offset_1 = {'x': 0.05}
         self.dev.updateMetadata({model.MD_POS_COR: offset_1})
-        test.assert_pos_almost_equal(subtract_coord(old_pos, offset_1), self.dev.position.value, **COMP_ARGS)
+        testing.assert_pos_almost_equal(subtract_coord(old_pos, offset_1), self.dev.position.value, **COMP_ARGS)
 
         # Test offset #2
         old_pos = self._getRealPosition()
         offset_2 = {'x':0.3}
         self.dev.updateMetadata({model.MD_POS_COR: offset_2})
         exp_pos = subtract_coord(old_pos, offset_2)
-        test.assert_pos_almost_equal(exp_pos, self.dev.position.value, **COMP_ARGS)
+        testing.assert_pos_almost_equal(exp_pos, self.dev.position.value, **COMP_ARGS)
 
         # now move to the origin
         new_pos = {'x': 0}
@@ -190,10 +190,10 @@ class TestNPMC(unittest.TestCase):
         f.result()
         exp_pos = self.dev.position.value.copy()
         exp_pos["x"] = 0
-        test.assert_pos_almost_equal(exp_pos, self.dev.position.value, **COMP_ARGS)
+        testing.assert_pos_almost_equal(exp_pos, self.dev.position.value, **COMP_ARGS)
         exp_real = self.dev.position.value.copy()
         exp_real.update(offset_2)
-        test.assert_pos_almost_equal(exp_real, self._getRealPosition(), **COMP_ARGS)
+        testing.assert_pos_almost_equal(exp_real, self._getRealPosition(), **COMP_ARGS)
 
         # Remove the offset
         self.dev.updateMetadata({model.MD_POS_COR: {'x': 0}})
@@ -240,7 +240,7 @@ class TestNPMC(unittest.TestCase):
         f2 = self.dev.moveRel({'x':-0.15})
 
         f2.result()
-        test.assert_pos_almost_equal(orig_pos, self.dev.position.value, **COMP_ARGS)
+        testing.assert_pos_almost_equal(orig_pos, self.dev.position.value, **COMP_ARGS)
 
     def test_reference(self):
         """

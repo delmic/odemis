@@ -23,7 +23,7 @@ import logging
 from odemis import model
 import odemis
 from odemis.gui.model import MainGUIData
-from odemis.util import test
+from odemis.util import testing
 import os
 import unittest
 from unittest.case import skip
@@ -43,7 +43,7 @@ class MainGUIDataTestCase(unittest.TestCase):
         # Start the backend
         try:
             broken_config_path = os.path.dirname(__file__) + "/secom-sim-no-stage.odm.yaml"
-            test.start_backend(broken_config_path)
+            testing.start_backend(broken_config_path)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             self.skipTest("Running backend found")
@@ -56,7 +56,7 @@ class MainGUIDataTestCase(unittest.TestCase):
         with self.assertRaises(KeyError):
             MainGUIData(microscope)
 
-        test.stop_backend()
+        testing.stop_backend()
 
     def test_secom(self):
         """
@@ -65,7 +65,7 @@ class MainGUIDataTestCase(unittest.TestCase):
         # Start the backend
         try:
             broken_config_path = CONFIG_PATH + "sim/secom-sim.odm.yaml"
-            test.start_backend(broken_config_path)
+            testing.start_backend(broken_config_path)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             self.skipTest("Running backend found")
@@ -88,7 +88,7 @@ class MainGUIDataTestCase(unittest.TestCase):
         self.assertIsNotNone(gdata.opm)
         self.assertIsNotNone(gdata.settings_obs)
 
-        test.stop_backend()
+        testing.stop_backend()
 
     def test_no_microscope(self):
         """

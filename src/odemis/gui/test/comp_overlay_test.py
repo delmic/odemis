@@ -40,7 +40,7 @@ from odemis.gui.util.img import wxImage2NDImage
 from odemis.util import mock
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 from odemis.util.conversion import hex_to_frgb
-from odemis.util.test import assert_array_not_equal, assert_pos_not_almost_equal
+from odemis.util.testing import assert_array_not_equal, assert_pos_not_almost_equal
 import time
 import unittest
 import wx

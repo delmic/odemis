@@ -26,7 +26,7 @@ import logging
 from odemis import model
 import odemis
 from odemis.acq import stream, acqmng
-from odemis.util import test
+from odemis.util import testing
 import os
 import time
 import unittest
@@ -44,7 +44,7 @@ class TestOverlayStream(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(SECOM_LENS_CONFIG)
+            testing.start_backend(SECOM_LENS_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -64,7 +64,7 @@ class TestOverlayStream(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:

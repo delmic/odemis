@@ -27,7 +27,7 @@ from odemis import model
 import odemis
 from odemis.acq import stream
 from odemis.model import MD_PIXEL_SIZE, MD_DWELL_TIME, MD_POS, MD_TIME_LIST
-from odemis.util import test
+from odemis.util import testing
 import os
 import time
 import unittest
@@ -61,7 +61,7 @@ class TestFlim(unittest.TestCase):
                                     f"Got error: {err}")
 
         try:
-            test.start_backend(SECOM_FLIM_CONFIG)
+            testing.start_backend(SECOM_FLIM_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -88,7 +88,7 @@ class TestFlim(unittest.TestCase):
 
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
