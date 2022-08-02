@@ -571,6 +571,8 @@ def dump_vigilant_attributes(self):
     vas = dict()
     daemon = self._pyroDaemon
     for name, value in inspect_getmembers(self, lambda x: isinstance(x, VigilantAttributeBase)):
+        if name.startwith("_"):
+            continue
         if not hasattr(value, "_pyroDaemon"):
             value._register(daemon)
         vas[name] = value
