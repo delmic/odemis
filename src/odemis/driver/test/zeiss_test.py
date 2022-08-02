@@ -24,7 +24,7 @@ from concurrent.futures import CancelledError
 import logging
 import math
 from odemis.driver import zeiss
-from odemis.util import test
+from odemis.util import testing
 import os
 import time
 import unittest
@@ -165,9 +165,9 @@ class TestSEM(unittest.TestCase):
 
         f = self.stage.moveRel({"x":-2e-6, "y":-3e-6})
         f.result()
-        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
         time.sleep(6)
-        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
         # Try a relative move outside of the range (less than min)
         axes = self.stage.axes
@@ -175,18 +175,18 @@ class TestSEM(unittest.TestCase):
         f = self.stage.moveRel(toofar)
         with self.assertRaises(ValueError):
             f.result()
-        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
         time.sleep(6)
-        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
         # Try a relative move outside of the range (more than max)
         toofar = {"y": axes["y"].range[1] - pos["y"] + 10e-6}
         f = self.stage.moveRel(toofar)
         with self.assertRaises(ValueError):
             f.result()
-        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
         time.sleep(6)
-        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
 #         f = self.stage.moveRel({"z": 4e-3})  # 100 µm
 #         time.sleep(15)  # wait for stage move
@@ -196,7 +196,7 @@ class TestSEM(unittest.TestCase):
 #         f = self.stage.moveRel({"z":-4e-3})  # 100 µm
 #         time.sleep(15)  # wait for stage move
 #         f.result()
-#         test.assert_pos_almost_equal(self.stage.position.value, pos, atol=10e-6)
+#         testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=10e-6)
 
         with self.assertRaises(ValueError):
             f = self.stage.moveRel({"x":-200e-3})
@@ -206,17 +206,17 @@ class TestSEM(unittest.TestCase):
         subpos["x"] += 50e-6
         f = self.stage.moveAbs(subpos)
         f.result()
-        test.assert_pos_almost_equal(self.stage.position.value, subpos)
+        testing.assert_pos_almost_equal(self.stage.position.value, subpos)
         time.sleep(6)
-        test.assert_pos_almost_equal(self.stage.position.value, subpos)
+        testing.assert_pos_almost_equal(self.stage.position.value, subpos)
 
         subpos = self.stage.position.value.copy()
         subpos.pop("y")
         subpos["x"] -= 50e-6
         self.stage.moveAbsSync(subpos)
-        test.assert_pos_almost_equal(self.stage.position.value, p)
+        testing.assert_pos_almost_equal(self.stage.position.value, p)
         time.sleep(6)
-        test.assert_pos_almost_equal(self.stage.position.value, p)
+        testing.assert_pos_almost_equal(self.stage.position.value, p)
 
         # Check that a long move takes time (ie, that it waits until the end of the move)
         # It's tricky, because it always waits at least 1s.
@@ -251,7 +251,7 @@ class TestSEM(unittest.TestCase):
         f = self.stage.moveAbs(pos)  # Back to orig pos
         f.result()
         time.sleep(6)  # wait for position to update
-        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
         # Same thing, but using stop() method
         pos = self.stage.position.value.copy()
@@ -270,7 +270,7 @@ class TestSEM(unittest.TestCase):
         f = self.stage.moveAbs(pos)  # Back to orig pos
         f.result()
         time.sleep(6)
-        test.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
     def test_focus(self):
         """

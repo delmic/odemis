@@ -31,7 +31,7 @@ import odemis
 from odemis import model
 from odemis.acq import fastem_conf
 from odemis.acq.fastem_conf import OVERVIEW_MODE, LIVESTREAM_MODE, MEGAFIELD_MODE
-from odemis.util import img, test
+from odemis.util import img, testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -51,7 +51,7 @@ class TestFASTEMConfig(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if TEST_NOHW:
-            test.start_backend(FASTEM_CONFIG)
+            testing.start_backend(FASTEM_CONFIG)
 
         cls.scanner = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")

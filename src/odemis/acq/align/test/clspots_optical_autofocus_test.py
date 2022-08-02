@@ -29,7 +29,7 @@ import unittest
 import odemis
 from odemis import model
 from odemis.acq import align
-from odemis.util import test, timeout
+from odemis.util import testing, timeout
 
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
@@ -47,7 +47,7 @@ class TestAutofocusSim(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        test.start_backend(CLSPOTS_SIM_CONFIG)
+        testing.start_backend(CLSPOTS_SIM_CONFIG)
 
         # find components by their role
         cls.diagnostic_cam = model.getComponent(role="diagnostic-ccd")
@@ -131,7 +131,7 @@ class TestAutofocusHW(unittest.TestCase):
         if TEST_NOHW:
             raise unittest.SkipTest('No HW present. Skipping tests.')
 
-        test.start_backend(CLSPOTS_CONFIG)
+        testing.start_backend(CLSPOTS_CONFIG)
 
         # find components by their role
         cls.diagnostic_cam = model.getComponent(role="diagnostic-ccd")

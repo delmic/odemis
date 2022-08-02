@@ -39,7 +39,7 @@ from odemis.acq.acqmng import SettingsObserver, acquireZStack
 from odemis.acq.leech import ProbeCurrentAcquirer
 from odemis.driver import xt_client
 from odemis.driver.test.xt_client_test import CONFIG_FIB_SEM, CONFIG_FIB_SCANNER, CONFIG_DETECTOR
-from odemis.util import test
+from odemis.util import testing
 from odemis.util.comp import generate_zlevels
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -54,6 +54,7 @@ ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 # * TEST_NOHW = sim: xtadapter/server_sim.py running on localhost
 # * TEST_NOHW = 0 (or anything else): connected to the real hardware
 TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to Hw testing
+
 if TEST_NOHW == "sim":
     pass
 elif TEST_NOHW == "0":
@@ -161,7 +162,7 @@ class SECOMTestCase(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(SECOM_CONFIG)
+            testing.start_backend(SECOM_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -191,7 +192,7 @@ class SECOMTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -305,7 +306,7 @@ class SPARCTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC_CONFIG)
+            testing.start_backend(SPARC_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -328,7 +329,7 @@ class SPARCTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -572,7 +573,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(ENZEL_CONFIG)
+            testing.start_backend(ENZEL_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -596,7 +597,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:

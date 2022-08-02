@@ -29,9 +29,8 @@ from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
     WEAVER_MEAN, acquireTiledArea, FocusingMethod
 from odemis.acq.stitching._tiledacq import TiledAcquisitionTask
-from odemis.util import test, img
+from odemis.util import testing, img
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
-from odemis.util.test import assert_pos_almost_equal
 import os
 import time
 import unittest
@@ -47,7 +46,7 @@ ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 class CRYOSECOMTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
-        test.start_backend(ENZEL_CONFIG)
+        testing.start_backend(ENZEL_CONFIG)
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
@@ -183,23 +182,23 @@ class CRYOSECOMTestCase(unittest.TestCase):
         logging.debug("Starting position: %s", starting_pos)
         # no change in movement
         tiled_acq_task._moveToTile((0, 0), (0, 0), fov)
-        assert_pos_almost_equal(self.stage.position.value, starting_pos, atol=100e-9, match_all=False)
+        testing.assert_pos_almost_equal(self.stage.position.value, starting_pos, atol=100e-9, match_all=False)
 
         # Note that we cannot predict precisely, as the algorithm may choose to spread
         # more or less the tiles to fit within the area.
         tiled_acq_task._moveToTile((1, 0), (0, 0), fov)  # move right on x
         exp_pos = {'x': starting_pos["x"] + exp_shift[0] / 2}
-        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
+        testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
 
         tiled_acq_task._moveToTile((1, 1), (1, 0), fov)  # move down on y
         exp_pos = {'x': starting_pos["x"] + exp_shift[0] / 2,
                    'y': starting_pos["y"] - exp_shift[1] / 2}
-        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
+        testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
 
         tiled_acq_task._moveToTile((0, 1), (1, 1), fov)  # move back on x
         exp_pos = {'x': starting_pos["x"],
                    'y': starting_pos["y"] - exp_shift[1] / 2}
-        assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
+        testing.assert_pos_almost_equal(self.stage.position.value, exp_pos, atol=10e-6, match_all=False)
 
     def test_get_fov(self):
         """

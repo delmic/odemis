@@ -24,7 +24,7 @@ from __future__ import division
 import logging
 import math
 from odemis.driver import smaract
-from odemis.util import test
+from odemis.util import testing
 import os
 import pickle
 import time
@@ -143,16 +143,16 @@ class TestSmarPod(unittest.TestCase):
         pos4 = {'x': 1e-3, 'rx': 1e-5, 'ry': 0, 'rz': 0}
 
         self.dev.moveAbs(pos1).result()
-        test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
         self.dev.moveAbs(pos2).result()
-        test.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
         self.dev.moveAbs(pos3).result()
-        test.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
         self.dev.moveAbs(pos4).result()
         # add missing axes to do the comparison
         pos4['y'] = pos3['y']
         pos4['z'] = pos3['z']
-        test.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
         logging.debug(self.dev.position.value)
 
     def test_move_cancel(self):
@@ -186,7 +186,7 @@ class TestSmarPod(unittest.TestCase):
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
-        test.assert_pos_almost_equal(smaract.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
+        testing.assert_pos_almost_equal(smaract.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
@@ -196,7 +196,7 @@ class TestSmarPod(unittest.TestCase):
         self.dev.moveRel(shift).result()
 
         new_pos = smaract.add_coord(smaract.add_coord(smaract.add_coord(old_pos, shift), shift), shift)
-        test.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
 
     def test_pivot_set(self):
         # Check that the pivot position is available from the beginning
@@ -208,16 +208,16 @@ class TestSmarPod(unittest.TestCase):
             old_pos = self.dev.position.value
             new_pivot = {'x': 0.005, 'y': 0.005, 'z': 0.001}
             self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
-            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            testing.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
             self.dev.moveRelSync({"x": 0})  # WARNING: this can cause a move!
-            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            testing.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
 
             old_pos = self.dev.position.value
             new_pivot = {'x': 0.001, 'y':-0.005, 'z': 0.001}
             self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
-            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            testing.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
             self.dev.moveRelSync({"x": 0})  # WARNING: this can cause a move!
-            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            testing.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
         finally:
             self.dev.updateMetadata({model.MD_PIVOT_POS: old_pivot})
             self.dev.moveRelSync({"x": 0})
@@ -327,15 +327,15 @@ class Test5DOF(unittest.TestCase):
 
         # move the stage to the maximum range
         self.dev.moveAbs(edge_move).result()
-        test.assert_pos_almost_equal(self.dev.position.value, edge_move, match_all=False)
+        testing.assert_pos_almost_equal(self.dev.position.value, edge_move, match_all=False)
         # moving rx/rz would throw unreachable move exception
         with self.assertRaises(IndexError):
             self.dev.moveAbs(rot_move).result()
         # moving all linear axes from range then moving rx/rz would be fine
         self.dev.moveAbs(zero_move).result()
-        test.assert_pos_almost_equal(self.dev.position.value, zero_move, match_all=False)
+        testing.assert_pos_almost_equal(self.dev.position.value, zero_move, match_all=False)
         self.dev.moveAbs(rot_move).result()
-        test.assert_pos_almost_equal(self.dev.position.value, rot_move, match_all=False)
+        testing.assert_pos_almost_equal(self.dev.position.value, rot_move, match_all=False)
 
     def test_move_abs(self):
         pos1 = {'x': 0, 'y': 0, 'z': 0, 'rx': 0.001, 'rz': 0.001}
@@ -345,16 +345,16 @@ class Test5DOF(unittest.TestCase):
         pos4 = {'x': 1e-3, 'rx': 1e-5, 'rz': 0}
 
         self.dev.moveAbs(pos1).result()
-        test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
         self.dev.moveAbs(pos2).result()
-        test.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
         self.dev.moveAbs(pos3).result()
-        test.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
         self.dev.moveAbs(pos4).result()
         # add missing axes to do the comparison
         pos4['y'] = pos3['y']
         pos4['z'] = pos3['z']
-        test.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
 
     def test_move_update_position(self):
         """
@@ -367,8 +367,8 @@ class Test5DOF(unittest.TestCase):
         f = self.dev.moveAbs(pos2)
         # wait and see if the position updated midway through the move. Should take 3 s in sim
         time.sleep(1.0)
-        test.assert_pos_not_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
-        test.assert_pos_not_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
+        testing.assert_pos_not_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
+        testing.assert_pos_not_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
         f.result()
 
     def test_move_cancel(self):
@@ -389,7 +389,7 @@ class Test5DOF(unittest.TestCase):
         time.sleep(0.1)
         self.dev.stop()
 
-        test.assert_pos_not_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
+        testing.assert_pos_not_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
 
     def test_move_rel(self):
         # Test relative moves
@@ -399,7 +399,7 @@ class Test5DOF(unittest.TestCase):
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
-        test.assert_pos_almost_equal(smaract.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
+        testing.assert_pos_almost_equal(smaract.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
@@ -409,7 +409,7 @@ class Test5DOF(unittest.TestCase):
         self.dev.moveRel(shift).result()
 
         new_pos = smaract.add_coord(smaract.add_coord(smaract.add_coord(old_pos, shift), shift), shift)
-        test.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
 
     def test_pivot_set(self):
         # Check that the pivot position is available from the beginning
@@ -419,16 +419,16 @@ class Test5DOF(unittest.TestCase):
             old_pos = self.dev.position.value
             new_pivot = {'x': 0.05, 'y': 0.05, 'z': 0.01}
             self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
-            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            testing.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
             self.dev.moveRelSync({"x": 0})  # WARNING: this can cause a move!
-            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            testing.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
 
             old_pos = self.dev.position.value
             new_pivot = {'x': 0.01, 'y':-0.05, 'z': 0.01}
             self.dev.updateMetadata({model.MD_PIVOT_POS: new_pivot})
-            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            testing.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
             self.dev.moveRelSync({"x": 0})  # WARNING: this can cause a move!
-            test.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
+            testing.assert_pos_almost_equal(old_pos, self.dev.position.value, **COMP_ARGS)
         finally:
             self.dev.updateMetadata({model.MD_PIVOT_POS: old_pivot})
             self.dev.moveRelSync({"x": 0})
@@ -445,7 +445,7 @@ class Test5DOF(unittest.TestCase):
         for a, i in self.dev.referenced.value.items():
             self.assertTrue(i)
 
-        test.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
 
     def test_move_and_settle(self):
         pos1 = {'x': 0, 'y': 0}
@@ -534,11 +534,11 @@ class TestMCS2(unittest.TestCase):
         pos3 = {'x': 0.643e-3, 'y': 0, 'z': 1e-3}
 
         self.dev.moveAbs(pos1).result()
-        test.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
         self.dev.moveAbs(pos2).result()
-        test.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
         self.dev.moveAbs(pos3).result()
-        test.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
         logging.debug(self.dev.position.value)
 
     def test_move_cancel(self):
@@ -569,7 +569,7 @@ class TestMCS2(unittest.TestCase):
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
-        test.assert_pos_almost_equal(smaract.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
+        testing.assert_pos_almost_equal(smaract.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
 
         # Test several relative moves and ensure they are queued up.
         old_pos = self.dev.position.value
@@ -579,7 +579,7 @@ class TestMCS2(unittest.TestCase):
         self.dev.moveRel(shift).result()
 
         new_pos = smaract.add_coord(smaract.add_coord(smaract.add_coord(old_pos, shift), shift), shift)
-        test.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
 
     def test_reference_cancel(self):
         """Test canceling referencing"""
@@ -608,7 +608,7 @@ class TestMCS2(unittest.TestCase):
         # TODO: some hardware have fancy multi-marks, which means that the referencing
         # doesn't necessarily end-up at 0, and everytime the axis is referenced
         # it can end up at a different mark.
-        # test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+        # testing.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
 
         # Try again, after a move
         shift = {'x': 1e-3, 'y':-1e-3}
@@ -624,7 +624,7 @@ class TestMCS2(unittest.TestCase):
 
         # Check that at least the position changed
         self.assertNotEqual(pos_move["x"], pos_refd["x"])
-        # test.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+        # testing.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
 
     def test_reference_and_deactivate_move(self):
         # Set a deactive position and check to be sure that the controller moves to this location
@@ -635,7 +635,7 @@ class TestMCS2(unittest.TestCase):
         f = self.dev.reference(set(self.dev.axes.keys()))
         f.result()
 
-        test.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
+        testing.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
 
     def test_auto_update_function(self):
         self.dev.moveAbs({"x": 0.0, "y": 0.0, "z": 0.0}).result()
@@ -647,7 +647,7 @@ class TestMCS2(unittest.TestCase):
         # the position updater function is called every 1 sec, wait a bit more.
         time.sleep(2)
         pos_after_move = self.dev.position.value
-        test.assert_pos_almost_equal(expected_pos, pos_after_move, **COMP_ARGS)
+        testing.assert_pos_almost_equal(expected_pos, pos_after_move, **COMP_ARGS)
 
 CONFIG_Picoscale = {"name": "Stage Metrology",
                     "role": "metrology",

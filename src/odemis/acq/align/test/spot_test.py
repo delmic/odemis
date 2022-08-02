@@ -31,7 +31,7 @@ from odemis.acq.align import spot
 from odemis.acq.align.spot import GRID_SIMILARITY, GRID_AFFINE
 from odemis.dataio import hdf5, tiff
 from odemis.driver.actuator import ConvertStage
-from odemis.util import test, mock
+from odemis.util import testing, mock
 import os
 import time
 import unittest
@@ -55,7 +55,7 @@ class TestSpotAlignment(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(SECOM_LENS_CONFIG)
+            testing.start_backend(SECOM_LENS_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -83,7 +83,7 @@ class TestSpotAlignment(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         self.data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "one_spot.h5"))

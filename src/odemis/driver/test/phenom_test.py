@@ -26,7 +26,7 @@ import logging
 from odemis import model
 from odemis.driver import phenom
 from odemis.model import HwError
-from odemis.util import test
+from odemis.util import testing
 import os
 import pickle
 import threading
@@ -206,7 +206,7 @@ class TestSEM(unittest.TestCase):
         exp_res = (max_res[0] // 2, max_res[1] // 2)
         self.scanner.resolution.value = exp_res
         self.scanner.translation.value = (-1, 1)
-        test.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
+        testing.assert_tuple_almost_equal(self.scanner.resolution.value, exp_res)
         self.assertEqual(self.scanner.translation.value, (-1, 1))
         self.scanner.translation.value = (0, 0)
 
@@ -431,7 +431,7 @@ class TestSEM(unittest.TestCase):
         time.sleep(1)
         f = self.stage.moveRel({"x":100e-6, "y":100e-6})  # 1 mm
         f.result()
-        test.assert_pos_almost_equal(self.stage.position.value, pos)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos)
 
 #     @skip("skip")
     def test_navcam(self):
@@ -464,7 +464,7 @@ class TestSEM(unittest.TestCase):
         f = self.navcam_focus.moveAbs(pos)
         f.result()
 
-        test.assert_pos_almost_equal(self.navcam_focus.position.value, pos)
+        testing.assert_pos_almost_equal(self.navcam_focus.position.value, pos)
 
 #     @skip("skip")
     def test_pressure(self):

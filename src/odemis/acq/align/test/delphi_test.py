@@ -27,7 +27,7 @@ from odemis import model
 import odemis
 from odemis.acq.align import delphi, pattern
 from odemis.dataio import hdf5, tiff
-from odemis.util import test, img
+from odemis.util import testing, img
 import os
 import unittest
 
@@ -57,7 +57,7 @@ class TestCalibration(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(DELPHI_CONFIG)
+            testing.start_backend(DELPHI_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -82,7 +82,7 @@ class TestCalibration(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:

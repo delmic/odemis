@@ -25,7 +25,7 @@ from odemis import model
 import odemis
 from odemis.acq import stream
 from odemis.dataio.tiff import read_data
-from odemis.util import test, comp
+from odemis.util import testing, comp
 import os
 import unittest
 
@@ -138,7 +138,7 @@ class TestMeasureZ(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        test.start_backend(ENZEL_CONFIG)
+        testing.start_backend(ENZEL_CONFIG)
 
         cls.stage = model.getComponent(role="stage")
         cls.ccd = model.getComponent(role="ccd")

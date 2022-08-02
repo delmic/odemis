@@ -23,8 +23,7 @@ from odemis import model
 from odemis.acq.align.shift import MeasureShift
 from odemis.dataio import tiff
 from odemis.driver import simcam, simulated
-from odemis.util import timeout, test
-from odemis.util.test import assert_array_not_equal, assert_tuple_almost_equal
+from odemis.util import timeout, testing
 import time
 import unittest
 from unittest.case import skip
@@ -90,7 +89,7 @@ class TestSimCam(unittest.TestCase):
         # binning
         self.camera.binning.value = (16, 16)
         exp_res = (max_res[0] // 16, max_res[1] // 16)
-        assert_tuple_almost_equal(self.camera.resolution.value, exp_res)
+        testing.assert_tuple_almost_equal(self.camera.resolution.value, exp_res)
         self.camera.translation.value = (-1, 1)
         self.assertEqual(self.camera.translation.value, (0, 0))
 
@@ -98,7 +97,7 @@ class TestSimCam(unittest.TestCase):
         exp_res = (max_res[0] // 32, max_res[1] // 32)
         self.camera.resolution.value = exp_res
         self.camera.translation.value = (-1, 1)
-        assert_tuple_almost_equal(self.camera.resolution.value, exp_res)
+        testing.assert_tuple_almost_equal(self.camera.resolution.value, exp_res)
         self.assertEqual(self.camera.translation.value, (-1, 1))
         self.camera.binning.value = (1, 1)
         self.camera.resolution.value = self.camera.resolution.range[1]
@@ -332,30 +331,30 @@ class TestSimCamMove(unittest.TestCase):
         im0 = self.camera.data.get()
         self.assertEqual(self.camera.resolution.value[::-1], im0.shape[:2])
         im1 = self.camera.data.get()
-        assert_tuple_almost_equal((0, 0), MeasureShift(im0, im1, 10), delta=0.5)
+        testing.assert_tuple_almost_equal((0, 0), MeasureShift(im0, im1, 10), delta=0.5)
 
         # Move a little bit in X,Y => should have a different image shifted by the same amount
         self.camera.updateMetadata({model.MD_POS: (10e-6, 20e-6)})
         im_move1 = self.camera.data.get()
         # Y is opposite direction in pixels, compared to physical
-        assert_tuple_almost_equal((10, -20), MeasureShift(im0, im_move1, 10), delta=0.5)
+        testing.assert_tuple_almost_equal((10, -20), MeasureShift(im0, im_move1, 10), delta=0.5)
 
         # Move a little bit => should have a different image
         self.camera.updateMetadata({model.MD_POS: (100e-6, 200e-6)})
         im_move1 = self.camera.data.get()
         # Note: images are always different, due to synthetic noise
-        test.assert_array_not_equal(im0, im_move1)
+        testing.assert_array_not_equal(im0, im_move1)
 
         # Move the opposite direction
         self.camera.updateMetadata({model.MD_POS: (-100e-6, -200e-6)})
         im_move2 = self.camera.data.get()
-        test.assert_array_not_equal(im0, im_move2)
-        test.assert_array_not_equal(im_move1, im_move2)
+        testing.assert_array_not_equal(im0, im_move2)
+        testing.assert_array_not_equal(im_move1, im_move2)
 
         # Move far => should "block" on the border
         self.camera.updateMetadata({model.MD_POS: (-1000e-6, -2000e-6)})
         im_move_f1 = self.camera.data.get()
-#         test.assert_array_not_equal(im0, im_move_f1)
+#         testing.assert_array_not_equal(im0, im_move_f1)
 
         # Move even further => no change
         self.camera.updateMetadata({model.MD_POS: (-10000e-6, -20000e-6)})
@@ -380,8 +379,8 @@ class TestSimCamMove(unittest.TestCase):
         self.camera.updateMetadata({model.MD_PIXEL_SIZE: (2e-6, 2e-6)})  # Normally updated by the mdupdater
 
         im_move2 = self.camera.data.get()
-        assert_tuple_almost_equal((0, 0), MeasureShift(im_move1[::2,::2], im_move2, 10), delta=0.5)
-        assert_tuple_almost_equal((5, -10), MeasureShift(im0[::2,::2], im_move2, 10), delta=0.5)
+        testing.assert_tuple_almost_equal((0, 0), MeasureShift(im_move1[::2,::2], im_move2, 10), delta=0.5)
+        testing.assert_tuple_almost_equal((5, -10), MeasureShift(im0[::2,::2], im_move2, 10), delta=0.5)
 
 class TestSimCamWithPolarization(unittest.TestCase):
 
@@ -434,7 +433,7 @@ class TestSimCamWithPolarization(unittest.TestCase):
         im_rhc = self.camera.data.get()
 
         # test the two images are different from each other (different txt was written on top)
-        assert_array_not_equal(im_lhc, im_rhc)
+        testing.assert_array_not_equal(im_lhc, im_rhc)
 
         # change binning
         self.camera.binning.value = (2, 2)
@@ -447,7 +446,7 @@ class TestSimCamWithPolarization(unittest.TestCase):
         im_vertical = self.camera.data.get()
 
         # test the two images are different from each other (different txt was written on top)
-        assert_array_not_equal(im_horizontal, im_vertical)
+        testing.assert_array_not_equal(im_horizontal, im_vertical)
 
 
 if __name__ == '__main__':

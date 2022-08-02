@@ -28,7 +28,7 @@ from odemis.acq.move import (ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRI
                              _getDistance, SCALING_FACTOR, getRotationMatrix,
                              cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel, get3beamsSafePos,
                              SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS)
-from odemis.util import test
+from odemis.util import testing
 import os
 import scipy
 import time
@@ -49,7 +49,7 @@ class TestEnzelMove(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        test.start_backend(ENZEL_CONFIG)
+        testing.start_backend(ENZEL_CONFIG)
 
         # find components by their role
         cls.stage = model.getComponent(role="stage")
@@ -86,41 +86,41 @@ class TestEnzelMove(unittest.TestCase):
         align = self.aligner
         # Get the stage to loading position
         cryoSwitchSamplePosition(LOADING).result()
-        test.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
                                      atol=ATOL_LINEAR_POS)
         # Align should be parked
-        test.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
+        testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 
         # Get the stage to coating position
         f = cryoSwitchSamplePosition(COATING)
         f.result()
         filter_dict = lambda keys, d: {key: d[key] for key in keys}
-        test.assert_pos_almost_equal(filter_dict({'x', 'y', 'z'}, stage.position.value),
+        testing.assert_pos_almost_equal(filter_dict({'x', 'y', 'z'}, stage.position.value),
                                      filter_dict({'x', 'y', 'z'}, self.stage_coating), atol=ATOL_LINEAR_POS)
-        test.assert_pos_almost_equal(filter_dict({'rx', 'rz'}, stage.position.value),
+        testing.assert_pos_almost_equal(filter_dict({'rx', 'rz'}, stage.position.value),
                                      filter_dict({'rx', 'rz'}, self.stage_coating), atol=ATOL_LINEAR_POS)
         # align should be in deactive position
-        test.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
+        testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 
         # Get the stage to alignment position
         f = cryoSwitchSamplePosition(ALIGNMENT)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, self.stage_alignment, atol=ATOL_LINEAR_POS, match_all=False)
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_alignment, atol=ATOL_LINEAR_POS, match_all=False)
 
         # Get the stage to 3beams position
         f = cryoSwitchSamplePosition(THREE_BEAMS)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, self.stage_3beams, atol=ATOL_LINEAR_POS, match_all=False)
-        test.assert_pos_almost_equal(align.position.value, self.align_3beams, atol=ATOL_LINEAR_POS)
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_3beams, atol=ATOL_LINEAR_POS, match_all=False)
+        testing.assert_pos_almost_equal(align.position.value, self.align_3beams, atol=ATOL_LINEAR_POS)
 
         # Get the stage to alignment position
         f = cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-        test.assert_pos_almost_equal(stage.position.value, self.stage_sem_imaging, atol=ATOL_LINEAR_POS, match_all=False)
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_sem_imaging, atol=ATOL_LINEAR_POS, match_all=False)
 
         # Switch back to loading position
         cryoSwitchSamplePosition(LOADING).result()
-        test.assert_pos_almost_equal(stage.position.value, self.stage_deactive, atol=ATOL_LINEAR_POS)
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive, atol=ATOL_LINEAR_POS)
 
     def test_align_switch_procedures(self):
         """
@@ -130,19 +130,19 @@ class TestEnzelMove(unittest.TestCase):
         # Get the stage to loading position
         f = cryoSwitchAlignPosition(LOADING)
         f.result()
-        test.assert_pos_almost_equal(align.position.value, self.align_deactive,
+        testing.assert_pos_almost_equal(align.position.value, self.align_deactive,
                                      atol=ATOL_LINEAR_POS)
 
         # Get the stage to imaging position
         f = cryoSwitchAlignPosition(THREE_BEAMS)
         f.result()
-        test.assert_pos_almost_equal(align.position.value, self.align_active,
+        testing.assert_pos_almost_equal(align.position.value, self.align_active,
                                      atol=ATOL_LINEAR_POS)
 
         # Get the stage to imaging position
         f = cryoSwitchAlignPosition(ALIGNMENT)
         f.result()
-        test.assert_pos_almost_equal(align.position.value, self.align_alignment,
+        testing.assert_pos_almost_equal(align.position.value, self.align_alignment,
                                      atol=ATOL_LINEAR_POS)
 
 
@@ -156,7 +156,7 @@ class TestEnzelMove(unittest.TestCase):
         time.sleep(2)
         cancelled = f.cancel()
         self.assertTrue(cancelled)
-        test.assert_pos_not_almost_equal(stage.position.value, self.stage_deactive,
+        testing.assert_pos_not_almost_equal(stage.position.value, self.stage_deactive,
                                          atol=ATOL_LINEAR_POS)
 
         stage = self.stage
@@ -165,7 +165,7 @@ class TestEnzelMove(unittest.TestCase):
         time.sleep(2)
         cancelled = f.cancel()
         self.assertTrue(cancelled)
-        test.assert_pos_not_almost_equal(stage.position.value, self.stage_coating,
+        testing.assert_pos_not_almost_equal(stage.position.value, self.stage_coating,
                                          atol=ATOL_LINEAR_POS)
 
     def test_get_progress(self):
@@ -302,7 +302,7 @@ class TestEnzelMove(unittest.TestCase):
         # 3. Move to loading where the ordered submoves would start from rx/rx, resulting in an invalid move
         # exception if it's not handled
         cryoSwitchSamplePosition(LOADING).result()
-        test.assert_pos_almost_equal(self.stage.position.value, self.stage_deactive,
+        testing.assert_pos_almost_equal(self.stage.position.value, self.stage_deactive,
                                      atol=ATOL_LINEAR_POS)
 
 
@@ -312,7 +312,7 @@ class TestMeteorMove(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        test.start_backend(METEOR_CONFIG)
+        testing.start_backend(METEOR_CONFIG)
 
         # get the stage components
         cls.stage = model.getComponent(role="stage-bare")

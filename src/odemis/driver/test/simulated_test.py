@@ -25,7 +25,7 @@ from concurrent.futures._base import CancelledError
 import logging
 from odemis import model
 from odemis.driver import simulated
-from odemis.util import test
+from odemis.util import testing
 import time
 import unittest
 from unittest.case import skip
@@ -105,7 +105,7 @@ class ActuatorTest(object):
             move[axis] = (rng[0] + rng[1]) / 2
         f = self.dev.moveAbs(move)
         f.result()  # wait
-        test.assert_pos_almost_equal(move, self.dev.position.value, atol=1e-7)
+        testing.assert_pos_almost_equal(move, self.dev.position.value, atol=1e-7)
 
     def test_moveRel(self):
         prev_pos = self.dev.position.value
@@ -120,7 +120,7 @@ class ActuatorTest(object):
 
         f = self.dev.moveRel(move)
         f.result()  # wait
-        test.assert_pos_almost_equal(expected_pos, self.dev.position.value, atol=1e-7)
+        testing.assert_pos_almost_equal(expected_pos, self.dev.position.value, atol=1e-7)
 
     def test_stop(self):
         self.dev.stop()

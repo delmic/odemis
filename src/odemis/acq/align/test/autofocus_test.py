@@ -32,7 +32,7 @@ from odemis.acq import align, stream
 from odemis.acq.align import autofocus
 from odemis.acq.align.autofocus import Sparc2AutoFocus, MTD_BINARY
 from odemis.dataio import hdf5
-from odemis.util import test, timeout, img
+from odemis.util import testing, timeout, img
 import os
 from scipy import ndimage
 import time
@@ -63,7 +63,7 @@ class TestAutofocus(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(SECOM_CONFIG)
+            testing.start_backend(SECOM_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -89,7 +89,7 @@ class TestAutofocus(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
 
@@ -166,7 +166,7 @@ class TestSparc2AutoFocus(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(SPARC2_FOCUS_CONFIG)
+            testing.start_backend(SPARC2_FOCUS_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -195,7 +195,7 @@ class TestSparc2AutoFocus(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -299,7 +299,7 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(SPARC2_FOCUS_CONFIG)
+            testing.start_backend(SPARC2_FOCUS_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -327,7 +327,7 @@ class TestSparc2AutoFocus_2(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -427,7 +427,7 @@ class TestSparc2AutoFocus_3(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(SPARC2_FOCUS2_CONFIG)
+            testing.start_backend(SPARC2_FOCUS2_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -455,7 +455,7 @@ class TestSparc2AutoFocus_3(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -517,7 +517,7 @@ class TestAutofocusSpectrometer(unittest.TestCase):
     def setUpClass(cls):
 
         try:
-            test.start_backend(SPARC_CONFIG)
+            testing.start_backend(SPARC_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -541,7 +541,7 @@ class TestAutofocusSpectrometer(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
@@ -614,7 +614,7 @@ class TestAutofocus1d(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            test.start_backend(SPARC2_FOCUS_CONFIG)
+            testing.start_backend(SPARC2_FOCUS_CONFIG)
         except LookupError:
             logging.info("A running backend is already found, skipping tests")
             cls.backend_was_running = True
@@ -634,7 +634,7 @@ class TestAutofocus1d(unittest.TestCase):
     def tearDownClass(cls):
         if cls.backend_was_running:
             return
-        test.stop_backend()
+        testing.stop_backend()
 
     def setUp(self):
         if self.backend_was_running:
