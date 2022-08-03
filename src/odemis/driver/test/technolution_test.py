@@ -43,11 +43,17 @@ import matplotlib.pyplot as plt
 import numpy
 
 from odemis import model
-from odemis.driver.technolution import AcquisitionServer, convertRange, AsmApiException, DATA_CONTENT_TO_ASM, \
-    VOLT_RANGE, I16_SYM_RANGE
 from odemis.util import testing
-from technolution_asm.models import CalibrationLoopParameters
-from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
+
+try:
+    from odemis.driver.technolution import AcquisitionServer, convertRange, AsmApiException, DATA_CONTENT_TO_ASM, \
+        VOLT_RANGE, I16_SYM_RANGE
+    from technolution_asm.models import CalibrationLoopParameters
+    from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
+    technolution_available = True
+except ImportError as err:
+    logging.info("technolution_asm package not found with error: {}".format(err))
+    technolution_available = False
 
 # Set logger level to debug to observe all the output (useful when a test fails)
 logging.getLogger().setLevel(logging.DEBUG)
@@ -103,6 +109,10 @@ class TestAcquisitionServer(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if not technolution_available:
+            raise unittest.SkipTest(f"Skipping the technolution tests, correct libraries to perform the tests are not"
+                                f" available.")
+
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
