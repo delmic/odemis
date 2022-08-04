@@ -111,7 +111,7 @@ class ViewportGrid(wx.Panel):
             except AttributeError:
                 # Should never happen, unless it's not really a ViewPort.
                 # If so, let's not go completely bad
-                logging.exception("View has no view")
+                logging.exception("View %s has no view", v)
                 viewports.append(v)
             if len(viewports) >= 4:
                 break
@@ -124,8 +124,6 @@ class ViewportGrid(wx.Panel):
         return ([ViewPort])
         """
         viewports = []
-        if [view.Shown for view in self.viewports].count(True) > 2:
-            logging.warning("Found more than two viewports to show, only the first 2 are displayed in this layout.")
 
         if len(self.visible_viewports) == 2:
             logging.debug("Only two viewports are visible so these are shown.")
@@ -140,9 +138,10 @@ class ViewportGrid(wx.Panel):
                 except AttributeError:
                     # Should never happen, unless it's not really a ViewPort.
                     # If so, let's not go completely bad
-                    logging.exception("Viewport has no view")
+                    logging.exception("Viewport %s has no view", v)
                     viewports.append(v)
                 if len(viewports) >= 2:
+                    logging.warning("Found more than two viewports to show, only the first 2 are displayed in this layout.")
                     break
 
             return viewports
