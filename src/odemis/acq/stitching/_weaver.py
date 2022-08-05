@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 19 Jul 2017
 
-@author: Éric Piel
+@author: Éric Piel, Thera Pals
 
-Copyright © 2017 Éric Piel, Delmic
+Copyright © 2017-2022 Éric Piel, Delmic
 
 This file is part of Odemis.
 
@@ -13,8 +13,7 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
-from __future__ import division
+"""
 
 from future.utils import with_metaclass
 from abc import ABCMeta
@@ -47,6 +46,9 @@ class Weaver(with_metaclass(ABCMeta, object)):
         """
         self.tiles = []
         self.adjust_brt = adjust_brightness
+        self.tbbx_px = None  # the bounding boxes of each tile in pixel coordinates
+        self.gbbx_px = None  # the global bounding box of the weaved image in pixel coordinates
+        self.gbbx_phy = None  # the global bounding box of the weaved image in physical coordinates
 
     def addTile(self, tile):
         """
@@ -60,20 +62,102 @@ class Weaver(with_metaclass(ABCMeta, object)):
         img.mergeMetadata(tile.metadata)
         self.tiles.append(tile)
 
-    @abstractmethod
     def getFullImage(self):
         """
         Assembles the tiles into a large image.
-        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box.
+        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box of the tiles.
+        """
+        self.tbbx_px, self.gbbx_px, self.gbbx_phy = self.get_bounding_boxes(self.tiles)
+        im = self.weave_tiles()
+        md = self.get_final_metadata(self.tiles[0].metadata.copy())
+        return model.DataArray(im, md)
+
+    @abstractmethod
+    def weave_tiles(self):
+        """
+        Weave the tiles into a single image.
+        return (2D DataArray): The weaved image.
         """
         pass
+
+    @staticmethod
+    def get_bounding_boxes(tiles: list):
+        """
+        Compute the bounding box of each tile in pixel coordinates,
+        and the global bounding box of all tiles in physical and pixel coordinates.
+
+        :param tiles: list of all tiles (DataArrays).
+
+        :return tbbx_px: (list of tuples) the ltrb bounding boxes of each tile in pixel coordinates
+        :return gbbx_px: (list of tuples) the global ltrb bounding box of the weaved image in pixel coordinates
+        :return gbbx_phy: (list of tuples) the global ltrb bounding box of the weaved image in physical coordinates
+        """
+
+        # Get a fixed pixel size by using the first one
+        # TODO: use the mean, in case they are all slightly different due to
+        # correction?
+        pxs = tiles[0].metadata[model.MD_PIXEL_SIZE]
+
+        tbbx_phy = []  # tuples of ltrb in physical coordinates
+        for t in tiles:
+            c = t.metadata[model.MD_POS]
+            w = t.shape[-1], t.shape[-2]
+            if not util.almost_equal(pxs[0], t.metadata[model.MD_PIXEL_SIZE][0], rtol=0.01):
+                logging.warning("Tile @ %s has a unexpected pixel size (%g vs %g)",
+                                c, t.metadata[model.MD_PIXEL_SIZE][0], pxs[0])
+            bbx = (c[0] - (w[0] * pxs[0] / 2), c[1] - (w[1] * pxs[1] / 2),
+                   c[0] + (w[0] * pxs[0] / 2), c[1] + (w[1] * pxs[1] / 2))
+
+            tbbx_phy.append(bbx)
+
+        gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
+                    max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
+
+        # Compute the bounding-boxes in pixel coordinates
+        tbbx_px = []
+
+        # that's the origin (Y is max as Y is inverted)
+        glt = gbbx_phy[0], gbbx_phy[3]
+        for bp, t in zip(tbbx_phy, tiles):
+            lt = (int(round((bp[0] - glt[0]) / pxs[0])),
+                  int(round(-(bp[3] - glt[1]) / pxs[1])))
+            w = t.shape[-1], t.shape[-2]
+            bbx = (lt[0], lt[1],
+                   lt[0] + w[0], lt[1] + w[1])
+            tbbx_px.append(bbx)
+
+        gbbx_px = (min(b[0] for b in tbbx_px), min(b[1] for b in tbbx_px),
+                   max(b[2] for b in tbbx_px), max(b[3] for b in tbbx_px))
+
+        assert gbbx_px[0] == gbbx_px[1] == 0
+        if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
+            # Overlap > 50% or missing tiles
+            logging.warning("Global area much bigger than sum of tile areas")
+        return tbbx_px, gbbx_px, gbbx_phy
+
+    def get_final_metadata(self, md: dict) -> dict:
+        """
+        :param md: The metadata which needs to be updated with the final position and dimension.
+
+        Return the metadata of the final output image to have the correct position and dimensions.
+        """
+        if self.gbbx_phy is None:
+            raise ValueError("Image needs to be weaved before getting final metadata.")
+
+        # TODO: check this is also correct based on lt + half shape * pxs
+        c_phy = ((self.gbbx_phy[0] + self.gbbx_phy[2]) / 2,
+                 (self.gbbx_phy[1] + self.gbbx_phy[3]) / 2)
+
+        md[model.MD_POS] = c_phy
+        md[model.MD_DIMS] = "YX"
+        return md
 
     def _adjust_brightness(self, tile, tiles):
         """
         Adjusts the brightness of a tile, so its mean corresponds to the mean of a list of tiles.
-        tile (DataArray): tile to adjust
-        tiles (2D DataArray): input tiles
-        return (2D DataArray): tiles with adjusted brightness
+        :param tile (DataArray): tile to adjust
+        :param tiles (2D DataArray): input tiles
+        :returns (2D DataArray): tiles with adjusted brightness
         """
         # This is a very simple algorithm. In reality, not every tile should have the same brightness. A better
         # way to handle it would be to do local brightness adjustments, e.g. by comparing the overlapping
@@ -109,76 +193,24 @@ class CollageWeaver(Weaver):
       the bounding box.
     """
 
-    def getFullImage(self):
+    def weave_tiles(self):
         """
-        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box.
+        Weave tiles by pasting the tiles where their center position is.
+        return (2D DataArray): The weaved image.
         """
-        tiles = self.tiles
-
-        # Compute the bounding box of each tile and the global bounding box
-
-        # Get a fixed pixel size by using the first one
-        # TODO: use the mean, in case they are all slightly different due to
-        # correction?
-        pxs = tiles[0].metadata[model.MD_PIXEL_SIZE]
-
-        tbbx_phy = []  # tuples of ltrb in physical coordinates
-        for t in tiles:
-            c = t.metadata[model.MD_POS]
-            w = t.shape[-1], t.shape[-2]
-            if not util.almost_equal(pxs[0], t.metadata[model.MD_PIXEL_SIZE][0], rtol=0.01):
-                logging.warning("Tile @ %s has a unexpected pixel size (%g vs %g)",
-                                c, t.metadata[model.MD_PIXEL_SIZE][0], pxs[0])
-            bbx = (c[0] - (w[0] * pxs[0] / 2), c[1] - (w[1] * pxs[1] / 2),
-                   c[0] + (w[0] * pxs[0] / 2), c[1] + (w[1] * pxs[1] / 2))
-
-            tbbx_phy.append(bbx)
-
-        gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
-                    max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
-
-        # Compute the bounding-boxes in pixel coordinates
-        tbbx_px = []
-
-        # that's the origin (Y is max as Y is inverted)
-        glt = gbbx_phy[0], gbbx_phy[3]
-        for bp, t in zip(tbbx_phy, tiles):
-            lt = (int(round((bp[0] - glt[0]) / pxs[0])),
-                  int(round(-(bp[3] - glt[1]) / pxs[1])))
-            w = t.shape[-1], t.shape[-2]
-            bbx = (lt[0], lt[1],
-                   lt[0] + w[0], lt[1] + w[1])
-            tbbx_px.append(bbx)
-
-        gbbx_px = (min(b[0] for b in tbbx_px), min(b[1] for b in tbbx_px),
-                   max(b[2] for b in tbbx_px), max(b[3] for b in tbbx_px))
-
-        assert gbbx_px[0] == gbbx_px[1] == 0
-
-        if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
-            # Overlap > 50% or missing tiles
-            logging.warning("Global area much bigger than sum of tile areas")
-
         # Paste each tile
         logging.debug("Generating global image of size %dx%d px",
-                      gbbx_px[-2], gbbx_px[-1])
-        im = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
-        # Use minimum of the values in the tiles for background
-        im[:] = numpy.amin(tiles)
-        for b, t in zip(tbbx_px, tiles):
+                      self.gbbx_px[-2], self.gbbx_px[-1])
+
+        # Create a background of the image using the minimum value of self.tiles
+        im = numpy.ones((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=self.tiles[0].dtype) * numpy.amin(self.tiles)
+
+        for b, t in zip(self.tbbx_px, self.tiles):
             if self.adjust_brt:
-                t = self._adjust_brightness(t, tiles)
+                t = self._adjust_brightness(t, self.tiles)
             im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = t
             # TODO: border
-
-        # Update metadata
-        # TODO: check this is also correct based on lt + half shape * pxs
-        c_phy = ((gbbx_phy[0] + gbbx_phy[2]) / 2,
-                 (gbbx_phy[1] + gbbx_phy[3]) / 2)
-        md = tiles[0].metadata.copy()
-        md[model.MD_POS] = c_phy
-        md[model.MD_DIMS] = "YX"
-        return model.DataArray(im, md)
+        return im
 
 
 class CollageWeaverReverse(Weaver):
@@ -189,87 +221,34 @@ class CollageWeaverReverse(Weaver):
     with the last tile and pastes the older tiles in reverse order of acquisition.
     """
 
-    def getFullImage(self):
+    def weave_tiles(self):
         """
-        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
+        Weave tiles by filling parts of the global image that are still empty with the new tile.
+        return (2D DataArray): The weaved image.
         """
-        tiles = self.tiles
-
-        # Compute the bounding box of each tile and the global bounding box
-
-        # Get a fixed pixel size by using the first one
-        # TODO: use the mean, in case they are all slightly different due to
-        # correction?
-        pxs = tiles[0].metadata[model.MD_PIXEL_SIZE]
-
-        tbbx_phy = []  # tuples of ltrb in physical coordinates
-        for t in tiles:
-            c = t.metadata[model.MD_POS]
-            w = t.shape[-1], t.shape[-2]
-            if not util.almost_equal(pxs[0], t.metadata[model.MD_PIXEL_SIZE][0], rtol=0.01):
-                logging.warning("Tile @ %s has a unexpected pixel size (%g vs %g)",
-                                c, t.metadata[model.MD_PIXEL_SIZE][0], pxs[0])
-            bbx = (c[0] - (w[0] * pxs[0] / 2), c[1] - (w[1] * pxs[1] / 2),
-                   c[0] + (w[0] * pxs[0] / 2), c[1] + (w[1] * pxs[1] / 2))
-
-            tbbx_phy.append(bbx)
-
-        gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
-                    max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
-
-        # Compute the bounding-boxes in pixel coordinates
-        tbbx_px = []
-
-        # that's the origin (Y is max as Y is inverted)
-        glt = gbbx_phy[0], gbbx_phy[3]
-        for bp, t in zip(tbbx_phy, tiles):
-            lt = (int(round((bp[0] - glt[0]) / pxs[0])),
-                  int(round(-(bp[3] - glt[1]) / pxs[1])))
-            w = t.shape[-1], t.shape[-2]
-            bbx = (lt[0], lt[1],
-                   lt[0] + w[0], lt[1] + w[1])
-            tbbx_px.append(bbx)
-
-        gbbx_px = (min(b[0] for b in tbbx_px), min(b[1] for b in tbbx_px),
-                   max(b[2] for b in tbbx_px), max(b[3] for b in tbbx_px))
-
-        assert gbbx_px[0] == gbbx_px[1] == 0
-        if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
-            # Overlap > 50% or missing tiles
-            logging.warning("Global area much bigger than sum of tile areas")
-
         # Paste each tile
         logging.debug("Generating global image of size %dx%d px",
-                      gbbx_px[-2], gbbx_px[-1])
-        im = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
-        # Use minimum of the values in the tiles for background
-        im[:] = numpy.amin(tiles)
+                      self.gbbx_px[-2], self.gbbx_px[-1])
+        # Create a background of the image using the minimum value of self.tiles
+        im = numpy.ones((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=self.tiles[0].dtype) * numpy.amin(self.tiles)
 
         # The mask is multiplied with the tile, thereby creating a tile with a gradient
-        mask = numpy.zeros((gbbx_px[-1], gbbx_px[-2]), dtype=numpy.bool)
+        mask = numpy.zeros((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=numpy.bool)
 
-        for b, t in zip(tbbx_px, tiles):
+        for b, t in zip(self.tbbx_px, self.tiles):
             # Part of image overlapping with tile
             roi = im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
             moi = mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
 
             if self.adjust_brt:
-                t = self._adjust_brightness(t, tiles)
+                t = self._adjust_brightness(t, self.tiles)
 
             # Insert image at positions that are still empty
             roi[~moi] = t[~moi]
 
             # Update mask
             mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = True
-
-        # Update metadata
-        # TODO: check this is also correct based on lt + half shape * pxs
-        c_phy = ((gbbx_phy[0] + gbbx_phy[2]) / 2,
-                 (gbbx_phy[1] + gbbx_phy[3]) / 2)
-        md = tiles[0].metadata.copy()
-        md[model.MD_POS] = c_phy
-        md[model.MD_DIMS] = "YX"
-        return model.DataArray(im, md)
+        return im
 
 
 class MeanWeaver(Weaver):
@@ -278,56 +257,12 @@ class MeanWeaver(Weaver):
     average of the pixel of each tile.
     """
 
-    def getFullImage(self):
+    def weave_tiles(self):
         """
-        return (2D DataArray): same dtype as the tiles, with shape corresponding to the bounding box. 
+        Weave tiles by using a smooth gradient.
+        return (2D DataArray): The weaved image.
         """
-        tiles = self.tiles
-
-        # Compute the bounding box of each tile and the global bounding box
-
-        # Get a fixed pixel size by using the first one
-        # TODO: use the mean, in case they are all slightly different due to
-        # correction?
-        pxs = tiles[0].metadata[model.MD_PIXEL_SIZE]
-
-        tbbx_phy = []  # tuples of ltrb in physical coordinates
-        for t in tiles:
-            c = t.metadata[model.MD_POS]
-            w = t.shape[-1], t.shape[-2]
-            if not util.almost_equal(pxs[0], t.metadata[model.MD_PIXEL_SIZE][0], rtol=0.01):
-                logging.warning("Tile @ %s has a unexpected pixel size (%g vs %g)",
-                                c, t.metadata[model.MD_PIXEL_SIZE][0], pxs[0])
-            bbx = (c[0] - (w[0] * pxs[0] / 2), c[1] - (w[1] * pxs[1] / 2),
-                   c[0] + (w[0] * pxs[0] / 2), c[1] + (w[1] * pxs[1] / 2))
-
-            tbbx_phy.append(bbx)
-
-        gbbx_phy = (min(b[0] for b in tbbx_phy), min(b[1] for b in tbbx_phy),
-                    max(b[2] for b in tbbx_phy), max(b[3] for b in tbbx_phy))
-
-        # Compute the bounding-boxes in pixel coordinates
-        tbbx_px = []
-
-        # that's the origin (Y is max as Y is inverted)
-        glt = gbbx_phy[0], gbbx_phy[3]
-        for bp, t in zip(tbbx_phy, tiles):
-            lt = (int(round((bp[0] - glt[0]) / pxs[0])),
-                  int(round(-(bp[3] - glt[1]) / pxs[1])))
-            w = t.shape[-1], t.shape[-2]
-            bbx = (lt[0], lt[1],
-                   lt[0] + w[0], lt[1] + w[1])
-            tbbx_px.append(bbx)
-
-        gbbx_px = (min(b[0] for b in tbbx_px), min(b[1] for b in tbbx_px),
-                   max(b[2] for b in tbbx_px), max(b[3] for b in tbbx_px))
-
-        assert gbbx_px[0] == gbbx_px[1] == 0
-        if numpy.greater(gbbx_px[-2:], 4 * numpy.sum(tbbx_px[-2:])).any():
-            # Overlap > 50% or missing tiles
-            logging.warning("Global area much bigger than sum of tile areas")
-
-        # Weave tiles by using a smooth gradient. The part of the tile that does not overlap
+        #  The part of the tile that does not overlap
         # with any previous tiles is inserted into the part of the
         # ovv image that is still empty. This part is determined by a mask, which indicates
         # the parts of the image that already contain image data (True) and the ones that are still
@@ -346,21 +281,20 @@ class MeanWeaver(Weaver):
 
         # Paste each tile
         logging.debug("Generating global image of size %dx%d px",
-                      gbbx_px[-2], gbbx_px[-1])
-        im = numpy.empty((gbbx_px[-1], gbbx_px[-2]), dtype=tiles[0].dtype)
-        # Use minimum of the values in the tiles for background
-        im[:] = numpy.amin(tiles)
+                      self.gbbx_px[-2], self.gbbx_px[-1])
+        # Create a background of the image using the minimum value of self.tiles
+        im = numpy.ones((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=self.tiles[0].dtype) * numpy.amin(self.tiles)
 
         # The mask is multiplied with the tile, thereby creating a tile with a gradient
-        mask = numpy.zeros((gbbx_px[-1], gbbx_px[-2]), dtype=numpy.bool)
+        mask = numpy.zeros((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=numpy.bool)
 
-        for b, t in zip(tbbx_px, tiles):
+        for b, t in zip(self.tbbx_px, self.tiles):
             # Part of image overlapping with tile
             roi = im[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
             moi = mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]]
 
             if self.adjust_brt:
-                self._adjust_brightness(t, tiles)
+                self._adjust_brightness(t, self.tiles)
             # Insert image at positions that are still empty
             roi[~moi] = t[~moi]
 
@@ -382,19 +316,11 @@ class MeanWeaver(Weaver):
             # only apply a (linear) gradient to these parts, while keeping the new tile for the
             # rest of the region. However, this approach does not solve the hardcoding problem
             # since the overlap region is still arbitrary. Future solutions might adaptively
-            # select the this region.
+            # select this region.
 
             # Use weights to create gradient in overlapping region
             roi[moi] = (t * (1 - w))[moi] + (roi * w)[moi]
 
             # Update mask
             mask[b[1]:b[1] + t.shape[0], b[0]:b[0] + t.shape[1]] = True
-
-        # Update metadata
-        # TODO: check this is also correct based on lt + half shape * pxs
-        c_phy = ((gbbx_phy[0] + gbbx_phy[2]) / 2,
-                 (gbbx_phy[1] + gbbx_phy[3]) / 2)
-        md = tiles[0].metadata.copy()
-        md[model.MD_POS] = c_phy
-        md[model.MD_DIMS] = "YX"
-        return model.DataArray(im, md)
+        return im
