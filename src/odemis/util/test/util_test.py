@@ -21,15 +21,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from __future__ import division, print_function
 
+import inspect
 from functools import partial
 import os
+import numpy.random
 import odemis
 from odemis import model, util
 import logging
 import math
 from odemis.model import CancellableFuture
 from odemis.util import limit_invocation, TimeoutError, executeAsyncTask, \
-    perpendicular_distance, to_str_escape, test, driver, timeout
+    perpendicular_distance, to_str_escape, testing, driver, timeout
 import time
 import unittest
 import weakref
@@ -61,7 +63,7 @@ class TestLimitInvocation(unittest.TestCase):
         u = Useless()
         wku = weakref.ref(u)
         now = time.time()
-        end = now + 1.1 # a bit more than 1 s
+        end = now + 1.1  # a bit more than 1 s
         while time.time() < end:
             u.doit(time.time(), b=3)
             time.sleep(0.01)
@@ -255,6 +257,7 @@ def tp(trans, ps):
         i = (i + 1) % len(trans)
     return tuple(r)
 
+
 # First we define a bounding boxes, at different locations
 bounding_boxes = [(-2, -2, 0, 0),
                   (-1, -1, 1, 1),
@@ -263,6 +266,7 @@ bounding_boxes = [(-2, -2, 0, 0),
 
 # From this, we generate boxes that are situated all around these
 # bounding boxes, but that do not touch or overlap them.
+
 
 def relative_boxes(bb):
 
@@ -297,6 +301,7 @@ def relative_boxes(bb):
     overlap_boxes = overlap_left + overlap_top + overlap_right + overlap_bottom
 
     return outside_boxes, touching_boxes, overlap_boxes
+
 
 class CanvasTestCase(unittest.TestCase):
 
@@ -396,53 +401,258 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-sim.odm.yaml"
 
+
 class TestBackendStarter(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
         # make sure initially no backend is running.
         if driver.get_backend_status() == driver.BACKEND_RUNNING:
-            test.stop_backend()
+            testing.stop_backend()
 
     @classmethod
     def tearDownClass(cls):
         # turn off everything when the testing finished.
         if driver.get_backend_status() == driver.BACKEND_RUNNING:
-            test.stop_backend()
+            testing.stop_backend()
 
     def test_no_running_backend(self):
         # check if there is no running backend
         backend_status = driver.get_backend_status()
         self.assertIn(backend_status, [driver.BACKEND_STOPPED, driver.BACKEND_DEAD])
         # run enzel
-        test.start_backend(ENZEL_CONFIG)
+        testing.start_backend(ENZEL_CONFIG)
         # now check if the role is enzel
         role = model.getMicroscope().role
         self.assertEqual(role, "enzel")
 
     def test_running_backend_same_as_requested(self):
         # run enzel backend
-        test.start_backend(ENZEL_CONFIG)
+        testing.start_backend(ENZEL_CONFIG)
         # check if the role is enzel
         role = model.getMicroscope().role
         self.assertEqual(role, "enzel")
         # run enzel backend again
-        test.start_backend(ENZEL_CONFIG)
+        testing.start_backend(ENZEL_CONFIG)
         # it should still be enzel.
         role = model.getMicroscope().role
         self.assertEqual(role, "enzel")
 
     def test_running_backend_different_from_requested(self):
         # run sparc backend
-        test.start_backend(SPARC_CONFIG)
+        testing.start_backend(SPARC_CONFIG)
         # check if the role is sparc
         role = model.getMicroscope().role
         self.assertEqual(role, "sparc")
         # now run another backend (enzel)
-        test.start_backend(ENZEL_CONFIG)
+        testing.start_backend(ENZEL_CONFIG)
         # check if the role now is enzel instead of sparc
         role = model.getMicroscope().role
         self.assertEqual(role, "enzel")
+
+
+class FindClosestTestCase(unittest.TestCase):
+
+    def test_simple(self):
+        """Finding the closest point in a single list"""
+        closest = util.find_closest(15, [1, 2, 3])
+        self.assertEqual(closest, 3, "Failed to get correct output.")
+
+    def test_multiple(self):
+        """Test finding the closest point in multiple lists"""
+        in_exp = {
+            tuple([-1, -5, -6]): -1,
+            tuple([1, 2, 3]): 3,
+            tuple([0, 5, 10]): 5,
+            tuple([-15, 30, -60]): -15
+        }
+
+        for testlist, hardcoded_closest in in_exp.items():
+            closest = util.find_closest(5, testlist)
+            self.assertEqual(hardcoded_closest, closest, "Failed to get correct output for "
+                                                         "the closest value to 5 in %s" % in_exp)
+
+
+class IndexClosestTestCase(unittest.TestCase):
+
+    def test_simple(self):
+        """ Test finding the index of the closest point in a list """
+        simple_list = [1, 5, 6]
+        closest_index = util.index_closest(1, simple_list)
+        self.assertEqual(closest_index, 0, "Failed to get correct output for "
+                                           "the closest index to 1 in %s" % simple_list)
+
+    def test_multiple(self):
+        """ Test finding the index of the closest point in multiple lists """
+        in_exp = {
+            tuple([-1, -5, -6]): 0,
+            tuple([1, 2, 3]): 2,
+            tuple([0, 5, 10]): 1,
+            tuple([-15, 30, -60]): 0
+        }
+
+        for testlist, hardcoded_closest_index in in_exp.items():
+            closest = util.index_closest(5, testlist)
+            self.assertEqual(hardcoded_closest_index, closest, "Failed to get correct output for "
+                                                               "the closest index to 5 in %s" % in_exp)
+
+
+class NormalizeRectTestCase(unittest.TestCase):
+
+    def test_already_normalized(self):
+        """Test normalizing a rectangle with already normalized values"""
+        rect = (1, 2, 3, 4)
+        normalized_rect = util.normalize_rect(rect)
+
+        self.assertEqual(normalized_rect, rect, "Failed to normalize the rectangle")
+
+    def test_non_normalized(self):
+        """Test normalizing a rectangle with not yet normalized values"""
+        rect = (10, 7, 5, 3)
+        normalized_rect = util.normalize_rect(rect)
+        expected_normalized_rect = (5, 3, 10, 7)
+
+        self.assertEqual(normalized_rect, expected_normalized_rect, "Failed to normalize the rectangle")
+
+
+class IsPointInRectTestCase(unittest.TestCase):
+
+    def test_points_in_rect(self):
+        """Test whether the given coordinates are in the rectangle"""
+        rect = (5, 3, 10, 7)
+        point = (8.0, 4.0)
+        in_rect = util.is_point_in_rect(point, rect)
+        self.assertTrue(in_rect, "Failed to get correct output for the point in rectangle %s with "
+                                 "point %s" % (rect, point))
+
+    def test_points_outside_rect(self):
+        """Test whether the given coordinates are not in the rectangle"""
+        rect = (5, 3, 10, 7)
+        point = (22.0, 44.0)
+        in_rect = util.is_point_in_rect(point, rect)
+        self.assertFalse(in_rect, "Failed to get correct output for the point in rectangle %s with "
+                                  "point %s" % (rect, point))
+
+
+class ExpandRectTestCase(unittest.TestCase):
+
+    def test_expand_rect(self):
+        """Test expanding a rectangle"""
+        rect = (5, 3, 10, 7)
+        expanded_rect = util.expand_rect(util.normalize_rect(rect), 5)
+        expected_rect = (0, -2, 15, 12)
+        self.assertEqual(expanded_rect, expected_rect, "Failed to get correct output for rectangle %s with "
+                                                       "expanded rectangle %s" % (expanded_rect, expected_rect))
+
+
+class FindPlotContentTestCase(unittest.TestCase):
+
+    def test_find_plot_content(self):
+        """Test finding left and right most non-zero values"""
+        xd = (10, 15, 20, 25, 30, 35, 40)
+        yd = (0, 1, 0, 0, 2, -3, 0)
+        plot_content = util.find_plot_content(xd, yd)
+        self.assertEqual(plot_content, (15, 35), "Failed to get correct output while finding plot content "
+                                                 "for %s with values  %s %s" % (plot_content, xd, yd))
+
+
+class WrapToMpiPpiTestCase(unittest.TestCase):
+
+    def test_positive_pi(self):
+        """Test value is smaller than +pi value"""
+        converted_angle = util.wrap_to_mpi_ppi(4.65)
+        self.assertLessEqual(converted_angle, math.pi, "Failed to convert the angle to a value between -pi and +pi "
+                                                       "with the converted value: %s" % converted_angle)
+
+    def test_negative_pi(self):
+        """Test value is bigger than -pi value"""
+        converted_angle = util.wrap_to_mpi_ppi(-5.1)
+        self.assertGreaterEqual(converted_angle, -math.pi, "Failed to convert the angle to a value between -pi and +pi "
+                                                           "with the converted value: %s" % converted_angle)
+
+
+class RecursiveDictUpdateTestCase(unittest.TestCase):
+
+    def test_dict_update(self):
+        """Test recursively updating first dict with the second dict"""
+        dict1 = {
+          "firstname": "John",
+          "lastname": "Doe",
+          "birthdate": 1964
+        }
+
+        dict2 = {
+            "suffix": "van",
+            "birthdate": 1994
+        }
+
+        expected_dict = {
+            "firstname": "John",
+            "suffix": "van",
+            "lastname": "Doe",
+            "birthdate": 1994
+        }
+
+        new_dict = util.recursive_dict_update(dict1, dict2)
+        self.assertEqual(new_dict, expected_dict, "Failed to get correct output while updating the dictionary "
+                                                  " %s" % new_dict)
+
+
+class PairwiseTestCase(unittest.TestCase):
+
+    def test_pairwise(self):
+        """Test pairing two items in a tuple"""
+        test = util.pairwise(("item 1", "item 2"))
+        test_list = list(test)[0]
+        self.assertEqual(test_list, ("item 1", "item 2"), "Failed to pair.")
+
+
+class InspectGetMembersTestCase(unittest.TestCase):
+
+    def test_inspect_get_members(self):
+        """ Test the builtin inspect.getmembers raises a TypeError for the dummy class, and that
+        util.inspect_getmembers has the correct output. """
+        with self.assertRaises(TypeError):
+            inspect.getmembers(InspectGetMembersDummy())
+
+        res = util.inspect_getmembers(InspectGetMembersDummy())
+        self.assertEqual(len(res), 27)
+
+
+class InspectGetMembersDummy:
+    """
+    https://stackoverflow.com/questions/54478679/workaround-for-getattr-special-method-breaking-inspect-getmembers-in-pytho
+    """
+    def __getattr__(self, name):
+        def wrapper():
+            print("For testing purposes, this does nothing useful.")
+
+        return wrapper
+
+
+class GetBestDtypeForAccTestCase(unittest.TestCase):
+
+    def test_get_best_dtype_for_acc(self):
+        """Test setting the fitting dtype"""
+        # test that for a non int the same dtype is returned
+        img = numpy.random.random((10, 9)).astype(numpy.float64)
+        idtype = util.get_best_dtype_for_acc(img.dtype, 5)
+        self.assertEqual(idtype, img.dtype)
+
+        img = numpy.random.random((10, 9)).astype(numpy.uint8)
+        idtype = util.get_best_dtype_for_acc(img.dtype, 3)
+        self.assertEqual(idtype, numpy.uint16)
+
+        img = numpy.random.random((10, 9)).astype(numpy.uint8)
+        # for uint8 images the max value is 255, and for uint16 it is 65535. If the number of uint8 images to be
+        # accumulated times 255 exceeds 65535 the best dtype becomes uint32.
+        idtype = util.get_best_dtype_for_acc(img.dtype, int(65535/255) + 1)
+        self.assertEqual(idtype, numpy.uint32)
+
+        # for multiple uint64 images the expected dtype is float64
+        img = numpy.random.random((10, 9)).astype(numpy.uint64)
+        idtype = util.get_best_dtype_for_acc(img.dtype, 3)
+        self.assertEqual(idtype, numpy.float64)
 
 
 if __name__ == "__main__":
