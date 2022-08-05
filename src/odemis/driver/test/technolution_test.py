@@ -77,6 +77,13 @@ EXTERNAL_STORAGE = {"host"     : "localhost",
 
 
 class TestAuxiliaryFunc(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        if not technolution_available:
+            raise unittest.SkipTest(f"Skipping the technolution tests, correct libraries to perform the tests"
+                                    f"are not available.")
+
     def test_convertRange(self):
         # Test input value of zero on even range
         out = tuple(convertRange((0, 0), (-1, 1), (-100, 100)))
@@ -110,8 +117,8 @@ class TestAcquisitionServer(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         if not technolution_available:
-            raise unittest.SkipTest(f"Skipping the technolution tests, correct libraries to perform the tests are not"
-                                f" available.")
+            raise unittest.SkipTest(f"Skipping the technolution tests, correct libraries to perform the tests"
+                                    f"are not available.")
 
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
@@ -353,6 +360,10 @@ class TestEBeamScanner(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if not technolution_available:
+            raise unittest.SkipTest(f"Skipping the technolution tests, correct libraries to perform the tests"
+                                    f"are not available.")
+
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or Hw components present. Skipping tests.')
 
@@ -786,6 +797,10 @@ class TestMirrorDescanner(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if not technolution_available:
+            raise unittest.SkipTest(f"Skipping the technolution tests, correct libraries to perform the tests"
+                                    f"are not available.")
+
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
@@ -1268,6 +1283,10 @@ class TestMPPC(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if not technolution_available:
+            raise unittest.SkipTest(f"Skipping the technolution tests, correct libraries to perform the tests"
+                                    f"are not available.")
+
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwCompetents present. Skipping tests.')
 
@@ -1696,6 +1715,10 @@ class Test_ASMDataFlow(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        if not technolution_available:
+            raise unittest.SkipTest(f"Skipping the technolution tests, correct libraries to perform the tests"
+                                    f"are not available.")
+
         if TEST_NOHW:
             raise unittest.SkipTest('No simulator for the ASM or HwComponents present. Skipping tests.')
 
