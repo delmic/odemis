@@ -21,11 +21,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import collections.abc
 from odemis import model, util
-from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, InstantaneousFuture, roattribute, \
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, InstantaneousFuture, ProgressiveFuture, roattribute, \
     MD_PIXEL_SIZE
 from odemis.util import almost_equal
 from odemis.util.weak import WeakMethod
 from ConsoleClient.Communication.Connection import Connection
+from concurrent.futures import CancelledError
 
 from functools import partial
 import threading
@@ -233,24 +234,6 @@ class OrsayComponent(model.HwComponent):
             self._light = Light(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._light)
 
-        # create the FIB Scanner child
-        try:
-            kwargs = children["scanner"]
-        except (KeyError, TypeError):
-            logging.info(no_child_msg % "scanner")
-        else:
-            self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._scanner)
-
-        # create the detector child
-        try:
-            kwargs = children["detector"]
-        except (KeyError, TypeError):
-            logging.info(no_child_msg % "detector")
-        else:
-            self._detector = Detector(parent=self, daemon=daemon, **kwargs)
-            self.children.value.add(self._detector)
-
         # create the FIB Focus child
         try:
             kwargs = children["focus"]
@@ -268,6 +251,24 @@ class OrsayComponent(model.HwComponent):
         else:
             self._fib_aperture = FIBAperture(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._fib_aperture)
+
+        # create the FIB Scanner child
+        try:
+            kwargs = children["scanner"]
+        except (KeyError, TypeError):
+            logging.info(no_child_msg % "scanner")
+        else:
+            self._scanner = Scanner(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._scanner)
+
+        # create the detector child
+        try:
+            kwargs = children["detector"]
+        except (KeyError, TypeError):
+            logging.info(no_child_msg % "detector")
+        else:
+            self._detector = Detector(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._detector)
 
     def on_connect(self):
         """
@@ -2710,8 +2711,14 @@ class Scanner(model.Emitter):
             raise ValueError(f"To create a Orsay scanner component the parent should also have the FIBSource child.")
         self._fib_source = self.parent._fib_source  # reference to the FIBSource object
 
+
+        if not hasattr(self.parent, "_fib_aperture"):
+            raise ValueError(f"To create a Orsay scanner component the parent should also have the FIBAperture child.")
+        self._fib_aperture = self.parent._fib_aperture  # reference to the FIBSource object
+
         self.blanker = self._fib_beam.blanker
         self.power = self._fib_source.gunOn
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)
 
         self.horizontalFov = self._fib_beam.horizontalFov
         self.scale = model.VAEnumerated((self.shape[0] / self._fib_beam.imageFormat.value[0],
@@ -2751,9 +2758,42 @@ class Scanner(model.Emitter):
         # In case the preset mask already exist it is automatically overwritten.
         self.parent.preset_manager.CreatePresetMask(PRESET_MASK_NAME, *relevant_parameters)
 
-        # TODO K.K. The specs of the high level aperture/preset describe the implementation of the probe current Use the
-        #  currently selected preset and combine with the faraday cup measurements and make an attribute/VA of the
-        #  probe current
+        # TODO K.K. What init value to use?
+        self.probe_current = model.IntEnumerated(list(self.presetData.keys())[0], setter=self._setProbeCurrent,
+                                                 choices=self.presetData.keys())
+
+    def _setProbeCurrent(self, probe_current):
+        preset_name = self.presetData[probe_current]["name"]
+        self.setPreset(preset_name)
+        return probe_current
+
+    # TODO K.K. Im not entirely happy with the min_wait implementation
+    def setPreset(self, preset_name, timeout=120, min_wait=60):
+        # There is currently no option to load a preset without specifying a preset mask
+        self.parent.preset_manager.LoadPreset(preset_name, self.completePresetMaskName)
+        preset_settings = self.presetData[self.convertPresetName2ProbeCurrent(preset_name)]
+
+        tstart = time.time()
+
+        # TODO K.K. test if numbering of apertures goes ok. one system does 0 --> 29 the other 1 --> 30
+        # The main concern is the aperture number and the condenser voltage. There is no exact way of knowing when setting
+        # the preset has been completed.
+        while self._fib_aperture.selectedAperture.value != preset_settings['aperture_number'] or \
+                self._fib_beam.condenserVoltage.value != preset_settings['condenser_voltage'] and \
+                time.time() - tstart > min_wait:  # With the current implementation on the orsay side the waiting time is at least 60 seconds.
+        # TODO Update the minimal waiting time to a lower value when Orsay has updated loading of the presets.
+            time.sleep(0.5)
+            if time.time() > tstart + + timeout:
+                raise TimeoutError("Referencing timeout after %g s" % timeout)
+
+    def convertPresetName2ProbeCurrent(self, preset_name):
+        if "pA_" not in preset_name or not preset_name[:preset_name.find("pA_")].isnumeric():
+            logging.warning(f"The preset {preset_name} could not not be converted to a current for use in Odemis. "
+                            f"It lacks the correct formatting, it should be formatted as follows: CURRENTpA_EXTRA_INFO (e.g. '20pA_20um25200V')")
+            return None
+
+        return int(preset_name[:preset_name.find("pA_")])
+
 
     def terminate(self):
         """
@@ -2780,6 +2820,7 @@ class Scanner(model.Emitter):
                                 f"missed the necessary formatting. Presets naming for the probe current should be "
                                 f"formatted as follows: CURRENTpA_EXTRA_INFO (e.g. '20pA_20um25200V')")
                 continue
+
             full_preset = self.parent.preset_manager.GetPreset(preset.get("name"))
             current = preset_name[:preset_name.find("_")]
 
@@ -2817,7 +2858,7 @@ class Scanner(model.Emitter):
                             f"and the setting {setting} using the tag {tag}.")
             return None
 
-    def _getApertureNmbrFromPreset(self, preset):
+    def getApertureNmbrFromPreset(self, preset):
         """
         Get the aperture number from a given preset.
 
@@ -3012,6 +3053,60 @@ class Dataflow(model.DataFlow):
             logging.exception("Failed to receive the latest image.")
         self.notify(image)
 
+    @isasync
+    def performFaradayCupMeasurement(self):
+        # Create ProgressiveFuture and update its state
+        est_start = time.time() + 0.1
+        f = ProgressiveFuture(start=est_start,
+                              end=est_start + 10)  # Rough time estimation
+        f._Faraday_cup_measurement_lock = threading.Lock()
+        f._must_stop = threading.Event()  # Cancel of the current future requested
+        f.task_canceller = self._cancelFaradayCupMeasurement
+        return self._executor.submitf(f, self._performFaradayCupMeasurement, f)
+
+    def _performFaradayCupMeasurement(self, future):
+        with future._Faraday_cup_measurement_lock:
+            if future._must_stop.is_set():
+                raise CancelledError()
+            ion_column = self.parent.datamodel.IonColumnMCS
+            ion_column.FaradayBaseline.Target = 1
+            ion_column.FaradayStart.Target = 1
+
+        t_start = time.time()
+        while t_start + 7 >= time.time():  # Wait for the measurement to settle and to perform the Baseline measurement
+            time.sleep(0.5)
+            if future._must_stop.is_set():
+                raise CancelledError()
+
+        with future._Faraday_cup_measurement_lock:  # Get the lock to prevent canceling while reading the measurement
+            if future._must_stop.is_set():
+                raise CancelledError()
+            faraday_current = float(ion_column.FaradayCurrent.Actual)  # Measure the faraday current
+            ion_column.FaradayStart.Target = 0  # After receiving value set faraday start back to zero
+
+        t_start = time.time()
+        while t_start + 2 >= time.time():  # Wait for the beam to be functional again
+            time.sleep(0.5)
+            if future._must_stop.is_set():
+                raise CancelledError()
+        return faraday_current
+
+    def _cancelFaradayCupMeasurement(self, future):
+        future._must_stop.set()  # Tell the thread taking care of the Faraday cup measurement it's over.
+
+        with future._Faraday_cup_measurement_lock:
+            logging.debug("Cancelling the Faraday cup measurement")
+            self.parent.datamodel.IonColumnMCS.FaradayStart.Target = 0
+
+            t_start = time.time()
+            while t_start + 3 >= time.time():  # Wait for the beam to be functional again
+                time.sleep(0.5)
+                if int(self.parent.datamodel.IonColumnMCS.FaradayStart.Actual) == 0:
+                    return True
+            else:
+                logging.warning(f"Failed to cancel the Faraday cup measurement."
+                                f"The FaradayStart.Actual is {self.parent.datamodel.IonColumnMCS.FaradayStart.Actual} ")
+                return False
 
 class Focus(model.Actuator):
     """

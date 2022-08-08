@@ -1925,7 +1925,7 @@ class TestScanner(unittest.TestCase):
         for preset_data in all_preset_data.values():
             preset = self.oserver.preset_manager.GetPreset(preset_data["name"])
             self.assertEqual(preset_data["aperture_number"],
-                             self.scanner._getApertureNmbrFromPreset(preset))
+                             self.scanner.getApertureNmbrFromPreset(preset))
             self.assertEqual(preset_data["condenser_voltage"],
                              self.scanner._getCondenserVoltageFromPreset(preset))
 
@@ -1940,7 +1940,7 @@ class TestScanner(unittest.TestCase):
             self.skipTest(f"This test requires the preset {preset_name} to be defined on the machine.")
 
         full_preset = self.oserver.preset_manager.GetPreset(preset_name)
-        aperture_number_preset = self.scanner._getApertureNmbrFromPreset(full_preset)
+        aperture_number_preset = self.scanner.getApertureNmbrFromPreset(full_preset)
 
         # TODO Remove try except if Orsay fixed LoadPreset to not time out.
         try:
@@ -2152,6 +2152,33 @@ class TestDataflow(unittest.TestCase):
             time.sleep(2)  # Wait in between get calls.
 
         self.scanner.blanker.value = True
+
+        # Test with asap = True
+        image = self.dataflow.get(asap=True)
+        self.assertIsInstance(image, model.DataArray)
+        self.assertEqual(image.dtype, numpy.uint16)
+        self.assertEqual(image.shape, self.fibbeam.imageFormat.value)
+
+    def test_performFaradayCupMeasurement(self):
+        # Test acquisition of the Faraday current measurement
+        future = self.scanner.performFaradayCupMeasurement()
+        time.sleep(2)  # Wait for the future to start and the values to be set.
+        self.assertEqual(int(self.oserver.datamodel.IonColumnMCS.FaradayBaseline.Actual), 1)
+        self.assertEqual(int(self.oserver.datamodel.IonColumnMCS.FaradayStart.Actual), 1)
+
+        self.assertIsInstance(future.result(), float)
+        self.assertEqual(int(self.oserver.datamodel.IonColumnMCS.FaradayStart.Target), 0)
+        self.assertEqual(int(self.oserver.datamodel.IonColumnMCS.FaradayStart.Actual), 0)
+
+        # Test canceling in multiple moments of the measurement process
+        for cancel_time in [1, 2, 8.5, 10]:
+            future = self.scanner.performFaradayCupMeasurement()
+            time.sleep(cancel_time)
+            future.cancel()
+            self.assertEqual(int(self.oserver.datamodel.IonColumnMCS.FaradayStart.Target), 0,
+                             f"Failed to pass the FaradayStart.Target assert for canceling with a wait time of {cancel_time} sec")
+            self.assertEqual(int(self.oserver.datamodel.IonColumnMCS.FaradayStart.Actual), 0,
+                             f"Failed to pass the FaradayStart.Actual assert for canceling with a wait time of {cancel_time} sec")
 
 
 class TestFocus(unittest.TestCase):
@@ -2373,20 +2400,20 @@ class TestFIBAperture(unittest.TestCase):
         # Test position X
         f = self.fib_aperture.moveRel({"x": 5e-4, "y": 0})
         f.result()
-        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos + 5e-4, "y": init_y_pos}, atol=1e-7)
+        test.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos + 5e-4, "y": init_y_pos}, atol=1e-7)
 
         f = self.fib_aperture.moveRel({"x": -5e-4})
         f.result()
-        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
+        test.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
 
         # Test position Y
         f = self.fib_aperture.moveRel({"x": 0, "y": 5e-4})
         f.result()
-        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos + 5e-4}, atol=1e-7)
+        test.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos + 5e-4}, atol=1e-7)
 
         f = self.fib_aperture.moveRel({"y": - 5e-4})
         f.result()
-        testing.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
+        test.assert_pos_almost_equal(self.fib_aperture.position.value, {"x": init_x_pos, "y": init_y_pos}, atol=1e-7)
 
         # Move both at the same time
         f = self.fib_aperture.moveRel({"x": 5e-4, "y": 5e-4})
