@@ -171,28 +171,24 @@ def _split_planes(data):
 
     # Anything to split?
     dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim::])
-    hdims = dims.replace("XY", "") # remove XY while keeping order
-    ldims = dims.replace(hdims, "")
-    if "X" not in dims or "Y" not in dims:
+    if len(dims) <= 2 or "X" not in dims or "Y" not in dims:
         return [data]
 
-    das = []
-    hshape = list(data.shape)
-    hshape[dims.index("X")] = 1
-    hshape[dims.index("Y")] = 1
-    for i in numpy.ndindex(*hshape):
-        pelem = list(i)
-        pelem[dims.index("X")] = slice(None) # all
-        pelem[dims.index("Y")] = slice(None) # all
-        plane = data[tuple(pelem)]
+    first_idx = min(dims.index("X"), dims.index("Y"))
+    last_idx = max(dims.index("X"), dims.index("Y"))
 
+    # Move the x- and y-axis to the last two dimensions, while keeping the order of x and y the same.
+    data = numpy.moveaxis(data, [first_idx, last_idx], [-2, -1])
+    # Merge the first axes except for x and y and turn it into a list, to separate the data into a list of DataArrays.
+    data = list(data.reshape(-1, data.shape[first_idx], data.shape[last_idx]))
+
+    for plane in data:
         # Update MD_DIMS if present (as metadata is just ref to the original)
         if model.MD_DIMS in plane.metadata:
             plane.metadata = plane.metadata.copy()
-            plane.metadata[model.MD_DIMS] = ldims
-        das.append(plane)
+            plane.metadata[model.MD_DIMS] = dims[first_idx] + dims[last_idx]  # XY or YX
 
-    return das
+    return data
 
 
 def open_acquisition(filename, fmt=None):

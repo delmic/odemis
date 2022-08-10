@@ -22,7 +22,7 @@ from odemis import model
 from odemis.acq import stream
 from odemis.dataio import tiff
 from odemis.util.dataio import data_to_static_streams, open_acquisition, \
-    splitext
+    splitext, _split_planes
 import time
 import unittest
 
@@ -223,6 +223,100 @@ class TestDataIO(unittest.TestCase):
             self.assertEqual(ao, eo, "Unexpected output for '%s': %s" % (inp, ao))
 
 
+class TestSplitPlanes(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls) :
+        cls.metadata = {model.MD_SW_VERSION: "1.0-test",
+                        model.MD_HW_NAME: "fake hw",
+                        model.MD_DESCRIPTION: "sem"}
+
+    def _input_image_2d(self):
+        md = self.metadata.copy()
+        md[model.MD_DIMS] = "XY"
+        return model.DataArray(numpy.zeros((512, 512), dtype=numpy.dtype("uint16")), md)
+
+    def _input_image_3d(self):
+        return model.DataArray(numpy.zeros((3, 8, 10, 256, 512), dtype=numpy.dtype("uint16")), self.metadata.copy())
+
+    def test_no_x_or_y_planes(self):
+        """Test that for a 2d and a 1d DataArray that does not contain an X or Y dim the data is returned unchanged."""
+        # Test that the data remains unchanged for a 2d-array, that does not contain an X or Y dimension.
+        two_dim_da = self._input_image_2d()
+        two_dim_da.metadata[model.MD_DIMS] = "CT"
+        da = _split_planes(two_dim_da)[0]
+        numpy.testing.assert_array_equal(da, two_dim_da)
+
+        # Check that the metadata remains unchanged
+        for k, v in self.metadata.items():
+            self.assertEqual(self.metadata[k], da.metadata[k])
+            self.assertEqual(self.metadata[k], two_dim_da.metadata[k])
+
+        # Test that the data remains unchanged for a 1d-array, that does not contain an X or Y dimension.
+        one_dim_da = model.DataArray(numpy.zeros(512, dtype=numpy.dtype("uint16")), self.metadata.copy())
+        one_dim_da.metadata[model.MD_DIMS] = "C"
+        da = _split_planes(one_dim_da)[0]
+        numpy.testing.assert_array_equal(da, one_dim_da)
+
+        # Check that the metadata remains unchanged
+        for k, v in self.metadata.items():
+            self.assertEqual(self.metadata[k], da.metadata[k])
+            self.assertEqual(self.metadata[k], one_dim_da.metadata[k])
+
+    def test_2d_plane(self):
+        """Test that for a 2d DataArray the data is returned unchanged."""
+        two_dim_da = self._input_image_2d()
+        da = _split_planes(two_dim_da)[0]
+        self.assertIsInstance(da, model.DataArray)
+        self.assertEqual(da.shape, (512, 512))
+
+        # Check that the metadata remains unchanged
+        for k, v in self.metadata.items():
+            self.assertEqual(self.metadata[k], da.metadata[k])
+            self.assertEqual(self.metadata[k], two_dim_da.metadata[k])
+
+    def test_multi_dim_pLane_yx(self):
+        """
+        Test that for an array with more than 2 dimensions and the x- and y-axes ordered as YX,
+        the input remains unchanged, and the output is correct.
+        """
+        multi_dim_da = self._input_image_3d()
+        multi_dim_da.metadata[model.MD_DIMS] = "CTZYX"
+        list_da = _split_planes(multi_dim_da)
+        self.assertIsInstance(list_da, list)
+        self.assertEqual(multi_dim_da.metadata[model.MD_DIMS], "CTZYX")
+
+        # Check that the metadata remains unchanged
+        for k, v in self.metadata.items():
+            self.assertEqual(self.metadata[k], multi_dim_da.metadata[k])
+            self.assertEqual(self.metadata[k], list_da[0].metadata[k])
+
+        for da in list_da:
+            self.assertIsInstance(da, model.DataArray)
+            self.assertEqual(da.shape, (256, 512))
+            self.assertEqual(da.metadata[model.MD_DIMS], "YX")
+
+    def test_multi_dim_pLane_xy(self):
+        """
+        Test that for an array with more than 2 dimensions and the x- and y-axes ordered as XY,
+        the input remains unchanged, and the output is correct.
+        """
+        multi_dim_da = self._input_image_3d()
+        multi_dim_da.metadata[model.MD_DIMS] = "CTZXY"
+        list_da = _split_planes(multi_dim_da)
+        self.assertIsInstance(list_da, list)
+        self.assertEqual(multi_dim_da.metadata[model.MD_DIMS], "CTZXY")
+
+        # Check that the metadata remains unchanged
+        for k, v in self.metadata.items():
+            self.assertEqual(self.metadata[k], multi_dim_da.metadata[k])
+            self.assertEqual(self.metadata[k], list_da[0].metadata[k])
+
+        for da in list_da:
+            self.assertIsInstance(da, model.DataArray)
+            self.assertEqual(da.shape, (256, 512))
+            self.assertEqual(da.metadata[model.MD_DIMS], "XY")
+
+
 if __name__ == "__main__":
     unittest.main()
-
