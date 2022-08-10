@@ -23,9 +23,11 @@ import collections.abc
 from odemis import model, util
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, \
     InstantaneousFuture
+from odemis.util import almost_equal
 from odemis.util.weak import WeakMethod
 from ConsoleClient.Communication.Connection import Connection
 
+from functools import partial
 import threading
 import time
 import logging
@@ -67,6 +69,7 @@ NO_ERROR_VALUES = (None, "", "None", "none", 0, "0", "NoError")
 
 INTERLOCK_DETECTED_STR = "Interlock event detected"
 
+
 def recursive_getattr(obj, attr):
     """
     Get a named attribute from an object; getattr(x, 'y.z') is equivalent to x.y.z.
@@ -79,6 +82,7 @@ def recursive_getattr(obj, attr):
     for a in attr.split("."):
         obj = getattr(obj, a)
     return obj
+
 
 def get_orsay_param_connectors(obj):
     """
@@ -244,6 +248,15 @@ class OrsayComponent(model.HwComponent):
         else:
             self._focus = Focus(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._focus)
+
+        # create the FIB Focus child
+        try:
+            kwargs = children["fib-aperture"]
+        except (KeyError, TypeError):
+            logging.info(no_child_msg % "fib-aperture")
+        else:
+            self._fib_aperture = FIBAperture(parent=self, daemon=daemon, **kwargs)
+            self.children.value.add(self._fib_aperture)
 
     def on_connect(self):
         """
@@ -2570,7 +2583,7 @@ class Light(model.Emitter):
         self._parameter = None
 
         self._shape = ()
-        self.power = model.ListContinuous([0.0], unit="W", range=((0.0, ), (1.0, )), setter=self._changePower)
+        self.power = model.ListContinuous([0.0], unit="W", range=((0.0,), (1.0,)), setter=self._changePower)
         self.spectra = model.ListVA([(0.7e-6, 1.02e-6, 1.05e-6, 1.08e-6, 1.4e-6)], unit="m", readonly=True)
 
         self.on_connect()
@@ -2615,7 +2628,6 @@ class Light(model.Emitter):
         logging.debug("Turning Chamber light %s." % "on" if power else "off")
         self._parameter.Target = power
         return [1.0 if power else 0.0]
-
 
     def terminate(self):
         """
@@ -2760,6 +2772,275 @@ class Focus(model.Actuator):
         """
         logging.debug("Cancelling the executor")
         self._executor.cancel()
+
+    def terminate(self):
+        """
+        Stop and shut down the executor
+        """
+        if self._executor:
+            self.stop()
+            self._executor.shutdown()
+            self._executor = None
+
+
+# TODO Once the Orsay server provides the range HybridAperture.XAxis/YAxis.Position.Min/Max, then we could directly
+#  use them instead of hard-coding it..
+APERTURE_AXIS_RANGE = (-6e-3, 6e-3)  # meters
+
+
+class FIBAperture(model.Actuator):
+    """
+    Represents the Aperture carrier of the Orsay FIB. This class allows controls of the current position of the
+    aperture carrier using the move functions like a stage. This allows positioning of a certain aperture w.r.t. the
+    ion beam. The aperture carrier is a plate which contains multiple apertures.
+    Using the selectedAperture VA an aperture can be selected using the number it is identified with. The size of the
+    currently selected aperture can be found using the sizeSelectedAperture VA.
+
+    Class contains the metadata MD_APERTURES_INFO which is a dict containing for each aperture the lifetime,
+    size and position in x and y.
+    """
+    def __init__(self, name, role, parent, **kwargs):
+        axes_def = {"x": model.Axis(unit="m", range=APERTURE_AXIS_RANGE),
+                    "y": model.Axis(unit="m", range=APERTURE_AXIS_RANGE)}
+        super().__init__(name, role, parent=parent, axes=axes_def, **kwargs)
+        self._hybridAperture = self.parent.datamodel.HybridAperture
+        self._lastApertureNmbr = int(self._hybridAperture.SelectedDiaph.Max)
+
+        self._selectedApertureConnector = None
+        self.selectedAperture = model.IntContinuous(int(self._hybridAperture.SelectedDiaph.Actual),
+                                                    readonly=True, range=(0, self._lastApertureNmbr))
+        self._sizeSelectedApertureConnector = None
+        self.sizeSelectedAperture = model.FloatVA(float(self._hybridAperture.SizeOfSelectedDiaph.Actual),
+                                                  readonly=True, unit="m")
+
+        self._apertureDict = {}
+        self._apertureConnectors = {}
+        # Dict to convert the strings returned by the Orsay param to the real type.
+        self._apertureVarTypes = {"Lifetime": int, "Size": float, "PositionX": float, "PositionY": float}
+        for aprtr_nmbr in range(self._lastApertureNmbr):
+            self._apertureDict[aprtr_nmbr] = {
+                "Lifetime": None,
+                "Size": None,
+                "Position": {"x": None, "y": None}
+            }
+
+        self.position = model.VigilantAttribute({'x': 0.0, 'y': 0.0}, readonly=True, unit="m")
+        self._positionXConnector = None
+        self._positionX = model.FloatVA(0.0, readonly=True, unit="m")
+        self._positionX.subscribe(self._updatePosition)  # Update the position whenever the X value changes
+        self._positionYConnector = None
+        self._positionY = model.FloatVA(0.0, readonly=True, unit="m")
+        self._positionY.subscribe(self._updatePosition)  # Update the position whenever the Y value changes
+
+        self._referencedConnector = None
+        self.referenced = model.VigilantAttribute({"x": False, "y": False}, readonly=True)
+
+        self._executor = CancellableThreadPoolExecutor(max_workers=1)
+
+        self.on_connect()
+
+    def update_VAs(self):
+        self._updatePosition()
+        for connector in get_orsay_param_connectors(self):
+            connector.update_VA()
+            
+        self.connectApertureDict()
+        self._referencedListener()
+
+    def on_connect(self):
+        """
+        Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
+        Needs to be called after connection and reconnection to the server.
+        """
+        self.connectApertureDict()
+        self._metadata[model.MD_APERTURES_INFO] = self._apertureDict
+
+        self._selectedApertureConnector = OrsayParameterConnector(self.selectedAperture,
+                                                                  self._hybridAperture.SelectedDiaph
+                                                                  )
+        self._sizeSelectedApertureConnector = OrsayParameterConnector(self.sizeSelectedAperture,
+                                                                      self._hybridAperture.SizeOfSelectedDiaph
+                                                                      )
+
+        self._positionXConnector = OrsayParameterConnector(self._positionX,
+                                                           self._hybridAperture.XPosition
+                                                           )
+
+        self._positionYConnector = OrsayParameterConnector(self._positionY,
+                                                           self._hybridAperture.YPosition
+                                                           )
+
+        self._referencedConnector = self._hybridAperture.Calibrated.Subscribe(self._referencedListener)
+
+        self.update_VAs()
+
+    def _referencedListener(self, parameter=None, attr_name="Actual"):
+        """
+        Reads if the aperture plate is calibrated and updates the value of the referenced VA in axis X and Y.
+        Gets called as callback by the Orsay server when the parameter changes value.
+
+        :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback. When no Orsay
+        Parameter is provided the Orsay Parameter 'Calibrated' is retrieved from the Odemis side.
+        :param (str) attr_name: The name of the attribute of parameter which was changed. The VA is only changed when
+        Actual is updated/provided as keyword argument.
+        """
+        if parameter is None:
+            parameter = self._hybridAperture.Calibrated
+        if attr_name != "Actual":
+            return  # Don't do anything when Target, Min, Max or other attribute names are updated.
+        referenced_value = parameter.Actual in {True, "True", "true"}
+        self.referenced._set_value({"x": referenced_value, "y": referenced_value}, force_write=True)
+
+    def connectApertureDict(self):
+        """
+        (re)Connects the aperture dict to the Orsay server by subscribing listeners to all the aperture data and
+        updating the values.
+        """
+        # Remove the references to the old connectors.
+        self._apertureConnectors = {i: [] for i in range(self._lastApertureNmbr)}
+
+        for aprtr_nmbr in range(self._lastApertureNmbr):
+            # Subscribe to and update the value Lifetime
+            param = recursive_getattr(self._hybridAperture, f"Aperture{aprtr_nmbr}.Lifetime")
+            self._addApertureListener(aprtr_nmbr, "Lifetime", param)
+            
+            # Subscribe to and update the value Size
+            param = recursive_getattr(self._hybridAperture, f"Aperture{aprtr_nmbr}.Size")
+            self._addApertureListener(aprtr_nmbr, "Size", param)
+
+            # Subscribe to and update the value PositionX
+            param = recursive_getattr(self._hybridAperture, f"Aperture{aprtr_nmbr}.PositionX")
+            self._addApertureListener(aprtr_nmbr, "PositionX", param)
+
+            # Subscribe to and update the value PositionY
+            param = recursive_getattr(self._hybridAperture, f"Aperture{aprtr_nmbr}.PositionY")
+            self._addApertureListener(aprtr_nmbr, "PositionY", param)
+
+    def _addApertureListener(self, aperture_nmbr, param_type, parameter):
+        """
+        Subscribes _apertureListener to an Orsay parameter with the right input to update to the apertureDict when called.
+        Also initializes the value by calling the listener once.
+
+        :param aperture_nmbr (int): number of the aperture in the dict from 0 --> 30
+        :param param_type (type func): type of variable to be saved. Function used to convert str from the Orsay parameter.
+        :param parameter (Orsay Parameter): A parameter of the Orsay server.
+        :return:
+        """
+        listener = partial(self._apertureListener, aperture_nmbr, param_type)
+        parameter.Subscribe(listener)
+        self._apertureConnectors[aperture_nmbr].append(listener)
+        listener(parameter, attr_name="Actual")  # Make a fake call to the listener to initialize the value.
+
+    def _apertureListener(self, aperture_nmbr, param_type, parameter, attr_name="Actual"):
+        if attr_name != "Actual":
+            return
+        var_type = self._apertureVarTypes[param_type]
+        if param_type.startswith("Position"):
+            self._apertureDict[aperture_nmbr]["Position"][param_type[-1].lower()] = var_type(parameter.Actual)
+        else:
+            self._apertureDict[aperture_nmbr][param_type] = var_type(parameter.Actual)
+
+    @isasync
+    def moveAbs(self, pos):
+        """
+        When the aperture plate needs to be moved to a position.
+        This method is non-blocking.
+        """
+        self._checkMoveAbs(pos)
+        return self._executor.submit(self._doMoveAbs, pos)
+
+    @isasync
+    def moveRel(self, shift):
+        """
+        When the aperture plate needs to be moved by a shift.
+        This method is non-blocking.
+        """
+        self._checkMoveRel(shift)
+        return self._executor.submit(self._doMoveRel, shift)
+
+    def _doMoveAbs(self, pos, timeout=10):
+        logging.debug(f"Moving the aperture to position {pos}")
+        tend = time.time() + timeout
+        if "x" in pos:
+            self._hybridAperture.XPosition.Target = pos["x"]
+        if "y" in pos:
+            self._hybridAperture.YPosition.Target = pos["y"]
+
+        def posReached():
+            # The aperture stage is expected to have a precision of 1 mu
+            reached = []
+            if "x" in pos:
+                reached.append(almost_equal(float(self._hybridAperture.XPosition.Actual), pos["x"], atol=1e-6))
+            if "y" in pos:
+                reached.append(almost_equal(float(self._hybridAperture.YPosition.Actual), pos["y"], atol=1e-6))
+            return all(reached)
+
+        while not posReached() \
+                or self._hybridAperture.XAxis.IsMoving.Actual == "True" \
+                or self._hybridAperture.YAxis.IsMoving.Actual == "True":
+            time.sleep(0.1)
+            t = time.time()
+            if t > tend:
+                raise TimeoutError("Move timeout after %g s" % timeout)
+
+        self._updatePosition()
+
+    def _doMoveRel(self, shift):
+        new_pos = {}
+        if "x" in shift:
+            new_pos.update({"x": self.position.value["x"] + shift["x"]})
+        if "y" in shift:
+            new_pos.update({"y": self.position.value["y"] + shift["y"]})
+        self._doMoveAbs(new_pos)
+
+    @isasync
+    def reference(self, axes):
+        """
+        reference usually takes axes as an argument. However, the SmarPod references all
+        axes together so this argument is extraneous.
+        axes (set of str): axes to be referenced
+        returns (Future): object to control the reference request
+        """
+        self._checkReference(axes)
+        logging.debug(f"Referencing both the X and Y axis no matter the input, input axis is {axes}")
+        return self._executor.submit(self._doReference)
+
+    def _doReference(self, timeout=10):
+        tend = time.time() + timeout
+        self._hybridAperture.Calibrated.Target = True
+        # Wait until the calibrating process finished and the calibrated parameter is set to True
+        while self._hybridAperture.Calibrating.Actual in {True, "True", "true"} \
+                or not self._hybridAperture.Calibrated.Actual in {True, "True", "true"}:
+            time.sleep(0.5)
+            t = time.time()
+            if t > tend:
+                raise TimeoutError("Referencing timeout after %g s" % timeout)
+
+        self._referencedListener()
+
+    def stop(self, axes=None):
+        """
+        Cancel all queued motions in the executor
+        """
+        self._hybridAperture.XAxis.IsMoving.Target = False
+        self._hybridAperture.YAxis.IsMoving.Target = False
+
+        logging.debug("Cancelling the executor")
+        self._executor.cancel()
+
+        tend = time.time() + 10  # Wait for max 10 seconds for the movement to stop
+        while time.time() < tend:
+            if self._hybridAperture.XAxis.IsMoving.Actual == "False" and self._hybridAperture.YAxis.IsMoving.Actual == "False":
+                break
+            time.sleep(0.01)
+        else:
+            msg = "The aperture move is not properly stopped, the current status of x is %s and of y is %s" % \
+                  (self._hybridAperture.XAxis.IsMoving.Actual, self._hybridAperture.YAxis.IsMoving.Actual)
+            raise TimeoutError(msg)
+
+    def _updatePosition(self, *args):
+        """"Listener to update the position VA for X and Y"""
+        self.position._value = {"x": self._positionX.value, "y": self._positionY.value}
 
     def terminate(self):
         """
