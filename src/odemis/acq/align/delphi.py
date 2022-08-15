@@ -1642,7 +1642,7 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
         a_x, b_x = 0, 0
         if smxs:
             coef_x = array([rx, [1] * len(rx)])
-            a_nx, b_nx = linalg.lstsq(coef_x.T, smxs, rcond=None)[0]
+            a_nx, b_nx = linalg.lstsq(coef_x.T, smxs, rcond=-1)[0]  # TODO: use rcond=None when supporting numpy 1.14+
             logger.debug("Computed linear reg NX as %s, %s", a_nx, b_nx)
             if a_nx != 0:
                 a_x = -1 / a_nx
@@ -1651,7 +1651,7 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
         a_y, b_y = 0, 0
         if smys:
             coef_y = array([ry, [1] * len(ry)])
-            a_ny, b_ny = linalg.lstsq(coef_y.T, smys, rcond=None)[0]
+            a_ny, b_ny = linalg.lstsq(coef_y.T, smys, rcond=-1)[0]  # TODO: use rcond=None when supporting numpy 1.14+
             logger.debug("Computed linear reg NY as %s, %s", a_ny, b_ny)
             if a_ny != 0:
                 a_y = -1 / a_ny
