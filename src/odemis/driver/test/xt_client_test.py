@@ -199,6 +199,15 @@ class TestMicroscope(unittest.TestCase):
                                (abs_pos["rz"] + rel_pos["rz"]) % (2 * math.pi), places=4)
         self.assertAlmostEqual(self.stage.position.value["rx"],
                                (abs_pos["rx"] + rel_pos["rx"]), places=4)
+
+        # Relative move in R < 0
+        f = self.stage.moveAbs({"rz": 0})
+        rel_pos = {"rz": -0.5} # rad
+        f = self.stage.moveRel(rel_pos)
+        f.result()
+        self.assertAlmostEqual(self.stage.position.value["rz"] % (2 * math.pi),
+                               (0 + rel_pos["rz"]) % (2 * math.pi), places=4)
+
         self.stage.moveAbs(init_pos)
 
     def test_hfov(self):
