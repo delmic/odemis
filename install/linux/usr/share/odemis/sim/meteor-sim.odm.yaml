@@ -103,7 +103,8 @@ METEOR-Sim: {
     },
     affects: ["Camera", "EBeam"],
     metadata: {
-        POS_ACTIVE_RANGE: {"x":[0.040, 0.054], "y": [-5.e-3, 10.e-3]}
+        # Typically, x range is the same as FM_IMAGING_RANGE, and Y has to be converted
+        POS_ACTIVE_RANGE: {"x": [0.040, 0.054], "y": [-10.e-3, 20.e-3]}
     },
 }
 
