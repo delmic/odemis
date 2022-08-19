@@ -183,6 +183,8 @@ class Camera(model.DigitalCamera):
 
         # fit
         self.resolution.value = self.resolution.clip(new_res)
+
+        self._metadata[model.MD_BINNING] = self._binning
         return self._binning
 
     def _setResolution(self, value):
