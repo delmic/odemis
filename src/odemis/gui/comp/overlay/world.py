@@ -3010,7 +3010,7 @@ class EKLine(GenericGadgetLine):
 
         # Reverse equation of pos =  a + b * wl
         b = (self.p_end_pos[1] - self.p_start_pos[1]) / (wl_end - wl_start)
-        logging.debug("%s mm / %s nm", (self.p_end_pos[1] - self.p_start_pos[1]) * 1e3, (wl_end - wl_start) * 1e9)
+        logging.debug("EK line at %s mm / %s nm", (self.p_end_pos[1] - self.p_start_pos[1]) * 1e3, (wl_end - wl_start) * 1e9)
         a = self.p_start_pos[1] - b * wl_start
 
         # This will call _onLinePos() direct, which is fine, as the VA may clip
