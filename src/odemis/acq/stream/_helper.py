@@ -1275,6 +1275,10 @@ class AngularSpectrumAlignmentStream(AngularSpectrumSettingsStream):
         del self.pixelSize
         del self.repetition
 
+        # Doesn't do acquisition, so cannot acquire multiple polarizations
+        if hasattr(self, "acquireAllPol"):
+            del self.acquireAllPol
+
     def _onMagnification(self, mag):
         # Override, to not update the pixelSize (as the parent does)
         pass

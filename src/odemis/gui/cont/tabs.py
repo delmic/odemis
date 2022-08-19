@@ -5778,22 +5778,28 @@ class Sparc2AlignTab(Tab):
                 main_data.spectrograph,
                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
                          model.MD_ROTATION: 0},  # Force the CCD as-is
-                analyzer=None,
+                analyzer=main_data.pol_analyzer,
                 detvas=detvas,
             )
             as_panel = self._stream_controller.addStream(as_stream,
                                                          add_to_view=self.panel.vp_align_ek.view)
 
             # Add the standard spectrograph axes (wavelength, grating, slit-in).
-            # TODO: use hardware axes?
 
-            def add_axis(axisname, comp):
+            def add_axis(axisname, comp, label=None):
+                if comp is None:
+                    return
                 hw_conf = get_hw_config(comp, main_data.hw_settings_config)
-                as_panel.add_axis_entry(axisname, comp, hw_conf.get(axisname))
+                axis_conf = hw_conf.get(axisname, {})
+                if label:
+                    axis_conf = axis_conf.copy()
+                    axis_conf["label"] = label
+                as_panel.add_axis_entry(axisname, comp, axis_conf)
 
             add_axis("grating", main_data.spectrograph)
             add_axis("wavelength", main_data.spectrograph)
             add_axis("slit-in", main_data.spectrograph)
+            add_axis("band", main_data.light_filter, "filter")
 
             as_stream.should_update.subscribe(self._on_ccd_stream_play)
 
