@@ -59,13 +59,19 @@ class LASpectrumSettingsStream(SpectrumSettingsStream):
         self.l2 = l2
         if l2:
             # Convert the boolean to the actual position.
-            # The actuator is expected to have two positions, named "on" and "off"
+            # Two possibilities:
+            # * "New" style for EK is to have POS_ACTIVE and POS_DEACTIVE metadata,
+            # * Two choices positions, named "on" and "off"
             self._toLens2Pos = None
-            for pos, pos_name in l2.axes["x"].choices.items():
-                if pos_name == "on":
-                    self._toLens2Pos = pos
+            md = l2.getMetadata()
+            if model.MD_FAV_POS_ACTIVE in md:
+                self._toLens2Pos = md[model.MD_FAV_POS_ACTIVE]["x"]
+            else:
+                for pos, pos_name in l2.axes["x"].choices.items():
+                    if pos_name == "on":
+                        self._toLens2Pos = pos
             if self._toLens2Pos is None:
-                raise ValueError("Lens 2 actuator should have an 'on' position, but only %s" %
+                raise ValueError("Lens 2 actuator should have an FAV_POS_ACTIVE metadata or 'on' position, but only %s" %
                                  (list(l2.axes["x"].choices.values()),))
 
         # Polarization stored on the stream.
