@@ -8,7 +8,7 @@ on:
 jobs:
   build:
 
-    runs-on: ubuntu-18.04
+    runs-on: ubuntu-20.04
 
     steps:
     - uses: actions/checkout@v2
@@ -18,12 +18,12 @@ jobs:
         sudo apt-get -y update
 
         sudo apt-get -y install python3-pil python3-yaml python3-serial python3-zmq \
-        python3-scipy python3-decorator cgroup-bin \
+        python3-scipy python3-decorator \
         python3-libtiff python3-comedilib python3-h5py libtiff5-dev python3-future \
         python3-pkg-resources python3-netifaces python3-cairo python3-numpy python3-scipy \
         python3-decorator python3-xdg python3-suds python3-matplotlib python3-opencv \
         python3-wxgtk4.0 python3-serial python3-evdev python3-notify2 python3-psutil \
-        graphicsmagick cgroup-bin authbind python3-setuptools cython python3-pyro4-delmic
+        graphicsmagick cgroup-tools authbind python3-setuptools cython python3-pyro4-delmic
 
         sudo mkdir /var/run/odemisd
         sudo chmod a+rw /var/run/odemisd
