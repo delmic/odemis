@@ -24,7 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # {} around the whole file and "" around each string). In addition, the standard
 # parser doesn't report where the error is situated in the file.
 
-from __future__ import division
 import collections
 import itertools
 import logging

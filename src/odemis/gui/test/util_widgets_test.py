@@ -18,8 +18,6 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
 from odemis.gui.comp.slider import UnitFloatSlider
 import time
 import unittest

@@ -132,8 +132,6 @@ Graphical data is drawn using the following sequence of method calls:
 
 """
 
-from __future__ import division
-
 from abc import abstractmethod
 import cairo
 from decorator import decorator

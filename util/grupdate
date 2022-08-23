@@ -28,8 +28,6 @@ grupdate. If not, see http://www.gnu.org/licenses/.
 # To test:
 # ./util/grupdate -E "boooo" -o summary-booo.log flooboo*.log
 
-from __future__ import division, absolute_import, print_function
-
 import argparse
 from datetime import datetime
 import logging

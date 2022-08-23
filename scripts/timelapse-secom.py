@@ -26,8 +26,6 @@ the scripts. Some of them can be updated while running, but it will not work
 with all of them.
 '''
 
-from __future__ import division
-
 import argparse
 import logging
 from odemis import dataio, model

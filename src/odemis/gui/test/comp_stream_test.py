@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' stream module in gui.comp
 # ===============================================================================
 
-from __future__ import division
-
 import numpy
 from odemis.acq.stream import Stream, StaticSpectrumStream, BrightfieldStream, \
     SEMStream, FluoStream, StaticFluoStream, StaticSEMStream

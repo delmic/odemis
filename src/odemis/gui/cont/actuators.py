@@ -15,7 +15,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from __future__ import division
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.comp.combo import ComboBox
 import logging

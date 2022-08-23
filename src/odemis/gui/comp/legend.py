@@ -22,8 +22,6 @@
 
 """
 
-from __future__ import division
-
 import cairo
 import collections
 import logging

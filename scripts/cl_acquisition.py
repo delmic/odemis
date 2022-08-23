@@ -25,8 +25,6 @@ odemis-cli --set-attr Spec10 exposureTime 0.1
 odemis-cli --set-attr ARCam binning "2, 2"
 '''
 
-from __future__ import division
-
 import logging
 import numpy
 from odemis import model, dataio

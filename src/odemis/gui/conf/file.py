@@ -17,8 +17,6 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
 from future.utils import with_metaclass
 from abc import ABCMeta, abstractproperty
 import configparser

@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # Driver/wrapper for the ASP API in Odemis which can connect Odemis to the ASM API made by Technolution for the
 # multi-beam project
-from __future__ import division
-
 import base64
 import json
 import logging

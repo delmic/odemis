@@ -13,8 +13,6 @@ method,  will return true if it contains a value ending with '.png', indicating
 the content is an PNG image.
 
 """
-from __future__ import division, absolute_import, print_function
-
 import os
 import sys
 

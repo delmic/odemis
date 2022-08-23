@@ -19,8 +19,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # Test module for model.Stream classes
-from __future__ import division, print_function
-
 from concurrent.futures import CancelledError
 import gc
 import logging

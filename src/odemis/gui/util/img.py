@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # Some helper functions to convert/manipulate images
 
-from __future__ import division
-
 import cairo
 import logging
 import math

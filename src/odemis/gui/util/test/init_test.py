@@ -23,8 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # test the functions of the gui.util.__init__ module
-from __future__ import division, print_function
-
 import logging
 from odemis.gui.util import wxlimit_invocation, formats_to_wildcards, \
     call_in_wx_main, call_in_wx_main_wrapper

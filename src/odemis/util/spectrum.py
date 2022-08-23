@@ -26,8 +26,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Note that the spectrum is normally contained on the C dimension, which is
 # by convention the first of the 5 dimensions of a DataArray (CTZYX).
 
-from __future__ import division
-
 from builtins import range
 import math
 import numpy

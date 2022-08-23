@@ -17,8 +17,6 @@ You should have received a copy of the GNU General Public License along with Ode
 
 # various functions to help with computations related to fluorescence microscopy
 
-from __future__ import division
-
 import collections
 from odemis.model import BAND_PASS_THROUGH
 from past.builtins import basestring  # For Python 2 & 3

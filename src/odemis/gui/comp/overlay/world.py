@@ -22,8 +22,6 @@ This file is part of Odemis.
 
 """
 
-from __future__ import division
-
 import logging
 import math
 from abc import ABCMeta, abstractmethod

@@ -23,8 +23,6 @@ see http://www.gnu.org/licenses/.
 # Contains all the static streams, which only provide projections of the data
 # they were initialised with.
 
-from __future__ import division
-
 from past.builtins import basestring, long
 import collections
 import copy

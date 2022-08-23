@@ -20,8 +20,6 @@ see http://www.gnu.org/licenses/.
 
 """
 
-from __future__ import division
-
 from future.utils import with_metaclass
 from functools import partial
 from abc import ABCMeta, abstractmethod, abstractproperty

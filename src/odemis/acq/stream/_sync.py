@@ -24,8 +24,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # all the detectors can run simultaneously (each receiving a different wavelength
 # band).
 
-from __future__ import division
-
 from abc import ABCMeta, abstractmethod
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError

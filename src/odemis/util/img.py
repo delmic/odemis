@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # various functions to convert and modify images (as DataArray)
 
-from __future__ import division
-
 import logging
 import math
 import numpy

@@ -21,8 +21,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 try:
     import StringIO
 except ImportError:  # Python 3 naming

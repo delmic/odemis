@@ -21,8 +21,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division, print_function
-
 import logging
 
 from Pyro4.core import oneway

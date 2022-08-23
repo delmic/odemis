@@ -10,8 +10,6 @@ The goal is to assess/characterise the shift when these settings change.
 
 '''
 
-from __future__ import division
-
 import argparse
 import logging
 from odemis import model

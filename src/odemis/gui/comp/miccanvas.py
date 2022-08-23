@@ -21,8 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from __future__ import division
-
 import cairo
 from decorator import decorator
 import logging

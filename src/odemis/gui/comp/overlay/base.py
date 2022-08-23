@@ -30,8 +30,6 @@ They will *only* receive mouse events if they are active!
 
 """
 
-from __future__ import division
-
 from future.utils import with_metaclass
 import cairo
 import logging

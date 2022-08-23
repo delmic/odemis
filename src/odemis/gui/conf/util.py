@@ -24,8 +24,6 @@ This module contains functions that help in the generation of dynamic configurat
 
 """
 
-from __future__ import division
-
 from builtins import str
 from past.builtins import basestring, long
 from collections import OrderedDict

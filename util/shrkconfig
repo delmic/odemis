@@ -22,8 +22,6 @@ shrkconfig. If not, see http://www.gnu.org/licenses/.
 # To test:
 # ./util/shrkconfig --log-level 2 --serial fake --read
 
-from __future__ import division, absolute_import, print_function
-
 import argparse
 import logging
 from odemis import model

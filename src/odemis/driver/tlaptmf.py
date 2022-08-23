@@ -29,8 +29,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # of the device (which is clearly physically written on it too). This can be
 # then easily compared with the USB attribute cf /sys/bus/usb/devices/*/serial
 
-from __future__ import division
-
 import glob
 import logging
 import math

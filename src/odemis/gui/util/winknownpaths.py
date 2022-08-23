@@ -27,8 +27,6 @@ https://gist.github.com/mkropat/7550097
 Importing this module from a platform other than Windows will fail.
 """
 
-from __future__ import division
-
 import ctypes
 from ctypes import windll, wintypes
 from uuid import UUID

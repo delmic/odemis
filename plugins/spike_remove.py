@@ -34,7 +34,6 @@ arising from, out of or in connection with the software or the use or
 other dealings in the software.
 '''
 
-from __future__ import division
 from collections import OrderedDict
 import logging
 from odemis import dataio, model

@@ -26,8 +26,6 @@ This module contains all code needed for the access to and management of GUI
 related configuration files.
 
 """
-from __future__ import division
-
 CONF_GENERAL = None
 CONF_ACQUI = None
 CONF_CHAMB = None

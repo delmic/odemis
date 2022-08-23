@@ -17,8 +17,6 @@ run as:
 
 '''
 
-from __future__ import division
-
 import argparse
 import glob
 import logging

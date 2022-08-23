@@ -26,8 +26,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #
 # Note that libpvcam is only provided for x86 32-bits
 
-from __future__ import division
-
 import collections
 from ctypes import *
 import gc

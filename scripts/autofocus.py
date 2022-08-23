@@ -15,8 +15,6 @@ run as:
 You first need to run the odemis backend. The GUI can also be running.
 """
 
-from __future__ import division
-
 import logging
 from odemis import model
 from odemis.acq import align
