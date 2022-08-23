@@ -19,8 +19,6 @@ This file is part of Odemis.
 This module contains update functionality for the Windows Viewer version of Odemis
 
 """
-from __future__ import division
-
 from concurrent.futures import CancelledError
 import logging
 import odemis

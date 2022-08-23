@@ -28,8 +28,6 @@
 # and xmlh/xh_delmic.py modules are available (e.g. through a symbolic link)
 # in XRCED's plugin directory.
 
-from __future__ import division
-
 import logging
 import math
 import numpy

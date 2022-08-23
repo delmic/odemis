@@ -23,8 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # updated. Typically it is used to transmit video (sequence of images). It does it
 # losslessly and with metadata attached (see _metadata for the conventional ones).
 
-from __future__ import division, print_function
-
 from past.builtins import basestring
 import Pyro4
 import logging

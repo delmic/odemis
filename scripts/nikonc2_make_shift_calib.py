@@ -10,8 +10,6 @@ From the shifts in this file, generate a calibration file for the Nikon C2 to
 compensate for horizontal shift by determining a scan delay.
 
 '''
-from __future__ import division, print_function
-
 import sys
 # import matplotlib.pyplot as plt
 import numpy as np

@@ -15,8 +15,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division
-
 # Various helper functions and classes for the lens alignment
 TOP_LEFT = 0
 TOP_RIGHT = 1

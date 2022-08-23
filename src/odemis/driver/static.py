@@ -24,8 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # physical components which cannot be modified by software. It's mostly used for
 # computing the right metadata/behaviour of the system.
 
-from __future__ import division
-
 import collections
 import math
 import numbers

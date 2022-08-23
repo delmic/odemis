@@ -15,8 +15,6 @@ python delphi_sem_calib.py
 The the odemis backend should be running with the Delphi or Phenom model.
 """
 
-from __future__ import division, print_function, absolute_import
-
 import logging
 from odemis import model
 from odemis.acq.align import delphi, autofocus

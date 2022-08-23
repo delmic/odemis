@@ -24,8 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Various helper functions that have a generic usefulness
 # Warning: do not put anything that has dependencies on non default python modules
 
-from __future__ import division, absolute_import
-
 import queue
 import collections
 from concurrent.futures import CancelledError

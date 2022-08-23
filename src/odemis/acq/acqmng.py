@@ -24,7 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Everything related to high-level image acquisition on the microscope.
 
 
-from __future__ import division
 from collections import OrderedDict
 import collections
 from concurrent.futures import CancelledError

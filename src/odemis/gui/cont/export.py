@@ -20,8 +20,6 @@ This file is part of Odemis.
 
 """
 
-from __future__ import division
-
 from collections import OrderedDict
 import logging
 from odemis.util import dataio as udataio

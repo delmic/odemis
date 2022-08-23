@@ -28,7 +28,6 @@ content, in other words performing "image registration".
 
 """
 
-from __future__ import division
 from odemis.acq.drift import MeasureShift
 import numpy
 import math

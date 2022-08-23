@@ -25,8 +25,6 @@ see http://www.gnu.org/licenses/.
 # Detector, Emitter and Dataflow associations.
 
 # Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
-from __future__ import division
-
 from ._base import *
 from ._helper import *
 from ._live import *

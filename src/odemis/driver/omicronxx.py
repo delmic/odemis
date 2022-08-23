@@ -27,8 +27,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # one which contain multiple source (ie, the LedHUB). In the second case, the
 # commands are indexed with the source number: [X].
 
-from __future__ import division
-
 from future.utils import with_metaclass
 from abc import ABCMeta, abstractmethod
 import fcntl

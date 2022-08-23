@@ -19,8 +19,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # store or retrieve information.
 
 
-from __future__ import division
-
 from past.builtins import long
 from abc import abstractmethod
 from concurrent.futures._base import CancelledError

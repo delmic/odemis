@@ -18,7 +18,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import division, print_function
 from odemis import model
 from odemis.driver import semcomedi
 from odemis.util import testing

@@ -24,8 +24,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # It's mostly for replacing components which are present but not controlled by
 # software, or for testing.
 
-from __future__ import division
-
 import logging
 from odemis import model, util
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError

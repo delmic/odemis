@@ -24,8 +24,6 @@ Content:
     This module contains controls for file selection.
 
 """
-from __future__ import division
-
 import fnmatch
 import logging
 from odemis.gui import img

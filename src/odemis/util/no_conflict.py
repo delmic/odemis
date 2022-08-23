@@ -1,5 +1,4 @@
 # Solving the metaclass conflict https://code.activestate.com/recipes/204197-solving-the-metaclass-conflict/
-from __future__ import division
 import inspect, types
 import sys
 

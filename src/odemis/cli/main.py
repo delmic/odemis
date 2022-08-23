@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
 
-from __future__ import division, print_function
-
 from past.builtins import basestring, unicode
 from builtins import str
 import argparse

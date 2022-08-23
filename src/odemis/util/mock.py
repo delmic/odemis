@@ -16,8 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # Fake component for testing purpose
 
-from __future__ import division
-
 from past.builtins import long
 import logging
 import time

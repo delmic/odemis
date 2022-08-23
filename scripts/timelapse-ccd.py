@@ -28,7 +28,6 @@ odemis-cli --set-attr Clara exposureTime 1.5
 odemis-cli --set-attr Clara binning "2, 2"
 '''
 
-from __future__ import division
 from odemis import dataio, model
 import argparse
 import logging

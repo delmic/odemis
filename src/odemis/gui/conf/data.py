@@ -18,8 +18,6 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
 from collections import OrderedDict
 import copy
 from odemis.acq import stream

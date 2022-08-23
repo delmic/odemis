@@ -19,8 +19,6 @@ see http://www.gnu.org/licenses/.
 
 """
 
-from __future__ import division, print_function
-
 from odemis.gui.util import wx_adapter
 import Pyro4.errors
 import argparse
