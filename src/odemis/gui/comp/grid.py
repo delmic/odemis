@@ -111,7 +111,7 @@ class ViewportGrid(wx.Panel):
             except AttributeError:
                 # Should never happen, unless it's not really a ViewPort.
                 # If so, let's not go completely bad
-                logging.exception("View has no view")
+                logging.exception("View %s has no view", v)
                 viewports.append(v)
             if len(viewports) >= 4:
                 break
@@ -124,22 +124,27 @@ class ViewportGrid(wx.Panel):
         return ([ViewPort])
         """
         viewports = []
-        if [view.Shown for view in self.viewports].count(True) > 2:
-            logging.warning("Found more than two viewports to show, only the first 2 are displayed in this layout.")
 
-        for v in self.viewports:
-            try:
-                if v.view is not None and v.Shown:
+        if len(self.visible_viewports) == 2:
+            logging.debug("Only two viewports are visible so these are shown.")
+            return self.visible_viewports
+
+        else:
+            # If more/less than 2 viewports are visible use the first 2 viewports with a view
+            for v in self.viewports:
+                try:
+                    if v.view is not None and v.Shown:
+                        viewports.append(v)
+                except AttributeError:
+                    # Should never happen, unless it's not really a ViewPort.
+                    # If so, let's not go completely bad
+                    logging.exception("Viewport %s has no view", v)
                     viewports.append(v)
-            except AttributeError:
-                # Should never happen, unless it's not really a ViewPort.
-                # If so, let's not go completely bad
-                logging.exception("Viewport has no view")
-                viewports.append(v)
-            if len(viewports) >= 2:
-                break
+                if len(viewports) >= 2:
+                    logging.warning("Found more than two viewports to show, only the first 2 are displayed in this layout.")
+                    break
 
-        return viewports
+            return viewports
 
     def show_2_vert_stacked_viewports(self):
         """ Show the first two viewports in a 2x1 grid"""

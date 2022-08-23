@@ -95,8 +95,8 @@ class GridPanelTestCase(test.GuiTestCase):
         gp.hide_viewport(self.frame.red)
         gp.hide_viewport(self.frame.blue)
         gui_loop(0.2)
-        self.assertEqual(self.frame.purple.Size, (gp.grid_layout.bl.size.x, csize.y))
-        self.assertEqual(self.frame.brown.Size, (gp.grid_layout.br.size.x, csize.y))
+        self.assertEqual(self.frame.purple.Size, (csize.x, gp.grid_layout.tl.size.y))
+        self.assertEqual(self.frame.brown.Size, (csize.x, gp.grid_layout.bl.size.y))
         gp.show_viewport(self.frame.red)
         gp.show_viewport(self.frame.blue)
 
@@ -113,8 +113,8 @@ class GridPanelTestCase(test.GuiTestCase):
         gp.hide_viewport(self.frame.purple)
         gp.hide_viewport(self.frame.brown)
         gui_loop(0.2)
-        self.assertEqual(self.frame.red.Size, (gp.grid_layout.tl.size.x, csize.y))
-        self.assertEqual(self.frame.blue.Size, (gp.grid_layout.tr.size.x, csize.y))
+        self.assertEqual(self.frame.red.Size, (csize.x, gp.grid_layout.tl.size.y))
+        self.assertEqual(self.frame.blue.Size, (csize.x, gp.grid_layout.bl.size.y))
         gp.show_viewport(self.frame.brown)
         gp.show_viewport(self.frame.purple)
 
