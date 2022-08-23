@@ -23,8 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # test the functions of the gui.util.updater module
-from __future__ import division
-
 import logging
 import unittest
 import wx

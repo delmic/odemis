@@ -16,8 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # This is a driver for the Andor Shamrock & Kymera spectographs.
 
-from __future__ import division
-
 from past.builtins import basestring
 from ctypes import *
 import ctypes

@@ -9,8 +9,6 @@ Cairo has been fully integrated.
 
 """
 
-from __future__ import division, print_function
-
 import unittest
 import logging
 import numpy

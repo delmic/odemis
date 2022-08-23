@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # ===============================================================================
 # Test module for Odemis' custom FoldPanelBar in gui.comp
 # ===============================================================================
-from __future__ import division
-
 import unittest
 import wx
 

@@ -21,8 +21,6 @@ You first need to run the odemis backend with the SECOM config:
 odemisd --log-level 2 install/linux/usr/share/odemis/secom-tud.odm.yaml
 """
 
-from __future__ import division
-
 import argparse
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging

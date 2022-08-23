@@ -25,8 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 Combobox and similar controls.
 
 """
-from __future__ import division
-
 from builtins import str
 import logging
 from odemis.gui import img

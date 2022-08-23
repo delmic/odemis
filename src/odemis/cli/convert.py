@@ -21,8 +21,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # Example usage:
 # convert --input file-as.hdf5 --output file-as.ome.tiff
 
-from __future__ import division, print_function
-
 import argparse
 from gettext import ngettext
 import logging

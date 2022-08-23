@@ -8,8 +8,6 @@ Created on 14 Jan 2019
 This script provides a command line interface for displaying a video with a spot grid overlay.
 
 """
-from __future__ import division, print_function
-
 import argparse
 import cairo
 import logging

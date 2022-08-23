@@ -44,8 +44,6 @@ the one set just before starting the script.
 
 """
 
-from __future__ import division
-
 import argparse
 import logging
 import math

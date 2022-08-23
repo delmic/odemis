@@ -25,7 +25,6 @@ This file is part of Odemis.
 This module contains classes that control the dye database.
 
 """
-from __future__ import division
 import json
 import logging
 import time

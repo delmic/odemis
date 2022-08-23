@@ -26,8 +26,6 @@ see http://www.gnu.org/licenses/.
 #   :                :       :               :
 # (varies fastest) ...    (varies slowest)  ...
 
-from __future__ import division
-
 import csv
 import logging
 from odemis import model

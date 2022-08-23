@@ -18,8 +18,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # Contains streams that will directly acquire data from a detector, based on an
 # emitter.
 
-from __future__ import division
-
 from past.builtins import long
 from concurrent import futures
 from concurrent.futures.thread import ThreadPoolExecutor

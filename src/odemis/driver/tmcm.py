@@ -29,8 +29,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # is connected)
 # Bug reported to Trinamic 2015-10-19. => They don't really seem to believe it.
 
-from __future__ import division
-
 from past.builtins import basestring
 import glob
 import logging

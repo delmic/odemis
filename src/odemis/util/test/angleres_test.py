@@ -19,8 +19,6 @@ You should have received a copy of the GNU General Public License along with Ode
 If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division
-
 import numpy
 
 from odemis.model import MD_POL_MODE, MD_POL_S1

@@ -25,8 +25,6 @@ user interface.
 
 """
 
-from __future__ import division
-
 from past.builtins import long
 from future.utils import with_metaclass
 from abc import ABCMeta

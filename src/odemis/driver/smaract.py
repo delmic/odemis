@@ -23,8 +23,6 @@ This driver supports SmarAct and SmarPod actuators, which are accessed via a C D
 provided by SmarAct. This must be installed on the system for this actuator to run. Please
 refer to the SmarAct readme for Linux installation instructions.
 '''
-from __future__ import division
-
 from concurrent.futures import CancelledError, TimeoutError
 import copy
 from ctypes import *

@@ -26,8 +26,6 @@ This module contains tests for checking that Odemis will launch correctly for ea
 hardware configuration file in this repository. This includes both the back-end and the GUI.
 
 """
-from __future__ import division, print_function
-
 import argparse
 import glob
 import logging

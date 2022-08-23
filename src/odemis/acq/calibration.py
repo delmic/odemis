@@ -17,8 +17,6 @@ You should have received a copy of the GNU General Public License along with Ode
 
 # Various helper functions for handling calibration
 
-from __future__ import division
-
 import csv
 import logging
 import math

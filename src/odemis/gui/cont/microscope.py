@@ -18,8 +18,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
 from past.builtins import basestring
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED
 import logging

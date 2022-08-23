@@ -19,8 +19,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from __future__ import division
-
 import logging
 from odemis.driver import rigol
 import os

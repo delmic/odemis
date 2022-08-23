@@ -25,8 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # * limit the memory to about 3G. For example add highmem=3500M to the kernel
 #   command line (in /etc/default/grub)
 
-from __future__ import division
-
 from past.builtins import long
 from builtins import str
 import collections

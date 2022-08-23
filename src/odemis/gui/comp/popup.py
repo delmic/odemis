@@ -21,8 +21,6 @@
 
 """
 
-from __future__ import division
-
 import logging
 from odemis.gui.util import call_in_wx_main
 import sys

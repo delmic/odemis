@@ -20,8 +20,6 @@ see http://www.gnu.org/licenses/.
 
 """
 
-from __future__ import division
-
 from concurrent.futures._base import CancelledError
 import logging
 from odemis.acq.align.delphi import DelphiCalibration

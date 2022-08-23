@@ -21,8 +21,6 @@ see http://www.gnu.org/licenses/.
 
 """
 
-from __future__ import division, absolute_import
-
 import base64
 from collections import OrderedDict
 from concurrent import futures

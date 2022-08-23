@@ -20,8 +20,6 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division, absolute_import
-
 from bugreporter.odemis_bugreporter import OdemisBugreporter, BugreporterFrame
 from future.moves.urllib.error import HTTPError
 import logging

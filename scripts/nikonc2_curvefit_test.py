@@ -9,8 +9,6 @@ Testing script for determining the curve fit for analyze-shifts.py TSV files.
 
 '''
 
-from __future__ import division, print_function
-
 import sys
 import argparse
 import matplotlib.pyplot as plt

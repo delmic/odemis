@@ -19,8 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import division, print_function
-
 import logging
 import math
 import os
@@ -122,6 +120,7 @@ class TestFindOptimalRange(unittest.TestCase):
 
             logging.info("shortcut took %g s, while full took %g s", dur_sc, dur_full)
             self.assertLessEqual(dur_sc, dur_full)
+
 
     def test_auto_vs_manual(self):
         """
@@ -748,7 +747,6 @@ class TestRGB2Greyscale(unittest.TestCase):
         self.assertEqual(gsim.shape, rgbim.shape[0:2])
         self.assertEqual(gsim[1, 1], 254)
 
-
 class TestRescaleHQ(unittest.TestCase):
 
     def test_simple(self):
@@ -861,59 +859,6 @@ class TestRescaleHQ(unittest.TestCase):
         self.assertEqual(100, out[128, 256, 1])
         self.assertEqual(150, out[128, 256, 2])
         self.assertEqual(255, out[128, 256, 3])
-
-
-class TestMeanWithinCircle(unittest.TestCase):
-
-    def test_3d(self):
-        """
-        Check that the mean of 3D data is 1D
-        """
-        # X = 40, Y = 30
-        data = numpy.zeros((3, 30, 40), dtype=numpy.uint16)
-        data[1] = 1
-        data[2] = 2
-        data[2, 29, 39] = 100
-
-        # Tiny circle of 1px => same as the point
-        m = mean_within_circle(data, (35, 10), 1)
-        self.assertEqual(m.shape, (3,))
-        numpy.testing.assert_equal(m, data[:, 10, 35])  # Y, X are in reverse order
-
-        # Circle of radius 3 on a area where every point is the same value => same as the center
-        m = mean_within_circle(data, (15, 10), 3)
-        self.assertEqual(m.shape, (3,))
-        numpy.testing.assert_almost_equal(m, data[:, 15, 10])  # Y, X are in reverse order
-
-        # Circle of radius 3 on a area where a point is brighter => bigger than the average
-        m = mean_within_circle(data, (39, 28), 3)
-        self.assertEqual(m.shape, (3,))
-        numpy.testing.assert_almost_equal(m[0:2], data[0:2, 28, 39])  # Y, X are in reverse order
-        self.assertGreater(m[2], data[2, 28, 39])  # Y, X are in reverse order
-
-        # Very large circle => it's also fine
-        m = mean_within_circle(data, (20, 10), 300)
-        self.assertEqual(m.shape, (3,))
-
-    def test_4d(self):
-        """
-        Check that the mean of 4D data is 2D
-        """
-        # X = 40, Y = 30
-        data = numpy.zeros((25, 3, 30, 40), dtype=numpy.uint8)
-        data[:, 1] = 1
-        data[:, 2] = 2
-        data[:, 2, 29, 39] = 100
-
-        # Tiny circle of 1px => same as the point
-        m = mean_within_circle(data, (35, 10), 1)
-        self.assertEqual(m.shape, (25, 3))
-        numpy.testing.assert_equal(m, data[:,:, 10, 35])  # Y, X are in reverse order
-
-        # Circle of radius 3 on a area where every point is the same value => same as the center
-        m = mean_within_circle(data, (15, 10), 3)
-        self.assertEqual(m.shape, (25, 3,))
-        numpy.testing.assert_almost_equal(m, data[:,:, 15, 10])  # Y, X are in reverse order
 
 
 class TestImageIntegrator(unittest.TestCase):
@@ -1149,42 +1094,8 @@ class TestMergeTiles(unittest.TestCase):
         
         os.remove(FILENAME)
 
-
-class TestRotateImage(unittest.TestCase):
-
-    def test_rotate_img_metadata(self):
-        """
-        Verify that rotating an image around a center of rotation results in
-        the correct metadata being set on the image.
-        """
-
-        # Expected position calculated with the equation:
-        # exp_pos_x = cos(alpha) * (pos_x - cor_x) - sin(alpha) * (pos_y - cor_y) + cor_y
-        # exp_pos_y = sin(alpha) * (pos_x - cor_x) + sin(alpha) * (pos_y - cor_y) + cor_y
-        test_data = [
-            # pos:  {center of rot, rotation,  expected position}
-            {"pos": (0, 0), "cor": (0, 0), "rot": 10, "exp_pos": (0, 0)},
-            {"pos": (0, 1), "cor": (0, 0), "rot": 90, "exp_pos": (-1, 0)},
-            {"pos": (0, 1), "cor": (0, 0), "rot": -90, "exp_pos": (1, 0)},
-            {"pos": (123e-6, 24e-7), "cor": (123.0e-6, 2.4e-6), "rot": 5.7, "exp_pos": (123.0e-6, 2.4e-6)},
-            {"pos": (123e-6, 24e-7), "cor": (10.0e-6, 24e-6), "rot": 5.7, "exp_pos": (1.24586586e-4, 1.37299314e-05)},
-            {"pos": (123e-6, 24e-7), "cor": (10.0e-6, 24e-6), "rot": -5.7, "exp_pos": (1.20295973e-4, -8.7163320e-06)},
-        ]
-
-        data = numpy.ones((51, 76))
-        for t in test_data:
-            md = {model.MD_POS: t["pos"]}
-            image = model.DataArray(data, md)
-            rotation = math.radians(t["rot"])
-            center_of_rot = t["cor"]
-            rotated_img = img.rotate_img_metadata(image, rotation, center_of_rot)
-
-            self.assertEqual(rotation, rotated_img.metadata[model.MD_ROTATION])
-            testing.assert_tuple_almost_equal(t["exp_pos"], rotated_img.metadata[model.MD_POS])
-            numpy.testing.assert_array_equal(image, rotated_img)  # The data should not change, only the metadata.
-
 # TODO: test guessDRange()
-
 
 if __name__ == "__main__":
     unittest.main()
+
