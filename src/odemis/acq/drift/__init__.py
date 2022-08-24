@@ -280,8 +280,9 @@ def GuessAnchorRegion(whole_img, sample_region):
     # Drift correction region shape
     dc_shape = (50, 50)
 
-    # Properly modified image for cv2.Canny
-    uint8_img = misc.bytescale(whole_img)
+    # Scale the image between 0 and 255 to have it properly modified for cv2.Canny
+    uint8_img = (255 - 0) * ((whole_img - numpy.min(whole_img)) / (numpy.max(whole_img) - numpy.min(whole_img))) + 0
+    uint8_img = numpy.round(uint8_img).astype(numpy.uint8)
 
     # Generates black/white image that contains only the edges
     cannied_img = cv2.Canny(uint8_img, 100, 200)
