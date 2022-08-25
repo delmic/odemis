@@ -704,7 +704,7 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
 
 #   @skip("simple")
     def test_set_path_stream(self):
-        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam, analyzer=self.analyzer)
 
         # Change positions
         self.optmngr.setPath(ars).result()
