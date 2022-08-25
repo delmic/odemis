@@ -40,12 +40,13 @@ from odemis.acq.stream import Stream, StreamTree, RGBSpatialProjection, DataProj
 from odemis.gui.conf import get_general_conf, get_acqui_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
-                          MD_POS, InstantaneousFuture, hasVA, StringEnumerated,
-    MD_CALIB)
+                          MD_POS, InstantaneousFuture, hasVA, StringEnumerated, MD_CALIB)
 from odemis.gui.log import observe_comp_state
 import os
 import threading
 import time
+from typing import Tuple
+
 
 # The different states of a microscope
 STATE_OFF = 0
@@ -1191,6 +1192,29 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 
+    def _getImagePixelSizeNoBinning(self) -> Tuple[float, float]:
+        """
+        Finds out the pixel size of an image from the CCD if the binning was
+        at 1x1.
+        return: the pixel size (X,Y)
+        """
+        # The .pixelSize of the CCD contains the sensor pixel size.
+        # The image pixel size depend on the lens magnification and binning.
+        try:
+            md = self.main.ccd.getMetadata()
+            pxs = md[model.MD_PIXEL_SIZE]
+        except KeyError:
+            # Fallback to the sensor pixel size, which is what is used when no
+            # lens magnification is known.
+            pxs = self.main.ccd.pixelSize.value
+
+        if model.hasVA(self.main.ccd, "binning"):
+            b = self.main.ccd.binning.value
+        else:
+            b = (1, 1)
+
+        return pxs[0] / b[0], pxs[1] / b[1]
+
     def _posToCCD(self, posphy, absolute: bool=True, clip: bool=True):
         """
         Convert position from physical coordinates to CCD coordinates (top-left
@@ -1203,17 +1227,8 @@ class Sparc2AlignGUIData(ActuatorGUIData):
           an int. Otherwise the value returned will be two floats.
         return (0<=int or float, 0<=int or float)
         """
-        # We need to convert to the _image_ pixel size (not sensor), and they
-        # are different due to the lens magnification.
-        md = self.main.ccd.getMetadata()
-        try:
-            pxs = md[model.MD_PIXEL_SIZE]
-        except KeyError:
-            pxs = self.main.ccd.pixelSize.value
-        b = md.get(model.MD_BINNING, (1, 1))
-        pxs = pxs[0] / b[0], pxs[0] / b[1]
-
         # Pole position is always expressed considering there is no binning
+        pxs = self._getImagePixelSizeNoBinning()
         res = self.main.ccd.shape[0:2]
 
         # Convert into px referential (Y is inverted)
@@ -1242,15 +1257,8 @@ class Sparc2AlignGUIData(ActuatorGUIData):
           being at the top-left. Otherwise, only the scale is adjusted.
         return (float, float)
         """
-        md = self.main.ccd.getMetadata()
-        try:
-            pxs = md[model.MD_PIXEL_SIZE]
-        except KeyError:
-            pxs = self.main.ccd.pixelSize.value
-        b = md.get(model.MD_BINNING, (1, 1))
-        pxs = pxs[0] / b[0], pxs[0] / b[1]
-
         # position is always expressed considering there is no binning
+        pxs = self._getImagePixelSizeNoBinning()
         res = self.main.ccd.shape[0:2]
 
         # Convert into the referential with the center as origin
