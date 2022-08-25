@@ -40,7 +40,8 @@ from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS, MD_THETA_LIST, MD_WL_LIST
+    MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS, MD_THETA_LIST, MD_WL_LIST, MD_ROTATION, \
+    MD_ROTATION_COR
 from odemis.model import hasVA
 from odemis.util import units, executeAsyncTask, almost_equal, img, angleres
 import queue
@@ -48,10 +49,9 @@ import threading
 import time
 
 import odemis.util.driver as udriver
-from . import MonochromatorSettingsStream
 
+from . import MonochromatorSettingsStream
 from ._base import Stream, POL_POSITIONS, POL_MOVE_TIME
-import weakref
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
 # same acquisition, but it doesn't make much sense to acquire them
@@ -2469,8 +2469,17 @@ class SEMAngularSpectrumMDStream(SEMCCDMDStream):
             # Handles sub-pixels (aka fuzzing)
             md[MD_PIXEL_SIZE] = (semmd[MD_PIXEL_SIZE][0] * self._emitter.resolution.value[0],
                                  semmd[MD_PIXEL_SIZE][1] * self._emitter.resolution.value[1])
-            # Saves metadata
             md[MD_POS] = semmd[MD_POS]
+
+            # The AR CCD has a rotation, corresponding to the rotation of the
+            # mirror compared to the SEM axes, but we don't care about it, we
+            # just care about the SEM rotation (for the XY axes)
+            for k in (MD_ROTATION, MD_ROTATION_COR):
+                if k in semmd:
+                    md[k] = semmd[k]
+                else:
+                    md.pop(k, None)
+
             md[MD_DIMS] = "CAZYX"
             # Note that the THETA_LIST is only correct for the center wavelength
             # In theory, we can reconstruct it from the mirror metadata (and for

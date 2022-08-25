@@ -794,7 +794,9 @@ def mean_within_circle(data: model.DataArray, center: Tuple[float, float], radiu
     """
     Compute the mean value of the points within a circle.
     It only keeps the pixels whose center is within the circle. It can handle
-    data with more than 2 dimensions.
+    data with more than 2 dimensions. With more than two dimensions, the circle
+    is based on the last two dimensions (Y, X), and the rest of the dimensions are
+    treated independently.
 
     data (DataArray of shape ..., Y, X): the data where to compute the mean.
        All the extra dimensions are kept in the result
@@ -802,11 +804,11 @@ def mean_within_circle(data: model.DataArray, center: Tuple[float, float], radiu
     radius: the radius of the circle which contains the center of the pixels to be
       taken into account.
 
-    returns (DataArray of type float):
+    returns (DataArray of type float, with same shape as data minus X&Y):
         the mean of data that corresponds to points in the circle.
     """
     n = 0
-    datasum = numpy.zeros(data.shape[0], dtype=numpy.float64)
+    datasum = numpy.zeros(data.shape[:-2], dtype=numpy.float64)
 
     # Scan the square around the circle, and only pick the points in the circle
     for px in range(max(0, int(center[0] - radius)),
@@ -815,7 +817,7 @@ def mean_within_circle(data: model.DataArray, center: Tuple[float, float], radiu
                         min(int(center[1] + radius) + 1, data.shape[-2])):
             if math.hypot(center[0] - px, center[1] - py) <= radius:
                 n += 1
-                datasum += data[:, py, px]
+                datasum += data[..., py, px]
 
     mean = datasum / n
     return mean

@@ -27,7 +27,7 @@ import numpy
 from odemis import model
 from odemis.dataio import tiff
 from odemis.util import img, get_best_dtype_for_acc
-from odemis.util.img import Bin
+from odemis.util.img import Bin, mean_within_circle
 import os
 import time
 import unittest
@@ -860,6 +860,59 @@ class TestRescaleHQ(unittest.TestCase):
         self.assertEqual(100, out[128, 256, 1])
         self.assertEqual(150, out[128, 256, 2])
         self.assertEqual(255, out[128, 256, 3])
+
+
+class TestMeanWithinCircle(unittest.TestCase):
+
+    def test_3d(self):
+        """
+        Check that the mean of 3D data is 1D
+        """
+        # X = 40, Y = 30
+        data = numpy.zeros((3, 30, 40), dtype=numpy.uint16)
+        data[1] = 1
+        data[2] = 2
+        data[2, 29, 39] = 100
+
+        # Tiny circle of 1px => same as the point
+        m = mean_within_circle(data, (35, 10), 1)
+        self.assertEqual(m.shape, (3,))
+        numpy.testing.assert_equal(m, data[:, 10, 35])  # Y, X are in reverse order
+
+        # Circle of radius 3 on a area where every point is the same value => same as the center
+        m = mean_within_circle(data, (15, 10), 3)
+        self.assertEqual(m.shape, (3,))
+        numpy.testing.assert_almost_equal(m, data[:, 15, 10])  # Y, X are in reverse order
+
+        # Circle of radius 3 on a area where a point is brighter => bigger than the average
+        m = mean_within_circle(data, (39, 28), 3)
+        self.assertEqual(m.shape, (3,))
+        numpy.testing.assert_almost_equal(m[0:2], data[0:2, 28, 39])  # Y, X are in reverse order
+        self.assertGreater(m[2], data[2, 28, 39])  # Y, X are in reverse order
+
+        # Very large circle => it's also fine
+        m = mean_within_circle(data, (20, 10), 300)
+        self.assertEqual(m.shape, (3,))
+
+    def test_4d(self):
+        """
+        Check that the mean of 4D data is 2D
+        """
+        # X = 40, Y = 30
+        data = numpy.zeros((25, 3, 30, 40), dtype=numpy.uint8)
+        data[:, 1] = 1
+        data[:, 2] = 2
+        data[:, 2, 29, 39] = 100
+
+        # Tiny circle of 1px => same as the point
+        m = mean_within_circle(data, (35, 10), 1)
+        self.assertEqual(m.shape, (25, 3))
+        numpy.testing.assert_equal(m, data[:,:, 10, 35])  # Y, X are in reverse order
+
+        # Circle of radius 3 on a area where every point is the same value => same as the center
+        m = mean_within_circle(data, (15, 10), 3)
+        self.assertEqual(m.shape, (25, 3,))
+        numpy.testing.assert_almost_equal(m, data[:,:, 15, 10])  # Y, X are in reverse order
 
 
 class TestImageIntegrator(unittest.TestCase):

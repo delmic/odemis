@@ -848,6 +848,9 @@ STREAM_SETTINGS_CONFIG = {
                 "tooltip": "Vertical binning of the CCD",
                 "control_type": odemis.gui.CONTROL_RADIO,
             }),
+            ("polarization", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+            }),
         )),
     # For DEBUG
 #     stream.StaticSpectrumStream:
