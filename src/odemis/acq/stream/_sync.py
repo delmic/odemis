@@ -2453,7 +2453,7 @@ class SEMAngularSpectrumMDStream(SEMCCDMDStream):
          live update overlay and can be converted by _assembleFinalData into the final ._raw.
         """
         if n != self._ccd_idx:
-            return super(SEMAngularSpectrumMDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+            return super()._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
 
         # Raw data format is AC
         # Final data format is CAZYX with spec_res, angle_res, 1 , X , Y with X, Y = 1 at one ebeam position
@@ -2506,6 +2506,21 @@ class SEMAngularSpectrumMDStream(SEMCCDMDStream):
             raw_data = raw_data[::-1, ...]  # invert C
         self._live_data[n][pol_idx][:,:, 0, px_idx[0], px_idx[1]] = raw_data.reshape(spec_res, angle_res)
 
+    def _assembleFinalData(self, n, data):
+        """
+        :param n: (int) number of the current stream which is assembled into ._raw
+        :param data: all acquired data of the stream
+        This function post-processes/organizes the data for a stream and exports it into ._raw.
+        """
+        if n != self._ccd_idx:
+            return super()._assembleFinalData(n, data)
+
+        if len(data) > 1:  # Multiple polarizations => keep them separated, and add the polarization name to the description
+            for d in data:
+                d.metadata[model.MD_DESCRIPTION] += " " + d.metadata[model.MD_POL_MODE]
+
+        self._raw.extend(data)
+
 
 class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
     """
@@ -2525,7 +2540,7 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
          live update overlay and can be converted by _assembleFinalData into the final ._raw.
         """
         if n != self._ccd_idx:
-            return super(SEMTemporalSpectrumMDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+            return super()._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
 
         # Data format is CTZYX with spec_res, temp_res, 1 , X , Y with X, Y = 1 at one ebeam position
         temp_res = raw_data.shape[0]
