@@ -58,24 +58,65 @@ SPARC2_POLARIZATIONANALYZER_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm
 SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
 
 
+def assert_pos_as_in_mode(t: unittest.TestCase, comp, mode):
+    """
+    Check the position of the given component is as defined for the
+    specified mode (for all the axes defined in the specified mode)
+    comp (Component): component for which
+    mode (str): name of one of the modes
+    raises AssertionError if not equal
+    """
+    positions = path.SPARC2_MODES[mode][1][comp.role]
+    for axis, pos in positions.items():
+        if isinstance(pos, tuple):  # multiple options
+            for p in pos:
+                # From the metadata?
+                if isinstance(p, str) and p.startswith("MD:"):
+                    md_name = p[3:]
+                    md = comp.getMetadata()
+                    try:
+                        pos = md[md_name][axis]
+                        break
+                    except KeyError:  # no such metadata, or axis on the metadata
+                        pass
+                else:  # Position value or choice name
+                    pos = p
+                    break
+
+        axis_def = comp.axes[axis]
+        # If "not mirror", just check it's different from "mirror"
+        if pos == path.GRATING_NOT_MIRROR:
+            choices = axis_def.choices
+            for key, value in choices.items():
+                if value == "mirror":
+                    t.assertNotEqual(comp.position.value[axis], key,
+                                        "Position of %s.%s is %s == mirror, but shouldn't be" %
+                                        (comp.name, axis, comp.position.value[axis]))
+                    break
+            # If no "mirror" pos => it's all fine anyway
+            continue
+
+        # If the position is a name => convert it
+        if hasattr(axis_def, "choices"):
+            for key, value in axis_def.choices.items():
+                if value == pos:
+                    pos = key
+                    break
+
+        # TODO: if grating == mirror and no mirror choice, check wavelength == 0
+        t.assertAlmostEqual(comp.position.value[axis], pos,
+                            msg="Position of %s.%s is %s != %s" %
+                                   (comp.name, axis, comp.position.value[axis], pos))
+
+
 # @skip("faster")
 class SimPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) simple SPARC (like in Chalmers)
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPARC_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC_CONFIG)
 
         # Microscope component
         cls.microscope = model.getComponent(role="sparc")
@@ -89,19 +130,11 @@ class SimPathTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-
 #        print gc.get_referrers(cls.optmngr)
         del cls.optmngr  # To garbage collect it
 #         logging.debug("Current number of threads: %d", threading.active_count())
 #         for t in threading.enumerate():
 #             print "Thread %d: %s" % (t.ident, t.name)
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
 #    @skip("simple")
     def test_wrong_mode(self):
@@ -173,19 +206,9 @@ class MonashPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) full SPARC (like in Monash)
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(MONASH_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(MONASH_CONFIG)
 
         # Microscope component
         cls.microscope = model.getComponent(role="sparc")
@@ -203,14 +226,7 @@ class MonashPathTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
         del cls.optmngr  # To garbage collect it
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
 #    @skip("simple")
     def test_wrong_mode(self):
@@ -302,19 +318,9 @@ class SpecPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC with just a spectrometer (like in AMOLF)
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPEC_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPEC_CONFIG)
 
         # Microscope component
         cls.microscope = model.getComponent(role="sparc")
@@ -326,14 +332,7 @@ class SpecPathTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
         del cls.optmngr  # To garbage collect it
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
 #     @skip("simple")
     def test_wrong_mode(self):
@@ -390,19 +389,9 @@ class Sparc2PathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC2 (like in Oslo)
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPARC2_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC2_CONFIG)
 
         # Microscope component
         cls.microscope = model.getComponent(role="sparc2")
@@ -425,49 +414,8 @@ class Sparc2PathTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        del cls.optmngr  # To garbage collect it
-        testing.stop_backend()
+        del cls.optmngr  # To garbage collect it early
 
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
-
-    def assert_pos_as_in_mode(self, comp, mode):
-        """
-        Check the position of the given component is as defined for the
-        specified mode (for all the axes defined in the specified mode)
-        comp (Component): component for which
-        mode (str): name of one of the modes
-        raises AssertionError if not equal
-        """
-        positions = path.SPARC2_MODES[mode][1][comp.role]
-        for axis, pos in positions.items():
-            axis_def = comp.axes[axis]
-            # If "not mirror", just check it's different from "mirror"
-            if pos == path.GRATING_NOT_MIRROR:
-                choices = axis_def.choices
-                for key, value in choices.items():
-                    if value == "mirror":
-                        self.assertNotEqual(comp.position.value[axis], key,
-                                            "Position of %s.%s is %s == mirror, but shouldn't be" %
-                                            (comp.name, axis, comp.position.value[axis]))
-                        break
-                # If no "mirror" pos => it's all fine anyway
-                continue
-
-            # If the position is a name => convert it
-            if hasattr(axis_def, "choices"):
-                for key, value in axis_def.choices.items():
-                    if value == pos:
-                        pos = key
-                        break
-
-            # TODO: if grating == mirror and no mirror choice, check wavelength == 0
-            self.assertAlmostEqual(comp.position.value[axis], pos,
-                                   msg="Position of %s.%s is %s != %s" %
-                                       (comp.name, axis, comp.position.value[axis], pos))
 
     def test_wrong_mode(self):
         """
@@ -506,9 +454,9 @@ class Sparc2PathTestCase(unittest.TestCase):
         # setting ar
         self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
@@ -516,24 +464,23 @@ class Sparc2PathTestCase(unittest.TestCase):
         # CL intensity mode
         self.optmngr.setPath("cli").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "cli")
+        assert_pos_as_in_mode(self, self.lenswitch, "cli")
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.003})
 
         # setting spectral
         self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
-        self.assert_pos_as_in_mode(self.slit, "spectral")
-        self.assert_pos_as_in_mode(self.specgraph, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
         # setting mirror-align
         self.optmngr.setPath("mirror-align").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "mirror-align")
-        self.assert_pos_as_in_mode(self.slit, "mirror-align")
-        self.assert_pos_as_in_mode(self.specgraph, "mirror-align")
+        assert_pos_as_in_mode(self, self.lenswitch, "mirror-align")
+        assert_pos_as_in_mode(self, self.slit, "mirror-align")
+        assert_pos_as_in_mode(self, self.specgraph, "mirror-align")
         # Check the filter wheel is in "pass-through"
         self.assertEqual(fbands[self.filter.position.value["band"]], "pass-through")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
@@ -552,9 +499,9 @@ class Sparc2PathTestCase(unittest.TestCase):
         # setting chamber-view
         self.optmngr.setPath("chamber-view").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "chamber-view")
-        self.assert_pos_as_in_mode(self.slit, "chamber-view")
-        self.assert_pos_as_in_mode(self.specgraph, "chamber-view")
+        assert_pos_as_in_mode(self, self.lenswitch, "chamber-view")
+        assert_pos_as_in_mode(self, self.slit, "chamber-view")
+        assert_pos_as_in_mode(self, self.specgraph, "chamber-view")
         # Check the filter wheel is in "pass-through"
         self.assertEqual(fbands[self.filter.position.value["band"]], "pass-through")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
@@ -570,9 +517,9 @@ class Sparc2PathTestCase(unittest.TestCase):
         # setting spec-focus
         self.optmngr.setPath("spec-focus").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spec-focus")
-        self.assert_pos_as_in_mode(self.slit, "spec-focus")
-        self.assert_pos_as_in_mode(self.specgraph, "spec-focus")
+        assert_pos_as_in_mode(self, self.lenswitch, "spec-focus")
+        assert_pos_as_in_mode(self, self.slit, "spec-focus")
+        assert_pos_as_in_mode(self, self.specgraph, "spec-focus")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
 
@@ -615,9 +562,9 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(ars).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
 
         # Change positions back
@@ -625,9 +572,9 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sas).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
@@ -645,9 +592,8 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
-        self.assert_pos_as_in_mode(self.slit, "spectral")
-        self.assert_pos_as_in_mode(self.specgraph, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
 
@@ -661,9 +607,8 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
-        self.assert_pos_as_in_mode(self.slit, "spectral")
-        self.assert_pos_as_in_mode(self.specgraph, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
@@ -677,9 +622,8 @@ class Sparc2PathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
-        self.assert_pos_as_in_mode(self.slit, "spectral")
-        self.assert_pos_as_in_mode(self.specgraph, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertEqual(self.cl_det_sel.position.value, {'x': 0.01})
         self.assertEqual(self.focus.position.value, orig_focus)
@@ -689,19 +633,9 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC2 (like in Oslo)
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPARC2_POLARIZATIONANALYZER_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC2_POLARIZATIONANALYZER_CONFIG)
 
         # Microscope component
         cls.microscope = model.getComponent(role="sparc2")
@@ -723,54 +657,7 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
         del cls.optmngr  # To garbage collect it
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
-
-    def assert_pos_as_in_mode(self, comp, mode):
-        """
-        Check the position of the given component is as defined for the
-        specified mode (for all the axes defined in the specified mode)
-        comp (Component): component for which
-        mode (str): name of one of the modes
-        raises AssertionError if not equal
-        """
-        positions = path.SPARC2_MODES[mode][1][comp.role]
-        for axis, pos in positions.items():
-            axis_def = comp.axes[axis]
-            # If "not mirror", just check it's different from "mirror"
-            if pos == path.GRATING_NOT_MIRROR:
-                choices = axis_def.choices
-                for key, value in choices.items():
-                    if value == "mirror":
-                        self.assertNotEqual(comp.position.value[axis], key,
-                                            "Position of %s.%s is %s == mirror, but shouldn't be" %
-                                            (comp.name, axis, comp.position.value[axis]))
-                        break
-                # If no "mirror" pos => it's all fine anyway
-                continue
-
-            # If the position is a name => convert it
-            if hasattr(axis_def, "choices"):
-                if isinstance(axis_def.choices, frozenset):
-                    for value in list(axis_def.choices):
-                        if value == pos:
-                            break
-                else:
-                    for key, value in axis_def.choices.items():
-                        if value == pos:
-                            pos = key
-                            break
-
-            # TODO: if grating == mirror and no mirror choice, check wavelength == 0
-            self.assertAlmostEqual(comp.position.value[axis], pos,
-                                   msg="Position of %s.%s is %s != %s" %
-                                       (comp.name, axis, comp.position.value[axis], pos))
 
     # @skip("simple")
     def test_set_path(self):
@@ -784,9 +671,9 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         # setting ar
         self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
@@ -795,9 +682,8 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.analyzer.moveAbs({"pol": "vertical"})
         self.optmngr.setPath("spectral").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
-        self.assert_pos_as_in_mode(self.slit, "spectral")
-        self.assert_pos_as_in_mode(self.specgraph, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
@@ -806,9 +692,9 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.analyzer.moveAbs({"pol": "vertical"})
         self.optmngr.setPath("chamber-view").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "chamber-view")
-        self.assert_pos_as_in_mode(self.slit, "chamber-view")
-        self.assert_pos_as_in_mode(self.specgraph, "chamber-view")
+        assert_pos_as_in_mode(self, self.lenswitch, "chamber-view")
+        assert_pos_as_in_mode(self, self.slit, "chamber-view")
+        assert_pos_as_in_mode(self, self.specgraph, "chamber-view")
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
         # Check the filter wheel is in "pass-through"
         self.assertEqual(fbands[self.filter.position.value["band"]], "pass-through")
@@ -818,14 +704,14 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
 
 #   @skip("simple")
     def test_set_path_stream(self):
-        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
+        ars = stream.ARSettingsStream("test ar", self.ccd, self.ccd.data, self.ebeam, analyzer=self.analyzer)
 
         # Change positions
         self.optmngr.setPath(ars).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
 
         # move analyzer to pos that is different from requested pos in next mode
@@ -858,9 +744,8 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         # Change positions
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
-        self.assert_pos_as_in_mode(self.slit, "spectral")
-        self.assert_pos_as_in_mode(self.specgraph, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
 
@@ -870,19 +755,9 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARC2 (like in EMPA)
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPARC2_EXT_SPEC_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC2_EXT_SPEC_CONFIG)
 
         # Microscope component
         cls.microscope = model.getComponent(role="sparc2")
@@ -902,49 +777,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
         del cls.optmngr  # To garbage collect it
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
-
-    def assert_pos_as_in_mode(self, comp, mode):
-        """
-        Check the position of the given component is as defined for the
-        specified mode (for all the axes defined in the specified mode)
-        comp (Component): component for which
-        mode (str): name of one of the modes
-        raises AssertionError if not equal
-        """
-        positions = path.SPARC2_MODES[mode][1][comp.role]
-        for axis, pos in positions.items():
-            axis_def = comp.axes[axis]
-            # If "not mirror", just check it's different from "mirror"
-            if pos == path.GRATING_NOT_MIRROR:
-                choices = axis_def.choices
-                for key, value in choices.items():
-                    if value == "mirror":
-                        self.assertNotEqual(comp.position.value[axis], key,
-                                            "Position of %s.%s is %s == mirror, but shouldn't be" %
-                                            (comp.name, axis, comp.position.value[axis]))
-                        break
-                # If no "mirror" pos => it's all fine anyway
-                continue
-
-            # If the position is a name => convert it
-            if hasattr(axis_def, "choices"):
-                for key, value in axis_def.choices.items():
-                    if value == pos:
-                        pos = key
-                        break
-
-            # TODO: if grating == mirror and no mirror choice, check wavelength == 0
-            self.assertAlmostEqual(comp.position.value[axis], pos,
-                                   msg="Position of %s.%s is %s != %s" %
-                                       (comp.name, axis, comp.position.value[axis], pos))
 
     # @skip("simple")
     def test_wrong_mode(self):
@@ -962,9 +795,9 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # setting ar
         self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
@@ -972,7 +805,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         spgph_pos = self.specgraph.position.value
         self.optmngr.setPath("spectral", detector=self.spec).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit check, as slit-in-big does _not_ affects the (external) spectrometer
         # No specgraph_dedicated check, as any position is fine
         # Check that specgraph (not -dedicated) should _not_ move (as it's not
@@ -982,26 +815,26 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # setting mirror-align
         self.optmngr.setPath("mirror-align").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "mirror-align")
-        self.assert_pos_as_in_mode(self.slit, "mirror-align")
-        self.assert_pos_as_in_mode(self.specgraph, "mirror-align")
+        assert_pos_as_in_mode(self, self.lenswitch, "mirror-align")
+        assert_pos_as_in_mode(self, self.slit, "mirror-align")
+        assert_pos_as_in_mode(self, self.specgraph, "mirror-align")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
         # setting spec-focus
         self.optmngr.setPath("spec-focus").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spec-focus")
-        self.assert_pos_as_in_mode(self.slit, "spec-focus")
-        self.assert_pos_as_in_mode(self.specgraph, "spec-focus")
+        assert_pos_as_in_mode(self, self.lenswitch, "spec-focus")
+        assert_pos_as_in_mode(self, self.slit, "spec-focus")
+        assert_pos_as_in_mode(self, self.specgraph, "spec-focus")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
         # setting fiber-align
         self.optmngr.setPath("fiber-align").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "fiber-align")
-        self.assert_pos_as_in_mode(self.specgraph_dedicated, "fiber-align")
+        assert_pos_as_in_mode(self, self.lenswitch, "fiber-align")
+        assert_pos_as_in_mode(self, self.specgraph_dedicated, "fiber-align")
         spec_sel_md = self.spec_sel.getMetadata()
         spec_sel_pos = self.spec_sel.position.value["x"]
         self.assertAlmostEqual(spec_sel_pos, 0.026112848)
@@ -1014,9 +847,9 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
         # setting chamber-view
         self.optmngr.setPath("chamber-view").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "chamber-view")
-        self.assert_pos_as_in_mode(self.slit, "chamber-view")
-        self.assert_pos_as_in_mode(self.specgraph, "chamber-view")
+        assert_pos_as_in_mode(self, self.lenswitch, "chamber-view")
+        assert_pos_as_in_mode(self, self.slit, "chamber-view")
+        assert_pos_as_in_mode(self, self.specgraph, "chamber-view")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
@@ -1058,9 +891,9 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(ars).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
@@ -1069,9 +902,9 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sas).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
@@ -1082,7 +915,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
 
@@ -1091,7 +924,7 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
 
 
@@ -1102,19 +935,9 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
     via an optical fiber. In addition to check the handling of multiple external
     spectrometers, it also tests the detectors with numbered roles (eg, spectrometer2) 
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPARC2_4SPEC_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC2_4SPEC_CONFIG)
 
         # Microscope component
         cls.microscope = model.getComponent(role="sparc2")
@@ -1138,49 +961,7 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
         del cls.optmngr  # To garbage collect it
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
-
-    def assert_pos_as_in_mode(self, comp, mode):
-        """
-        Check the position of the given component is as defined for the
-        specified mode (for all the axes defined in the specified mode)
-        comp (Component): component for which
-        mode (str): name of one of the modes
-        raises AssertionError if not equal
-        """
-        positions = path.SPARC2_MODES[mode][1][comp.role]
-        for axis, pos in positions.items():
-            axis_def = comp.axes[axis]
-            # If "not mirror", just check it's different from "mirror"
-            if pos == path.GRATING_NOT_MIRROR:
-                choices = axis_def.choices
-                for key, value in choices.items():
-                    if value == "mirror":
-                        self.assertNotEqual(comp.position.value[axis], key,
-                                            "Position of %s.%s is %s == mirror, but shouldn't be" %
-                                            (comp.name, axis, comp.position.value[axis]))
-                        break
-                # If no "mirror" pos => it's all fine anyway
-                continue
-
-            # If the position is a name => convert it
-            if hasattr(axis_def, "choices"):
-                for key, value in axis_def.choices.items():
-                    if value == pos:
-                        pos = key
-                        break
-
-            # TODO: if grating == mirror and no mirror choice, check wavelength == 0
-            self.assertAlmostEqual(comp.position.value[axis], pos,
-                                   msg="Position of %s.%s is %s != %s" %
-                                       (comp.name, axis, comp.position.value[axis], pos))
 
     # @skip("simple")
     def test_wrong_mode(self):
@@ -1198,9 +979,9 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
         # setting ar
         self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
@@ -1210,32 +991,32 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
         # setting mirror-align
         self.optmngr.setPath("mirror-align").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "mirror-align")
-        self.assert_pos_as_in_mode(self.slit, "mirror-align")
-        self.assert_pos_as_in_mode(self.specgraph, "mirror-align")
+        assert_pos_as_in_mode(self, self.lenswitch, "mirror-align")
+        assert_pos_as_in_mode(self, self.slit, "mirror-align")
+        assert_pos_as_in_mode(self, self.specgraph, "mirror-align")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
         # setting spec-focus
         self.optmngr.setPath("spec-focus").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spec-focus")
-        self.assert_pos_as_in_mode(self.slit, "spec-focus")
-        self.assert_pos_as_in_mode(self.specgraph, "spec-focus")
+        assert_pos_as_in_mode(self, self.lenswitch, "spec-focus")
+        assert_pos_as_in_mode(self, self.slit, "spec-focus")
+        assert_pos_as_in_mode(self, self.specgraph, "spec-focus")
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
         # setting fiber-align without target: works, but may select any of the 2 spectrometers
         self.optmngr.setPath("fiber-align").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "fiber-align")
-        self.assert_pos_as_in_mode(self.specgraph_dedicated, "fiber-align")
+        assert_pos_as_in_mode(self, self.lenswitch, "fiber-align")
+        assert_pos_as_in_mode(self, self.specgraph_dedicated, "fiber-align")
 
         # setting chamber-view
         self.optmngr.setPath("chamber-view").result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "chamber-view")
-        self.assert_pos_as_in_mode(self.slit, "chamber-view")
-        self.assert_pos_as_in_mode(self.specgraph, "chamber-view")
+        assert_pos_as_in_mode(self, self.lenswitch, "chamber-view")
+        assert_pos_as_in_mode(self, self.slit, "chamber-view")
+        assert_pos_as_in_mode(self, self.specgraph, "chamber-view")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
@@ -1294,9 +1075,9 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(ars).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
@@ -1305,9 +1086,9 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sas).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "ar")
-        self.assert_pos_as_in_mode(self.slit, "ar")
-        self.assert_pos_as_in_mode(self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
 
@@ -1317,7 +1098,7 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
         self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 1.57, places=2)
@@ -1327,7 +1108,7 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(sps).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
         self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 1.57, places=2)
 
@@ -1337,7 +1118,7 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.022)
         self.assertAlmostEqual(self.spec_det_sel.position.value["rx"], 1.57, places=2)
@@ -1348,7 +1129,7 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
 
         self.optmngr.setPath(specs).result()
         # Assert that actuator was moved according to mode given
-        self.assert_pos_as_in_mode(self.lenswitch, "spectral")
+        assert_pos_as_in_mode(self, self.lenswitch, "spectral")
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
         self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 0, places=2)
@@ -1358,19 +1139,9 @@ class SecomPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SECOM
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SECOM_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SECOM_CONFIG)
 
         # Microscope component
         cls.microscope = model.getComponent(role="secom")
@@ -1384,14 +1155,7 @@ class SecomPathTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
         del cls.optmngr  # To garbage collect it
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     def test_set_acq_quality(self):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
@@ -1468,8 +1232,6 @@ class SecomFlimPathTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SECOM setup for FLIM
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
         try:
@@ -1479,15 +1241,7 @@ class SecomFlimPathTestCase(unittest.TestCase):
             raise unittest.SkipTest(f"Skipping SECOM FLIM path tests, cannot import nikonc driver."
                                     f"Got error: {err}")
 
-        try:
-            testing.start_backend(SECOM_FLIM_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SECOM_FLIM_CONFIG)
 
         # Microscope component
         cls.microscope = model.getComponent(role="secom")
@@ -1504,14 +1258,7 @@ class SecomFlimPathTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
         del cls.optmngr  # To garbage collect it
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     def test_set_path_stream(self):
         self.optmngr.setPath("confocal").result()

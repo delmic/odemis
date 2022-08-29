@@ -3043,7 +3043,8 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
         # No exposureTime VA => integrationTime will be provided
-        ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
+        ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data,
+                                      self.ebeam, analyzer=self.analyzer)
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         list_positions = list(ars.polarization.choices) + ["acquireAllPol"]
@@ -3150,7 +3151,8 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
                                 emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         # No exposureTime VA => integrationTime will be provided
-        ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data, self.ebeam, self.analyzer)
+        ars = stream.ARSettingsStream("test ar with analyzer", self.ccd, self.ccd.data,
+                                      self.ebeam, analyzer=self.analyzer)
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.polarization.value = "vertical"
@@ -3259,7 +3261,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
 
         # Create the settings stream without "exposureTime" VA
         ars = stream.ARSettingsStream("test ar integrate images",
-                                      self.ccd, self.ccd.data, self.ebeam, self.analyzer,
+                                      self.ccd, self.ccd.data, self.ebeam, analyzer=self.analyzer,
                                       detvas={"readoutRate", "binning", "resolution"})
 
         # shouldn't affect
@@ -3341,7 +3343,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
                                 emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         # Create without "exposureTime" VA => integrationTime VA
         ars = stream.ARSettingsStream("test ar integrate images",
-                                      self.ccd, self.ccd.data, self.ebeam, self.analyzer,
+                                      self.ccd, self.ccd.data, self.ebeam, analyzer=self.analyzer,
                                       detvas={"readoutRate", "binning", "resolution"})
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
@@ -3442,7 +3444,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
 
         # Create without "exposureTime" VA => integrationTime VA
         ars = stream.ARSettingsStream("test ar integrate images",
-                                      self.ccd, self.ccd.data, self.ebeam, self.analyzer,
+                                      self.ccd, self.ccd.data, self.ebeam, analyzer=self.analyzer,
                                       detvas={"readoutRate", "binning", "resolution"})
 
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
