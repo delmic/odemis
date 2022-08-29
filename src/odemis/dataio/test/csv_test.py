@@ -286,6 +286,15 @@ class TestCSVIO(unittest.TestCase):
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
 
+    def test_unknown_acquisition_type(self):
+        """Test that a ValueError is raised for an unknown acquisition type."""
+        size = (10, 10)
+        md = {model.MD_ACQ_TYPE: "FAKE",
+              model.MD_DIMS: "FAKE"}
+        data = model.DataArray(numpy.zeros(size), md)
+        with self.assertRaises(ValueError):
+            csv.export(FILENAME, data)
+
 
 if __name__ == "__main__":
     unittest.main()
