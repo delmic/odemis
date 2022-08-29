@@ -24,7 +24,6 @@ import numpy
 from odemis import model
 from odemis.util import spectrum
 
-
 FORMAT = "CSV"
 # list of file-name extensions possible, the first one is the default when saving a file
 EXTENSIONS = [u".csv"]
@@ -130,7 +129,7 @@ def export(filename, data):
             first_row = ['theta\\phi[rad]'] + [d for d in data[0, 1:]]
             csv_writer.writerow(first_row)
             # dump the array
-            csv_writer.writerows(data[1:,:])
+            csv_writer.writerows(data[1:, :])
 
     elif data.ndim == 2 and dims == "XC":
         logging.debug("Exporting spectrum-line data to CSV")
@@ -155,7 +154,7 @@ def export(filename, data):
             csv_writer.writerow(first_row)
             # dump the array
             csv_writer.writerows(data)
-        
+
     elif data.ndim == 2 and dims == "TC":
         logging.debug("Exporting temporal spectrum data to CSV")
         if acq_type != model.MD_AT_TEMPSPECTRUM:
@@ -203,4 +202,4 @@ def export(filename, data):
             csv_writer.writerows(rows)
 
     else:
-        raise ValueError(f"Unknown acquisition type {acq_types} of data (dims = {dims}) to be exported as CSV")
+        raise ValueError(f"Unknown acquisition type {acq_type} of data (dims = {dims}) to be exported as CSV")
