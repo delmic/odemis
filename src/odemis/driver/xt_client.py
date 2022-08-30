@@ -2051,8 +2051,11 @@ class Stage(model.Actuator):
         # actually allows rotation in both directions)
         for an in ("rx", "rz"):
             rng = self.axes[an].range
+            # To handle both rotations 0->2pi and inverted: -2pi -> 0.
+            # TODO: for inverted rotations of 2pi, it would probably be more
+            # user-friendly to still report 0->2pi as range.
             if util.almost_equal(rng[1] - rng[0], 2 * math.pi):
-                pos[an] = pos[an] % (2 * math.pi) - rng[0]
+                pos[an] = (pos[an] - rng[0]) % (2 * math.pi) + rng[0]
         return pos
 
     def _moveTo(self, future, pos, rel=False, timeout=60):
@@ -2107,7 +2110,8 @@ class Stage(model.Actuator):
 
     def _doMoveRel(self, future, shift):
         """
-        shift (dict): position in internal coordinates
+        shift (dict): position in internal coordinates (ie, axes in the same
+           direction as the hardware expects)
         """
         # We don't check the target position fit the range, the xt-adapter will take care of that
         self._moveTo(future, shift, rel=True)
