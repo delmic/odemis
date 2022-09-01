@@ -500,7 +500,10 @@ class SEM(model.HwComponent):
             self._acquisitions.clear()
             self._acq_cmd_q.put(ACQ_CMD_TERM)
             self._req_stop_acquisition()
-        self._acquisition_thread.join(10)
+
+        acq_thread = self._acquisition_thread
+        if acq_thread:
+            acq_thread.join(10)
 
         # Terminate components
         self._scanner.terminate()
@@ -1076,7 +1079,6 @@ class Stage(model.Actuator):
             with self.parent._acquisition_init_lock:
                 with self.parent._acq_progress_lock:
                     self._updatePosition()
-                    logging.debug("Updated stage position to %s", self.position.value)
         except Exception:
             logging.exception("Unexpected failure during XYZ polling")
 
@@ -1092,38 +1094,57 @@ class Stage(model.Actuator):
         # it's read-only, so we change it via _value
         pos = self._applyInversion(self._position)
         self.position._set_value(pos, force_write=True)
+        logging.debug("Updated stage position to %s", pos)
 
-    def _doMove(self, pos):
+    def _doMoveAbs(self, pos):
         """
         move to the position
         """
         # TODO: support cancelling (= call StgStop)
         with self.parent._acq_progress_lock:
             # Perform move through Tescan API
+            logging.debug("Requesting stage move to %s", pos)
+
+            # If not all axes requested, fill up the rest with the current position
+            if pos.keys() < {"x", "y", "z"}:
+                self._updatePosition()
+                current_pos = self._position.copy()
+                current_pos.update(pos)
+                pos = current_pos
+
             # Position from m to mm and inverted
             self.parent._device.StgMoveTo(-pos["x"] * 1e3,
-                                          - pos["y"] * 1e3,
-                                          - pos["z"] * 1e3)
+                                          -pos["y"] * 1e3,
+                                          -pos["z"] * 1e3)
+
+            # TODO: does it need a bit of time before checking it's busy?
+            time.sleep(0.1)
 
             # Wait until move is completed
             while self.parent._device.StgIsBusy():
-                time.sleep(0.2)
+                time.sleep(0.1)
 
+            logging.debug("Stage move to %s completed", pos)
             self._updatePosition()
+
+    def _doMoveRel(self, shift):
+        # Compute the position in absolute coordinates
+        self._updatePosition()
+        pos = self._position.copy()
+        for axis, change in shift.items():
+            pos[axis] += change
+
+        self._checkMoveAbs(self._applyInversion(pos))
+        self._doMoveAbs(pos)
 
     @isasync
     def moveRel(self, shift):
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
-
         shift = self._applyInversion(shift)
 
-        for axis, change in shift.items():
-            self._position[axis] += change
-
-        pos = self._position
-        return self._executor.submit(self._doMove, pos)
+        return self._executor.submit(self._doMoveRel, shift)
 
     @isasync
     def moveAbs(self, pos):
@@ -1132,16 +1153,13 @@ class Stage(model.Actuator):
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
 
-        for axis, new_pos in pos.items():
-            self._position[axis] = new_pos
-
-        pos = self._position
-        return self._executor.submit(self._doMove, pos)
+        return self._executor.submit(self._doMoveAbs, pos)
 
     def stop(self, axes=None):
+        self.parent._device.StgStop()  # TODO: can be removed once move cancellation is supported
         # Empty the queue for the given axes
         self._executor.cancel()
-        self.parent._device.StgStop()
+        self.parent._device.StgStop()  # Make sure it's stopped in any case
         logging.info("Stopping all axes: %s", ", ".join(self.axes))
 
     def terminate(self):
