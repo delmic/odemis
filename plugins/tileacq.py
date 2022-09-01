@@ -118,7 +118,12 @@ class TileAcqPlugin(Plugin):
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
         self.stitch = model.BooleanVA(True)
+
+        # Allow to running fine alignment procedure, only on SECOM and DELPHI
         self.fineAlign = model.BooleanVA(False)
+        if microscope.role not in ("secom", "delphi"):
+            self.vaconf["fineAlign"]["control_type"] = odemis.gui.CONTROL_NONE
+
         # TODO: manage focus (eg, autofocus or ask to manual focus on the corners
         # of the ROI and linearly interpolate)
 
