@@ -280,8 +280,9 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
     # handle time correlator data (chronograph) data
     # -> no spectrum efficiency compensation and bg correction supported
     if data.shape[-5] <= 1 and data.shape[-4] > 1:
-        raise ValueError("Do not support any background correction or spectrum efficiency "
-                         "compensation for time correlator (chronograph) data")
+        if bckg is not None or coef is not None:
+            raise ValueError("Background correction and spectrum efficiency compensation "
+                             "not supported on time correlator (chronograph) data")
 
     # TODO: use MD_BASELINE as a fallback?
     if bckg is not None:
