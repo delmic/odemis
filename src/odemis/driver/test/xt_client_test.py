@@ -197,6 +197,16 @@ class TestMicroscope(unittest.TestCase):
                                (abs_pos["rz"] + rel_pos["rz"]) % (2 * math.pi), places=4)
         self.assertAlmostEqual(self.stage.position.value["rx"],
                                (abs_pos["rx"] + rel_pos["rx"]), places=4)
+
+        # Relative move in rz < 0 => it should "wrap around" and report a value near 2pi.
+        # (rx doesn't support full rotation, so we don't use it)
+        f = self.stage.moveAbs({"rz": 0})
+        rel_pos = {"rz": -0.5} # rad
+        f = self.stage.moveRel(rel_pos)
+        f.result()
+        self.assertAlmostEqual(self.stage.position.value["rz"] % (2 * math.pi),
+                               rel_pos["rz"] % (2 * math.pi), places=4)
+
         self.stage.moveAbs(init_pos)
 
     def test_hfov(self):
