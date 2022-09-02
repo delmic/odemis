@@ -3,19 +3,19 @@ import time
 import unittest
 import subprocess
 
-from odemis.util import test
+from odemis.util import testing
 from odemis.odemisd.start import find_window, main
 from odemis.acq.test.stream_test import SECOM_CONFIG
 
 class StartTestCase(unittest.TestCase):
     @classmethod
     def tearDownClass(cls):
-        test.stop_backend()
+        testing.stop_backend()
 
 
     def setUp(self):
         try:
-            test.stop_backend()
+            testing.stop_backend()
         except IOError:
             pass
 
