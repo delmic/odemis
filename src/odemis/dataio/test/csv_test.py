@@ -240,6 +240,29 @@ class TestCSVIO(unittest.TestCase):
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
 
+    def testExportTemporalSpectrum(self):
+        """Try simple temporal spectrum export; note that size is made up and is not specific"""
+        size = (150, 340)
+        dtype = numpy.uint16
+        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
+              model.MD_ACQ_TYPE: model.MD_AT_TEMPSPECTRUM,
+              model.MD_DIMS: "TC"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+        data += 56
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 150)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
     def testExportEK(self):
         """Try simple angular spectrum export"""
         size = (340, 1024)
