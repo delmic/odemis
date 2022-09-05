@@ -231,14 +231,14 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         # Move the caret to the start of the field
         mctrl.SetSelection(0, 0)
 
-        # Create illegal number
+        # Create illegal number => should revert to previous value
         for c in "e\r":
             sim.Char(ord(c))
             test.gui_loop(0.02)
 
         test.gui_loop(0.1)
-        self.assertEqual(mctrl.GetValue(), None)
-        self.assertEqual(mctrl.get_value_str(), u"")
+        self.assertEqual(mctrl.GetValue(), 1000)
+        self.assertEqual(mctrl.get_value_str(), u"1 km")
 
         # Add 2nd control
 
