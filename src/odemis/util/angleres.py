@@ -634,6 +634,8 @@ def ExtractThetaList(data):
         line_bottom = data.metadata[model.MD_AR_MIRROR_BOTTOM]
     except KeyError:
         raise ValueError("Metadata required: MD_MIRROR_*, MD_WL_LIST")
+    if len(wl_list) == 0:
+        raise ValueError("Metadata MD_WL_LIST is empty, needs wavelength for each pixel")
 
     # Note: the mirror is actually seen upside-down (cf CCD pixel positions)
     #                                                        CCD

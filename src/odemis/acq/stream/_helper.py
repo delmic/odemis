@@ -1177,7 +1177,10 @@ class AngularSpectrumSettingsStream(PolarizedCCDSettingsStream):
         # cropped/corrected (while in the StaticStream only the data with angle
         # is shown, and eventually it'll also be corrected for the chromatic
         # aberration).
-        md[model.MD_THETA_LIST] = angleres.ExtractThetaList(data)
+        try:
+            md[model.MD_THETA_LIST] = angleres.ExtractThetaList(data)
+        except ValueError as ex:
+            logging.debug("Failed to compute angle metadata: %s", ex)
 
         if self.wl_inverted:
             data = data[:,::-1, ...]  # invert C
