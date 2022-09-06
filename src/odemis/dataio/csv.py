@@ -30,7 +30,7 @@ LOSSY = True  # because it only supports AR in phi/theta and spectrum in wavelen
 CAN_SAVE_PYRAMID = False
 
 
-def export(filename, data):
+def export(filename: str, data: model.DataArray):
     """
     Write a CSV file:
         - If the given data is spectrum data write it as series of wavelength->intensity
@@ -40,7 +40,7 @@ def export(filename, data):
         - If the given data is AR data then just dump the theta/phi array
         - If the given data is temporal spectrum data then dump the time/wavelength array
         - If the given data is EK data then dump the angle/wavelength array
-    filename (unicode): filename of the file to create (including path).
+    filename (str): filename of the file to create (including path).
     data (model.DataArray): the data to export.
        Metadata is taken directly from the DA object.
     raises:
@@ -51,8 +51,11 @@ def export(filename, data):
 
     # Export Spectrum Data
     if dims == "C" and data.ndim == 1:
+        if acq_type != model.MD_AT_SPECTRUM:
+            logging.warning("Data seems to be spectrum, but acq_type is %s", acq_type)
+
         logging.debug("Exporting spectrum data to CSV")
-        _export_spectrum_data(acq_type, data, filename)
+        _export_spectrum_data(data, filename)
 
     # Export Chronogram Data
     elif dims == "T" and data.ndim == 1:
@@ -64,6 +67,11 @@ def export(filename, data):
         logging.debug("Exporting angle data to CSV")
         _export_angle_data(data, filename)
 
+    # Export AR Data
+    elif acq_type == model.MD_AT_AR:
+        logging.debug("Exporting AR data to CSV")
+        _export_ar_data(data, filename)
+
     # Export Spectrum-line Data
     elif dims == "XC" and data.ndim == 2:
         logging.debug("Exporting spectrum-line data to CSV")
@@ -71,34 +79,31 @@ def export(filename, data):
 
     # Export Temporal Spectrum Data
     elif dims == "TC" and data.ndim == 2:
+        if acq_type != model.MD_AT_TEMPSPECTRUM:
+            logging.warning("Data seems to be temporal spectrum, but acq_type is %s", acq_type)
+
         logging.debug("Exporting temporal spectrum data to CSV")
-        _export_temporal_spectrum_data(acq_type, data, filename)
+        _export_temporal_spectrum_data(data, filename)
 
     # Export Angular Spectrum Data
     elif dims == "AC" and data.ndim == 2:
-        logging.debug("Exporting angular spectrum data to CSV")
-        _export_angular_spectrum_data(acq_type, data, filename)
+        if acq_type != model.MD_AT_EK:
+            logging.warning("Data seems to be EK, but acq_type is %s", acq_type)
 
-    # Export AR Data
-    elif acq_type == model.MD_AT_AR:
-        logging.debug("Exporting AR data to CSV")
-        _export_ar_data(data, filename)
+        logging.debug("Exporting angular spectrum data to CSV")
+        _export_angular_spectrum_data(data, filename)
 
     else:
         raise ValueError(f"Unknown acquisition type {acq_type} of data (dims = {dims}) to be exported as CSV")
 
 
-def _export_spectrum_data(acq_type, data, filename):
+def _export_spectrum_data(data: model.DataArray, filename: str):
     """
     This will export the spectrum data to a CSV file using the type of microscope,
     the acquired data and filename title in its creation.
-    :param acq_type: data.metadata.get(model.MD_ACQ_TYPE, None)
-    :param data: (model.DataArray)
-    :param filename: (unicode)
+    :param data (model.DataArray): the data in the DA to use for exporting.
+    :param filename (str): filename of the file to create (including path).
     """
-
-    if acq_type != model.MD_AT_SPECTRUM:
-        logging.warning("Data seems to be spectrum, but acq_type is %s", acq_type)
 
     spectrum_range, unit = spectrum.get_spectrum_range(data)
     if unit == "m":
@@ -116,16 +121,13 @@ def _export_spectrum_data(acq_type, data, filename):
         csv_writer.writerow(headers)
         csv_writer.writerows(spectrum_tuples)
 
-    fd.close()
 
-
-def _export_chronogram_data(data, filename):
+def _export_chronogram_data(data: model.DataArray, filename: str):
     """
     This will export the chronogram data to a CSV file using the acquired data,
     and filename title in its creation.
-    :param data:
-    :param filename:
-    :return:
+    :param data (model.DataArray): the data in the DA to use for exporting.
+    :param filename (str): filename of the file to create (including path).
     """
 
     time_range, unit = spectrum.get_time_range(data)
@@ -145,16 +147,13 @@ def _export_chronogram_data(data, filename):
         csv_writer.writerow(headers)
         csv_writer.writerows(time_tuples)
 
-    fd.close()
 
-
-def _export_angle_data(data, filename):
+def _export_angle_data(data: model.DataArray, filename: str):
     """
     This will export the angle data to a CSV file using the acquired data,
     and filename title in its creation.
-    :param data:
-    :param filename:
-    :return:
+    :param data (model.DataArray): the data in the DA to use for exporting.
+    :param filename (str): filename of the file to create (including path).
     """
     angle_range, unit_a = spectrum.get_angle_range(data)
     if unit_a == "rad":
@@ -172,22 +171,18 @@ def _export_angle_data(data, filename):
         csv_writer.writerow(headers)
         csv_writer.writerows(angle_tuples)
 
-    fd.close()
 
-
-def _export_ar_data(data, filename):
+def _export_ar_data(data: model.DataArray, filename: str):
     """
     This will export the AR data to a CSV file using the acquired data,
     and filename title in its creation.
-    :param data:
-    :param filename:
-    :return:
+    :param data (model.DataArray): the data in the DA to use for exporting.
+    :param filename (str): filename of the file to create (including path).
     """
     # Data should be in the form of (Y+1, X+1), with the first row and column the angles
     with open(filename, 'w', newline='') as fd:
         csv_writer = csv.writer(fd)
 
-        # TODO: put theta/phi angles in metadata? Read back from MD theta/phi and then add as additional line/column
         # add the phi and theta values as an extra line/column in order to be displayed in the csv-file
         # attach theta as first column
         theta_lin = numpy.linspace(0, math.pi / 2, data.shape[0])
@@ -203,16 +198,13 @@ def _export_ar_data(data, filename):
         # dump the array
         csv_writer.writerows(data[1:, :])
 
-    fd.close()
 
-
-def _export_spectrum_line_data(data, filename):
+def _export_spectrum_line_data(data: model.DataArray, filename: str):
     """
     This will export the line data to a CSV file using the acquired data,
     and filename title in its creation.
-    :param data:
-    :param filename:
-    :return:
+    :param data (model.DataArray): the data in the DA to use for exporting.
+    :param filename (str): filename of the file to create (including path).
     """
     spectrum_range, unit = spectrum.get_spectrum_range(data)
     if unit == "m":
@@ -235,20 +227,14 @@ def _export_spectrum_line_data(data, filename):
         # dump the array
         csv_writer.writerows(data)
 
-    fd.close()
 
-
-def _export_temporal_spectrum_data(acq_type, data, filename):
+def _export_temporal_spectrum_data(data: model.DataArray, filename: str):
     """
     This will export the temporal spectrum data to a CSV file using the type
     of microscope, the acquired data and filename title in its creation.
-    :param acq_type:
-    :param data:
-    :param filename:
-    :return:
+    :param data (model.DataArray): the data in the DA to use for exporting.
+    :param filename (str): filename of the file to create (including path).
     """
-    if acq_type != model.MD_AT_TEMPSPECTRUM:
-        logging.warning("Data seems to be temporal spectrum, but acq_type is %s", acq_type)
 
     spectrum_range, unit_c = spectrum.get_spectrum_range(data)
     if unit_c == "m":
@@ -267,20 +253,14 @@ def _export_temporal_spectrum_data(acq_type, data, filename):
         csv_writer.writerow(headers)
         csv_writer.writerows(rows)
 
-    fd.close()
 
-
-def _export_angular_spectrum_data(acq_type, data, filename):
+def _export_angular_spectrum_data(data: model.DataArray, filename:str):
     """
     This will export the angular spectrum data to a CSV file using the type
     of microscope, the acquired data and filename title in its creation.
-    :param acq_type:
-    :param data:
-    :param filename:
-    :return:
+    :param data (model.DataArray): the data in the DA to use for exporting.
+    :param filename (str): filename of the file to create (including path).
     """
-    if acq_type != model.MD_AT_EK:
-        logging.warning("Data seems to be EK, but acq_type is %s", acq_type)
 
     spectrum_range, unit_c = spectrum.get_spectrum_range(data)
     if unit_c == "m":
@@ -301,4 +281,3 @@ def _export_angular_spectrum_data(acq_type, data, filename):
         csv_writer.writerow(headers)
         csv_writer.writerows(rows)
 
-    fd.close()

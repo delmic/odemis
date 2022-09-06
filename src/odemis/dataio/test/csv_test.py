@@ -199,7 +199,7 @@ class TestCSVIO(unittest.TestCase):
         """Try simple spectrum-line export"""
         size = (1340, 6)
         dtype = numpy.float
-        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
+        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[1]).tolist(),
               model.MD_PIXEL_SIZE: (None, 4.2e-06),
               model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
               model.MD_DIMS: "XC"}
@@ -244,7 +244,19 @@ class TestCSVIO(unittest.TestCase):
         """Try simple temporal spectrum export; note that size is made up and is not specific"""
         size = (150, 340)
         dtype = numpy.uint16
-        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
+
+        # test for wavelength
+        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[1]).tolist(),
+              model.MD_ACQ_TYPE: model.MD_AT_TEMPSPECTRUM,
+              model.MD_DIMS: "TC"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+        data += 56
+
+        # export
+        csv.export(FILENAME, data)
+
+        # test for time
+        md = {model.MD_TIME_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
               model.MD_ACQ_TYPE: model.MD_AT_TEMPSPECTRUM,
               model.MD_DIMS: "TC"}
         data = model.DataArray(numpy.zeros(size, dtype), md)
