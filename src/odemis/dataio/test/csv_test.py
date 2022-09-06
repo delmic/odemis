@@ -63,25 +63,27 @@ class TestCSVIO(unittest.TestCase):
 
         raised = False
         try:
-            pycsv.reader(open(FILENAME, 'rb'))
+            with open(FILENAME, 'rb') as f:
+                pycsv.reader(f)
         except IOError:
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
 
         # test intensity value is at correct position
-        file = pycsv.reader(open(FILENAME, 'r', newline=''))
+        with open(FILENAME, 'r', newline='') as f:
+            file = pycsv.reader(f)
 
-        a = numpy.zeros((91, 361))
-        index = 0
-        for line in file:
-            if index == 0:
-                a[index] = 0.0
-            else:
-                a[index] = line
-            index += 1
-        # test intensity for same px as defined above is also different when reading back
-        # (+1 as we add a line for theta/phi MD to the array when exporting)
-        self.assertEqual(a[11][11], 10)
+            a = numpy.zeros((91, 361))
+            index = 0
+            for line in file:
+                if index == 0:
+                    a[index] = 0.0
+                else:
+                    a[index] = line
+                index += 1
+            # test intensity for same px as defined above is also different when reading back
+            # (+1 as we add a line for theta/phi MD to the array when exporting)
+            self.assertEqual(a[11][11], 10)
 
     def testExportSpectrum(self):
         """Try simple spectrum export"""
@@ -281,7 +283,7 @@ class TestCSVIO(unittest.TestCase):
         dtype = float
         md = {model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(size[-1])],
               model.MD_THETA_LIST: numpy.linspace(-1.5, 1.4, size[-2]),
-              model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
+              model.MD_ACQ_TYPE: model.MD_AT_EK,
               model.MD_DIMS: "AC"}
         data = model.DataArray(numpy.zeros(size, dtype), md)
 
@@ -302,7 +304,7 @@ class TestCSVIO(unittest.TestCase):
         """Try simple angular spectrum export missing WL_LIST and THETA_LIST"""
         size = (340, 1024)
         dtype = float
-        md = {model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
+        md = {model.MD_ACQ_TYPE: model.MD_AT_EK,
               model.MD_DIMS: "AC"}
         data = model.DataArray(numpy.zeros(size, dtype), md)
 
