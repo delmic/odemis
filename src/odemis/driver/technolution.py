@@ -1717,7 +1717,7 @@ class MPPC(model.Detector):
 
         # Remainder of the line scan time, part which is not a whole multiple of the descan periods.
         remainder_scanning_time = line_scan_time % descanner.clockPeriod.value
-        if remainder_scanning_time is not 0:
+        if remainder_scanning_time != 0:
             # Adjusted the flyback time if there is a remainder of scanning time by adding one setpoint to ensure the
             # line scan time is equal to a whole multiple of the descanner clock period
             flyback_time = flyback_time + (descanner.clockPeriod.value - remainder_scanning_time)

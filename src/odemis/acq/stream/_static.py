@@ -836,12 +836,8 @@ class StaticSpectrumStream(StaticStream):
             self.calibrated.value = None
             return
 
-        try:
-            # If MD_THETA_LIST, the length of the A dimension might be reduced
-            calibrated = calibration.apply_spectrum_corrections(data, bckg, coef)
-        except Exception:
-            logging.exception("Failed to apply spectrum correction")
-            calibrated = data
+        # If MD_THETA_LIST, the length of the A dimension might be reduced
+        calibrated = calibration.apply_spectrum_corrections(data, bckg, coef)
         self.calibrated.value = calibrated
 
     def _setBackground(self, bckg):

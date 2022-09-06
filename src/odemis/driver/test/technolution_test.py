@@ -1600,7 +1600,7 @@ class TestMPPC(unittest.TestCase):
         line_scan_time = acq_dwell_time * resolution
         # check if line scan time is integer multiple of descanner clock period
         remainder_scanning_time = line_scan_time % self.MirrorDescanner.clockPeriod.value
-        if remainder_scanning_time is not 0:
+        if remainder_scanning_time != 0:
             # make line scan time an integer multiple of the clock period by adding the extra time needed
             flyback_time = flyback_time + (self.MirrorDescanner.clockPeriod.value - remainder_scanning_time)
         exp_line_scan_time = numpy.round(line_scan_time + flyback_time, 9)  # round to prevent floating point errors
