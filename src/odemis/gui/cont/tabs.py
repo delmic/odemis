@@ -5814,7 +5814,7 @@ class Sparc2AlignTab(Tab):
             add_axis("grating", main_data.spectrograph)
             add_axis("wavelength", main_data.spectrograph)
             add_axis("slit-in", main_data.spectrograph)
-            add_axis("band", main_data.light_filter, "filter")
+            add_axis("band", main_data.light_filter, "Filter")
 
             as_stream.should_update.subscribe(self._on_ccd_stream_play)
 
