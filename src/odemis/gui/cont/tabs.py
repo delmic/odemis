@@ -5946,7 +5946,7 @@ class Sparc2AlignTab(Tab):
             "lens-align": "mirror-align",  # if autofocus is needed: spec-focus (first)
             "lens2-align": "lens2-align",  # if autofocus is needed: spec-focus (first)
             "center-align": "ar",
-            "ek-align": "ek",
+            "ek-align": "ek-align",
             "fiber-align": "fiber-align",
             "streak-align": "streak-align",
         }
