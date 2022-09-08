@@ -238,7 +238,7 @@ SPARC2: {
         # Default position of the lens (can be improved by user)
         FAV_POS_ACTIVE: {"x": 0.0045} # m
     },
-    affects: ["Camera", "Spectrometer 1", "Spectral Camera", "Spectrometer 2"],
+    affects: ["Lens2 Switch"],
 }
 
 # The second lens of Plate 1, either to working or parking position
