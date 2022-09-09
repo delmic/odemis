@@ -20,7 +20,8 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 """
 from odemis.gui import img, BG_COLOUR_MAIN
-from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb
+from odemis.gui.util.conversion import change_brightness, wxcol_to_frgb, \
+    frgb_to_wxcol
 import wx
 
 
@@ -376,7 +377,7 @@ class CaptionBar(wx.Window):
 
         rf, gf, bf = col1
         for y in range(rect.y, rect.y + rect.height):
-            cur_col = (rf * 255, gf * 255, bf * 255)
+            cur_col = frgb_to_wxcol((rf, gf, bf))
             dc.SetBrush(wx.Brush(cur_col, wx.BRUSHSTYLE_SOLID))
             dc.DrawRectangle(rect.x, rect.y + (y - rect.y), rect.width, rect.height)
             rf = rf + rstep
