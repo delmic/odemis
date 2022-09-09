@@ -809,7 +809,7 @@ class ViewButtonController(object):
         """ Associate each button with the correct visible viewport """
 
         if not self.viewports:
-            logging.warn("Could not handle view change, viewports unknown!")
+            logging.warning("Could not handle view change, viewports unknown!")
             return
 
         self._unsubscribe()

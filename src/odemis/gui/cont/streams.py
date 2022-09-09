@@ -2228,7 +2228,7 @@ class StreamBarController(object):
         # Remove from the views
         for v in self._tab_data_model.views.value:
             if hasattr(v, "removeStream"):
-                # logging.warn("> %s > %s", v, stream)
+                # logging.warning("> %s > %s", v, stream)
                 v.removeStream(stream)
 
         # Remove from the list of streams

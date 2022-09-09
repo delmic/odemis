@@ -100,7 +100,7 @@ class VigilantAttributeConnector(object):
             logging.debug("Setting VA value to %s after control event %d", value, evt.Id)
             self.vigilattr.value = value
         except (ValueError, TypeError, IndexError) as exc:
-            logging.warn("VA refused value %s: %s", value, exc)
+            logging.warning("VA refused value %s: %s", value, exc)
             self.va_2_ctrl(self.vigilattr.value)
         evt.Skip()
 

@@ -250,7 +250,7 @@ def determine_default_control(va):
     """
 
     if not va:
-        logging.warn("No VA provided!")
+        logging.warning("No VA provided!")
         return odemis.gui.CONTROL_NONE
 
     if va.readonly:
