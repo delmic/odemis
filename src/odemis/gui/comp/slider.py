@@ -28,7 +28,7 @@ from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
 from abc import abstractmethod
 from odemis.gui import img
 from odemis.gui.util import wxlimit_invocation
-import collections
+from collections.abc import Iterable
 import logging
 import math
 import odemis.gui as gui
@@ -767,7 +767,7 @@ class VisualRangeSlider(BaseSlider):
     def SetRange(self, min_value, max_value=None):
         # Make it compatible with passing a tuple as argument
         if max_value is None:
-            if isinstance(min_value, collections.Iterable) and len(min_value) == 2:
+            if isinstance(min_value, Iterable) and len(min_value) == 2:
                 min_value, max_value = min_value
             else:
                 raise ValueError("Needs min and max values")
