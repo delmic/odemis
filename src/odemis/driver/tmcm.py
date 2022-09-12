@@ -904,7 +904,7 @@ class TMCLController(model.Actuator):
             try:
                 self._serial.write(msg)
             except IOError:
-                logging.warn("Failed to send command to TMCM, trying to reconnect.")
+                logging.warning("Failed to send command to TMCM, trying to reconnect.")
                 self._tryRecover()
                 # Failure here should mean that the device didn't get the (complete)
                 # instruction, so it's safe to send the command again.
@@ -914,7 +914,7 @@ class TMCLController(model.Actuator):
                 try:
                     res = self._serial.read(9)
                 except IOError:
-                    logging.warn("Failed to read from TMCM, trying to reconnect.")
+                    logging.warning("Failed to read from TMCM, trying to reconnect.")
                     self._tryRecover()
                     # We already sent the instruction before, so don't send it again
                     # here. Instead, raise an error and let the user decide what to do next

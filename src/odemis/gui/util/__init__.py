@@ -94,7 +94,7 @@ def ignore_dead(f, self, *args, **kwargs):
     try:
         return f(self, *args, **kwargs)
     except RuntimeError:
-        logging.warn("Dead object %s ignored in %s", self, f.__name__)
+        logging.warning("Dead object %s ignored in %s", self, f.__name__)
 
 
 def dead_object_wrapper(f):

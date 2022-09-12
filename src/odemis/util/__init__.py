@@ -489,7 +489,7 @@ def limit_invocation(delay_s):
     """
 
     if delay_s > 5:
-        logging.warn("Warning! Long delay interval. Please consider using "
+        logging.warning("Warning! Long delay interval. Please consider using "
                      "an interval of 5 or less seconds")
 
     def li_dec(f):

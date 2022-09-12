@@ -458,7 +458,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             self.update_projection(b_start_pos, b_end_pos, (shift[0], shift[1], scale))
 
-            # logging.warn("%s %s", shift, phys_to_buffer_pos(shift))
+            # logging.warning("%s %s", shift, phys_to_buffer_pos(shift))
             rect = (b_start_pos.x,
                     b_start_pos.y,
                     b_end_pos.x - b_start_pos.x,
@@ -729,7 +729,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     self._roa.value = UNDEFINED_ROI
 
         else:
-            logging.warn("Expected ROA not found!")
+            logging.warning("Expected ROA not found!")
 
     def _draw_points(self, ctx):
         # Calculate the offset of the center of the buffer relative to the

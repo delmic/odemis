@@ -509,7 +509,7 @@ class PMTControl(model.PowerSupplier):
             try:
                 self._serial.write(cmd)
             except IOError:
-                logging.warn("Failed to send command to PMT Control firmware, "
+                logging.warning("Failed to send command to PMT Control firmware, "
                              "trying to reconnect.")
                 if self._recovering:
                     raise
@@ -525,7 +525,7 @@ class PMTControl(model.PowerSupplier):
                 try:
                     char = self._serial.read()
                 except IOError:
-                    logging.warn("Failed to read from PMT Control firmware, "
+                    logging.warning("Failed to read from PMT Control firmware, "
                                  "trying to reconnect.")
                     if self._recovering:
                         raise
