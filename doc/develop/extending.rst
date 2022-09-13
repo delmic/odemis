@@ -560,8 +560,8 @@ directory following the interface for the specific type of component (see the
 back-end API in chapter _`Back-end Application Programming Interface`).
 
 Add a test class to the test directory which instantiates the component and at
-least detects whether the component is connected or not (``scan()`` and ``selfTest()``
-methods) and does basic tasks (e.g., acquiring an image or moving an actuator).
+least detects whether the component is connected or not
+and does basic tasks (e.g., acquiring an image or moving an actuator).
 
 Update the microscope configuration file for instantiating the microscope with the
 parameters for your new driver.
@@ -574,6 +574,19 @@ reloads the list of rules at boot time. So, when changing the rules, you can
 force it to reload them with::
 
     sudo udevadm control --reload-rules
+
+When developing a device adapter, it's normally possible to use the module independently
+from the rest of Odemis to test and debug it. However, eventually the module will be used
+by the back-end, as defined within a microscope file. If during this phase some
+issue arises, it is possible to observe the entire back-end with a debugger, but
+it is not straightforwards. Normally the back-end is run as root, and executes
+every adapter in a separate process. This makes the debugging quite complicated.
+If you need to execute the back-end in a debugger, you can disable the multi-process
+safety, and run it as a normal user with a command looking like this::
+
+    python3 src/odemis/odemisd/main.py --debug --log-level 2 path/to/microscope.odm.yaml
+
+
 
 
 Adding a feature to the Graphical User Interface
