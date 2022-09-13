@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import queue
 from past.builtins import long
-import collections
+from collections.abc import Iterable
 import functools
 import gc
 import glob
@@ -2700,7 +2700,7 @@ class Scanner(model.Emitter):
 
         if scanning_ttl:
             for c, v in scanning_ttl.items():
-                if not isinstance(v, collections.Iterable):
+                if not isinstance(v, Iterable):
                     # If no name given, put None as name
                     v = (v, None)
                 if len(v) == 2:

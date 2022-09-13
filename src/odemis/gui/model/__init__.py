@@ -24,7 +24,7 @@ from future.utils import with_metaclass
 from past.builtins import basestring, long
 import queue
 from abc import ABCMeta
-import collections
+from collections.abc import Mapping
 import logging
 import math
 
@@ -448,7 +448,7 @@ class MainGUIData(object):
         ts = []
         for c in self.microscope.children.value:
             # Actuators have an .axes roattribute
-            if not isinstance(c.axes, collections.Mapping):
+            if not isinstance(c.axes, Mapping):
                 continue
             # Run each of them in a separate thread, to ensure we stop all ASAP
             t = threading.Thread(target=self._stopActuator, name=c.name, args=(c,))

@@ -24,7 +24,7 @@ see http://www.gnu.org/licenses/.
 # they were initialised with.
 
 from past.builtins import basestring, long
-import collections
+from collections.abc import Iterable
 import copy
 import gc
 import logging
@@ -382,7 +382,7 @@ class StaticARStream(StaticStream):
         :param data: (model.DataArray(Shadow) of shape (YX) or list of such DataArray(Shadow)).
         The metadata MD_POS, MD_AR_POLE and MD_POL_MODE should be provided
         """
-        if not isinstance(data, collections.Iterable):
+        if not isinstance(data, Iterable):
             data = [data]  # from now it's just a list of DataArray
 
         # TODO: support DAS, as a "delayed loading" by only calling .getData()
