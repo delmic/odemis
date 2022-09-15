@@ -621,6 +621,7 @@ class StaticSpectrumStream(StaticStream):
             # cached list of angle or timestamps for each position in the second dimension
             if dims[1] == "A":
                 theta_list, unit_theta = spectrum.get_angle_range(image)
+                # TODO: handle case where theta list is only NAN
                 # Only keep valid values (ie, not the NaN)
                 # Note, the .calibrated data will have the same columns removed
                 self._thetal_px_values = numpy.array([theta for theta in theta_list if not math.isnan(theta)])
