@@ -256,6 +256,7 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     # exactly at POS_ACTIVE.
     # TODO: should have a POS_ACTIVE_RANGE to define the whole region
     if (_isNearPosition(current_pos, align_active, align.axes) or
+        _isNearPosition(current_pos, align_alignment, align.axes) or
         _isNearPosition(current_pos, three_beams, align.axes)
        ):
         return THREE_BEAMS
