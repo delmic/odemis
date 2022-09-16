@@ -27,11 +27,13 @@ import unittest
 from builtins import range
 
 import numpy
+from matplotlib import cm, colors
 
 from odemis import model
 from odemis.dataio import tiff
 from odemis.util import img, get_best_dtype_for_acc, testing
 from odemis.util.img import Bin, mean_within_circle
+from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -1182,6 +1184,314 @@ class TestRotateImage(unittest.TestCase):
             numpy.testing.assert_array_equal(image, rotated_img)  # The data should not change, only the metadata.
 
 
+class TestTintToMdFormat(unittest.TestCase):
+    # inputs should be tuple/list, colormap and str
+    # outputs can be str or tuple
+
+    def test_tint_to_md_format_tuple(self):
+        """
+        check if passing a tint tuple will lead
+        to returning the correct metadata format
+        """
+
+        # test Tuple tint instance type
+        tint_output = img.tint_to_md_format((240, 240, 10))
+        self.assertTrue(isinstance(tint_output, tuple))
+
+    def test_tint_to_md_format_colormap(self):
+        """
+        check if passing a tint colormap will lead
+        to returning the correct metadata format
+        """
+
+        # test Colormap tint instance type
+        tint_output = img.tint_to_md_format(cm.get_cmap('summer', 10))
+        self.assertTrue(isinstance(tint_output, str))
+
+    def test_tint_to_md_format_str(self):
+        """
+        check if passing a known tint str will lead
+        to returning the correct metadata format
+        """
+
+        # test str tint instance type
+        tint_output = img.tint_to_md_format(TINT_FIT_TO_RGB)
+        self.assertTrue(isinstance(tint_output, str))
+
+    def test_tint_to_md_format_unexpected(self):
+        """
+        check if passing an unknown tint str will
+        lead to raising a correct exception
+        """
+
+        TINT_RGB_NONE = "norgb"
+
+        # test an unknown str tint instance type
+        with self.assertRaises(ValueError):
+            img.tint_to_md_format(TINT_RGB_NONE)
+
+
+class TestMdFormatToTint(unittest.TestCase):
+    # inputs should be str or tuple
+    # outputs can be tint type of str/tuple/colormap
+
+    def test_md_format_to_tint_tuple(self):
+        """
+        check if passing a tuple user_tint type in saved
+        metadata will lead to returning the correct tint format
+        """
+
+        # test Tuple metadata user_tint
+        tint_output = img.md_format_to_tint((240, 240, 10))
+        self.assertTrue(isinstance(tint_output, tuple))
+
+    def test_md_format_to_tint_str(self):
+        """
+        check if passing a known str user_tint type in saved
+        metadata will lead to returning the correct tint format
+        """
+
+        # test standard fitrgb str metadata user_tint
+        tint_output = img.md_format_to_tint(TINT_FIT_TO_RGB)
+        self.assertTrue(isinstance(tint_output, str))
+
+    def test_md_format_to_tint_unknown_str(self):
+        """
+        check if passing an unknown str user_tint type in saved
+        metadata will lead to raising the correct exception
+        """
+
+        TINT_RGB_NONE = "norgb"
+
+        # test unknown str metadata user_tint
+        with self.assertRaises(ValueError):
+            img.md_format_to_tint(TINT_RGB_NONE)
+
+    def test_md_format_to_tint_colormap(self):
+        """
+        check if passing a colormap name user_tint type in saved
+        metadata will lead to returning the correct tint format
+        """
+
+        # test ListedColormap str metadata user_tint
+        tint_output = img.md_format_to_tint('autumn')
+        self.assertTrue(isinstance(tint_output, colors.Colormap))
+
+    def test_md_format_to_tint_unknown_type(self):
+        """
+        check if passing an unknown user_tint type in saved
+        metadata will lead to raising the correct exception
+        """
+
+        # test unknown str metadata user_tint
+        with self.assertRaises(TypeError):
+            img.md_format_to_tint(0.05)
+
+
+class TestGetOutliers(unittest.TestCase):
+    # inputs should be an image data array and a float ratio
+    # output is tuple of 2 values for min/max range
+
+    def test_getOutliers_default(self):
+        """
+        Verify that the default outlier value will return the
+        right min/max values of the given range within a set DA
+        """
+
+        # input will be a DA containing a fake picture
+        size = (300, 300)
+        low_range = 0
+        high_range = 250
+
+        # use random integers to fill the DA
+        numpy.random.seed(0)
+        data = numpy.random.randint(low_range, high_range, size)
+
+        # keep the value for outliers default
+        output_range = img.getOutliers(data)
+
+        # set expected output values based on low_range high_range input
+        calc_output1 = 0.0
+        calc_output2 = high_range - 1.0
+
+        # assess the returned 2-valued tuple min/max range values
+        self.assertEqual(output_range[0] == calc_output1, output_range[1] == calc_output2)
+
+    def test_getOutliers_discard_all(self):
+        """
+        Verify that a specific outlier value will return the
+        right min/max values of the given range within a set DA
+        """
+
+        # input will be a DA containing a fake picture and a value for outliers
+        size = (300, 300)
+        low_range = 0
+        high_range = 250
+        outlier_num = 0.5  # use the max value (discard all) for median return
+
+        # use random integers to fill the DA
+        numpy.random.seed(0)
+        data = numpy.random.randint(low_range, high_range, size)
+
+        output_range = img.getOutliers(data, outlier_num)
+
+        # set expected output values based on low_range high_range
+        # input and take the outlier value into account
+        calc_output1 = high_range * outlier_num
+        calc_output2 = float(high_range) - calc_output1
+
+        # assess the returned 2-valued tuple min/max range values
+        self.assertEqual(output_range[0] == calc_output1, output_range[1] == calc_output2)
+
+
+class TestGuessDRange(unittest.TestCase):
+
+    def test_guessDRange_zero_BPP(self):
+        """
+        Not exactly sure what has to be tested here
+        """
+
+        size = (2000, 1000)
+        md = {
+              model.MD_DIMS: 'YX',
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+              model.MD_BPP: 0
+             }
+
+        # arr = numpy.arange(size[0] * size[1], dtype=numpy.uint8)
+        arr = numpy.arange(size[0] * size[1], dtype=numpy.float)
+        data = model.DataArray(arr, metadata=md)
+
+        with self.assertRaises(TypeError):
+            min_max_values = img.guessDRange(data)
+
+        # min/max values should be uint8 min/max
+        min_max_type = numpy.iinfo(numpy.uint8)
+
+        # self.assertEqual(min_max_values[0] == min_max_type.min, min_max_values[1] == min_max_type.max)
+
+    def test_guessDRange_wrong_type(self):
+        """
+        Not exactly sure what has to be tested here
+        """
+
+        size = (2000, 1000)
+        md = {
+              model.MD_DIMS: 'YX',
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+              model.MD_BPP: 0
+             }
+
+        arr = numpy.arange(size[0] * size[1], dtype=numpy.float)
+        data = model.DataArray(arr, metadata=md)
+
+        with self.assertRaises(TypeError):
+            img.guessDRange(data)
+
+    def test_guessDRange(self):
+        """
+        Test the data range of the data based on guess method
+        """
+
+        size = (2000, 1000)
+        md = {
+              model.MD_DIMS: 'YX',
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+              model.MD_BPP: 8
+             }
+
+        # check for dtype uint8
+        arr = numpy.arange(size[0] * size[1], dtype='uint8')
+        data = model.DataArray(arr, metadata=md)
+
+        # min/max values are dependent on given BPP
+        min_max_values = img.guessDRange(data)
+
+        self.assertEqual(min_max_values[0] == 0, min_max_values[1] == (2 ** data.metadata[model.MD_BPP]) - 1)
+
+        # check for dtype int32
+        arr = arr.astype('int32')
+        data = model.DataArray(arr, metadata=md)
+
+        min_max_values = img.guessDRange(data)
+
+        self.assertEqual(min_max_values[0] == -abs(2 ** data.metadata[model.MD_BPP] // 2),
+                         min_max_values[1] == (2 ** data.metadata[model.MD_BPP] // 2) - 1)
+
+    def test_getColorbar(self):
+        """
+
+        :return:
+        """
+
+        # input will be color_map (obj matplotlib) height (int), width (int) and alpha (bool) with def=false
+        input_cm = cm.get_cmap('cividis')
+        input_height = 16
+        input_width = 72
+        input_alpha = False
+
+        # NumPy array of uint8 RGB tuples is returned
+        output_array = img.getColorbar(input_cm, input_height, input_width, input_alpha)
+
+        # test going back to a known color map?
+        # convert RGB values of uint8 to float
+        # self.assertRaises()
+
+
+    def test_tintToColormap(self):
+        """
+
+        :return:
+        """
+
+    def test_getYXFromZYX(self):
+        """
+
+        :return:
+        """
+
+    def test_ensure2DImage(self):
+        """
+
+        :return:
+        """
+
+    def test_Subtract(self):
+        """
+
+        :return:
+        """
+
+    def test_mergeMetadata(self):
+        """
+
+        :return:
+        """
+
+    def test_getTilesSize(self):
+        """
+
+        :return:
+        """
+
+    def test_getCenterOfTiles(self):
+        """
+
+        :return:
+        """
+
+    def test_getBoundingBox(self):
+        """
+
+        :return:
+        """
+
+    def test_assembleZCube(self):
+        """
+
+        :return:
+        """
+
 class TestFloodFill(unittest.TestCase):
 
     def test_standard_fill(self):
@@ -1219,7 +1529,6 @@ class TestFloodFill(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             img.apply_flood_fill(a, (2, 4))
-
 
 # TODO: test guessDRange()
 
