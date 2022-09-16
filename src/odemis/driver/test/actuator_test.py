@@ -197,6 +197,63 @@ class FixedPositionsTest(unittest.TestCase):
         super(FixedPositionsTest, self).tearDown()
 
 
+class FixedPositionsTestAntibacklash(unittest.TestCase):
+
+    def setUp(self):
+        # create a dependency as a standard TMCL controller
+        self.dependency = tmcm.TMCLController(name="test", role="test",
+                                         port="/dev/fake3",
+                                         axes=["x"],
+                                         ustepsize=[10e-6],
+                                         rng=[[-10e-3, 10e-3]],
+                                         refproc="Standard")
+
+        # create a stage with a backlash value
+        self.ab_stage = AntiBacklashActuator("absact", "align", {"orig": self.dependency},
+                                     backlash={"x": 100e-6})
+
+        # create a normal device FixedPositionActuator with positions that are 'slightly off' rounded numbers
+        self.dev_normal = FixedPositionsActuator("stage", "stage",
+                                                 {"x": self.ab_stage},
+                                                 "x",
+                                                 # Fixed positions, which cannot be reached exactly with the ustepsize
+                                                 {0 + 2e-6: "pos0", 0.001 + 3e-6: "pos1",
+                                                  0.002 - 2e-6: "pos2", 0.003 - 6e-6: "pos3"}
+                                                 )
+        self.dev_cycle = FixedPositionsActuator("stage", "stage",
+                                                {"x": self.ab_stage}, "x", {0: "pos0", 0.01: "pos1",
+                                                                      0.02: "pos2", 0.03: "pos3",
+                                                                      0.04: "pos4", 0.05: "pos5"}, cycle=0.06)
+
+    def test_same_position(self):
+        # fixed_pos = 0.001 + 3e-6
+        # rounded_pos = 0.001
+        # Because the position is rounded up, on the second move the antibacklash will activate (as the requested
+        # position is less than the current position), and cause 2 moves... unless the FixedPositionActuator skips the move
+        fixed_pos = 0.002 - 2e-6
+        rounded_pos = 0.002
+
+        f = self.dev_normal.moveAbs({'x': fixed_pos})
+        f.result()
+
+        self.assertEqual(self.dependency.position.value['x'], rounded_pos)
+
+        # Check whether the low level stage actually moved, or that this was shortcut
+        self._dep_positions = []
+        self.dependency.position.subscribe(self._on_dep_pos)
+
+        # There should be no move (even with backlash), as it's already at the right place
+        # (although it reports a slightly different position).
+        f = self.dev_normal.moveAbs({'x': fixed_pos})
+        f.result()
+
+        self.assertEqual(self._dep_positions, [])  # empty list == no move
+
+    def _on_dep_pos(self, pos):
+        # add any move to the move list
+        self._dep_positions.append(pos)
+
+
 class TestCoupledStage(unittest.TestCase):
     backend_was_running = False
 
