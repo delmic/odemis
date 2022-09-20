@@ -20,13 +20,11 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
 from future.utils import with_metaclass
 from past.builtins import basestring, long
 import queue
 from abc import ABCMeta
-import collections
+from collections.abc import Mapping
 import logging
 import math
 
@@ -40,12 +38,13 @@ from odemis.acq.stream import Stream, StreamTree, RGBSpatialProjection, DataProj
 from odemis.gui.conf import get_general_conf, get_acqui_conf
 from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
-                          MD_POS, InstantaneousFuture, hasVA, StringEnumerated,
-    MD_CALIB)
+                          MD_POS, InstantaneousFuture, hasVA, StringEnumerated, MD_CALIB)
 from odemis.gui.log import observe_comp_state
 import os
 import threading
 import time
+from typing import Tuple
+
 
 # The different states of a microscope
 STATE_OFF = 0
@@ -449,7 +448,7 @@ class MainGUIData(object):
         ts = []
         for c in self.microscope.children.value:
             # Actuators have an .axes roattribute
-            if not isinstance(c.axes, collections.Mapping):
+            if not isinstance(c.axes, Mapping):
                 continue
             # Run each of them in a separate thread, to ensure we stop all ASAP
             t = threading.Thread(target=self._stopActuator, name=c.name, args=(c,))
@@ -902,21 +901,6 @@ class CryoChamberGUIData(CryoGUIData):
         self.stage_align_slider_va = model.FloatVA(1e-6)
         self.show_advaned = model.BooleanVA(False)
 
-        # Some extra checks on the METEOR about the microscope config.
-        # The active range (on stage) should be within the FM range (on stage-bare).
-        # The difference between the two stages is only that Y is rotated (so a move
-        # on stage.Y could move less on stage-bare.Y) but typically stage-bare has a
-        # much wider range. So we assume it should always be at least as big, and
-        # this allows to detect when the user updated one metadata and not the other one.
-        if main.role == "meteor":
-            stage_fm_imaging_rng = main.stage_bare.getMetadata()[model.MD_FM_IMAGING_RANGE]
-            stage_rng = main.stage.getMetadata()[model.MD_POS_ACTIVE_RANGE]
-            for axis in ("x", "y"):
-                fm_rng = stage_fm_imaging_rng[axis]
-                if not all(fm_rng[0] <= r <= fm_rng[1] for r in stage_rng[axis]):
-                    raise ValueError(f"stage.POS_ACTIVE_RANGE should be within stage-bare.FM_IMAGING_RANGE "
-                                     f"but got axis {axis} with range {stage_rng[axis]} out of {fm_rng}")
-
 
 class AnalysisGUIData(MicroscopyGUIData):
     """
@@ -1206,6 +1190,29 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 
+    def _getImagePixelSizeNoBinning(self) -> Tuple[float, float]:
+        """
+        Finds out the pixel size of an image from the CCD if the binning was
+        at 1x1.
+        return: the pixel size (X,Y)
+        """
+        # The .pixelSize of the CCD contains the sensor pixel size.
+        # The image pixel size depend on the lens magnification and binning.
+        try:
+            md = self.main.ccd.getMetadata()
+            pxs = md[model.MD_PIXEL_SIZE]
+        except KeyError:
+            # Fallback to the sensor pixel size, which is what is used when no
+            # lens magnification is known.
+            pxs = self.main.ccd.pixelSize.value
+
+        if model.hasVA(self.main.ccd, "binning"):
+            b = self.main.ccd.binning.value
+        else:
+            b = (1, 1)
+
+        return pxs[0] / b[0], pxs[1] / b[1]
+
     def _posToCCD(self, posphy, absolute: bool=True, clip: bool=True):
         """
         Convert position from physical coordinates to CCD coordinates (top-left
@@ -1218,17 +1225,8 @@ class Sparc2AlignGUIData(ActuatorGUIData):
           an int. Otherwise the value returned will be two floats.
         return (0<=int or float, 0<=int or float)
         """
-        # We need to convert to the _image_ pixel size (not sensor), and they
-        # are different due to the lens magnification.
-        md = self.main.ccd.getMetadata()
-        try:
-            pxs = md[model.MD_PIXEL_SIZE]
-        except KeyError:
-            pxs = self.main.ccd.pixelSize.value
-        b = md.get(model.MD_BINNING, (1, 1))
-        pxs = pxs[0] / b[0], pxs[0] / b[1]
-
         # Pole position is always expressed considering there is no binning
+        pxs = self._getImagePixelSizeNoBinning()
         res = self.main.ccd.shape[0:2]
 
         # Convert into px referential (Y is inverted)
@@ -1257,15 +1255,8 @@ class Sparc2AlignGUIData(ActuatorGUIData):
           being at the top-left. Otherwise, only the scale is adjusted.
         return (float, float)
         """
-        md = self.main.ccd.getMetadata()
-        try:
-            pxs = md[model.MD_PIXEL_SIZE]
-        except KeyError:
-            pxs = self.main.ccd.pixelSize.value
-        b = md.get(model.MD_BINNING, (1, 1))
-        pxs = pxs[0] / b[0], pxs[0] / b[1]
-
         # position is always expressed considering there is no binning
+        pxs = self._getImagePixelSizeNoBinning()
         res = self.main.ccd.shape[0:2]
 
         # Convert into the referential with the center as origin

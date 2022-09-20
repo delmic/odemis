@@ -19,8 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 import logging
 import math
 from odemis.driver import smaract
@@ -46,8 +44,10 @@ COMP_ARGS = {
 
 CONFIG_SMARTPOD = {"name": "SmarPod",
         "role": "test",
-        "locator": "usb:sn:MCS2-00001614",
-        "hwmodel": 10074,  # CLS-32.17.1.D-S
+        # "locator": "usb:sn:MCS2-00001614",
+        "locator": "network:sn:MCS2-00010357",
+        # "hwmodel": 10074,  # CLS-32.17.1.D-S
+        "hwmodel": 10077,  # CLS-32.1-D-SC
         "axes": {
             'x': {
                 'range': [-0.2, 0.2],

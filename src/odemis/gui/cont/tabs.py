@@ -23,8 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from __future__ import division
-
 import collections
 from concurrent.futures._base import CancelledError, RUNNING
 from concurrent.futures import Future
@@ -2890,9 +2888,10 @@ class CryoChamberTab(Tab):
         elif self._role == 'meteor':
             self._control_warning_msg()
 
-    def _enable_position_controls(self, current_position=None):
+    def _enable_position_controls(self, current_position):
         """
         Enable/disable switching position button based on current move
+        current_position (acq.move constant): as reported by getCurrentPositionLabel()
         """
         if self._role == 'enzel':
             # Define which button to disable in respect to the current move
@@ -2928,6 +2927,22 @@ class CryoChamberTab(Tab):
                 self._toggle_switch_buttons(btn)
             else:
                 self._toggle_switch_buttons(currently_pressed=None)
+
+            # It's a common mistake that the stage.POS_ACTIVE_RANGE is incorrect.
+            # If so, the sample moving will be very odd, as the move is clipped to
+            # the range. So as soon as we reach FM_IMAGING, we check that at the
+            # current position is within range, if not, most likely that range is wrong.
+            if current_position == FM_IMAGING:
+                imaging_stage = self.tab_data_model.main.stage
+                stage_pos = imaging_stage.position.value
+                imaging_rng = imaging_stage.getMetadata().get(model.MD_POS_ACTIVE_RANGE, {})
+                for a, pos in stage_pos.items():
+                    if a in imaging_rng:
+                        rng = imaging_rng[a]
+                        if not rng[0] <= pos <= rng[1]:
+                            logging.warning("After moving to FM IMAGING, stage position is %s, outside of POS_ACTIVE_RANGE %s",
+                                            stage_pos, imaging_rng)
+                            break
 
             current_grid_label = getCurrentGridLabel(self._stage.position.value, self._stage)
             if current_grid_label in self.position_btns:
@@ -5778,22 +5793,28 @@ class Sparc2AlignTab(Tab):
                 main_data.spectrograph,
                 forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
                          model.MD_ROTATION: 0},  # Force the CCD as-is
-                analyzer=None,
+                analyzer=main_data.pol_analyzer,
                 detvas=detvas,
             )
             as_panel = self._stream_controller.addStream(as_stream,
                                                          add_to_view=self.panel.vp_align_ek.view)
 
             # Add the standard spectrograph axes (wavelength, grating, slit-in).
-            # TODO: use hardware axes?
 
-            def add_axis(axisname, comp):
+            def add_axis(axisname, comp, label=None):
+                if comp is None:
+                    return
                 hw_conf = get_hw_config(comp, main_data.hw_settings_config)
-                as_panel.add_axis_entry(axisname, comp, hw_conf.get(axisname))
+                axis_conf = hw_conf.get(axisname, {})
+                if label:
+                    axis_conf = axis_conf.copy()
+                    axis_conf["label"] = label
+                as_panel.add_axis_entry(axisname, comp, axis_conf)
 
             add_axis("grating", main_data.spectrograph)
             add_axis("wavelength", main_data.spectrograph)
             add_axis("slit-in", main_data.spectrograph)
+            add_axis("band", main_data.light_filter, "filter")
 
             as_stream.should_update.subscribe(self._on_ccd_stream_play)
 

@@ -20,9 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division
-
-import collections
+from collections.abc import Iterable
 from concurrent.futures import TimeoutError, CancelledError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
 import cv2
@@ -1088,7 +1086,7 @@ def AutoFocusSpectrometer(spectrograph, focuser, detectors, selector=None, strea
     return (ProgressiveFuture -> dict((grating, detector)->focus position)): a progressive future
       which will eventually return a map of grating/detector -> focus position.
     """
-    if not isinstance(detectors, collections.Iterable):
+    if not isinstance(detectors, Iterable):
         detectors = [detectors]
     if not detectors:
         raise ValueError("At least one detector must be provided")

@@ -25,7 +25,6 @@ Content:
     throughout Odemis.
 
 """
-from __future__ import division
 from builtins import str, chr # For Python 2 & 3
 
 import locale

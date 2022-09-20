@@ -25,8 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 #
 # This module is used both by Odemis' GUI and XRCED.
 
-from __future__ import division, print_function
-
 import ast
 import logging
 import odemis.gui.comp.buttons as btns

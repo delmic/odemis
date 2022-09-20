@@ -20,8 +20,6 @@ see http://www.gnu.org/licenses/.
 '''
 
 # A simple GUI to acquire quickly CL data and export it to TIFF or PNG files.
-from __future__ import division
-
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError
 import logging

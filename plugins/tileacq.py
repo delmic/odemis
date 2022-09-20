@@ -23,8 +23,6 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 '''
 
-from __future__ import division
-
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
     RUNNING
@@ -120,7 +118,12 @@ class TileAcqPlugin(Plugin):
         self.expectedDuration = model.VigilantAttribute(1, unit="s", readonly=True)
         self.totalArea = model.TupleVA((1, 1), unit="m", readonly=True)
         self.stitch = model.BooleanVA(True)
+
+        # Allow to running fine alignment procedure, only on SECOM and DELPHI
         self.fineAlign = model.BooleanVA(False)
+        if microscope.role not in ("secom", "delphi"):
+            self.vaconf["fineAlign"]["control_type"] = odemis.gui.CONTROL_NONE
+
         # TODO: manage focus (eg, autofocus or ask to manual focus on the corners
         # of the ROI and linearly interpolate)
 
@@ -658,16 +661,41 @@ class TileAcqPlugin(Plugin):
                 return int: The bigger the more leadership
                 """
                 # For now, we prefer a lot the EM images, because they are usually the
-                # one with the smallest FoV and the most contrast
+                # one with the smallest FoV (on the SECOM) and the most contrast.
+                # TODO: on the SPARC the CL (aka PMT) images often have even a
+                # better contrast, so maybe make it higher priority than EM?
                 if da.metadata[model.MD_ACQ_TYPE] == model.MD_AT_EM:
                     return numpy.prod(da.shape)  # More pixel to find the overlap
+                elif da.metadata[model.MD_ACQ_TYPE] == model.MD_AT_CL:
+                    return numpy.prod(da.shape) / 10
                 elif da.metadata[model.MD_ACQ_TYPE]:
                     # A lot less likely
                     return numpy.prod(da.shape) / 100
 
             das.sort(key=leader_quality, reverse=True)
-            das = tuple(das)
         return das
+
+    def _filter_duplicate_pos(self, tiles):
+        """
+        Remove tiles which are at the same position as another one.
+        It only looks at the "leader" of each set of tile (acquired at the same place).
+        If the leader is considered duplicate, the whole set is discarded.
+        Useful because the stitching functions forbid tiles (aka fail to run) if
+        two tiles are at the same position, but due to hardware issue, that might happen.
+        tiles: list of tuples of DataArrays
+        return: list of tuples of DataArrays
+        """
+        pos_seen = set()
+        tiles_uniq = []
+        for das in tiles:
+            pos = das[0].metadata.get(model.MD_POS)
+            if pos in pos_seen:
+                logging.warning("Found a tile at the same position as another one %s, will drop it", pos)
+            else:
+                pos_seen.add(pos)
+                tiles_uniq.append(das)
+
+        return tiles_uniq
 
     def _check_fov(self, das, sfov):
         """
@@ -816,8 +844,9 @@ class TileAcqPlugin(Plugin):
                     raise CancelledError()
 
                 if self.stitch.value:
-                    # Sort tiles (largest sem on first position)
-                    da_list.append(self.sort_das(das, stitch_ss))
+                    # Sort tiles (typically, largest SEM on first position)
+                    # Make it a tuple to indicate to the stitching that all the streams should be tied in position.
+                    da_list.append(tuple(self.sort_das(das, stitch_ss)))
 
                 # Check the FoV is correct using the data, and if not update
                 if i == 0:
@@ -835,6 +864,11 @@ class TileAcqPlugin(Plugin):
             elif self.stitch.value:
                 logging.info("Acquisition completed, now stitching...")
                 ft.set_progress(end=self.estimate_time(0) + time.time())
+
+                # Check that all the tiles have a different MD_POS, because the
+                # registrar doesn't like tiles on the same position. This shouldn't
+                # happen, but sometimes the stage may do weird things...
+                da_list = self._filter_duplicate_pos(da_list)
 
                 logging.info("Computing big image out of %d images", len(da_list))
                 das_registered = stitching.register(da_list)

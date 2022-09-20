@@ -132,8 +132,6 @@ Graphical data is drawn using the following sequence of method calls:
 
 """
 
-from __future__ import division
-
 from abc import abstractmethod
 import cairo
 from decorator import decorator
@@ -546,7 +544,7 @@ class BufferedCanvas(wx.Panel):
                 self.draw_timer.Start(int(delay * 1000), oneShot=True)
         except RuntimeError:
             # This only should happen when running test cases
-            logging.warn("Drawing requested on dead canvas")
+            logging.warning("Drawing requested on dead canvas")
 
     def update_drawing(self):
         """ Redraw the buffer and display it """
@@ -1864,7 +1862,7 @@ class PlotCanvas(BufferedCanvas):
             self.unit_x = unit_x
             self.unit_y = unit_y
         else:
-            logging.warn("Trying to fill PlotCanvas with empty data!")
+            logging.warning("Trying to fill PlotCanvas with empty data!")
             self.clear()
 
         wx.CallAfter(self.request_drawing_update)
@@ -2001,7 +1999,7 @@ class PlotCanvas(BufferedCanvas):
         # It is possible that the buffer has not been initialized yet, because this method can be
         # called before the Size event handler sets it.
         # if not self._bmp_buffer:
-        #     logging.warn("No buffer created yet, ignoring draw request")
+        #     logging.warning("No buffer created yet, ignoring draw request")
         #     return
 
         if not self or 0 in self.ClientSize:

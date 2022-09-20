@@ -19,10 +19,8 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 from past.builtins import basestring
-import collections
+from collections.abc import Iterable
 import glob
 import logging
 import math
@@ -225,13 +223,13 @@ class SpectraPro(model.Actuator):
 
         # First step of parsing calib parmeter: convert to (int, int) -> ...
         calib = calib or ()
-        if not isinstance(calib, collections.Iterable):
+        if not isinstance(calib, Iterable):
             raise ValueError("calib parameter must be in the format "
                              "[blz, gl, ca, sa, fl, ia, da], "
                              "but got %s" % (calib,))
         dcalib = {}
         for c in calib:
-            if not isinstance(c, collections.Iterable) or len(c) != 7:
+            if not isinstance(c, Iterable) or len(c) != 7:
                 raise ValueError("calib parameter must be in the format "
                                  "[blz, gl, ca, sa, fl, ia, da], "
                                  "but got %s" % (c,))

@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Driver for the Avantes spectrometers. The wavelengths are fixed, so no
 # spectrograph (actuator) component is provided, just the detector component.
 
-from __future__ import division
-
 from ctypes import *
 import ctypes
 import logging

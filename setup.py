@@ -4,8 +4,6 @@
 # To rebuild just the cython modules, use these commands:
 # sudo apt-get install python-setuptools cython
 # python3 setup.py build_ext --inplace
-from __future__ import division, print_function
-
 from setuptools import setup, find_packages
 from Cython.Build import cythonize # Warning: must be _after_ setup import
 import glob
@@ -15,7 +13,7 @@ import sys
 import numpy
 
 # To be updated to the current version
-VERSION = "3.1.0"
+VERSION = "3.2.0"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 

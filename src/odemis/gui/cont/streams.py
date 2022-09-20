@@ -21,9 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from __future__ import division
-
-import collections
+from collections import OrderedDict
+from collections.abc import Iterable
 import functools
 import gc
 import locale
@@ -31,7 +30,6 @@ import logging
 import threading
 import time
 from builtins import str
-from collections import OrderedDict
 
 import numpy
 import wx
@@ -465,7 +463,7 @@ class StreamController(object):
                 if (
                     isinstance(value, (int, long, float)) or
                     (
-                        isinstance(value, collections.Iterable) and
+                        isinstance(value, Iterable) and
                         len(value) > 0 and
                         isinstance(value[0], (int, long, float))
                     )
@@ -1242,7 +1240,7 @@ class StreamController(object):
                 fluo.FIT_IMPOSSIBLE: u"The peak is too far from the band %d→%d nm"
             }[fit]
 
-            if isinstance(band[0], collections.Iterable):  # multi-band
+            if isinstance(band[0], Iterable):  # multi-band
                 band = fluo.find_best_band_for_dye(wl, band)
             low, high = [int(round(b * 1e9)) for b in (band[0], band[-1])]
             lbl_ctrl.SetToolTip(tooltip % (low, high))
@@ -1477,7 +1475,7 @@ class StreamBarController(object):
         # Disable all controls
         self.locked_mode = locked
 
-        self.menu_actions = collections.OrderedDict()  # title => callback
+        self.menu_actions = OrderedDict()  # title => callback
 
         self._scheduler_subscriptions = {}  # stream -> callable
         self._sched_policy = SCHED_LAST_ONE  # works well in most cases
@@ -2230,7 +2228,7 @@ class StreamBarController(object):
         # Remove from the views
         for v in self._tab_data_model.views.value:
             if hasattr(v, "removeStream"):
-                # logging.warn("> %s > %s", v, stream)
+                # logging.warning("> %s > %s", v, stream)
                 v.removeStream(stream)
 
         # Remove from the list of streams

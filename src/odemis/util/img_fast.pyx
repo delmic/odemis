@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # Optimised versions of the functions of odemis.util.img
 
-from __future__ import division
 import cython
 
 # import both numpy and the Cython declarations for numpy

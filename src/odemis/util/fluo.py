@@ -17,9 +17,7 @@ You should have received a copy of the GNU General Public License along with Ode
 
 # various functions to help with computations related to fluorescence microscopy
 
-from __future__ import division
-
-import collections
+from collections.abc import Iterable
 from odemis.model import BAND_PASS_THROUGH
 from past.builtins import basestring  # For Python 2 & 3
 
@@ -43,7 +41,7 @@ def get_center(band):
     if isinstance(band, basestring):
         raise TypeError("Band must be a list or a tuple")
 
-    if isinstance(next(iter(band)), collections.Iterable):
+    if isinstance(next(iter(band)), Iterable):
         return tuple(get_center(b) for b in band)
 
     if len(band) % 2 == 0:
@@ -64,13 +62,13 @@ def get_one_band_em(bands, ex_band):
     if bands == BAND_PASS_THROUGH:
         return bands
 
-    if not isinstance(next(iter(bands)), collections.Iterable):
+    if not isinstance(next(iter(bands)), Iterable):
         return bands
 
     # Need to guess: the closest above the excitation wavelength
     if ex_band == BAND_PASS_THROUGH:
         ex_center = 1e9  # Nothing will match
-    elif isinstance(next(iter(ex_band)), collections.Iterable):
+    elif isinstance(next(iter(ex_band)), Iterable):
         # It's getting tricky, but at least above the smallest one
         ex_center = min(get_center(ex_band))
     else:
@@ -113,13 +111,13 @@ def get_one_band_ex(bands, em_band):
         return bands
 
     # FIXME: make it compatible with sets instead of list
-    if not isinstance(next(iter(bands)), collections.Iterable):
+    if not isinstance(next(iter(bands)), Iterable):
         return bands
 
     # Need to guess: the closest below the emission wavelength
     if em_band == BAND_PASS_THROUGH:
         em_center = 0  # Nothing will match
-    elif isinstance(next(iter(em_band)), collections.Iterable):
+    elif isinstance(next(iter(em_band)), Iterable):
         # It's getting tricky, but at least below the biggest one
         em_center = max(get_center(em_band))
     else:
@@ -158,7 +156,7 @@ def get_one_center(band):
 
     :return: (float) wavelength in m
     """
-    if isinstance(band[0], collections.Iterable) and band != BAND_PASS_THROUGH:
+    if isinstance(band[0], Iterable) and band != BAND_PASS_THROUGH:
         return get_center(band[0])
     else:
         return get_center(band)
@@ -178,7 +176,7 @@ def estimate_fit_to_dye(wl, band):
     # TODO: support multiple-peak/band/curve for the dye
 
     # if multi-band: get the best of all
-    if isinstance(band[0], collections.Iterable):
+    if isinstance(band[0], Iterable):
         return max(estimate_fit_to_dye(wl, b) for b in band)
 
     if band[0] < wl < band[-1]: # within the hardware range
@@ -202,7 +200,7 @@ def quantify_fit_to_dye(wl, band):
         return 0  # Pass-through is never good for fluorescence microscopy
 
     # if multi-band: get the best of all
-    if isinstance(band[0], collections.Iterable):
+    if isinstance(band[0], Iterable):
         return max(quantify_fit_to_dye(wl, b) for b in band)
 
     center = get_center(band)
@@ -250,7 +248,7 @@ def to_readable_band(band):
     #   ex: 453, 568, 968 nm
     if isinstance(band, basestring):
         return band
-    if not isinstance(band[0], collections.Iterable):
+    if not isinstance(band[0], Iterable):
         b = band
         center_nm = int(round(get_center(b) * 1e9))
 

@@ -39,8 +39,6 @@ other dealings in the software.
 # TODO: Include UI in which ROI and drift correction can be used as well
 
 
-from __future__ import division
-
 from collections import OrderedDict
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, RUNNING
 import logging

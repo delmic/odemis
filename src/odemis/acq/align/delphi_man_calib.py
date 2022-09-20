@@ -32,8 +32,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # odemisd --log-level 2 install/linux/usr/share/odemis/delphi.odm.yaml
 
 
-from __future__ import division, print_function
-
 import argparse
 from builtins import input
 import collections

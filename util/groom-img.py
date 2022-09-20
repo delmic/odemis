@@ -6,8 +6,6 @@
 # Call like:
 # ./util/groom-img.py -s src/odemis/gui/img/
 
-from __future__ import division, absolute_import, print_function
-
 import argparse
 import os
 import subprocess

@@ -20,8 +20,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from __future__ import absolute_import, division
-
 import queue
 from past.builtins import long
 import gc

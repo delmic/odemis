@@ -23,8 +23,6 @@ Created on 8 Feb 2012
 
 """
 
-from __future__ import division
-
 from abc import abstractmethod
 import collections
 from concurrent.futures._base import CancelledError

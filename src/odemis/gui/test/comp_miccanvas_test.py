@@ -25,8 +25,6 @@
 #===============================================================================
 # Test module for Odemis' gui.comp.canvas module
 #===============================================================================
-from __future__ import division, print_function
-
 from collections import deque
 import threading
 

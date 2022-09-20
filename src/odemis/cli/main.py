@@ -22,13 +22,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
 
-from __future__ import division, print_function
-
 from past.builtins import basestring, unicode
 from builtins import str
+from collections.abc import Iterable, Mapping
 import argparse
 import codecs
-import collections
 import importlib
 import inspect
 import logging
@@ -464,7 +462,7 @@ def get_detector(comp_name):
     """
     comp = get_component(comp_name)
     # check it's a detector by looking at some of the required attributes
-    if (not isinstance(comp.shape, collections.Iterable) or
+    if (not isinstance(comp.shape, Iterable) or
         not isinstance(comp.data, model.DataFlowBase)):
         raise ValueError("Component %s is not a detector" % comp.name)
     return comp
@@ -506,7 +504,7 @@ def set_attr(comp_name, attr_val_str):
         # case.
         if (isinstance(new_val, float) and
            hasattr(attr, "choices") and
-           isinstance(attr.choices, collections.Iterable)):
+           isinstance(attr.choices, Iterable)):
             orig_val = new_val
             choices = [v for v in attr.choices if isinstance(v, numbers.Number)]
             new_val = util.find_closest(new_val, choices)
@@ -692,7 +690,7 @@ def move_abs(comp_name, moves, check_distance=True, to_radians=False):
             # avoid the rounding error by looking for the closest possible
             if (isinstance(position, numbers.Real) and
                 hasattr(ad, "choices") and
-                isinstance(ad.choices, collections.Iterable) and
+                isinstance(ad.choices, Iterable) and
                 position not in ad.choices):
                 closest = util.find_closest(position, ad.choices)
                 if util.almost_equal(closest, position, rtol=1e-3):
@@ -761,7 +759,7 @@ def stop_move():
 
     error = False
     for c in comps:
-        if not isinstance(c.axes, collections.Mapping):
+        if not isinstance(c.axes, Mapping):
             continue
         try:
             c.stop()

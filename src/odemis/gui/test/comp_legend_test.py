@@ -21,8 +21,6 @@ This file is part of Odemis.
 """
 
 # Test module for Odemis' gui.comp.legend module
-from __future__ import division
-
 import collections
 import numbers
 import sys

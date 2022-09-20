@@ -20,8 +20,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 import logging
 import math
 import numpy
@@ -201,7 +199,7 @@ class TestCSVIO(unittest.TestCase):
         """Try simple spectrum-line export"""
         size = (1340, 6)
         dtype = numpy.float
-        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
+        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[1]).tolist(),
               model.MD_PIXEL_SIZE: (None, 4.2e-06),
               model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
               model.MD_DIMS: "XC"}
@@ -235,6 +233,41 @@ class TestCSVIO(unittest.TestCase):
         # check it's here
         st = os.stat(FILENAME)  # this test also that the file is created
         self.assertGreater(st.st_size, 5)
+        raised = False
+        try:
+            pycsv.reader(open(FILENAME, 'rb'))
+        except IOError:
+            raised = True
+        self.assertFalse(raised, 'Failed to read csv file')
+
+    def testExportTemporalSpectrum(self):
+        """Try simple temporal spectrum export; note that size is made up and is not specific"""
+        size = (150, 340)
+        dtype = numpy.uint16
+
+        # test for wavelength
+        md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[1]).tolist(),
+              model.MD_ACQ_TYPE: model.MD_AT_TEMPSPECTRUM,
+              model.MD_DIMS: "TC"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+        data += 56
+
+        # export
+        csv.export(FILENAME, data)
+
+        # test for time
+        md = {model.MD_TIME_LIST: numpy.linspace(536e-9, 650e-9, size[0]).tolist(),
+              model.MD_ACQ_TYPE: model.MD_AT_TEMPSPECTRUM,
+              model.MD_DIMS: "TC"}
+        data = model.DataArray(numpy.zeros(size, dtype), md)
+        data += 56
+
+        # export
+        csv.export(FILENAME, data)
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 150)
         raised = False
         try:
             pycsv.reader(open(FILENAME, 'rb'))
@@ -285,6 +318,15 @@ class TestCSVIO(unittest.TestCase):
         except IOError:
             raised = True
         self.assertFalse(raised, 'Failed to read csv file')
+
+    def test_unknown_acquisition_type(self):
+        """Test that a ValueError is raised for an unknown acquisition type."""
+        size = (10, 10)
+        md = {model.MD_ACQ_TYPE: "FAKE",
+              model.MD_DIMS: "FAKE"}
+        data = model.DataArray(numpy.zeros(size), md)
+        with self.assertRaises(ValueError):
+            csv.export(FILENAME, data)
 
 
 if __name__ == "__main__":

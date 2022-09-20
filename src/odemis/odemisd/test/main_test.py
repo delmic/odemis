@@ -21,8 +21,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 try:
     import StringIO
 except ImportError:  # Python 3 naming
@@ -31,7 +29,7 @@ import logging
 from odemis import model
 import odemis
 from odemis.odemisd import main
-from odemis.util import timeout, test
+from odemis.util import timeout, testing
 import os
 import subprocess
 import sys
@@ -124,7 +122,7 @@ class TestCommandLine(unittest.TestCase):
         sys.stdout = self.saved_stdout
         # Make sure the backend is stopped
         try:
-            test.stop_backend()
+            testing.stop_backend()
         except Exception:
             try:  # Try harder
                 subprocess.call(["sudo", "odemis-stop"])

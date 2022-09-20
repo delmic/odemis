@@ -24,8 +24,6 @@ odemis-cli --set-attr "EBeam ExtXY" magnification 5000
 # to select the CCD exposure time:
 odemis-cli --set-attr "Clara" exposureTime 0.1 # in s
 """
-from __future__ import division
-
 import argparse
 import copy
 import logging

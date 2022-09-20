@@ -23,10 +23,8 @@ see http://www.gnu.org/licenses/.
 # Contains all the static streams, which only provide projections of the data
 # they were initialised with.
 
-from __future__ import division
-
 from past.builtins import basestring, long
-import collections
+from collections.abc import Iterable
 import copy
 import gc
 import logging
@@ -384,7 +382,7 @@ class StaticARStream(StaticStream):
         :param data: (model.DataArray(Shadow) of shape (YX) or list of such DataArray(Shadow)).
         The metadata MD_POS, MD_AR_POLE and MD_POL_MODE should be provided
         """
-        if not isinstance(data, collections.Iterable):
+        if not isinstance(data, Iterable):
             data = [data]  # from now it's just a list of DataArray
 
         # TODO: support DAS, as a "delayed loading" by only calling .getData()
@@ -838,12 +836,8 @@ class StaticSpectrumStream(StaticStream):
             self.calibrated.value = None
             return
 
-        try:
-            # If MD_THETA_LIST, the length of the A dimension might be reduced
-            calibrated = calibration.apply_spectrum_corrections(data, bckg, coef)
-        except Exception:
-            logging.exception("Failed to apply spectrum correction")
-            calibrated = data
+        # If MD_THETA_LIST, the length of the A dimension might be reduced
+        calibrated = calibration.apply_spectrum_corrections(data, bckg, coef)
         self.calibrated.value = calibrated
 
     def _setBackground(self, bckg):

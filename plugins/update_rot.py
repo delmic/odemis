@@ -32,8 +32,6 @@ arising from, out of or in connection with the software or the use or
 other dealings in the software.
 '''
 
-from __future__ import division
-
 import logging
 from odemis import model
 from odemis.gui.plugin import Plugin

@@ -20,13 +20,12 @@
 
 """
 
-from __future__ import division, print_function
-
 import os
 import unittest
 import wx
 
 import odemis.gui.comp.miccanvas as miccanvas
+from odemis.gui.comp.viewport import ARLiveViewport
 from odemis.gui.dev.powermate import Powermate
 from odemis.gui.evt import EVT_KNOB_ROTATE
 import odemis.gui.test as test
@@ -42,11 +41,12 @@ class RotationKnobTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
 
     def test_mirror_arc_overlay(self):
-        cnvs = miccanvas.SparcARCanvas(self.panel)
+        vp = ARLiveViewport(self.panel)
+        vp.show_mirror_overlay()
+        self.add_control(vp, wx.EXPAND, proportion=1, clear=True)
+
+        cnvs = vp.canvas
         cnvs.scale = 20000
-        cnvs.add_world_overlay(cnvs.mirror_ol)
-        cnvs.mirror_ol.active.value = True
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         def zoom(evt):
             mi, ma = 1000, 80000

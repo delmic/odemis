@@ -27,8 +27,6 @@ and alignment of the FASTEM system and classes to control actions related to the
 overview image and multibeam acquisition.
 """
 
-from __future__ import division
-
 import logging
 import math
 import os

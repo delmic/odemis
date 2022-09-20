@@ -24,9 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # physical components which cannot be modified by software. It's mostly used for
 # computing the right metadata/behaviour of the system.
 
-from __future__ import division
-
-import collections
+from collections.abc import Iterable
 import math
 import numbers
 from numpy.polynomial import polynomial
@@ -110,7 +108,7 @@ class OpticalLens(model.HwComponent):
 
         if pole_pos is not None:
             # Use 1 million as the arbitrary max value (increase if you have a bigger CCD!)
-            if (not isinstance(pole_pos, collections.Iterable) or
+            if (not isinstance(pole_pos, Iterable) or
                 len(pole_pos) != 2 or any(not 0 <= v < 1e6 for v in pole_pos)):
                 raise ValueError("pole_pos must be 2 positive values, got %s" % pole_pos)
             self.polePosition = model.TupleContinuous(tuple(pole_pos),
@@ -126,7 +124,7 @@ class OpticalLens(model.HwComponent):
         # range. The main goal of using a TupleContinuous over a TupleVA is to
         # check it's 2 floats.
         if mirror_pos_top is not None:
-            if (not isinstance(pole_pos, collections.Iterable) or
+            if (not isinstance(pole_pos, Iterable) or
                 len(pole_pos) != 2 or any(not isinstance(v, numbers.Real) for v in mirror_pos_top)):
                 raise ValueError("pole_pos must be 2 floats, got %s" % mirror_pos_top)
             self.mirrorPositionTop = model.TupleContinuous(tuple(mirror_pos_top),
@@ -134,7 +132,7 @@ class OpticalLens(model.HwComponent):
                                                       cls=numbers.Real,
                                                       unit="px, px/m")
         if mirror_pos_bottom is not None:
-            if (not isinstance(pole_pos, collections.Iterable) or
+            if (not isinstance(pole_pos, Iterable) or
                 len(pole_pos) != 2 or any(not isinstance(v, numbers.Real) for v in mirror_pos_bottom)):
                 raise ValueError("pole_pos must be 2 floats, got %s" % mirror_pos_bottom)
             self.mirrorPositionBottom = model.TupleContinuous(tuple(mirror_pos_bottom),
@@ -202,10 +200,10 @@ class LightFilter(model.Actuator):
         """
         # One enumerated axis: band
         # Create a 2-tuple or a set of 2-tuples
-        if not isinstance(band, collections.Iterable) or len(band) == 0:
+        if not isinstance(band, Iterable) or len(band) == 0:
             raise ValueError("band must be a (list of a) list of 2 floats")
         # is it a list of list?
-        if isinstance(band[0], collections.Iterable):
+        if isinstance(band[0], Iterable):
             # => set of 2-tuples
             for sb in band:
                 if len(sb) != 2:

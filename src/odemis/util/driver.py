@@ -19,10 +19,8 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 from Pyro4.errors import CommunicationError
-import collections
+from collections.abc import Iterable
 import logging
 import math
 from odemis import model
@@ -172,10 +170,10 @@ def checkLightBand(band):
     band (object): should be tuple of floats or list of tuple of floats
     raise ValueError: if the band doesn't follow the convention
     """
-    if not isinstance(band, collections.Iterable) or len(band) == 0:
+    if not isinstance(band, Iterable) or len(band) == 0:
         raise ValueError("Band %r is not a (list of a) list of 2 floats" % (band,))
     # is it a list of list?
-    if isinstance(band[0], collections.Iterable):
+    if isinstance(band[0], Iterable):
         # => set of 2-tuples
         for sb in band:
             if len(sb) != 2:

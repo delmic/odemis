@@ -20,11 +20,10 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division
 from past.builtins import basestring, long
 import Pyro4
 from Pyro4.core import oneway
-import collections
+from collections.abc import Iterable, Set
 import logging
 import numbers
 import numpy
@@ -734,7 +733,7 @@ class ListVA(VigilantAttribute):
         self._setter = self._ensure_list_setter
 
     def _check(self, value):
-        if not isinstance(value, collections.Iterable):
+        if not isinstance(value, Iterable):
             raise TypeError("Value '%r' is not a list." % value)
 
     def _internal_set_value(self, value):
@@ -853,7 +852,7 @@ class Continuous(object):
             raise TypeError("Range '%s' is not a 2-tuple." % (rng,))
 
         start, end = rng
-        if not isinstance(start, collections.Iterable):
+        if not isinstance(start, Iterable):
             start = (start,)
             end = (end,)
 
@@ -882,7 +881,7 @@ class Continuous(object):
             value = self.value
             start, end = new_range
             tvalue = value
-            if not isinstance(value, collections.Iterable):
+            if not isinstance(value, Iterable):
                 tvalue = (value,)
                 start, end = (start,), (end,)
 
@@ -909,7 +908,7 @@ class Continuous(object):
         return (same type as val): value clipped
         """
 
-        if isinstance(self.min, collections.Iterable):
+        if isinstance(self.min, Iterable):
             clipped = []
             for v, min_v, max_v in zip(val, self.min, self.max):
                 clipped.append(max(min(v, max_v), min_v))
@@ -928,7 +927,7 @@ class Continuous(object):
         """
         start, end = self.range
 
-        if not isinstance(value, collections.Iterable):
+        if not isinstance(value, Iterable):
             value = (value,)
             start, end = (start,), (end,)
 
@@ -969,7 +968,7 @@ class Enumerated(object):
         return self._get_choices()
 
     def _set_choices(self, new_choices_raw):
-        if isinstance(new_choices_raw, collections.Set):
+        if isinstance(new_choices_raw, Set):
             new_choices = frozenset(new_choices_raw)
         elif isinstance(new_choices_raw, dict):
             new_choices = dict(new_choices_raw)
@@ -1021,7 +1020,7 @@ class VAEnumerated(VigilantAttribute, Enumerated):
             return val
 
         # find the closest choice (for numbers or tuples only)
-        if isinstance(val, collections.Iterable) or isinstance(val, numbers.Real):
+        if isinstance(val, Iterable) or isinstance(val, numbers.Real):
             ls = []
 
             for choice in self.choices:

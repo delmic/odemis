@@ -24,8 +24,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # in a separate executable. This allows to give special privileges (eg, via
 # authbind) to just this small executable.
 
-from __future__ import division
-
 from concurrent.futures import CancelledError
 import logging
 from odemis import model

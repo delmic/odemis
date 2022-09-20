@@ -18,10 +18,8 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division
 from past.builtins import basestring, long
-
-import collections
+from collections.abc import Iterable
 import cv2
 import json
 import logging
@@ -241,7 +239,7 @@ def reproduce_typed_value(typed_value, str_val):
             dict_val[key] = value
 
         return dict_val
-    elif isinstance(typed_value, collections.Iterable):
+    elif isinstance(typed_value, Iterable):
         if typed_value:
             typed_val_elm = typed_value[0]
         else:
@@ -277,7 +275,7 @@ def ensure_tuple(v):
       otherwise it will be returned as is
     return (tuple or object): same a v, but a tuple if v was iterable
     """
-    if isinstance(v, collections.Iterable) and not isinstance(v, basestring):
+    if isinstance(v, Iterable) and not isinstance(v, basestring):
         # convert to a tuple, with each object contained also converted
         return tuple(ensure_tuple(i) for i in v)
     else:

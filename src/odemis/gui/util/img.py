@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # Some helper functions to convert/manipulate images
 
-from __future__ import division
-
 import cairo
 import logging
 import math
@@ -2793,9 +2791,9 @@ def NDImage2wxBitmap(image):
     assert(len(image.shape) == 3)
     size = image.shape[1::-1]
     if image.shape[2] == 3: # RGB
-        bim = wx.Bitmap(size[0], size[1], 24)
-        bim.CopyFromBuffer(image, wx.BitmapBufferFormat_RGB)
-        # bim = wx.Bitmap.FromBuffer(size[0], size[1], image)
+        # Note that creating a empty Bitmap and then using CopyFromBuffer()
+        # doesn't work on Windows (with wxPython 4.0.7).
+        bim = wx.Bitmap.FromBuffer(size[0], size[1], image)
     elif image.shape[2] == 4: # RGBA
         bim = wx.Bitmap.FromBufferRGBA(size[0], size[1], image)
     else:

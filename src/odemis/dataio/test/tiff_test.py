@@ -21,8 +21,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
-from __future__ import division
-
 from PIL import Image
 import libtiff
 import logging

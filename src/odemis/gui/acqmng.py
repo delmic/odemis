@@ -21,10 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from __future__ import division
-
 from collections import OrderedDict
-import collections
+from collections.abc import Iterable
 import logging
 
 EXTRA_STREAM_VAS = ("dwellTime", "pixelSize", "repetition")
@@ -167,7 +165,7 @@ def preset_hq(entries):
                 value = entry.vigilattr.value * 4
 
                 # make sure it still fits
-                if isinstance(entry.vigilattr.range, collections.Iterable):
+                if isinstance(entry.vigilattr.range, Iterable):
                     value = sorted(list(entry.vigilattr.range) + [value])[1]  # clip
 
         elif entry.name == "scale": # for scanners only
@@ -178,7 +176,7 @@ def preset_hq(entries):
             value = tuple(max(1, v / 2) for v in entry.vigilattr.value)
 
             # make sure it still fits
-            if isinstance(entry.vigilattr.range, collections.Iterable):
+            if isinstance(entry.vigilattr.range, Iterable):
                 value = tuple(max(v, m) for v, m in zip(value, entry.vigilattr.range[0]))
 
         elif entry.name == "binning":
