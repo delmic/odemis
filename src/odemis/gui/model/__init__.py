@@ -458,7 +458,7 @@ class MainGUIData(object):
         # Wait for all the threads to be finished
         for t in ts:
             t.join(5)
-            if t.isAlive():
+            if t.is_alive():
                 logging.warning("Actuator %s still not done stopping after 5s", t.name)
         logging.info("Stopped motion on every axes")
 

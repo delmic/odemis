@@ -329,10 +329,10 @@ class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
             raise IOError("Cannot do multiple acquisitions simultaneously")
 
         if not self._acq_done.is_set():
-            if self._acq_thread and self._acq_thread.isAlive():
+            if self._acq_thread and self._acq_thread.is_alive():
                 logging.debug("Waiting for previous acquisition to fully finish")
                 self._acq_thread.join(10)
-                if self._acq_thread.isAlive():
+                if self._acq_thread.is_alive():
                     logging.error("Previous acquisition not ending")
 
         # Check if a DriftCorrector Leech is available
@@ -2852,10 +2852,10 @@ class ScannedRemoteTCStream(LiveStream):
         if self._current_future is not None and not self._current_future.done():
             raise IOError("Cannot do multiple acquisitions simultaneously")
 
-        if self._acq_thread and self._acq_thread.isAlive():
+        if self._acq_thread and self._acq_thread.is_alive():
             logging.debug("Waiting for previous acquisition to fully finish")
             self._acq_thread.join(10)
-            if self._acq_thread.isAlive():
+            if self._acq_thread.is_alive():
                 logging.error("Previous acquisition not ending, will acquire anyway")
 
         est_start = time.time() + 0.1

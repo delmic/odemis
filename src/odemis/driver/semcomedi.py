@@ -2128,7 +2128,7 @@ class Reader(Accesser):
             self.cancelled = False
             # TODO: don't create a new thread for every read => just create at
             # init, and use Queue/Event to synchronise
-            if self.thread and self.thread.isAlive():
+            if self.thread and self.thread.is_alive():
                 logging.warning("Preparing a new acquisition while previous one is not over")
             self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
             self.file.seek(0)
@@ -2168,15 +2168,15 @@ class Reader(Accesser):
         sleep = self.duration
         while time.time() < endt:
             self.thread.join(sleep)
-            if not self.thread.isAlive():
+            if not self.thread.is_alive():
                 break
             sleep = 1e-3
         logging.debug("Waited for the read thread for actually %g s", time.time() - self._begin)
         if self.cancelled:
-            if self.thread.isAlive():
+            if self.thread.is_alive():
                 self.thread.join(1) # waiting for the cancel to finish
             raise CancelledError("Reading thread was cancelled")
-        elif self.thread.isAlive():
+        elif self.thread.is_alive():
             logging.warning("Reading thread is still running after %g s", timeout)
             self.cancel()
 
@@ -2201,10 +2201,10 @@ class Reader(Accesser):
                 logging.debug("Failed to cancel read")
 
             # if the thread is stopped/not started, it's all fine
-            if not self.thread.isAlive():
+            if not self.thread.is_alive():
                 return
             self.thread.join(0.5) # wait maximum 0.5 s
-            if not self.thread.isAlive():
+            if not self.thread.is_alive():
                 return
 
             # Currently, after cancelling a comedi command, the read doesn't
@@ -2231,7 +2231,7 @@ class Reader(Accesser):
             except comedi.ComediError:
                 logging.debug("Failed to cancel read")
 
-            if self.thread.isAlive():
+            if self.thread.is_alive():
                 logging.warning("failed to cancel fully the reading thread")
 
 
@@ -2331,7 +2331,7 @@ class MMapReader(Reader):
             self.buf_offset = 0
             self.mmap.seek(0)
             self.cancelled = False
-            if self.thread and self.thread.isAlive():
+            if self.thread and self.thread.is_alive():
                 logging.warning("Preparing a new acquisition while previous one is not over")
             self.thread = threading.Thread(name="SEMComedi reader", target=self._thread)
 
@@ -2390,10 +2390,10 @@ class MMapReader(Reader):
         self.thread.join(timeout)
         logging.debug("Waited for the read thread for actually %g s", time.time() - self._begin)
         if self.cancelled:
-            if self.thread.isAlive():
+            if self.thread.is_alive():
                 self.thread.join(1) # waiting for the cancel to finish
             raise CancelledError("Reading thread was cancelled")
-        elif self.thread.isAlive():
+        elif self.thread.is_alive():
             logging.warning("Reading thread is still running after %g s", timeout)
             self.cancel()
 
@@ -2408,7 +2408,7 @@ class MMapReader(Reader):
 
     def cancel(self):
         with self._lock:
-            if not self.thread or self.cancelled or not self.thread.isAlive():
+            if not self.thread or self.cancelled or not self.thread.is_alive():
                 return
 
             logging.debug("Cancelling read")
@@ -2421,7 +2421,7 @@ class MMapReader(Reader):
             self.thread.join(0.5)
 
         # if the thread is stopped, it's all fine
-        if self.thread.isAlive():
+        if self.thread.is_alive():
             logging.warning("Failed to stop the reading thread")
 
 
@@ -2522,11 +2522,11 @@ class Writer(Accesser):
                 self.cancel()
                 raise IOError("Write timeout while device is still generating data")
 
-        if self.thread and self.thread.isAlive():
+        if self.thread and self.thread.is_alive():
             # It could be due to the write being cancelled
             # => check the thread is ending well
             self.thread.join(0.6)
-            if self.thread.isAlive():
+            if self.thread.is_alive():
                 self.cancel()  # maybe that helps?
                 raise IOError("Write timeout while device is idle")
 
@@ -2571,7 +2571,7 @@ class Writer(Accesser):
                 # In a loop because sometimes the sleep is not long enough, and
                 # so we need to convince comedi again to unblock the write()
                 for i in range(5):
-                    if not self.thread.isAlive():
+                    if not self.thread.is_alive():
                         return
                     logging.debug("Cancelling by setting to rest position at %s", pos)
                     for p, c, r in zip(pos, channels, ranges):

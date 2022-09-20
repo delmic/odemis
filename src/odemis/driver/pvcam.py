@@ -1263,7 +1263,7 @@ class PVCam(model.DigitalCamera):
         # (onEvent) add late events & return
         # => need lock (or something else?)
         if not cbuf:
-            if self.acquire_thread and self.acquire_thread.isAlive():
+            if self.acquire_thread and self.acquire_thread.is_alive():
                 logging.warning("Received synchronization event but acquisition not ready")
                 # queue the events, it's bad but less bad than skipping it
                 self._late_events.append(time.time())
@@ -1293,7 +1293,7 @@ class PVCam(model.DigitalCamera):
         # "if" is to not wait if it's already finished
         if self.acquire_must_stop.is_set():
             self.acquire_thread.join(20) # 20s timeout for safety
-            if self.acquire_thread.isAlive():
+            if self.acquire_thread.is_alive():
                 raise OSError("Failed to stop the acquisition thread")
             # ensure it's not set, even if the thread died prematurately
             self.acquire_must_stop.clear()
@@ -1438,7 +1438,7 @@ class PVCamDataFlow(model.DataFlow):
         else:
             # report problem if the acquisition was started without expecting synchronization
             assert (not comp.acquire_thread or
-                    not comp.acquire_thread.isAlive() or
+                    not comp.acquire_thread.is_alive() or
                     comp.acquire_must_stop.is_set())
 
         self._sync_event = event
