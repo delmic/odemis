@@ -106,7 +106,7 @@ class TestLight(unittest.TestCase):
             self.dev.power.value[i] *= 1e-8
             time.sleep(1)
             self.assertGreater(self.dev.power.value[i], 0)
-            # self.assertEquals(self.dev.power.value[i], 0)
+            # self.assertEqual(self.dev.power.value[i], 0)
 
 
 if __name__ == "__main__":
