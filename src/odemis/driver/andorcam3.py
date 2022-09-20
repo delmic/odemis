@@ -1866,7 +1866,7 @@ class AndorCam3(model.DigitalCamera):
         """
         with self._acq_sync_lock:
             if not self._ready_for_acq_start:
-                if self.acquire_thread and self.acquire_thread.isAlive():
+                if self.acquire_thread and self.acquire_thread.is_alive():
                     logging.warning("Received synchronization event but acquisition not ready")
                     # queue the events, it's bad but less bad than skipping it
                     self._late_events.append(time.time())
@@ -1894,7 +1894,7 @@ class AndorCam3(model.DigitalCamera):
         # "if" is to not wait if it's already finished
         if self.acquire_must_stop.is_set():
             self.acquire_thread.join(10) # 10s timeout for safety
-            if self.acquire_thread.isAlive():
+            if self.acquire_thread.is_alive():
                 raise OSError("Failed to stop the acquisition thread")
             # ensure it's not set, even if the thread died prematurely
             self.acquire_must_stop.clear()
@@ -2065,7 +2065,7 @@ class AndorCam3DataFlow(model.DataFlow):
         else:
             # report problem if the acquisition was started without expecting synchronization
             assert (not comp.acquire_thread or
-                    not comp.acquire_thread.isAlive() or
+                    not comp.acquire_thread.is_alive() or
                     comp.acquire_must_stop.is_set())
 
         self._sync_event = event

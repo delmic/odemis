@@ -228,12 +228,12 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         result_im = get_image_from_buffer(self.canvas)
 
         px1 = get_rgb(result_im,
-                      result_im.Width / 2 + shift[0],
-                      result_im.Height / 2 + shift[1])
+                      result_im.Width // 2 + shift[0],
+                      result_im.Height // 2 + shift[1])
         self.assertEqual(px1, (128, 0, 0))
         px2 = get_rgb(result_im,
-                      result_im.Width / 2 + 200 + shift[0],
-                      result_im.Height / 2 - 200 + shift[1])
+                      result_im.Width // 2 + 200 + shift[0],
+                      result_im.Height // 2 - 200 + shift[1])
         self.assertEqual(px2, (0, 0, 255))
 
     # @unittest.skip("simple")
@@ -265,8 +265,8 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         result_im = get_image_from_buffer(self.canvas)
 
         px1 = get_rgb(result_im,
-                      self.canvas._bmp_buffer_size[0] / 2 + 10,
-                      self.canvas._bmp_buffer_size[1] / 2 + 10)
+                      self.canvas._bmp_buffer_size[0] // 2 + 10,
+                      self.canvas._bmp_buffer_size[1] // 2 + 10)
         self.assertEqual(px1, (255, 0, 0))
 
         # zoom in
@@ -276,8 +276,8 @@ class TestDblMicroscopeCanvas(test.GuiTestCase):
         result_im = get_image_from_buffer(self.canvas)
 
         px1 = get_rgb(result_im,
-                      self.canvas._bmp_buffer_size[0] / 2 + 40,
-                      self.canvas._bmp_buffer_size[1] / 2 + 40)
+                      self.canvas._bmp_buffer_size[0] // 2 + 40,
+                      self.canvas._bmp_buffer_size[1] // 2 + 40)
         self.assertEqual(px1, (255, 0, 0))
 
         # fit to content without recentering should always zoom less or as much

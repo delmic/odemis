@@ -903,7 +903,7 @@ class Detector(model.Detector):
             logging.debug("Waiting for thread to stop.")
             if self._acquisition_thread is not None:
                 self._acquisition_thread.join(10)  # 10s timeout for safety
-                if self._acquisition_thread.isAlive():
+                if self._acquisition_thread.is_alive():
                     logging.exception("Failed to stop the acquisition thread")
                     # Now let's hope everything is back to normal...
             # ensure it's not set, even if the thread died prematurely
@@ -1680,7 +1680,7 @@ class NavCam(model.DigitalCamera):
         # "if" is to not wait if it's already finished
         if self.acquire_must_stop.is_set():
             self.acquire_thread.join(10)  # 10s timeout for safety
-            if self.acquire_thread.isAlive():
+            if self.acquire_thread.is_alive():
                 raise OSError("Failed to stop the acquisition thread")
             # ensure it's not set, even if the thread died prematurely
             self.acquire_must_stop.clear()

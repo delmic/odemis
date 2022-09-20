@@ -286,7 +286,7 @@ class ProgressiveFutureConnector(object):
 
         # a repeating timer, always called in the GUI thread
         self._timer = wx.PyTimer(self._update_progress)
-        self._timer.Start(250.0)  # 4 Hz
+        self._timer.Start(250)  # 4 Hz (250 milliseconds)
 
         # Set the progress bar to 0
         bar.Range = PROGRESS_RANGE

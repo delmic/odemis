@@ -45,7 +45,7 @@ class TestConversion(unittest.TestCase):
                   ]
         for (i, eo) in values:
             o = conversion.wavelength2rgb(i)
-            self.assertEquals(o, eo, u"%f nm -> %s should be %s" % (i * 1e9, o, eo))
+            self.assertEqual(o, eo, u"%f nm -> %s should be %s" % (i * 1e9, o, eo))
 
     def test_convertToObject_good(self):
         """
