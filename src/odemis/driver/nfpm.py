@@ -208,7 +208,7 @@ class PM8742(model.Actuator):
             resp_str = resp.decode("ascii")
             # expects something like this:
             # New_Focus 8742 v2.2 08/01/13 11511
-            m = re.match("\w+ (?P<model>\w+) (?P<fw>v\S+ \S+) (?P<sn>\d+)", resp_str)
+            m = re.match(r"\w+ (?P<model>\w+) (?P<fw>v\S+ \S+) (?P<sn>\d+)", resp_str)
             modl, fw, sn = m.groups()
         except Exception:
             raise IOError("Failed to decode firmware answer '%s'" % to_str_escape(resp))
@@ -348,7 +348,7 @@ class PM8742(model.Actuator):
         # returns something like "108, MOTOR NOT CONNECTED"
         try:
             resp_str = resp.decode('ascii')
-            m = re.match("(?P<no>\d+), (?P<msg>.+)", resp_str)
+            m = re.match(r"(?P<no>\d+), (?P<msg>.+)", resp_str)
             no, msg = int(m.group("no")), m.group("msg")  # group takes unicode str even on byte str input
         except Exception:
             raise IOError("Failed to decode error info '%s'" %
@@ -974,7 +974,7 @@ class PM8742Simulator(object):
         return None: self._output_buf is updated if necessary
         """
         # decode command into axis | command | (query | value) (xxCC?nn)
-        m = re.match(b"(?P<axis>\d+|) ?(?P<cmd>[*A-Za-z]+)(?P<val>\??| ?\S+|)$", msg)
+        m = re.match(br"(?P<axis>\d+|) ?(?P<cmd>[*A-Za-z]+)(?P<val>\??| ?\S+|)$", msg)
         if not m:
             logging.warning("SIM: failed to decode '%s'", to_str_escape(msg))
             self._push_error(6) # COMMAND DOES NOT EXIST
