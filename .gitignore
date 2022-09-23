@@ -76,3 +76,7 @@ magic.odm.yaml
 /src/odemis/driver/jeol.py
 /src/odemis/driver/nikonc.py
 /.mypy_cache/
+
+# Custom ignores
+src/odemis/dataio/test/htmlcov/
+install/linux/usr/share/odemis/sim/meteor-reverse-sim.odm.yaml
