@@ -743,6 +743,35 @@ class Shamrock(model.Actuator):
             with self._hw_access:
                 self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
 
+    def changeTurret(self, turret: int):
+        """
+        Force the spectrograph to assume the given turret is in use.
+        It updates the axes (grating and wavelength) information.
+        Not used normally as the hardware should automatically recognize the turret
+        it's turned on with, but for handling hardware issues.
+        turret: the turret number (typically between 1 and 3)
+        """
+        self.SetTurret(turret)
+        gchoices = self._getGratingChoices()
+
+        # Update the wavelength limits based on the new gratings
+        wl_range = (float("inf"), float("-inf"))
+        for g in gchoices:
+            try:
+                wmin, wmax = self.GetWavelengthLimits(g)
+            except ShamrockError:
+                logging.exception("Failed to find wavelength limit for grating %d", g)
+                continue
+            wl_range = min(wl_range[0], wmin), max(wl_range[1], wmax)
+
+        self.axes["wavelength"].range = wl_range
+        self.axes["grating"].choices = gchoices
+
+        # Go to some "known" position, and refresh the current position
+        self.moveAbs({"grating": min(gchoices)}).result()
+
+        logging.debug("Switched to turret %d, with gratings: %s", turret, ", ".join(gchoices.values()))
+
     def Initialize(self):
         """
         Initialise the currently selected device
@@ -2437,6 +2466,7 @@ class FakeShamrockDLL(object):
         offset = _deref(p_offset, c_int)
         info = self._gratings[_val(grating) - 1][0:4]
         lines.value, s_blaze.value, home.value, offset.value = info
+        lines.value += self._ct - 1
 
     def ShamrockSetDetectorOffsetEx(self, device, entrancePort, exitPort, offset):
         self._detoffset[_val(entrancePort), _val(exitPort)] = _val(offset)

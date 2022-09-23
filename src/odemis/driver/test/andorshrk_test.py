@@ -475,6 +475,18 @@ class TestShamrock(SpectrographTestBaseClass, unittest.TestCase):
 
         cls.spectrograph.terminate()
 
+    def test_change_turret(self):
+        self.spectrograph.changeTurret(2)
+
+        t = self.spectrograph.GetTurret()
+        self.assertEqual(t, 2)
+        print(self.spectrograph.axes["grating"].choices)
+
+        self.spectrograph.changeTurret(1)
+        t = self.spectrograph.GetTurret()
+        self.assertEqual(t, 1)
+        print(self.spectrograph.axes["grating"].choices)
+
     def test_multi_focus(self):
         """
         Test specific bug of the SR193 which causes it to improperly put the
