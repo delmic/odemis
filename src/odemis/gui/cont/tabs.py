@@ -24,14 +24,12 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
-from concurrent.futures._base import CancelledError, RUNNING
-from concurrent.futures import Future
+from concurrent.futures import CancelledError
 from functools import partial
 import gc
 import logging
 import math
 import numpy
-import os
 import os.path
 import pkg_resources
 import time
