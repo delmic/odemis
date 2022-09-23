@@ -3136,7 +3136,7 @@ class CryoChamberTab(Tab):
                             caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
         box.SetYesNoLabels("&Load", "&Cancel")
         ans = box.ShowModal()  # Waits for the window to be closed
-        return ans != wx.ID_NO
+        return ans == wx.ID_YES
 
     def _display_meteor_pos_warning_msg(self, end_pos):
         pos_str = []
@@ -3152,7 +3152,7 @@ class CryoChamberTab(Tab):
                                caption="Large move of the stage",
                                style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
-        return ans != wx.ID_NO
+        return ans == wx.ID_YES
 
     def _perform_axis_relative_movement(self, target_button):
         """
