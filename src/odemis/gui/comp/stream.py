@@ -27,7 +27,7 @@ from builtins import str
 from past.builtins import basestring
 from decorator import decorator
 import logging
-from collections import OrderedDict 
+from collections import OrderedDict
 from odemis import acq, gui
 from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
     FG_COLOUR_DIS, FG_COLOUR_RADIO_ACTIVE, FG_COLOUR_BUTTON
@@ -35,6 +35,7 @@ from odemis.gui import img
 from odemis.gui.comp import buttons
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.combo import ComboBox, ColorMapComboBox
+from odemis.gui.comp.file import FileBrowser
 from odemis.gui.comp.foldpanelbar import FoldPanelItem, FoldPanelBar
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider, Slider
@@ -1031,6 +1032,31 @@ class StreamPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
+    def add_file_button(self, label_text, value=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard=None):
+
+        # Create label
+        lbl_ctrl = self._add_side_label(label_text)
+
+        value_ctrl = FileBrowser(self._panel,
+                                style=wx.BORDER_NONE | wx.TE_READONLY,
+                                dialog_style=dialog_style,
+                                clear_label=clearlabel or "",
+                                clear_btn=clearlabel is not None,
+                                file_path=value,
+                                wildcard=wildcard,
+                                default_dir=None)
+
+        value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
+        value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
+
+        self.gb_sizer.Add(value_ctrl,
+                          (self.num_rows, 1), span=(1, 2),
+                          flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+                          border=5)
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
     def add_readonly_field(self, label_text, value=None, selectable=True):
         """ Adds a value to the control panel that cannot directly be changed by the user
 
@@ -1060,12 +1086,12 @@ class StreamPanel(wx.Panel):
                 value_ctrl.MinSize = (-1, 20)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
-                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                                   flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
             else:
                 value_ctrl = wx.StaticText(self._panel, label=value)
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
-                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+                self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                                   flag=wx.BOTTOM | wx.TOP | wx.ALIGN_CENTER_VERTICAL, border=5)
         else:
             value_ctrl = None
@@ -1111,7 +1137,7 @@ class StreamPanel(wx.Panel):
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = GraphicalRadioButtonControl(self._panel, -1, style=wx.NO_BORDER,
                                                  **conf)
-        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1),
+        self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
                           flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
 
         if value is not None:

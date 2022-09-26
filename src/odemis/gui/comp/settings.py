@@ -343,7 +343,7 @@ class SettingsPanel(wx.Panel):
         value_ctrl = FileBrowser(self,
                                  style=wx.BORDER_NONE | wx.TE_READONLY,
                                  dialog_style=dialog_style,
-                                 clear_label=clearlabel,
+                                 clear_label=clearlabel or "",
                                  clear_btn=clearlabel is not None,
                                  file_path=value,
                                  wildcard=wildcard,

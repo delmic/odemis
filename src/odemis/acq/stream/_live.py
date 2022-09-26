@@ -232,18 +232,17 @@ class LiveStream(Stream):
             for r in self.raw:
                 if data.shape != r.shape:
                     raise ValueError("Incompatible resolution of background data "
-                                     "%s with the angular resolved resolution %s." %
+                                     "%s with the data resolution %s." %
                                      (data.shape, r.shape))
                 if data.dtype != r.dtype:
                     raise ValueError("Incompatible encoding of background data "
-                                     "%s with the angular resolved encoding %s." %
+                                     "%s with the data encoding %s." %
                                      (data.dtype, r.dtype))
                 try:
                     if data.metadata[model.MD_BPP] != r.metadata[model.MD_BPP]:
                         raise ValueError(
                             "Incompatible format of background data "
-                            "(%d bits) with the angular resolved format "
-                            "(%d bits)." %
+                            "(%d bits) with the data format (%d bits)." %
                             (data.metadata[model.MD_BPP], r.metadata[model.MD_BPP]))
                 except KeyError:
                     pass  # no metadata, let's hope it's the same BPP
