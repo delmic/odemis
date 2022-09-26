@@ -1309,14 +1309,14 @@ class FixedPositionsActuator(model.Actuator):
 
         self._cycle = cycle
         self._move_sum = 0
-        self._position: Dict[str, float] = {}
         self._referenced: Dict[str, bool] = {}
         axis, dep = list(dependencies.items())[0]
         self._axis = axis
         self._dependency = dep
         self._caxis = axis_name
         self._positions: Union[Set[float], Dict[float, str]] = positions
-        self._actual_positions: Dict[float, float] = {}  # one choice position -> dependency position
+        # Last requested position moved to and reached
+        self._actual_positions: Dict[float, float] = {}
         # Executor used to reference and move to nearest position
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -1336,7 +1336,6 @@ class FixedPositionsActuator(model.Actuator):
 
         model.Actuator.__init__(self, name, role, axes=axes, dependencies=dependencies, **kwargs)
 
-        # self._position = {}  # isn't this a double declaration of empty dict?
         self.position = model.VigilantAttribute({}, readonly=True)
 
         logging.debug("Subscribing to position of dependency %s", dep.name)
@@ -1367,29 +1366,24 @@ class FixedPositionsActuator(model.Actuator):
             logging.exception(e)
 
     def _update_dep_position(self, value):
-        p = value[self._caxis]
+        real_pos = value[self._caxis]
+
         if self._cycle is not None:
-            p %= self._cycle
-        self._position[self._axis] = p
-        self._updatePosition()
+            real_pos %= self._cycle
 
-    def _update_dep_ref(self, value):
-        self._referenced[self._axis] = value[self._caxis]
-        self._updateReferenced()
-
-    def _updatePosition(self):
-        """
-        update the position VA
-        """
         # if it is an unsupported position report the nearest supported one
-        real_pos = self._position[self._axis]
         nearest = util.find_closest(real_pos, self._positions.keys())
+
         if not util.almost_equal(real_pos, nearest):
             logging.warning("Reporting axis %s @ %s (known position), while physical axis %s @ %s",
                             self._axis, nearest, self._caxis, real_pos)
         pos = {self._axis: nearest}
         logging.debug("reporting position %s", pos)
         self.position._set_value(pos, force_write=True)
+
+    def _update_dep_ref(self, value):
+        self._referenced[self._axis] = value[self._caxis]
+        self._updateReferenced()
 
     def _updateReferenced(self):
         """
@@ -1402,7 +1396,6 @@ class FixedPositionsActuator(model.Actuator):
     def moveRel(self, shift):
         if not shift:
             return model.InstantaneousFuture()
-        # self._checkMoveRel(shift)
         raise NotImplementedError("Relative move on fixed positions axis not supported")
 
     @isasync
@@ -1423,9 +1416,9 @@ class FixedPositionsActuator(model.Actuator):
     def _doMoveAbs(self, pos):
         axis, req_pos = list(pos.items())[0]
 
-        # if the actuator is already at the requested position skip movement
-        # this to prevent the actuator to move due to difference dep pos and requested pos
-        # and en up in the same place again. For instance, this is typical when anti-backlash is used.
+        # If a tiny difference between actual pos and requested pos would typically move the actuator to the
+        # same place again, in case the same positions is requested and when backlash is used this move will
+        # instead be ignored.
         if req_pos in self._actual_positions:
             cur_pos = self._dependency.position.value[self._caxis]
             if cur_pos == self._actual_positions[req_pos]:
