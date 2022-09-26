@@ -1143,9 +1143,6 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         if not main.spectrograph or not main.lens_mover:
             amodes.remove("lens-align")
 
-        if not main.spectrograph or not main.lens_switch:
-            amodes.remove("lens2-align")
-
         if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
             # This is different from the polePosition of the lens, which is in
@@ -1177,9 +1174,11 @@ class Sparc2AlignGUIData(ActuatorGUIData):
                 if not {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()):
                     raise ValueError("lens-switch should have FAV_POS_ACTIVE and FAV_POS_DEACTIVE")
             else:
+                amodes.remove("lens2-align")
                 amodes.remove("ek-align")
         else:
             amodes.remove("center-align")
+            amodes.remove("lens2-align")
             amodes.remove("ek-align")
 
         if main.fibaligner is None:

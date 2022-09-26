@@ -339,10 +339,15 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
 
     # Remove NaN values from the theta list, if exists, and update the calibrated data to have the same length
     if model.MD_THETA_LIST in data.metadata:
-        angle_range, _ = spectrum.get_angle_range(data)
-        angles, data = filter_nan_from_data(angle_range, data)
-        data = model.DataArray(data, data.metadata.copy())
-        data.metadata[MD_THETA_LIST] = angles
+        try:
+            # Explicitly call get_angle_per_pixel(), instead of get_angle_range(),
+            # to only accept correct metadata, without fallback to pixels
+            angle_range = spectrum.get_angle_per_pixel(data)
+            angles, data = filter_nan_from_data(angle_range, data)
+            data = model.DataArray(data, data.metadata.copy())
+            data.metadata[MD_THETA_LIST] = angles
+        except (ValueError, KeyError) as ex:
+            logging.debug("MD_THETA_LIST incorrect, will not use it: %s", ex)
 
     if coef is not None:
         # Check if we have any wavelength information in data.

@@ -2480,16 +2480,22 @@ class SEMAngularSpectrumMDStream(SEMCCDMDStream):
 
             md[MD_DIMS] = "CAZYX"
             # Note that the THETA_LIST is only correct for the center wavelength
-            # In theory, we can reconstruct it from the mirror metadata (and for
+            # We can reconstruct it from the mirror metadata (and for
             # all wavelengths). However, for now it's also used to indicate that
             # the angle dimension is present when saving the DataArray to a file.
-            md[MD_THETA_LIST] = angleres.ExtractThetaList(raw_data)
+            try:
+                md[MD_THETA_LIST] = angleres.ExtractThetaList(raw_data)
+            except ValueError as ex:
+                logging.warning("MD_THETA_LIST couldn't be computed: %s", ex)
+                md[MD_THETA_LIST] = []
 
             if spec_res != len(md[MD_WL_LIST]):
-                logging.error("MD_WL_LIST is length %s, while spectrum res is %s",
+                # Not a big deal, can happen if wavelength = 0
+                logging.warning("MD_WL_LIST is length %s, while spectrum res is %s",
                               len(md[MD_WL_LIST]), spec_res)
             if angle_res != len(md[MD_THETA_LIST]):
-                logging.error("MD_THETA_LIST is length %s, while angle res is %s",
+                # Not a big deal, can happen as computation depends on wavelength
+                logging.warning("MD_THETA_LIST is length %s, while angle res is %s",
                               len(md[MD_THETA_LIST]), angle_res)
 
             md[MD_DESCRIPTION] = self._streams[n].name.value

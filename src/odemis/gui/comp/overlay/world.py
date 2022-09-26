@@ -3201,6 +3201,12 @@ class EKOverlay(WorldOverlay):
                 evt.Skip()
                 return
 
+            if not self.wl_list:
+                # This can happen if the wavelength goes to 0 while dragging
+                logging.info("No WL_LIST any more so cannot drag the EK line anymore")
+                self._left_dragging = False
+                return
+
             self._selected_line.on_motion(vpos)
             self.cnvs.request_drawing_update()
         else:
