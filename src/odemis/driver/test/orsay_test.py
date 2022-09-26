@@ -1529,10 +1529,10 @@ class TestFIBBeam(unittest.TestCase):
         connector_test(self, self.fibbeam.objectiveVoltage, self.fibbeam._hvps.ObjectiveVoltage,
                        [(10.0, 10.0), (0.0, 0.0)], hw_safe=True, settletime=1)
 
-    def test_beamShift(self):
-        """Check that the beamShift VA is updated correctly"""
-        connector_test(self, self.fibbeam.beamShift, [self.fibbeam._ionColumn.ObjectiveShiftX,
-                                                      self.fibbeam._ionColumn.ObjectiveShiftY],
+    def test_shift(self):
+        """Check that the shift VA is updated correctly"""
+        connector_test(self, self.fibbeam.shift, [self.fibbeam._ionColumn.ObjectiveShiftX,
+                                                  self.fibbeam._ionColumn.ObjectiveShiftY],
                        [((1e-6, -1e-6), (1e-6, -1e-6)), ((0.0, 0.0), (0.0, 0.0))],
                        hw_safe=True, settletime=1)
 

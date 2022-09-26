@@ -2149,7 +2149,7 @@ class FIBBeam(model.HwComponent):
         + mirrorImage: BooleanVA, True to mirror the retrieved image
         + imageFromSteerers: BooleanVA, True to image from Steerers, False to image from Octopoles
         + objectiveVoltage: FloatContinuous, unit="V", range=(0.0, 2e4)
-        + beamShift: TupleContinuous Float, unit=m, range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
+        + shift: TupleContinuous Float, unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
         + horizontalFov: FloatContinuous, unit="m", range=(0.0, 1.0)
         + measuringCurrent: BooleanVA
         + current: FloatContinuous, readonly, unit="A", range=(0.0, 1.0e-5)
@@ -2209,8 +2209,8 @@ class FIBBeam(model.HwComponent):
         # self._imageFromSteerersConnector = None
         self.objectiveVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 2e4))
         self._objectiveVoltageConnector = None
-        self.beamShift = model.TupleContinuous((0.0, 0.0), unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)])
-        self._beamShiftConnector = None
+        self.shift = model.TupleContinuous((0.0, 0.0), unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)])
+        self._shiftConnector = None
         self.horizontalFov = model.FloatContinuous(0.0, unit="m", range=(0.0, 1.0))
         self._horizontalFovConnector = None
         self.measuringCurrent = model.BooleanVA(False)
@@ -2357,8 +2357,8 @@ class FIBBeam(model.HwComponent):
         self._objectiveVoltageConnector = OrsayParameterConnector(self.objectiveVoltage, self._hvps.ObjectiveVoltage,
                                                                   minpar=self._hvps.ObjectiveVoltage_Minvalue,
                                                                   maxpar=self._hvps.ObjectiveVoltage_Maxvalue)
-        self._beamShiftConnector = OrsayParameterConnector(self.beamShift, [self._ionColumn.ObjectiveShiftX,
-                                                                            self._ionColumn.ObjectiveShiftY],
+        self._shiftConnector = OrsayParameterConnector(self.shift, [self._ionColumn.ObjectiveShiftX,
+                                                                    self._ionColumn.ObjectiveShiftY],
                                                            minpar=[self._ionColumn.ObjectiveShiftX_Minvalue,
                                                                    self._ionColumn.ObjectiveShiftY_Minvalue],
                                                            maxpar=[self._ionColumn.ObjectiveShiftX_Maxvalue,
