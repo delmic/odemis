@@ -3129,14 +3129,19 @@ class CryoChamberTab(Tab):
                 return None
         return cryoSwitchSamplePosition(self._target_position)
 
-    def _display_insertion_stick_warning_msg(self):
+    def _display_insertion_stick_warning_msg(self) -> bool:
         box = wx.MessageDialog(self.main_frame, "The sample will be loaded. Please make sure that the sample is properly set and the insertion stick is removed.",
                             caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
         box.SetYesNoLabels("&Load", "&Cancel")
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans == wx.ID_YES
 
-    def _display_meteor_pos_warning_msg(self, end_pos):
+    def _display_meteor_pos_warning_msg(self, end_pos) -> bool:
+        """
+        Ask confirmation to the user before moving to a different position on the METEOR
+        end_pos: target position of the stage, if the user accepts the move
+        return: True if the user accepts, False if the move should be cancelled.
+        """
         pos_str = []
         for axis in ("x", "y", "z", "rx", "ry", "rz"):
             if axis in end_pos:
@@ -3144,9 +3149,9 @@ class CryoChamberTab(Tab):
                     pos_str.append(f"{axis} = " + readable_str(math.degrees(end_pos[axis]), "°", 4))
                 else:
                     pos_str.append(f"{axis} = " + readable_str(end_pos[axis], "m", 4))
-        pos_str = ", ". join(pos_str)
+        pos_str = "\n". join(pos_str)
         box = wx.MessageDialog(self.main_frame,
-                               "The stage will move to this position:\n" + pos_str + "\nIs this safe?",
+                               "The stage will move to this position:\n" + pos_str + "\n\nIs this safe?",
                                caption="Large move of the stage",
                                style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
