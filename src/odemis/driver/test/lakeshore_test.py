@@ -36,8 +36,8 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
-# arguments used for the creation of basic components
-CONFIG_SERIAL_BUS_CONNECTION = {
+# arguments used for the creation of basic components to test via serial port connection
+CONFIG_SINGLE_TEMP = {
     "name": "Lakeshore Test",
     "role": "temperature-controller",
     "port": "/dev/ttyUSB0/",
@@ -46,8 +46,8 @@ CONFIG_SERIAL_BUS_CONNECTION = {
     "output_channel": 2,
 }
 
-# arguments used for the creation of basic components
-CONFIG_IP_BUS_CONNECTION = {
+# arguments used for the creation of basic components to test via IP connection
+CONFIG_MULTI_TEMP = {
     "name": "Lakeshore Test",
     "role": "temperature-controller",
     "port": "192.168.30.214",
@@ -58,8 +58,8 @@ CONFIG_IP_BUS_CONNECTION = {
 
 # arguments used for the creation of basic components
 if TEST_NOHW:
-    CONFIG_SERIAL_BUS_CONNECTION["port"] = "/dev/fake"
-    CONFIG_IP_BUS_CONNECTION["port"] = "/dev/fake"
+    CONFIG_SINGLE_TEMP["port"] = "/dev/fake"
+    CONFIG_MULTI_TEMP["port"] = "/dev/fake"
 
 
 class LakeshoreBaseTest:
@@ -68,16 +68,6 @@ class LakeshoreBaseTest:
     @classmethod
     def tearDownClass(cls):
         cls.dev.terminate()  # free up socket.
-
-    def test_temperature_poll(self):
-        return
-        # Test that the temperature polls.
-        # Designed to work with the simulator - the temperature will not be exactly the same
-        logging.debug("Test stasis temperature polling")
-        temp1 = self.dev.temperature.value
-        time.sleep(3)
-        temp2 = self.dev.temperature.value
-        # self.assertNotEqual(temp1, temp2)
 
 
 class TestLakeshoreModel335(LakeshoreBaseTest, unittest.TestCase):
@@ -95,7 +85,7 @@ class TestLakeshoreModel335(LakeshoreBaseTest, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dev = lakeshore.Lakeshore(**CONFIG_SERIAL_BUS_CONNECTION)
+        cls.dev = lakeshore.Lakeshore(**CONFIG_SINGLE_TEMP)
 
     def test_device_model(self):
         """
@@ -108,11 +98,22 @@ class TestLakeshoreModel335(LakeshoreBaseTest, unittest.TestCase):
 
         self.assertEqual(model, "MODEL335")
 
+    def test_temperature_poll(self):
+        # Test that the temperature polls.
+        # Designed to work with the simulator - the temperature will not be exactly the same
+        logging.debug("Test stasis temperature polling")
+        temp1 = []
+        temp2 = []
+        for testCtr in range(10):
+            temp1.append(self.dev.temperature.value)
+            time.sleep(1)
+            temp2.append(self.dev.temperature.value)
+        self.assertNotEqual(temp1, temp2)
+
     def test_simple(self):
         """
         Test some simple functions
         """
-        # return
         logging.debug("Test target temperature setting")
 
         self.assertNotEqual(self.dev.temperature.value, 0)
@@ -170,7 +171,7 @@ class TestLakeshoreModel350(LakeshoreBaseTest, unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        cls.dev = lakeshore.Lakeshore(**CONFIG_IP_BUS_CONNECTION)
+        cls.dev = lakeshore.Lakeshore(**CONFIG_MULTI_TEMP)
 
     def test_device_model(self):
         """
@@ -183,11 +184,22 @@ class TestLakeshoreModel350(LakeshoreBaseTest, unittest.TestCase):
 
         self.assertEqual(model, "MODEL350")
 
+    def test_temperature_poll(self):
+        # Test that the temperature polls.
+        # Designed to work with the simulator - the temperature will not be exactly the same
+        logging.debug("Test stasis temperature polling")
+        temp1 = []
+        temp2 = []
+        for testCtr in range(10):
+            temp1.append(self.dev.monolithTemperature.value)
+            time.sleep(1)
+            temp2.append(self.dev.monolithTemperature.value)
+        self.assertNotEqual(temp1, temp2)
+
     def test_simple(self):
         """
         Test some simple functions
         """
-        # return
         logging.debug("Test target temperature setting")
 
         self.assertNotEqual(self.dev.monolithTemperature.value, 0)
