@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 26 Jul 2017
 
 @author: Éric Piel
@@ -18,22 +18,23 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
-
-from __future__ import division
+"""
 
 import logging
-import numpy
-from odemis import model
-import odemis
-from odemis.acq.stitching import CollageWeaver, MeanWeaver, CollageWeaverReverse
-from odemis.dataio import find_fittest_converter
-from odemis.util.img import ensure2DImage
+import math
 import os
 import random
 import time
 import unittest
 
+import numpy
+
+import odemis
+from odemis import model
+from odemis.acq.stitching import CollageWeaver, MeanWeaver, CollageWeaverReverse, WEAVER_MEAN, WEAVER_COLLAGE_REVERSE, \
+    WEAVER_COLLAGE
+from odemis.dataio import find_fittest_converter
+from odemis.util.img import ensure2DImage, rotate_img_metadata
 from stitching_test import decompose_image
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -43,15 +44,13 @@ IMG_PATH = os.path.dirname(odemis.__file__)
 IMGS = [IMG_PATH + "/driver/songbird-sim-sem.h5",
         IMG_PATH + "/acq/align/test/images/Slice69_stretched.tif"]
 
-# @unittest.skip("skip")
 
-
-class TestCollageWeaver(unittest.TestCase):
+class WeaverBaseTest:
+    """Base class for testing the different types of weavers."""
 
     def setUp(self):
         random.seed(1)  # for reproducibility
 
-    # @unittest.skip("skip")
     def test_one_tile(self):
         """
         Test that when there is only one tile, it's returned as-is
@@ -68,10 +67,17 @@ class TestCollageWeaver(unittest.TestCase):
             model.MD_EXP_TIME: 1.2,  # s
             model.MD_IN_WL: (500e-9, 520e-9),  # m
             model.MD_DIMS: "YX",
+            model.MD_ROTATION: 0,
         }
         intile = model.DataArray(img12, md)
 
-        weaver = CollageWeaver()
+        if self.weaver_type == WEAVER_COLLAGE:
+            weaver = CollageWeaver()
+        elif self.weaver_type == WEAVER_COLLAGE_REVERSE:
+            weaver = CollageWeaverReverse()
+        elif self.weaver_type == WEAVER_MEAN:
+            weaver = MeanWeaver()
+
         weaver.addTile(intile)
         outd = weaver.getFullImage()
 
@@ -88,10 +94,17 @@ class TestCollageWeaver(unittest.TestCase):
             model.MD_POS: (10e-3, 30e-3),  # m
             model.MD_DWELL_TIME: 1.2e-6,  # s
             model.MD_DIMS: "YX",
+            model.MD_ROTATION: 0,
         }
         intile = model.DataArray(img8, md8)
 
-        weaver = MeanWeaver()
+        if self.weaver_type == WEAVER_COLLAGE:
+            weaver = CollageWeaver()
+        elif self.weaver_type == WEAVER_COLLAGE_REVERSE:
+            weaver = CollageWeaverReverse()
+        elif self.weaver_type == WEAVER_MEAN:
+            weaver = MeanWeaver()
+
         weaver.addTile(intile)
         outd = weaver.getFullImage()
 
@@ -99,11 +112,10 @@ class TestCollageWeaver(unittest.TestCase):
         numpy.testing.assert_array_equal(outd, intile)
         self.assertEqual(outd.metadata, intile.metadata)
 
-    def test_no_seam(self):
+    def test_real_perfect_overlap(self):
         """
         Test on decomposed image
         """
-
         numTiles = [2, 3, 4]
         overlap = [0.4]
         for img in IMGS:
@@ -114,15 +126,107 @@ class TestCollageWeaver(unittest.TestCase):
                 for o in overlap:
                     [tiles, _] = decompose_image(
                         img, o, n, "horizontalZigzag", False)
+                    if self.weaver_type == WEAVER_COLLAGE:
+                        weaver = CollageWeaver()
+                    elif self.weaver_type == WEAVER_COLLAGE_REVERSE:
+                        weaver = CollageWeaverReverse()
+                    elif self.weaver_type == WEAVER_MEAN:
+                        weaver = MeanWeaver()
 
-                    weaver = CollageWeaver(adjust_brightness=False)
                     for t in tiles:
                         weaver.addTile(t)
-
                     sz = len(weaver.getFullImage())
                     w = weaver.getFullImage()
+                    numpy.testing.assert_allclose(w, img[:sz, :sz], rtol=1)
 
-                    numpy.testing.assert_array_almost_equal(w, img[:sz, :sz], decimal=1)
+    def test_synthetic_perfect_overlap(self):
+        """
+        Test on synthetic image with exactly matching overlap, weaved image should be equal to original image
+        """
+
+        img0 = numpy.zeros((100, 100))
+        img1 = numpy.zeros((100, 100))
+
+        img0[:, 80:90] = 1
+        img1[:, 10:20] = 1
+
+        exp_out = numpy.zeros((100, 170))
+        exp_out[:, 80:90] = 1
+
+        md0 = {
+            model.MD_SW_VERSION: "1.0-test",
+            model.MD_DESCRIPTION: u"test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1, 1),  # m/px
+            model.MD_POS: (50, 50),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+        }
+        in0 = model.DataArray(img0, md0)
+
+        md1 = {
+            model.MD_SW_VERSION: "1.0-test",
+            model.MD_DESCRIPTION: u"test",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 2),  # px, px
+            model.MD_PIXEL_SIZE: (1, 1),  # m/px
+            model.MD_POS: (120, 50),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            model.MD_IN_WL: (500e-9, 520e-9),  # m
+        }
+        in1 = model.DataArray(img1, md1)
+
+        if self.weaver_type == WEAVER_COLLAGE:
+            weaver = CollageWeaver()
+        elif self.weaver_type == WEAVER_COLLAGE_REVERSE:
+            weaver = CollageWeaverReverse()
+        elif self.weaver_type == WEAVER_MEAN:
+            weaver = MeanWeaver()
+
+        weaver.addTile(in0)
+        weaver.addTile(in1)
+        outd = weaver.getFullImage()
+
+        numpy.testing.assert_equal(outd, exp_out)
+
+    def test_rotated_tiles(self):
+        """Verify that the correct rotation is set on the weaved image."""
+        numTiles = [2, 3, 4]
+        overlap = 0.4
+        rotation = math.radians(5)
+        if self.weaver_type == WEAVER_COLLAGE:
+            weaver_class = CollageWeaver
+        elif self.weaver_type == WEAVER_COLLAGE_REVERSE:
+            weaver_class = CollageWeaverReverse
+        elif self.weaver_type == WEAVER_MEAN:
+            weaver_class = MeanWeaver
+
+        for img in IMGS:
+            conv = find_fittest_converter(img)
+            img = conv.read_data(img)[0]
+            img = ensure2DImage(img)
+            for n in numTiles:
+                [tiles, _] = decompose_image(img, overlap, n, "horizontalZigzag", False)
+                weaver = weaver_class()
+
+                for t in tiles:
+                    t.metadata[model.MD_ROTATION] = rotation
+                    weaver.addTile(t)
+
+                # The content of the weaved image will be bad looking, because the rotation is not taken into
+                # account when decomposing the image into tiles.
+                weaved_img = weaver.getFullImage()
+                self.assertEqual(weaved_img.metadata[model.MD_ROTATION], rotation)
+
+
+class TestCollageWeaver(WeaverBaseTest, unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.weaver_type = WEAVER_COLLAGE
 
     def test_brightness_adjust(self):
         img0 = numpy.zeros((100, 100))
@@ -169,133 +273,12 @@ class TestCollageWeaver(unittest.TestCase):
 
         numpy.testing.assert_almost_equal(outd, exp_out, decimal=5)
 
-# @unittest.skip("skip")
-class TestMeanWeaver(unittest.TestCase):
 
-    def setUp(self):
-        random.seed(1)
+class TestMeanWeaver(WeaverBaseTest, unittest.TestCase):
 
-    # @unittest.skip("skip")
-    def test_one_tile(self):
-        """
-        Test that when there is only one tile, it's returned as-is
-        """
-        img12 = numpy.zeros((2048, 1937), dtype=numpy.uint16) + 4000
-        md = {
-            model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_BPP: 12,
-            model.MD_BINNING: (1, 2),  # px, px
-            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
-            model.MD_POS: (1e-3, -30e-3),  # m
-            model.MD_EXP_TIME: 1.2,  # s
-            model.MD_IN_WL: (500e-9, 520e-9),  # m
-            model.MD_DIMS: "YX",
-        }
-        intile = model.DataArray(img12, md)
-
-        weaver = MeanWeaver()
-        weaver.addTile(intile)
-        outd = weaver.getFullImage()
-
-        self.assertEqual(outd.shape, intile.shape)
-        numpy.testing.assert_array_equal(outd, intile)
-        self.assertEqual(outd.metadata, intile.metadata)
-
-        # Same thing but with a typical SEM data
-        img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
-        md8 = {
-            model.MD_DESCRIPTION: u"test sem",
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
-            model.MD_POS: (10e-3, 30e-3),  # m
-            model.MD_DWELL_TIME: 1.2e-6,  # s
-            model.MD_DIMS: "YX",
-        }
-        intile = model.DataArray(img8, md8)
-
-        weaver = MeanWeaver()
-        weaver.addTile(intile)
-        outd = weaver.getFullImage()
-
-        self.assertEqual(outd.shape, intile.shape)
-        numpy.testing.assert_array_equal(outd, intile)
-        self.assertEqual(outd.metadata, intile.metadata)
-
-    def test_real_perfect_overlap(self):
-        """
-        Test on decomposed image
-        """
-
-        numTiles = [2, 3, 4]
-        overlap = [0.4]
-
-        for img in IMGS:
-            conv = find_fittest_converter(img)
-            data = conv.read_data(img)[0]
-            img = ensure2DImage(data)
-
-            for n in numTiles:
-                for o in overlap:
-                    [tiles, _] = decompose_image(
-                        img, o, n, "horizontalZigzag", False)
-
-                    weaver = MeanWeaver()
-                    for t in tiles:
-                        weaver.addTile(t)
-
-                    sz = len(weaver.getFullImage())
-                    w = weaver.getFullImage()
-
-                    numpy.testing.assert_allclose(w, img[:sz, :sz], rtol=1)
-
-    def test_synthetic_perfect_overlap(self):
-        """
-        Test on synthetic image with exactly matching overlap, weaved image should be equal to original image
-        """
-
-        img0 = numpy.zeros((100, 100))
-        img1 = numpy.zeros((100, 100))
-
-        img0[:, 80:90] = 1
-        img1[:, 10:20] = 1
-
-        exp_out = numpy.zeros((100, 170))
-        exp_out[:, 80:90] = 1
-
-        md0 = {
-            model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_BPP: 12,
-            model.MD_BINNING: (1, 2),  # px, px
-            model.MD_PIXEL_SIZE: (1, 1),  # m/px
-            model.MD_POS: (50, 50),  # m
-            model.MD_EXP_TIME: 1.2,  # s
-            model.MD_IN_WL: (500e-9, 520e-9),  # m
-        }
-        in0 = model.DataArray(img0, md0)
-
-        md1 = {
-            model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_BPP: 12,
-            model.MD_BINNING: (1, 2),  # px, px
-            model.MD_PIXEL_SIZE: (1, 1),  # m/px
-            model.MD_POS: (120, 50),  # m
-            model.MD_EXP_TIME: 1.2,  # s
-            model.MD_IN_WL: (500e-9, 520e-9),  # m
-        }
-        in1 = model.DataArray(img1, md1)
-
-        weaver = MeanWeaver()
-        weaver.addTile(in0)
-        weaver.addTile(in1)
-        outd = weaver.getFullImage()
-
-        numpy.testing.assert_equal(outd, exp_out)
+    @classmethod
+    def setUpClass(cls):
+        cls.weaver_type = WEAVER_COLLAGE
 
     def test_gradient(self):
         """
@@ -337,8 +320,25 @@ class TestMeanWeaver(unittest.TestCase):
         outd = weaver.getFullImage()
 
         # Visualize overlap mask
-        #from PIL import Image
+        # from PIL import Image
         # Image.fromarray(outd).show()
+        #
+        # The overlap mask should look something like this:
+        # ........................@@@@@@@@@@@@@@@
+        # ...........|\-----------@@@@@@@@@@@@@@@
+        # ...........||\----------@@@@@@@@@@@@@@@
+        # ...........|||\---------@@@@@@@@@@@@@@@
+        # ...........||||\--------@@@@@@@@@@@@@@@
+        # ...........||||||@@@@@@@@@@@@@@@@@@@@@@
+        # ...........||||||@@@@@@@@@@@@@@@@@@@@@@
+        # ...........||||||@@@@@@@@@@@@@@@@@@@@@@
+        # ...........||||||@@@@@@@@@@@@@@@@@@@@@@
+        # ...........||||||@@@@@@@@@@@@@@@@@@@@@@
+        # ...........||||/--------@@@@@@@@@@@@@@@
+        # ...........|||/---------@@@@@@@@@@@@@@@
+        # ...........||/----------@@@@@@@@@@@@@@@
+        # ...........|/-----------@@@@@@@@@@@@@@@
+        # ........................@@@@@@@@@@@@@@@
 
         # Test that values in overlapping region decrease from left to right
         o = outd[10:-10, 70:100]  # the gradient is going to be small on the edges, so only check middle part
@@ -348,132 +348,11 @@ class TestMeanWeaver(unittest.TestCase):
             self.assertLess(row[-1], row[0])
 
 
-class TestCollageWeaverReverse(unittest.TestCase):
+class TestCollageWeaverReverse(WeaverBaseTest, unittest.TestCase):
 
-    def setUp(self):
-        random.seed(1)
-
-    # @unittest.skip("skip")
-    def test_one_tile(self):
-        """
-        Test that when there is only one tile, it's returned as-is
-        """
-        img12 = numpy.zeros((2048, 1937), dtype=numpy.uint16) + 4000
-        md = {
-            model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_BPP: 12,
-            model.MD_BINNING: (1, 2),  # px, px
-            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
-            model.MD_POS: (1e-3, -30e-3),  # m
-            model.MD_EXP_TIME: 1.2,  # s
-            model.MD_IN_WL: (500e-9, 520e-9),  # m
-            model.MD_DIMS: "YX",
-        }
-        intile = model.DataArray(img12, md)
-
-        weaver = MeanWeaver()
-        weaver.addTile(intile)
-        outd = weaver.getFullImage()
-
-        self.assertEqual(outd.shape, intile.shape)
-        numpy.testing.assert_array_equal(outd, intile)
-        self.assertEqual(outd.metadata, intile.metadata)
-
-        # Same thing but with a typical SEM data
-        img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
-        md8 = {
-            model.MD_DESCRIPTION: u"test sem",
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_PIXEL_SIZE: (1.3e-6, 1.3e-6),  # m/px
-            model.MD_POS: (10e-3, 30e-3),  # m
-            model.MD_DWELL_TIME: 1.2e-6,  # s
-            model.MD_DIMS: "YX",
-        }
-        intile = model.DataArray(img8, md8)
-
-        weaver = CollageWeaverReverse()
-        weaver.addTile(intile)
-        outd = weaver.getFullImage()
-
-        self.assertEqual(outd.shape, intile.shape)
-        numpy.testing.assert_array_equal(outd, intile)
-        self.assertEqual(outd.metadata, intile.metadata)
-
-    def test_real_perfect_overlap(self):
-        """
-        Test on decomposed image
-        """
-
-        numTiles = [2, 3, 4]
-        overlap = [0.4]
-
-        for img in IMGS:
-            conv = find_fittest_converter(img)
-            data = conv.read_data(img)[0]
-            img = ensure2DImage(data)
-
-            for n in numTiles:
-                for o in overlap:
-                    [tiles, _] = decompose_image(
-                        img, o, n, "horizontalZigzag", False)
-
-                    weaver = CollageWeaverReverse(adjust_brightness=False)
-                    for t in tiles:
-                        weaver.addTile(t)
-
-                    sz = len(weaver.getFullImage())
-                    w = weaver.getFullImage()
-
-                    numpy.testing.assert_allclose(w, img[:sz, :sz], rtol=1)
-
-    def test_synthetic_perfect_overlap(self):
-        """
-        Test on synthetic image with exactly matching overlap, weaved image should be equal to original image
-        """
-
-        img0 = numpy.zeros((100, 100))
-        img1 = numpy.zeros((100, 100))
-
-        img0[:, 80:90] = 1
-        img1[:, 10:20] = 1
-
-        exp_out = numpy.zeros((100, 170))
-        exp_out[:, 80:90] = 1
-
-        md0 = {
-            model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_BPP: 12,
-            model.MD_BINNING: (1, 2),  # px, px
-            model.MD_PIXEL_SIZE: (1, 1),  # m/px
-            model.MD_POS: (50, 50),  # m
-            model.MD_EXP_TIME: 1.2,  # s
-            model.MD_IN_WL: (500e-9, 520e-9),  # m
-        }
-        in0 = model.DataArray(img0, md0)
-
-        md1 = {
-            model.MD_SW_VERSION: "1.0-test",
-            model.MD_DESCRIPTION: u"test",
-            model.MD_ACQ_DATE: time.time(),
-            model.MD_BPP: 12,
-            model.MD_BINNING: (1, 2),  # px, px
-            model.MD_PIXEL_SIZE: (1, 1),  # m/px
-            model.MD_POS: (120, 50),  # m
-            model.MD_EXP_TIME: 1.2,  # s
-            model.MD_IN_WL: (500e-9, 520e-9),  # m
-        }
-        in1 = model.DataArray(img1, md1)
-
-        weaver = CollageWeaverReverse()
-        weaver.addTile(in0)
-        weaver.addTile(in1)
-        outd = weaver.getFullImage()
-
-        numpy.testing.assert_equal(outd, exp_out)
+    @classmethod
+    def setUpClass(cls):
+        cls.weaver_type = WEAVER_COLLAGE
 
     def test_foreground_tile(self):
         """

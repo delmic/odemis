@@ -19,8 +19,6 @@ more details.
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see
 http://www.gnu.org/licenses/.
 """
-from __future__ import division, print_function
-
 import logging
 import math
 import queue
@@ -2047,19 +2045,32 @@ class Stage(model.Actuator):
         pos = self.parent.get_stage_position()
         pos["rx"] = pos.pop("t")
         pos["rz"] = pos.pop("r")
+        # Make sure the full rotations are within the range (because the SEM
+        # actually allows rotation in both directions)
+        for an in ("rx", "rz"):
+            rng = self.axes[an].range
+            # To handle both rotations 0->2pi and inverted: -2pi -> 0.
+            # TODO: for inverted rotations of 2pi, it would probably be more
+            # user-friendly to still report 0->2pi as range.
+            if util.almost_equal(rng[1] - rng[0], 2 * math.pi):
+                pos[an] = (pos[an] - rng[0]) % (2 * math.pi) + rng[0]
         return pos
 
-    def _moveTo(self, future, pos, timeout=60):
+    def _moveTo(self, future, pos, rel=False, timeout=60):
         with future._moving_lock:
             try:
                 if future._must_stop.is_set():
                     raise CancelledError()
-                logging.debug("Moving to position {}".format(pos))
+                if rel:
+                    logging.debug("Moving by shift {}".format(pos))
+                else:
+                    logging.debug("Moving to position {}".format(pos))
+
                 if "rx" in pos.keys():
                     pos["t"] = pos.pop("rx")
                 if "rz" in pos.keys():
                     pos["r"] = pos.pop("rz")
-                self.parent.move_stage(pos, rel=False)
+                self.parent.move_stage(pos, rel=rel)
                 time.sleep(0.5)
 
                 # Wait until the move is over.
@@ -2069,10 +2080,8 @@ class Stage(model.Actuator):
                 moving = True
                 tstart = time.time()
                 while moving:
-                    pos = self._getPosition()
-                    moving = self.parent.stage_is_moving()
                     # Take the opportunity to update .position
-                    self._updatePosition(pos)
+                    self._updatePosition()
 
                     if time.time() > tstart + timeout:
                         self.parent.stop_stage_movement()
@@ -2081,6 +2090,7 @@ class Stage(model.Actuator):
 
                     # Wait for 50ms so that we do not keep using the CPU all the time.
                     time.sleep(50e-3)
+                    moving = self.parent.stage_is_moving()
 
                 # If it was cancelled, Abort() has stopped the stage before, and
                 # we still have waited until the stage stopped moving. Now let
@@ -2097,22 +2107,12 @@ class Stage(model.Actuator):
                 self._updatePosition()
 
     def _doMoveRel(self, future, shift):
-        pos = self._getPosition()
-        for k, v in shift.items():
-            pos[k] += v
-
-        target_pos = self._applyInversion(pos)
-        # Check range (for the axes we are moving)
-        for an in shift.keys():
-            rng = self.axes[an].range
-            if rng == (0, 2 * math.pi) and an in ("rx", "rz"):
-                pos[an] = pos[an] % (2 * math.pi)
-                target_pos[an] = target_pos[an] % (2 * math.pi)
-            p = target_pos[an]
-            if not rng[0] <= p <= rng[1]:
-                raise ValueError("Relative move would cause axis %s out of bound (%g m)" % (an, p))
-
-        self._moveTo(future, pos)
+        """
+        shift (dict): position in internal coordinates (ie, axes in the same
+           direction as the hardware expects)
+        """
+        # We don't check the target position fit the range, the xt-adapter will take care of that
+        self._moveTo(future, shift, rel=True)
 
     @isasync
     def moveRel(self, shift):
@@ -2136,7 +2136,7 @@ class Stage(model.Actuator):
         return f
 
     def _doMoveAbs(self, future, pos):
-        self._moveTo(future, pos)
+        self._moveTo(future, pos, rel=False)
 
     @isasync
     def moveAbs(self, pos):

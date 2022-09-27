@@ -24,8 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # {} around the whole file and "" around each string). In addition, the standard
 # parser doesn't report where the error is situated in the file.
 
-from __future__ import division
-import collections
+from collections.abc import Mapping
 import itertools
 import logging
 import os
@@ -298,7 +297,7 @@ class Instantiator(object):
 
         if "children" not in microscope:
             microscope["children"] = {}
-        elif not isinstance(microscope["children"], collections.Mapping):
+        elif not isinstance(microscope["children"], Mapping):
             # upgrade from list -> dict
             logging.debug("Upgrading the microscope children list to a dict")
             d = {"c%d" % i: c for i, c in enumerate(microscope["children"])}
@@ -1028,9 +1027,9 @@ class Instantiator(object):
         for comp in data:
             mds[comp] = data[comp].get('metadata', {})
             props[comp] = data[comp].get('properties', {})
-            if not isinstance(mds[comp], collections.Mapping):
+            if not isinstance(mds[comp], Mapping):
                 raise ValueError("Persistent metadata for component %s is not a mapping." % comp)
-            if not isinstance(props[comp], collections.Mapping):
+            if not isinstance(props[comp], Mapping):
                 raise ValueError("Persistent properties for component %s is not a mapping." % comp)
         return props, mds
 

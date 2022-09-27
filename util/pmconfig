@@ -31,7 +31,6 @@ python3 pmconfig.py --address 0 --target-address 1 --spc-config
 or
 python3 pmconfig.py --address 1 --spc-config
 """
-from __future__ import division
 import argparse
 import logging
 import sys

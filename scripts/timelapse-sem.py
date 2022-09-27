@@ -28,8 +28,6 @@ odemis-cli --set-attr "EBeam ExtXY" dwellTime 10e-6
 odemis-cli --set-attr "EBeam ExtXY" scale "4, 4"
 '''
 
-from __future__ import division
-
 import argparse
 import logging
 from odemis import dataio, model

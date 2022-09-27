@@ -20,8 +20,6 @@ The configuration used is the settings of the hardware just _before_ starting
 the script.
 """
 
-from __future__ import division
-
 import argparse
 import logging
 import sys

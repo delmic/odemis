@@ -24,8 +24,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # all the detectors can run simultaneously (each receiving a different wavelength
 # band).
 
-from __future__ import division
-
 from abc import ABCMeta, abstractmethod
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
@@ -40,7 +38,8 @@ from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
-    MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS, MD_THETA_LIST, MD_WL_LIST
+    MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS, MD_THETA_LIST, MD_WL_LIST, MD_ROTATION, \
+    MD_ROTATION_COR
 from odemis.model import hasVA
 from odemis.util import units, executeAsyncTask, almost_equal, img, angleres
 import queue
@@ -48,10 +47,9 @@ import threading
 import time
 
 import odemis.util.driver as udriver
-from . import MonochromatorSettingsStream
 
+from . import MonochromatorSettingsStream
 from ._base import Stream, POL_POSITIONS, POL_MOVE_TIME
-import weakref
 
 # On the SPARC, it's possible that both the AR and Spectrum are acquired in the
 # same acquisition, but it doesn't make much sense to acquire them
@@ -2453,7 +2451,7 @@ class SEMAngularSpectrumMDStream(SEMCCDMDStream):
          live update overlay and can be converted by _assembleFinalData into the final ._raw.
         """
         if n != self._ccd_idx:
-            return super(SEMAngularSpectrumMDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+            return super()._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
 
         # Raw data format is AC
         # Final data format is CAZYX with spec_res, angle_res, 1 , X , Y with X, Y = 1 at one ebeam position
@@ -2469,8 +2467,17 @@ class SEMAngularSpectrumMDStream(SEMCCDMDStream):
             # Handles sub-pixels (aka fuzzing)
             md[MD_PIXEL_SIZE] = (semmd[MD_PIXEL_SIZE][0] * self._emitter.resolution.value[0],
                                  semmd[MD_PIXEL_SIZE][1] * self._emitter.resolution.value[1])
-            # Saves metadata
             md[MD_POS] = semmd[MD_POS]
+
+            # The AR CCD has a rotation, corresponding to the rotation of the
+            # mirror compared to the SEM axes, but we don't care about it, we
+            # just care about the SEM rotation (for the XY axes)
+            for k in (MD_ROTATION, MD_ROTATION_COR):
+                if k in semmd:
+                    md[k] = semmd[k]
+                else:
+                    md.pop(k, None)
+
             md[MD_DIMS] = "CAZYX"
             # Note that the THETA_LIST is only correct for the center wavelength
             # In theory, we can reconstruct it from the mirror metadata (and for
@@ -2497,6 +2504,21 @@ class SEMAngularSpectrumMDStream(SEMCCDMDStream):
             raw_data = raw_data[::-1, ...]  # invert C
         self._live_data[n][pol_idx][:,:, 0, px_idx[0], px_idx[1]] = raw_data.reshape(spec_res, angle_res)
 
+    def _assembleFinalData(self, n, data):
+        """
+        :param n: (int) number of the current stream which is assembled into ._raw
+        :param data: all acquired data of the stream
+        This function post-processes/organizes the data for a stream and exports it into ._raw.
+        """
+        if n != self._ccd_idx:
+            return super()._assembleFinalData(n, data)
+
+        if len(data) > 1:  # Multiple polarizations => keep them separated, and add the polarization name to the description
+            for d in data:
+                d.metadata[model.MD_DESCRIPTION] += " " + d.metadata[model.MD_POL_MODE]
+
+        self._raw.extend(data)
+
 
 class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
     """
@@ -2516,7 +2538,7 @@ class SEMTemporalSpectrumMDStream(SEMCCDMDStream):
          live update overlay and can be converted by _assembleFinalData into the final ._raw.
         """
         if n != self._ccd_idx:
-            return super(SEMTemporalSpectrumMDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+            return super()._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
 
         # Data format is CTZYX with spec_res, temp_res, 1 , X , Y with X, Y = 1 at one ebeam position
         temp_res = raw_data.shape[0]

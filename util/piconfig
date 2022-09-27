@@ -30,8 +30,6 @@ piconfig. If not, see http://www.gnu.org/licenses/.
 # To test:
 # ./util/piconfig --log-level 2 --write test.pi.tsv --port /dev/fake --controller 1
 
-from __future__ import division, absolute_import, print_function
-
 import argparse
 import logging
 import re

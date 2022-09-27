@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 19 Sep 2012
 
 @author: piel
@@ -18,25 +18,24 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
-from __future__ import division, print_function
-
-from builtins import range
+"""
 import logging
-import numpy
-from odemis import model
-from odemis.dataio import tiff
-from odemis.util import img, get_best_dtype_for_acc
-from odemis.util.img import Bin
+import math
 import os
 import time
 import unittest
-from unittest.case import skip
+from builtins import range
+
+import numpy
+
+from odemis import model
+from odemis.dataio import tiff
+from odemis.util import img, get_best_dtype_for_acc, testing
+from odemis.util.img import Bin, mean_within_circle
 
 logging.getLogger().setLevel(logging.DEBUG)
 
 
-# @skip("faster")
 class TestFindOptimalRange(unittest.TestCase):
     """
     Test findOptimalRange
@@ -121,7 +120,6 @@ class TestFindOptimalRange(unittest.TestCase):
 
             logging.info("shortcut took %g s, while full took %g s", dur_sc, dur_full)
             self.assertLessEqual(dur_sc, dur_full)
-
 
     def test_auto_vs_manual(self):
         """
@@ -211,7 +209,7 @@ class TestHistogram(unittest.TestCase):
 
     def test_uint16(self):
         # 16 bits
-        depth = 4096 # limited depth
+        depth = 4096  # limited depth
         size = (1024, 965)
         grey_img = numpy.zeros(size, dtype="uint16") + 1500
         grey_img[0, 0] = 0
@@ -293,7 +291,7 @@ class TestHistogram(unittest.TestCase):
         """
         test the compactHistogram()
         """
-        depth = 4096 # limited depth
+        depth = 4096  # limited depth
         size = (1024, 965)
         grey_img = numpy.zeros(size, dtype="uint16") + 1500
         grey_img[0, 0] = 0
@@ -351,7 +349,7 @@ class TestDataArray2RGB(unittest.TestCase):
         # first 8 bit => no change (and test the short-cut)
         size = (1024, 1024)
         depth = 256
-        grey_img = numpy.zeros(size, dtype="uint8") + depth // 2 # 128
+        grey_img = numpy.zeros(size, dtype="uint8") + depth // 2  # 128
         grey_img[0, 0] = 10
         grey_img[0, 1] = depth - 10
 
@@ -387,7 +385,7 @@ class TestDataArray2RGB(unittest.TestCase):
         numpy.testing.assert_equal(out[1, 1], [255, 255, 255])
 
         # 32 bits
-        depth = 2**32
+        depth = 2 ** 32
         grey_img = numpy.zeros(size, dtype="uint32") + depth // 2
         grey_img[0, 0] = depth // 50
         grey_img[0, 1] = depth - depth // 50
@@ -405,7 +403,6 @@ class TestDataArray2RGB(unittest.TestCase):
                 numpy.array_equal(pixel, [128, 128, 128]))
         numpy.testing.assert_equal(out[1, 0], [0, 0, 0])
         numpy.testing.assert_equal(out[1, 1], [255, 255, 255])
-
 
     def test_irange(self):
         """test with specific corner values of irange"""
@@ -444,7 +441,7 @@ class TestDataArray2RGB(unittest.TestCase):
         out = img.DataArray2RGB(grey_img, irange=(depth // 2 - 1, depth // 2 + 1))
         self.assertEqual(out.shape, size + (3,))
         self.assertEqual(self.CountValues(out), 3)
-        hist, edges = img.histogram(out[:, :, 0]) # just use one RGB channel
+        hist, edges = img.histogram(out[:, :, 0])  # just use one RGB channel
         self.assertGreater(hist[0], 0)
         self.assertEqual(hist[1], 0)
         self.assertGreater(hist[-1], 0)
@@ -457,7 +454,7 @@ class TestDataArray2RGB(unittest.TestCase):
         data[2, :] = 56
         data[200, 2] = 3
 
-        data_nc = data.swapaxes(0, 1) # non-contiguous cannot be treated by fast conversion
+        data_nc = data.swapaxes(0, 1)  # non-contiguous cannot be treated by fast conversion
 
         # convert to RGB
         hist, edges = img.histogram(data)
@@ -516,9 +513,9 @@ class TestDataArray2RGB(unittest.TestCase):
         tint = (0, 73, 255)
         out = img.DataArray2RGB(grey_img, tint=tint)
         self.assertEqual(out.shape, size + (3,))
-        self.assertEqual(self.CountValues(out[:, :, 0]), 1) # R
-        self.assertEqual(self.CountValues(out[:, :, 1]), 3) # G
-        self.assertEqual(self.CountValues(out[:, :, 2]), 3) # B
+        self.assertEqual(self.CountValues(out[:, :, 0]), 1)  # R
+        self.assertEqual(self.CountValues(out[:, :, 1]), 3)  # G
+        self.assertEqual(self.CountValues(out[:, :, 2]), 3)  # B
 
         pixel0 = out[0, 0]
         pixel1 = out[0, 1]
@@ -621,12 +618,12 @@ class TestMergeMetadata(unittest.TestCase):
 
     def test_simple(self):
         # Try correction is null (ie, identity)
-        md = {model.MD_ROTATION: 0, # °
-              model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m
-              model.MD_POS: (-5e-3, 2e-3), # m
-              model.MD_ROTATION_COR: 0, # °
-              model.MD_PIXEL_SIZE_COR: (1, 1), # ratio
-              model.MD_POS_COR: (0, 0), # m
+        md = {model.MD_ROTATION: 0,  # °
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m
+              model.MD_POS: (-5e-3, 2e-3),  # m
+              model.MD_ROTATION_COR: 0,  # °
+              model.MD_PIXEL_SIZE_COR: (1, 1),  # ratio
+              model.MD_POS_COR: (0, 0),  # m
               }
         orig_md = dict(md)
         img.mergeMetadata(md)
@@ -636,9 +633,9 @@ class TestMergeMetadata(unittest.TestCase):
             self.assertNotIn(k, md)
 
         # Try the same but using a separate correction metadata
-        id_cor = {model.MD_ROTATION_COR: 0, # °
-                  model.MD_PIXEL_SIZE_COR: (1, 1), # ratio
-                  model.MD_POS_COR: (0, 0), # m
+        id_cor = {model.MD_ROTATION_COR: 0,  # °
+                  model.MD_PIXEL_SIZE_COR: (1, 1),  # ratio
+                  model.MD_POS_COR: (0, 0),  # m
                   }
 
         orig_md = dict(md)
@@ -658,9 +655,9 @@ class TestMergeMetadata(unittest.TestCase):
 
         # Check that providing a metadata without correction data doesn't change
         # anything
-        simpl_md = {model.MD_ROTATION: 90, # °
-                    model.MD_PIXEL_SIZE: (17e-8, 17e-8), # m
-                    model.MD_POS: (5e-3, 2e-3), # m
+        simpl_md = {model.MD_ROTATION: 90,  # °
+                    model.MD_PIXEL_SIZE: (17e-8, 17e-8),  # m
+                    model.MD_POS: (5e-3, 2e-3),  # m
                     }
         orig_md = dict(simpl_md)
         img.mergeMetadata(simpl_md)
@@ -747,6 +744,7 @@ class TestRGB2Greyscale(unittest.TestCase):
         gsim = img.RGB2Greyscale(rgbim)
         self.assertEqual(gsim.shape, rgbim.shape[0:2])
         self.assertEqual(gsim[1, 1], 254)
+
 
 class TestRescaleHQ(unittest.TestCase):
 
@@ -860,6 +858,59 @@ class TestRescaleHQ(unittest.TestCase):
         self.assertEqual(100, out[128, 256, 1])
         self.assertEqual(150, out[128, 256, 2])
         self.assertEqual(255, out[128, 256, 3])
+
+
+class TestMeanWithinCircle(unittest.TestCase):
+
+    def test_3d(self):
+        """
+        Check that the mean of 3D data is 1D
+        """
+        # X = 40, Y = 30
+        data = numpy.zeros((3, 30, 40), dtype=numpy.uint16)
+        data[1] = 1
+        data[2] = 2
+        data[2, 29, 39] = 100
+
+        # Tiny circle of 1px => same as the point
+        m = mean_within_circle(data, (35, 10), 1)
+        self.assertEqual(m.shape, (3,))
+        numpy.testing.assert_equal(m, data[:, 10, 35])  # Y, X are in reverse order
+
+        # Circle of radius 3 on a area where every point is the same value => same as the center
+        m = mean_within_circle(data, (15, 10), 3)
+        self.assertEqual(m.shape, (3,))
+        numpy.testing.assert_almost_equal(m, data[:, 15, 10])  # Y, X are in reverse order
+
+        # Circle of radius 3 on a area where a point is brighter => bigger than the average
+        m = mean_within_circle(data, (39, 28), 3)
+        self.assertEqual(m.shape, (3,))
+        numpy.testing.assert_almost_equal(m[0:2], data[0:2, 28, 39])  # Y, X are in reverse order
+        self.assertGreater(m[2], data[2, 28, 39])  # Y, X are in reverse order
+
+        # Very large circle => it's also fine
+        m = mean_within_circle(data, (20, 10), 300)
+        self.assertEqual(m.shape, (3,))
+
+    def test_4d(self):
+        """
+        Check that the mean of 4D data is 2D
+        """
+        # X = 40, Y = 30
+        data = numpy.zeros((25, 3, 30, 40), dtype=numpy.uint8)
+        data[:, 1] = 1
+        data[:, 2] = 2
+        data[:, 2, 29, 39] = 100
+
+        # Tiny circle of 1px => same as the point
+        m = mean_within_circle(data, (35, 10), 1)
+        self.assertEqual(m.shape, (25, 3))
+        numpy.testing.assert_equal(m, data[:, :, 10, 35])  # Y, X are in reverse order
+
+        # Circle of radius 3 on a area where every point is the same value => same as the center
+        m = mean_within_circle(data, (15, 10), 3)
+        self.assertEqual(m.shape, (25, 3,))
+        numpy.testing.assert_almost_equal(m, data[:, :, 15, 10])  # Y, X are in reverse order
 
 
 class TestImageIntegrator(unittest.TestCase):
@@ -1051,7 +1102,7 @@ class TestMergeTiles(unittest.TestCase):
         del rdata
 
         os.remove(FILENAME)
-        
+
     def test_rgb_tiles(self):
 
         def getSubData(dast, zoom, rect):
@@ -1063,40 +1114,75 @@ class TestMergeTiles(unittest.TestCase):
                     tiles_column.append(dast.getTile(x, y, zoom))
                 tiles.append(tiles_column)
             return tiles
-        
+
         FILENAME = u"test" + tiff.EXTENSIONS[0]
         POS = (5.0, 7.0)
         size = (3, 2000, 1000)
         md = {
-        model.MD_DIMS: 'YXC',
-        model.MD_POS: POS,
-        model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+            model.MD_DIMS: 'YXC',
+            model.MD_POS: POS,
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
         }
         arr = numpy.arange(size[0] * size[1] * size[2], dtype=numpy.uint8).reshape(size[::-1])
         print(arr.shape)
         data = model.DataArray(arr, metadata=md)
-        
+
         # export
         tiff.export(FILENAME, data, pyramid=True)
-        
+
         rdata = tiff.open_data(FILENAME)
-        
+
         tiles = getSubData(rdata.content[0], 0, (0, 0, 7, 3))
         merged_img = img.mergeTiles(tiles)
         self.assertEqual(merged_img.shape, (1000, 2000, 3))
         self.assertEqual(merged_img.metadata[model.MD_POS], POS)
-        
+
         tiles = getSubData(rdata.content[0], 0, (0, 0, 3, 1))
         merged_img = img.mergeTiles(tiles)
         self.assertEqual(merged_img.shape, (512, 1024, 3))
         numpy.testing.assert_almost_equal(merged_img.metadata[model.MD_POS], (4.999512, 7.000244))
-        
+
         del rdata
-        
+
         os.remove(FILENAME)
+
+
+class TestRotateImage(unittest.TestCase):
+
+    def test_rotate_img_metadata(self):
+        """
+        Verify that rotating an image around a center of rotation results in
+        the correct metadata being set on the image.
+        """
+
+        # Expected position calculated with the equation:
+        # exp_pos_x = cos(alpha) * (pos_x - cor_x) - sin(alpha) * (pos_y - cor_y) + cor_y
+        # exp_pos_y = sin(alpha) * (pos_x - cor_x) + sin(alpha) * (pos_y - cor_y) + cor_y
+        test_data = [
+            # pos:  {center of rot, rotation,  expected position}
+            {"pos": (0, 0), "cor": (0, 0), "rot": 10, "exp_pos": (0, 0)},
+            {"pos": (0, 1), "cor": (0, 0), "rot": 90, "exp_pos": (-1, 0)},
+            {"pos": (0, 1), "cor": (0, 0), "rot": -90, "exp_pos": (1, 0)},
+            {"pos": (123e-6, 24e-7), "cor": (123.0e-6, 2.4e-6), "rot": 5.7, "exp_pos": (123.0e-6, 2.4e-6)},
+            {"pos": (123e-6, 24e-7), "cor": (10.0e-6, 24e-6), "rot": 5.7, "exp_pos": (1.24586586e-4, 1.37299314e-05)},
+            {"pos": (123e-6, 24e-7), "cor": (10.0e-6, 24e-6), "rot": -5.7, "exp_pos": (1.20295973e-4, -8.7163320e-06)},
+        ]
+
+        data = numpy.ones((51, 76))
+        for t in test_data:
+            md = {model.MD_POS: t["pos"]}
+            image = model.DataArray(data, md)
+            rotation = math.radians(t["rot"])
+            center_of_rot = t["cor"]
+            rotated_img = img.rotate_img_metadata(image, rotation, center_of_rot)
+
+            self.assertEqual(rotation, rotated_img.metadata[model.MD_ROTATION])
+            testing.assert_tuple_almost_equal(t["exp_pos"], rotated_img.metadata[model.MD_POS])
+            numpy.testing.assert_array_equal(image, rotated_img)  # The data should not change, only the metadata.
+
 
 # TODO: test guessDRange()
 
+
 if __name__ == "__main__":
     unittest.main()
-

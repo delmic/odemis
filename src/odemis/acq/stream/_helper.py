@@ -19,8 +19,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # store or retrieve information.
 
 
-from __future__ import division
-
 from past.builtins import long
 from abc import abstractmethod
 from concurrent.futures._base import CancelledError
@@ -1274,6 +1272,14 @@ class AngularSpectrumAlignmentStream(AngularSpectrumSettingsStream):
         # No need for the repetition information, as we only do live view
         del self.pixelSize
         del self.repetition
+
+        # Doesn't do acquisition, so cannot acquire multiple polarizations
+        if hasattr(self, "acquireAllPol"):
+            del self.acquireAllPol
+
+    def _onMagnification(self, mag):
+        # Override, to not update the pixelSize (as the parent does)
+        pass
 
     def _onNewData(self, dataflow, data):
         if self.wl_inverted:

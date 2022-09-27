@@ -24,9 +24,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Everything related to high-level image acquisition on the microscope.
 
 
-from __future__ import division
 from collections import OrderedDict
-import collections
+from collections.abc import Iterable
 from concurrent.futures import CancelledError
 import logging
 import threading
@@ -410,10 +409,10 @@ def _weight_stream(stream):
         # affects the other dyes (and which could lead to a little bit of
         # bleaching).
         ewl_center = fluo.get_center(stream.emission.value)
-        if isinstance(ewl_center, collections.Iterable):
+        if isinstance(ewl_center, Iterable):
             # multi-band filter, so fallback to guess based on excitation
             xwl_center = fluo.get_center(stream.excitation.value)
-            if isinstance(xwl_center, collections.Iterable):
+            if isinstance(xwl_center, Iterable):
                 # also unguessable => just pick one "randomly"
                 ewl_bonus = ewl_center[0]
             else:
@@ -527,7 +526,7 @@ class AcquisitionTask(object):
                 # Wait for the acquisition to be finished.
                 # Will pass down exceptions, included in case it's cancelled
                 das = f.result()
-                if not isinstance(das, collections.Iterable):
+                if not isinstance(das, Iterable):
                     logging.warning("Future of %s didn't return a list of DataArrays, but %s", s, das)
                     das = []
 

@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # Special functions and class to manage method/function with weakref
 # wxpython.pubsub has something similar
-from __future__ import division, absolute_import
 import weakref
 
 

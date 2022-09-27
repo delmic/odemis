@@ -19,8 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import division
-
 import logging
 
 import numpy
@@ -145,7 +143,7 @@ def transform_coordinates_reverse(register_values, xlower, xupper, ylower, yuppe
     A = numpy.array([[xupper[0], yupper[0]], [xlower[0], ylower[0]],
                      [xupper[1], yupper[1]], [xlower[1], ylower[1]]])
     b = numpy.array([dc_xupper, dc_xlower, dc_yupper, dc_ylower])
-    value, *_ = numpy.linalg.lstsq(A, b, rcond=None)
+    value, *_ = numpy.linalg.lstsq(A, b, rcond=-1)  # TODO: use rcond=None when supporting numpy 1.14+
 
     value = (value[0] * 1e-6, value[1] * 1e-6)  # µm --> m
     return value

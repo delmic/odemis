@@ -19,11 +19,9 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 import queue
 from past.builtins import long
-import collections
+from collections.abc import Iterable
 import functools
 import gc
 import glob
@@ -2702,7 +2700,7 @@ class Scanner(model.Emitter):
 
         if scanning_ttl:
             for c, v in scanning_ttl.items():
-                if not isinstance(v, collections.Iterable):
+                if not isinstance(v, Iterable):
                     # If no name given, put None as name
                     v = (v, None)
                 if len(v) == 2:

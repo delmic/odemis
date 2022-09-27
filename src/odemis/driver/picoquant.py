@@ -23,8 +23,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # Both are connected via USB. They require a dedicated library to be installed
 # on the computer, libph300.so or libhh400.so .
 
-from __future__ import division
-
 from ctypes import *
 import ctypes
 from decorator import decorator

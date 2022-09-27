@@ -19,12 +19,10 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 from past.builtins import basestring
 import Pyro4
 from Pyro4.core import oneway
-import collections
+from collections.abc import Mapping
 import logging
 import multiprocessing
 import os
@@ -270,7 +268,7 @@ class ContainerObject(Pyro4.core.DaemonObject):
             # container, get the direct reference, to make it faster.
             # The best would be that Pyro takes care of this automatically for all Proxies
             dependencies = kwargs["dependencies"]
-            if isinstance(dependencies, collections.Mapping):
+            if isinstance(dependencies, Mapping):
                 logging.debug("Looking to simplify dependencies entry %s", dependencies)
                 dependencies = {k: _getMostDirectObject(self, v) for k, v in dependencies.items()}
                 kwargs["dependencies"] = dependencies

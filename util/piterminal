@@ -22,8 +22,6 @@ piterminal. If not, see http://www.gnu.org/licenses/.
 # To test:
 # ./util/piterminal --log-level 2 --port /dev/fake
 
-from __future__ import division, absolute_import, print_function
-
 import argparse
 from builtins import input
 import logging

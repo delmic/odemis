@@ -30,8 +30,6 @@ They will *only* receive mouse events if they are active!
 
 """
 
-from __future__ import division
-
 from future.utils import with_metaclass
 import cairo
 import logging
@@ -631,10 +629,10 @@ class SelectionMixin(DragMixin):
 
             if isinstance(self.select_v_start_pos, list):
                 self.select_v_start_pos = Vec(self.select_v_start_pos)
-                logging.warn("'select_v_start_pos' is still set as a list somewhere!")
+                logging.warning("'select_v_start_pos' is still set as a list somewhere!")
             if isinstance(self.select_v_end_pos, list):
                 self.select_v_end_pos = Vec(self.select_v_end_pos)
-                logging.warn("'select_v_end_pos' is still set as a list somewhere!")
+                logging.warning("'select_v_end_pos' is still set as a list somewhere!")
 
             self._calc_edges()
             self.selection_mode = SEL_MODE_NONE

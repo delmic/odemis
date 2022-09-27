@@ -20,8 +20,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # by a Stream. One specific feature is that they can also be aware of the
 # acquisition of the whole series of streams, done by the acquisition manager.
 
-from __future__ import division
-
 from past.builtins import long
 import logging
 import math

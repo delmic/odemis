@@ -15,8 +15,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from __future__ import division
-
 import logging
 from odemis import model
 from odemis.util import to_str_escape
@@ -338,6 +336,8 @@ class FakeDG1000Z(object):
         self._listener_thread.daemon = True
         # or listener_thread.setDaemon(True) for old versions of python
         self._listener_thread.start()
+        # Wait a second to ensure the server is running
+        time.sleep(1)
 
     def __del__(self):
         try:

@@ -21,8 +21,6 @@
 
 """
 
-from __future__ import division
-
 import wx
 import wx.lib.wxcairo as wxcairo
 from odemis.gui.util.conversion import wxcol_to_frgb

@@ -19,8 +19,6 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
 from builtins import str
 from past.builtins import basestring
 import wx

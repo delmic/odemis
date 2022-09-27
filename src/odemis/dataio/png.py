@@ -15,8 +15,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # Very rough converter to simple 8-bit PNG
-from __future__ import division
-
 import logging
 import numpy
 from odemis import model

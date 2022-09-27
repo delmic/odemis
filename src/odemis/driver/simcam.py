@@ -19,8 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from __future__ import division
-
 import math
 import threading
 from past.builtins import long
@@ -183,6 +181,8 @@ class Camera(model.DigitalCamera):
 
         # fit
         self.resolution.value = self.resolution.clip(new_res)
+
+        self._metadata[model.MD_BINNING] = self._binning
         return self._binning
 
     def _setResolution(self, value):

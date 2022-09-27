@@ -26,9 +26,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Note that the spectrum is normally contained on the C dimension, which is
 # by convention the first of the 5 dimensions of a DataArray (CTZYX).
 
-from __future__ import division
-
 from builtins import range
+import logging
 import math
 import numpy
 from odemis import model
@@ -93,7 +92,7 @@ def get_spectrum_range(data):
 
     try:
         return get_wavelength_per_pixel(data), "m"
-    except (ValueError, KeyError):
+    except (ValueError, KeyError) as ex:
         dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
         # useless polynomial => just show pixels values (ex: -50 -> +50 px)
         if len(dims) == 3 and dims == "YXC" and data.shape[2] in (3, 4):  # RGB?
@@ -105,6 +104,7 @@ def get_spectrum_range(data):
             except ValueError:
                 raise ValueError("Dimension 'C' not in dimensions, so skip computing wavelength list.")
 
+        logging.info("Couldn't get spectrum metadata: %s", ex)
         max_bw = data.shape[ci] // 2
         min_bw = (max_bw - data.shape[ci]) + 1
         return list(range(min_bw, max_bw + 1)), "px"
@@ -161,7 +161,7 @@ def get_time_range(data):
 
     try:
         return get_time_per_pixel(data), "s"
-    except (ValueError, KeyError):
+    except (ValueError, KeyError) as ex:
         dims = data.metadata.get(model.MD_DIMS, "CTZYX"[-data.ndim:])
 
         if len(dims) == 3 and dims == "YXC" and data.shape[2] in (3, 4):  # RGB?
@@ -173,6 +173,7 @@ def get_time_range(data):
             except ValueError:
                 raise ValueError("Dimension 'T' not in dimensions, so skip computing time list.")
 
+        logging.info("Couldn't get time metadata: %s", ex)
         # no time list. just show pixels values (ex: 0 -> +50 px)
         max_t = data.shape[ti] // 2  # Typically, a TC array
         min_t = (max_t - data.shape[ti]) + 1
@@ -191,7 +192,7 @@ def get_angle_range(data):
 
     try:
         return get_angle_per_pixel(data), "rad"
-    except (ValueError, KeyError):
+    except (ValueError, KeyError) as ex:
         # Special default dimension with A instead of T.
         # If the function was called, let's assume there are some chances
         # that it really has an angle somewhere so fallback to the 4th dimension
@@ -208,6 +209,7 @@ def get_angle_range(data):
                 raise ValueError("Dimension 'A' not in dimensions, so skip computing angle list.")
 
         # Shows pixels values (ex: 0 -> +50 px), if theta list is not present
+        logging.info("Couldn't get angle metadata: %s", ex)
         max_t = data.shape[thetai] // 2  # array of shape AC
         min_t = (max_t - data.shape[thetai]) + 1
         return list(range(min_t, max_t + 1)), "px"

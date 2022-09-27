@@ -19,8 +19,6 @@ This file is part of Odemis.
 This module contains update functionality for the Windows Viewer version of Odemis
 
 """
-from __future__ import division
-
 from concurrent.futures import CancelledError
 import logging
 import odemis
@@ -92,7 +90,7 @@ class WindowsUpdater:
             web_version = web_version_file.readline().strip()
             web_version_file.close()
         except IOError as err:
-            logging.warn("Error on remote version check (%s)", err)
+            logging.warning("Error on remote version check (%s)", err)
             return None
 
         return web_version.decode('latin1')

@@ -21,8 +21,6 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division, print_function
-
 from builtins import range
 import copy
 import logging
@@ -35,6 +33,8 @@ from odemis.driver.tmcm import TMCLController
 from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
 from odemis.gui.comp.overlay.view import HORIZONTAL_LINE, VERTICAL_LINE, CROSSHAIR
+from odemis.gui.comp.overlay.world import EKOverlay
+from odemis.gui.comp.viewport import ARLiveViewport
 from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL, FeatureOverviewView
 from odemis.gui.util.img import wxImage2NDImage
 from odemis.util import mock
@@ -50,7 +50,6 @@ import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.model as guimodel
 import odemis.gui.test as test
-from odemis.gui.comp.overlay.world import EKOverlay
 
 test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -1190,10 +1189,12 @@ class OverlayTestCase(test.GuiTestCase):
         test.gui_loop()
 
     def test_mirror_arc_overlay(self):
-        cnvs = miccanvas.SparcARCanvas(self.panel)
-        cnvs.scale = 20000
-        self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
+        vp = ARLiveViewport(self.panel)
+        vp.show_mirror_overlay()
+        self.add_control(vp, wx.EXPAND, proportion=1, clear=True)
 
+        cnvs = vp.canvas
+        cnvs.scale = 20000
         cnvs.flip = 0
         cnvs.update_drawing()
 

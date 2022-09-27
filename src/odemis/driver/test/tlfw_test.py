@@ -14,9 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division, print_function
-
-import collections
+from collections.abc import Iterable
 import logging
 from odemis.driver import tlfw
 import os
@@ -85,7 +83,7 @@ class TestStatic(unittest.TestCase):
 
         self.assertGreater(len(dev.axes["band"].choices), 0)
         for p, b in dev.axes["band"].choices.items():
-            self.assertIsInstance(b, collections.Iterable)
+            self.assertIsInstance(b, Iterable)
             dev.moveAbs({"band": p})
 
         self.assertTrue(dev.selfTest(), "self test failed.")

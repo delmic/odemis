@@ -18,8 +18,6 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
 from collections import OrderedDict
 import copy
 from odemis.acq import stream
@@ -847,6 +845,9 @@ STREAM_SETTINGS_CONFIG = {
                 "label": "Angular binning",
                 "tooltip": "Vertical binning of the CCD",
                 "control_type": odemis.gui.CONTROL_RADIO,
+            }),
+            ("polarization", {
+                "control_type": odemis.gui.CONTROL_COMBO,
             }),
         )),
     # For DEBUG

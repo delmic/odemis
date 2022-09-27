@@ -25,8 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 Combobox and similar controls.
 
 """
-from __future__ import division
-
 from builtins import str
 import logging
 from odemis.gui import img
@@ -35,6 +33,7 @@ from odemis.gui.comp.buttons import ImageButton, darken_image
 import wx
 import wx.adv
 from odemis.util.img import getColorbar, tintToColormap
+from odemis.gui.util.img import NDImage2wxBitmap
 
 
 class ComboBox(wx.adv.OwnerDrawnComboBox):
@@ -216,8 +215,7 @@ class ColorMapComboBox(ComboBox):
             h = r.height
 
             gradient = getColorbar(color_map, w, h)
-            bmp = wx.Bitmap(*gradient.shape[1::-1])
-            bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
+            bmp = NDImage2wxBitmap(gradient)
             dc.DrawBitmap(bmp, 0, 0)
             return
         else:
@@ -225,9 +223,7 @@ class ColorMapComboBox(ComboBox):
             # Draw color map
             colorbar_width = int(round(r.width * COLOBAR_WITH_RATIO))
             gradient = getColorbar(color_map, colorbar_width, r.height)
-            bmp = wx.Bitmap(*gradient.shape[1::-1])
-            bmp.CopyFromBuffer(gradient, format=wx.BitmapBufferFormat_RGB)
-            # image = wx.ImageFromBuffer(*gradient.shape[1::-1], gradient)
+            bmp = NDImage2wxBitmap(gradient)
             dc.DrawBitmap(bmp, 0, item * r.height)
             item_name = self.Strings[item]
             dc.DrawText(item_name.title(), colorbar_width + 5, item * r.height + 5)

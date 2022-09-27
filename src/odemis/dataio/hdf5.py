@@ -19,11 +19,10 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
 from past.builtins import basestring, unicode
 from numpy.polynomial import polynomial
 
-import collections
+from collections.abc import Iterable
 import h5py
 import json
 import logging
@@ -932,7 +931,7 @@ def _add_image_metadata(group, image, mds):
             else:
                 ewls[i] = (1e-9, 1e-9)
             state[i] = ST_INVALID
-        elif not isinstance(ewl, collections.Iterable) and typ > 1:
+        elif not isinstance(ewl, Iterable) and typ > 1:
             ewls[i] = (ewl,) * typ
 
     if isinstance(ewls[0], basestring):

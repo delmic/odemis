@@ -26,8 +26,6 @@ as the region of acquisition (ROA), region of calibration (ROC) and projects in 
 FASTEM system.
 """
 
-from __future__ import division
-
 import logging
 
 import wx

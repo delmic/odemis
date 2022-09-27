@@ -24,12 +24,10 @@ This module contains functions that help in the generation of dynamic configurat
 
 """
 
-from __future__ import division
-
 from builtins import str
 from past.builtins import basestring, long
 from collections import OrderedDict
-import collections
+from collections.abc import Iterable, Mapping
 import logging
 import math
 import numbers
@@ -252,7 +250,7 @@ def determine_default_control(va):
     """
 
     if not va:
-        logging.warn("No VA provided!")
+        logging.warning("No VA provided!")
         return odemis.gui.CONTROL_NONE
 
     if va.readonly:
@@ -434,10 +432,10 @@ def process_setting_metadata(hw_comp, setting_va, conf):
         elif hasattr(setting_va, "choices") and isinstance(setting_va.choices, set):
             # Intersect the two choice sets
             choices &= setting_va.choices
-        elif hasattr(setting_va, "choices") and isinstance(setting_va.choices, collections.Mapping):  # dicts
+        elif hasattr(setting_va, "choices") and isinstance(setting_va.choices, Mapping):  # dicts
             # Only keep the items of va.choices which are also choices
             choices = {k: v for k, v in setting_va.choices.items() if k in choices}
-        elif hasattr(setting_va, "range") and isinstance(setting_va.range, collections.Iterable):
+        elif hasattr(setting_va, "range") and isinstance(setting_va.range, Iterable):
             # Ensure that each choice is within the range
             # TODO: handle iterables
             rng = setting_va.range
@@ -447,9 +445,9 @@ def process_setting_metadata(hw_comp, setting_va, conf):
 
     # Ensure the choices are within the range (if both are given)
     # TODO: handle iterables
-    if choices is not None and None not in (minv, maxv) and not isinstance(minv, collections.Iterable):
+    if choices is not None and None not in (minv, maxv) and not isinstance(minv, Iterable):
         logging.debug("Restricting choices %s to range %s->%s", choices, minv, maxv)
-        if isinstance(choices, collections.Mapping):  # dicts
+        if isinstance(choices, Mapping):  # dicts
             choices = {k: v for k, v in choices.items() if minv <= k <= maxv}
         else:
             choices = set(c for c in choices if minv <= c <= maxv)
@@ -593,7 +591,7 @@ def format_axis_choices(name, axis_def):
 
 def choice_to_str(choice):
     """ Return a list of choices, where iterable choices are joined by an `x` """
-    if isinstance(choice, basestring) or not isinstance(choice, collections.Iterable):
+    if isinstance(choice, basestring) or not isinstance(choice, Iterable):
         return str(choice)
     return u" x ".join(str(c) for c in choice)
 
@@ -617,7 +615,7 @@ def str_to_value(text, va):
     logging.debug("Parsing free text value %s", text)
     va_val = va.value
     # Try to find a good corresponding value inside the string
-    if isinstance(va_val, collections.Iterable) and text.endswith(va.unit):
+    if isinstance(va_val, Iterable) and text.endswith(va.unit):
         _, str_si, _ = decompose_si_prefix("1" + text[-(len(va.unit) + 1):], unit=va.unit)
         str_val = text
     else:
@@ -625,7 +623,7 @@ def str_to_value(text, va):
     new_val = reproduce_typed_value(va_val, str_val)
 
     # In case of list, be lenient by dropping the extra values if it's too many
-    if isinstance(new_val, collections.Iterable):
+    if isinstance(new_val, Iterable):
         new_val = new_val[:len(va_val)]
 
         if new_val and isinstance(new_val[0], numbers.Real):
@@ -787,7 +785,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
                                      events=update_event)
 
         if change_callback:
-            if not isinstance(update_event, collections.Iterable):
+            if not isinstance(update_event, Iterable):
                 update_event = (update_event,)
             for event in update_event:
                 value_ctrl.Bind(event, change_callback)
@@ -880,7 +878,7 @@ def create_setting_entry(container, name, va, hw_comp, conf=None, change_callbac
 
         # TODO: Might need size=(100, 16)!!
         cbconf = {}
-        if hasattr(va, "choices") and isinstance(va.choices, collections.Iterable):
+        if hasattr(va, "choices") and isinstance(va.choices, Iterable):
             # Enumerated VA => don't allow entering other values
             cbconf["style"] = wx.CB_READONLY
         lbl_ctrl, value_ctrl = container.add_combobox_control(label_text, conf=cbconf)

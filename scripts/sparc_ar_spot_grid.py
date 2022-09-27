@@ -27,7 +27,6 @@ odemis-cli --set-attr ARCam ReadoutRate 100000
 odemis-cli --set-attr E-beam Magnification 4000
 '''
 
-from __future__ import division
 from odemis import dataio, model
 import argparse
 import logging

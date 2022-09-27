@@ -20,8 +20,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division
-
 import queue
 from decorator import decorator
 from functools import wraps
@@ -96,7 +94,7 @@ def ignore_dead(f, self, *args, **kwargs):
     try:
         return f(self, *args, **kwargs)
     except RuntimeError:
-        logging.warn("Dead object %s ignored in %s", self, f.__name__)
+        logging.warning("Dead object %s ignored in %s", self, f.__name__)
 
 
 def dead_object_wrapper(f):

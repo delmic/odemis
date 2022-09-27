@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # various functions to convert and modify images (as DataArray)
 
-from __future__ import division
-
 import logging
 import math
 import numpy
@@ -33,7 +31,7 @@ import cv2
 import copy
 from odemis.model import DataArray
 from odemis.model import MD_DWELL_TIME, MD_EXP_TIME, TINT_FIT_TO_RGB, TINT_RGB_AS_IS
-from odemis.util import get_best_dtype_for_acc
+from odemis.util import get_best_dtype_for_acc, transform
 from odemis.util.conversion import get_img_transformation_matrix, rgb_to_frgb
 from typing import Tuple
 
@@ -44,7 +42,7 @@ from matplotlib import cm
 try:
     from odemis.util import img_fast
 except ImportError:
-    logging.warn("Failed to load optimised functions, slow version will be used.")
+    logging.warning("Failed to load optimised functions, slow version will be used.")
     img_fast = None
 
 # This is a weave-based optimised version (but weave requires g++ installed)
@@ -794,7 +792,9 @@ def mean_within_circle(data: model.DataArray, center: Tuple[float, float], radiu
     """
     Compute the mean value of the points within a circle.
     It only keeps the pixels whose center is within the circle. It can handle
-    data with more than 2 dimensions.
+    data with more than 2 dimensions. With more than two dimensions, the circle
+    is based on the last two dimensions (Y, X), and the rest of the dimensions are
+    treated independently.
 
     data (DataArray of shape ..., Y, X): the data where to compute the mean.
        All the extra dimensions are kept in the result
@@ -802,11 +802,11 @@ def mean_within_circle(data: model.DataArray, center: Tuple[float, float], radiu
     radius: the radius of the circle which contains the center of the pixels to be
       taken into account.
 
-    returns (DataArray of type float):
+    returns (DataArray of type float, with same shape as data minus X&Y):
         the mean of data that corresponds to points in the circle.
     """
     n = 0
-    datasum = numpy.zeros(data.shape[0], dtype=numpy.float64)
+    datasum = numpy.zeros(data.shape[:-2], dtype=numpy.float64)
 
     # Scan the square around the circle, and only pick the points in the circle
     for px in range(max(0, int(center[0] - radius)),
@@ -815,7 +815,7 @@ def mean_within_circle(data: model.DataArray, center: Tuple[float, float], radiu
                         min(int(center[1] + radius) + 1, data.shape[-2])):
             if math.hypot(center[0] - px, center[1] - py) <= radius:
                 n += 1
-                datasum += data[:, py, px]
+                datasum += data[..., py, px]
 
     mean = datasum / n
     return mean
@@ -980,6 +980,35 @@ def mergeTiles(tiles):
     result.metadata[model.MD_POS] = getCenterOfTiles(tiles, result_shape[:2])
 
     return result
+
+
+def rotate_img_metadata(image, rotation, center_of_rot):
+    """
+    Updates the metadata of an image to rotate its position around a given center of rotation.
+
+    :param image: (DataArray) The image for which the metadata will be rotated
+    :param rotation: (float) [rad] Rotation by which to rotate the image, positive value is counter-clockwise rotation.
+    :param center_of_rot: (float, float) [m] Center of rotation (x, y), in the  same coordinate system as MD_POS of the
+                                         image.
+    :returns: (DataArray) The image with the metadata MD_POS and MD_ROTATION updated, the input data remains unchanged:
+        MD_POS: old position + shift based on input rotation [m]
+        MD_ROTATION: new rotation + input rotation [rad]
+    """
+    img = DataArray(image, image.metadata.copy())
+    pos = img.metadata[model.MD_POS]
+
+    transl = transform.RigidTransform(translation=center_of_rot)
+    rot = transform.RigidTransform(rotation=rotation)
+
+    # Translate so that the center of rotation is at (0,0), because the rigid transform rotates around (0, 0)
+    p1 = transl.inverse().apply(pos)
+    p2 = rot.apply(p1)  # rotate the position
+    p = transl.apply(p2)  # translate back to the original center
+
+    img.metadata[model.MD_POS] = (p[0], p[1])
+    original_rotation = img.metadata.get(model.MD_ROTATION, 0)
+    img.metadata[model.MD_ROTATION] = original_rotation + rotation
+    return img
 
 
 def getBoundingBox(content):

@@ -136,7 +136,7 @@ class TestEnzelMove(unittest.TestCase):
         # Get the stage to imaging position
         f = cryoSwitchAlignPosition(THREE_BEAMS)
         f.result()
-        testing.assert_pos_almost_equal(align.position.value, self.align_active,
+        testing.assert_pos_almost_equal(align.position.value, self.align_3beams,
                                      atol=ATOL_LINEAR_POS)
 
         # Get the stage to imaging position

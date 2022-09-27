@@ -14,8 +14,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 from odemis.acq.stitching._constants import REGISTER_GLOBAL_SHIFT, REGISTER_SHIFT, \
     REGISTER_IDENTITY, WEAVER_MEAN, WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE
 from odemis.acq.stitching._tiledacq import acquireTiledArea, estimateTiledAcquisitionTime, estimateTiledAcquisitionMemory, FocusingMethod

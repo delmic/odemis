@@ -18,8 +18,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
 from past.builtins import basestring
 from concurrent.futures._base import CancelledError, CANCELLED, FINISHED
 import logging
@@ -989,11 +987,11 @@ class DelphiStateController(SecomStateController):
         self._hole_focus = None
 
         if sht is None:
-            logging.warn("No sample holder loaded!")
+            logging.warning("No sample holder loaded!")
             return
         elif sht != PHENOM_SH_TYPE_OPTICAL:
             # Log the warning but load the calibration data
-            logging.warn("Wrong sample holder type! We will try to load the "
+            logging.warning("Wrong sample holder type! We will try to load the "
                          "calibration data anyway...")
 
         calib = self._calibconf.get_sh_calib(shid)
@@ -1145,7 +1143,7 @@ class DelphiStateController(SecomStateController):
             return
         elif sht != PHENOM_SH_TYPE_OPTICAL:
             # Hopefully it's just because the sample holder has not been correctly registered
-            logging.warn("Wrong sample holder type %d! We will try to calibrate anyway...", sht)
+            logging.warning("Wrong sample holder type %d! We will try to calibrate anyway...", sht)
 
         # Returns 'yes' for automatic, 'no' for manual
         dlg = windelphi.RecalibrationDialog(self._main_frame)

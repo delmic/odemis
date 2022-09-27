@@ -20,8 +20,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from __future__ import division
-
 import copy
 import logging
 import math
@@ -672,7 +670,8 @@ def _doCryoSwitchSamplePosition(future, target):
             except IndexError:
                 # In case the required movement is invalid/unreachable with the smaract 5dof stage
                 # Move all linear axes first then rotational ones using the fallback_submoves
-                logging.debug("This move {} is unreachable, trying to move all axes at once...".format(sub_move))
+                logging.debug("This move %s is unreachable, trying to move all axes at once...",
+                              sub_move_dict)
                 for sub_move in fallback_submoves:
                     sub_move_dict = filter_dict(sub_move, target_pos[target])
                     logging.debug("Moving %s to %s.", stage.name, sub_move)

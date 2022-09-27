@@ -22,8 +22,6 @@ This file is part of Odemis.
 
 """
 
-from __future__ import division
-
 import logging
 import math
 from abc import ABCMeta, abstractmethod
@@ -460,7 +458,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             self.update_projection(b_start_pos, b_end_pos, (shift[0], shift[1], scale))
 
-            # logging.warn("%s %s", shift, phys_to_buffer_pos(shift))
+            # logging.warning("%s %s", shift, phys_to_buffer_pos(shift))
             rect = (b_start_pos.x,
                     b_start_pos.y,
                     b_end_pos.x - b_start_pos.x,
@@ -731,7 +729,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     self._roa.value = UNDEFINED_ROI
 
         else:
-            logging.warn("Expected ROA not found!")
+            logging.warning("Expected ROA not found!")
 
     def _draw_points(self, ctx):
         # Calculate the offset of the center of the buffer relative to the
@@ -3010,7 +3008,7 @@ class EKLine(GenericGadgetLine):
 
         # Reverse equation of pos =  a + b * wl
         b = (self.p_end_pos[1] - self.p_start_pos[1]) / (wl_end - wl_start)
-        logging.debug("%s mm / %s nm", (self.p_end_pos[1] - self.p_start_pos[1]) * 1e3, (wl_end - wl_start) * 1e9)
+        logging.debug("EK line at %s mm / %s nm", (self.p_end_pos[1] - self.p_start_pos[1]) * 1e3, (wl_end - wl_start) * 1e9)
         a = self.p_start_pos[1] - b * wl_start
 
         # This will call _onLinePos() direct, which is fine, as the VA may clip

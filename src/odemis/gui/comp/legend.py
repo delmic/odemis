@@ -22,10 +22,8 @@
 
 """
 
-from __future__ import division
-
+from collections.abc import Iterable, Mapping
 import cairo
-import collections
 import logging
 import numpy
 from odemis.gui import FG_COLOUR_DIS
@@ -744,7 +742,7 @@ class RadioLegend(wx.Panel):
         self.text.SetLabel(name)  # set the descriptive text for the legend
 
         if len(choices) > 1:
-            if isinstance(choices, collections.Mapping):  # create combo box + radio buttons
+            if isinstance(choices, Mapping):  # create combo box + radio buttons
                 self._choices_dict = choices
 
                 choices_radio = self.createComboBox(choices, default_value)
@@ -755,7 +753,7 @@ class RadioLegend(wx.Panel):
 
                 self._legend_on = True  # True while not changes requested via stream panel
 
-            elif isinstance(choices, collections.Iterable):  # only create radio buttons
+            elif isinstance(choices, Iterable):  # only create radio buttons
                 # if we have multiple choices -> select between choices with radio button
                 self.createRadioButtons(choices, default_value)  # create radio buttons
                 self.control_sizer.Add(self.pos_display, 1, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)

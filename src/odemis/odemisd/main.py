@@ -21,8 +21,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from __future__ import division, print_function
-
 import argparse
 import grp
 from logging import FileHandler
@@ -518,10 +516,12 @@ class BackendRunner(object):
         try:
             os.setgid(gid_base)
         except OSError:
+            # This can happen especially when running the backend as a standard user.
             logging.warning("Not enough permissions to run in group " + model.BASE_GROUP + ", trying anyway...")
 
-        # everything created after must be rw by group
-        os.umask(~(stat.S_IRUSR | stat.S_IWUSR | stat.S_IRGRP | stat.S_IWGRP))
+        # Everything created after should be (also) accessible by the group.
+        # Need the user execute bit, to allow directory creation (with files inside)
+        os.umask(~(stat.S_IRWXU | stat.S_IRGRP | stat.S_IWGRP))
 
     def mk_base_dir(self):
         """
@@ -569,6 +569,7 @@ class BackendRunner(object):
             self.mk_base_dir()
         except Exception:
             logging.error("Failed to create back-end directory " + model.BASE_DIRECTORY)
+            raise
 
         # create the root container
         try:

@@ -13,8 +13,6 @@
 # odemis-mic-selector.py --log-level 2 --config /usr/share/test-sun.yaml 238abe69010000c8 1bcf:2880 --config /usr/share/test-key.yaml 413c:2003 --fallback /usr/share/test-none.yaml
 
 
-from __future__ import division, print_function, absolute_import
-
 import Pyro4
 import argparse
 import collections

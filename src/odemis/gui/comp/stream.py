@@ -23,8 +23,6 @@ data streams coming from the microscope.
 
 """
 
-from __future__ import division
-
 from builtins import str
 from past.builtins import basestring
 from decorator import decorator
@@ -133,7 +131,7 @@ class StreamPanelHeader(wx.Control):
         self.btn_update = self._add_update_btn() if self.Parent.options & OPT_BTN_UPDATE else None
 
         # Add spacer for creating padding on the right side of the header panel
-        self._sz.Add((64, 1), 0)
+        self._sz.Add((24, 1), 0)
 
         # Set the sizer of the Control
         self.SetSizerAndFit(self._sz)
@@ -165,7 +163,10 @@ class StreamPanelHeader(wx.Control):
 
     def _add_label_ctrl(self):
         """ Add a label control to the header panel """
-        label_ctrl = wx.StaticText(self, -1, self.Parent.stream.name.value)
+        label_ctrl = wx.StaticText(self, wx.ID_ANY, self.Parent.stream.name.value,
+                                   style=wx.ST_ELLIPSIZE_END)
+        # In case the name is too long, at least we can see it full with a mouse hover
+        label_ctrl.SetToolTip(self.Parent.stream.name.value)
         label_ctrl.SetBackgroundColour(self.Parent.GetBackgroundColour())
         label_ctrl.SetForegroundColour(FG_COLOUR_MAIN)
         self._add_ctrl(label_ctrl, stretch=True)

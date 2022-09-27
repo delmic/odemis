@@ -23,8 +23,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # -4 -> 4V, you should use pins 9->12.
 
 
-from __future__ import division
-
 import logging
 from odemis import model
 import odemis

@@ -21,8 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from __future__ import division
-
 from odemis.gui.util import get_home_folder
 from odemis.util.filename import create_filename, guess_pattern, update_counter, make_unique_name
 import os

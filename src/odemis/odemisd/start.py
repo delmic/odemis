@@ -20,7 +20,6 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division, absolute_import, print_function
 
 import argparse
 import logging
@@ -29,6 +28,7 @@ import re
 import shlex
 import sys
 import time
+import notify2
 
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -40,8 +40,10 @@ DEFAULT_CONFIG = {"LOGLEVEL": "1"}
 
 # Used to parse the back-end log, and display it nicely
 RE_MSG_BE_START = "Starting Odemis back-end"
+RE_MSG_GUI_LOG_START = "************  Starting Odemis GUI  ************"
 RE_MSG_BE_FAILURE = "Failed to instantiate the model due to component"
 RE_MSG_BE_TRACEBACK = "Full traceback of the error follows"
+RE_MSG_GUI_FAILURE = "Traceback (most recent call last)"
 RE_MSG_BE_HEADER = r"[0-9]+-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9]+\t\S+\t\S+:"
 
 # String as returned by xprop WM_CLASS
@@ -134,6 +136,93 @@ from odemis.model import ST_RUNNING, ST_UNLOADED
 import wx
 
 
+def get_notify_object():
+    notify2.init("Odemis")
+    notif = notify2.Notification("")
+    return notif
+
+
+def display_log(type, logfile):
+    """
+    Shows the most recent log containing the "possible" traceback of an error in the process/file specified.
+
+    :param type (str): Type of process that was tried to be started (e.g. "Odemis back-end", "Odemis GUI")
+    :param logfile (str): Localtion of the matching log file (e.g. "/var/log/odemis.log", "~/odemis-gui.log")
+    """
+    title = f"Log message of {type}"
+    caption = f"Failure during {type} initialisation"
+    f = open(logfile, "r")
+    lines = f.readlines()
+
+    # Start at the beginning of the most recent log (skipping the log from
+    # previous runs)
+    for i, l in enumerate(reversed(lines)):
+        if RE_MSG_BE_START in l:
+            lines = lines[-(i + 1):]
+            break
+        elif RE_MSG_GUI_LOG_START in l:
+            lines = lines[-(i + 1):]
+            break
+
+    # First show a "simple" error message, by looking for:
+    # "Failed to instantiate the model due to component" (+all the backtrace)
+    # "Traceback (most recent call last)" (+all the backtrace)
+    # If it exists -> only show it, and have a "Show details" button
+
+    failurelb = None
+    failurebt = None
+    failurele = None  # First line which is not the backtrace
+    for i, l in enumerate(lines):
+        if failurelb is None:
+            if RE_MSG_BE_FAILURE in l:
+                failurelb = i
+            elif RE_MSG_GUI_FAILURE in l:
+                failurelb = i  # First traceback of the GUI error
+        elif failurebt is None:
+            if RE_MSG_BE_TRACEBACK in l:  # Also works for the GUI
+                failurebt = i  # Beginning of backtrace
+        else:
+            if re.match(RE_MSG_BE_HEADER, l):  # Also works for the GUI
+                failurele = i  # End of backtrace
+                break
+
+    app = wx.App()  # This variable is created to show the log_frame. Required even though it is unused.
+    if failurelb is not None:
+        failmsg = "".join(lines[failurelb:failurele])
+        failmsg += "\nWould you like to see the full log message now?"
+        box = wx.MessageDialog(None, failmsg,
+                               caption,
+                               wx.YES_NO | wx.YES_DEFAULT | wx.ICON_ERROR | wx.CENTER)
+        ans = box.ShowModal()  # Waits for the window to be closed
+        if ans == wx.ID_NO:
+            return
+
+    fullmsg = "".join(lines)
+
+    # At least, skip everything not related to this last run
+    log_frame = create_log_frame(title, fullmsg)
+    log_frame.ShowModal()
+
+def create_log_frame(title, msg):
+    frame = wx.Dialog(None, title=title, size=(800, 800),
+                      style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
+    text = wx.TextCtrl(frame, value=msg, style=wx.TE_MULTILINE | wx.TE_READONLY)
+
+    textsizer = wx.BoxSizer()
+    textsizer.Add(text, 1, flag=wx.ALL | wx.EXPAND)
+
+    btnsizer = frame.CreateButtonSizer(wx.CLOSE)
+
+    sizer = wx.BoxSizer(wx.VERTICAL)
+    sizer.Add(textsizer, 1, flag=wx.ALL | wx.EXPAND, border=5)
+    sizer.Add(btnsizer, 0, flag=wx.EXPAND | wx.BOTTOM, border=5)
+    frame.SetSizer(sizer)
+
+    # Show the end of the log (which is most likely showing the error)
+    text.ShowPosition(text.GetLastPosition())
+    frame.CenterOnScreen()
+    return frame
+
 class BackendStarter(object):
     def __init__(self, config, nogui=False):
         self._config = config
@@ -144,20 +233,7 @@ class BackendStarter(object):
 
         self._nogui = nogui
 
-        try:
-            # Uses Gobject, which works with both GTK2 or GTK3
-            import notify2
-            notify2.init("Odemis")
-            self._notif = notify2.Notification("")
-        except ImportError:
-            # Warning: wx will crash if Pynotify has been loaded before creating
-            # the wx.App (probably due to bad interaction with GTK).
-            # That's why we only import it here. It only works if wxPython uses
-            # GTK2. If GTK3 is used, chaos will ensue, without explanations.
-            logging.debug("Cannot use notify2, falling back to pynotify")
-            import pynotify
-            pynotify.init("Odemis")
-            self._notif = pynotify.Notification("")
+        self._notif = get_notify_object()
 
         # For listening to component states
         self._mic = None
@@ -193,27 +269,6 @@ class BackendStarter(object):
         sizer.Add(btnsizer, 0, flag=wx.EXPAND | wx.BOTTOM, border=5)
         frame.SetSizer(sizer)
 
-        frame.CenterOnScreen()
-        return frame
-
-    @staticmethod
-    def _create_log_frame(msg):
-        frame = wx.Dialog(None, title="Log message of Odemis back-end", size=(800, 800),
-                          style=wx.DEFAULT_DIALOG_STYLE | wx.RESIZE_BORDER)
-        text = wx.TextCtrl(frame, value=msg, style=wx.TE_MULTILINE | wx.TE_READONLY)
-
-        textsizer = wx.BoxSizer()
-        textsizer.Add(text, 1, flag=wx.ALL | wx.EXPAND)
-
-        btnsizer = frame.CreateButtonSizer(wx.CLOSE)
-
-        sizer = wx.BoxSizer(wx.VERTICAL)
-        sizer.Add(textsizer, 1, flag=wx.ALL | wx.EXPAND, border=5)
-        sizer.Add(btnsizer, 0, flag=wx.EXPAND | wx.BOTTOM, border=5)
-        frame.SetSizer(sizer)
-
-        # Show the end of the log (which is most likely showing the error)
-        text.ShowPosition(text.GetLastPosition())
         frame.CenterOnScreen()
         return frame
 
@@ -506,50 +561,7 @@ class BackendStarter(object):
             self._backend_done.set()
 
     def display_backend_log(self):
-        f = open(self._config["LOGFILE"], "r")
-        lines = f.readlines()
-
-        # Start at the beginning of the latest log (skipping the log from
-        # previous runs)
-        for i, l in enumerate(reversed(lines)):
-            if RE_MSG_BE_START in l:
-                lines = lines[-(i + 1):]
-                break
-
-        # First show a "simple" error message, by looking for:
-        # "Failed to instantiate the model due to component" (+all the backtrace)
-        # If it exists -> only show it, and have a "Show details" button
-
-        failurelb = None
-        failurebt = None
-        failurele = None  # First line which is not the backtrace
-        for i, l in enumerate(lines):
-            if failurelb is None:
-                if RE_MSG_BE_FAILURE in l:
-                    failurelb = i
-            elif failurebt is None:
-                if RE_MSG_BE_TRACEBACK in l:
-                    failurebt = i  # Beginning of backtrace
-            else:
-                if re.match(RE_MSG_BE_HEADER, l):
-                    failurele = i  # End of backtrace
-                    break
-
-        if failurelb is not None:
-            failmsg = "".join(lines[failurelb:failurele])
-            failmsg += "\nWould you like to see the full log message now?"
-            box = wx.MessageDialog(None, failmsg,
-                                   "Failure during Odemis back-end initialisation",
-                                   wx.YES_NO | wx.YES_DEFAULT | wx.ICON_ERROR | wx.CENTER)
-            ans = box.ShowModal()  # Waits for the window to be closed
-            if ans == wx.ID_NO:
-                return
-
-        fullmsg = "".join(lines)
-
-        # At least, skip everything not related to this last run
-        log_frame = self._create_log_frame(fullmsg)
-        log_frame.ShowModal()
+        display_log("Odemis back-end", self._config["LOGFILE"])
 
 
 def find_window(wm_class):
@@ -655,6 +667,14 @@ def main(args):
     except ValueError:
         loglevel = 1
         odemis_config["LOGLEVEL"] = "%d" % loglevel
+
+    # Set up logging before everything else
+    if loglevel < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    # TODO: allow to put logging level so low that nothing is ever output
+    loglevel_names = [logging.WARNING, logging.INFO, logging.DEBUG]
+    loglevel = loglevel_names[min(len(loglevel_names) - 1, loglevel)]
     logging.getLogger().setLevel(loglevel)
 
     # pyrolog = logging.getLogger("Pyro4")
@@ -722,7 +742,28 @@ def main(args):
             else:
                 # Return when the GUI is done
                 logging.info("Starting the GUI...")
-                subprocess.check_call(["odemis-gui", "--log-level", odemis_config["LOGLEVEL"]])
+
+                gui_start_time = time.time()
+                try:
+                    subprocess.check_call(["odemis-gui", "--log-level", odemis_config["LOGLEVEL"]])
+                except subprocess.CalledProcessError as error:
+                    # Only show a trace back when the GUI process stops within 10 seconds, then the cause is expected
+                    # to be an error not the user closing the GUI/ a full stop. Only errors that prevents the GUI
+                    # window from even appearing should be caught.
+                    if time.time() < gui_start_time + 10:
+                        error_code_gui = error.returncode
+
+                        notif = get_notify_object()
+                        notif.update("Failed to start the GUI",
+                                     f"For more information look at the log file odemis-gui.log in the home folder.'",
+                                     "dialog-warning")
+                        notif.show()
+
+                        display_log("Odemis GUI", os.path.expanduser("~/odemis-gui.log"))
+
+                        return error_code_gui
+                    else: # The GUI closed more than 10 seconds after starting. A normal startup is assumed.
+                        logging.warning(f"The GUI closed with the error code {error.returncode}.")
 
     except ValueError as exp:
         logging.error("%s", exp)

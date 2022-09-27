@@ -18,8 +18,6 @@ run as:
 
 """
 
-from __future__ import division
-
 import argparse
 import logging
 from odemis import model, dataio, util

@@ -182,6 +182,8 @@ MD_TIME_RANGE_TO_DELAY = "Streak time range to trigger delay"  # (dict) mapping 
 # dict (int (resolution X) -> dict (float (dwell time) -> tuple of 4 floats (correction factors)))
 MD_SHIFT_LOOKUP = "Pixel shift compensation table"
 MD_CALIB = "Calibration parameters"  # (list of list of float) Calibration parameters for the correct axes mapping
+# dict of dicts with lifetime, size, positionX and position Y as keys --> {aperture1: {lifetime: value, size: value, positionX: value, positionY: value},  aperture2: {lifetime: value, size: value, positionX: value, positionY: value}, etc.}
+MD_APERTURES_INFO = "Information about all the apertures in the system"
 
 # The following metadata is used to store specific known positions for the
 # actuators.

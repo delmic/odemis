@@ -22,9 +22,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
-import collections
+from collections.abc import Iterable, Sequence
 import logging
 import math
 import numbers
@@ -288,7 +286,7 @@ def readable_str(value, unit=None, sig=None):
             sunit = u""
         else:
             sunit = u" %s" % unit
-        if isinstance(value, collections.Iterable):
+        if isinstance(value, Iterable):
             # Could use "×" , but less readable than "x"
             return u"%s%s" % (u" x ".join([to_string_pretty(v, sig) for v in value]), sunit)
         else:
@@ -296,7 +294,7 @@ def readable_str(value, unit=None, sig=None):
 
     # TODO: special case for s: only if < 10
 
-    if isinstance(value, collections.Iterable):
+    if isinstance(value, Iterable):
         values, prefix = si_scale_list(value)
         return u"%s %s%s" % (u" x ".join([to_string_pretty(v, sig) for v in values]), prefix, unit)
     else:
@@ -412,7 +410,7 @@ def value_to_str(value, unit=None, accuracy=None, pretty_time=False):
         if pretty_time and unit == "s" and isinstance(value, numbers.Real):
             return readable_time(value, full=False)
         elif (isinstance(value, numbers.Real) or
-              (isinstance(value, collections.Sequence) and
+              (isinstance(value, Sequence) and
                len(value) > 0 and
                isinstance(value[0], numbers.Real))
              ):

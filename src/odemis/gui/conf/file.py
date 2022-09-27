@@ -17,8 +17,6 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
-from __future__ import division
-
 from future.utils import with_metaclass
 from abc import ABCMeta, abstractproperty
 import configparser
@@ -106,7 +104,7 @@ class Config(with_metaclass(ABCMeta, object)):
         value (byte string or unicode): if unicode, it's encoded as UTF-8
         """
         if not self.config.has_section(section):
-            logging.warn("Section %s not found, creating...", section)
+            logging.warning("Section %s not found, creating...", section)
             self.config.add_section(section)
         value = self._ensure_str_format(value)
         self.config.set(section, option, value)
@@ -119,7 +117,7 @@ class Config(with_metaclass(ABCMeta, object)):
           (if the value is unicode, it's encoded as UTF-8)
         """
         if not self.config.has_section(section):
-            logging.warn("Section %s not found, creating...", section)
+            logging.warning("Section %s not found, creating...", section)
             self.config.add_section(section)
         for option, value in option_value_list:
             value = self._ensure_str_format(value)

@@ -21,7 +21,6 @@ This file is part of Odemis.
 
 """
 
-from __future__ import division
 from builtins import range  # For Python 2 & 3
 
 import math

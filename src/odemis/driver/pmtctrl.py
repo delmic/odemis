@@ -19,8 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
 import fcntl
 import glob
 import logging
@@ -511,7 +509,7 @@ class PMTControl(model.PowerSupplier):
             try:
                 self._serial.write(cmd)
             except IOError:
-                logging.warn("Failed to send command to PMT Control firmware, "
+                logging.warning("Failed to send command to PMT Control firmware, "
                              "trying to reconnect.")
                 if self._recovering:
                     raise
@@ -527,7 +525,7 @@ class PMTControl(model.PowerSupplier):
                 try:
                     char = self._serial.read()
                 except IOError:
-                    logging.warn("Failed to read from PMT Control firmware, "
+                    logging.warning("Failed to read from PMT Control firmware, "
                                  "trying to reconnect.")
                     if self._recovering:
                         raise

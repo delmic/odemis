@@ -14,9 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from __future__ import division
-
-import collections
+from collections.abc import Iterable
 import logging
 from odemis.model import BAND_PASS_THROUGH
 from odemis.util import fluo
@@ -162,7 +160,7 @@ class FluoTestCase(unittest.TestCase):
         # try with "easy" values: the center
         for b in bands:
             # pick a good wl, and check the function finds it
-            if isinstance(b[0], collections.Iterable):
+            if isinstance(b[0], Iterable):
                 sb = b[-1]
             else:
                 sb = b
@@ -181,7 +179,7 @@ class FluoTestCase(unittest.TestCase):
         # try with "easy" values: the center
         for b in bands:
             # pick a good wl, and check the function finds it
-            if isinstance(b[0], collections.Iterable):
+            if isinstance(b[0], Iterable):
                 sb = b[0]
             else:
                 sb = b
@@ -198,7 +196,7 @@ class FluoTestCase(unittest.TestCase):
         # try with "hard" values: the border
         for b in bands:
             # pick a good wl, and check the function finds it
-            if isinstance(b[0], collections.Iterable):
+            if isinstance(b[0], Iterable):
                 sb = b[-1]
             else:
                 sb = b
@@ -217,7 +215,7 @@ class FluoTestCase(unittest.TestCase):
         # try with "hard" values: the border
         for b in bands:
             # pick a good wl, and check the function finds it
-            if isinstance(b[0], collections.Iterable):
+            if isinstance(b[0], Iterable):
                 sb = b[1]
             else:
                 sb = b

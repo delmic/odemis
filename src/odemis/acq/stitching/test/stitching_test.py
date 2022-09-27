@@ -20,8 +20,6 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from __future__ import division
-
 import copy
 import numpy
 from odemis import model
@@ -194,7 +192,9 @@ class TestWeave(unittest.TestCase):
 
         self.assertEqual(outd.shape, intile.shape)
         numpy.testing.assert_array_equal(outd, intile)
-        self.assertEqual(outd.metadata, intile.metadata)
+        # All metadata should be identical (but the output may contain some extra metadata
+        for k, v in intile.metadata.items():
+            self.assertEqual(outd.metadata[k], v)
 
         # Same thing but with a typical SEM data
         img8 = numpy.zeros((256, 356), dtype=numpy.uint8) + 40
@@ -211,7 +211,9 @@ class TestWeave(unittest.TestCase):
 
         self.assertEqual(outd.shape, intile.shape)
         numpy.testing.assert_array_equal(outd, intile)
-        self.assertEqual(outd.metadata, intile.metadata)
+        # All metadata should be identical (but the output may contain some extra metadata
+        for k, v in intile.metadata.items():
+            self.assertEqual(outd.metadata[k], v)
 
     def test_no_seam(self):
         """

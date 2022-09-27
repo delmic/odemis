@@ -25,12 +25,10 @@ user interface.
 
 """
 
-from __future__ import division
-
 from past.builtins import long
 from future.utils import with_metaclass
 from abc import ABCMeta
-import collections
+from collections.abc import Iterable
 import locale
 import logging
 from odemis import model, util
@@ -217,7 +215,7 @@ class SettingsController(with_metaclass(ABCMeta, object)):
                 if (
                     isinstance(value, (int, long, float)) or
                     (
-                        isinstance(value, collections.Iterable) and
+                        isinstance(value, Iterable) and
                         len(value) > 0 and
                         isinstance(value[0], (int, long, float))
                     )
