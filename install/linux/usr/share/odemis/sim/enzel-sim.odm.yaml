@@ -3,7 +3,7 @@ ENZEL-Sim: {
     role: enzel,
     children: [
         "Sample Thermostat", "Cooler Controller",
-        "SEM E-beam Full", "SEM Detector",
+        "SEM E-beam Full", "SEM Detector Full",
         "EBeam Focus",
         "FIB Scanner", "FIB Detector",
         "Light Source", "Filter Wheel", "Stigmator",
@@ -49,7 +49,7 @@ ENZEL-Sim: {
 "SEM E-beam Full": {
     class: scanner.CompositedScanner,
     role: e-beam,
-    affects: ["SEM Detector", "Camera"], # affects the CCD in case of cathodoluminescence
+    children: {"detector": "SEM Detector Full"},
     dependencies: {
         external: "SEM E-beam",
         internal: "EBeam Control"
@@ -59,6 +59,7 @@ ENZEL-Sim: {
         scale: [8, 8],#  (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
     },
+    affects: ["SEM Detector Full", "Camera"], # affects the CCD in case of cathodoluminescence
 }
 
 # Analog connection to the SEM, using a DAQ board, for controlling the beam position and receiving the ETD signal.
@@ -70,6 +71,15 @@ ENZEL-Sim: {
     children: {
        scanner: "SEM E-beam",
        detector0: "SEM Detector",
+    },
+}
+
+# Merges the analog and digital detectors (xt_client one and the one from the DAQ board)
+"SEM Detector Full": {
+    role: se-detector,
+    init: {},
+    dependencies: {
+        external: "SEM Detector",
     },
 }
 
@@ -101,7 +111,7 @@ ENZEL-Sim: {
 # Must be connected on AI1/AI9 (differential)
 "SEM Detector": { # aka ETD
     # Internal child of SEM Scan Interface, so no class
-    role: se-detector,
+    role: null,
     init: {
         channel: 1,
         limits: [-3, 3], # V
@@ -140,7 +150,7 @@ ENZEL-Sim: {
 "EBeam Focus": {
     # Internal child of "SEM XT connection", so no class
     role: ebeam-focus,
-    affects: ["SEM Detector"],
+    affects: ["SEM Detector Full"],
 }
 
 # Simulated FIB: typically this is provided by the SEM class too, but here, we just use
@@ -163,9 +173,8 @@ ENZEL-Sim: {
 }
 
 "FIB Detector": {
-  role: se-detector-ion,
+    role: se-detector-ion,
 }
-
 
 "Light Source": {
     class: lle.FakeLLE,
@@ -307,8 +316,8 @@ ENZEL-Sim: {
     "under": "3DOF Stage"
   },
   init: {
-    axes: [ "x", "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
-    rotation: [ 0, 0, -0.4887 ], # rad , -28°
+    axes: ["x", "y", "z"], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+    rotation: [0, 0, -0.4887], # rad, rz, ry, rx=-28°
   },
   affects: [ "Camera" ],
   metadata: {
