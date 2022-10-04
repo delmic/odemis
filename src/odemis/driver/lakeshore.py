@@ -73,11 +73,12 @@ class Lakeshore(model.HwComponent):
 
     def __init__(self, name, role, port, sensor_input='b', output_channel=2, **kwargs):
         """
-        A driver for the Lakeshore 310 temperature controller.
+        A driver for the Lakeshore 335 and Lakeshore 350 temperature controller.
         name: (str)
         role: (str)
-        port: (str) port name. Can be a pattern, in which case all the ports
+        port: (str) port name (starts with /) or IP address (xxx.xxx.xxx.xxx). Can be a pattern, in which case all the ports
           fitting the pattern will be tried.
+          Can be an IP address only for the model 350.
           Use /dev/fake for a simulator
         sensor_input (str or dict str->str): either a single input name, or the name of
             the VigilantAttribute (to be followed by temperature) -> input name
@@ -103,20 +104,20 @@ class Lakeshore(model.HwComponent):
         except LakeshoreError as ex:
             logging.warning("Discarding initial error status: %s", ex)
 
-        # set supported sensor input and output channel values
-        if md == "MODEL335":
+        # set supported sensor input and output channel values based on device type
+        if md == "MODEL335":  # Model 335 supports only single temperature control with up to 2 channels
             supported_sensor_inputs = ('A', 'B')
             supported_output_channels = (1, 2)
-        elif md == "MODEL350":
+        elif md == "MODEL350":  # Model 350 supports both single and multiple temperature control with up to 4 channels
             supported_sensor_inputs = ('A', 'B', 'C', 'D')
             supported_output_channels = (1, 2, 3, 4)
         else:
-            raise IOError("Incompatible device model detected. Supported models: MODEL350 and MODEL335")
+            raise IOError(f"The device model {md} is incompatible. Supported device models: MODEL350 and MODEL335")
 
-        # Check if there's only one sensor input and the input is defined as string
+        # If there's only one sensor input and the input is defined as string,
+        # Convert it to a dict for compatibility with the multiple input code.
         if isinstance(sensor_input, str):
             sensor_input = {"": sensor_input}
-        # Check if there's one or multiple sensor input(s) and defined as dictionary
         elif not isinstance(sensor_input, dict):
             raise ValueError("Invalid sensor input type. Sensor input must be either str or dict")
 
@@ -128,13 +129,13 @@ class Lakeshore(model.HwComponent):
 
             # Vigilant attributes of the temperature.
             va = FloatVA(unit=u"°C", value=self.GetSensorTemperature(sensor_name), readonly=True)
-            if va_name == "":
+            if va_name == "":  # in case of a single string as sensor input
                 full_va_name = "temperature"
             else:
                 full_va_name = f"{va_name}Temperature"
             setattr(self, full_va_name, va)
 
-        # Check if there's only one int type output channel
+        # If there's only one output channel and defined as string, convert it to a dict for compatibility
         if isinstance(output_channel, int):
             output_channel = {"": output_channel}
         elif not isinstance(output_channel, dict):
@@ -255,8 +256,7 @@ class Lakeshore(model.HwComponent):
             try:
                 self._accesser = IPBusAccesser(bus_pattern)
             except (IOError, LakeshoreError) as e:
-                logging.debug(e)
-                logging.info("Could not establish connection to the device through IP bus accessor.")
+                logging.info("Could not establish connection to the device through IP bus accessor: %s", e)
 
             self._checkDeviceCompatibility()
 
@@ -293,7 +293,8 @@ class Lakeshore(model.HwComponent):
         """
         logging.debug("Sending command %s", to_str_escape(cmd))
         self._accesser.sendOrder(cmd)
-        time.sleep(0.05)
+        # TODO: Instead of always wait, only wait before sending the next command, if less than 50ms have elapsed.
+        time.sleep(0.05)  # Lakeshore manual: "No other communication is started for 50ms after receiving the response"
 
     def _sendQuery(self, cmd):
         """
@@ -303,7 +304,8 @@ class Lakeshore(model.HwComponent):
             IOError if no answer is returned in time
         """
         ans = self._accesser.sendQuery(cmd)
-        time.sleep(0.05)  # prevent overloading the device with messages
+        # TODO: Instead of always wait, only wait before sending the next command, if less than 50ms have elapsed.
+        time.sleep(0.05)  # Lakeshore manual: "No other communication is started for 50ms after receiving the response"
         return ans
 
     # Low level serial commands.
@@ -491,7 +493,7 @@ class Lakeshore(model.HwComponent):
                     full_va_name = f"{va_name}Temperature"
                 va = getattr(self, full_va_name)
                 va._set_value(temp, force_write=True)
-                logging.debug(u"Lakeshore %s temperature: %f °C", va_name, va.value)
+                logging.debug("Lakeshore %s temperature: %f °C", va_name, va.value)
                 self.checkError()
         except:
             # another exception.
@@ -509,7 +511,7 @@ class SerialBusAccesser(object):
         raises:
            IOError: if something went wrong opening the port
         """
-        # Ensure no one will talk to it simultaneously, and we don't talk to devices already in use
+        # Ensure that this odemis driver will not send multiple command simultaneously
         self._ser_access = threading.Lock()
 
         # For debugging purpose
@@ -536,7 +538,6 @@ class SerialBusAccesser(object):
         with self._ser_access:
             logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
-            time.sleep(0.05)
 
     def sendQuery(self, cmd):
         """
@@ -566,7 +567,7 @@ class SerialBusAccesser(object):
 
 class IPBusAccesser(object):
     """
-    Manages ip bus connections through ethernet connection
+    Manage TCP/IP connections over ethernet
     """
 
     def __init__(self, ip_address: str):
@@ -582,8 +583,6 @@ class IPBusAccesser(object):
 
         self._ser_access = threading.Lock()
 
-        # self._socket.recv.timeout(3)  # set 3 seconds timeout to receive data
-
     def terminate(self):
         self._socket.close()
 
@@ -595,7 +594,6 @@ class IPBusAccesser(object):
         with self._ser_access:
             logging.debug("Sending command %s", to_str_escape(cmd))
             self._socket.send(cmd)
-            time.sleep(0.05)
 
     def sendQuery(self, cmd):
         """
@@ -604,8 +602,6 @@ class IPBusAccesser(object):
         raise:
             IOError if no answer is returned in time
         """
-
-        # self._socket.listen()
 
         cmd = cmd + b"\n"
         with self._ser_access:

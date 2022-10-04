@@ -96,13 +96,12 @@ class TestLakeshoreModel335(LakeshoreBaseTest, unittest.TestCase):
 
         self.assertEqual(model, "MODEL335")
 
-    def test_temperature_poll(self):
-        # Test that the temperature polls.
+    def test_temperature_update(self):
+        # Tests the temperature VA is automatically updated
         # Designed to work with the simulator - the temperature will not be exactly the same
-        logging.debug("Test stasis temperature polling")
         temp1 = []
         temp2 = []
-        for testCtr in range(10):
+        for i in range(10):
             temp1.append(self.dev.temperature.value)
             time.sleep(1)
             temp2.append(self.dev.temperature.value)
@@ -176,10 +175,6 @@ class TestLakeshoreModel350(LakeshoreBaseTest, unittest.TestCase):
         Test device model
         """
         manufacturer, model, _, _ = self.dev.GetIdentifier()
-
-        if TEST_NOHW:
-            self.skipTest("Simulator always pretends to be MODEL350.")
-
         self.assertEqual(model, "MODEL350")
 
     def test_temperature_poll(self):
@@ -188,7 +183,7 @@ class TestLakeshoreModel350(LakeshoreBaseTest, unittest.TestCase):
         logging.debug("Test stasis temperature polling")
         temp1 = []
         temp2 = []
-        for testCtr in range(10):
+        for i in range(10):
             temp1.append(self.dev.monolithTemperature.value)
             time.sleep(1)
             temp2.append(self.dev.monolithTemperature.value)
