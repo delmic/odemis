@@ -52,8 +52,46 @@ SPEC_CONFIG = CONFIG_PATH + "sim/sparc-sim-spec.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim.odm.yaml"
 SPARC2_EXT_SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-ext-spec-sim.odm.yaml"
 SECOM_FLIM_CONFIG = CONFIG_PATH + "sim/secom-flim-sim.odm.yaml"
-SPARC2_POLARIZATIONANALYZER_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
+SPARC2_POLARIZATIONANALYZER_CONFIG = CONFIG_PATH + "sim/sparc2-ek-polarizer-sim.odm.yaml"
 SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
+
+
+def path_pos_to_phys_pos(pos, comp, axis):
+    """
+    Convert a generic position definition into an actual position (as reported in comp.position)
+    pos (float, str, or tuple): a generic definition of the position
+    comp (Actuator)
+    axis (str): the axis for which the position is read
+    """
+    axis_def = comp.axes[axis]
+
+    md = comp.getMetadata()
+    if isinstance(pos, tuple):  # multiple options
+        for p in pos:
+            # From the metadata?
+            if isinstance(p, str) and p.startswith("MD:"):
+                md_name = p[3:]
+                try:
+                    pos = md[md_name][axis]
+                    break
+                except KeyError:  # no such metadata, or axis on the metadata
+                    pass
+            else:  # Position value or choice name
+                pos = p
+                break
+
+    if isinstance(pos, str) and pos.startswith("MD:"):
+        md_name = pos[3:]
+        pos = md[md_name][axis]
+
+    # If the position is a name => convert it
+    if hasattr(axis_def, "choices"):
+        for key, value in axis_def.choices.items():
+            if value == pos:
+                pos = key
+                break
+
+    return pos
 
 
 def assert_pos_as_in_mode(t: unittest.TestCase, comp, mode):
@@ -66,21 +104,6 @@ def assert_pos_as_in_mode(t: unittest.TestCase, comp, mode):
     """
     positions = path.SPARC2_MODES[mode][1][comp.role]
     for axis, pos in positions.items():
-        if isinstance(pos, tuple):  # multiple options
-            for p in pos:
-                # From the metadata?
-                if isinstance(p, str) and p.startswith("MD:"):
-                    md_name = p[3:]
-                    md = comp.getMetadata()
-                    try:
-                        pos = md[md_name][axis]
-                        break
-                    except KeyError:  # no such metadata, or axis on the metadata
-                        pass
-                else:  # Position value or choice name
-                    pos = p
-                    break
-
         axis_def = comp.axes[axis]
         # If "not mirror", just check it's different from "mirror"
         if pos == path.GRATING_NOT_MIRROR:
@@ -94,14 +117,10 @@ def assert_pos_as_in_mode(t: unittest.TestCase, comp, mode):
             # If no "mirror" pos => it's all fine anyway
             continue
 
-        # If the position is a name => convert it
-        if hasattr(axis_def, "choices"):
-            for key, value in axis_def.choices.items():
-                if value == pos:
-                    pos = key
-                    break
-
         # TODO: if grating == mirror and no mirror choice, check wavelength == 0
+
+        pos = path_pos_to_phys_pos(pos, comp, axis)
+
         t.assertAlmostEqual(comp.position.value[axis], pos,
                             msg="Position of %s.%s is %s != %s" %
                                    (comp.name, axis, comp.position.value[axis], pos))
@@ -629,7 +648,7 @@ class Sparc2PathTestCase(unittest.TestCase):
 # @skip("faster")
 class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
     """
-    Tests to be run with a (simulated) SPARC2 (like in Oslo)
+    Tests the optical path settings on a SPARC2 with polarizer and EK imaging
     """
     @classmethod
     def setUpClass(cls):
@@ -639,8 +658,8 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         cls.microscope = model.getComponent(role="sparc2")
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
-        cls.spec = model.getComponent(role="spectrometer")
         cls.spec_integrated = model.getComponent(role="spectrometer-integrated")
+        cls.spec = model.getComponent(role="spectrometer")
         cls.specgraph = model.getComponent(role="spectrograph")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
@@ -662,7 +681,6 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         """
         Test setting modes that do exist.
         """
-        fbands = self.filter.axes["band"].choices
         l1_pos_exp = self.lensmover.getMetadata()[model.MD_FAV_POS_ACTIVE]
         self.lensmover.reference({"x"}).result()  # reset pos
 
@@ -685,6 +703,15 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
+        # setting EK live
+        # For EK, the lens switch should be active, while it's deactive in spectral mode
+        self.optmngr.setPath("ek").result()
+        # Assert that actuator was moved according to mode given
+        assert_pos_as_in_mode(self, self.lenswitch, "ek")
+        assert_pos_as_in_mode(self, self.slit, "ek")
+        # No requirement on polarizer (it should be unchanged)
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+
         # setting chamber-view
         # move analyzer to pos that is different from requested pos in mode spectral
         self.analyzer.moveAbs({"pol": "vertical"})
@@ -693,11 +720,22 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         assert_pos_as_in_mode(self, self.lenswitch, "chamber-view")
         assert_pos_as_in_mode(self, self.slit, "chamber-view")
         assert_pos_as_in_mode(self, self.specgraph, "chamber-view")
+        assert_pos_as_in_mode(self, self.filter, "chamber-view")
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
         # Check the filter wheel is in "pass-through"
-        self.assertEqual(fbands[self.filter.position.value["band"]], "pass-through")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
         self.focus.moveRel({"z": 1e-3}).result()
+        testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
+
+        # setting EK align
+        # The grating should be not mirror, and filter is pass-through
+        self.optmngr.setPath("ek-align").result()
+        # Assert that actuator was moved according to mode given
+        assert_pos_as_in_mode(self, self.lenswitch, "ek-align")
+        assert_pos_as_in_mode(self, self.slit, "ek-align")
+        assert_pos_as_in_mode(self, self.specgraph, "ek-align")
+        assert_pos_as_in_mode(self, self.filter, "chamber-view")
+        # No requirement on polarizer (it should be unchanged)
         testing.assert_pos_almost_equal(self.lensmover.position.value, l1_pos_exp, atol=1e-6)
 
 #   @skip("simple")
@@ -746,6 +784,18 @@ class Sparc2PolAnalyzerPathTestCase(unittest.TestCase):
         assert_pos_as_in_mode(self, self.slit, "spectral")
         self.assertEqual(self.analyzer.position.value, {'pol': "pass-through"})
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 1.5707963267948966})
+
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        eks = stream.AngularSpectrumSettingsStream("test ek1", self.ccd, self.ccd.data, self.ebeam,
+                                                   spectrometer=self.spec_integrated, spectrograph=self.specgraph, analyzer=self.analyzer)
+        semeks = stream.SEMAngularSpectrumMDStream("test sem-ek1", [sems, eks])
+
+        # Change positions
+        self.optmngr.setPath(semeks).result()
+        # Assert that actuator was moved according to mode given
+        assert_pos_as_in_mode(self, self.lenswitch, "ek")
+        assert_pos_as_in_mode(self, self.slit, "ek")
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
 
 
 #    @skip("faster")

@@ -90,7 +90,7 @@ class WindowsUpdater:
             web_version = web_version_file.readline().strip()
             web_version_file.close()
         except IOError as err:
-            logging.warn("Error on remote version check (%s)", err)
+            logging.warning("Error on remote version check (%s)", err)
             return None
 
         return web_version.decode('latin1')

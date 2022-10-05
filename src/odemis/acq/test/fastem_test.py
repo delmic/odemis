@@ -183,7 +183,7 @@ class TestFastEMROA(unittest.TestCase):
             estimated_line_time = cell_res[0] * dwell_time
             # Remainder of the line scan time, part which is not a whole multiple of the descan periods.
             remainder_scanning_time = estimated_line_time % self.descanner.clockPeriod.value
-            if remainder_scanning_time is not 0:
+            if remainder_scanning_time != 0:
                 # Adjusted the flyback time if there is a remainder of scanning time by adding one setpoint to ensure
                 # the line scan time is equal to a whole multiple of the descanner clock period
                 flyback = flyback + (self.descanner.clockPeriod.value - remainder_scanning_time)

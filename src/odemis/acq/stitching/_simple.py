@@ -54,7 +54,10 @@ def register(tiles, method=REGISTER_GLOBAL_SHIFT):
             dep_tiles = None
         registrar.addTile(tile, dep_tiles)
 
-    # Update positions
+    # Compute the positions
+    positions, dep_positions = registrar.getPositions()
+
+    # Update positions, by creating DataArrays with the same data, but different MD_POS
     for i, ts in enumerate(tiles):
         # Return tuple of positions if dependent tiles are present
         if isinstance(ts, tuple):
@@ -63,20 +66,20 @@ def register(tiles, method=REGISTER_GLOBAL_SHIFT):
 
             # Update main tile
             md = copy.deepcopy(tile.metadata)
-            md[model.MD_POS] = registrar.getPositions()[0][i]
+            md[model.MD_POS] = positions[i]
             tileUpd = model.DataArray(tile, md)
 
             # Update dependent tiles
             tilesNew = [tileUpd]
-            for j, dt in enumerate(dep_tiles):
-                md = copy.deepcopy(dt.metadata)
-                md[model.MD_POS] = registrar.getPositions()[1][i][j]
-                tilesNew.append(model.DataArray(dt, md))
+            for j, t in enumerate(dep_tiles):
+                md = copy.deepcopy(t.metadata)
+                md[model.MD_POS] = dep_positions[i][j]
+                tilesNew.append(model.DataArray(t, md))
             tileUpd = tuple(tilesNew)
 
         else:
             md = copy.deepcopy(ts.metadata)
-            md[model.MD_POS] = registrar.getPositions()[0][i]
+            md[model.MD_POS] = positions[i]
             tileUpd = model.DataArray(ts, md)
 
         updatedTiles.append(tileUpd)

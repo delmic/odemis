@@ -45,7 +45,7 @@ class PowerControlUnit(model.PowerSupplier):
     '''
 
     def __init__(self, name, role, port, pin_map=None, delay=None, init=None, ids=None,
-                 termination=None, **kwargs):
+                 termination=None, check_power=True, **kwargs):
         '''
         port (str): port name
         pin_map (dict of str -> int): names of the components
@@ -55,6 +55,10 @@ class PowerControlUnit(model.PowerSupplier):
         init (dict str -> boolean): turn on/off the corresponding component upon
             initialization.
         ids (list str): EEPROM ids expected to be detected during initialization.
+        check_power (bool): normally the power is checked by verifying that the
+          EEPROM IDs can be read. To disable this check, ids must be empty, and
+          check_power set to False. This allows to use hardware which is not
+          physically connected to EEPROMs.
         termination (dict str -> bool/None): indicate for every component
             if it should be turned off on termination (False), turned on (True)
             or left as-is (None).
@@ -65,6 +69,11 @@ class PowerControlUnit(model.PowerSupplier):
         else:
             self.powered = []
         model.PowerSupplier.__init__(self, name, role, **kwargs)
+
+        if not check_power and ids:
+            raise ValueError(f"check_power can only be disabled if no ids are specified, but got {ids}")
+
+        self._check_power = check_power
 
         # TODO: catch errors and convert to HwError
         self._ser_access = threading.Lock()
@@ -115,7 +124,7 @@ class PowerControlUnit(model.PowerSupplier):
             # This is in particular to handle some cases where the device resets
             # when turning on the power. One or more trials and the
             logging.exception("Failure during turning on initial power.")
-            raise HwError("Device error when initialising power: %s. "
+            raise HwError("Device error when initializing power: %s. "
                           "Try again or contact support if the problem persists." %
                           (ex,))
 
@@ -205,7 +214,7 @@ class PowerControlUnit(model.PowerSupplier):
 
         # Power components on/off according to ._termination
         # If nothing is specified, leave it as-is.
-        logging.debug("Changing power supply on termination: %s" % self._termination)
+        logging.debug("Changing power supply on termination: %s", self._termination)
         self._doSupply(self._termination)
 
         if self._serial:
@@ -266,9 +275,13 @@ class PowerControlUnit(model.PowerSupplier):
         try:
             ans = self._sendCommand("SID")
         except PowerControlError as e:
-            # means there is no power provided
-            raise HwError("There is no power provided to the Power Control Unit. "
-                          "Please make sure the board is turned on.")
+            # Often means there is no power provided
+            if self._check_power:
+                raise HwError("There is no power provided to the Power Control Unit. "
+                              "Please make sure the board is turned on.")
+            else:
+                logging.warning("Failed to read EEPROM IDs: %s", e)
+                ans = ""
         return [x for x in ans.split(',') if x != '']
 
     def _sendCommand(self, cmd):
@@ -280,7 +293,7 @@ class PowerControlUnit(model.PowerSupplier):
         """
         cmd = (cmd + "\n").encode('latin1')
         with self._ser_access:
-            logging.debug("Sending command %s" % to_str_escape(cmd))
+            logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
 
             ans = b''

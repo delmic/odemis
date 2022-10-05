@@ -256,6 +256,7 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     # exactly at POS_ACTIVE.
     # TODO: should have a POS_ACTIVE_RANGE to define the whole region
     if (_isNearPosition(current_pos, align_active, align.axes) or
+        _isNearPosition(current_pos, align_alignment, align.axes) or
         _isNearPosition(current_pos, three_beams, align.axes)
        ):
         return THREE_BEAMS
@@ -670,7 +671,8 @@ def _doCryoSwitchSamplePosition(future, target):
             except IndexError:
                 # In case the required movement is invalid/unreachable with the smaract 5dof stage
                 # Move all linear axes first then rotational ones using the fallback_submoves
-                logging.debug("This move {} is unreachable, trying to move all axes at once...".format(sub_move))
+                logging.debug("This move %s is unreachable, trying to move all axes at once...",
+                              sub_move_dict)
                 for sub_move in fallback_submoves:
                     sub_move_dict = filter_dict(sub_move, target_pos[target])
                     logging.debug("Moving %s to %s.", stage.name, sub_move)

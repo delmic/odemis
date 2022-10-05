@@ -57,6 +57,8 @@ class FileBrowser(wx.Panel):
                  default_dir=None,
         ):
         """
+        clear_btn (bool): whether to show a button to remove the file selection
+        clear_label (str): text to show when there is no file selected
         wildcard (None or str): the list of wildcard to pass to file dialog.
           If it's None, it will use the default, which is to show all files (*.*).
         """

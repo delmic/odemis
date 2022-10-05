@@ -25,7 +25,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Warning: do not put anything that has dependencies on non default python modules
 
 import queue
-import collections
+from collections.abc import Mapping
 from concurrent.futures import CancelledError
 from decorator import decorator
 from functools import wraps
@@ -169,7 +169,7 @@ def recursive_dict_update(d, other):
     """
 
     for k, v in other.items():
-        if isinstance(v, collections.Mapping):
+        if isinstance(v, Mapping):
             r = recursive_dict_update(d.get(k, {}), v)
             d[k] = r
         else:
@@ -489,7 +489,7 @@ def limit_invocation(delay_s):
     """
 
     if delay_s > 5:
-        logging.warn("Warning! Long delay interval. Please consider using "
+        logging.warning("Warning! Long delay interval. Please consider using "
                      "an interval of 5 or less seconds")
 
     def li_dec(f):

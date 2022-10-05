@@ -187,7 +187,7 @@ class Powermate(threading.Thread):
                             )
                             wx.PostEvent(self.target_viewport.canvas, knob_evt)
             except IOError:
-                logging.warn("Failed to communicate with the powermate, was unplugged?")
+                logging.warning("Failed to communicate with the powermate, was unplugged?")
                 # Sleep and after try and find the device again
                 while True:
                     time.sleep(5)

@@ -24,7 +24,7 @@ see http://www.gnu.org/licenses/.
 # they were initialised with.
 
 from past.builtins import basestring, long
-import collections
+from collections.abc import Iterable
 import copy
 import gc
 import logging
@@ -382,7 +382,7 @@ class StaticARStream(StaticStream):
         :param data: (model.DataArray(Shadow) of shape (YX) or list of such DataArray(Shadow)).
         The metadata MD_POS, MD_AR_POLE and MD_POL_MODE should be provided
         """
-        if not isinstance(data, collections.Iterable):
+        if not isinstance(data, Iterable):
             data = [data]  # from now it's just a list of DataArray
 
         # TODO: support DAS, as a "delayed loading" by only calling .getData()
@@ -621,6 +621,7 @@ class StaticSpectrumStream(StaticStream):
             # cached list of angle or timestamps for each position in the second dimension
             if dims[1] == "A":
                 theta_list, unit_theta = spectrum.get_angle_range(image)
+                # TODO: handle case where theta list is only NAN
                 # Only keep valid values (ie, not the NaN)
                 # Note, the .calibrated data will have the same columns removed
                 self._thetal_px_values = numpy.array([theta for theta in theta_list if not math.isnan(theta)])
@@ -836,12 +837,8 @@ class StaticSpectrumStream(StaticStream):
             self.calibrated.value = None
             return
 
-        try:
-            # If MD_THETA_LIST, the length of the A dimension might be reduced
-            calibrated = calibration.apply_spectrum_corrections(data, bckg, coef)
-        except Exception:
-            logging.exception("Failed to apply spectrum correction")
-            calibrated = data
+        # If MD_THETA_LIST, the length of the A dimension might be reduced
+        calibrated = calibration.apply_spectrum_corrections(data, bckg, coef)
         self.calibrated.value = calibrated
 
     def _setBackground(self, bckg):

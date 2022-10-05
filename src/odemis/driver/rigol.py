@@ -336,6 +336,8 @@ class FakeDG1000Z(object):
         self._listener_thread.daemon = True
         # or listener_thread.setDaemon(True) for old versions of python
         self._listener_thread.start()
+        # Wait a second to ensure the server is running
+        time.sleep(1)
 
     def __del__(self):
         try:

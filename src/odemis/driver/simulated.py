@@ -31,7 +31,7 @@ import os
 import random
 import time
 from past.builtins import long
-from collections import Iterable
+from collections.abc import Iterable
 
 
 class Light(model.Emitter):

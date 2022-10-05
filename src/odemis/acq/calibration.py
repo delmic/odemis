@@ -280,8 +280,9 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
     # handle time correlator data (chronograph) data
     # -> no spectrum efficiency compensation and bg correction supported
     if data.shape[-5] <= 1 and data.shape[-4] > 1:
-        raise ValueError("Do not support any background correction or spectrum efficiency "
-                         "compensation for time correlator (chronograph) data")
+        if bckg is not None or coef is not None:
+            raise ValueError("Background correction and spectrum efficiency compensation "
+                             "not supported on time correlator (chronograph) data")
 
     # TODO: use MD_BASELINE as a fallback?
     if bckg is not None:
@@ -338,10 +339,15 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
 
     # Remove NaN values from the theta list, if exists, and update the calibrated data to have the same length
     if model.MD_THETA_LIST in data.metadata:
-        angle_range, _ = spectrum.get_angle_range(data)
-        angles, data = filter_nan_from_data(angle_range, data)
-        data = model.DataArray(data, data.metadata.copy())
-        data.metadata[MD_THETA_LIST] = angles
+        try:
+            # Explicitly call get_angle_per_pixel(), instead of get_angle_range(),
+            # to only accept correct metadata, without fallback to pixels
+            angle_range = spectrum.get_angle_per_pixel(data)
+            angles, data = filter_nan_from_data(angle_range, data)
+            data = model.DataArray(data, data.metadata.copy())
+            data.metadata[MD_THETA_LIST] = angles
+        except (ValueError, KeyError) as ex:
+            logging.debug("MD_THETA_LIST incorrect, will not use it: %s", ex)
 
     if coef is not None:
         # Check if we have any wavelength information in data.

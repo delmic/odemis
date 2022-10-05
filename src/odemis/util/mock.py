@@ -132,7 +132,7 @@ class FakeCCD(model.HwComponent):
         if self._acquisition_must_stop.is_set():
             logging.debug("Waiting for thread to stop.")
             self._acquisition_thread.join(10)  # 10s timeout for safety
-            if self._acquisition_thread.isAlive():
+            if self._acquisition_thread.is_alive():
                 logging.exception("Failed to stop the acquisition thread")
                 # Now let's hope everything is back to normal...
             # ensure it's not set, even if the thread died prematurely

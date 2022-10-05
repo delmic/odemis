@@ -63,7 +63,7 @@ class TestExecutor(unittest.TestCase):
 
         time.sleep(0.1)
         self.executor.cancel()
-        self.assertEquals(self.called, 20)
+        self.assertEqual(self.called, 20)
         for f in fs:
             self.assertTrue(f.cancelled())
             self.assertRaises(CancelledError, f.result)

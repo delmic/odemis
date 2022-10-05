@@ -29,6 +29,8 @@ import numbers
 import threading
 from concurrent.futures._base import CancelledError, FINISHED
 from concurrent import futures
+from typing import Dict, Union, Set
+
 import numpy
 from past.builtins import basestring
 
@@ -1307,13 +1309,14 @@ class FixedPositionsActuator(model.Actuator):
 
         self._cycle = cycle
         self._move_sum = 0
-        self._position = {}
-        self._referenced = {}
+        self._referenced: Dict[str, bool] = {}
         axis, dep = list(dependencies.items())[0]
         self._axis = axis
         self._dependency = dep
         self._caxis = axis_name
-        self._positions = positions
+        self._positions: Union[Set[float], Dict[float, str]] = positions
+        # Last requested position moved to and reached
+        self._actual_positions: Dict[float, float] = {}
         # Executor used to reference and move to nearest position
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
 
@@ -1333,7 +1336,6 @@ class FixedPositionsActuator(model.Actuator):
 
         model.Actuator.__init__(self, name, role, axes=axes, dependencies=dependencies, **kwargs)
 
-        self._position = {}
         self.position = model.VigilantAttribute({}, readonly=True)
 
         logging.debug("Subscribing to position of dependency %s", dep.name)
@@ -1364,29 +1366,24 @@ class FixedPositionsActuator(model.Actuator):
             logging.exception(e)
 
     def _update_dep_position(self, value):
-        p = value[self._caxis]
+        real_pos = value[self._caxis]
+
         if self._cycle is not None:
-            p %= self._cycle
-        self._position[self._axis] = p
-        self._updatePosition()
+            real_pos %= self._cycle
 
-    def _update_dep_ref(self, value):
-        self._referenced[self._axis] = value[self._caxis]
-        self._updateReferenced()
-
-    def _updatePosition(self):
-        """
-        update the position VA
-        """
         # if it is an unsupported position report the nearest supported one
-        real_pos = self._position[self._axis]
         nearest = util.find_closest(real_pos, self._positions.keys())
+
         if not util.almost_equal(real_pos, nearest):
             logging.warning("Reporting axis %s @ %s (known position), while physical axis %s @ %s",
                             self._axis, nearest, self._caxis, real_pos)
         pos = {self._axis: nearest}
         logging.debug("reporting position %s", pos)
         self.position._set_value(pos, force_write=True)
+
+    def _update_dep_ref(self, value):
+        self._referenced[self._axis] = value[self._caxis]
+        self._updateReferenced()
 
     def _updateReferenced(self):
         """
@@ -1399,7 +1396,6 @@ class FixedPositionsActuator(model.Actuator):
     def moveRel(self, shift):
         if not shift:
             return model.InstantaneousFuture()
-        self._checkMoveRel(shift)
         raise NotImplementedError("Relative move on fixed positions axis not supported")
 
     @isasync
@@ -1408,6 +1404,7 @@ class FixedPositionsActuator(model.Actuator):
         Move the actuator to the defined position in m for each axis given.
         pos dict(string-> float): name of the axis and position in m
         """
+
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
@@ -1417,8 +1414,18 @@ class FixedPositionsActuator(model.Actuator):
         return f
 
     def _doMoveAbs(self, pos):
-        axis, distance = list(pos.items())[0]
-        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, distance)
+        axis, req_pos = list(pos.items())[0]
+
+        # If a tiny difference between actual pos and requested pos would typically move the actuator to the
+        # same place again, in case the same positions is requested and when backlash is used this move will
+        # instead be ignored.
+        if req_pos in self._actual_positions:
+            cur_pos = self._dependency.position.value[self._caxis]
+            if cur_pos == self._actual_positions[req_pos]:
+                logging.debug("Dependency actuator is already at the right position (pos: %s cur_pos: %s)", pos, cur_pos)
+                return
+
+        logging.debug("Moving axis %s (-> %s) to %g", self._axis, self._caxis, req_pos)
 
         try:
             # While it's moving, don't listen to the intermediary positions,
@@ -1426,14 +1433,14 @@ class FixedPositionsActuator(model.Actuator):
             self._dependency.position.unsubscribe(self._update_dep_position)
 
             if self._cycle is None:
-                move = {self._caxis: distance}
+                move = {self._caxis: req_pos}
                 self._dependency.moveAbs(move).result()
             else:
                 # Optimize by moving through the closest way
                 cur_pos = self._dependency.position.value[self._caxis]
-                vector1 = distance - cur_pos
+                vector1 = req_pos - cur_pos
                 mod1 = vector1 % self._cycle
-                vector2 = cur_pos - distance
+                vector2 = cur_pos - req_pos
                 mod2 = vector2 % self._cycle
                 if abs(mod1) < abs(mod2):
                     self._move_sum += mod1
@@ -1445,7 +1452,7 @@ class FixedPositionsActuator(model.Actuator):
                         move_to_ref = (self._cycle - cur_pos) % self._cycle + self._offset
                         self._dependency.moveRel({self._caxis: move_to_ref}).result()
                         self._dependency.reference({self._caxis}).result()
-                        move = {self._caxis: distance}
+                        move = {self._caxis: req_pos}
                     else:
                         move = {self._caxis: mod1}
                 else:
@@ -1453,6 +1460,10 @@ class FixedPositionsActuator(model.Actuator):
                     self._move_sum -= mod2
 
                 self._dependency.moveRel(move).result()
+
+            # after successful movement store the actual position reached by the dependency
+            cur_pos = self._dependency.position.value[self._caxis]
+            self._actual_positions[req_pos] = cur_pos
         finally:
             self._dependency.position.subscribe(self._update_dep_position, init=True)
 

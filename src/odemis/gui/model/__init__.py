@@ -24,7 +24,7 @@ from future.utils import with_metaclass
 from past.builtins import basestring, long
 import queue
 from abc import ABCMeta
-import collections
+from collections.abc import Mapping
 import logging
 import math
 
@@ -448,7 +448,7 @@ class MainGUIData(object):
         ts = []
         for c in self.microscope.children.value:
             # Actuators have an .axes roattribute
-            if not isinstance(c.axes, collections.Mapping):
+            if not isinstance(c.axes, Mapping):
                 continue
             # Run each of them in a separate thread, to ensure we stop all ASAP
             t = threading.Thread(target=self._stopActuator, name=c.name, args=(c,))
@@ -458,7 +458,7 @@ class MainGUIData(object):
         # Wait for all the threads to be finished
         for t in ts:
             t.join(5)
-            if t.isAlive():
+            if t.is_alive():
                 logging.warning("Actuator %s still not done stopping after 5s", t.name)
         logging.info("Stopped motion on every axes")
 
@@ -1143,9 +1143,6 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         if not main.spectrograph or not main.lens_mover:
             amodes.remove("lens-align")
 
-        if not main.spectrograph or not main.lens_switch:
-            amodes.remove("lens2-align")
-
         if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
             # This is different from the polePosition of the lens, which is in
@@ -1177,9 +1174,11 @@ class Sparc2AlignGUIData(ActuatorGUIData):
                 if not {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()):
                     raise ValueError("lens-switch should have FAV_POS_ACTIVE and FAV_POS_DEACTIVE")
             else:
+                amodes.remove("lens2-align")
                 amodes.remove("ek-align")
         else:
             amodes.remove("center-align")
+            amodes.remove("lens2-align")
             amodes.remove("ek-align")
 
         if main.fibaligner is None:

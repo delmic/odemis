@@ -1031,7 +1031,7 @@ def _getIFDsFromOME(pxe, offset=0):
         logging.warning("All dims concidered high dims (%s = %s), but still not enough to use all %d IFDs referenced",
                         hdims, hdshape, nbifds)
 
-    imsetn = numpy.empty(hdshape, dtype=numpy.int)
+    imsetn = numpy.empty(hdshape, dtype=numpy.int32)
     imsetn[:] = -1
     for tfe in pxe.findall("TiffData"):
         # UUID: can indicate data from a different file. For now, we only load

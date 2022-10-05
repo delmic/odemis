@@ -101,11 +101,7 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},  # ek mode available only if MD_FAV_POS_ACTIVE
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
-                 'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  # Typically the grating should be non-mirror but we leave it up to the user/GUI.
-                 # 'cl-det-selector': {'x': 'off'},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
-                 # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                 }),
             'cli': ("cl-detector",
@@ -191,6 +187,14 @@ SPARC2_MODES = {
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  }),
+            'ek-align': (r"ccd.*",  # Same as "ek", but with grating and filter explicitly set by default
+                {'lens-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},  # ek mode available only if MD_FAV_POS_ACTIVE
+                 'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'slit-in-big': {'x': 'off'},  # closed
+                 'spectrograph': {'grating': GRATING_NOT_MIRROR},
+                 'filter': {'band': BAND_PASS_THROUGH},
+                 'chamber-light': {'power': 'off'},
+                }),
             'chamber-view': (r"ccd.*",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_ACTIVE, 'on')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},

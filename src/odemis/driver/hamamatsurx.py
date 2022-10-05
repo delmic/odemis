@@ -563,7 +563,7 @@ class ReadoutCamera(model.DigitalCamera):
 
     def terminate(self):
         # terminate image thread
-        if self.t_image.isAlive():
+        if self.t_image.is_alive():
             self.parent.queue_img.put(None)
             self.t_image.join(5)
         try:
@@ -1036,7 +1036,7 @@ class StreakCamera(model.HwComponent):
             logging.info("Failed to stop the HPDTA App (Hamamatsu streak camera)", exc_info=True)
 
         self.should_listen = False  # terminates receiver thread
-        if self.t_receiver.isAlive():
+        if self.t_receiver.is_alive():
             self.t_receiver.join(5)
         self._closeConnection()
 
@@ -1217,7 +1217,7 @@ class StreakCamera(model.HwComponent):
         # Note: sync acquisition calls directly AcqStart
 
         # restart thread in case it was terminated
-        if not self._readoutcam.t_image.isAlive():
+        if not self._readoutcam.t_image.is_alive():
             self.AcqLiveMonitor("RingBuffer", nbBuffers=3)
             self._readoutcam.t_image = threading.Thread(target=self._readoutcam._getDataFromBuffer)
             self._readoutcam.t_image.start()

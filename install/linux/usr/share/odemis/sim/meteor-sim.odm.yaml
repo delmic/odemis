@@ -166,10 +166,22 @@ METEOR-Sim: {
     },
 }
 
+"AntiBacklash for Filter Wheel": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            # Force every move to always finish in the same direction
+            "fw": 50.e-3,  # rad
+        },
+    },
+    children: {"slave": "Optical Actuators"},
+}
+
 "Filter Wheel": {
     class: actuator.FixedPositionsActuator,
     role: filter,
-    dependencies: {"band": "Optical Actuators"},
+    dependencies: {"band": "AntiBacklash for Filter Wheel"},
     init: {
         axis_name: "fw",
         # This filter-wheel is made so that the light goes through two "holes":
