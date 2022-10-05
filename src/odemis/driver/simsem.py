@@ -379,7 +379,7 @@ class Detector(model.Detector):
         self.stop_acquire()
 
     @isasync
-    def applyAutoContrast(self):
+    def applyAutoContrastBrightness(self):
         """
         (Simulation of) run the calibration for the brightness/contrast.
         (Identical interface as the phenom driver)

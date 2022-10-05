@@ -756,16 +756,16 @@ class Detector(model.Detector):
         self.updateMetadata({model.MD_DET_TYPE: model.MD_DT_NORMAL})
 
     @isasync
-    def applyAutoContrast(self):
+    def applyAutoContrastBrightness(self):
         # Create ProgressiveFuture and update its state to RUNNING
         est_start = time.time() + 0.1
         f = model.ProgressiveFuture(start=est_start,
                                     end=est_start + 2)  # rough time estimation
         f._move_lock = threading.Lock()
 
-        return self._executor.submitf(f, self._applyAutoContrast, f)
+        return self._executor.submitf(f, self._applyAutoContrastBrightness, f)
 
-    def _applyAutoContrast(self, future):
+    def _applyAutoContrastBrightness(self, future):
         """
         Trigger Phenom's AutoContrast
         """

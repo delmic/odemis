@@ -1068,7 +1068,7 @@ class SecomStreamsTab(Tab):
                 if self.curr_s.focuser.role == "ebeam-focus" and self.main_data.role == "delphi":
                     self.orig_hfw = emt.horizontalFoV.value
                     emt.horizontalFoV.value = min(self.orig_hfw, AUTOFOCUS_HFW)
-                    f = det.applyAutoContrast()
+                    f = det.applyAutoContrast() #TODO renaming required here?
                     f.result()
                     # Use the good initial focus value if known
                     init_focus = self._state_controller.good_focus

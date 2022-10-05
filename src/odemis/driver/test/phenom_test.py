@@ -31,7 +31,6 @@ import threading
 import time
 import unittest
 from unittest.case import skip
-
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 
@@ -514,7 +513,7 @@ class TestSEM(unittest.TestCase):
         """
         Check it's possible to apply AutoContrast
         """
-        f = self.sed.applyAutoContrast()
+        f = self.sed.applyAutoContrastBrightness()
         f.result()
 
 

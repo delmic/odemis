@@ -1044,7 +1044,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
             escan.scale.value = (1, 1)
             escan.dwellTime.value = 5.2e-06  # good enough for clear SEM image
             detector.data.subscribe(_discard_data)  # unblank the beam
-            f = detector.applyAutoContrast()
+            f = detector.applyAutoContrastBrightness()
             f.result()
             detector.data.unsubscribe(_discard_data)
             image = detector.data.get(asap=False)
@@ -1064,7 +1064,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
             escan.horizontalFoV.value = 250e-06  # m
             escan.scale.value = (4, 4)
             detector.data.subscribe(_discard_data)  # unblank the beam
-            f = detector.applyAutoContrast()
+            f = detector.applyAutoContrastBrightness()
             f.result()
             detector.data.unsubscribe(_discard_data)
             future._autofocus_f = autofocus.AutoFocus(detector, escan, ebeam_focus)
@@ -1435,7 +1435,7 @@ def _DoHFWShiftFactor(future, detector, escan, logpath=None):
         zoom_f = 2  # zoom factor
 
         detector.data.subscribe(_discard_data)  # unblank the beam
-        f = detector.applyAutoContrast()
+        f = detector.applyAutoContrastBrightness()
         f.result()
         detector.data.unsubscribe(_discard_data)
 
@@ -1571,7 +1571,7 @@ def _DoResolutionShiftFactor(future, detector, escan, logpath):
         resolution_values = []
 
         detector.data.subscribe(_discard_data)  # unblank the beam
-        f = detector.applyAutoContrast()
+        f = detector.applyAutoContrastBrightness()
         f.result()
         detector.data.unsubscribe(_discard_data)
 
@@ -1744,7 +1744,7 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
         zoom_f = 2  # zoom factor
 
         detector.data.subscribe(_discard_data)  # unblank the beam
-        f = detector.applyAutoContrast()
+        f = detector.applyAutoContrastBrightness()
         f.result()
         detector.data.unsubscribe(_discard_data)
 
