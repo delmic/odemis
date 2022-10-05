@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 
 from past.builtins import long
-import collections
+from collections.abc import Iterable
 import functools
 import gc
 import logging
@@ -468,11 +468,11 @@ class Stream(object):
         kwargs = {}
         if isinstance(va, (model.ListVA, model.ListVAProxy)):
             vacls = model.ListVA
-        elif hasattr(va, "choices") and isinstance(va.choices, collections.Iterable):
+        elif hasattr(va, "choices") and isinstance(va.choices, Iterable):
             # Enumerated
             vacls = model.VAEnumerated
             kwargs["choices"] = va.choices
-        elif hasattr(va, "range") and isinstance(va.range, collections.Iterable):
+        elif hasattr(va, "range") and isinstance(va.range, Iterable):
             # Continuous
             # TODO: TupleContinuous vs FloatContinuous vs... use range type?
             r0 = va.range[0]

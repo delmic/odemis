@@ -1,3 +1,90 @@
+odemis (3.2.0-1) bionic; urgency=medium
+
+  * New version: 3.2
+  * Main new changes and features:
+    - Colourmap option for streams in the GUI
+    - Support for the METEOR systems
+    - Support for the ENZEL systems
+    - Support for the FASTEM systems
+    - Add EK (Angular Spectrum) acquisition support for the SPARC
+    - Support for Thermofisher SEM
+    - Support for Ubuntu 20.04
+    - Only Ubuntu 18.04 and later is supported
+    - Only Python 3.6 and later is supported
+  * Other improvements and bug fixes:
+    - Option to control digital SEM external/blanker when analog scan is used
+    - Support for hardware trigger on Andor SDK2 cameras
+    - Support for SmarAct Picoscale interferometers
+    - Support for SmarAct SmarPod actuators
+    - Support for Piezomotors actuators
+    - Support for Picoquant HydraHarp 400
+    - Addition of the !include and !extend tags to merge yaml files
+    - odemis-cli is now called odemis
+    - Updated instructions to use Odemis with Anaconda on Windows
+    - fix discontinuity in AR projection around phi=0
+  * Improvements and bug fixes already present in the v3.1 branch:
+    - Fix bug reporter sometimes not showing a confirmation of the reception
+    - Bug reporter can be internally set to send to a different department
+    - New image in Windows installer
+    - When "show pixel value" is selected, the value under the cursor is
+      immediately shown.
+    - merge_RGB plugin detects that the pixel size read in the TIFF is 
+      too large and replaces it by a fallback sane value.
+    - Andorcam 3: improve temperature control
+    - Andorcam 3: fix large horizontal binning not working
+    - Andorcam 3: support for Sona cameras
+    - New "AR to CSV" script, to export AR from the command line.
+    - Odemis Viewer now 64 bits
+    - Smaller Odemis Viewer installer
+    - When "show pixel value" is selected, it's now possible to change
+      focus, use measure tool, etc.
+    - On Windows, when exporting CSV files, they would sometimes have an extra line
+    - Fix download of new version from the Windows Viewer
+    - Restore the "snapshot" screen feedback
+    - When exporting to CSV, AR polarimetry samples acquired with drift correction,
+      it could sometimes fail.
+    - Warn if the user is trying to open AR polarimetry data, without having
+      the special polarimetry module
+    - If a move fails on a Physik Instrumente actuator, properly report it
+      in the GUI
+    - Do not restart the GUI when odemis icon is pressed again
+    - SPARC manual focus now properly updates the optical path when selecting
+      the second camera
+    - Allow spectrum acquisition with an exposure time < 10 ms
+    - Zeiss driver handles better long commands
+    - AR spectral plugin: warn if acquisition tab not selected
+    - AR spectral plugin: better acquisition time estimate on slow camera readout
+    - Persitent data was not saved if /etc/odemis-settings.yaml was not present
+    - At start-up, the semcomedi driver would sometimes report a non-square pixel size
+    - Fix andorcam2 driver error handler causing a bigger error
+    - Reduce SPARC live update frequency to 0.5 Hz.
+    - Delay PMT protection a tiny bit after end of acquisition
+    - Fix regression preventing loading AR background containing multiple AR images
+    - Fix Fluorescence stream ordering when emission is the same between two streams
+    - Fix the year in filename sometimes replaced by %Y
+    - Fix hamamatsurx driver incorrectly logging an error at init with Python 3
+    - After SPARC manual focus, immediately pause the stream, to keep the slit image
+    - Fix font dialog selection sometimes appearing on Windows
+    - Fix import of greyscale TIFF in the merge RGB plugin
+    - Fix bug reporter sending corrupted attachements
+    - Command line utils also use Python 3 by default
+    - AR spectral plugin could display the wavelength inverted on some systems
+    - Do not fail after temporal spectral acquisition for a display error
+    - Fix icon background in the Windows Viewer
+    - Fix DELPHI calibration window on Python 3
+    - Fix cli_rgb plugin not using the correct filter
+    - Fix file selection in plugin with no specific file pattern
+    - Fix overview thumbnail not always updated (DELPHI)
+    - Fix logging of fine alignment scaling_xy (SECOM)
+    - Fix reading/writing streakcam calibration on Python 3
+    - Fix npmc driver not starting on Python 3
+    - The default python interpreter is Python 3
+    - Update tescan driver to use the latest library, compatible with Python 3
+    - Automatically close DELPHI first calibration dialog when sample is ejected
+    - CL intensity streams are shown using the same blending mode as for FM
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 2 Sep 2022 11:47:45 +0200
+
 odemis (3.1.0-1) xenial; urgency=medium
 
   * New version: 3.1

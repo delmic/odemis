@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from past.builtins import basestring
-import collections
+from collections.abc import Iterable
 import glob
 import logging
 import math
@@ -223,13 +223,13 @@ class SpectraPro(model.Actuator):
 
         # First step of parsing calib parmeter: convert to (int, int) -> ...
         calib = calib or ()
-        if not isinstance(calib, collections.Iterable):
+        if not isinstance(calib, Iterable):
             raise ValueError("calib parameter must be in the format "
                              "[blz, gl, ca, sa, fl, ia, da], "
                              "but got %s" % (calib,))
         dcalib = {}
         for c in calib:
-            if not isinstance(c, collections.Iterable) or len(c) != 7:
+            if not isinstance(c, Iterable) or len(c) != 7:
                 raise ValueError("calib parameter must be in the format "
                                  "[blz, gl, ca, sa, fl, ia, da], "
                                  "but got %s" % (c,))
@@ -450,9 +450,9 @@ class SpectraPro(model.Actuator):
         self._sendOrder("%d turret" % t)
 
     # regex to read the gratings
-    RE_NOTINSTALLED = re.compile("\D*(\d+)\s+Not Installed")
-    RE_INSTALLED = re.compile("\D*(\d+)\s+(\d+)\s*g/mm BLZ=\s*([0-9][.0-9]*)\s*(nm|NM|um|UM)")
-    RE_GRATING = re.compile("\D*(\d+)\s+(.+\S)\s*\r")
+    RE_NOTINSTALLED = re.compile(r"\D*(\d+)\s+Not Installed")
+    RE_INSTALLED = re.compile(r"\D*(\d+)\s+(\d+)\s*g/mm BLZ=\s*([0-9][.0-9]*)\s*(nm|NM|um|UM)")
+    RE_GRATING = re.compile(r"\D*(\d+)\s+(.+\S)\s*\r")
     def GetGratingChoices(self):
         """
         return (dict int -> string): grating number to description
@@ -485,7 +485,7 @@ class SpectraPro(model.Actuator):
 
         return gratings
 
-    RE_GDENSITY = re.compile("(\d+)\s*g/mm")
+    RE_GDENSITY = re.compile(r"(\d+)\s*g/mm")
     def _getGrooveDensity(self, gid):
         """
         Returns the groove density of the given grating
@@ -502,7 +502,7 @@ class SpectraPro(model.Actuator):
         density = float(m.group(1)) * 1e3 # l/m
         return density
 
-    RE_BLZ = re.compile("BLZ=\s+(?P<blz>[0-9.]+)\s*(?P<unit>[NU]M)")
+    RE_BLZ = re.compile(r"BLZ=\s+(?P<blz>[0-9.]+)\s*(?P<unit>[NU]M)")
     def _getBlaze(self, gid):
         """
         Returns the blaze (=optimal center wavelength) of the given grating
@@ -562,7 +562,7 @@ class SpectraPro(model.Actuator):
         # ?NM 300.00 nm
 
         res = self._sendQuery("?nm")
-        m = re.search("\s*(\d+.\d+)( nm)?", res)
+        m = re.search(r"\s*(\d+.\d+)( nm)?", res)
         wl = float(m.group(1)) * 1e-9
         if wl > 1e-3:
             raise SPError("Unexpected wavelength of '%s'" % res)
@@ -1048,7 +1048,7 @@ class SPSimulator(object):
                    b" 3 1200 g/mm BLZ= 700NM \r\n"
                    b" 4  Not Installed    \r\n")
         elif com.endswith(b"goto"):
-            m = re.match(b"(\d+.\d+) goto", com)
+            m = re.match(br"(\d+.\d+) goto", com)
             if m:
                 new_wl = max(0, min(float(m.group(1)), 5000)) # clamp value silently
                 move = abs(self._wavelength - new_wl)
@@ -1056,12 +1056,12 @@ class SPSimulator(object):
                 out = b""
                 time.sleep(move / 500) # simulate 500nm/s speed
         elif com.endswith(b"turret"):
-            m = re.match(b"(\d+) turret", com)
+            m = re.match(br"(\d+) turret", com)
             if m:
                 self._turret = int(m.group(1))
                 out = b""
         elif com.endswith(b"grating"):
-            m = re.match(b"(\d+) grating", com)
+            m = re.match(br"(\d+) grating", com)
             if m:
                 self._grating = int(m.group(1))
                 out = b""

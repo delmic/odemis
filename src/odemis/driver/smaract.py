@@ -767,6 +767,8 @@ class SmarPod(model.Actuator):
             return model.InstantaneousFuture()
         
         self._checkMoveAbs(pos)
+
+        pos = self._applyInversion(pos)
         if not self.IsPoseReachable(pos):
             raise ValueError("Pose %s is not reachable by the SmarPod controller" % (pos,))
 

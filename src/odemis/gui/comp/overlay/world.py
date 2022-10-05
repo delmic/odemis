@@ -458,7 +458,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
 
             self.update_projection(b_start_pos, b_end_pos, (shift[0], shift[1], scale))
 
-            # logging.warn("%s %s", shift, phys_to_buffer_pos(shift))
+            # logging.warning("%s %s", shift, phys_to_buffer_pos(shift))
             rect = (b_start_pos.x,
                     b_start_pos.y,
                     b_end_pos.x - b_start_pos.x,
@@ -729,7 +729,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
                     self._roa.value = UNDEFINED_ROI
 
         else:
-            logging.warn("Expected ROA not found!")
+            logging.warning("Expected ROA not found!")
 
     def _draw_points(self, ctx):
         # Calculate the offset of the center of the buffer relative to the
@@ -3199,6 +3199,12 @@ class EKOverlay(WorldOverlay):
             if not self._selected_line:
                 logging.error("Dragging without selected tool")
                 evt.Skip()
+                return
+
+            if not self.wl_list:
+                # This can happen if the wavelength goes to 0 while dragging
+                logging.info("No WL_LIST any more so cannot drag the EK line anymore")
+                self._left_dragging = False
                 return
 
             self._selected_line.on_motion(vpos)

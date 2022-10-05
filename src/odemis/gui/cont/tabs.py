@@ -3136,7 +3136,7 @@ class CryoChamberTab(Tab):
                             caption="Loading sample", style=wx.YES_NO | wx.ICON_QUESTION| wx.CENTER)
         box.SetYesNoLabels("&Load", "&Cancel")
         ans = box.ShowModal()  # Waits for the window to be closed
-        return ans != wx.ID_NO
+        return ans == wx.ID_YES
 
     def _display_meteor_pos_warning_msg(self, end_pos):
         pos_str = []
@@ -3152,7 +3152,7 @@ class CryoChamberTab(Tab):
                                caption="Large move of the stage",
                                style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
-        return ans != wx.ID_NO
+        return ans == wx.ID_YES
 
     def _perform_axis_relative_movement(self, target_button):
         """
@@ -5814,7 +5814,7 @@ class Sparc2AlignTab(Tab):
             add_axis("grating", main_data.spectrograph)
             add_axis("wavelength", main_data.spectrograph)
             add_axis("slit-in", main_data.spectrograph)
-            add_axis("band", main_data.light_filter, "filter")
+            add_axis("band", main_data.light_filter, "Filter")
 
             as_stream.should_update.subscribe(self._on_ccd_stream_play)
 
@@ -5946,7 +5946,7 @@ class Sparc2AlignTab(Tab):
             "lens-align": "mirror-align",  # if autofocus is needed: spec-focus (first)
             "lens2-align": "lens2-align",  # if autofocus is needed: spec-focus (first)
             "center-align": "ar",
-            "ek-align": "ek",
+            "ek-align": "ek-align",
             "fiber-align": "fiber-align",
             "streak-align": "streak-align",
         }

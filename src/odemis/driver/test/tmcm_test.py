@@ -355,7 +355,7 @@ class TestActuator(unittest.TestCase):
         f.add_done_callback(self.callback_test_notify)
         f.result()
         time.sleep(0.01) # make sure the callback had time to be called
-        self.assertEquals(self.called, 1)
+        self.assertEqual(self.called, 1)
         self.assertTrue(f.done())
 
         # test callback while in the queue
@@ -367,12 +367,12 @@ class TestActuator(unittest.TestCase):
         f2.result()
         self.assertTrue(f1.done())
         time.sleep(0.01) # make sure the callback had time to be called
-        self.assertEquals(self.called, 1)
+        self.assertEqual(self.called, 1)
         self.assertTrue(f2.done())
 
         # It should work even if the action is fully done
         f2.add_done_callback(self.callback_test_notify2)
-        self.assertEquals(self.called, 2)
+        self.assertEqual(self.called, 2)
 
         # test callback called after being cancelled
         move_forth = {'x': 12e-3}
@@ -382,7 +382,7 @@ class TestActuator(unittest.TestCase):
         self.assertTrue(f.cancel()) # Returns false if already over
         f.add_done_callback(self.callback_test_notify)
         time.sleep(0.01) # make sure the callback had time to be called
-        self.assertEquals(self.called, 1)
+        self.assertEqual(self.called, 1)
         self.assertTrue(f.cancelled())
 
     def callback_test_notify(self, future):
@@ -819,7 +819,7 @@ class TestCanActuator(unittest.TestCase):
         f.add_done_callback(self.callback_test_notify)
         f.result()
         time.sleep(0.01)  # make sure the callback had time to be called
-        self.assertEquals(self.called, 1)
+        self.assertEqual(self.called, 1)
         self.assertTrue(f.done())
 
         # test callback while in the queue
@@ -831,12 +831,12 @@ class TestCanActuator(unittest.TestCase):
         f2.result()
         self.assertTrue(f1.done())
         time.sleep(0.01)  # make sure the callback had time to be called
-        self.assertEquals(self.called, 1)
+        self.assertEqual(self.called, 1)
         self.assertTrue(f2.done())
 
         # It should work even if the action is fully done
         f2.add_done_callback(self.callback_test_notify2)
-        self.assertEquals(self.called, 2)
+        self.assertEqual(self.called, 2)
 
         # test callback called after being cancelled
         move_forth = {'x': 12e-3}
@@ -846,7 +846,7 @@ class TestCanActuator(unittest.TestCase):
         self.assertTrue(f.cancel())  # Returns false if already over
         f.add_done_callback(self.callback_test_notify)
         time.sleep(0.01)  # make sure the callback had time to be called
-        self.assertEquals(self.called, 1)
+        self.assertEqual(self.called, 1)
         self.assertTrue(f.cancelled())
 
     def callback_test_notify(self, future):

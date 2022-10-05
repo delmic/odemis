@@ -21,7 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import collections
+from collections.abc import Iterable
 import logging
 import math
 from odemis import model
@@ -69,7 +69,7 @@ class VigilantAttributeConnector(object):
         self.ctrl_2_va = ctrl_2_va or value_ctrl.GetValue
         if events is None:
             self.change_events = ()
-        elif not isinstance(events, collections.Iterable):
+        elif not isinstance(events, Iterable):
             self.change_events = (events,)
         else:
             self.change_events = events
@@ -100,7 +100,7 @@ class VigilantAttributeConnector(object):
             logging.debug("Setting VA value to %s after control event %d", value, evt.Id)
             self.vigilattr.value = value
         except (ValueError, TypeError, IndexError) as exc:
-            logging.warn("VA refused value %s: %s", value, exc)
+            logging.warning("VA refused value %s: %s", value, exc)
             self.va_2_ctrl(self.vigilattr.value)
         evt.Skip()
 
@@ -158,7 +158,7 @@ class AxisConnector(object):
         self.ctrl_2_pos = ctrl_2_pos or value_ctrl.GetValue
         if events is None:
             self.change_events = ()
-        elif not isinstance(events, collections.Iterable):
+        elif not isinstance(events, Iterable):
             self.change_events = (events,)
         else:
             self.change_events = events
@@ -286,7 +286,7 @@ class ProgressiveFutureConnector(object):
 
         # a repeating timer, always called in the GUI thread
         self._timer = wx.PyTimer(self._update_progress)
-        self._timer.Start(250.0)  # 4 Hz
+        self._timer.Start(250)  # 4 Hz (250 milliseconds)
 
         # Set the progress bar to 0
         bar.Range = PROGRESS_RANGE

@@ -20,12 +20,22 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
+
+from collections import OrderedDict
 import functools
 import logging
-from odemis import model
+from odemis import model, dataio
+import odemis
+from odemis.acq import calibration
 from odemis.acq.stream import SpectrumSettingsStream, SEMSpectrumMDStream
+from odemis.dataio import get_available_formats
+from odemis.gui.conf import util
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.plugin import Plugin
+from odemis.gui.util import formats_to_wildcards
+from odemis.util import img
+import os
+import wx
 
 
 class BlSpectrumSettingsStream(SpectrumSettingsStream):
@@ -39,6 +49,9 @@ class BlSpectrumSettingsStream(SpectrumSettingsStream):
         """
         super(BlSpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         self._blanker = blanker
+
+        # Background file name: a str (the full path) or None (no background)
+        self.backgroundFile = model.VigilantAttribute(None, setter=self.onBackgroundFile)
 
     def _prepare_opm(self):
         self._activateBlanker()
@@ -63,6 +76,68 @@ class BlSpectrumSettingsStream(SpectrumSettingsStream):
         except Exception:
             logging.exception("Failed to set the blanker tp automatic mode")
 
+    def onBackgroundFile(self, fn: str) -> str:
+
+        try:
+            if fn is None:
+                logging.debug("Clearing spectrum background")
+                cdata = None
+            else:
+                logging.debug("Loading spectrum background")
+                converter = dataio.find_fittest_converter(fn, mode=os.O_RDONLY)
+                data = converter.read_data(fn)
+                # will raise exception if doesn't contain good calib data
+                cdata = calibration.get_spectrum_data(data)  # get the background image (can be an averaged image)
+
+            self.background.value = cdata  # update the background VA on the stream -> recomputes image displayed
+            return fn
+
+        except Exception as err:
+            logging.info("Failed using file %s as background for currently loaded data", fn, exc_info=True)
+            msg = "File '%s' not suitable as background for currently loaded data:\n\n%s"
+            dlg = wx.MessageDialog(None,
+                                   msg % (fn, err),
+                                   "Unusable spectrum background file",
+                                   wx.OK | wx.ICON_STOP)
+            dlg.ShowModal()
+            dlg.Destroy()
+            return self.background.value  # previous value
+
+    # Overrides method of LiveStream
+    def _onBackground(self, data):
+        """Called when the background is changed"""
+        # Accept anything
+        self._shouldUpdateHistogram()
+
+    # Overrides method of SpectrumSettingsStream
+    def _updateImage(self):
+        """
+        Convert the raw data to a spectrum. The background, if present, is first
+        subtracted.
+        """
+        if not self.raw:
+            return
+
+        try:
+            data = self.raw[0]
+
+            # Subtract the background (without caring about the wavelength)
+            try:
+                bckg = self.background.value
+                if bckg is not None:
+                    data = img.Subtract(data, bckg)
+            except Exception as ex:
+                logging.info("Failed to apply spectrum correction: %s", ex)
+
+            # Just copy the raw data into the image, removing useless extra dimensions
+            im = data[:, 0, 0, 0, 0]
+            im.metadata = im.metadata.copy()
+            im.metadata[model.MD_DIMS] = "C"
+            self.image.value = im
+
+        except Exception:
+            logging.exception("Updating %s %s image", self.__class__.__name__, self.name.value)
+
 
 class BlSEMSpectrumMDStream(SEMSpectrumMDStream):
     """
@@ -78,6 +153,30 @@ class BlSEMSpectrumMDStream(SEMSpectrumMDStream):
             return super(BlSEMSpectrumMDStream, self)._runAcquisition(future)
         finally:
             self._sccd._unlinkHwAxes()
+
+
+LIVE_STREAM_CONFIG = OrderedDict((
+            ("wavelength", {
+                "tooltip": "Center wavelength of the spectrograph",
+                "control_type": odemis.gui.CONTROL_FLT,
+                "range": (0.0, 1900e-9),
+                "key_step_min": 1e-9,
+            }),
+            ("grating", {}),
+            ("slit-in", {
+                "label": "Input slit",
+                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
+            }),
+            ("filter", {  # from filter
+                "choices": util.format_band_choices,
+            }),
+            ("backgroundFile", {
+                "control_type": odemis.gui.CONTROL_OPEN_FILE,
+                "label": "Background",
+                "clearlabel": "None",
+                "wildcard": formats_to_wildcards(get_available_formats(os.O_RDONLY), include_all=True)[0]
+            }),
+        ))
 
 
 class BlExtraPlugin(Plugin):
@@ -103,6 +202,8 @@ class BlExtraPlugin(Plugin):
             logging.info("%s plugin cannot load as the microscope is not a SPARC",
                          self.name)
             return
+
+        odemis.gui.conf.data.STREAM_SETTINGS_CONFIG[BlSpectrumSettingsStream] = LIVE_STREAM_CONFIG
 
         for sptm in sptms:
             if len(sptms) <= 1:

@@ -20,22 +20,21 @@ from odemis.driver import powerctrl, semcomedi
 import os
 import unittest
 
-
-logger = logging.getLogger().setLevel(logging.DEBUG)
+logging.getLogger().setLevel(logging.DEBUG)
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 CLASS = powerctrl.PowerControlUnit
+KWARGS = dict(name="test", role="power_control",
+              pin_map={"sem": 0, "sed": 1},
+              port="/dev/ttyPMT*",
+              # ids=[],
+              check_power=True)
 if TEST_NOHW:
     # Test using the simulator
-    KWARGS = dict(name="test", role="power_control", pin_map={
-                    "sem": 0, "sed": 1}, port="/dev/fake")
-else:
-    # Test using the hardware
-    KWARGS = dict(name="test", role="power_control", pin_map={
-                    "sem": 0, "sed": 1}, port="/dev/ttyPMT*")
+    KWARGS["port"] ="/dev/fake"
 
 # Control unit used for PCU testing
 CLASS_PCU = CLASS

@@ -42,7 +42,7 @@ from matplotlib import cm
 try:
     from odemis.util import img_fast
 except ImportError:
-    logging.warn("Failed to load optimised functions, slow version will be used.")
+    logging.warning("Failed to load optimised functions, slow version will be used.")
     img_fast = None
 
 # This is a weave-based optimised version (but weave requires g++ installed)
