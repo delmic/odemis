@@ -672,6 +672,7 @@ class AndorCam2(model.DigitalCamera):
 
             # Clara: 0 = conventional (less noise), 1 = Extended Near Infra-Red => 0
             # iXon Ultra: 0 = EMCCD (more sensitive), 1 = conventional (bigger well) => 0
+            # iDus InGaAs:  0 = High Sensitivity, 1 = High Dynamic Range => 0
             self._output_amp = 0
 
             ror_choices = self._getReadoutRates()
