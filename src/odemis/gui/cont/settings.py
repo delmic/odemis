@@ -308,7 +308,7 @@ class SettingsController(with_metaclass(ABCMeta, object)):
         def auto_adjust(_):
             """ Call the auto contrast method on the detector if it's not already running """
             if not btn_autoadjust.up:
-                f = detector.applyAutoContrast()
+                f = detector.applyAutoContrastBrightness()
                 btn_autoadjust.SetLabel("Adjusting...")
                 btn_autoadjust.Disable()
                 brightness_entry.value_ctrl.Disable()

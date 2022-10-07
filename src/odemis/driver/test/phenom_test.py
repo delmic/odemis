@@ -514,7 +514,7 @@ class TestSEM(unittest.TestCase):
         """
         Check it's possible to apply AutoContrast
         """
-        f = self.sed.applyAutoContrast()
+        f = self.sed.applyAutoContrastBrightness()
         f.result()
 
 
