@@ -2853,19 +2853,6 @@ class MCS2(model.Actuator):
         logging.debug("Connected to SA_CTL Controller ID %d with %d channels", self._id.value, self._get_number_of_channels())
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
 
-        # Read param_file
-        if param_file:
-            try:
-                filestream = open(param_file)
-            except Exception as ex:
-                raise ValueError("Failed to open file %s: %s" % (param_file, ex))
-            try:
-                prop_params_i32, prop_params_i64, prop_params_str = self.parse_tsv_config(filestream)
-            except Exception as ex:
-                raise ValueError("Failed to parse file %s: %s" % (param_file, ex))
-            logging.debug("Extracted param file config: %s, %s, %s", prop_params_i32, prop_params_i64, prop_params_str)
-            self.apply_config(prop_params_i32, prop_params_i64, prop_params_str)
-
         # Add metadata
         self._swVersion = self.GetFullVersionString()
         devname = self.GetProperty_s(SA_CTLDLL.SA_CTL_PKEY_DEVICE_NAME, 0)
@@ -2876,13 +2863,27 @@ class MCS2(model.Actuator):
 
         logging.debug("Using SA_CTL library version %s to connect to %s", self._swVersion, self._hwVersion)
 
+        # Read param_file
+        if param_file:
+            try:
+                filestream = open(param_file)
+            except Exception as ex:
+                raise ValueError("Failed to open file %s: %s" % (param_file, ex))
+            try:
+                prop_params = self.parse_tsv_config(filestream)
+            except Exception as ex:
+                raise ValueError("Failed to parse file %s: %s" % (param_file, ex))
+            logging.debug("Extracted param file config: %s", prop_params)
+            self.apply_config(prop_params)
+
+        # set specific axis properties
         for name, channel in self._axis_map.items():
             self._set_speed(channel, speed)
             self._set_accel(channel, accel)
             self._set_hold_time(channel, hold_time)
 
             # Log referencing mode, and warn if it's not normal (autozero)
-            ref_mode = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE, channel)
+            ref_mode = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS, channel)
             log_lvl = logging.INFO
             if ref_mode & SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO:
                 log_lvl = logging.WARNING
@@ -2947,43 +2948,36 @@ class MCS2(model.Actuator):
         super(MCS2, self).updateMetadata(md)
 
     # Methods below are for using and applying additional parameters through a param_file
-    def apply_config(self, prop_params_i32, prop_params_i64, prop_params_str):
+    def apply_config(self, prop_params):
         """
         Configure the device according to the given 'user configuration' from a specified param_file.
-        :param prop_params_i32 (dict (int, int) -> int): channel index/property code -> value of type int32
-        :param prop_params_i64 (dict (int, int) -> int): channel index/property code -> value of type int64
-        :param prop_params_str (dict (int, int) -> int): channel index/property code -> value of type str
+        :param prop_params (dict (int, int) -> (str, int)): channel index, property code -> type, value
         """
 
-        # if type is int32 run this method for every dict item
-        for (ch, p), v in prop_params_i32.items():
-            self.SetProperty_i32(p, ch, v)
-        # if type is int64 run this method for every dict item
-        for (ch, p), v in prop_params_i64.items():
-            self.SetProperty_i64(p, ch, v)
-        # if type is str run this method for every dict item
-        for (ch, p), v in prop_params_str.items():
-            self.SetProperty_s(p, ch, v)
+        # run the appropriate method for every dict item depending on value type
+        for (ch, p), (typ, v) in prop_params.items():
+            if typ == "I32":
+                self.SetProperty_i32(p, ch, v)
+            elif typ == "I64":
+                self.SetProperty_i64(p, ch, v)
+            elif typ == "Str":
+                self.SetProperty_s(p, ch, v)
 
     @staticmethod
     def parse_tsv_config(filestream):
         """
         Parse a tab-separated value (.mcs2.tsv) file in the following format:
-            file header > channel_index property value # description
+            (file header) channel_index     property    value   # description
             channel_index can be a (Ch) number starting from 0 this also refers to a defined channel type
             property is a hexadecimal code representing a specific property
             value is a hexadecimal code representing independent property ﬂags
         filestream (File): opened filestream
         return:
-            prop_params_i32 (dict (int, int) -> int): channel index/property code -> value (int32)
-            prop_params_i64 (dict (int, int) -> int): channel index/property code -> value (int64)
-            prop_params_str (dict (int, int) -> int): channel index/property code -> value (str)
+            prop_params_i32 (dict (int, int) -> (str, int)): channel index, property code -> type, value
         """
 
         # MCS2 property types dedicated dicts:
-        prop_params_i32 = {}
-        prop_params_i64 = {}
-        prop_params_str = {}
+        prop_params = {}
 
         # read the parameters "database" the file
         for readline in filestream:
@@ -2997,22 +2991,15 @@ class MCS2(model.Actuator):
             m = re.match(r"(?P<num>[0-9]+)\t(?P<code>0x[0-9A-F]+)\t(?P<value>0x[0-9A-F]+)\t(?P<type>(I32|I64|Str))\s*(#.*)?$", readline)
             if not m:
                 # read line is not in the correct format
-                raise ValueError("Failed to parse line '%s'" % readline.rstrip("\n\r"))
+                raise ValueError("Failed to parse line, unexpected line format '%s'" % readline.rstrip("\n\r"))
 
             # assigned the read str value to the appropriate variables (hex will be cast to int)
             ch_num, prop_code, set_val, typ = int(m.group("num")), int(m.group("code"), 0), int(m.group("value"), 0), m.group("type")
 
             # check the read type and append values to the right dicts
-            if typ == "I32":
-                prop_params_i32[(ch_num, prop_code)] = set_val
-            elif typ == "I64":
-                prop_params_i64[(ch_num, prop_code)] = set_val
-            elif typ == "Str":
-                prop_params_str[(ch_num, prop_code)] = set_val
-            else:
-                raise ValueError("Unexpected line '%s'" % readline.rstrip("\n\r"))
+            prop_params[(ch_num, prop_code)] = typ, set_val
 
-        return prop_params_i32, prop_params_i64, prop_params_str
+        return prop_params
 
     @staticmethod
     def scan():
