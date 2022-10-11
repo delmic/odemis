@@ -41,13 +41,13 @@ class TestMeasureShift(unittest.TestCase):
         numpy.random.seed(0)  # Set the seed to a fixed value, for making test cases reproducible
 
         # Input
-        self.data = hdf5.read_data(os.path.join(DATA_DIR, "example_input.h5"))
+        self.data = hdf5.read_data(os.path.join(DATA_DIR, "../../drift/test/example_input.h5"))
         C, T, Z, Y, X = self.data[0].shape
         self.data[0].shape = Y, X
         self.small_data = self.data[0][350:400, 325:375]
 
         # Input drifted by known value
-        self.data_drifted = hdf5.read_data(os.path.join(DATA_DIR, "example_drifted.h5"))
+        self.data_drifted = hdf5.read_data(os.path.join(DATA_DIR, "../../drift/test/example_drifted.h5"))
         C, T, Z, Y, X = self.data_drifted[0].shape
         self.data_drifted[0].shape = Y, X
 
