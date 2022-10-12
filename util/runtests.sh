@@ -127,7 +127,7 @@ for f in $testfiles; do
     pushd "$(dirname $f)" > /dev/null
         # Automatically kill after MAXTIME, then try harder after 30 s
         if [ $pytest = True ]; then
-          timeout -k 30 $MAXTIME $interpreter -m pytest $f --tb=short --verbose >> "$TESTLOG" 2>&1
+          timeout -k 30 $MAXTIME $interpreter -m pytest $f --tb=short --verbose -rfE >> "$TESTLOG" 2>&1
         else
           timeout -k 30 $MAXTIME $interpreter $f --verbose >> "$TESTLOG" 2>&1
         fi
