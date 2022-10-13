@@ -260,7 +260,7 @@ class Lakeshore(model.HwComponent):
 
             self._checkDeviceCompatibility()
 
-            return
+            return bus_pattern
 
         if bus_pattern == "/dev/fake":
             names = [bus_pattern]
@@ -613,7 +613,7 @@ class IPBusAccesser(object):
                 try:
                     data = self._socket.recv(TCP_BUFFER_SIZE)
                 except socket.timeout:
-                    raise model.HwError("Connection is timed out.")
+                    raise IOError("Connection is timed out.")
                 ans += data
 
             logging.debug("Received answer %s", to_str_escape(ans))
