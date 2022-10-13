@@ -3734,7 +3734,7 @@ class IPBusAccesser(object):
         is used (and it's typically controller 1 answering)
         com (string): command to send (including the \n if necessary)
         """
-        assert(len(com) <= 100) # commands can be quite long (with floats)
+        assert(len(com) <= 100)  # commands can be quite long (with floats)
         assert(addr is None or 1 <= addr <= 16 or addr == 254 or addr == 255)  # 255 means "broadcast"
         if addr is None:
             full_com = com
