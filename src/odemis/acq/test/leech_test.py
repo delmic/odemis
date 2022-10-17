@@ -18,6 +18,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq import stream
+from odemis.acq.drift import AnchoredEstimator
 from odemis.acq.leech import ProbeCurrentAcquirer, AnchorDriftCorrector
 from odemis.driver import simsem
 import time
@@ -89,7 +90,21 @@ class ADCTestCase(unittest.TestCase):
         with self.assertRaises(ValueError):
             dc.series_start()
 
+    def test_estimateAcquisitionTime(self):
+        """
+        Tests the minimum time required to acquire one anchor area
+        """
+        # Total anchor estimation time should be more than 0
+        dc = AnchorDriftCorrector(self.scanner, self.sed)
+        dc.roi.value = (0, 0, 0.1, 0.1)
+        dce = AnchoredEstimator(dc._scanner, dc._detector,
+                                dc.roi.value, dc.dwellTime.value)
+        test_time = dce.estimateAcquisitionTime()
+        total_anchor_estimation = dc.estimateAcquisitionTime(0.1, (5, 5))
+        self.assertGreaterEqual(total_anchor_estimation, test_time)
+
     def test_get_next_pixels(self):
+        # TODO dc.series_start, dc.complete, dc.series_complete needs to be tested
         dc = AnchorDriftCorrector(self.scanner, self.sed)
 
         # Period = dt => every pixel
