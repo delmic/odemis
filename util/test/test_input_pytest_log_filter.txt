@@ -8,6 +8,10 @@ collecting ... collected 3 items
 fastem_conf_test.py::TestFASTEMConfig::test_configure_scanner_live ERROR [ 33%]
 fastem_conf_test.py::TestFASTEMConfig::test_configure_scanner_megafield ERROR [ 66%]
 fastem_conf_test.py::TestFASTEMConfig::test_configure_scanner_overview ERROR [100%]
+=========================== short test summary info ============================
+FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_3x2
+FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_one_tile
+FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_zoom
 
 ==================================== ERRORS ====================================
 ________ ERROR at setup of TestFASTEMConfig.test_configure_scanner_live ________

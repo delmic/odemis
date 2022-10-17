@@ -54,7 +54,10 @@ def filter_test_log(log_txt):
         comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_one_tile FAILED [ 77%]
         comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_zoom FAILED [ 88%]
         comp_canvas_test.py::TestDblMicroscopeCanvas::test_zoom_move PASSED      [100%]
-
+        =========================== short test summary info ============================
+        FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_3x2
+        FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_one_tile
+        FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_zoom
 
         =================================== FAILURES ===================================
         /home/kleijwegt/development/odemis/src/odemis/gui/test/comp_canvas_test.py:742: AssertionError: Tuples differ: (0, 128, 127) != (0, 76, 179)
@@ -62,8 +65,13 @@ def filter_test_log(log_txt):
         /home/kleijwegt/development/odemis/src/odemis/gui/test/comp_canvas_test.py:604: AssertionError: Tuples differ: (0, 127, 128) != (0, 179, 76)
         ====================== 3 failed, 6 passed in 7.43 seconds ======================
 
-    For a full test report only failures, errors etc. are of interest, therefore only this part is outputted, the rest is
-    filtered. An example of such an output string is the following example:
+    For a full test report only the short summary, failures, errors etc. are of interest, therefore only this part is
+    outputted, the rest is filtered. An example of such an output string is the following example:
+
+        =========================== short test summary info ============================
+        FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_3x2
+        FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_one_tile
+        FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_zoom
 
         =================================== FAILURES ===================================
         /home/kleijwegt/development/odemis/src/odemis/gui/test/comp_canvas_test.py:742: AssertionError: Tuples differ: (0, 128, 127) != (0, 76, 179)
@@ -72,7 +80,8 @@ def filter_test_log(log_txt):
         ====================== 3 failed, 6 passed in 7.43 seconds ======================
 
     """
-    test_results = re.search("\n\n===(.+?)((.|\n)*)==", log_txt).group()  # Filter to only get the usefull parts of the test report
+    # Filter to only get the usefull parts of the test report
+    test_results = re.search(".* short test summary info .*\n(.|\n)*==", log_txt).group()
     test_results = test_results.lstrip("\n")  # Remove preceding empty lines
     # Only display when there is more to tell than just passed test cases (meaning failures, warning etc.)
     if "\n" in test_results:  # Only a message with multiple lines contains interesting information.
