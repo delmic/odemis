@@ -4157,7 +4157,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         else:
             self.fail("Failed to find a second point in AR")
 
-        e.wait(3.0)
+        e.wait(10.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
         im2d1 = ars_raw_pj.image.value
 
@@ -4174,7 +4174,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         ars.background.value = calib
         numpy.testing.assert_equal(ars.background.value, calib[0, 0, 0])
 
-        e.wait(3.0)
+        e.wait(10.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
         im2d2 = ars_raw_pj.image.value
 
@@ -4241,7 +4241,7 @@ class StaticStreamsTestCase(unittest.TestCase):
                 e.set()
 
         ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
-        e.wait(3.0)
+        e.wait(10.0)
         time.sleep(1.0)  # wait a little extra as .image is updated multiple times
 
         # Control AR projection
@@ -4259,7 +4259,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         else:
             self.fail("Failed to find another polarization position")
 
-        e.wait(3.0)
+        e.wait(10.0)
         time.sleep(1.0)  # wait extra, in case .image is updated multiple times (normally not here)
         im2d1 = ars_raw_pj.image.value
 
@@ -4281,7 +4281,7 @@ class StaticStreamsTestCase(unittest.TestCase):
             self.assertEqual(len(bg_VA), 1)
             numpy.testing.assert_equal(bg_VA[0], bg_im[0][0, 0, 0])
 
-        e.wait(3.0)
+        e.wait(10.0)
         time.sleep(1.0)  # wait shortly as .image is updated multiple times
         im2d2 = ars_raw_pj.image.value
 
@@ -4311,7 +4311,7 @@ class StaticStreamsTestCase(unittest.TestCase):
                 e.set()
 
         ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
-        e.wait(3.0)
+        e.wait(10.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         im2d0 = ars_raw_pj.image.value
@@ -4322,7 +4322,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         ars.background.value = bg_data
         # test if bg VA shows same values as stored in bg_data
         numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
-        e.wait(3.0)
+        e.wait(10.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         im2d1 = ars_raw_pj.image.value
@@ -4423,7 +4423,7 @@ class StaticStreamsTestCase(unittest.TestCase):
                 e.set()
 
         ars_raw_pj.image.subscribe(on_im)  # when .image VA changes, call on_im(.image.value)
-        e.wait(3.0)
+        e.wait(10.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         im2d0 = ars_raw_pj.image.value
@@ -4434,7 +4434,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         ars.background.value = bg_data
         # test if bg VA shows same values as stored in bg_data
         numpy.testing.assert_array_equal(ars.background.value[0], bg_data[0][0, 0, 0])
-        e.wait(3.0)
+        e.wait(10.0)
         time.sleep(0.5)  # wait shortly as .image is updated multiple times
 
         im2d1 = ars_raw_pj.image.value
