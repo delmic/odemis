@@ -1016,7 +1016,8 @@ def getBoundingBox(content):
     """
     Compute the physical bounding-box of the given DataArray(Shadow)
     content (DataArray(Shadow)): The data of the image
-    return (tuple(minx, miny, maxx, maxy)): left,top,right,bottom positions in world coordinates where top < bottom and left < right
+    return (tuple(minx, miny, maxx, maxy)): left,top,right,bottom positions in world coordinates where top < bottom
+    and left < right
     raise LookupError if metadata is not available
     """
     # TODO: also handle if passed a 2D array of images? (as returned for pyramidal images)

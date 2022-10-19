@@ -1549,9 +1549,14 @@ class TestGetYXFromZYX(unittest.TestCase):
             x_count += 1
 
     def test_getYXFromZYX_normal(self):
+        """
+        Verify that using a 3D DA picture will return the
+        right 2D DA picture.
+        normal use of function
+        """
         data = model.DataArray(self.arr1, metadata=self.md)
-        # take the middle z-slice
-        z_slice = 198
+        # take a random z-slice value
+        z_slice = 160
 
         output_DA = numpy.asarray(img.getYXFromZYX(data, zIndex=z_slice))
 
@@ -1572,7 +1577,12 @@ class TestGetYXFromZYX(unittest.TestCase):
 
         self.assertTrue(numpy.count_nonzero(output_DA == self.color_num) == checknum)
 
-    def test_getYXFromZYX_2D(self):
+    def test_getYXFromZYX_1D(self):
+        """
+        Verify that using a 1D DA picture will return the
+        right 2D DA picture.
+        see if expected input of ZYX DA can handle a X only DA
+        """
         # create a 2D data array using a sliced 3D array
         # keep the z-slice at default
         data = model.DataArray(self.arr1[0, 0, :], metadata=self.md)
@@ -1586,6 +1596,10 @@ class TestGetYXFromZYX(unittest.TestCase):
         self.assertTrue(numpy.all(output_DA == self.color_num))
 
     def test_getYXFromZYX_4D(self):
+        """
+        Verify that using a 4D DA picture will fail.
+        see if a ValueError exception is raised
+        """
         # use a 4D array to force a ValueError when slicing array shape
         data = model.DataArray(self.arr1.reshape(20, 399, 399, 10), metadata=self.md)
 
@@ -1608,14 +1622,23 @@ class TestEnsure2DImage(unittest.TestCase):
         self.data = model.DataArray(arr)
 
     def test_ensure2DImage_2D(self):
+        """
+        Verify that using a 5D CTZYX DA will return the
+        right 2D DA.
+        normal use of function
+        """
         out_arr = numpy.asarray(img.ensure2DImage(self.data))
 
-        # check if the returned array is 2D
+        # check if the returned array shape is 2D
         self.assertTrue(out_arr.ndim == 2)
         # check if the YX values match
         self.assertEqual(out_arr.shape, self.data.shape[3:])
 
     def test_ensure2DImage_5D(self):
+        """
+        Verify that using a 5D DA will fail.
+        see if a ValueError exception is raised
+        """
         self.data = numpy.asarray(self.data).reshape(1, 2, 50, 400, 400)
 
         with self.assertRaises(ValueError):
@@ -1632,6 +1655,10 @@ class TestSubtract(unittest.TestCase):
         self.pic2 = np.zeros((600, 600))
 
     def test_Subtract_uint(self):
+        """
+        Verify that using an uint8 as dtype will return the right DA.
+        normal use of function
+        """
         pic1 = self.pic1.astype('uint8')
         pic2 = self.pic2.astype('uint8')
         # add white squares in the black pictures
@@ -1647,6 +1674,10 @@ class TestSubtract(unittest.TestCase):
         self.assertFalse(numpy.any(out_arr[300:400, 300:400]))
 
     def test_Subtract_float(self):
+        """
+        Verify that using a float as dtype will return the right DA.
+        normal use of function but forcing different path in method
+        """
         # add white squares in the black pictures
         self.pic1[200:500, 200:500] = 0.5
         self.pic2[300:400, 300:400] = 0.5
@@ -1661,6 +1692,10 @@ class TestSubtract(unittest.TestCase):
         self.assertFalse(numpy.any(out_arr[300:400, 300:400]))
 
     def test_Subtract_uintbool(self):
+        """
+        Verify that using pictures with different dtypes will return the right DA.
+        check if using 2 different dtype arrays will still work
+        """
         pic1 = self.pic1.astype('bool')
         # add white squares in the black pictures
         pic1[200:500, 200:500] = 1
@@ -1684,6 +1719,11 @@ class TestGetTilesSize(unittest.TestCase):
     # test for single tile only
 
     def test_getTilesSize_shape2(self):
+        """
+        Verify that using a 2D shaped DA tiles list will return the right length and size of DA.
+        Also check for only 1 tile.
+        normal use of function
+        """
         # create the 4 DA subtiles
         size = (800, 600)  # size shape = 2
         tile1 = np.zeros(size)
@@ -1694,14 +1734,14 @@ class TestGetTilesSize(unittest.TestCase):
         # start index for y-axis
         y_start = 0
 
-        # create a white triangle in the black tile
+        # create a pattern in the tile
         for x in reversed(range(size[0])):
             for y in range(y_start, size[1]):
                 tile1[x, y] = 1
             y_start += 1
 
         # create the other 3 tiles by swapping axis of tile1
-        # 4 tiles together make white diamond shape
+        # 4 tiles together make diamond shape pattern
         tile2 = np.flip(tile1, axis=1)
         tile3 = np.flip(tile1, axis=0)
         tile4 = np.flip(tile3, axis=1)
@@ -1727,6 +1767,10 @@ class TestGetTilesSize(unittest.TestCase):
         self.assertEqual(output_size, size)
 
     def test_getTilesSize_shape3(self):
+        """
+        Verify that using a 3D shaped DA tiles list will return the right length and size of DA.
+        normal use of function
+        """
         # create the 4 DA subtiles
         size = (800, 600, 10)  # size shape = 3
 
@@ -1738,14 +1782,14 @@ class TestGetTilesSize(unittest.TestCase):
         # start index for y-axis
         y_start = 0
 
-        # create a white triangle in the black tile
+        # create a pattern in the tile
         for x in reversed(range(size[0])):
             for y in range(y_start, size[1]):
                 tile1[x, y] = 1
             y_start += 1
 
         # create the other 3 tiles by swapping axis of tile1
-        # 4 tiles together make white diamond shape
+        # 4 tiles together make diamond shape pattern
         tile2 = np.flip(tile1, axis=1)
         tile3 = np.flip(tile1, axis=0)
         tile4 = np.flip(tile3, axis=1)
@@ -1766,23 +1810,20 @@ class TestGetTilesSize(unittest.TestCase):
 
 
 class TestGetCenterOfTiles(unittest.TestCase):
-    # TODO WiP
     # input tiles (tuple of tuple of DataArray) and result_shape (tuple containing height/width values)
     # output tuple (x, y) physical x,y coordinates
-    # test for tile list regular (5-)shape
+    # test for tile list normal (5-)shape
     # test for wrong shape -> IndexError
     # test for missing PIXEL_SIZE in model parameters -> ValueError
-    # test for single tile only
 
     def setUp(self):
         md = {
               model.MD_DIMS: 'CTZYX',
               model.MD_PIXEL_SIZE: (1e-6, 1e-6),
-              model.MD_POS: (-5e-3, 2e-3)
+              model.MD_POS: (0.05, 0.07)
              }
 
         self.size = (10, 10, 10, 800, 600)  # dimensions 5 as DIMS
-        # self.size = (10, 800, 600)
         tile1 = model.DataArray(np.zeros(self.size), md)
         tile2 = model.DataArray(np.zeros(self.size), md)
         tile3 = model.DataArray(np.zeros(self.size), md)
@@ -1791,13 +1832,13 @@ class TestGetCenterOfTiles(unittest.TestCase):
         # start index for y-axis
         y_start = 0
 
-        # create a white triangle in the black tile
+        # create a pattern in the tile
         for x in reversed(range(self.size[-2])):
             for y in range(y_start, self.size[-1]):
                 tile1[..., x, y] = 1
             y_start += 1
 
-        # create the other 3 tiles by swapping axis of tile1
+        # create the other 3 tiles by swapping axis of tile1/3
         # 4 tiles together make white diamond shape
         tile2 = np.flip(tile1, axis=1)
         tile3 = np.flip(tile1, axis=0)
@@ -1809,50 +1850,206 @@ class TestGetCenterOfTiles(unittest.TestCase):
         self.tiles_list = (tile_list, tile_list, tile_list, tile_list)
 
     def test_getCenterOfTiles_normal(self):
+        """
+        Verify that using a 5D shaped DA tiles list will return the right physical position if compared with
+        input metadata position.
+        normal use of function
+        """
         result_shape = tuple(len(self.tiles_list) * elem for elem in self.size)
 
         # normal input of CTZYX dimension of DA's in tuple list of tuples
-        output_coords = img.getCenterOfTiles(self.tiles_list, result_shape)
+        output_pos = img.getCenterOfTiles(self.tiles_list, result_shape)
 
-        # not exactly sure what to test for here..
-        self.assertTrue(isinstance(output_coords, tuple))
+        x_pos = self.tiles_list[0][0].metadata[model.MD_POS][0]
+        y_pos = self.tiles_list[0][0].metadata[model.MD_POS][1]
+
+        # check if the x positions is almost equal
+        self.assertAlmostEqual(output_pos[0], x_pos, places=2)
+        # check if the y positions is almost equal
+        self.assertAlmostEqual(output_pos[1], y_pos, places=2)
 
     def test_getCenterOfTiles_incorrect_shape(self):
-        new_md = {
-                  model.MD_DIMS: 'CTZYX',
-                  model.MD_PIXEL_SIZE: (2e-4, 2e-4),
-                  model.MD_POS: (-5e-3, 2e-3)
-                  }
+        """
+        Verify that using a wrong shaped DA tiles list will fail.
+        see if a IndexError exception is raised
+        """
         new_tile = []
         new_tiles = []
 
         for t1 in self.tiles_list:
             new_tile.clear()
             for t2 in t1:
-                # adjust the md and size
-                t2.metadata = new_md
+                # remove the first 2 axis so effectively keep 3D ZYX array
                 new_tile.append(t2[0, 0, :, :, :])
             new_tiles.append(new_tile)
 
         result_shape = tuple(len(new_tiles) * elem for elem in self.size)
 
-        # using wrong shape force IndexError
+        # using wrong shape force IndexError shape of CTZYX expected
         with self.assertRaises(IndexError):
             img.getCenterOfTiles(new_tiles, result_shape)
 
     def test_getCenterOfTiles_no_pixelsize(self):
+        """
+        Verify that leaving out PIXEL_SIZE in the metadate DA tiles list will fail.
+        see if a ValueError exception is raised
+        """
         del self.tiles_list[0][0].metadata[model.MD_PIXEL_SIZE]
         result_shape = tuple(len(self.tiles_list) * elem for elem in self.size)
 
+        # force ValueError by leaving out PIXEL_SIZE
         with self.assertRaises(ValueError):
             img.getCenterOfTiles(self.tiles_list, result_shape)
 
-#
-#
-# class TestGetBoundingBox(unittest.TestCase):
-#
-#
-# class TestAssembleZCube(unittest.TestCase):
+
+class TestGetBoundingBox(unittest.TestCase):
+    # input picture model.DA
+    # output tuple (left, top, right, bottom) position in world coordinates
+    # test for normal behaviour with appropriate 5D model.DA
+    # test for missing PIXEL_SIZE or PIXEL_SIZE=None in model parameters -> LookupError
+
+    def setUp(self):
+        # create a 5D size and metadata with necessary items
+        self.size = (9, 10, 13, 400, 600)
+        self.md = {
+            model.MD_DIMS: 'CTZYX',
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+            model.MD_POS: (0.95, 0.07)
+        }
+
+    def test_getBoundingBox_normal(self):
+        """
+        Verify that using a 5D shaped DA will return the right bounding box.
+        normal use of function
+        """
+        # create a DA with random values
+        new_da = np.random.random(self.size)
+        new_da = model.DataArray(new_da, self.md)
+
+        output_pos = img.getBoundingBox(new_da)
+
+        # set the positions to check for
+        pos_x = new_da.metadata[model.MD_POS][0]
+        pos_y = new_da.metadata[model.MD_POS][1]
+
+        # check if all the positions are almost equal
+        self.assertAlmostEqual(output_pos[0], pos_x, places=2)
+        self.assertAlmostEqual(output_pos[1], pos_y, places=2)
+        self.assertAlmostEqual(output_pos[2], pos_x, places=2)
+        self.assertAlmostEqual(output_pos[3], pos_y, places=2)
+
+    def test_getBoundingBox_force_LookupError(self):
+        """
+        Verify that removing PIXEL_SIZE in the metadate DA will fail.
+        see if a LookupError exception is raised
+        """
+        # create a DA with random values
+        new_da = np.random.random(self.size)
+        new_da = model.DataArray(new_da, self.md)
+
+        # remove the PIXEL_SIZE key
+        del self.md[model.MD_PIXEL_SIZE]
+
+        # force a LookupError
+        with self.assertRaises(LookupError):
+            img.getBoundingBox(new_da)
+
+    def test_getBoundingBox_IndexError(self):
+        """
+        Verify that using a wrong shaped DA will fail.
+        see if a IndexError exception is raised
+        """
+        # create a wrong shaped DA with random values
+        self.size = (4000, 3500)
+        new_da = np.random.random(self.size)
+        new_da = model.DataArray(new_da, self.md)
+
+        # force an IndexError due to wrong DA shape
+        with self.assertRaises(IndexError):
+            img.getBoundingBox(new_da)
+
+
+class TestAssembleZCube(unittest.TestCase):
+    # input list of model.DA YX shaped images and list of float
+    # output DA of ZYX shape
+    # test for normal behaviour with appropriate 2D model.DA
+    # test for 3D model.DA -> ValueError
+    # test for change ordering of z-stack list -> output change
+
+    def setUp(self):
+        # create a 2D size and metadata with necessary items
+        self.size = (3200, 3200)
+        self.md = {
+            model.MD_DIMS: 'YX',
+            model.MD_PIXEL_SIZE: (2e-06, 4e-05),
+            model.MD_POS: (0.2, 0.2)
+        }
+
+    def test_assembleZCube_normal(self):
+        """
+        Verify that using a 2D shaped image DA's in a list will return the right ZCube assembly.
+        normal use of function
+        """
+        img_list = []
+        z_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.5, 0.4, 0.3, 0.2, 0.1]
+
+        # create a list of DA
+        for x in range(10):
+            img_list.append(model.DataArray(np.random.random_integers(0, 220, self.size), self.md))
+
+        output_DA = img.assembleZCube(img_list, z_list)
+
+        # check if the imput DA shapes are different than the output DA
+        self.assertNotEqual(img_list[0].ndim, output_DA.ndim)
+        # check if the Z dimension has the right size
+        self.assertEqual(output_DA.shape[0], len(z_list))
+
+    def test_assembleZCube_3d(self):
+        """
+        Verify that using a 3D shaped image DA's in a list will fail the assembly of a ZCube.
+        see if a ValueError exception is raised
+        """
+        # adjust the size for 3D DA
+        self.size = (10, 700, 700)
+
+        img_list = []
+        z_list = [0.1, 0.2, 0.3, 0.4, 0.5, 0.5, 0.4, 0.3, 0.2, 0.1]
+
+        # create a list of DA
+        for x in range(10):
+            img_list.append(model.DataArray(np.random.random_integers(0, 220, self.size), self.md))
+
+        with self.assertRaises(ValueError):
+            img.assembleZCube(img_list, z_list)
+
+    def test_assembleZCube_change_Zorder(self):
+        """
+        Verify that using a 3D shaped image DA's in a list will return a different ZCube assembly if the order
+        of the images is changed.
+        see if the differences with a list generated before and after reordering are picked up
+        """
+        img_list = []
+        z_list = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+        # create a list of DA
+        for x in range(10):
+            img_list.append(model.DataArray(np.random.random_integers(0, 220, self.size), self.md))
+
+        output_DA_before = img.assembleZCube(img_list, z_list)
+
+        # create a temp reversed list based on img_list
+        rev_list = img_list.copy()
+
+        # reverse the order of the img_list
+        for index, num in enumerate(reversed(range(len(img_list)))):
+            rev_list[index] = img_list[num]
+
+        output_DA_after = img.assembleZCube(rev_list, z_list)
+
+        # check if the Z dimension has the right size
+        self.assertEqual(output_DA_before.shape[0], len(z_list) and output_DA_after.shape[0], len(z_list))
+        # check if the returned DA before order reverse is different than after order reverse
+        np.testing.assert_equal(np.any(np.not_equal(output_DA_before, output_DA_after)), True)
 
 
 if __name__ == "__main__":
