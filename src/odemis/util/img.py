@@ -479,7 +479,6 @@ def getColorbar(color_map, width, height, alpha=False):
     alpha: (bool): set to true if you want alpha channel
     return: numpy Array of uint8 RGB tuples
     """
-    # AssertionErrors not handled? Unable to test these in testcase.
     assert isinstance(width, int) and width > 0
     assert isinstance(height, int) and height > 0
     gradient = numpy.linspace(0.0, 1.0, width)
@@ -695,7 +694,7 @@ def Subtract(a, b):
     Subtract 2 images, with clipping if needed
     a (DataArray)
     b (DataArray or scalar)
-    return (DataArray): a - b, with same dtype and metadata as a
+    return (DataArray): a - b, with same metadata as a and with dtype depending on subtraction
     """
     # TODO: see if it is more useful to upgrade the type to a bigger if overflow
     if a.dtype.kind in "bu":
@@ -1016,7 +1015,8 @@ def getBoundingBox(content):
     """
     Compute the physical bounding-box of the given DataArray(Shadow)
     content (DataArray(Shadow)): The data of the image
-    return (tuple(minx, miny, maxx, maxy)): left,top,right,bottom positions in world coordinates where top < bottom and left < right
+    return (tuple(minx, miny, maxx, maxy)): left,top,right,bottom positions in world coordinates where top < bottom
+    and left < right
     raise LookupError if metadata is not available
     """
     # TODO: also handle if passed a 2D array of images? (as returned for pyramidal images)
