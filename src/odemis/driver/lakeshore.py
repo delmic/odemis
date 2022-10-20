@@ -191,37 +191,6 @@ class Lakeshore(model.HwComponent):
 
         super(Lakeshore, self).terminate()
 
-    @staticmethod
-    def _openSerialPort(port, baudrate=57600):
-        """
-        Opens the given serial port the right way for a Power control device.
-        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
-        baudrate (int)
-        return (serial): the opened serial port
-        """
-        ser = serial.Serial(
-            port=port,
-            baudrate=baudrate,
-            bytesize=serial.SEVENBITS,
-            parity=serial.PARITY_ODD,
-            stopbits=serial.STOPBITS_ONE,
-            timeout=2  # s
-        )
-
-        # Purge
-        ser.flush()
-        ser.flushInput()
-
-        # Try to read until timeout to be extra safe that we properly flushed
-        ser.timeout = 0.01
-        while True:
-            char = ser.read()
-            if char == b'':
-                break
-        ser.timeout = 1
-
-        return ser
-
     def _checkDeviceCompatibility(self):
         """
         Checks the device manifacturer and model
@@ -563,6 +532,37 @@ class SerialBusAccesser(object):
             logging.debug("Received answer %s", to_str_escape(ans))
 
             return ans.strip()
+
+    @staticmethod
+    def _openSerialPort(port, baudrate=57600):
+        """
+        Opens the given serial port the right way for a Power control device.
+        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
+        baudrate (int)
+        return (serial): the opened serial port
+        """
+        ser = serial.Serial(
+            port=port,
+            baudrate=baudrate,
+            bytesize=serial.SEVENBITS,
+            parity=serial.PARITY_ODD,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=2  # s
+        )
+
+        # Purge
+        ser.flush()
+        ser.flushInput()
+
+        # Try to read until timeout to be extra safe that we properly flushed
+        ser.timeout = 0.01
+        while True:
+            char = ser.read()
+            if char == b'':
+                break
+        ser.timeout = 1
+
+        return ser
 
 
 class IPBusAccesser(object):
