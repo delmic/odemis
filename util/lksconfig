@@ -1,0 +1,127 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Allows to read/write the configuration of Lakeshore temperature controller
+"""
+Created on 07 October 2022
+
+@author: Canberk Akin
+
+Copyright © 2022 Canberk Akin, Delmic
+
+This file is part of Odemis.
+
+lksconfig is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+lksconfig is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+lksconfig. If not, see http://www.gnu.org/licenses/.
+"""
+# for testing, use /dev/fake as address:
+# ./util/lksconfig --log-level 2 --channel 4 --set-pid 1 2 3 --address /dev/fake
+
+# for examination, use real ip address/serial port or role:
+# ./util/lksconfig --log-level 2 --channel 4 --set-pid 1 2 3 --address 192.168.2.12  (/dev/ttyACM2)
+# ./util/lksconfig --channel 1 --get-pid --role sample-thermostat
+
+import argparse
+import logging
+from odemis import model
+from odemis.driver import lakeshore
+import sys
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(description="Read/write parameters in a Lakeshore temperature controller")
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=0, help="set verbosity level (0-2, default = 0)")
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--address', dest="address", type=str,
+                       help="Port name (starts with /) or IP address (xxx.xxx.xxx.xxx)")
+    group.add_argument('--role', dest="role",
+                       help="Role of the temperature controller in Odemis, "
+                            "to connect via the Odemis back-end. Ex: 'sample-thermostat'.")
+
+    parser.add_argument('--channel', dest="channel", type=int, required=True,
+                        help="Select the output channel to set PID values"
+                             "(from 1 to 4 for model 350 and 1 or 2 for model 335)")
+
+    group = parser.add_mutually_exclusive_group(required=True)
+    group.add_argument('--get-pid', dest="getpid", action='store_true',
+                       help="Gets the P, I and D values of the specified output channel")
+    group.add_argument('--set-pid', dest="setpid", type=float, nargs=3,
+                       metavar=("<proportional>", "<integral>", "<derivative>"),
+                       help="Sets the P, I and D values")
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    try:
+        if options.role:
+            dev = model.getComponent(role=options.role)
+        else:
+            dev = lakeshore.Lakeshore("lakeshore", "lakeshore", port=options.address)
+
+        if options.getpid:
+            get_pid(dev, options.channel)
+        if options.setpid:
+            set_pid(dev, options.channel, *options.setpid)
+
+        if not options.role:
+            dev.terminate()
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+
+    return 0
+
+
+def get_pid(comp: lakeshore.Lakeshore, channel: int):
+    """
+    comp: lakeshore instance
+    channel: output channel for which to read the PID values
+    """
+    p, i, d = comp.GetPID(channel)
+    print(f"Channel {channel} PID = {p}, {i}, {d}")
+
+
+def set_pid(comp: lakeshore.Lakeshore, channel: int, p: float, i: float, d: float):
+    """
+    comp: lakeshore instance
+    channel: output channel for which to set the PID values
+    p: the value for output Proportional (gain): 0.1 to 1000
+    i: the value for output Integral (reset): 0.1 to 1000
+    d: the value for output Derivative (rate): 0 to 200
+    """
+    comp.SetPID(channel, p, i, d)
+    comp.checkError()
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)

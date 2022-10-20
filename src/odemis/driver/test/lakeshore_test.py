@@ -1,6 +1,6 @@
 #!/usr/bin/env python
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on August 31, 2020
 
 @author: Anders Muskens
@@ -19,7 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
 import logging
 from odemis.driver import lakeshore
@@ -135,7 +135,7 @@ class TestLakeshoreModel335(LakeshoreBaseTest, unittest.TestCase):
         self.dev.heating.value = 2
         self.assertEqual(self.dev.heating.value, 2)
         with self.assertRaises(IndexError):
-            self.dev.heating.value = 5
+            self.dev.heating.value = 6
         self.dev.heating.value = old_val
 
     def test_heating_test(self):
@@ -217,7 +217,7 @@ class TestLakeshoreModel350(LakeshoreBaseTest, unittest.TestCase):
         self.dev.monolithHeating.value = 2
         self.assertEqual(self.dev.monolithHeating.value, 2)
         with self.assertRaises(IndexError):
-            self.dev.monolithHeating.value = 5
+            self.dev.monolithHeating.value = 6
         self.dev.monolithHeating.value = old_val
 
     def test_heating_test(self):
@@ -234,6 +234,27 @@ class TestLakeshoreModel350(LakeshoreBaseTest, unittest.TestCase):
 
         self.dev.sampleTargetTemperature.value = old
         self.dev.sampleHeating.value = 0  # stop heating
+
+    def test_pid_ctrl(self):
+        """
+        Test PID controller
+        """
+        # get current PID values
+        proportional, integral, derivative = self.dev.GetPID(1)
+
+        try:
+            # set new PID values
+            self.dev.SetPID(1, proportional + 1, integral + 2, derivative + 0.5)
+            # get new PID values
+            proportional_new, integral_new, derivative_new = self.dev.GetPID(1)
+
+            # assure that the PID values indeed changed
+            self.assertAlmostEqual(proportional + 1, proportional_new)
+            self.assertAlmostEqual(integral + 2, integral_new)
+            self.assertAlmostEqual(derivative + 0.5, derivative_new)
+        finally:
+            # set back the PID values to what it was
+            self.dev.SetPID(1, proportional, integral, derivative)
 
 
 if __name__ == "__main__":
