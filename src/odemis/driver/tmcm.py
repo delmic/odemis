@@ -269,8 +269,9 @@ class TMCLController(model.Actuator):
          -> axis name, reported position when enabled (high),
          reported position when disabled (low), transition period (s).
          The axes created can only be moved via moveAbs(), and do not support referencing.
-        led_prot_do (dict int -> bool): Digital output channel -> 
-         value to set (True = high). Active when the leds (of the refswitch) are on.
+        led_prot_do (dict int -> value): Digital output channel -> 
+          axis position (as defined in do_axes). Forces the axis to be in that
+          position when the leds (of the refswitch) are on.
         """
         # If DIP is set to 0, it will be using the value from global param 66
         if not (address is None or 1 <= address <= 255):
