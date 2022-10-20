@@ -230,6 +230,7 @@ class Lakeshore(model.HwComponent):
                 self._accesser = IPBusAccesser(bus_pattern)
             except (IOError, LakeshoreError) as e:
                 logging.info("Could not establish connection to the device through IP bus accessor: %s", e)
+                raise
 
             self._checkDeviceCompatibility()
 
@@ -315,8 +316,8 @@ class Lakeshore(model.HwComponent):
         identity = self._sendQuery(b'*IDN?')
         try:
             manufacturer, md, serialn, firmware = identity.decode("latin1").split(',')
-        except TypeError:
-            raise IOError("Invalid identifier received")
+        except (TypeError, ValueError) as ex:
+            raise IOError(f"Invalid identifier received: {ex}")
 
         return manufacturer, md, serialn, firmware
 
