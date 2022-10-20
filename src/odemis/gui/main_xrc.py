@@ -5752,7 +5752,7 @@ def __init_resources():
                                             <object class="UnitFloatCtrl" name="ctrl_sample_target_tmp">
                                                 <size>-1,20</size>
                                                 <value>-100</value>
-                                                <accuracy>3</accuracy>
+                                                <accuracy>4</accuracy>
                                                 <key_step>0.1</key_step>
                                                 <unit>°C</unit>
                                                 <scale>linear</scale>
