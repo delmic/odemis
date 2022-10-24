@@ -70,6 +70,7 @@ def do_autofocus_in_roi(
                     raise CancelledError()
                 stage.moveAbsSync({"x": x, "y": y})
                 # run autofocus
+                #TODO check the condition
                 f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
                 foc_pos, foc_lev, conf_measure = f._running_subf.result(timeout=900)
                 if foc_lev >= conf_level:
@@ -121,7 +122,7 @@ def autofocus_in_roi(
         focus_range: tuple,
         nx: int = 3,
         ny: int = 3,
-        conf_level: float = 0
+        conf_level: int = 0
 ):
     """
     Wrapper for do_autofocus_in_roi. It provides the ability to check the progress of autofocus
@@ -131,7 +132,6 @@ def autofocus_in_roi(
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimate_autofocus_in_roi_time(nx, ny, ccd))
-    f._running_subf = model.InstantaneousFuture()
     f._autofocus_roi_state = RUNNING
     f._autofocus_roi_lock = threading.Lock()
     f.task_canceller = _cancel_autofocus_bbox
