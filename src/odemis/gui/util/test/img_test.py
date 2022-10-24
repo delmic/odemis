@@ -999,6 +999,40 @@ class TestSpatialExport(test.GuiTestCase):
         for s, md in zip(streams, orig_md):
             self.assertEqual(md, s.raw[0].metadata)
 
+    def test_tr(self):
+        """
+        Test exporting spatial view of a time-resolved data
+        """
+        data = numpy.ones((1, 306, 1, 200, 300), dtype="uint16")
+        data[0,:, 0,:, 3] = numpy.arange(200)
+        data[0,:, 0, 1, 3] = numpy.arange(306)
+        tld = list(numpy.arange(data.shape[1]) * 0.1e-9)
+        md = {model.MD_SW_VERSION: "1.0-test",
+             model.MD_HW_NAME: "fake Time correlator",
+             model.MD_DESCRIPTION: "TR",
+             model.MD_ACQ_DATE: time.time(),
+             model.MD_BPP: 12,
+             model.MD_PIXEL_SIZE: (2e-6, 2e-6),  # m/px
+             model.MD_POS: (-0.001203511795256, -0.000295338300158),  # m
+             model.MD_EXP_TIME: 0.2,  # s
+             model.MD_TIME_LIST: tld,
+            }
+
+        tr_data = model.DataArray(data.astype(numpy.float64), md)
+        # Also a spectrum stream, but very special one: without spectrum dimension!
+        tr_stream = stream.StaticSpectrumStream("test tr", tr_data)
+
+        view_hfw = (0.00025158414075691866, 0.00017445320835792754)
+        view_pos = [-0.001211588332679978, -0.00028726176273402186]
+        draw_merge_ratio = 0.3
+        proj = RGBSpatialProjection(tr_stream)
+        streams = [self.streams[1], proj]
+        orig_md = [s.raw[0].metadata.copy() for s in streams]
+        exp_data = img.images_to_export_data(streams, view_hfw, view_pos, draw_merge_ratio, True)
+        self.assertEqual(exp_data[0].shape, (3379, 4199))  # greyscale
+        for s, md in zip(streams, orig_md):
+            self.assertEqual(md, s.raw[0].metadata)
+
     def test_no_crop_need(self):
         """
         Data roi covers the whole window view
