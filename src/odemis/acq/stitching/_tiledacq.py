@@ -24,6 +24,8 @@ from enum import Enum
 import logging
 import math
 import numpy
+from scipy.spatial import Delaunay
+
 from odemis import model, dataio
 from odemis.acq import acqmng
 from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MTD_EXHAUSTIVE
@@ -32,8 +34,10 @@ from odemis.acq.stitching._simple import register, weave
 from odemis.acq.stream import Stream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
+from odemis.gui import conf
+from odemis.gui.util.raster import point_in_polygon
 from odemis.model import DataArray
-from odemis.util import dataio as udataio, img
+from odemis.util import dataio as udataio, img, linalg
 from odemis.util.img import assembleZCube
 import os
 import psutil
@@ -50,6 +54,7 @@ SKIP_TILES = 3
 
 MOVE_SPEED_DEFAULT = 100e-6  # m/s
 
+
 class FocusingMethod(Enum):
     NONE = 0  # Never auto-focus
     ALWAYS = 1  # Before every tile
@@ -65,7 +70,8 @@ class TiledAcquisitionTask(object):
     """
 
     def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
-                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
+                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
+                 zstep_size=None, zsteps=None, focus_points=None):
         """
         :param streams: (list of Streams) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
@@ -127,6 +133,9 @@ class TiledAcquisitionTask(object):
             self._focus_rng = (max(focus_rng[0], focuser_range[0]), min((focus_rng[1], focuser_range[1])))
             logging.debug("Calculated focus range ={}".format(self._focus_rng))
 
+            # used in re-focusing method
+            self._focus_points = numpy.array(focus_points) if focus_points else None
+
         if focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION and not zlevels:
             raise ValueError("MAX_INTENSITY_PROJECTION requires zlevels, but none passed")
             # Note: we even allow if only one zlevels. It would not do MIP, but
@@ -140,7 +149,10 @@ class TiledAcquisitionTask(object):
         else:
             self._zlevels = []
 
-        if len(self._zlevels) > 1 and focusing_method != FocusingMethod.MAX_INTENSITY_PROJECTION:
+        self._zsteps = zsteps  # int >= 1
+        self._zstep_size = zstep_size  # float
+
+        if len(self._zlevels or '') > 1 and focusing_method != FocusingMethod.MAX_INTENSITY_PROJECTION:
             raise NotImplementedError("Multiple zlevels currently only works with focusing method MAX_INTENSITY_PROJECTION")
 
         # For "ON_LOW_FOCUS_LEVEL" method: a focus level which is corresponding to a in-focus image.
@@ -169,6 +181,7 @@ class TiledAcquisitionTask(object):
 
         self._registrar = registrar
         self._weaver = weaver
+        self._focus_plane = {}
 
     def _getFov(self, sd):
         """
@@ -466,7 +479,7 @@ class TiledAcquisitionTask(object):
         acq_time = 0
         for stream in self._streams:
             acq_stream_time = acqmng.estimateTime([stream])
-            if stream.focuser is not None and len(self._zlevels) > 1:
+            if stream.focuser is not None and len(self._zlevels or '') > 1:
                 # Acquisition time for each stream will be multiplied by the number of zstack levels
                 acq_stream_time *= len(self._zlevels)
             acq_time += acq_stream_time
@@ -571,9 +584,15 @@ class TiledAcquisitionTask(object):
         """
         das = []
         for stream in self._streams:
-            if stream.focuser is not None and len(self._zlevels) > 1:
+            if stream.focuser is not None and len(self._zlevels or '') > 1:
                 # Acquire zstack images based on the given zlevels, and compress them into a single da
                 da = self._acquireStreamCompressedZStack(i, ix, iy, stream)
+            elif stream.focuser and len(self._zlevels or '') == 1:
+                z = self._zlevels[0]
+                logging.debug(f"Moving focus for tile {ix}x{iy} to {z}.")
+                stream.focuser.moveAbsSync({'z': z})
+                # Acquire a single image of the stream
+                da = self._acquireStreamTile(i, ix, iy, stream)
             else:
                 # Acquire a single image of the stream
                 da = self._acquireStreamTile(i, ix, iy, stream)
@@ -598,17 +617,21 @@ class TiledAcquisitionTask(object):
             self._moveToTile((ix, iy), prev_idx, self._sfov)
             prev_idx = ix, iy
 
+            if self._focus_points is not None:
+                self._refocus()
+
             das = self._getTileDAs(i, ix, iy)
 
             if i == 0:
                 # Check the FoV is correct using the data, and if not update
                 self._sfov = self._updateFov(das, self._sfov)
 
+            # TODO: why is this step here and not before the acquisition on line 660?
             if self._focus_stream:
                 # Adjust focus of current tile and reacquire image
                 das = self._adjustFocus(das, i, ix, iy)
 
-            # Save the das on disk if an log path exists
+            # Save the das on disk if a log path exists
             if self._log_path:
                 self._save_tiles(ix, iy, das)
 
@@ -617,6 +640,81 @@ class TiledAcquisitionTask(object):
 
             i += 1
         return da_list
+
+    def _get_z_on_focus_plane(self, x, y):
+        if not self._focus_plane:
+            c, normal = linalg.fit_plane_lstsq(self._focus_points)
+            self._focus_plane["c"] = c
+            self._focus_plane["normal"] = normal
+        point_on_plane = (0, 0, self._focus_plane["c"])  # where the plane intersects with the z-axis
+        z = linalg.get_z_pos_on_plane(x, y, point_on_plane, self._focus_plane["normal"])
+        return z
+
+    def _get_triangulated_focus_point(self, x, y):
+        """Triangulate focus points and get the z position of the xy-point in the corresponding focus-triangle."""
+        tri = Delaunay(self._focus_points[:, :2])  # triangulate focus points
+
+        point_in_triangle = False
+        # Check in 2D if the point is in one of the triangles from the focus points
+        for simplex in tri.simplices:
+            triangle = [self._focus_points[:, :2][simplex[0]],
+                        self._focus_points[:, :2][simplex[1]],
+                        self._focus_points[:, :2][simplex[2]]]
+            point_in_triangle = point_in_polygon([x, y], polygon=triangle)
+            if point_in_triangle:
+                break
+
+        if point_in_triangle is False:
+            logging.debug("Acquiring tile outside of focused area, will use plane fitting to find the focus.")
+            # If the point is not in one of the triangles fit a plane through all
+            # focus points and base the z position on that plane fit.
+            z = self._get_z_on_focus_plane(x, y)
+        else:
+            tr = [self._focus_points[simplex[0]],
+                  self._focus_points[simplex[1]],
+                  self._focus_points[simplex[2]]]
+
+            z = linalg.get_point_on_plane(x, y, tr)
+
+        return z
+
+    def _refocus(self):
+        """Update the z-levels to fit the found focus positions"""
+        current_pos = self._stage.position.value
+        z = self._get_triangulated_focus_point(current_pos["x"], current_pos["y"])
+        logging.info(f"Found z focus: {z}")
+        self._zlevels = self._get_zstack_levels(z)
+
+    def _get_zstack_levels(self, focus_value):
+        """
+        Calculate the zstack levels from the current focus position and zsteps value
+        :returns (list(float) or None) zstack levels for zstack acquisition.
+          return None if only one zstep is requested.
+        """
+        zsteps = self._zsteps
+        if zsteps == 1:
+            return [focus_value, ]
+
+        # Clip zsteps value to allowed range
+        focus_range = self._focus_stream.focuser.axes['z'].range  # FIXME update to the safe range for MIMAS
+        zmin = focus_value - (zsteps / 2 * self._zstep_size)
+        zmax = focus_value + (zsteps / 2 * self._zstep_size)
+        if (zmax - zmin) > (focus_range[1] - focus_range[0]):
+            # Corner case: it'd be larger than the entire range => limit to the entire range
+            zmin = focus_range[0]
+            zmax = focus_range[1]
+        if zmax > focus_range[1]:
+            # Too high => shift down
+            zmax -= zmax - focus_range[1]
+            zmin -= zmax - focus_range[1]
+        if zmin < focus_range[0]:
+            # Too low => shift up
+            zmin += focus_range[0] - zmin
+            zmax += focus_range[0] - zmin
+
+        # Create focus zlevels from the given zsteps number
+        zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
+        return zlevels
 
     def _adjustFocus(self, das, i, ix, iy):
         """
@@ -628,7 +726,7 @@ class TiledAcquisitionTask(object):
           by a new version at a better focus level.
         """
         refocus = False
-        # If autofocus explicitly disabled, or MPI => don't do anything
+        # If autofocus explicitly disabled, or MIP => don't do anything
         if self._focusing_method in (FocusingMethod.NONE, FocusingMethod.MAX_INTENSITY_PROJECTION):
             return das
         elif self._focusing_method == FocusingMethod.ON_LOW_FOCUS_LEVEL:
@@ -781,7 +879,8 @@ def estimateTiledAcquisitionMemory(*args, **kwargs):
 
 
 def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
-                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
+                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
+                     zstep_size=None, zsteps=None, focus_points=None):
     """
     Start a tiled acquisition task for the given streams (SEM or FM) in order to
     build a complete view of the TEM grid. Needed tiles are first acquired for
@@ -799,7 +898,8 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     future._task_lock = threading.Lock()
     # Create a tiled acquisition task
     task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
-                                registrar=registrar, weaver=weaver, focusing_method=focusing_method)
+                                registrar=registrar, weaver=weaver, focusing_method=focusing_method,
+                                zstep_size=zstep_size, zsteps=zsteps, focus_points=focus_points)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()

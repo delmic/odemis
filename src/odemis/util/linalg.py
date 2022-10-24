@@ -157,3 +157,53 @@ def qlp(a, mode='reduced'):
     """
     q, r = qrp(numpy.flip(a), mode)
     return numpy.flip(q), numpy.flip(r)
+
+
+def fit_plane_lstsq(coordinates):
+    """https://gist.github.com/RustingSword/e22a11e1d391f2ab1f2c"""
+    (rows, cols) = coordinates.shape
+    G = numpy.ones((rows, 3))
+    G[:, 0] = coordinates[:, 0]  # X
+    G[:, 1] = coordinates[:, 1]  # Y
+    Z = coordinates[:, 2]
+    (a, b, c), *_ = numpy.linalg.lstsq(G, Z)
+    normal = (a, b, -1)
+    nn = numpy.linalg.norm(normal)
+    normal = normal / nn
+    return c, normal
+
+
+def get_z_pos_on_plane(x: float, y: float, point_on_plane: tuple, normal: numpy.ndarray) -> float:
+    """
+    Get the z position on a plane given a point on the plane and the normal vector.
+
+    :param x: the x-position of the point
+    :param y: the y-position of the point
+    :param point_on_plane: a point on the plane
+    :param normal: the normal vector of the plane
+    :return: the z-position of the point
+    """
+    d = -numpy.dot(point_on_plane, normal)
+    a, b, c = normal
+    # equation for a plane is ax + by + cz + d = 0
+    z = -(d + a * x + b * y) / c
+    return z
+
+
+def get_point_on_plane(x: float, y: float, tr: tuple) -> float:
+    """
+    Get the z position on a plane given a triangle.
+
+    :param x: the x-position of the point
+    :param y: the y-position of the point
+    :param tr: a triangle describing the plane
+    :return: the z-position of the point
+    """
+    # These two vectors are in the plane
+    v1 = tr[2] - tr[0]
+    v2 = tr[1] - tr[0]
+    # the cross product is a vector normal to the plane
+    normal = numpy.cross(v1, v2)
+    z = get_z_pos_on_plane(x, y, tr[1], normal)
+
+    return z
