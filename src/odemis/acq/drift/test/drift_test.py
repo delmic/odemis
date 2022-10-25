@@ -85,7 +85,7 @@ class TestAnchoredEstimator(unittest.TestCase):
                        self._trans_range[1][1] - self._trans_range[0][1])
         self.assertLessEqual(calculated_drift, translation)
 
-    def test_updateSEMSettings(self):
+    def test_updateScannerSettings(self):
         """
         Tests the change in SEM settings by changing the values indirectly
         """
@@ -96,7 +96,7 @@ class TestAnchoredEstimator(unittest.TestCase):
         ac._scale = (1, 1)
         ac._res = (1022, 1022)
         ac._dwell_time = 2.5e-6
-        ac._updateSEMSettings()
+        ac._updateScannerSettings()
         # Check in the order defined in _updateSEMSettings
         self.assertEqual(ac._emitter.scale.value, ac._scale)
         self.assertEqual(ac._emitter.resolution.value, ac._res)
