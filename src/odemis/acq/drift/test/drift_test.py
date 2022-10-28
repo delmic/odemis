@@ -17,8 +17,9 @@ You should have received a copy of the GNU General Public License along with Ode
 import itertools
 import logging
 import numpy
-from odemis.acq.drift import AnchoredEstimator, GuessAnchorRegion
+from odemis.acq.drift import AnchoredEstimator, GuessAnchorRegion, MIN_RESOLUTION, MAX_PIXELS
 from odemis.dataio import hdf5
+from odemis.driver import simsem
 import os
 import unittest
 
@@ -26,15 +27,97 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 DATA_DIR = os.path.dirname(__file__)
 
+CONFIG_SED = {"name": "sed", "role": "sed"}
+CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
+CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
+              "drift_period": 0.1,
+              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
+              }
+
 
 class TestAnchoredEstimator(unittest.TestCase):
     """
     Test AnchoredEstimator
     """
 
+    @classmethod
+    def setUpClass(cls):
+        cls.sem = simsem.SimSEM(**CONFIG_SEM)
+
+        for child in cls.sem.children.value:
+            if child.name == CONFIG_SED["name"]:
+                cls.detector = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+
+    def test_acquire(self):
+        """
+        Tests the boundary conditions of acquired area
+        """
+        # the acquired region should follow min_resolution and max_pixels settings
+        region = (0, 0, 0.1, 0.1)
+        dwellTime = 5e-6
+        ac = AnchoredEstimator(self.scanner, self.detector, region, dwellTime)
+        ac.acquire()
+        acquired_data = ac.raw[0]
+        acquired_res = acquired_data.shape
+        total_pixels = numpy.prod(acquired_res)
+        self.assertGreaterEqual(acquired_res, MIN_RESOLUTION)
+        self.assertLessEqual(total_pixels, MAX_PIXELS)
+
+    def test_estimate(self):
+        """
+        Tests whether the estimated drift is within the FOV of the scanner
+        """
+        # maximum drift estimates should be within the FOV of the scanner
+        region = (0, 0, 0.1, 0.1)
+        dwellTime = 5e-6
+        ac = AnchoredEstimator(self.scanner, self.detector, region, dwellTime)
+        calculated_drift = ac.estimate()
+        # Compute margin so that it's always possible to place the ROI within the
+        # scanner FoV: half the ROI resolution (at scale 1).
+        margin = ((ac._res[0] * ac._scale[0]) // 2,
+                  (ac._res[1] * ac._scale[1]) // 2)
+        trans_rng = self.scanner.translation.range  # pixels
+        self._trans_range = ((trans_rng[0][0] + margin[0], trans_rng[0][1] + margin[1]),
+                             (trans_rng[1][0] - margin[0], trans_rng[1][1] - margin[1]))
+        translation = (self._trans_range[1][0] - self._trans_range[0][0],
+                       self._trans_range[1][1] - self._trans_range[0][1])
+        self.assertLessEqual(calculated_drift, translation)
+
+    def test_updateSEMSettings(self):
+        """
+        Tests the change in SEM settings by changing the values indirectly
+        """
+        # the arbitrary update value should be registered and updated when the update function is called
+        region = (0, 0, 0.1, 0.1)
+        dwellTime = 5e-6
+        ac = AnchoredEstimator(self.scanner, self.detector, region, dwellTime)
+        ac._scale = (1, 1)
+        ac._res = (1022, 1022)
+        ac._dwell_time = 2.5e-6
+        ac._updateSEMSettings()
+        # Check in the order defined in _updateSEMSettings
+        self.assertEqual(ac._emitter.scale.value, ac._scale)
+        self.assertEqual(ac._emitter.resolution.value, ac._res)
+        self.assertEqual(ac._emitter.dwellTime.value, ac._dwell_time)
+        # TODO how to check translation update?
+
     def test_estimateAcquisitionTime(self):
-        # TODO
-        pass
+        """
+        Tests the minimum time required to acquire the anchor area
+        """
+        # min amount of acquired time should be more than 0
+        self.region = (0, 0, 0.1, 0.1)
+        self.dwellTime = 5e-6
+        width = (self.region[2] - self.region[0], self.region[3] - self.region[1])
+        shape = self.scanner.shape
+        res = (max(1, int(round(shape[0] * width[0] / 1))),
+               max(1, int(round(shape[1] * width[1] / 1))))
+        test_time = numpy.prod(res) * self.dwellTime
+        ac = AnchoredEstimator(self.scanner, self.detector, self.region, self.dwellTime)
+        calculate_estimateAcquisitionTime = ac.estimateAcquisitionTime()
+        self.assertGreaterEqual(calculate_estimateAcquisitionTime, test_time)
 
     def test_estimateCorrectionPeriod(self):
         # Input -> expected output (as a list)
