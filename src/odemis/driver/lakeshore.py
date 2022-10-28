@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 12 June 2020
 
 @author: Anders Muskens
@@ -18,7 +18,7 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 import logging
 import fcntl
 import glob
@@ -108,9 +108,12 @@ class Lakeshore(model.HwComponent):
         if md == "MODEL335":  # Model 335 supports only single temperature control with up to 2 channels
             supported_sensor_inputs = ('A', 'B')
             supported_output_channels = (1, 2)
+            supported_heater_range_choices = {0: "Off", 1: "Low", 2: "Medium", 3: "High"}
         elif md == "MODEL350":  # Model 350 supports both single and multiple temperature control with up to 4 channels
-            supported_sensor_inputs = ('A', 'B', 'C', 'D')
+            supported_sensor_inputs = ('A', 'B', 'C', 'D', 'D1', 'D2', 'D3', 'D4', 'D5')
             supported_output_channels = (1, 2, 3, 4)
+            supported_heater_range_choices = {0: "Off", 1: "Range 1", 2: "Range 2", 3: "Range 3", 4: "Range 4",
+                                              5: "Range 5"}
         else:
             raise IOError(f"The device model {md} is incompatible. Supported device models: MODEL350 and MODEL335")
 
@@ -118,6 +121,7 @@ class Lakeshore(model.HwComponent):
         # Convert it to a dict for compatibility with the multiple input code.
         if isinstance(sensor_input, str):
             sensor_input = {"": sensor_input}
+
         elif not isinstance(sensor_input, dict):
             raise ValueError("Invalid sensor input type. Sensor input must be either str or dict")
 
@@ -162,7 +166,7 @@ class Lakeshore(model.HwComponent):
                                              setter=va_target_temp_setter)
 
             va_heating = IntEnumerated(value=self.GetHeaterRange(output_channel_nr),
-                                       choices={0: "Off", 1: "Low", 2: "Medium", 3: "High"},
+                                       choices=supported_heater_range_choices,
                                        setter=va_target_heater_setter)
 
             if va_name == "":
@@ -191,42 +195,11 @@ class Lakeshore(model.HwComponent):
 
         super(Lakeshore, self).terminate()
 
-    @staticmethod
-    def _openSerialPort(port, baudrate=57600):
-        """
-        Opens the given serial port the right way for a Power control device.
-        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
-        baudrate (int)
-        return (serial): the opened serial port
-        """
-        ser = serial.Serial(
-            port=port,
-            baudrate=baudrate,
-            bytesize=serial.SEVENBITS,
-            parity=serial.PARITY_ODD,
-            stopbits=serial.STOPBITS_ONE,
-            timeout=2  # s
-        )
-
-        # Purge
-        ser.flush()
-        ser.flushInput()
-
-        # Try to read until timeout to be extra safe that we properly flushed
-        ser.timeout = 0.01
-        while True:
-            char = ser.read()
-            if char == b'':
-                break
-        ser.timeout = 1
-
-        return ser
-
     def _checkDeviceCompatibility(self):
         """
-        Checks the device manifacturer and model
+        Checks the device manufacturer and model
         raises:
-         IOError: Not supported device model or manifacturer
+         IOError: Not supported device model or manufacturer
          There might be other errors such as timeout error
         """
         manufacturer, md, _, _ = self.GetIdentifier()  # if value is incorrect, will throw an exception wile unpacking
@@ -257,6 +230,7 @@ class Lakeshore(model.HwComponent):
                 self._accesser = IPBusAccesser(bus_pattern)
             except (IOError, LakeshoreError) as e:
                 logging.info("Could not establish connection to the device through IP bus accessor: %s", e)
+                raise
 
             self._checkDeviceCompatibility()
 
@@ -342,8 +316,8 @@ class Lakeshore(model.HwComponent):
         identity = self._sendQuery(b'*IDN?')
         try:
             manufacturer, md, serialn, firmware = identity.decode("latin1").split(',')
-        except TypeError:
-            raise IOError("Invalid identifier received")
+        except (TypeError, ValueError) as ex:
+            raise IOError(f"Invalid identifier received: {ex}")
 
         return manufacturer, md, serialn, firmware
 
@@ -368,6 +342,43 @@ class Lakeshore(model.HwComponent):
         """
         val = self._sendQuery(b"SETP? %d" % (output_channel,))
         return float(val) - KELVIN_CONVERT
+
+    def SetPID(self, output_channel, p_value, i_value, d_value):
+        """
+        Set the control loop PID values
+        output_channel: (int): The channel output to control, typically 1 or 2 for model 335 and
+            1, 2, 3 or 4 for model 350
+        p_value (float): The value for output Proportional (gain): 0.1 to 1000
+        i_value (float): The value for output Integral (reset): 0.1 to 1000
+        d_value (float): The value for output Derivative (rate): 0 to 200
+        """
+        if not 1 <= output_channel <= 4:
+            raise ValueError(f"Output channel should be between 1 to 4. {output_channel} given")
+        if not 0.1 <= p_value <= 1000:
+            raise ValueError(f"P should be between 0.1 to 1000. {p_value} given")
+        if not 0.1 <= i_value <= 1000:
+            raise ValueError(f"I should be between 0.1 to 1000. {i_value} given")
+        if not 0 <= d_value <= 200:
+            raise ValueError(f"D should be between 0 to 200. {d_value} given")
+
+        self._sendOrder(b"PID %d,%.2f,%.2f,%.2f" % (output_channel, p_value, i_value, d_value))
+
+    def GetPID(self, output_channel):
+        """
+        Get the control loop PID values.
+        output_channel: (int): The channel output to control, typically 1 or 2 for model 335 and
+            1, 2, 3 or 4 for model 350
+        returns 3 floats: Current P, I and D values that are set
+        """
+        if not 1 <= output_channel <= 4:
+            raise ValueError(f"Output channel should be between 1 to 4. {output_channel} given")
+
+        pid_values = self._sendQuery(b"PID? %d" % (output_channel,))
+        try:
+            proportional, integral, derivative = pid_values.decode("latin1").split(',')
+            return float(proportional), float(integral), float(derivative)
+        except (TypeError, ValueError) as ex:
+            raise IOError(f"Failed to retrieve PID values with the error: {ex}")
 
     def GetSensorTemperature(self, sensor_name):
         """
@@ -511,7 +522,7 @@ class SerialBusAccesser(object):
         raises:
            IOError: if something went wrong opening the port
         """
-        # Ensure that this odemis driver will not send multiple command simultaneously
+        # Ensure no one will talk to it simultaneously, and we don't talk to devices already in use
         self._ser_access = threading.Lock()
 
         # For debugging purpose
@@ -526,6 +537,37 @@ class SerialBusAccesser(object):
 
         self._serial = self._openSerialPort(port)
 
+    @staticmethod
+    def _openSerialPort(port, baudrate=57600):
+        """
+        Opens the given serial port the right way for a Power control device.
+        port (string): the name of the serial port (e.g., /dev/ttyUSB0)
+        baudrate (int)
+        return (serial): the opened serial port
+        """
+        ser = serial.Serial(
+            port=port,
+            baudrate=baudrate,
+            bytesize=serial.SEVENBITS,
+            parity=serial.PARITY_ODD,
+            stopbits=serial.STOPBITS_ONE,
+            timeout=2  # s
+        )
+
+        # Purge
+        ser.flush()
+        ser.flushInput()
+
+        # Try to read until timeout to be extra safe that we properly flushed
+        ser.timeout = 0.01
+        while True:
+            char = ser.read()
+            if char == b'':
+                break
+        ser.timeout = 1
+
+        return ser
+
     def terminate(self):
         with self._ser_access:
             self._serial.close()
@@ -538,6 +580,7 @@ class SerialBusAccesser(object):
         with self._ser_access:
             logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
+            time.sleep(0.05)
 
     def sendQuery(self, cmd):
         """
@@ -594,6 +637,7 @@ class IPBusAccesser(object):
         with self._ser_access:
             logging.debug("Sending command %s", to_str_escape(cmd))
             self._socket.send(cmd)
+            time.sleep(0.05)
 
     def sendQuery(self, cmd):
         """
@@ -636,11 +680,35 @@ class LakeshoreSimulator(object):
         self._output_buf = b""  # what the commands sends back to the "host computer"
         self._input_buf = b""  # what we receive from the "host computer"
 
+        self._output_states = {
+            1: {
+                'pid': [0.1, 0.1, 0.0],
+                'temperature': 100,  # K
+                'setpoint': 150,  # K
+                'heating': 3  # enum int 0,1,2,3,4 or 5
+            },
+            2: {
+                'pid': [1.0, 10.0, 50.0],
+                'temperature': 100,  # K
+                'setpoint': 150,  # K
+                'heating': 1  # enum int 0,1,2,3,4 or 5
+            },
+            3: {
+                'pid': [500.0, 500.0, 100.0],
+                'temperature': 200,  # K
+                'setpoint': 50,  # K
+                'heating': 5  # enum int 0,1,2,3,4 or 5
+            },
+            4: {
+                'pid': [1000.0, 1000.0, 200.0],
+                'temperature': 180,  # K
+                'setpoint': 140,  # K
+                'heating': 2  # enum int 0,1,2,3,4 or 5
+            }
+        }
+
         # Start with a command error, to check it's properly reset by the driver
         self._status_byte = POWER_ON | COMMAND_ERROR
-        self._setpoint = 150  # K
-        self._temperature = 100  # K
-        self._heating = 3  # enum int 0,1,2, or 3
 
     def write(self, data):
         self._input_buf += data
@@ -685,45 +753,66 @@ class LakeshoreSimulator(object):
         msg = msg.decode("latin1").strip()  # remove leading and trailing whitespace
         msg = "".join(msg.split())  # remove all space characters
 
-        if msg == "*ESR?":  # error status register
+        if msg == "*ESR?":  # event status register
             self._sendAnswer(b"%d" % (self._status_byte,))
         elif msg == "*CLS":
             self._status_byte = POWER_ON
         elif msg == "*IDN?":
             self._sendAnswer(b"LSCI,MODEL350,fake,0.0")
-        elif re.match('LOCK', msg):
+        elif re.match("LOCK", msg):
             pass
-        # Query setpoint
-        elif re.match('SETP\?', msg):
-            self._sendAnswer(b"+%.3f" % (self._setpoint,))
-        # set setpoint
-        elif re.match("SETP", msg):
+        # Query SetPoint
+        elif re.match(r"SETP\?[1-4]", msg):
+            channel = int(msg[5])
+            self._sendAnswer(b"+%.3f" % (self._output_states[channel]['setpoint'],))
+        # Set SetPoint
+        elif re.match("SETP[1-4]", msg):
             vals = msg[4:].split(',')
-            self._setpoint = float(vals[1])
+            channel = int(msg[4])
+            self._output_states[channel]['setpoint'] = float(vals[1])
         # Query heating range
-        elif re.match('RANGE\?', msg):
-            self._sendAnswer(b"%d" % (self._heating,))
+        elif re.match(r"RANGE\?[1-4]", msg):
+            channel = int(msg[6])
+            self._sendAnswer(b"%d" % (self._output_states[channel]['heating'],))
         # set heating range
-        elif re.match("RANGE", msg):
+        elif re.match("RANGE[1-4]", msg):
             vals = msg[5:].split(',')
-            self._heating = int(vals[1])
-        # Query temperature
-        elif re.match('KRDG\?', msg):
+            channel = int(msg[5])
+            self._output_states[channel]['heating'] = int(vals[1])
+        elif re.match(r"KRDG\?[A-D]", msg):
+            sensor_input = ord(msg[5]) - 64  # map the char A-D into 1-4 based on ASCII values
             # send temperature with some noise
             if os.path.exists(os.path.join(model.BASE_DIRECTORY, "temp_increase.txt")):
                 logging.info("Simulator set to increase temperature by 1 deg each reading")
-                self._temperature += 1
-                self._sendAnswer(b"+%.3f" % (self._temperature))
+                self._output_states[sensor_input]['temperature'] += 1
+                self._sendAnswer(b"+%.3f" % (self._output_states[sensor_input]['temperature'],))
             else:
-                self._sendAnswer(b"+%.3f" % (self._temperature + random.uniform(-0.1, 0.1),))
-                if self._heating:
-                    if self._temperature < self._setpoint:  # heating is enabled
-                        self._temperature += 0.05 * self._heating  # simulate heating
+                self._sendAnswer(b"+%.3f" % (self._output_states[sensor_input]['temperature'] + random.uniform(-0.1, 0.1),))
+                if self._output_states[sensor_input]['heating']:
+                    # heating is enabled
+                    if self._output_states[sensor_input]['temperature'] < self._output_states[sensor_input]['setpoint']:
+                        # simulate heating
+                        self._output_states[sensor_input]['temperature'] += 0.05 * self._output_states[sensor_input]['heating']
                     else:
-                        self._temperature -= 0.1
+                        self._output_states[sensor_input]['temperature'] -= 0.1
                 else:  # no heating so no temperature control
                     # maintain stable temperature
-                    if self._temperature > STABLE_TEMPERATURE:
-                        self._temperature -= 0.1  # cool off with no heating
+                    if self._output_states[sensor_input]['temperature'] > STABLE_TEMPERATURE:
+                        self._output_states[sensor_input]['temperature'] -= 0.1  # cool off with no heating
+            logging.debug("Sample temperature: %s", self._output_states[sensor_input]['temperature'])
+        elif re.match(r"PID\?[1-4]", msg):
+            channel = int(msg[4])
+            p, i, d = self._output_states[channel]['pid']
+            self._sendAnswer(b"%.2f, %.2f, %.2f" % (p, i, d))
+
+        # set PID values
+        elif re.match("PID[1-4]", msg):
+            channel = int(msg[3])
+            pid_values = msg[5:].split(",")
+            pid_state = self._output_states[channel]['pid']
+
+            pid_state[0] = float(pid_values[0])
+            pid_state[1] = float(pid_values[1])
+            pid_state[2] = float(pid_values[2])
         else:
             self._status_byte |= COMMAND_ERROR
