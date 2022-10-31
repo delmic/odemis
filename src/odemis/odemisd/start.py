@@ -44,7 +44,8 @@ RE_MSG_GUI_LOG_START = "************  Starting Odemis GUI  ************"
 RE_MSG_BE_FAILURE = "Failed to instantiate the model due to component"
 RE_MSG_BE_TRACEBACK = "Full traceback of the error follows"
 RE_MSG_GUI_FAILURE = "Traceback (most recent call last)"
-RE_MSG_BE_HEADER = r"[0-9]+-[0-9][0-9]-[0-9][0-9] [0-9][0-9]:[0-9][0-9]:[0-9][0-9].[0-9]+\t\S+\t\S+:"
+RE_MSG_BE_HEADER = r"[0-9]+-[0-1][0-9]-[0-3][0-9] [0-2][0-9]:[0-6][0-9]:[0-6][0-9].[0-9]+\t\S+\t\S+:"
+MAX_SHORT_ERROR_LENGTH = 40  # lines
 
 # String as returned by xprop WM_CLASS
 GUI_WM_CLASS = "Odemis"
@@ -147,10 +148,10 @@ def display_log(type, logfile):
     Shows the most recent log containing the "possible" traceback of an error in the process/file specified.
 
     :param type (str): Type of process that was tried to be started (e.g. "Odemis back-end", "Odemis GUI")
-    :param logfile (str): Localtion of the matching log file (e.g. "/var/log/odemis.log", "~/odemis-gui.log")
+    :param logfile (str): Location of the matching log file (e.g. "/var/log/odemis.log", "/home/..../odemis-gui.log")
     """
     title = f"Log message of {type}"
-    caption = f"Failure during {type} initialisation"
+    caption = f"Failure during {type} initialization"
     f = open(logfile, "r")
     lines = f.readlines()
 
@@ -188,7 +189,16 @@ def display_log(type, logfile):
 
     app = wx.App()  # This variable is created to show the log_frame. Required even though it is unused.
     if failurelb is not None:
-        failmsg = "".join(lines[failurelb:failurele])
+        failmsg = f"Failure during {type} initialization:\n\n"
+
+        # Make sure the "short" message is never too long
+        if failurele - failurelb <= MAX_SHORT_ERROR_LENGTH:
+            failmsg += "".join(lines[failurelb:failurele])
+        else:
+            # Shorten it, by showing the beginning and end
+            failmsg += ("".join(lines[failurelb:failurelb + MAX_SHORT_ERROR_LENGTH // 2]) +
+                       "[...]\n" +
+                       "".join(lines[failurele - MAX_SHORT_ERROR_LENGTH // 2:failurele]))
         failmsg += "\nWould you like to see the full log message now?"
         box = wx.MessageDialog(None, failmsg,
                                caption,
