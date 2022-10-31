@@ -2254,7 +2254,7 @@ def get_ordered_images(streams, raw=False):
             model.MD_EXP_TIME in md and model.MD_DWELL_TIME not in md):
             md[model.MD_DWELL_TIME] = md[model.MD_EXP_TIME]
             del md[model.MD_EXP_TIME]
-        elif isinstance(ostream, acqstream.SpectrumStream):
+        elif hasattr(ostream, "spectrumBandwidth"):
             # The spectrum stream projection is limited to the selected bandwidth
             # => update the metadata (note that we are subverting this metadata
             # as it should have as many entries as C dim, but the C dim has been
