@@ -19,9 +19,11 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import Pyro4
+from concurrent.futures import CancelledError
 import copy
 import logging
 from odemis import model
+from odemis.dataio import hdf5
 from odemis.driver import tescan
 from odemis.util import testing
 import os
@@ -29,7 +31,6 @@ import pickle
 import threading
 import time
 import unittest
-from odemis.dataio import hdf5
 from unittest.case import skip
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -59,7 +60,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            "focus": CONFIG_FOCUS,
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
-              "host": "192.168.1.208"
+              "host": "192.168.1.175"
               }
 
 # This one works with the Mira Simulator
@@ -68,7 +69,7 @@ CONFIG_SEM_NO_DET = {"name": "sem", "role": "sem",
                            "stage": CONFIG_STG,
                            "focus": CONFIG_FOCUS,
                            "light": CONFIG_LIGHT},
-              "host": "192.168.1.208"
+              "host": "192.168.1.175"
               }
 
 
@@ -240,7 +241,104 @@ class BaseSEMTest(object):
         time.sleep(6)  # Wait for value refresh
         self.assertEqual(orig_ext, ebeam.external.value)
 
-    # TODO: test move
+    def test_move_rel(self):
+        """
+        Check it's possible to move the stage with relative moves
+        """
+        pos = self.stage.position.value.copy()
+        f = self.stage.moveRel({"x":2e-6, "y":3e-6})
+        f.result()
+        self.assertNotEqual(self.stage.position.value, pos)
+        time.sleep(6)  # wait until .position is updated
+        self.assertNotEqual(self.stage.position.value, pos)
+
+        f = self.stage.moveRel({"x":-2e-6, "y":-3e-6})
+        f.result()
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+
+        # Try a relative move outside of the range (less than min)
+        axes = self.stage.axes
+        # toofar = {"x": axes["x"].range[0] - pos["x"] - 10e-6}
+        # f = self.stage.moveRel(toofar)
+        # with self.assertRaises(ValueError):
+        #     f.result()
+        # testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        # time.sleep(6)
+        # testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        #
+        # # Try a relative move outside of the range (more than max)
+        # toofar = {"y": axes["y"].range[1] - pos["y"] + 10e-6}
+        # f = self.stage.moveRel(toofar)
+        # with self.assertRaises(ValueError):
+        #     f.result()
+        # testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        # time.sleep(6)
+        # testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+
+        # Move really too far (more than the range)
+        with self.assertRaises(ValueError):
+            f = self.stage.moveRel({"x":axes["x"].range[1] - axes["x"].range[0] + 10e-6})
+
+    def test_move_abs(self):
+        """
+        Check it's possible to move the stage in absolute coordinates
+        """
+        p = self.stage.position.value.copy()
+        subpos = self.stage.position.value.copy()
+        subpos["x"] += 50e-6
+        f = self.stage.moveAbs(subpos)
+        f.result()
+        testing.assert_pos_almost_equal(self.stage.position.value, subpos)
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, subpos)
+
+        self.stage.moveAbsSync({"x": p["x"]})
+        testing.assert_pos_almost_equal(self.stage.position.value, p)
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, p)
+
+    def test_stop(self):
+        """
+        Check it's possible to stop the stage while it's moving.
+        """
+        pos = self.stage.position.value.copy()
+        logging.info("Initial pos = %s", pos)
+        f = self.stage.moveRel({"y":-50e-3})
+        exppos = pos.copy()
+        exppos["y"] += -50e-3
+
+        time.sleep(0.5)  # abort after 0.5 s
+        f.cancel()
+
+        time.sleep(6)  # wait for position to update
+        self.assertNotEqual(self.stage.position.value, pos)
+        self.assertNotEqual(self.stage.position.value, exppos)
+
+        f = self.stage.moveAbs(pos)  # Back to orig pos
+        f.result()
+        time.sleep(6)  # wait for position to update
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+
+        # Same thing, but using stop() method
+        pos = self.stage.position.value.copy()
+        f = self.stage.moveRel({"y": 10e-3})
+        time.sleep(0.5)
+        self.stage.stop()
+
+        with self.assertRaises(CancelledError):
+            f.result()
+
+        exppos = pos.copy()
+        exppos["y"] += 10e-3
+        self.assertNotEqual(self.stage.position.value, pos)
+        self.assertNotEqual(self.stage.position.value, exppos)
+
+        f = self.stage.moveAbs(pos)  # Back to orig pos
+        f.result()
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
 
 class TestSEMNoDet(BaseSEMTest, unittest.TestCase):
