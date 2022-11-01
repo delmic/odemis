@@ -33,8 +33,8 @@ def filter_test_log(log_txt):
     Text regarding progress and passed tests are excluded.
     If the output log is too long the middle part of the logged is not returned.
 
-    :param log (str): String with the log of a single test file.
-    :return (str): filtered log
+    :param log_txt: (str) String with the log of a single test file.
+    :return (str): filtered log, returns None if there is nothing interesting in log_txt
 
     Example of filtering:
     This function expects a pytest test report of single test file as input, a string such as the example below:
@@ -81,16 +81,23 @@ def filter_test_log(log_txt):
 
     """
     # Filter to only get the usefull parts of the test report
-    test_results = re.search(".* short test summary info .*\n(.|\n)*==", log_txt).group()
+    test_results = re.search("\n===.*(short test|FAILURES|ERRORS|warnings)(.+?)((.|\n)*)==", log_txt)
+    test_results = test_results.group() if test_results else ""  # Can only group if there is something to group
     test_results = test_results.lstrip("\n")  # Remove preceding empty lines
     # Only display when there is more to tell than just passed test cases (meaning failures, warning etc.)
     if "\n" in test_results:  # Only a message with multiple lines contains interesting information.
         if len(test_results) > 2000:
-            test_results = test_results[0:1000] + \
-                           "\n\n \t--The middle part of the logging message is not displayed because it is too long for the default summary report. -- \n\n" + \
-                            test_results[-2000:] + \
-                           "\n \t--Logging message is too long for the default summary report, the middle part is not displayed -- \n\n"
-        return test_results
+            test_results = test_results.split("\n")
+            # Cut out the middle part of the log and leave the first and last 20 lines.
+            test_results = "\n".join(test_results[:20]) + \
+                           "\n\n \t--The middle part of the logging message is not displayed," \
+                           " because it is too long for the default summary report. -- \n\n" + \
+                           "\n".join(test_results[-20:]) + \
+                           "\n \t--Logging message is too long for the default summary report, " \
+                           "the middle part is not displayed -- \n\n"
+    else:
+        test_results = None
+    return test_results
 
 
 if __name__ == "__main__":

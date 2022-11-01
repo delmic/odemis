@@ -1,0 +1,72 @@
+/home/testing/development/odemis/src/odemis/acq/align/test/shift_test.py returned 0
+Running /home/testing/development/odemis/src/odemis/acq/align/test/keypoint_test.py:
+============================= test session starts ==============================
+platform linux -- Python 3.8.10, pytest-4.6.9, py-1.8.1, pluggy-0.13.0 -- /usr/bin/python3
+cachedir: .pytest_cache
+rootdir: /home/testing/development/odemis
+collecting ... collected 3 items
+
+keypoint_test.py::TestKeypoint::test_image_pair FAILED                   [ 33%]
+keypoint_test.py::TestKeypoint::test_no_match PASSED                     [ 66%]
+keypoint_test.py::TestKeypoint::test_synthetic_images PASSED             [100%]
+
+=================================== FAILURES ===================================
+_________________________ TestKeypoint.test_image_pair _________________________
+keypoint_test.py:120: in test_image_pair
+    numpy.testing.assert_equal(tmatn, tmat)
+E   AssertionError: 
+E   Arrays are not equal
+E   
+E   Mismatch: 88.9%
+E   Max absolute difference: 7423.98476505
+E   Max relative difference: 35.63178233
+E    x: array([[-1.992191e+01,  4.837572e+01,  6.024020e+03],
+E          [-4.290206e+01,  1.502814e+02, -6.178859e+03],
+E          [-3.643328e-02,  1.119097e-01,  1.000000e+00]])
+E    y: array([[ 1.172050e+00, -2.503712e+00,  7.139536e+02],
+E          [ 2.024711e+00, -4.339407e+00,  1.245126e+03],
+E          [ 1.622487e-03, -3.479750e-03,  1.000000e+00]])
+----------------------------- Captured stderr call -----------------------------
+DEBUG:root:Skipping exporter png as it is lossy
+DEBUG:root:Skipping exporter csv as it is lossy
+DEBUG:root:Skipping exporter catmaid as it is lossy
+DEBUG:root:Determined that 'slice69_stretched.tif' corresponds to TIFF format
+INFO:root:Failed to use the OME data (No OME XML data found), will use standard TIFF
+DEBUG:root:Skipping exporter png as it is lossy
+DEBUG:root:Skipping exporter csv as it is lossy
+DEBUG:root:Skipping exporter catmaid as it is lossy
+DEBUG:root:Determined that 'g_009_cropped.tif' corresponds to TIFF format
+DEBUG:root:Guessing high dims are CTZ = [1, 1, 1]
+DEBUG:root:Guessing high dims are CTZ = [1, 1, 1]
+DEBUG:root:Using feature detector ORB
+DEBUG:root:Found 130 and 236 keypoints
+DEBUG:root:Found 130 matches and 7 good ones
+DEBUG:root:Computed metadata = {'Centre position': (-0.000308817655909565, -0.0003642147242796027), 'Pixel size': (4.192049807724573e-09, 8.248288855457904e-09), 'Rotation': -2.618278365138589, 'Shear': -71.37762328485172}
+DEBUG:root:Using feature detector ORB
+DEBUG:root:Found 130 and 236 keypoints
+DEBUG:root:Found 130 matches and 6 good ones
+DEBUG:root:Computed metadata = {'Centre position': (-0.0005086268780434295, -0.00036049255362293457), 'Pixel size': (6.228309738084018e-06, 9.289514065255769e-06), 'Rotation': 0.31142635014535613, 'Shear': -1364.2415444658388}
+------------------------------ Captured log call -------------------------------
+DEBUG    root:__init__.py:64 Skipping exporter png as it is lossy
+DEBUG    root:__init__.py:64 Skipping exporter csv as it is lossy
+DEBUG    root:__init__.py:64 Skipping exporter catmaid as it is lossy
+DEBUG    root:__init__.py:141 Determined that 'slice69_stretched.tif' corresponds to TIFF format
+INFO     root:tiff.py:2177 Failed to use the OME data (No OME XML data found), will use standard TIFF
+DEBUG    root:__init__.py:64 Skipping exporter png as it is lossy
+DEBUG    root:__init__.py:64 Skipping exporter csv as it is lossy
+DEBUG    root:__init__.py:64 Skipping exporter catmaid as it is lossy
+DEBUG    root:__init__.py:141 Determined that 'g_009_cropped.tif' corresponds to TIFF format
+DEBUG    root:tiff.py:1027 Guessing high dims are CTZ = [1, 1, 1]
+DEBUG    root:tiff.py:1027 Guessing high dims are CTZ = [1, 1, 1]
+DEBUG    root:keypoint.py:99 Using feature detector ORB
+DEBUG    root:keypoint.py:104 Found 130 and 236 keypoints
+DEBUG    root:keypoint.py:125 Found 130 matches and 7 good ones
+DEBUG    root:keypoint_test.py:98 Computed metadata = {'Centre position': (-0.000308817655909565, -0.0003642147242796027), 'Pixel size': (4.192049807724573e-09, 8.248288855457904e-09), 'Rotation': -2.618278365138589, 'Shear': -71.37762328485172}
+DEBUG    root:keypoint.py:99 Using feature detector ORB
+DEBUG    root:keypoint.py:104 Found 130 and 236 keypoints
+DEBUG    root:keypoint.py:125 Found 130 matches and 6 good ones
+DEBUG    root:keypoint_test.py:119 Computed metadata = {'Centre position': (-0.0005086268780434295, -0.00036049255362293457), 'Pixel size': (6.228309738084018e-06, 9.289514065255769e-06), 'Rotation': 0.31142635014535613, 'Shear': -1364.2415444658388}
+=========================== short test summary info ============================
+FAILED keypoint_test.py::TestKeypoint::test_image_pair - AssertionError: 
+====================== 1 failed, 2 passed in 9.17 seconds ======================
+/home/testing/development/odemis/src/odemis/acq/align/test/keypoint_test.py returned 1

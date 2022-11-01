@@ -4,16 +4,31 @@ from util.pytest_log_filter import filter_test_log
 
 
 class TestFilterTestLog(unittest.TestCase):
-    # NOTE: This test case does not test much of the functionality, it mostly is an example on how to use the function filter_test_log
     """
     Test on the filter_test_log function
     """
 
-    def test_sample_input(self):
-        with open("test_input_pytest_log_filter.txt") as f:
+    def test_sample_input_ubuntu_18_04(self):
+        """Test that the logs are filtered correctly and the size is reduced for a too long message on Ubuntu 18.04"""
+        with open("test_input_pytest_log_filter_18_04.txt") as f:
             log_txt = f.read()
         filtered_log = filter_test_log(log_txt)
-        self.assertIsInstance(filtered_log, str)
+        self.assertEqual(46, len(filtered_log.split("\n")))
+        self.assertTrue("Logging message is too long" in filtered_log)
+
+    def test_sample_input_ubuntu_20_04(self):
+        """Test that the logs are filtered correctly and the size is reduced for a too long message on Ubuntu 20.04"""
+        with open("test_input_pytest_log_filter_20_04.txt") as f:
+            log_txt = f.read()
+        filtered_log = filter_test_log(log_txt)
+        self.assertEqual(46, len(filtered_log.split("\n")))
+        self.assertTrue("Logging message is too long" in filtered_log)
+
+    def test_sample_empty_str(self):
+        """Test that the logs are filtered correctly and the size is reduced for an empty string"""
+        log_txt = ""
+        filtered_log = filter_test_log(log_txt)
+        self.assertEqual(None, filtered_log)
 
 
 if __name__ == '__main__':
