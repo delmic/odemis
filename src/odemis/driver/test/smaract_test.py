@@ -21,6 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
 import math
+import tempfile
+
 from odemis.driver import smaract
 from odemis.util import testing
 import os
@@ -478,6 +480,7 @@ CONFIG_3DOF = {"name": "3DOF",
         "accel": 0.001,
         "hold_time": 1.0,
         "pos_deactive_after_ref": True,
+        "param_file": None,
         "axes": {
             'x': {
                 'range': [-3e-3, 3e-3],
@@ -648,6 +651,59 @@ class TestMCS2(unittest.TestCase):
         time.sleep(2)
         pos_after_move = self.dev.position.value
         testing.assert_pos_almost_equal(expected_pos, pos_after_move, **COMP_ARGS)
+
+    def test_param_file_nofile(self):
+        # check if forcing a ValueError is the result of a file that does not exist
+        with self.assertRaises(ValueError):
+            CONFIG_3DOF['param_file'] = "nonexistingfile.mcs2.tsv"
+            smaract.MCS2(**CONFIG_3DOF)
+
+    def test_parse_tsv_config(self):
+        # create a temporary .mcs2.tsv file
+        file_id, file_name = tempfile.mkstemp(suffix='.mcs2.tsv', text=True)
+
+        # open the file descriptor/id as a regular file in write mode
+        testfile = os.fdopen(file_id, 'w')
+
+        # create a dictionary with parameter identifiers and values
+        param_dict = [{"num": 1, "code": 0x0307005D, "value": 0b00000001, "type": "I32"},
+                      {"num": 1, "code": 0x0309005D, "value": 0b00001000, "type": "I64"},
+                      {"num": 1, "code": 0x0308007E, "value": "Newname", "type": "Str"}]
+
+        # add a comment line to test for
+        testfile.writelines("# commented line example\n")
+        # add an int32 type property line to test for
+        testfile.writelines(f"{param_dict[0]['num']}\t{hex(param_dict[0]['code'])}\t{param_dict[0]['value']}\t"
+                            f"{param_dict[0]['type']} # Referencing Options (Inverted Start Direction)\n")
+        # add an int64 type property line to test for
+        testfile.writelines(f"{param_dict[1]['num']}\t{hex(param_dict[1]['code'])}\t{param_dict[1]['value']}\t"
+                            f"{param_dict[1]['type']} # Referencing Options (Inverted Start Direction)\n")
+        # add a String type property line to test for
+        testfile.writelines(f"{param_dict[2]['num']}\t{hex(param_dict[2]['code'])}\t{param_dict[2]['value']}\t"
+                            f"{param_dict[2]['type']} # Referencing Options (Inverted Start Direction)\n")
+
+        CONFIG_3DOF['param_file'] = file_name
+        dev = smaract.MCS2(**CONFIG_3DOF)
+
+        # open the target file again, this time for reading only
+        testfile = open(file_name, 'r')
+        out_params = dev.parse_tsv_config(testfile)
+
+        # check if the output dict contains the right amount of properties
+        self.assertEqual(len(out_params), len(param_dict))
+
+        # check if the output dict contains the right property input values
+        for item in param_dict:
+            key = (item['num'], item['code'], item['type'])
+            if key in out_params:
+                # check equal values
+                self.assertEqual(item['value'], out_params[key])
+                # check equal types
+                self.assertEqual(type(item['value']), type(out_params[key]))
+
+        testfile.close()
+        os.remove(file_name)
+
 
 CONFIG_Picoscale = {"name": "Stage Metrology",
                     "role": "metrology",
