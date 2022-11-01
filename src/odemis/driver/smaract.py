@@ -23,19 +23,22 @@ This driver supports SmarAct and SmarPod actuators, which are accessed via a C D
 provided by SmarAct. This must be installed on the system for this actuator to run. Please
 refer to the SmarAct readme for Linux installation instructions.
 '''
-from concurrent.futures import CancelledError, TimeoutError
+
 import copy
-from ctypes import *
 import logging
 import math
+import os
+import threading
+import time
+import re
+
+from ctypes import *
+from typing import Optional, Dict
 from odemis import model
 from odemis import util
 from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasync, VigilantAttribute, roattribute
 from odemis.util import driver, RepeatingTimer, almost_equal
-import os
-import threading
-import time
-from typing import Optional, Dict
+from concurrent.futures import CancelledError, TimeoutError
 
 
 def add_coord(pos1, pos2):
@@ -2770,7 +2773,7 @@ class SA_CTLError(IOError):
 class MCS2(model.Actuator):
 
     def __init__(self, name, role, locator, ref_on_init=False, axes=None, speed=1e-3, accel=1e-3,
-                 hold_time=float('inf'), pos_deactive_after_ref=False, **kwargs):
+                 hold_time=float('inf'), pos_deactive_after_ref=False, param_file=None, **kwargs):
         """
         A driver for a SmarAct MCS2 Actuator.
         This driver uses a DLL provided by SmarAct which connects via
@@ -2860,13 +2863,30 @@ class MCS2(model.Actuator):
 
         logging.debug("Using SA_CTL library version %s to connect to %s", self._swVersion, self._hwVersion)
 
+        # Read param_file and apply it
+        if param_file:
+            try:
+                filestream = open(param_file)
+            except Exception as ex:
+                raise ValueError("Failed to open file %s: %s" % (param_file, ex))
+            try:
+                # try to parse read the file line-by-line
+                prop_params = self.parse_tsv_config(filestream)
+                logging.debug("Extracted param file config: %s" % prop_params)
+            except Exception as ex:
+                raise ValueError("Failed to parse file %s: %s" % (param_file, ex))
+
+            # apply the new property values
+            self.apply_config(prop_params)
+
+        # set specific axis properties
         for name, channel in self._axis_map.items():
             self._set_speed(channel, speed)
             self._set_accel(channel, accel)
             self._set_hold_time(channel, hold_time)
 
             # Log referencing mode, and warn if it's not normal (autozero)
-            ref_mode = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_POSITIONER_TYPE, channel)
+            ref_mode = self.GetProperty_i32(SA_CTLDLL.SA_CTL_PKEY_REFERENCING_OPTIONS, channel)
             log_lvl = logging.INFO
             if ref_mode & SA_CTLDLL.SA_CTL_REF_OPT_BIT_AUTO_ZERO:
                 log_lvl = logging.WARNING
@@ -2930,6 +2950,76 @@ class MCS2(model.Actuator):
                 raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (deactive_pos,))
         super(MCS2, self).updateMetadata(md)
 
+    # Methods below are for using and applying additional parameters through a param_file
+    def apply_config(self, prop_params):
+        """
+        Configure the device according to the given 'user configuration' from a specified param_file.
+        :param prop_params (dict (int, int, str) -> int/str): channel index, property code, type -> value
+        """
+
+        # run the appropriate method for every dict item depending on value type
+        for (ch, p, typ), v in prop_params.items():
+            if typ == "I32":
+                self.SetProperty_i32(p, ch, v)
+            elif typ == "I64":
+                self.SetProperty_i64(p, ch, v)
+            elif typ == "Str":
+                self.SetProperty_s(p, ch, v)
+            else:
+                raise ValueError(f"Property type not handled: {typ}, valid types are I32/I64/Str")
+
+        logging.debug("parameter file device configuration property changes applied.")
+
+    @staticmethod
+    def parse_tsv_config(filestream):
+        """
+        Parse a tab-separated value (.mcs2.tsv) file in the following format:
+            (file header) channel_index     property    value   type   # description
+            channel_index can be a (Ch) number starting from 0 this also refers to a defined channel type
+            property is a hexadecimal code representing a specific property
+            value is a hexadecimal code representing independent property ﬂags
+            type is the type of the value used for this property (I32/I64/Str)
+        filestream (File): opened filestream
+        return:
+            prop_params_i32 (dict (int, int, str) -> int/str): channel index, property code, type -> value
+        """
+
+        # MCS2 property types dictionary:
+        prop_params = {}
+
+        # read the parameters "database" the file
+        for readline in filestream:
+            # comment or empty line?
+            mc = re.match(r"\s*(#|$)", readline)
+
+            if mc:
+                logging.debug("Comment line skipped: '%s'", readline.rstrip("\n\r"))
+                continue
+            # check if the read line matches the expected line format
+            m = re.match(
+                r"(?P<num>[0-9]+)\t(?P<code>0x[0-9A-F]+)\t(?P<value>(.*))\t(?P<type>(I32|I64|Str))\s*(#.*)?$",
+                readline,
+                re.IGNORECASE)
+
+            if not m:
+                # read line is not in the correct format
+                raise ValueError("Failed to parse line, unexpected line format '%s'" % readline.rstrip("\n\r"))
+
+            # assign the readline values to the appropriate variables
+            ch_num = int(m.group("num"))
+            prop_code = int(m.group("code"), 0)
+            typ = m.group("type")
+
+            if typ == "Str":
+                set_val = str(m.group("value"))
+            else:  # typ == I32 or I64
+                set_val = int(m.group("value"), 0)
+
+            # add all the values to the property dictionary
+            prop_params[(ch_num, prop_code, typ)] = set_val
+
+        return prop_params
+
     @staticmethod
     def scan():
         """
@@ -2979,6 +3069,14 @@ class MCS2(model.Actuator):
         value (int64): value to set
         """
         self.core.SA_CTL_SetProperty_i64(self._id, c_int8(idx), c_uint32(property_key), c_int64(value))
+
+    def SetProperty_s(self, property_key, idx, value):
+        """
+        property_key (int32): property key symbol
+        idx (int): channel
+        value (str): value to set
+        """
+        self.core.SA_CTL_SetProperty_s(self._id, c_int8(idx), c_uint32(property_key), value)
 
     def GetProperty_f64(self, property_key, idx):
         """
@@ -3543,6 +3641,11 @@ class FakeMCS2_DLL(object):
         if not property_key.value in self.properties:
             raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
         self.properties[property_key.value][ch.value] = value.value
+
+    def SA_CTL_SetProperty_s(self, handle, ch, property_key, value):
+        if not property_key.value in self.properties:
+            raise SA_CTLError(SA_CTLDLL.SA_CTL_ERROR_INVALID_KEY, "error")
+        self.properties[property_key.value][ch.value] = value.encode('ASCII')
 
     def SA_CTL_GetProperty_f64(self, handle, ch, property_key, p_val, size):
         if not property_key.value in self.properties:
