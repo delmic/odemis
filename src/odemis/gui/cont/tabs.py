@@ -4898,7 +4898,7 @@ class EnzelAlignTab(Tab):
         self.panel.html_alignment_doc.LoadPage(doc_path)
 
         self.panel.controls_step_size_slider.SetRange(1e-6,
-                                                      min(50e-6, abs(self._sem_stream.emitter.beamShift.range[1][0])))
+                                                      min(50e-6, abs(self._sem_stream.emitter.shift.range[1][0])))
         self.panel.controls_step_size_slider.set_position_value(10e-6)
 
         self.panel.pnl_z_align_controls.Show(False)
@@ -4927,10 +4927,10 @@ class EnzelAlignTab(Tab):
 
         :param shift (dict --> float): Relative movement of the beam shift with the axis as keys (x/y)
         """
-        beamShiftVA = self._sem_stream.emitter.beamShift
+        shiftVA = self._sem_stream.emitter.shift
         try:
             if "x" in shift:
-                beamShiftVA.value = (beamShiftVA.value[0] + shift["x"], beamShiftVA.value[1])
+                shiftVA.value = (shiftVA.value[0] + shift["x"], shiftVA.value[1])
         except IndexError:
             show_message(wx.GetApp().main_frame,
                          "Reached the limits of the beam shift, cannot move any further in x direction.",
@@ -4939,7 +4939,7 @@ class EnzelAlignTab(Tab):
 
         try:
             if "y" in shift:
-                beamShiftVA.value = (beamShiftVA.value[0], beamShiftVA.value[1] + shift["y"])
+                shiftVA.value = (shiftVA.value[0], shiftVA.value[1] + shift["y"])
         except IndexError:
             show_message(wx.GetApp().main_frame,
                          "Reached the limits of the beam shift, cannot move any further in y direction.",
