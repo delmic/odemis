@@ -1231,7 +1231,7 @@ class Scanner(model.Emitter):
         beam_shift_info = self.parent.beam_shift_info()
         range_x = beam_shift_info["range"]["x"]
         range_y = beam_shift_info["range"]["y"]
-        self.beamShift = model.TupleContinuous(
+        self.shift = model.TupleContinuous(
             self.parent.get_beam_shift(),
             ((range_x[0], range_y[0]), (range_x[1], range_y[1])),
             cls=(int, float),
@@ -1334,9 +1334,9 @@ class Scanner(model.Emitter):
                 self.spotSize._value = spot_size
                 self.spotSize.notify(spot_size)
             beam_shift = self.parent.get_beam_shift()
-            if beam_shift != self.beamShift.value:
-                self.beamShift._value = beam_shift
-                self.beamShift.notify(beam_shift)
+            if beam_shift != self.shift.value:
+                self.shift._value = beam_shift
+                self.shift.notify(beam_shift)
             rotation = self.parent.get_rotation()
             if rotation != self.rotation.value:
                 self.rotation._value = rotation
