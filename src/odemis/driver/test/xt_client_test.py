@@ -531,20 +531,20 @@ class TestMicroscope(unittest.TestCase):
 
     def test_set_beam_shift(self):
         """Setting the beam shift."""
-        init_beam_shift = self.scanner.beamShift.value
-        beam_shift_range = self.scanner.beamShift.range
+        init_beam_shift = self.scanner.shift.value
+        beam_shift_range = self.scanner.shift.range
         new_beam_shift_x = beam_shift_range[1][0] - 1e-6
         new_beam_shift_y = beam_shift_range[0][1] + 1e-6
-        self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
+        self.scanner.shift.value = (new_beam_shift_x, new_beam_shift_y)
         time.sleep(0.1)
-        testing.assert_tuple_almost_equal((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
+        testing.assert_tuple_almost_equal((new_beam_shift_x, new_beam_shift_y), self.scanner.shift.value)
         # Test it still works for different values.
         new_beam_shift_x = beam_shift_range[0][0] + 1e-6
         new_beam_shift_y = beam_shift_range[1][1] - 1e-6
-        self.scanner.beamShift.value = (new_beam_shift_x, new_beam_shift_y)
-        testing.assert_tuple_almost_equal((new_beam_shift_x, new_beam_shift_y), self.scanner.beamShift.value)
-        # set beamShift back to initial value
-        self.scanner.beamShift.value = init_beam_shift
+        self.scanner.shift.value = (new_beam_shift_x, new_beam_shift_y)
+        testing.assert_tuple_almost_equal((new_beam_shift_x, new_beam_shift_y), self.scanner.shift.value)
+        # set shift back to initial value
+        self.scanner.shift.value = init_beam_shift
 
     def test_contrast(self):
         """Test setting the contrast."""
