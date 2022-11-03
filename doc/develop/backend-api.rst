@@ -209,6 +209,11 @@ Most typically, when the emitter is a single point, this is an X/Y scan, to buil
 In Odemis, we can take a short cut, and represent the emitter and the scanner as
 a single component. That is why Scanner inherit from Emitter.
 
+Note that the rotation, scale, resolution, and translation are interdependent. By convention,
+it is necessary to set them in this order to ensure that they don't modify previously
+defined values: Rotation > Scale > Resolution > Translation.
+
+
 .. py:class:: Scanner()
 
     .. py:attribute:: power
@@ -237,13 +242,29 @@ a single component. That is why Scanner inherit from Emitter.
     The following three attributes permit to define a region of interest
     (i.e., a sub-region).
 
-    .. py:attribute:: translation
-
-        *(VA, tuple of floats, unit=px)* How much shift is applied to the center of the area acquired. It is expressed in pixels (the size of a pixel being defined by pixelSize, and so independent of .scale).
-
     .. py:attribute:: scale
 
-        *(VA, tuple of floats or int, unit=ratio)* ratio of the size of the scannable area divided by the size of the scanned area. Note that this is the inverse of the typical definition of scale (i.e., increasing the scale leads to a smaller scanned area). The advantage of this definition is that its meaning is very similar to binning. Note that the MD_PIXEL_SIZE metadata of a dataflow will depend both on pixelSize and scale (i.e., MD_PIXEL_SIZE = pixelSize * scale).
+        *(VA, tuple of floats or int, unit=ratio)* ratio (for X and Y) of the size of the scannable area divided by the size of the scanned area.
+        By convention, (1, 1) corresponds to the closest distance between pixels centers while scanning at the highest resolution.
+        Note that this is the inverse of the typical definition of scale (i.e., increasing the scale leads to a smaller scanned area).
+        The advantage of this definition is that its meaning is very similar to binning.
+        Note that the MD_PIXEL_SIZE metadata of a dataflow will depend both on pixelSize and scale (i.e., MD_PIXEL_SIZE = pixelSize * scale).
+
+    .. py:attribute:: translation
+
+        *(VA, tuple of floats, unit=px)* How much shift (X, Y) is applied to the center of the area acquired.
+        It is expressed in pixels (the size of a pixel being defined by pixelSize, and so independent of .scale),
+        and just affect the scanning settings.
+        It is limited by the field of view of the scanner, and it is automatically
+        clipped based on the current resolution and scale. So if the scanner is
+        configure to scan the whole field of view, no translation is possible.
+        See the ``.shift`` attribute for handling such cases.
+        A bigger value in X means the next image will shift towards the right
+        (ie, the position corresponding to the center of the new image is on the right of the 
+        center of the previous image). A bigger value in Y means a shift towards the bottom.
+        (0, 0) means that it's at the center of the scan area.
+        The MD_POS in the image metadata contains an adjusted MD_POS to indicate the center of the image,
+        based on the MD_POS in the scanner metadata and the pixel size.
 
     .. py:attribute:: rotation
 
@@ -251,6 +272,21 @@ a single component. That is why Scanner inherit from Emitter.
 
     .. Rationale: we could have done slightly differently by using a general .transformation (VA, array of float, shape of (3,3) for a 2D resolution). It would have been a transformation matrix from the scanning area to the actual value. Very generic, but more complex to use and read and the advanced transformations possible don't seem to be useful.
 
+    .. py:attribute:: shift
+
+        *(VA, tuple of floats, unit=m, optional)* How much shift (X, Y) is applied to the center of the area acquired.
+        It is expressed in meters. It actually affects the beam column parameters to obtain that shift.
+        A bigger value in X means a shift towards the left (ie, the center of the new image corresponds to a position
+        at the left of the center of the previous image).
+        A bigger value in Y means a shift towards the bottom (ie, the center of the new image corresponds to a position
+        below the center of the previous image).
+        (0, 0) means that it's at the center of the scan area.
+        MD_POS is never updated.
+    
+    .. Rationale: the reason for this odd choice of referential (ie, opposite to the
+       standard referential of the stage) is only historical. We used the beam
+       shift from the TFS API, and didn't questioned whether this was fitting the
+       Odemis API.
 
     .. py:attribute:: accelVoltage
 
@@ -316,6 +352,9 @@ DigitalCamera
 =============
 
 DigitialCamera is a subtype of Detector which detects light with an array.
+Note that the binning, resolution, and translation are interdependent. By convention,
+it is necessary to set them in this order to ensure that they don't modify previously
+defined values: Binning > Resolution > Translation. 
 
 .. py:class:: DigitalCamera()
 
@@ -324,11 +363,24 @@ DigitialCamera is a subtype of Detector which detects light with an array.
 
     .. py:attribute:: binning
 
-        *(VA, tuple of ints)* How many CCD pixels are merged (for each dimension) to form one pixel on the image. Changing this property will automatically adapt the resolution to make sure the actual sensor region stays the same one. For this reason, it is recommended to set this property before the resolution property. It has a .range attribute with two 2-tuples for min and max.
+        *(VA, tuple of ints)* How many CCD pixels are merged (for each dimension X and Y) to form one pixel on the image. Changing this property will automatically adapt the resolution to make sure the actual sensor region stays the same one. For this reason, it is recommended to set this property before the resolution property. It has a .range attribute with two 2-tuples for min and max.
 
     .. py:attribute:: resolution
 
-        *(VA, tuple of ints)* Number of pixels in the image generated for each dimension (width, height). If it's smaller than the full resolution of the captor, it's centred. It's value is the same as the shape of the data generated by the Data Flow (taking into account that DataArrays' shape follow numpy's convention so height is first, and width second). Binning is taken into account, so a captor of 1024x1024 with a binning of 2x2 and resolution of 512x512 will generate a data of shape 512x512. If when setting it, the resolution is not available, another resolution can be picked. It  will try to select an acceptable resolution bigger than the resolution requested. If the resolution is smaller than the entire captor, the centre part of the captor is used. It has a .range attribute with two 2-tuples for min and max.
+        *(VA, tuple of ints)* Number of pixels in the image generated for each dimension (width, height). If it's smaller than the full resolution of the captor, it's centered.
+        It's value is the same as the shape of the data generated by the Data Flow (taking into account that DataArrays' shape follow numpy's convention so height is first, and width second).
+        Binning is taken into account, so a captor of 1024x1024 with a binning of 2x2 and resolution of 512x512 will generate a data of shape 512x512.
+        If when setting it, the resolution is not available, another resolution can be picked.
+        It  will try to select an acceptable resolution bigger than the resolution requested.
+        If the resolution is smaller than the entire captor, the centre part of the captor is used.
+        It has a .range attribute with two 2-tuples for min and max.
+
+    .. py:attribute:: translation
+
+        *(VA, tuple of floats, unit=px, optional)* How much shift (X, Y) is applied to the center of the area acquired.
+        It is expressed in pixels (the size of a pixel being defined by pixelSize, and so independent of .binning).
+        A smaller value in X means a shift towards the left, and a smaller value in Y means a shift towards the top.
+        0, 0 means that it's at the center of the detector.
 
     .. py:attribute:: exposureTime
 
