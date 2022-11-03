@@ -87,7 +87,7 @@ class CompositedScanner(model.Emitter):
             self.magnification = self._external_scanner.magnification
 
         # TODO: just pick every VAs which are not yet on self?
-        for vaname in ("accelVoltage", "probeCurrent", "depthOfField", "spotSize", "beamShift"):
+        for vaname in ("accelVoltage", "probeCurrent", "depthOfField", "spotSize", "shift"):
             if model.hasVA(self._internal_scanner, vaname):
                 va = getattr(self._internal_scanner, vaname)
                 setattr(self, vaname, va)

@@ -234,9 +234,6 @@ HW_SETTINGS_CONFIG = {
             ("scanner", {
                 "control_type": odemis.gui.CONTROL_NONE,
             }),
-            ("beamShift", {
-                "control_type": odemis.gui.CONTROL_NONE,
-            }),
         )),
     "laser-mirror":
         OrderedDict((
