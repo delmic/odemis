@@ -269,6 +269,13 @@ class OrsayComponent(model.HwComponent):
             self._fib_aperture = FIBAperture(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._fib_aperture)
 
+    @roattribute
+    def host(self) -> str:
+        """
+        IP address of the Orsay Physics FIB server
+        """
+        return self._host
+
     def on_connect(self):
         """
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
