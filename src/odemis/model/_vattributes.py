@@ -128,10 +128,8 @@ class VigilantAttribute(VigilantAttributeBase):
         self._check(initval)
 
         self.readonly = readonly
-        if setter is None:
-            self._setter = WeakMethod(self.__default_setter)
-        else:
-            self._setter = WeakMethod(setter) # to avoid cycles
+        self._setter = None
+        self.setter = setter
 
         if getter is not None:
             self._getter = WeakMethod(getter)  # to avoid cycles
@@ -147,8 +145,17 @@ class VigilantAttribute(VigilantAttributeBase):
         self.debug = False  # If True, this VA will print a call stack when its value is set
         self.max_discard = max_discard
 
-    def __default_setter(self, value):
-        return value
+    @property
+    def setter(self):
+        # It actually returns a WeakMethod to the setter, but calling it should behave the same
+        return self._setter
+
+    @setter.setter
+    def setter(self, setter):
+        if setter is None:
+            self._setter = None
+        else:
+            self._setter = WeakMethod(setter)  # to avoid cycles
 
     def _getproxystate(self):
         """
@@ -194,10 +201,14 @@ class VigilantAttribute(VigilantAttributeBase):
         prev_value = self._value
 
         self._check(value) # we allow the setter to even put illegal value, it's the master
-        try:
-            self._value = self._setter(value)
-        except WeakRefLostError:
-            self._value = self.__default_setter(value)
+        if self._setter is None:
+            self._value = value
+        else:
+            try:
+                self._value = self._setter(value)
+            except WeakRefLostError:
+                self._value = value
+                self._setter = None
 
         # only notify if the value has changed (or is different from requested)
         try:
@@ -726,11 +737,8 @@ class ListVA(VigilantAttribute):
 
     def __init__(self, value=None, *args, **kwargs):
         value = _NotifyingList([] if value is None else value, notifier=self._internal_set_value)
+        self._orig_setter = None
         VigilantAttribute.__init__(self, value, *args, **kwargs)
-
-        # Wrap the setter
-        self._orig_setter = self._setter
-        self._setter = self._ensure_list_setter
 
     def _check(self, value):
         if not isinstance(value, Iterable):
@@ -742,12 +750,29 @@ class ListVA(VigilantAttribute):
 
     # Redefine the setter, so we can force to listen to internal modifications
     def _ensure_list_setter(self, value):
-        try:
-            v = self._orig_setter(value)
-        except WeakRefLostError:
-            v = self.__default_setter(value)
+        if self._orig_setter is None:
+            v = value
+        else:
+            try:
+                v = self._orig_setter(value)
+            except WeakRefLostError:
+                v = value
 
         return _NotifyingList(v, notifier=self._internal_set_value)
+
+    # Wrap the setter (but hide this from the user)
+    @property
+    def setter(self):
+        return self._orig_setter
+
+    @setter.setter
+    def setter(self, setter):
+        if setter is None:
+            self._orig_setter = None
+        else:
+            self._orig_setter = WeakMethod(setter)  # to avoid cycles
+
+        self._setter = self._ensure_list_setter
 
 
 class ListVAProxy(VigilantAttributeProxy):

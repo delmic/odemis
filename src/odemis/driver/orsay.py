@@ -24,7 +24,6 @@ from odemis import model, util
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, InstantaneousFuture, roattribute, \
     MD_PIXEL_SIZE
 from odemis.util import almost_equal
-from odemis.util.weak import WeakMethod
 from ConsoleClient.Communication.Connection import Connection
 
 from functools import partial
@@ -1376,10 +1375,10 @@ class GISReservoir(model.HwComponent):
 class OrsayParameterConnector:
     """
     Object that is connected to a VA and a parameter on the Orsay server.
+    The value of the VA will be set based on the Orsay paramater's Actual attribute.
     If VA is not readonly, writing to the VA will write this value to the Orsay parameter's Target attribute.
     If VA is readonly, the VA will be kept up to date of the changes of the Orsay parameter, but force writing to the VA
     will not update the Orsay parameter.
-
 
     This class exists to prevent the need for copy-pasting similar code for each such connection that needs to be made.
     This class overwrites the setter of the VA, but does not use the getter. Instead it subscribes an update method to
@@ -1388,7 +1387,7 @@ class OrsayParameterConnector:
     not be the case if the getter was used.
     """
 
-    def __init__(self, va, parameter, attr_name="Actual", mapping=None, conversion_funcs=None, factor=None, minpar=None,
+    def __init__(self, va, parameter, mapping=None, conversion_funcs=None, factor=None, minpar=None,
                  maxpar=None):
         """
         Initialise the Connector
@@ -1396,10 +1395,8 @@ class OrsayParameterConnector:
         :param (VigilantAttribute) va: The vigilant attribute this Orsay parameter connector should be connected to.
             This VA should not have a setter yet, because the setter will be overwritten. Must be a Tuple VA if a list
             of parameters is passed to the parameter argument.
-        :param (Orsay Parameter) parameter: A parameter of the Orsay server. It can also be a list of parameters, if va
-            can contain a Tuple of equal length.
-        :param (string) attr_name: The name of the attribute of parameter the va should be synchronised with.
-            Defaults to "Actual".
+        :param (Orsay Parameter or list of Orsay Parameters) parameter: A parameter of the Orsay server.
+            It can also be a list of parameters, then va should contain a Tuple of equal length.
         :param (dict or None) mapping: A dict mapping values of the VA (dict keys) to values of the parameter (dict
             values). If None is supplied, factor can be used, or no special conversion is applied.
         :param (dict or None) conversion_funcs: A dict containing the keys "va2par" and "par2va" which contain functions
@@ -1423,14 +1420,6 @@ class OrsayParameterConnector:
             logging.warning("Received multiple inputs transforming the Orsay parameter value, only one the "
                             "keyword arguments 'mapping, conversion_func and factor' should be defined.\n"
                             "Using the first keyword argument in the order 'mapping, conversion_funcs, factor'.")
-
-        # The following parameters will get their values below
-        self._parameters = None  # list of parameters to connect to
-        self._attr_name = None  # equal to attr_name argument, but None when not connected
-        self._va = None  # equal to va argument, but None when not connected
-        self._va_is_tuple = False  # boolean, indicates if the va is a tuple (True) or not (False).
-        self._va_value_type = None  # contains the type (int, float, str, etc.) of the va. If the va is a tuple, it
-        # contains the type of the values contained in the tuple.
 
         self._mapping = mapping
         if conversion_funcs is not None:
@@ -1464,27 +1453,33 @@ class OrsayParameterConnector:
                                                                       len(self._parameters) != len(self._maxpar)):
             raise ValueError("Number of parameters, minimum parameters and maximum parameters is not equal")
 
-        # Store and analyse the passed VA, to determine its type, if it's a tuple or not and if it's read-only
-        self._attr_name = attr_name
+        # Store and analyse the passed VA, to determine its type (int, float, str, etc.),
+        # if it's a tuple or not and if it's read-only
         self._va = va
+
         if isinstance(parameter, collections.abc.Iterable):  # if multiple parameters are passed
-            self._va_is_tuple = True
+            self._va_is_tuple = True  # indicates if the VA is a tuple (True) or not (False).
             self._va_value_type = type(self._va.value[0])  # if no Tuple VA is passed, this line will raise an exception
         else:
             self._va_is_tuple = False
             self._va_value_type = type(self._va.value)
+
         if not self._va.readonly:  # only overwrite the VA's setter if the VA is not read-only
-            self._va._setter = WeakMethod(self._update_parameter)
+            self._va.setter = self._update_parameter
         if self._va_is_tuple and not len(self._parameters) == len(self._va.value):
             raise ValueError("Length of Tuple VA does not match number of parameters passed.")
         if len(self._parameters) > 1 and not self._va_is_tuple:
             raise ValueError("Multiple parameters are passed, but VA is not of a tuple type.")
 
-        self._factor = None
-        if self._va_value_type == float:
-            self._factor = factor
+        # User-friendly name, just for debugging messages
+        if self._va_is_tuple:
+            self._param_names = "+".join(p.Name for p in self._parameters)
         else:
-            logging.warning("Cannot apply a conversion factor to a non int type VA")
+            self._param_names = self._parameters[0].Name
+
+        self._factor = factor
+        if factor and not issubclass(self._va_value_type, float):
+            raise ValueError(f"Cannot apply a conversion factor to a non float type VA (type is {self._va_value_type})")
 
         # If the VA has a range, check the Orsay server if a range of the parameter is specified and copy this range
         if hasattr(self._va, "range"):
@@ -1493,8 +1488,7 @@ class OrsayParameterConnector:
             else:
                 new_range = [self._va.range[0], self._va.range[1]]
 
-            for i in range(len(self._parameters)):
-                p = self._parameters[i]
+            for i, p in enumerate(self._parameters):
                 # Search for a lowerbound on the server
                 if self._minpar:  # in case a minimum parameter is supplied
                     if self._minpar[i].Actual is not None:
@@ -1511,6 +1505,7 @@ class OrsayParameterConnector:
                         new_range[0][i] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
                     else:
                         new_range[0] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
+
                 # Search for an upperbound on the server
                 if self._maxpar:  # in case a minimum parameter is supplied
                     if self._maxpar[i].Actual is not None:
@@ -1533,11 +1528,11 @@ class OrsayParameterConnector:
             else:
                 new_range = tuple(new_range)
 
-            # Set the range of the VA
-            # Overwrite the VA value to make sure the current value is within the new range, so the new range can be
-            # set. The correct value the VA should have will be set by calling update_VA below.
-            self._va._value = new_range[0]
-            self._va.range = new_range
+            if self._va.range != new_range:
+                # Set the range of the VA, and automatically update the value to fit within the range
+                self._va.clip_on_range = True
+                self._va.range = new_range
+                logging.debug("Updated range of parameter %s to %s", self._param_names, new_range)
 
         # The actual hart of this method, linking the update callbacks to the Orsay parameters
         for p in self._parameters:
@@ -1554,41 +1549,42 @@ class OrsayParameterConnector:
         if self._va is not None and self._parameters is not None:
             for p in self._parameters:
                 p.Unsubscribe(self.update_VA)
+            logging.debug("Disconnected param %s, VA value = %s", self._param_names, self._va.value)
             self._parameters = None
-            self._attr_name = None
-            self._va._setter = WeakMethod(self._va._VigilantAttribute__default_setter)  # va's setter back to default
+            self._va.setter = None
             self._va = None
 
-    def update_VA(self, parameter=None, attr_name=None):
+    def update_VA(self, parameter=None, attr_name="Actual"):
         """
         Copies the value of the parameter to the VA
 
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
-        :param (str) attr_name: The name of the attribute of parameter which was changed
+        :param (str) attr_name: The name of the attribute of parameter which was changed (typically, "Actual")
         """
-        # Check that the value of the attr_name argument makes sense
-        if attr_name is None:
-            attr_name = self._attr_name
-        if attr_name != self._attr_name:
+        # Drop events when something else than the "Actual" attribute changed (eg, Target).
+        if attr_name != "Actual":
             return
 
-        # Determine the new value that the VA should get
-        if self._va_is_tuple:
-            new_values = []
-            for p in self._parameters:
-                new_entry = self._parameter_to_VA_value(getattr(p, attr_name))
-                new_values.append(new_entry)
-            new_value = tuple(new_values)
-        else:
-            new_value = self._parameter_to_VA_value(getattr(self._parameters[0], attr_name))
+        # We don't use "parameter", as we could be called for any of the multiple parameters.
+        # => just update all of them.
+        try:
+            # Determine the new value that the VA should get
+            if self._va_is_tuple:
+                # Just read all the values again (it's simpler)
+                new_value = tuple(self._parameter_to_VA_value(getattr(p, attr_name)) for p in self._parameters)
+            else:
+                new_value = self._parameter_to_VA_value(getattr(self._parameters[0], attr_name))
+        except Exception:
+            logging.exception("Failed to convert parameter %s value %s to VA's value",
+                              self._param_names, getattr(self._parameters[0], attr_name))
+            return  # Don't raise an exception, to not be unsubscribed
 
-        # For logging
-        names = tuple(p.Name + "." + attr_name for p in self._parameters)
-        logging.debug("VA's of %s changed to %s." % (names, new_value))
+        # Write the new value to the VA (if has changed)
+        if new_value != self._va._value:
+            logging.debug("VA of %s updated to %s.", self._param_names, new_value)
 
-        # Write the new value to the VA
-        self._va._value = new_value  # to not call the setter
-        self._va.notify(new_value)
+            self._va._value = new_value  # to not call the setter
+            self._va.notify(new_value)
 
     def _update_parameter(self, goal):
         """
@@ -1597,16 +1593,18 @@ class OrsayParameterConnector:
         :param (any) goal: value to write to the Orsay parameter's Target attribute. Type depends on the VA type
         :return (any): goal
         """
+        # Note: if we can write the Parameter, then attr_name is Target.
+
         # Write the goal value of the VA to the Target of the corresponding Orsay parameter(s) and log this
         if self._va_is_tuple:
             for p, g in zip(self._parameters, goal):
                 target = self._VA_to_parameter_value(g)
                 p.Target = target
-                logging.debug("Changing %s to %s." % (p.Name, target))
-        else:  # in case goal is not subscriptable
+                logging.debug("Setting %s to %s.", p.Name, target)
+        else:  # in case goal is not iterable
             target = self._VA_to_parameter_value(goal)
             self._parameters[0].Target = target
-            logging.debug("Changing %s to %s." % (self._parameters[0].Name, target))
+            logging.debug("Setting %s to %s.", self._param_names, target)
 
         return goal
 
@@ -1622,7 +1620,7 @@ class OrsayParameterConnector:
             try:
                 return self._mapping[va_value]
             except KeyError:
-                logging.warning("Conversion dictionary does not contain key %s, using it as-is.", va_value)
+                logging.warning("Conversion dictionary for %s does not contain key %s, using it as-is.", self._param_names, va_value)
         elif self._conversion_funcs is not None:
             return self._conversion_funcs["va2par"](va_value)
         elif self._factor:
@@ -1641,7 +1639,7 @@ class OrsayParameterConnector:
             for key, value in self._mapping.items():
                 if value == type(value)(par_value):
                     return key
-            logging.warning("Conversion dictionary does not contain a key for value %s, using it as-is.", par_value)
+            logging.warning("Conversion dictionary for %s does not contain a key for value %s, using it as-is.", self._param_names, par_value)
         elif self._conversion_funcs is not None:
             return self._conversion_funcs["par2va"](par_value)
         elif self._va_value_type == float:
@@ -1655,7 +1653,7 @@ class OrsayParameterConnector:
         elif self._va_value_type == bool:
             return par_value in {True, "True", "true", "1", "ON"}
         else:
-            raise NotImplementedError("Handeling of VA's of type %s is not implemented for OrsayParameterConnector."
+            raise NotImplementedError("Handling of VA's of type %s is not implemented for OrsayParameterConnector."
                                       % self._va.__class__.__name__)
 
 

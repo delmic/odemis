@@ -503,6 +503,11 @@ class VigilantAttributeTest(unittest.TestCase):
         prop.value = 10.0
         self.assertEqual(prop.value, 11.0)
 
+        # remove the delegation
+        prop.setter = None
+        prop.value = 10.0
+        self.assertEqual(prop.value, 10.0)
+
     def test_tuple_of_tuple_of_numpyarray(self):
         prop = model.VigilantAttribute(None)
 
