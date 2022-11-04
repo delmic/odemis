@@ -110,7 +110,9 @@ class OrsayComponent(model.HwComponent):
         + processInfo (StringVA, read-only, value is datamodel.HybridPlatform.ProcessInfo.Actual)
 
         :param (dict string->kwargs) children: parameters setting for the children.
-            Known children are "pneumatic-suspension", "pressure", "pumping-system", "ups", "gis" and "gis-reservoir"
+            Known children are "pneumatic-suspension", "pressure", "pumping-system",
+            "ups", "gis", "gis-reservoir", "light", "fib-vacuum", "fib-source",
+            "fib-beam", "scanner", "focus", "detector", and "fib-aperture"
             They will be provided back in the .children VA
         :param (string) host: ip address of the Orsay server
         """
@@ -259,7 +261,7 @@ class OrsayComponent(model.HwComponent):
             self._focus = Focus(parent=self, daemon=daemon, **kwargs)
             self.children.value.add(self._focus)
 
-        # create the FIB Focus child
+        # create the FIB Aperture child
         try:
             kwargs = children["fib-aperture"]
         except (KeyError, TypeError):
@@ -398,12 +400,38 @@ class OrsayComponent(model.HwComponent):
             if self._gis_reservoir:
                 self._gis_reservoir.terminate()
                 self._gis_reservoir = None
-            super(OrsayComponent, self).terminate()
+            if self._fib_beam:
+                self._fib_beam.terminate()
+                self._fib_beam = None
+            if self._fib_source:
+                self._fib_source.terminate()
+                self._fib_source = None
+            if self._fib_vacuum:
+                self._fib_vacuum.terminate()
+                self._fib_vacuum = None
+            if self._light:
+                self._light.terminate()
+                self._light = None
+            if self._detector:
+                self._detector.terminate()
+                self._detector = None
+            if self._scanner:
+                self._scanner.terminate()
+                self._scanner = None
+            if self._focus:
+                self._focus.terminate()
+                self._focus = None
+            if self._fib_aperture:
+                self._fib_aperture.terminate()
+                self._fib_aperture = None
+
             self._stop_connection_monitor.set()  # stop trying to reconnect
             self._device.HttpConnection.close()  # close the connection
             self._device.MessageConnection.Connection.close()
             self.datamodel = None
             self._device = None
+
+            super(OrsayComponent, self).terminate()
 
 
 class pneumaticSuspension(model.HwComponent):
@@ -1232,11 +1260,15 @@ class GISReservoir(model.HwComponent):
             return
 
         msg = ""
-        try:
-            rod_pos = int(self._gis.RodPosition.Actual)
-        except TypeError as e:
-            logging.warning("Unable to convert RodPosition to integer: %s" % str(e))
+        val = self._gis.RodPosition.Actual
+        if val is None:
             rod_pos = ROD_NOT_DETECTED
+        else:
+            try:
+                rod_pos = int(val)
+            except TypeError as e:
+                logging.warning("Unable to convert RodPosition to integer: %s", e)
+                rod_pos = ROD_NOT_DETECTED
 
         if rod_pos == ROD_NOT_DETECTED:
             msg += "Reservoir rod not detected. "
