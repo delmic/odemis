@@ -39,7 +39,7 @@ from odemis.driver import orsay
 from odemis.driver.orsay import PRESET_MASK_NAME
 from odemis.model import HwError
 from odemis import model
-from odemis.util import timeout, almost_equal, testing
+from odemis.util import almost_equal, find_closest, testing, timeout
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -1598,11 +1598,6 @@ class TestFIBBeam(unittest.TestCase):
         self.fibsource.gunOn.value = init_gun  # return to value before test
         sleep(5)  # give it some time to turn off
 
-    def test_imagingMode(self):
-        """Check that the imagingMode VA is updated correctly"""
-        connector_test(self, self.fibbeam.imagingMode, self.fibbeam._datamodel.Scanner.OperatingMode,
-                       [(True, 1), (False, 0)], hw_safe=True, settletime=1)
-
     def test_imageFormat(self):
         """Check that the imageFormat VA is updated correctly"""
         init_format = self.fibbeam.imageFormat.value
@@ -1883,30 +1878,91 @@ class TestScanner(unittest.TestCase):
         self.fibbeam.blanker.value = init_value  # return to initial value
 
     def test_scale(self):
-        init_format = self.fibbeam.imageFormat.value
+        init_res = self.scanner.resolution.value
         init_scale = self.scanner.scale.value
 
+        max_res = self.scanner.resolution.range[1]
+
         self.scanner.scale.value = (1.0, 1.0)
+        self.scanner.resolution.value = max_res
         sleep(1)
         self.assertEqual(self.fibbeam._ionColumn.ImageSize.Actual, "1024 1024")
-        self.assertEqual(self.fibbeam.imageFormat.value, (1024, 1024))
+        self.assertEqual(self.fibbeam.imageFormat.value, max_res)
 
         self.scanner.scale.value = (2.0, 2.0)
         sleep(1)
         self.assertEqual(self.fibbeam._ionColumn.ImageSize.Actual, "512 512")
         self.assertEqual(self.fibbeam.imageFormat.value, (512, 512))
+        self.assertEqual(self.scanner.resolution.value, (512, 512))
 
-        self.fibbeam.imageFormat.value = (1024, 1024)  # Set using the VA for format correctly
+        # The resolution follow the scale, so it should be clipped to 512 x 512 when a larger value is requested
+        self.scanner.resolution.value = max_res  # Set using the VA for format correctly
+        self.assertEqual(self.fibbeam.imageFormat.value, (512, 512))
+        self.assertEqual(self.scanner.resolution.value, (512, 512))
         sleep(1)
-        self.assertEqual(self.scanner.scale.value, (1.0, 1.0))
 
-        self.fibbeam.imageFormat.value = (512, 512)  # Set using the VA for format correctly
+        self.assertEqual(self.scanner.scale.value, (2.0, 2.0))
+        self.scanner.resolution.value = (512, 512)  # Set using the VA for format correctly
         sleep(1)
         self.assertEqual(self.scanner.scale.value, (2.0, 2.0))
 
+        # Changing back the scale, should automatically update the resolution to the same FoV
+        self.scanner.scale.value = (1.0, 1.0)
+        self.assertEqual(self.scanner.resolution.value, max_res)
+        sleep(1)
+        self.assertEqual(self.scanner.scale.value, (1.0, 1.0))
+
+        # Try a scale that doesn't precisely match an internal value
+        self.scanner.scale.value = (1.999, 1.999)
+        self.assertEqual(self.scanner.scale.value, (2.0, 2.0))
+        self.assertEqual(self.scanner.resolution.value, (512, 512))
+
+        # Try the smallest scale
+        scale_min = self.scanner.scale.range[0]
+        self.scanner.scale.value = scale_min
+        self.assertEqual(self.scanner.scale.value, scale_min)
+        exp_res = max_res[0] / scale_min[0]
+        self.assertEqual(self.scanner.resolution.value, (exp_res, exp_res))
+
+        # Setting a non-square scale is reverted to a square one
+        self.scanner.scale.value = (2.0, 1.3)
+        self.assertAlmostEqual(self.scanner.scale.value, (2, 2))
+        exp_res = round(max_res[0] / 2)
+        self.assertEqual(self.scanner.resolution.value, (exp_res, exp_res))
+
+        # Setting a non-int scale
+        self.scanner.scale.value = (1.5, 1.5)
+        self.assertAlmostEqual(self.scanner.scale.value[0], 1.50, places=2)
+        exp_res = round(max_res[0] / 1.5)
+        self.assertEqual(self.scanner.resolution.value, (exp_res, exp_res))
+
         # return to values of before test
-        self.fibbeam.imageFormat.value = init_format
+        self.scanner.resolution.value = init_res
         self.scanner.scale.value = init_scale
+
+    def test_translation(self):
+        max_res = self.scanner.resolution.range[1]
+
+        # Translation cannot be more than 0, 0 on full FoV
+        self.scanner.scale.value = (1.0, 1.0)
+        self.scanner.resolution.value = max_res
+        self.scanner.translation.value = (5, 50)
+        self.assertEqual(self.scanner.translation.value, (0, 0))
+
+        self.scanner.scale.value = (4.0, 4.0)
+        self.scanner.translation.value = (5, 50)
+        self.assertEqual(self.scanner.translation.value, (0, 0))
+
+        # Using a small resolution so the FoV is smaller and the translation can
+        # be more than (0, 0)
+        res = (max_res[0] // 4, max_res[1] // 4)
+        self.scanner.scale.value = (1.0, 1.0)
+        self.scanner.resolution.value = res
+        self.scanner.translation.value = (5, 50)
+        self.assertEqual(self.scanner.translation.value, (5, 50))
+
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = self.scanner.resolution.range[1]
 
     def test_accelVoltage(self):
         init_value = self.scanner.accelVoltage.value
@@ -2026,132 +2082,346 @@ class TestDetector(unittest.TestCase):
             raise unittest.SkipTest(NO_SERVER_MSG)
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-        cls.datamodel = cls.oserver.datamodel
         for child in cls.oserver.children.value:
-            if child.name == CONFIG_FIBBEAM["name"]:
-                cls.fibbeam = child
-            elif child.name == CONFIG_SCANNER["name"]:
+            if child.name == CONFIG_SCANNER["name"]:
                 cls.scanner = child
             elif child.name == CONFIG_DETECTOR["name"]:
                 cls.detector = child
 
-        cls._init_dwellTime = cls.fibbeam.dwellTime.value
-        cls.fibbeam.dwellTime.value = min(cls.fibbeam.dwellTime.choices)  # Speeds up the test cases
+        cls._init_dwell_time = cls.scanner.dwellTime.value
 
     @classmethod
     def tearDownClass(cls):
-        cls.fibbeam.dwellTime.value = cls._init_dwellTime
+        cls.scanner.dwellTime.value = cls._init_dwell_time
+        logging.debug("Setting back the scale and res")
+        cls.scanner.scale.value = (1, 1)
+        cls.scanner.resolution.value = cls.scanner.resolution.range[1]
+        logging.debug("Test cases for detector completed")
 
-    def test_receiveImage(self):
-        image = self.detector.receiveLatestImage()
-        self.assertIsInstance(image, model.DataArray)
-        self.assertEqual(image.dtype, numpy.uint16)
-        self.assertEqual(image.shape, self.fibbeam.imageFormat.value)
+    def setUp(self):
+        # reset resolution and dwellTime
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = self.scanner.resolution.range[1]
+        # If it's not accepted as-is, we have a problem!
+        self.assertEqual(self.scanner.resolution.value, self.scanner.resolution.range[1])
+
+        self.scanner.dwellTime.value = min(self.scanner.dwellTime.choices)  # Speeds up the test cases
+        self.acq_dates = []  # MD_ACQ_DATE for each image was received
+        self.acq_done = threading.Event()
+
+        self.scanner.blanker.value = False
+
+    def tearDown(self):
+        self.scanner.blanker.value = True
 
     def test_contrast(self):
         """
-        Copied from the fib beam, the VA is tested on that component
+        Test change of contrast is accepted
         """
         init_contrast = self.detector.contrast.value
         self.assertTrue(model.hasVA(self.detector, "contrast"))
 
-        self.fibbeam.contrast.value = min(self.fibbeam.contrast.range)
-        self.assertEqual(self.detector.contrast.value, min(self.fibbeam.contrast.range))
+        self.detector.contrast.value = min(self.detector.contrast.range)
+        self.assertEqual(self.detector.contrast.value, min(self.detector.contrast.range))
 
         self.detector.contrast.value = max(self.detector.contrast.range)
-        self.assertEqual(self.fibbeam.contrast.value, max(self.fibbeam.contrast.range))
+        self.assertEqual(self.detector.contrast.value, max(self.detector.contrast.range))
 
         # Set back the original value
         self.detector.contrast.value = init_contrast
 
     def test_brightness(self):
         """
-        Copied from the fib beam, the VA is tested on that component
+        Test change of brightness is accepted
         """
         init_brightness = self.detector.brightness.value
         self.assertTrue(model.hasVA(self.detector, "brightness"))
 
-        self.fibbeam.brightness.value = min(self.fibbeam.brightness.range)
-        self.assertEqual(self.detector.brightness.value, min(self.fibbeam.brightness.range))
+        self.detector.brightness.value = min(self.detector.brightness.range)
+        self.assertEqual(self.detector.brightness.value, min(self.detector.brightness.range))
 
         self.detector.brightness.value = max(self.detector.brightness.range)
-        self.assertEqual(self.fibbeam.brightness.value, max(self.fibbeam.brightness.range))
+        self.assertEqual(self.detector.brightness.value, max(self.detector.brightness.range))
 
         # Set back the original value
         self.detector.brightness.value = init_brightness
 
-
-class TestDataflow(unittest.TestCase):
-    """
-    Test for the Detector class
-    """
-    @classmethod
-    def setUpClass(cls):
-        """
-        Setup the Orsay client
-        """
-        if TEST_NOHW == 1:
-            raise unittest.SkipTest(NO_SERVER_MSG)
-
-        cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
-        cls.datamodel = cls.oserver.datamodel
-        for child in cls.oserver.children.value:
-            if child.name == CONFIG_FIBBEAM["name"]:
-                cls.fibbeam = child
-            elif child.name == CONFIG_SCANNER["name"]:
-                cls.scanner = child
-            elif child.name == CONFIG_DETECTOR["name"]:
-                cls.detector = child
-
-        cls.dataflow = cls.detector.data
-        cls._init_dwellTime = cls.fibbeam.dwellTime.value
-        cls.fibbeam.dwellTime.value = min(cls.fibbeam.dwellTime.choices)  # Speeds up the test cases
-
-    @classmethod
-    def tearDownClass(cls):
-        cls.fibbeam.dwellTime.value = cls._init_dwellTime
-
-    def test_get(self):
-        self.scanner.blanker.value = False
-        image = self.dataflow.get(asap=False)
+    def test_get_data_array(self):
+        image = self.detector._get_data_array()
         self.assertIsInstance(image, model.DataArray)
         self.assertEqual(image.dtype, numpy.uint16)
-        self.assertEqual(image.shape, self.fibbeam.imageFormat.value)
+        self.assertEqual(image.shape, self.scanner.resolution.value)
+
+    def test_scale(self):
+        """
+        Check that the image is received at the specified scale
+        """
+        max_res = self.scanner.resolution.range[1]
+        min_pxs = self.scanner.pixelSize.value
+
+        res = max_res
+        self.scanner.scale.value = (1.0, 1.0)
+        self.scanner.resolution.value = res
+        self.assertEqual(self.scanner.scale.value, (1, 1))
+        self.assertEqual(self.scanner.resolution.value, res)
+        img = self.detector.data.get()
+        self.assertEqual(img.shape[::-1], res)
+        self.assertEqual(min_pxs, img.metadata[model.MD_PIXEL_SIZE])
+        self.assertEqual(img.metadata[model.MD_POS], (0, 0))
+
+        res = (max_res[0] // 2, max_res[1] // 2)
+        exp_pxs = (min_pxs[0] * 2, min_pxs[1] * 2)
+        self.scanner.scale.value = (2.0, 2.0)
+        self.scanner.resolution.value = res
+        self.assertEqual(self.scanner.scale.value, (2, 2))
+        self.assertEqual(self.scanner.resolution.value, res)
+        img = self.detector.data.get()
+
+        self.assertEqual(img.shape[::-1], res)
+        self.assertEqual(img.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+
+        # Scale 2, and minimum resolution (1,1) => resolution is respected
+        min_res = self.scanner.resolution.range[0]
+        exp_pxs = (min_pxs[0] * 2, min_pxs[1] * 2)
+        self.scanner.scale.value = (2.0, 2.0)
+        self.scanner.resolution.value = min_res
+        self.assertEqual(self.scanner.scale.value, (2, 2))
+        self.assertEqual(self.scanner.resolution.value, min_res)
+        img = self.detector.data.get()
+
+        self.assertEqual(img.shape[::-1], min_res)
+        self.assertEqual(img.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+
+    def test_roi(self):
+        """
+        Test acquisition of sub-areas, with update of MD_POS
+        """
+        min_pxs = self.scanner.pixelSize.value
+
+        # Simple RoI @ scale 1
+        res = (100, 200)
+        self.scanner.scale.value = (1.0, 1.0)
+        self.scanner.resolution.value = res
+        self.scanner.translation.value = (5, 50)
+
+        img = self.detector.data.get()
+        self.assertEqual(img.shape[::-1], res)
+        self.assertNotEqual(img.metadata[model.MD_POS], (0, 0))
+
+        # Using odd values for resolution (ie, non-even)
+        # It cannot be exactly at the center, even with translation requested to 0,0.
+        # => shifted by 0.5 pixel
+        res = (101, 201)
+        self.scanner.resolution.value = res
+        self.scanner.translation.value = (0, 0)
+        self.assertEqual(self.scanner.translation.value, (-0.5, -0.5))
+        img = self.detector.data.get()
+        self.assertEqual(img.shape[::-1], res)
+        exp_shift = -min_pxs[0] / 2, min_pxs[1] / 2  # Y up => positive
+        self.assertEqual(img.metadata[model.MD_POS], exp_shift)
+
+        # Odd values for resolution, with translation
+        self.scanner.resolution.value = res
+        self.scanner.translation.value = (5, 50)
+        self.assertEqual(self.scanner.translation.value, (5 - 0.5, 50 - 0.5))
+
+        img = self.detector.data.get()
+        self.assertEqual(img.shape[::-1], res)
+        self.assertNotEqual(img.metadata[model.MD_POS], (0, 0))
+
+        # Test RoI at smaller scale
+        self.scanner.scale.value = (1.3, 1.3)
+        self.scanner.resolution.value = res
+        self.scanner.translation.value = (5, 50)
+
+        img = self.detector.data.get()
+        self.assertEqual(img.shape[::-1], res)
+        self.assertNotEqual(img.metadata[model.MD_POS], (0, 0))
+
+        # A new even-number resolution resets the translation to a round number
+        res = (100, 200)
+        self.scanner.resolution.value = res
+        trans = self.scanner.translation.value
+        int_trans = tuple(int(t) for t in trans)
+        self.assertEqual(int_trans, trans)
+
+    def test_roi_going_up(self):
+        """
+        Test RoI position update. Until 2022-11-22, the Orsay Pyshics server had
+        bug that causes an move in Y to stop updating the data (and hence failure
+        to acquire an image on the Odemis side).
+        """
+        trans_rng = self.scanner.translation.range
+
+        # Simple RoI @ scale 1
+        res = (100, 200)
+        self.scanner.scale.value = (1.0, 1.0)
+        self.scanner.resolution.value = res
+        self.scanner.translation.value = (5, 50)
+
+        img = self.detector.data.get()
+        self.assertEqual(img.shape[::-1], res)
+        self.assertNotEqual(img.metadata[model.MD_POS], (0, 0))
+
+        # Use the largest translation allowed => should be clipped to the largest that fits
+        self.scanner.translation.value = (trans_rng[1][0], trans_rng[1][1])
+        self.assertNotEqual(self.scanner.translation.value, (trans_rng[1][0], trans_rng[1][1]))
+
+        img = self.detector.data.get()
+        self.assertEqual(img.shape[::-1], res)
+        self.assertNotEqual(img.metadata[model.MD_POS], (0, 0))
+
+        # Use the smallest translation allowed => should be clipped to the largest that fits
+        # The image should be coming from the top-left
+        self.scanner.translation.value = (trans_rng[0][0], trans_rng[0][1])
+        logging.debug("New translation = %s", self.scanner.translation.value)
+        self.assertNotEqual(self.scanner.translation.value, (trans_rng[0][0], trans_rng[0][1]))
+
+        # Check it works, consistently
+        for i in range(3):
+            img = self.detector.data.get()
+            self.assertEqual(img.shape[::-1], res)
+            self.assertNotEqual(img.metadata[model.MD_POS], (0, 0))
+            time.sleep(0.5)
+
+        # Back to the center
+        self.scanner.translation.value = (0, 0)
+        img = self.detector.data.get()
+        self.assertEqual(img.shape[::-1], res)
+        self.assertEqual(img.metadata[model.MD_POS], (0, 0))
+
+    def test_roi_live(self):
+        """
+        Test change of sub-area while acquiring.
+        As of 2022-11-28, this causes sometimes troubles in the Orsay Server,
+        which stops generating images, or let the scanner active although it
+        states that it's off.
+        """
+        self.skipTest("Orsay server fails from time to time to send images if the settings are changed live.")
+        # Note: the Orsay client never does this. It always restarts the acquisition
+        # when the settings are changed. We probably should do the same to keep
+        # the server stable.
+
+        res = self.scanner.resolution.range[1]
+        scan_time = numpy.prod(res) * self.scanner.dwellTime.value
+        self.scanner.scale.value = (1, 1)
+        self.scanner.resolution.value = res
+
+        number = 5
+        self.size = None  # don't check the size (as it varies)
+        self.left = number
+        self.detector.data.subscribe(self.receive_image)
+        time.sleep(0.1 + scan_time / 2)  # Wait enough to be acquiring
+
+        # Reduce resolution during acquisition => it should keep acquiring, but
+        # second next image should have the new resolution
+        res = (100, 200)
+        self.scanner.scale.value = (1.3, 1.3)
+        self.scanner.resolution.value = res
+        self.scanner.translation.value = (5, 50)
+
+        # (2022-11-28) Even a big timeout (>10s per image) doesn't help
+        self.acq_done.wait(number * (10 + scan_time * 1.1))
+
+        self.detector.data.unsubscribe(self.receive_image)  # just in case
+        self.assertEqual(self.left, 0)
+        logging.debug("Acquisition dates: %s", self.acq_dates)
+
+    def test_dataflow_get(self):
+        scan_time = numpy.prod(self.scanner.resolution.value) * self.scanner.dwellTime.value
+        durations = []
 
         # Test with asap = True
-        image = self.dataflow.get(asap=True)
-        self.assertIsInstance(image, model.DataArray)
-        self.assertEqual(image.dtype, numpy.uint16)
-        self.assertEqual(image.shape, self.fibbeam.imageFormat.value)
-        self.scanner.blanker.value = True
-
-    def test_get_varying_dwell_time(self):
-        self.skipTest(f"By default this test is skipped. It test the functionality on changing dwell times. User input is required")
-
-        self.scanner.blanker.value = False
-        fast = min(self.fibbeam.dwellTime.choices)  # The default use is the shortest dwellTime
-        slow = max(self.fibbeam.dwellTime.choices)  # The default use is the longest dwellTime
-        for img_number, dwellTime in enumerate([fast, slow, fast, slow, fast, slow, fast]):
-            self.fibbeam.dwellTime.value = dwellTime
-
-            def display_image(img, img_number):
-                import cv2
-                cv2.imwrite(f"Img {img_number} with dwell time {dwellTime} at time {round(time.time())}.png", img)
-
-            if img_number in (4, 6):  # Also check if the get method works with consecutive calls
-                thread_thing = threading.Thread(target=self.dataflow.get, name="test")
-                thread_thing.deamon = True
-                thread_thing.start()
-                time.sleep(2)
-
-            image = self.dataflow.get(asap=False)
+        for i in range(5):
+            start_t = time.time()
+            image = self.detector.data.get(asap=True)
             self.assertIsInstance(image, model.DataArray)
             self.assertEqual(image.dtype, numpy.uint16)
-            self.assertEqual(image.shape, self.fibbeam.imageFormat.value)
-            # display_image(image, img_number)  # Don't save by default
-            time.sleep(2)  # Wait in between get calls.
+            self.assertEqual(image.shape, self.scanner.resolution.value)
+            self.assertIn(model.MD_ACQ_DATE, image.metadata)
+            stop_t = time.time()
+            logging.info("Expected time: %s s, actual time: %g s", scan_time, stop_t - start_t)
+            durations.append(stop_t - start_t)
 
-        self.scanner.blanker.value = True
+        logging.info("Durations: %s", durations)
+
+    def test_dataflow_get_not_asap(self):
+        scan_time = numpy.prod(self.scanner.resolution.value) * self.scanner.dwellTime.value
+        durations = []
+
+        self.size = self.scanner.resolution.value
+        self.left = 50
+        self.detector.data.subscribe(self.receive_image)
+
+        try:
+            # Test with asap = False (should not have any difference when the stream is not already playing)
+            for i in range(5):
+                time.sleep(0.5)  # Pretend to do something long and useful
+                start_t = time.time()
+                image = self.detector.data.get(asap=False)
+                self.assertIsInstance(image, model.DataArray)
+                self.assertEqual(image.dtype, numpy.uint16)
+                self.assertEqual(image.shape, self.scanner.resolution.value)
+                self.assertGreaterEqual(image.metadata[model.MD_ACQ_DATE], start_t)
+                stop_t = time.time()
+                logging.info("Expected time: %s s, actual time: %g s", scan_time, stop_t - start_t)
+                durations.append(stop_t - start_t)
+        finally:
+            self.detector.data.unsubscribe(self.receive_image)
+
+        logging.info("Durations: %s", durations)
+
+    def test_dataflow_get_varying_dwell_time(self):
+        fast = min(self.scanner.dwellTime.choices)  # The default use is the shortest dwellTime
+        slow = find_closest(fast * 10, self.scanner.dwellTime.choices)
+
+        for i, dt in enumerate([fast, slow, fast, slow, fast, slow, fast]):
+            self.scanner.dwellTime.value = dt
+            scan_time = numpy.prod(self.scanner.resolution.value) * self.scanner.dwellTime.value
+            logging.info("Acquiring an image with dwell time %g s, should take at least %s s",
+                         dt, scan_time)
+
+            if i in (2, 4, 5):  # Also check that the get method works with concurrent calls
+                t = threading.Thread(target=self.detector.data.get)
+                t.deamon = True
+                t.start()
+                time.sleep(0.1)
+
+            start_t = time.time()
+            image = self.detector.data.get(asap=False)
+            self.assertIsInstance(image, model.DataArray)
+            self.assertEqual(image.dtype, numpy.uint16)
+            self.assertEqual(image.shape, self.scanner.resolution.value)
+            stop_t = time.time()
+            logging.info("Expected time: %s s, actual time: %g s", scan_time, stop_t - start_t)
+
+            time.sleep(0.5)  # Wait in between get calls.
+
+    def test_subscribe(self):
+        scan_time = numpy.prod(self.scanner.resolution.value) * self.scanner.dwellTime.value
+
+        number = 5
+        self.size = self.scanner.resolution.value
+        self.left = number
+        self.detector.data.subscribe(self.receive_image)
+
+        self.acq_done.wait(number * (2 + scan_time * 1.1))  # 2s per image should be more than enough in any case
+
+        self.assertEqual(self.left, 0)
+        logging.debug("Acquisition dates: %s", self.acq_dates)
+
+    def receive_image(self, dataflow, image):
+        """
+        callback for df of test_acquire_flow()
+        """
+        if self.size is not None:
+            self.assertEqual(image.shape, self.size[::-1])
+        self.assertIn(model.MD_DWELL_TIME, image.metadata)
+        self.acq_dates.append(image.metadata[model.MD_ACQ_DATE])
+        self.left -= 1
+        if self.left <= 0:
+            dataflow.unsubscribe(self.receive_image)
+            self.acq_done.set()
 
 
 class TestFocus(unittest.TestCase):

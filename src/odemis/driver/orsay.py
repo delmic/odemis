@@ -2132,10 +2132,20 @@ class FIBSource(model.HwComponent):
             self._ionColumn = None
 
 
+# The scanner seems to support pretty much any resolutions, up to 1024x1024.
+# The minimum resolution is just an arbitrary limit here.
+# This corresponds to the "full field of view". The scanner can actually scan
+# any sub-area within this
+SCANNER_MIN_RES = (64, 64)  # px
+SCANNER_MAX_RES = (1024, 1024)  # px
+
+
 class FIBBeam(model.HwComponent):
     """
     Represents the beam of the Focused Ion Beam (FIB) from Orsay Physics. It contains many beam optics settings.
     """
+
+    # TODO: merge these controls directly into the user-facing components (ie, Scanner, Detector, Focus)
 
     def __init__(self, name, role, parent, **kwargs):
         """
@@ -2157,7 +2167,7 @@ class FIBBeam(model.HwComponent):
         + imageFromSteerers: BooleanVA, True to image from Steerers, False to image from Octopoles
         + objectiveVoltage: FloatContinuous, unit="V", range=(0.0, 2e4)
         + shift: TupleContinuous Float, unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)]
-        + horizontalFov: FloatContinuous, unit="m", range=(0.0, 1.0)
+        + horizontalFoV: FloatContinuous, unit="m", range=(0.0, 1.0)
         + measuringCurrent: BooleanVA
         + current: FloatContinuous, readonly, unit="A", range=(0.0, 1.0e-5)
         + videoDelay: FloatContinuous, unit="s", range=(0, 1e-3)
@@ -2167,9 +2177,7 @@ class FIBBeam(model.HwComponent):
         + dwellTime: FloatEnumerated, unit="s", choices=(1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7)
         + contrast: FloatContinuous, unit="", range=(0, 1)
         + brightness: FloatContinuous, unit="", range=(0, 1)
-        + imagingMode: BooleanVA, True means 'imaging in progess', False means 'not imaging'
         + imageFormat: VAEnumerated, unit="px", choices={(512, 512), (1024, 1024)}
-                       TODO: add support for rectangular options (640, 480) and (800, 600)
         + translation: TupleContinuous Float, unit="px", range=[(-512.0, -512.0), (512.0, 512.0)]
         + resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
         """
@@ -2183,7 +2191,10 @@ class FIBBeam(model.HwComponent):
         self._hvps = None
         self._sed = None
 
-        self.blanker = model.VAEnumerated(True, choices={True: "blanking", False: "no blanking", None: "imaging"})
+        # FIXME: make it None (auto) at start, as on other drivers
+        # TODO: not sure whether "auto" really works, but at least it makes the Orsay GUI indicate the beam
+        # is on, which is confusing (or maybe it's really, on and SOURCE just means like "OFF" with clever blanking during flyback?)
+        self.blanker = model.VAEnumerated(True, choices={True: "blanked", False: "unblanked", None: "auto"})
         self._blankerConnector = None
         self.blankerVoltage = model.FloatContinuous(0.0, unit="V", range=(0, 150))
         self._blankerVoltageConnector = None
@@ -2214,23 +2225,23 @@ class FIBBeam(model.HwComponent):
         # Note: Currently unused and unsafe
         # self.imageFromSteerers = model.BooleanVA(False)  # True to image from Steerers, False to image from Octopoles
         # self._imageFromSteerersConnector = None
-        self.objectiveVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 2e4))
+        self.objectiveVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 20e3))
         self._objectiveVoltageConnector = None
         self.shift = model.TupleContinuous((0.0, 0.0), unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)])
         self._shiftConnector = None
-        self.horizontalFov = model.FloatContinuous(0.0, unit="m", range=(0.0, 1.0))
-        self._horizontalFovConnector = None
+        self.horizontalFoV = model.FloatContinuous(0.0, unit="m", range=(0.0, 1.0))
+        self._horizontalFoVConnector = None
         self.measuringCurrent = model.BooleanVA(False)
         self._measuringCurrentConnector = None
         self.current = model.FloatContinuous(0.0, readonly=True, unit="A", range=(0.0, 1.0e-5))
         self._currentConnector = None
-        self.videoDelay = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
+        self.videoDelay = model.FloatContinuous(0.0, unit="s", range=(0.0, 1e-3))
         self._videoDelayConnector = None
-        self.flybackTime = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
+        self.flybackTime = model.FloatContinuous(0.0, unit="s", range=(0.0, 1e-3))
         self._flybackTimeConnector = None
-        self.blankingDelay = model.FloatContinuous(0.0, unit="s", range=(0, 1e-3))
+        self.blankingDelay = model.FloatContinuous(0.0, unit="s", range=(0.0, 1e-3))
         self._blankingDelayConnector = None
-        self.rotation = model.FloatContinuous(0.0, unit="rad", range=(0, 2 * pi))
+        self.rotation = model.FloatContinuous(0.0, unit="rad", range=(0.0, 2 * pi))
         self._rotationConnector = None
         self._rot_conversion_functions = {
             "va2par": util.wrap_to_mpi_ppi,
@@ -2238,12 +2249,15 @@ class FIBBeam(model.HwComponent):
         self.dwellTime = model.FloatEnumerated(1e-7, unit="s",
                                                choices={1e-3, 5e-4, 1e-4, 5e-5, 1e-5, 5e-6, 1e-6, 5e-7, 2e-7, 1e-7})
         self._dwellTimeConnector = None
-        self.contrast = model.FloatContinuous(1.0, unit="", range=(0, 1))
+        self.contrast = model.FloatContinuous(1.0, unit="", range=(0.0, 1.0))
         self._contrastConnector = None
-        self.brightness = model.FloatContinuous(1.0, unit="", range=(0, 1))
+        self.brightness = model.FloatContinuous(1.0, unit="", range=(0.0, 1.0))
         self._brightnessConnector = None
-        self.imagingMode = model.BooleanVA(False)  # True means 'imaging in progess', False means 'not imaging'
-        self._imagingModeConnector = None
+
+        # TODO: instead of trying so hard to connect back and forth the image
+        # settings, let's just set them as requested by the user, just before
+        # acquiring an image? (And apply them immediately if the acquisition is
+        # running?)
 
         # The following three VA's are highly intertwined. The imageFormat is the size of the buffer (in pixels) in
         # which the image is being stored on the Orsay server, and is therefore the maximal value of the resolution.
@@ -2257,32 +2271,30 @@ class FIBBeam(model.HwComponent):
         # is imaged (i.e. doubling the imageFormat will double the resolution).
         # When the resolution is changed, the value of translation is adapted such that it is as close to its current
         # value as possible, whilst making sure the area defined by resolution completely fits the imageFormat.
-        self.imageFormat = model.VAEnumerated((1024, 1024), unit="px", choices={(512, 512), (1024, 1024)},
+        # The server accepts non-square image size, but we force it to be square,
+        # because it's mapped to scale, and the server always keeps the scale square.
+        self.imageFormat = model.ResolutionVA(SCANNER_MAX_RES, rng=(SCANNER_MIN_RES, SCANNER_MAX_RES),
                                               setter=self._imageFormat_setter)
-        self.resolution = model.TupleContinuous((1024, 1024), unit="px", range=[(1, 1), (1024, 1024)],
+        self.resolution = model.TupleContinuous(SCANNER_MAX_RES, unit="px", range=[(1, 1), SCANNER_MAX_RES],
                                                 setter=self._resolution_setter)
-        self.translation = model.TupleContinuous((0.0, 0.0), unit="px", range=[(-512.0, -512.0), (512.0, 512.0)],
+
+        # It uses the pixel convention: smallest value corresponds to top left
+        # of the image. The unit is the pixel at scale == 1. We accept floats,
+        # because it's Odemis convention, however, it will always be rounded to
+        # the nearest integer.
+        self.translation = model.TupleContinuous((0, 0), range=[(-512, -512), (512, 512)],
+                                                 unit="px",
+                                                 cls=(int, float),
                                                  setter=self._translation_setter)
-        # imageFormatUpdatedResolutionTranslation is an event that is cleared when the imageFormat is set. The event is
-        # set when the resolution and translation are being updated.
-        # This is needed, because changing the image format on the server, sets the translation to (0.0, 0.0) and
-        # resolution equal to the new image format. (This is something the Orsay server does automatically.) We don't
-        # want that. We want to keep the resolution and translation as they were (except for appropriate scaling). So
-        # after updating the imageFormat, an update from the server on resolution and translation should be ignored and
-        # instead the current value of the resolution and translation (with appropriate scaling) is sent to the server.
-        self.imageFormatUpdatedResolutionTranslation = threading.Event()
-        self.imageFormatUpdatedResolutionTranslation.set()
-        # translation and resolution are on the Orsay server captured in a single variable, called ImageArea. This
-        # means that problems can arise when trying to update translation and resolution shortly after each other.
-        # The following Lock is acquired by the setters of the translation and resolution VA's. The below Event is
-        # cleared by these same setters and set by the updater of the translation and resolution VA's, which gets
-        # called after the ImageArea on the Orsay server changes value. The setters of both VA's block until the
-        # event gets set (or timeout). The blocking makes sure two consecutive calles to update one and then the
-        # other VA won't interfere with each other. The addition of the Lock assures that also calls originating from
-        # different threads won't interfere with each other.
+
+        # Translation and resolution are on the Orsay server captured in a
+        # single variable, called ImageArea. This means that problems can arise
+        # when trying to update translation and resolution shortly after each
+        # other. The following Lock is acquired by the setters of the
+        # translation and resolution VA's. The addition of the Lock assures that
+        # also calls originating from different threads won't interfere with
+        # each other.
         self.updatingImageArea = threading.Lock()
-        self.imageAreaUpdated = threading.Event()
-        self.imageAreaUpdated.set()
 
         self.on_connect()
 
@@ -2296,6 +2308,9 @@ class FIBBeam(model.HwComponent):
         self._hvps = self.parent.datamodel.HVPSFloatingIon
         self._sed = self.parent.datamodel.Sed
 
+        # OFF always disables the blanker.
+        # SOURCE disables the blanker, but activates it during fly back. (probably also activated when not scanning)
+        # LOCAL always activates the blanker.
         self._blankerConnector = OrsayParameterConnector(self.blanker, self._ionColumn.BlankingState,
                                                          mapping={True: "LOCAL", False: "OFF", None: "SOURCE"})
         self._blankerVoltageConnector = OrsayParameterConnector(self.blankerVoltage, self._ionColumn.BlankingVoltage,
@@ -2370,7 +2385,7 @@ class FIBBeam(model.HwComponent):
                                                                    self._ionColumn.ObjectiveShiftY_Minvalue],
                                                            maxpar=[self._ionColumn.ObjectiveShiftX_Maxvalue,
                                                                    self._ionColumn.ObjectiveShiftY_Maxvalue])
-        self._horizontalFovConnector = OrsayParameterConnector(self.horizontalFov, self._ionColumn.ObjectiveFieldSize,
+        self._horizontalFoVConnector = OrsayParameterConnector(self.horizontalFoV, self._ionColumn.ObjectiveFieldSize,
                                                                minpar=self._ionColumn.ObjectiveFieldSize_Minvalue,
                                                                maxpar=self._ionColumn.ObjectiveFieldSize_Maxvalue)
         self._measuringCurrentConnector = OrsayParameterConnector(self.measuringCurrent, self._ionColumn.FaradayStart,
@@ -2388,8 +2403,6 @@ class FIBBeam(model.HwComponent):
                                                            maxpar=self._ionColumn.PixelTime_Maxvalue)
         self._contrastConnector = OrsayParameterConnector(self.contrast, self._sed.PMT, factor=0.01)
         self._brightnessConnector = OrsayParameterConnector(self.brightness, self._sed.Level, factor=0.01)
-        self._imagingModeConnector = OrsayParameterConnector(self.imagingMode, self._datamodel.Scanner.OperatingMode,
-                                                             mapping={True: 1, False: 0})
         # Subscribe to the parameter on the Orsay server
         self._ionColumn.ImageSize.Subscribe(self._updateImageFormat)
         self._ionColumn.ImageArea.Subscribe(self._updateTranslationResolution)
@@ -2412,52 +2425,76 @@ class FIBBeam(model.HwComponent):
         :param (tuple (int, int)) value: The goal format of the image.
         :return (tuple (int, int)): The actual image format set.
         """
-        # let it be known that image format is updating resolution and translation
-        self.imageFormatUpdatedResolutionTranslation.clear()
+        # Only accept square shape
+        value = (value[0], value[1])
 
         # get the old image format and determine the scale change
         prev_value = self.imageFormat.value
-        logging.debug("Image format is: %s. Updating translation and resolution and their ranges accordingly."
-                      % str(prev_value))
         scale = value[0] / prev_value[0]  # determine by how much the x axis is scaled
 
-        self._ionColumn.ImageSize.Target = "%d %d" % (value[0], value[1])  # write the new image format to the server
+        # determine new value of resolution (adjusted by the scale to keep the same area)
+        res = self.resolution.value
+        new_resolution = tuple(int(k * scale) for k in res)
+        new_resolution = self.resolution.clip(new_resolution)
 
-        # determine new value of resolution
-        new_resolution = [int(k * scale) for k in self.resolution.value]
-        for i in range(len(new_resolution)):  # clip so new_resolution cannot contain values outside of range, like 0
-            if new_resolution[i] < self.resolution.range[0][i]:
-                new_resolution[i] = self.resolution.range[0][i]
-            elif new_resolution[i] > self.resolution.range[1][i]:
-                new_resolution[i] = self.resolution.range[1][i]
-        new_resolution = tuple(new_resolution)
+        # translation is stored as pixels at scale 1, so no need to change
 
-        # determine new value of translation
-        new_translation = list(self.translation.value)
-        # if scale < 1:
-        new_translation[0] = int(new_translation[0])
-        new_translation[1] = int(new_translation[1])
-        new_translation = [float(k * scale) for k in new_translation]
-        if scale < 1:
-            # if horizontal resolution is odd and the translation does not already contain a half
-            if new_resolution[0] % 2 != 0 and new_translation[0] == int(new_translation[0]):
-                new_translation[0] -= 0.5  # prefer adding a pixel to the left
-            # if vertical resolution is odd and the translation does not already contain a half
-            if new_resolution[1] % 2 != 0 and new_translation[1] == int(new_translation[1]):
-                new_translation[1] += 0.5  # prefer adding a pixel to the top
-        new_translation = tuple(new_translation)
+        im_size = "%d %d" % (value[0], value[1])
 
-        self.imageFormatUpdatedResolutionTranslation.wait(10)  # wait until the image format has updated image area
-        # This is needed, because changing the image format on the server, sets the translation to (0.0, 0.0) and
-        # resolution equal to the new image format. We don't want that. We want to keep the resolution and translation
-        # as they were (except for appropriate scaling).
+        if self._ionColumn.ImageSize.Target != im_size:
+            # Wait until the image format has updated image area. This is
+            # needed, because changing the image format on the server
+            # automatically sets the ImageArea to full FoV. We don't want that.
+            # We want to keep the resolution and translation as they were
+            # (except for appropriate scaling).
+            self._set_and_wait_update(self._ionColumn.ImageSize, im_size)
 
+        # This works because the new ImageFormat value has already been set by _updateImageFormat
         self.resolution.value = new_resolution  # set new resolution with calling the setter
-        self.translation.value = new_translation  # set new translation with calling the setter
 
-        logging.debug("Updating imageFormat to %s and updating translation and resolution and their ranges accordingly."
-                      % str(value))
         return value
+
+    def _set_and_wait_update(self, param, value: str, timeout:float=5, resend:float=1) -> bool:
+        """
+        Set a Parameter to a value, and wait until the current value is the value
+        requested.
+        :param param: (Orsay Parameter) the parameter to change. .Target is used to
+          set the value and .Actual is used to read the current value.
+        :param value: the value to set. It should be exactly as it will eventually
+          be accepted by the server (as it's compared to .Actual).
+        :param timeout: maximum time to wait
+        :param resend: maximum time to wait until setting the value again
+        :return: True if the current value is now the value requested.
+           False if it failed, and the Parameter has a different value, and the
+           timeout was reached.
+        """
+        logging.debug("Requesting %s to %s.", param.Name, value)
+        param.Target = value
+
+        # Now wait until the Actual value has reached the requested value
+        # We could use Subscribe() to be more efficient, but to keep the code,
+        # simple for now we just do polling.
+        now = time.time()
+        timeout_t = now + timeout  # s
+        resend_t = now + resend  # s
+        while now < timeout_t:
+            if param.Actual == value:
+                logging.debug("%s updated", param.Name)
+                return True
+
+            logging.debug("Waiting for %s == %s (currently = %s, target = %s).",
+                          param.Name, value, param.Actual, param.Target)
+            time.sleep(0.05)
+
+            now = time.time()
+            if now > resend_t:
+                logging.debug("Retrying to update %s to %s", param.Name, value)
+                param.Target = value
+                resend_t = now + resend  # s
+        else:
+            logging.warning("%s not updated, giving up waiting for %s, now at %s",
+                            param.Name, value, param.Actual)
+            return False
 
     def _updateImageFormat(self, parameter=None, attr_name="Actual"):
         """
@@ -2471,44 +2508,57 @@ class FIBBeam(model.HwComponent):
             parameter = self._ionColumn.ImageSize
         if attr_name != "Actual":
             return
+
         state = self._ionColumn.ImageSize.Actual
-        logging.debug("Image format is: %s. Updating translation and resolution and their ranges accordingly." % state)
+        logging.debug("Received ImageSize: %s.", state)
         new_value = tuple(map(int, state.split(" ")))
-        self.imageFormat._value = new_value  # to not call the setter
-        self.imageFormat.notify(new_value)
+
+        if new_value[0] != new_value[1]:
+            # For the scale, we only support square image format
+            logging.warning("Image format received is not square: %s", new_value)
+
+        if self.imageFormat._value != new_value:
+            self.imageFormat._value = new_value  # to not call the setter
+            self.imageFormat.notify(new_value)
 
     def _clip_and_set_image_area(self, target_resolution, target_translation):
         """
         Clip the translation based on the resolution, calculate the imageArea and set the imageArea to the Orsay server
 
         :param ((int, int)) target_resolution: intended resolution to set
-        :param ((float, float)) target_translation: intended translation to set
-        :return: ((float, float)) new_translation: actual translation set
+        :param ((int, int)) target_translation: intended translation to set
+        :return: ((int, int)) new_translation: actual translation set
         """
-        target_translation = list(target_translation)  # make the entries mutable
+        im_fmt = self.imageFormat.value
         # find the current limits for translation and clip the new value
-        tran_limit_0 = float(self.imageFormat.value[0] / 2 - target_resolution[0] / 2)
-        tran_limit_1 = float(self.imageFormat.value[1] / 2 - target_resolution[1] / 2)
-        if target_translation[0] < -tran_limit_0:
-            target_translation[0] = -tran_limit_0
-        elif target_translation[0] > tran_limit_0:
-            target_translation[0] = tran_limit_0
-        if target_translation[1] < -tran_limit_1:
-            target_translation[1] = -tran_limit_1
-        elif target_translation[1] > tran_limit_1:
-            target_translation[1] = tran_limit_1
+        trans_max = (int(im_fmt[0] / 2 - target_resolution[0] / 2),
+                     int(im_fmt[1] / 2 - target_resolution[1] / 2))
+        # the min is just the opposite of the max (eg, -512 -> 512)
+        target_translation = (max(-trans_max[0], min(target_translation[0], trans_max[0])),
+                              max(-trans_max[1], min(target_translation[1], trans_max[1])))
 
-        translation_target = [0, 0]  # keep centre where it was, move target_trans from centre to upper left corner
-        translation_target[0] = int(self.imageFormat.value[0] / 2 + target_translation[0] - target_resolution[0] / 2)
-        translation_target[1] = int(self.imageFormat.value[1] / 2 - target_translation[1] - target_resolution[1] / 2)
+        # Convert coordinates from center to left-top
+        target_trans_lt = (int(im_fmt[0] / 2 + target_translation[0] - target_resolution[0] / 2),
+                           int(im_fmt[1] / 2 + target_translation[1] - target_resolution[1] / 2))
 
-        target = map(str, translation_target + list(target_resolution))
+        target = map(str, target_trans_lt + target_resolution)
         target = " ".join(target)
-        self._ionColumn.ImageArea.Target = target
 
-        logging.debug("Updating imageArea to %s." % target)
+        # Wait until the settings are actually set. It's especially important in
+        # case there are consecutive calls to change the resolution/translation.
+        # Without blocking, they could interfere with each other. It usually
+        # takes ~200 ms for the settings to update.
+        # As of 2022-11-17, there is a bug in the server which causes the ImageArea
+        # to sometimes reset to 0 0 1024 1024 when setting the value while scanning.
+        # => Wait 5 s for the settings to be updated, while retrying to set it every 1 s.
+        self._set_and_wait_update(self._ionColumn.ImageArea, target)
 
-        return tuple(target_translation)
+        # Compute the actual translation, based on the rounding (if resolution is
+        # an odd number, the translation will be -0.5).
+        new_translation = (target_trans_lt[0] - im_fmt[0] / 2 + target_resolution[0] / 2,
+                           target_trans_lt[1] - im_fmt[1] / 2 + target_resolution[1] / 2)
+
+        return new_translation
 
     def _translation_setter(self, value):
         """
@@ -2523,23 +2573,9 @@ class FIBBeam(model.HwComponent):
         (resolution VA) to prevent the new translation from placing part of the image area outside of the image format.
         """
         with self.updatingImageArea:  # translation and resolution cannot be updated simultaneously
-            self.imageAreaUpdated.clear()
-
-            new_translation = list(value)
-
-            new_translation[0] = math.ceil(new_translation[0])
-            new_translation[1] = math.floor(new_translation[1])
-            if self.resolution.value[0] % 2 != 0:  # if horizontal resolution is odd
-                new_translation[0] -= 0.5  # prefer adding a pixel to the left
-            if self.resolution.value[1] % 2 != 0:  # if vertical resolution is odd
-                new_translation[1] += 0.5  # prefer adding a pixel to the top
-
-            clipped_translation = self._clip_and_set_image_area(self.resolution.value, new_translation)
-
-            # wait for the Orsay server to have updated the image area based on the new translation (or timeout)
-            self.imageAreaUpdated.wait(10)
-
-            return clipped_translation
+            trans = tuple(int(round(t)) for t in value)
+            trans = self._clip_and_set_image_area(self.resolution.value, trans)
+            return trans
 
     def _resolution_setter(self, value):
         """
@@ -2551,18 +2587,17 @@ class FIBBeam(model.HwComponent):
         Also adapts the coordinates of the top left corner of the image area to assure that the centre of the image area
         stays where it is.
         """
-        with self.updatingImageArea:  # translation and resolution cannot be updated simultaniously
-            self.imageAreaUpdated.clear()
+        with self.updatingImageArea:  # translation and resolution cannot be updated simultaneously
+            max_res = self.imageFormat.value
+            res = (min(value[0], max_res[0]),
+                   min(value[1], max_res[1]))
 
-            self._clip_and_set_image_area(value, self.translation.value)
+            self._clip_and_set_image_area(res, self.translation.value)
             # no need to set the clipped translation, because the clipped translation is used to calculate the new image
-            # area, which is set to the Orsay server, which will call _updateTranalstionResolution, which will write the
+            # area, which is set to the Orsay server, which will call _updateTranslationResolution, which will write the
             # clipped translation to the translation VA.
 
-            # wait for the Orsay server to have updated the image area based on the new resolution (or timeout)
-            self.imageAreaUpdated.wait(10)
-
-            return value
+            return res
 
     def _updateTranslationResolution(self, parameter=None, attr_name="Actual"):
         """
@@ -2578,27 +2613,31 @@ class FIBBeam(model.HwComponent):
         if attr_name != "Actual":
             return
 
-        if not self.imageFormatUpdatedResolutionTranslation.is_set():  # if this update comes from change in imageFormat
-            self.imageFormatUpdatedResolutionTranslation.set()  # let it be known that resolution and translation are
-            # not awaiting an update because of image format any more
-            return  # but don't actually perform the update
-
         area = self._ionColumn.ImageArea.Actual
-        logging.debug("Image area is: %s." % area)
+        logging.debug("Received ImageArea: %s.", area)
         area = list(map(int, area.split(" ")))
 
-        new_translation = [0, 0]  # move new_translation from centre to upper left corner
-        new_translation[0] = - self.imageFormat.value[0] / 2 + area[2] / 2 + area[0]
-        new_translation[1] = self.imageFormat.value[1] / 2 - area[3] / 2 - area[1]
-        new_translation = tuple(map(float, new_translation))
+        # Convert translation from upper left corner to center
+        new_translation = (area[0] - self.imageFormat.value[0] / 2 + area[2] / 2,
+                           area[1] - self.imageFormat.value[1] / 2 + area[3] / 2)
+
+        # Note: when the resolution is an odd number of pixels, the center cannot
+        # be exactly at the center, and as we always round down, it's shifted by
+        # -0.5. MD_POS is also calculated similarly.
 
         new_resolution = tuple(area[2:4])
 
-        self.translation._value = new_translation  # to not call the setter
-        self.resolution._value = new_resolution  # to not call the setter
-        self.imageAreaUpdated.set()
-        self.translation.notify(new_translation)
-        self.resolution.notify(new_resolution)
+        if (
+            self.translation._value != new_translation or
+            self.resolution._value != new_resolution
+        ):
+            logging.debug("Updated resolution to %s, translation to %s", new_resolution, new_translation)
+            # Don't call the setters, as they would try to change the Parameter again...
+            # possibly causing an infinite loop.
+            self.translation._value = new_translation  # to not call the setter
+            self.resolution._value = new_resolution  # to not call the setter
+            self.translation.notify(new_translation)
+            self.resolution.notify(new_resolution)
 
     def terminate(self):
         """
@@ -2697,7 +2736,7 @@ class Scanner(model.Emitter):
         Defines the following VA's and links them to the callbacks from the Orsay server:
         • power: IntEnumerated, choices={0: "off", 1: "on"}
         • blanker: VAEnumerated, choices={True: "blanking", False: "no blanking", None: "imaging"}
-        • horizontalFov: FloatContinuous, unit="m", range=(0.0, 1.0)
+        • horizontalFoV: FloatContinuous, unit="m", range=(0.0, 1.0)
         • scale: VAEnumerate, choices={(1.0, 1.0), (2.0, 2.0)}
         • resolution: TupleContinuous Int, unit="px", range=[(1, 1), (1024, 1024)]
         • translation: TupleContinuous Float, unit="px", range=[(-512.0, -512.0), (512.0, 512.0)]
@@ -2707,7 +2746,6 @@ class Scanner(model.Emitter):
         • pixelSize: TupleContinuous, unit="m", range=((0.0, 0.0), (1 / 1024, 1 / 1024)))
         """
         super().__init__(name, role, parent=parent, **kwargs)
-        self._shape = (1024, 1024)
 
         if not hasattr(self.parent, "_fib_beam"):
             raise ValueError(f"To create a Orsay scanner component the parent should also have the FIBBeam child.")
@@ -2720,11 +2758,18 @@ class Scanner(model.Emitter):
         self.blanker = self._fib_beam.blanker
         self.power = self._fib_source.gunOn
 
-        self.horizontalFov = self._fib_beam.horizontalFov
-        self.scale = model.VAEnumerated((self.shape[0] / self._fib_beam.imageFormat.value[0],
-                                         self.shape[1] / self._fib_beam.imageFormat.value[1]),
-                                        unit="", choices={(1.0, 1.0), (2.0, 2.0)},
-                                        setter=self._setScale)
+        self.horizontalFoV = self._fib_beam.horizontalFoV
+
+        # The scale, resolution, and translation are inter-dependent.
+        # They should be set in the order scale > resolution > translation.
+        imfmt_rng = self._fib_beam.imageFormat.range
+        self._shape = imfmt_rng[1]
+        scale_max = (imfmt_rng[1][0] / imfmt_rng[0][0], imfmt_rng[1][1] / imfmt_rng[0][1])
+        self.scale = model.TupleContinuous((1, 1), range=((1, 1), scale_max),
+                                           unit="",
+                                           cls=(int, float),
+                                           setter=self._setScale)
+        self._setScale(self.scale.value)  # Force the value
         self._fib_beam.imageFormat.subscribe(self._listenerImageFormat)  # Subscribe to update the scale when the image format changes.
 
         self.resolution = self._fib_beam.resolution
@@ -2732,14 +2777,16 @@ class Scanner(model.Emitter):
 
         self.rotation = self._fib_beam.rotation
         self.accelVoltage = self._fib_source.acceleratorVoltage
+        self.accelVoltage.subscribe(self._onAccelVoltage, init=True)
 
         self.dwellTime = self._fib_beam.dwellTime
-        self.pixelSize = model.VigilantAttribute((self._fib_beam.horizontalFov.value / self.shape[0],
-                                                  self._fib_beam.horizontalFov.value / self.shape[1]),
+        self.dwellTime.subscribe(self._onDwellTime, init=True)
+        self.pixelSize = model.VigilantAttribute((self._fib_beam.horizontalFoV.value / self.shape[0],
+                                                  self._fib_beam.horizontalFoV.value / self.shape[1]),
                                                   unit="m", readonly=True)
         # Update the pixel size in
         self.scale.subscribe(self._updatePixelSize)
-        self._fib_beam.horizontalFov.subscribe(self._updatePixelSize, init=True)
+        self._fib_beam.horizontalFoV.subscribe(self._updatePixelSize, init=True)
 
         # Find all available presets:
         self.presetData = self.getAllPresetData()
@@ -2761,12 +2808,6 @@ class Scanner(model.Emitter):
         # TODO K.K. The specs of the high level aperture/preset describe the implementation of the probe current Use the
         #  currently selected preset and combine with the faraday cup measurements and make an attribute/VA of the
         #  probe current
-
-    def terminate(self):
-        """
-        Called when Odemis is closed
-        """
-        pass
 
     def getAllPresetData(self):
         """
@@ -2855,33 +2896,50 @@ class Scanner(model.Emitter):
             raise LookupError(f"No condenser voltage preset found, None type was returned.")
 
     def _listenerImageFormat(self, image_format):
+        # Duplicate the X dimension, because the hardware only support square pixels
         scale = (self.shape[0] / image_format[0],
-                self.shape[1] / image_format[1])
+                 self.shape[0] / image_format[0])
         if scale != self.scale.value:
             self.scale._value = scale  # Don't call the setter
             self.scale.notify(scale)  # Do inform all the subscribers.
 
     def _setScale(self, scale):
-        self.parent._fib_beam.imageFormat.value = (self.shape[0] / scale[0],
-                                                   self.shape[1] / scale[1])
+        im_size_int = int(round(self.shape[0] / scale[0]))  # Same value for X and Y
+        im_size = self._fib_beam.imageFormat.clip((im_size_int, im_size_int))
+        self._fib_beam.imageFormat.value = im_size
+        scale = (self.shape[0] / im_size[0],
+                 self.shape[1] / im_size[1])
         return scale
 
     def _updatePixelSize(self, _):
         """
         Updates the pixel size VA and the pixel size metadata
+        Called when horizontalFoV or scale change.
         """
-        self.pixelSize._set_value((self._fib_beam.horizontalFov.value/self.shape[0],
-                                   self._fib_beam.horizontalFov.value / self.shape[1]), force_write=True)
-        self._metadata[MD_PIXEL_SIZE] = self.pixelSize.value
+        # In Odemis, the convention is a little odd:
+        # .pixelSize contains the pixel size at scale 1, always.
+        # MD_PIXEL_SIZE contains the pixel size for the image, based on all the settings, including scale.
+        pxs = (self._fib_beam.horizontalFoV.value / self.shape[0],
+               self._fib_beam.horizontalFoV.value / self.shape[1])
+        scale = self.scale.value
+
+        self._metadata[MD_PIXEL_SIZE] = (pxs[0] * scale[0],
+                                         pxs[1] * scale[1])
+        self.pixelSize._set_value(pxs, force_write=True)
+
+    def _onDwellTime(self, dt):
+        self._metadata[model.MD_DWELL_TIME] = dt
+
+    def _onAccelVoltage(self, volt):
+        self._metadata[model.MD_EBEAM_VOLTAGE] = volt
+
 
 class Detector(model.Detector):
     """
     Represents the sensor for acquiring the image data.
     """
-    SHAPE = (16384,)
-
     def __init__(self, name, role, parent, **kwargs):
-        super(Detector, self).__init__(name, role, parent=parent, **kwargs)
+        super().__init__(name, role, parent=parent, **kwargs)
 
         if not hasattr(self.parent, "_fib_beam"):
             raise ValueError(f"To create a Orsay Detector component the parent should also have the FIBBeam child.")
@@ -2891,27 +2949,104 @@ class Detector(model.Detector):
             raise ValueError(f"To create a Orsay Detector component the parent should also have the scanner child.")
         self._scanner = self.parent._scanner  # reference to the scanner object
 
+        # Apparently the detector is 14 bits, but in practice the data may still be > 2**14,
+        # and it is spread over more than 14 bits.
+        self._shape = (2 ** 16,)
         self.contrast = self._fib_beam.contrast
         self.brightness = self._fib_beam.brightness
 
-        self.data = Dataflow(self, self._fib_beam)
+        self.data = Dataflow(self)
 
-    def receiveLatestImage(self):
+    def terminate(self):
+        self.data.stop_generate()
+
+    def _retrieve_latest_image(self):
         """
-        Acquires the latest image from the Orsay server and converts it to a data array with type uint 16
-        :return (DataArray): Latest image acquired
+        Acquires the latest image from the Orsay server and converts it to a numpy array with type uint16
+        :return (numpy.ndarray of shape YX and dtype uint16): Latest image acquired (typically, always 1024x1024)
         """
+        try:
+            data = self.parent.datamodel.Miss.AcquireFullImageScanOne()  # Can take ~200ms
+            img = numpy.frombuffer(data, dtype=numpy.uint16)
+
+            # (2022-09-19) There is a bug in the "Miss" which sends the data "flipped" (see ConsoleClient/ImageExample.py).
+            # Orsay Physics indicated they cannot fix it easily, so it'll stay as-is.
+            # It's probably more like a wrong conversion int16 <> uint16.
+            # The fix, using 16 bit overflow, is just:
+            img = img.copy()  # because we cannot write onto "data"
+            img += 2 ** 15  # Overflow so that values >= 2**15 become small.
+
+            # TODO: if it ever returns a sub-area, we need a more clever way to guess
+            # (e.g. imageFormat.Actual). For now, it seems to always return 1024x1024.
+            # Convert to 2D, assuming the image is square
+            width = int(len(img) ** 0.5)
+            height = len(img) // width
+            img.shape = (height, width)  # fails if not the exact number of pixels
+            return img
+        except Exception:
+            logging.exception("Failed to retrieve FIB image")
+            raise
+
+    def _get_data_array(self):
+        """
+        Retrieve the latest image from the Orsay server, and adjust the shape
+        (e.g. crop) and metadata based on the current settings.
+        return (model.DataArray of shape YX)
+        """
+        now = time.time()
+
+        # Prepare metadata, based on detector + scanner metadata
         metadata = self._metadata.copy()
         metadata.update(self._scanner._metadata)
-        # TODO check if the estimate for MD_ACQ_DATE can be improved
-        scanning_time = self._scanner.dwellTime.value * self._scanner.resolution.value[0] * self._scanner.resolution.value[1]
-        metadata[model.MD_ACQ_DATE] = time.time() - scanning_time
-        image = self.parent.datamodel.Miss.AcquireFullImageScanOne()
-        decomposed_byte_image = numpy.frombuffer(image, dtype=numpy.uint16)
-        image_size = (int(len(decomposed_byte_image)**0.5), int(len(decomposed_byte_image)**0.5)) # Assume images are square
-        uint16image = decomposed_byte_image.reshape(image_size)
 
-        return model.DataArray(uint16image, metadata)
+        # Look up the scanner settings were, to crop and adjust the metadata
+        # x_left, y_top, width, height
+        img_area = self.parent.datamodel.IonColumnMCS.ImageArea.Actual
+        # Maximum width, height of content if it wasn't cropped
+        # (although the data received is always 1024x1024 px anyway!)
+        img_size = self.parent.datamodel.IonColumnMCS.ImageSize.Actual
+
+        logging.debug("Retrieving FIB image for area %s", img_area)
+        img = self._retrieve_latest_image()
+
+        # Guess the time it started based on the dwell time and resolution
+        # TODO check if the estimate for MD_ACQ_DATE can be improved
+        scan_time = self._scanner.dwellTime.value * len(img)
+        metadata[model.MD_ACQ_DATE] = now - scan_time
+
+        # Crop to the current area
+        img_area = list(map(int, img_area.split(" ")))
+        img_size = list(map(int, img_size.split(" ")))
+
+        # Beware: img is a numpy array, so X is dim 1, and Y is dim 0.
+        if len(img_area) != 4 or len(img_size) != 2:
+            logging.error("Cannot crop, img_area decoded to %s, img_size to %s", img_area, img_size)
+        elif not (0 <= img_area[0] < img.shape[1] and
+                  0 <= img_area[1] < img.shape[0] and
+                  0 <= img_area[0] + img_area[2] - 1 < img.shape[1] and
+                  0 <= img_area[1] + img_area[3] - 1 < img.shape[0]):
+            logging.error("Cannot crop, img_area %s is not within shape %s", img_area, img.shape)
+        else:
+            logging.debug("Cropping image from %s to x: %s -> %s, y: %s -> %s", img.shape,
+                          img_area[0], img_area[0] + img_area[2],
+                          img_area[1], img_area[1] + img_area[3])
+            img = img[img_area[1]:img_area[1] + img_area[3],  # Y
+                      img_area[0]:img_area[0] + img_area[2]]  # X
+
+            center = metadata.get(model.MD_POS, (0, 0))
+            trans = (img_area[0] - img_size[0] / 2 + img_area[2] / 2,
+                     img_area[1] - img_size[1] / 2 + img_area[3] / 2)
+
+            # The translation in in term of actual pixels in the image, so use
+            # the image pixel size (and not the .pixelSize which is scale independent)
+            pxs = metadata[model.MD_PIXEL_SIZE]
+            phy_trans = (trans[0] * pxs[0], -trans[1] * pxs[1])  # - to invert Y
+            metadata[model.MD_POS] = (center[0] + phy_trans[0],
+                                      center[1] + phy_trans[1])
+            if trans != (0, 0):
+                logging.debug("Shifted MD_POS by %s px to %s", trans, metadata[model.MD_POS])
+
+        return model.DataArray(img, metadata)
 
 
 class Dataflow(model.DataFlow):
@@ -2919,105 +3054,104 @@ class Dataflow(model.DataFlow):
     Represents image acquisition using the Orsay server.
     """
 
-    def __init__(self, detector, fib_beam):
-        super().__init__(self)
+    def __init__(self, detector):
+        super().__init__()
         self._detector = detector
-        self._fib_beam = fib_beam
-        self._datamodel = detector.parent.datamodel
+
+        # First image number that will correspond to an image completely scanned
+        self._first_img_nbr = 0
 
     def start_generate(self):
-        self._datamodel.Miss.ImageTrackingNumberScanOne.Subscribe(self._listenerImageTrackNumber)
-        self._fib_beam.imagingMode.value = True
+        """
+        Start the scanning & acquisition
+        raise IOError: if the scanner doesn't start
+        """
+        # The Orsay acquisition works the following way:
+        # The scanner is activated, by setting OperatingMode to 1.
+        # Every time the scanner *starts* a new image, the
+        # ImageTrackingNumberScanOne increases by 1. So, it should immediately
+        # increase after starting the scanner. That means that when starting
+        # an acquisition, the first increment doesn't correspond to a new image,
+        # but every other one does.
+        # Currently, as of 2022-10-07, if the scanner operating mode is changed
+        # to 1, while it hasn't fully stopped yet, it will not start. So we need
+        # to always make sure that any change to .Target is followed by a change
+        # to .Actual.
+
+        datamodel = self._detector.parent.datamodel
+        opmode = datamodel.Scanner.OperatingMode
+
+        current_img_nbr = int(datamodel.Miss.ImageTrackingNumberScanOne.Actual)
+        self._first_img_nbr = current_img_nbr + 2
+
+        datamodel.Miss.ImageTrackingNumberScanOne.Subscribe(self._listenerImageTrackNumber)
+        opmode.Target = 1  # scan
+
+        # Wait until it's really started, to avoid stopping during that time.
+        # It also helps to detect bad cases where the server is blocked.
+        timeout = time.time() + 5  # s
+        while time.time() < timeout:
+            img_nbr = int(datamodel.Miss.ImageTrackingNumberScanOne.Actual)
+            if int(opmode.Actual) == 1 and img_nbr > current_img_nbr:
+                logging.debug("Scanner start confirmed")
+                break
+            # logging.debug("Waiting longer for scanner to start: state is %s, image number is %s",
+            #               opmode.Actual, datamodel.Miss.ImageTrackingNumberScanOne.Actual)
+            time.sleep(0.05)
+        else:
+            # Report the error, and reset the scanner, hoping it'll work better next time
+            logging.warning("Scanner still not started, state is %s, image number is %s (started at %s)",
+                            opmode.Actual, datamodel.Miss.ImageTrackingNumberScanOne.Actual, current_img_nbr)
+            opmode.Target = 0
+            raise IOError("Scanner failed to start")
 
     def stop_generate(self):
-        self._fib_beam.imagingMode.value = False
-        self._datamodel.Miss.ImageTrackingNumberScanOne.Unsubscribe(self._listenerImageTrackNumber)
+        """
+        Stop the scanning & acquisition
+        Safe to be called even when the acquisition is already stopped
+        """
+        datamodel = self._detector.parent.datamodel
+        opmode = datamodel.Scanner.OperatingMode
 
-    # TODO Currently if two times .get(asap=False) is called consecutive the first call will stop the imaging meaning
-    #  the second runs into a timeout. For asap=True this is not a problem because it uses the next image available.
-    #  An implementation direction for a fix for this would be to move all the behaviour in the get method to
-    #  start/stop_generate. By using the parent class get method automatically the class deals with other subscribers.
-    def get(self, asap=True):
-        # The server increases ImageTrackingNumberScanOne by 1 every time it *starts* a scan
-        init_img_nbr = int(self._datamodel.Miss.ImageTrackingNumberScanOne.Actual)
+        datamodel.Miss.ImageTrackingNumberScanOne.Unsubscribe(self._listenerImageTrackNumber)
+        datamodel.Scanner.OperatingMode.Target = 0  # no scan
 
-        if asap and self._fib_beam.imagingMode.value:
-            # If we want the next image (ASAP), and the FIB is already scanning, we just need to
-            # wait until the next image start to know that the current image is ready
-            goal_image_nbr = init_img_nbr + 1
+        # Wait until it's really stopped (typically, it can take up to 300 ms)
+        timeout = time.time() + 5  # s
+        while time.time() < timeout:
+            if int(opmode.Actual) == 0:
+                logging.debug("Scanner stop confirmed")
+                break
+            time.sleep(0.05)
         else:
-            # Either the system is not scanning, or we want an image that will be started after now.
-            # In this case, starting the acquisition (or completing the current scan) will increase the image
-            # number by 1, and the start of the second image indicates the image is fully acquired.
-            goal_image_nbr = init_img_nbr + 2
-        logging.debug("Starting acquisition with im number %s, will wait until %s", init_img_nbr, goal_image_nbr)
-        is_received = threading.Event()
+            logging.warning("Scanner still not stopped: %s", opmode.Actual)
+            opmode.Target = 0
+            raise IOError("Scanner failed to stop")
 
-        def wait_single_image_acq(parameter=None, attributeName="Actual"):
-            """
-            Callback function for the Orsay server parameter "ImageTrackingNumberScanOne". Stops the acquisition
-            after acquiring a full image after the first callback. Because the ImageTrackingNumberScanOne bumps
-            at the start of a scan, and because of some hardware peculiarities when scanning a full image scan, a
-            fully scanned image with the latest dwell time can only be guaranteed when the image is scanned for
-            the second time.
-
-            :param parameter: "Required by the Orsay Server"
-            :param attributeName: "Required by the Orsay Server"
-            """
-            if parameter is None or attributeName != "Actual":
-                return
-
-            current_img_nbr = int(parameter.Actual)
-            logging.debug("Image number incremented to %d", current_img_nbr)
-
-            # The hardware acquired only a full image if the ImageTrackingNumberScanOne has increased by at least 1
-            if current_img_nbr >= goal_image_nbr:
-                self._datamodel.Miss.ImageTrackingNumberScanOne.Unsubscribe(wait_single_image_acq)
-                is_received.set()
-
-                # TODO: implement to only stop if there are no other subscribers
-                self._fib_beam.imagingMode.value = False
-                logging.debug("Image number %d received, completing the acquisition", current_img_nbr)
-
-
-        self._datamodel.Miss.ImageTrackingNumberScanOne.Subscribe(wait_single_image_acq)
-        self._fib_beam.imagingMode.value = True  # Start the acquisition
-
-        # Check scanning started after turning the scanner on, otherwise restart the scanning process and try again.
-        time.sleep(0.3)
-        for _ in range(5):
-            time.sleep(0.1)
-            if int(self._datamodel.Miss.ImageTrackingNumberScanOne.Actual) == init_img_nbr:
-                logging.debug("Acquisition didn't start, retrying acquisition")
-                self._fib_beam.imagingMode.value = False
-                time.sleep(1)
-                self._fib_beam.imagingMode.value = True
-                time.sleep(0.3)
-
-        # Wait at least for 60 seconds or 150% of the scanning time with the maximum resolution.
-        # 60 seconds might seem long but this is needed for simulator for any image with a dwell time > 1um s
-        time_out = max(60, self._fib_beam.dwellTime.value * 1024**2 * 1.5)
-        if not is_received.wait(timeout=time_out):
-            self._fib_beam.imagingMode.value = False  # Stop imaging
-            raise TimeoutError(f"The scanning process didn't finish within the expected time. Try restarting the "
-                               f"server. With the time out {time_out} s.")
-        return self._detector.receiveLatestImage()  # Return the acquired image
-
-    def _listenerImageTrackNumber(self, parameter=None, attributeName="Actual"):
+    def _listenerImageTrackNumber(self, param, attr: str):
         """
         Callback function for the Orsay server parameter "ImageTrackingNumberScanOne".
         Notifies all subscribed listeners with the latest image.
 
-        :param parameter: "Required by the Orsay Server"
-        :param attributeName: "Required by the Orsay Server"
+        param (Orsay Parameter): ImageTrackingNumberScanOne (Required by the Orsay API)
+        attr (str): The name of the attribute that changed on the parameter.
+           We only care about "Actual".
         """
-        if parameter is None or attributeName != "Actual":
+        if attr != "Actual":
             return
+
         try:
-            image = self._detector.receiveLatestImage()
-        except Exception:  # Make sure the listener is not desubscribed when it fails.
-            logging.exception("Failed to receive the latest image.")
-        self.notify(image)
+            img_nbr = int(param.Actual)
+            if img_nbr < self._first_img_nbr:
+                logging.debug("Omitting image %d", img_nbr)
+                return
+
+            logging.debug("Retrieving image %d", img_nbr)
+            # Gets the image, crop it, and adjust the metadata
+            image = self._detector._get_data_array()
+            self.notify(image)
+        except Exception:  # Make sure the listener is not unsubscribed when it fails.
+            logging.exception("Failed to receive image %s.", param.Actual)
 
 
 class Focus(model.Actuator):
