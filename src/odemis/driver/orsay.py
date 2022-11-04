@@ -308,14 +308,20 @@ class OrsayComponent(model.HwComponent):
             while not self._stop_connection_monitor.is_set():
 
                 if self._device and (self._device.HttpConnection._HTTPConnection__response is None or
-                                     self._device.MessageConnection.Connection._HTTPConnection__response is None):
+                                     not self._device.MessageConnection.Connected
+                                    ):
                     self.state._set_value(HwError("Connection to Orsay server lost. Trying to reconnect..."),
                                           force_write=True)
+                    logging.debug("Reconnecting (HTTPConnection = %s, MessageConnection = %s, closed %s)",
+                                  self._device.HttpConnection._HTTPConnection__response,
+                                  self._device.MessageConnection.Connection._HTTPConnection__response,
+                                  not self._device.MessageConnection.Connected)
                     self._device.HttpConnection.close()  # close the current connection
                     self._device.MessageConnection.Connection.close()
                     self._device = None  # destroy the current connection object
 
                 if not self._device:  # if there currently is no connection
+                    logging.debug("Reconnecting to %s", self._host)
                     try:  # try to reconnect
                         self._device = Connection(self._host)
                         time.sleep(1)
@@ -327,17 +333,23 @@ class OrsayComponent(model.HwComponent):
                                 pass  # no need to do anything
                         self.state._set_value(model.ST_RUNNING, force_write=True)
                     except Exception:
-                        logging.exception("Trying to reconnect to Orsay server.")
-                else:
-                    try:
-                        self.update_VAs()
-                        for child in self.children.value:
-                            try:
-                                child.update_VAs()
-                            except AttributeError:  # if the child does not have an update_VAs() method
-                                pass  # no need to do anything
-                    except Exception:
-                        logging.exception("Failure while updating VAs.")
+                        logging.exception("Failed to reconnect to Orsay server.")
+
+                # Note: add this to automatically force an update of every VA
+                # every 5 s. That allows to make really sure that the values are
+                # up to date, but it seems that in practice that is not needed,
+                # and it creates some spurious "updates" with identical values.
+                # else:
+                #     # Force refreshing the value of every VA
+                #     try:
+                #         self.update_VAs()
+                #         for child in self.children.value:
+                #             try:
+                #                 child.update_VAs()
+                #             except AttributeError:  # if the child does not have an update_VAs() method
+                #                 pass  # no need to do anything
+                #     except Exception:
+                #         logging.exception("Failure while updating VAs.")
                 self._stop_connection_monitor.wait(5)
         except Exception:
             logging.exception("Failure in connection monitor thread.")
