@@ -3165,23 +3165,45 @@ class Focus(model.Actuator):
 
     def __init__(self, name, role, parent, rng, **kwargs):
         """
-        Initialise Focus. Raises AttributeError exception if there is no _fib_beam sibling.
-        :param (tuple (float, float)) rng: the range of the z axis
+        Initialise Focus.
+        Raises AttributeError exception if there is no "fib_beam" sibling.
+        :param (tuple (float, float)) rng: the range of the z axis in m. It should
+          be big enough to contain the focus position for all objective voltages.
         """
+        # Check the rng makes sense by checking it's within -+ 1m (typically it's a few millimeters)
+        # Also takes care of detecting string instead of float
+        if not all(-1 < r < 1 for r in rng):
+            raise ValueError("rng should be within -1 -> 1m, but got %s" % (rng,))
+
         axes_def = {"z": model.Axis(unit="m", range=rng)}
         super().__init__(name, role, parent=parent, axes=axes_def, **kwargs)
 
-        self.position = model.VigilantAttribute({"z": 0.0}, readonly=True, unit="m")
-        self.parent._fib_beam.objectiveVoltage.subscribe(self._updatePosition)
-
-        self.baseLensVoltage = 0.0  # V1, the objective lens voltage corresponding to a focus distance of 0
+        # The objective lens voltage corresponding to a (theoretical) focus distance of 0.
         # Changes during runtime
+        # TODO: when does it change? Does it matter?
+        self.baseLensVoltage = 0.0  # V
 
-        # Event that get's set when the position VA changes value while performing a move using _doMoveAbs
+        self._metadata[model.MD_CALIB] = 0.18e6  # V/m, can be overridden by the user later
+
+        self.position = model.VigilantAttribute({"z": 0.0}, readonly=True, unit="m")
+        self.parent._fib_beam.objectiveVoltage.subscribe(self._updatePosition, init=True)
+
+        # Event to indicate that voltage has been changed, while performing a move using _doMoveAbs
         self._position_changed = threading.Event()
-        self._position_changed.clear()
 
         self._executor = CancellableThreadPoolExecutor(max_workers=1)
+
+    def updateMetadata(self, md):
+        if model.MD_CALIB in md:
+            calib = md[model.MD_CALIB]
+            if not isinstance(calib, (int, float)):
+                raise ValueError("MD_CALIB should be a float, but got %s" % (calib,))
+
+        super().updateMetadata(md)
+
+        if model.MD_CALIB in md:
+            # The physical focus hasn't really changed, but its position has, so update it
+            self._updatePosition()
 
     def _updatePosition(self, value=None):
         """
@@ -3235,7 +3257,7 @@ class Focus(model.Actuator):
         Move the focus point to pos["z"] meters
         """
         self._checkMoveAbs(pos)
-        logging.debug("Moving focus point to %f meter" % pos["z"])
+        logging.debug("Moving focus point to %s meter", pos["z"])
         return self._executor.submit(self._doMoveAbs, pos)
 
     @isasync
@@ -3244,7 +3266,7 @@ class Focus(model.Actuator):
         Move the focus point by shift["z"] meters
         """
         self._checkMoveRel(shift)
-        logging.debug("Moving focus point by %f meter" % shift["z"])
+        logging.debug("Moving focus point by %s meter", shift["z"])
         return self._executor.submit(self._doMoveRel, shift)
 
     def stop(self, axes=None):
