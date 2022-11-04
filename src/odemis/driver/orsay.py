@@ -373,7 +373,7 @@ class OrsayComponent(model.HwComponent):
             return
         currentProcessInfo = str(parameter.Actual)
         currentProcessInfo = currentProcessInfo.replace("N/A", "")
-        logging.debug("ProcessInfo update: " + currentProcessInfo)
+        logging.debug("ProcessInfo update: '%s'", currentProcessInfo)
         self.processInfo._set_value(currentProcessInfo, force_write=True)
 
     def terminate(self):
@@ -497,15 +497,15 @@ class pneumaticSuspension(model.HwComponent):
         valve_state = int(parameter.Actual)
         log_msg = "ValvePneumaticSuspension state changed to: %s."
         if valve_state in (VALVE_UNDEF, VALVE_ERROR):
-            logging.warning(log_msg % valve_state)
+            logging.warning(log_msg, valve_state)
             self._updateErrorState()
         elif valve_state in (VALVE_OPEN, VALVE_CLOSED):
-            logging.debug(log_msg % valve_state)
+            logging.debug(log_msg, valve_state)
             new_value = valve_state == VALVE_OPEN
             self.power._value = new_value  # to not call the setter
             self.power.notify(new_value)
         else:  # if _valve.Actual == VALVE_TRANSIT, or undefined
-            logging.debug(log_msg % valve_state)
+            logging.debug(log_msg, valve_state)
 
     def _updatePressure(self, parameter=None, attr_name="Actual"):
         """
@@ -903,7 +903,7 @@ class pumpingSystem(model.HwComponent):
         if attr_name != "Actual":
             return
         state = str(parameter.Actual).lower() == "true"
-        logging.debug("Turbopump turned %s." % ("on" if state else "off"))
+        logging.debug("Turbopump turned %s.", "on" if state else "off")
         self.turboPumpOn._set_value(state, force_write=True)
 
     def _updatePrimaryPumpOn(self, parameter=None, attr_name="Actual"):
@@ -919,7 +919,7 @@ class pumpingSystem(model.HwComponent):
         if attr_name != "Actual":
             return
         state = str(parameter.Actual).lower() == "true"
-        logging.debug("Primary pump turned %s." % ("on" if state else "off"))
+        logging.debug("Primary pump turned %s.", "on" if state else "off")
         self.primaryPumpOn._set_value(state, force_write=True)
 
     def _updateNitrogenPressure(self, parameter=None, attr_name="Actual"):
@@ -1098,7 +1098,7 @@ class GIS(model.Actuator):
             arm_pos = self._positionPar.Actual
             gas_pos = self._reservoirPar.Actual
             new_pos = {"arm": arm_pos == STR_WORK, "reservoir": gas_pos == STR_OPEN}
-            logging.debug("Current position is %s." % new_pos)
+            logging.debug("GIS position is %s.", new_pos)
             self.position._set_value(new_pos, force_write=True)
 
         if self._positionPar.Actual == self._positionPar.Target:
@@ -1294,16 +1294,15 @@ class GISReservoir(model.HwComponent):
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
         """
-        logging.debug("param id: %r", self._temperaturePar)
         if parameter is None:
             parameter = self._temperaturePar
         if parameter is not self._temperaturePar:
             logging.warning("Incorrect parameter passed to _updateTargetTemperature. Parameter should be "
-                            "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %r." % parameter)
+                            "datamodel.HybridGIS.ReservoirTemperature. Parameter passed is %r.", parameter)
         if attr_name != "Target":
             return
         new_value = float(self._temperaturePar.Target)
-        logging.debug("Target temperature changed to %f." % new_value)
+        logging.debug("Target temperature changed to %f.", new_value)
         self.targetTemperature._value = new_value  # to not call the setter
         self.targetTemperature.notify(new_value)
 
@@ -1317,8 +1316,8 @@ class GISReservoir(model.HwComponent):
         """
         if parameter is None:
             parameter = self._temperaturePar
-        if float(self._temperaturePar.Actual) == float(self._temperaturePar.Target):
-            logging.debug("Target temperature reached.")
+        # if float(self._temperaturePar.Actual) == float(self._temperaturePar.Target):
+        #     logging.debug("Target temperature reached.")
 
         if attr_name != "Actual":
             return
@@ -1344,7 +1343,7 @@ class GISReservoir(model.HwComponent):
         except AttributeError:  # in case RegulationOn.Actual is not a string
             reg = False
 
-        logging.debug("Temperature regulation turned %s." % "on" if reg else "off")
+        logging.debug("Temperature regulation turned %s.", "on" if reg else "off")
         self.temperatureRegulation._value = reg  # to not call the setter
         self.temperatureRegulation.notify(reg)
 
@@ -1360,7 +1359,7 @@ class GISReservoir(model.HwComponent):
             parameter = self._gis.ReservoirLifeTime
         if attr_name != "Actual":
             return
-        logging.debug("GIS reservoir lifetime updated to %f hours." % float(self._gis.ReservoirLifeTime.Actual))
+        logging.debug("GIS reservoir lifetime updated to %f hours.", float(self._gis.ReservoirLifeTime.Actual))
         self.age._set_value(float(self._gis.ReservoirLifeTime.Actual) * 3600,  # convert hours to seconds
                             force_write=True)
 
@@ -1396,7 +1395,7 @@ class GISReservoir(model.HwComponent):
 
         :param (boolean) goal: Mode to set the temperature regulation to. True is on, False is off.
         """
-        logging.debug("Turning temperature regulation %s." % "on" if goal else "off")
+        logging.debug("Turning temperature regulation %s.", "on" if goal else "off")
         self._gis.RegulationOn.Target = goal
         return goal
 
@@ -2736,7 +2735,7 @@ class Light(model.Emitter):
         if attributeName != "Actual":
             return
         light_state = 1.0 if self._parameter.Actual in (True, "True", "true", "1", "ON") else 0.0
-        logging.debug("Chamber light turned %s." % "on" if light_state else "off")
+        logging.debug("Chamber light turned %s.", "on" if light_state else "off")
         self.power._value = [light_state]  # to not call the setter
         self.power.notify([light_state])
 
@@ -2747,7 +2746,7 @@ class Light(model.Emitter):
         :param (float) return: goal
         """
         power = int(goal[0])
-        logging.debug("Turning Chamber light %s." % "on" if power else "off")
+        logging.debug("Turning Chamber light %s.", "on" if power else "off")
         self._parameter.Target = power
         return [1.0 if power else 0.0]
 
@@ -2879,7 +2878,8 @@ class Scanner(model.Emitter):
                                              "aperture_number": self._getApertureNmbrFromPreset(full_preset),
                                              "condenser_voltage": self._getCondenserVoltageFromPreset(full_preset)}})
             except LookupError as ex:
-                logging.warning(f"Failed to import preset {preset_name} due to missing required setting.", ex)
+                logging.warning(f"Failed to import preset %s due to missing required setting: %s",
+                                preset_name, ex)
         return preset_data
 
     def getPresetSetting(self, preset, sub_comp, setting, tag="Target"):
