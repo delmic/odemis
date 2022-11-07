@@ -601,7 +601,7 @@ class SECOMTestCase(unittest.TestCase):
         im_bbox = img.getBoundingBox(self._image)
         im_fov = im_bbox[2] - im_bbox[0], im_bbox[3] - im_bbox[1]
         logging.info("Image has bounding box = %s => FoV = %s", im_bbox, im_fov)
-        test.assert_tuple_almost_equal(guessed_fov, im_fov)
+        testing.assert_tuple_almost_equal(guessed_fov, im_fov)
 
     def _on_image(self, im):
         self._image = im
@@ -776,7 +776,7 @@ class SECOMConfocalTestCase(unittest.TestCase):
         im_bbox = img.getBoundingBox(self._image)
         im_fov = im_bbox[2] - im_bbox[0], im_bbox[3] - im_bbox[1]
         logging.info("Image has bounding box = %s => FoV = %s", im_bbox, im_fov)
-        test.assert_tuple_almost_equal(guessed_fov, im_fov)
+        testing.assert_tuple_almost_equal(guessed_fov, im_fov)
 
     def test_acq_conf_one_det(self):
         """
@@ -867,7 +867,7 @@ class SECOMConfocalTestCase(unittest.TestCase):
         for d in data:
             self.assertEqual(d.shape, exp_shape)
             self.assertIn(model.MD_OUT_WL, d.metadata)
-            test.assert_tuple_almost_equal(d.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+            testing.assert_tuple_almost_equal(d.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
         self.assertGreaterEqual(self.updates, 1)  # at least 1 update
         self.assertLessEqual(self.end, time.time())
