@@ -1081,6 +1081,23 @@ class TestOrsayParameterConnector(unittest.TestCase):
         self.assertEqual(va.range[0], float(minpar.Target))
         self.assertEqual(va.range[1], float(maxpar.Target))
 
+    def test_conversion_functions_error(self):
+        # Check that the conversion functions can only be used with two callables.
+        intva = model.IntVA(0)
+
+        with self.assertRaises(ValueError):
+            conversion_funcs = 1  # Not a dict
+            orsay.OrsayParameterConnector(intva, self.datamodel.IonColumnMCS.ObjectiveScanAngle,
+                                          conversion_funcs=conversion_funcs)
+
+        with self.assertRaises(ValueError):
+            conversion_funcs = {
+                "va2par": int,  # simple callable (allowed)
+                "par2va": 1,  # not callable
+            }
+            orsay.OrsayParameterConnector(intva, self.datamodel.IonColumnMCS.ObjectiveScanAngle,
+                                          conversion_funcs=conversion_funcs)
+
     def test_conversion_functions(self):
         """
         Testing the conversion function from VA to Parameter and back.
@@ -1090,29 +1107,9 @@ class TestOrsayParameterConnector(unittest.TestCase):
             if child.name == CONFIG_FIBBEAM["name"]:
                 fibbeam = child
 
-        # Make sure this variable isn't saved to the attribute anymore
-        init_conversion_func = copy.deepcopy(fibbeam._rot_conversion_functions)
-
-        # Check that the conversion functions can only be used with two callables.
-        with self.assertRaises(ValueError):
-            fibbeam._rot_conversion_functions = 1
-            fibbeam.on_connect()
-
-        # Reset the original values and a correct connector
-        fibbeam._rot_conversion_functions = copy.deepcopy(init_conversion_func)  # copy to prevent overwriting init_conversion_func
-        fibbeam.on_connect()
-
-        with self.assertRaises(ValueError):
-            fibbeam._rot_conversion_functions["par2va"] = 1
-            fibbeam.on_connect()
-
-        # Reset the original values and a correct connector
-        fibbeam._rot_conversion_functions = init_conversion_func
-        fibbeam.on_connect()
-
-        connector_test(self, self.fibbeam.rotation, fibbeam._ionColumn.ObjectiveScanAngle,
-                       [(0.0, 0.0), (0.5*math.pi, 0.5*math.pi), (1.5*math.pi, -0.5*math.pi)],
-                        hw_safe=True, settletime=1)
+        connector_test(self, fibbeam.rotation, fibbeam._ionColumn.ObjectiveScanAngle,
+                      [(0.0, 0.0), (0.5 * math.pi, 0.5 * math.pi), (1.5 * math.pi, -0.5 * math.pi)],
+                      hw_safe=True, settletime=1)
 
 
 # TODO Currently not tested due to vacuum issues FIB vacuum
@@ -1876,6 +1873,26 @@ class TestScanner(unittest.TestCase):
         sleep(1)  # Give the microscope some time so it won't break
 
         self.fibbeam.blanker.value = init_value  # return to initial value
+
+    def test_shift(self):
+        self.scanner.horizontalFoV.value = 100e-6  # m, a little large FoV, for the large shifts to work
+
+        self.scanner.shift.value = (0, 0)
+        sleep(1)
+        self.assertEqual(self.scanner.shift.value, (0, 0))
+
+        rng_shift = self.scanner.shift.range
+        self.scanner.shift.value = rng_shift[0]
+        sleep(1)
+        self.assertNotEqual(self.scanner.shift.value, (0, 0))
+
+        rng_shift = self.scanner.shift.range
+        self.scanner.shift.value = rng_shift[1]
+        sleep(1)
+        self.assertEqual(self.scanner.shift.value, rng_shift[1])
+        self.assertNotEqual(self.scanner.shift.value, (0, 0))
+
+        self.scanner.shift.value = (0, 0)
 
     def test_scale(self):
         init_res = self.scanner.resolution.value

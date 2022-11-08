@@ -65,7 +65,8 @@ HEATER_RISING = "UP"
 HEATER_FALLING = "DOWN"
 HEATER_ERROR = "EOFF"
 
-NO_ERROR_VALUES = (None, "", "None", "none", 0, "0", "NoError")
+NO_ERROR_VALUES = {None, "", "None", "none", 0, "0", "NoError"}
+TRUE_VALUES = {True, "True", "true", "1", "ON"}
 
 INTERLOCK_DETECTED_STR = "Interlock event detected"
 
@@ -1446,14 +1447,15 @@ class OrsayParameterConnector:
             to convert the values from the VA to the Orsay Parameter and vice versa.
         :param (float or None) factor: Specifies a conversion factor between the value of the parameter and the value of
             the va, such that VA = factor * Parameter. factor is only used for float type va's (or tuples of floats) and
-            only if conversion is None. If neither conversion nor factor is supplied, no special conversion is
-            performed.
-        :param (Orsay Parameter or None) minpar: supplies the possibility to explicitly pass a seperate parameter which
+            only if conversion is None.
+            If the VA contains a tuple, the factor should be a tuple of the same length.
+            If neither conversion nor factor is supplied, no special conversion is performed.
+        :param (Orsay Parameter or None) minpar: supplies the possibility to explicitly pass a separate parameter which
             contains the minimal value of parameter on .Actual, for cases where parameter.Min does not provide this. Can
             be a list of equal length to the list of parameters for tuple VA's. Then the first parameter in minpar
             dictates the minimum of the first parameter in parameters. Make sure to supply both minpar and maxpar, or
             neither, but never just one of the two.
-        :param (Orsay Parameter or None) maxpar: supplies the possibility to explicitly pass a seperate parameter which
+        :param (Orsay Parameter or None) maxpar: supplies the possibility to explicitly pass a separate parameter which
             contains the maximal value of parameter on .Actual, for cases where parameter.Max does not provide this. Can
             be a list of equal length to the list of parameters for tuple VA's. Then the first parameter in maxpar
             dictates the maximum of the first parameter in parameters. Make sure to supply both minpar and maxpar, or
@@ -1507,8 +1509,6 @@ class OrsayParameterConnector:
             self._va_is_tuple = False
             self._va_value_type = type(self._va.value)
 
-        if not self._va.readonly:  # only overwrite the VA's setter if the VA is not read-only
-            self._va.setter = self._update_parameter
         if self._va_is_tuple and not len(self._parameters) == len(self._va.value):
             raise ValueError("Length of Tuple VA does not match number of parameters passed.")
         if len(self._parameters) > 1 and not self._va_is_tuple:
@@ -1520,56 +1520,67 @@ class OrsayParameterConnector:
         else:
             self._param_names = self._parameters[0].Name
 
-        self._factor = factor
         if factor and not issubclass(self._va_value_type, float):
             raise ValueError(f"Cannot apply a conversion factor to a non float type VA (type is {self._va_value_type})")
+
+        if factor is None:
+            self._factor = None
+        elif self._va_is_tuple:
+            self._factor = factor
+        else:
+            # VA is a single value, but the factor is always stored as an iterable
+            self._factor = (factor,)
 
         # If the VA has a range, check the Orsay server if a range of the parameter is specified and copy this range
         if hasattr(self._va, "range"):
             if self._va_is_tuple:
                 new_range = [list(self._va.range[0]), list(self._va.range[1])]
             else:
-                new_range = [self._va.range[0], self._va.range[1]]
+                new_range = [[self._va.range[0]], [self._va.range[1]]]
 
+            par_min, par_max = [], []
             for i, p in enumerate(self._parameters):
-                # Search for a lowerbound on the server
+                # Search for a lower-bound on the server
                 if self._minpar:  # in case a minimum parameter is supplied
                     if self._minpar[i].Actual is not None:
-                        lowerbound = self._minpar[i].Actual
+                        mn = self._minpar[i].Actual
                     else:
-                        lowerbound = self._minpar[i].Target
-                    if p.Min is not None and p.Min != lowerbound:
-                        logging.warning("%s.Min and %s contain different, non-None values."
-                                        "Contact Orsay Physics about this!" % (p.Name, self._minpar[i].Name))
-                else:
-                    lowerbound = p.Min
-                if lowerbound is not None:  # if a lowerbound is defined in the server
-                    if self._va_is_tuple:
-                        new_range[0][i] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
-                    else:
-                        new_range[0] = self._parameter_to_VA_value(lowerbound)  # copy it to the va
+                        mn = self._minpar[i].Target
 
-                # Search for an upperbound on the server
+                    if p.Min is not None and p.Min != mn:
+                        logging.warning("%s.Min and %s contain different, non-None values."
+                                        "Contact Orsay Physics about this!",
+                                        p.Name, self._minpar[i].Name)
+                else:
+                    mn = p.Min
+                par_min.append(mn)
+
+                # Search for an upper-bound on the server
                 if self._maxpar:  # in case a minimum parameter is supplied
                     if self._maxpar[i].Actual is not None:
-                        upperbound = self._maxpar[i].Actual
+                        mx = self._maxpar[i].Actual
                     else:
-                        upperbound = self._maxpar[i].Target
-                    if p.Max is not None and p.Max != upperbound:
+                        mx = self._maxpar[i].Target
+                    if p.Max is not None and p.Max != mx:
                         logging.warning("%s.Max and %s contain different, non-None values."
-                                        "Contact Orsay Physics about this!" % (p.Name, self._maxpar[i].Name))
+                                        "Contact Orsay Physics about this!",
+                                        p.Name, self._maxpar[i].Name)
                 else:
-                    upperbound = p.Max
-                if upperbound is not None:  # if an upperbound is defined in the server
-                    if self._va_is_tuple:
-                        new_range[1][i] = self._parameter_to_VA_value(upperbound)  # copy it to the va
-                    else:
-                        new_range[1] = self._parameter_to_VA_value(upperbound)  # copy it to the va
+                    mx = p.Max
+                par_max.append(mx)
 
-            if self._va_is_tuple:
-                new_range = (new_range[0], new_range[1])
-            else:
-                new_range = tuple(new_range)
+            if None not in par_min:
+                new_range[0] = self._convert_parameter_to_va(par_min)
+
+            if None not in par_max:
+                new_range[1] = self._convert_parameter_to_va(par_max)
+
+            # Reorder the min/max in case the conversion changes the order (e.g. factor = -1)
+            new_range_t = [sorted([mn, mx]) for mn, mx in zip(*new_range)]
+            new_range = tuple(zip(*new_range_t))  # transpose & converts to tuple
+
+            if not self._va_is_tuple:
+                new_range = (new_range[0][0], new_range[1][0])
 
             if self._va.range != new_range:
                 # Set the range of the VA, and automatically update the value to fit within the range
@@ -1582,6 +1593,11 @@ class OrsayParameterConnector:
             p.Subscribe(self.update_VA)  # Subscribe to the parameter on the Orsay server
 
         self.update_VA()
+
+        # Connect the setter last, after the value and range have been initialized,
+        # to avoid requesting a value which wasn't initialized yet.
+        if not self._va.readonly:
+            self._va.setter = self._update_parameter
 
     def __del__(self):
         """Called when all references to this object are gone"""
@@ -1604,7 +1620,7 @@ class OrsayParameterConnector:
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed (typically, "Actual")
         """
-        # Drop events when something else than the "Actual" attribute changed (eg, Target).
+        # Drop events when something else than the "Actual" attribute changed (e.g. Target).
         if attr_name != "Actual":
             return
 
@@ -1614,9 +1630,11 @@ class OrsayParameterConnector:
             # Determine the new value that the VA should get
             if self._va_is_tuple:
                 # Just read all the values again (it's simpler)
-                new_value = tuple(self._parameter_to_VA_value(getattr(p, attr_name)) for p in self._parameters)
+                par_value = tuple(getattr(p, attr_name) for p in self._parameters)
             else:
-                new_value = self._parameter_to_VA_value(getattr(self._parameters[0], attr_name))
+                par_value = getattr(self._parameters[0], attr_name)
+
+            new_value = self._convert_parameter_to_va(par_value)
         except Exception:
             logging.exception("Failed to convert parameter %s value %s to VA's value",
                               self._param_names, getattr(self._parameters[0], attr_name))
@@ -1636,68 +1654,76 @@ class OrsayParameterConnector:
         :param (any) goal: value to write to the Orsay parameter's Target attribute. Type depends on the VA type
         :return (any): goal
         """
-        # Note: if we can write the Parameter, then attr_name is Target.
+        # To change the Parameter, we use .Target .
+        target = self._convert_va_to_parameter(goal)
+        logging.debug("Setting %s to %s.", self._param_names, target)
 
-        # Write the goal value of the VA to the Target of the corresponding Orsay parameter(s) and log this
         if self._va_is_tuple:
-            for p, g in zip(self._parameters, goal):
-                target = self._VA_to_parameter_value(g)
-                p.Target = target
-                logging.debug("Setting %s to %s.", p.Name, target)
-        else:  # in case goal is not iterable
-            target = self._VA_to_parameter_value(goal)
+            for p, t in zip(self._parameters, target):
+                p.Target = t
+        else:
             self._parameters[0].Target = target
-            logging.debug("Setting %s to %s.", self._param_names, target)
 
         return goal
 
-    def _VA_to_parameter_value(self, va_value):
+    def _convert_va_to_parameter(self, va_value):
         """
-        Converts a value of the VA to its corresponding value for the parameter. Uses the dictionary in self._conversion
-        or the factor in self._factor to do so.
+        Converts a value of the VA to its corresponding value for the parameter.
+        Uses ._mapping, ._conversion, or ._factor to do so.
 
         :param (any) va_value: The value of the VA. Its type depends on the VA type
         :return (any): The corresponding value of the parameter. Type depends on the parameter type
         """
+        if not isinstance(va_value, (list, tuple)):
+            # not a tuple => call as a 1-element tuple, and convert back to a single value
+            return self._convert_va_to_parameter((va_value,))[0]
+
+        # va_value is a tuple
         if self._mapping is not None:  # if a conversion dict is supplied
             try:
-                return self._mapping[va_value]
+                return tuple(self._mapping[v] for v in va_value)
             except KeyError:
-                logging.warning("Conversion dictionary for %s does not contain key %s, using it as-is.", self._param_names, va_value)
+                logging.warning("Conversion dictionary for %s does not contain key %s, using it as-is.",
+                                self._param_names, va_value)
         elif self._conversion_funcs is not None:
-            return self._conversion_funcs["va2par"](va_value)
+            return tuple(self._conversion_funcs["va2par"](v) for v in va_value)
         elif self._factor:
-            return va_value / self._factor
-        return va_value
+            return tuple(v / f for v, f in zip(va_value, self._factor))
+        else:
+            return va_value
 
-    def _parameter_to_VA_value(self, par_value):
+    def _convert_parameter_to_va(self, par_value):
         """
-        Converts a value of the parameter to its corresponding value for the VA. Uses the dictionary in self._conversion
-        or the factor in self._factor to do so.
+        Converts a value of the parameter to its corresponding value for the VA.
+        Uses ._mapping, ._conversion, or ._factor to do so.
 
         :param (any) par_value: The value of the parameter. Its type depends on the parameter type. Often a string
         :return (any): The corresponding value of the VA. Type depends on the VA type
         """
+        if not isinstance(par_value, (list, tuple)):
+            # not a tuple => call as a 1-element tuple, and convert back to a single value
+            return self._convert_parameter_to_va((par_value,))[0]
+
         if self._mapping is not None:  # if a conversion dict is supplied
-            for key, value in self._mapping.items():
-                if value == type(value)(par_value):
-                    return key
-            logging.warning("Conversion dictionary for %s does not contain a key for value %s, using it as-is.", self._param_names, par_value)
+            va_value = []
+            for p in par_value:
+                for key, value in self._mapping.items():
+                    if value == type(value)(p):
+                        va_value.append(key)
+                        break
+                else:
+                    logging.warning("Conversion dictionary for %s does not contain a key for value %s, using it as-is.", self._param_names, par_value)
+                    va_value.append(par_value)
+            return tuple(va_value)
         elif self._conversion_funcs is not None:
-            return self._conversion_funcs["par2va"](par_value)
-        elif self._va_value_type == float:
-            # Assure that the returned value is of the same type as the VA, even if the par_value is a string
-            new_value = float(par_value)
-            if self._factor:
-                new_value *= self._factor
-            return new_value
-        elif self._va_value_type == int:
-            return int(par_value)
+            return tuple(self._conversion_funcs["par2va"](p) for p in par_value)
         elif self._va_value_type == bool:
-            return par_value in {True, "True", "true", "1", "ON"}
+            return tuple(p in TRUE_VALUES for p in par_value)
         else:
-            raise NotImplementedError("Handling of VA's of type %s is not implemented for OrsayParameterConnector."
-                                      % self._va.__class__.__name__)
+            va_value = tuple(self._va_value_type(p) for p in par_value)
+            if self._factor:
+                va_value = tuple(v * f for v, f in zip(va_value, self._factor))
+            return va_value
 
 
 class FIBVacuum(model.HwComponent):
@@ -2268,7 +2294,19 @@ class FIBBeam(model.HwComponent):
         # self._imageFromSteerersConnector = None
         self.objectiveVoltage = model.FloatContinuous(0.0, unit="V", range=(0.0, 20e3))
         self._objectiveVoltageConnector = None
-        self.shift = model.TupleContinuous((0.0, 0.0), unit="m", range=[(-1.0e-4, -1.0e-4), (1.0e-4, 1.0e-4)])
+
+        # The referential of the shift on the Orsay FIB is the following:
+        # * Increase of the X value -> move to the right (new center is at the right of the old center)
+        #   IOW, the new data is extending the FoV on the right.
+        # * Increase of the Y value -> move to the bottom (new center is at the bottom of the old center)
+        # The limits actually decrease as the FoV reduces, but we have no information
+        # about the real limits.
+        # This has to be adjusted to the Odemis convention:
+        # * Increase in X -> move to the left
+        # * Increase in Y -> move to the bottom
+        self.shift = model.TupleContinuous((0.0, 0.0), unit="m",
+                                           cls=(int, float),
+                                           range=[(-100e-6, -100e-6), (100e-6, 100e-6)])
         self._shiftConnector = None
         self.horizontalFoV = model.FloatContinuous(0.0, unit="m", range=(0.0, 1.0))
         self._horizontalFoVConnector = None
@@ -2420,12 +2458,14 @@ class FIBBeam(model.HwComponent):
         self._objectiveVoltageConnector = OrsayParameterConnector(self.objectiveVoltage, self._hvps.ObjectiveVoltage,
                                                                   minpar=self._hvps.ObjectiveVoltage_Minvalue,
                                                                   maxpar=self._hvps.ObjectiveVoltage_Maxvalue)
-        self._shiftConnector = OrsayParameterConnector(self.shift, [self._ionColumn.ObjectiveShiftX,
-                                                                    self._ionColumn.ObjectiveShiftY],
-                                                           minpar=[self._ionColumn.ObjectiveShiftX_Minvalue,
-                                                                   self._ionColumn.ObjectiveShiftY_Minvalue],
-                                                           maxpar=[self._ionColumn.ObjectiveShiftX_Maxvalue,
-                                                                   self._ionColumn.ObjectiveShiftY_Maxvalue])
+        self._shiftConnector = OrsayParameterConnector(self.shift,
+                                                       parameter=[self._ionColumn.ObjectiveShiftX,
+                                                                  self._ionColumn.ObjectiveShiftY],
+                                                       factor=(-1, 1),  # Invert X, to fit the Odemis convention
+                                                       minpar=[self._ionColumn.ObjectiveShiftX_Minvalue,
+                                                               self._ionColumn.ObjectiveShiftY_Minvalue],
+                                                       maxpar=[self._ionColumn.ObjectiveShiftX_Maxvalue,
+                                                               self._ionColumn.ObjectiveShiftY_Maxvalue])
         self._horizontalFoVConnector = OrsayParameterConnector(self.horizontalFoV, self._ionColumn.ObjectiveFieldSize,
                                                                minpar=self._ionColumn.ObjectiveFieldSize_Minvalue,
                                                                maxpar=self._ionColumn.ObjectiveFieldSize_Maxvalue)
@@ -2734,7 +2774,7 @@ class Light(model.Emitter):
             parameter = self._parameter
         if attributeName != "Actual":
             return
-        light_state = 1.0 if self._parameter.Actual in (True, "True", "true", "1", "ON") else 0.0
+        light_state = 1.0 if self._parameter.Actual in TRUE_VALUES else 0.0
         logging.debug("Chamber light turned %s.", "on" if light_state else "off")
         self.power._value = [light_state]  # to not call the setter
         self.power.notify([light_state])
@@ -2828,6 +2868,8 @@ class Scanner(model.Emitter):
         # Update the pixel size in
         self.scale.subscribe(self._updatePixelSize)
         self._fib_beam.horizontalFoV.subscribe(self._updatePixelSize, init=True)
+
+        self.shift = self._fib_beam.shift
 
         # Find all available presets:
         self.presetData = self.getAllPresetData()
@@ -3433,7 +3475,7 @@ class FIBAperture(model.Actuator):
             parameter = self._hybridAperture.Calibrated
         if attr_name != "Actual":
             return  # Don't do anything when Target, Min, Max or other attribute names are updated.
-        referenced_value = parameter.Actual in {True, "True", "true"}
+        referenced_value = parameter.Actual in TRUE_VALUES
         self.referenced._set_value({"x": referenced_value, "y": referenced_value}, force_write=True)
 
     def connectApertureDict(self):
@@ -3554,8 +3596,8 @@ class FIBAperture(model.Actuator):
         tend = time.time() + timeout
         self._hybridAperture.Calibrated.Target = True
         # Wait until the calibrating process finished and the calibrated parameter is set to True
-        while self._hybridAperture.Calibrating.Actual in {True, "True", "true"} \
-                or not self._hybridAperture.Calibrated.Actual in {True, "True", "true"}:
+        while self._hybridAperture.Calibrating.Actual in TRUE_VALUES \
+                or not self._hybridAperture.Calibrated.Actual in TRUE_VALUES:
             time.sleep(0.5)
             t = time.time()
             if t > tend:
