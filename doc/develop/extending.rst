@@ -519,8 +519,8 @@ Fixing a bug
 ============
 
 Like every complex piece of software, Odemis contains bugs, even though we do
-our best to minimize their amount. In the event you are facing a bug, we advise
-you first to report it to us (bugreport@delmic.com). We might have already solved it
+our best to minimize their amount. In the event you are facing a bug, we first advise
+to report it to us (at https://support.delmic.com). We might have already solved it
 or might be able to fix it for you. If neither of these two options work out,
 you can try to fix it yourself. When reporting a bug, please include a
 description of what is happening compared to what you expect to happen, the log
@@ -534,14 +534,35 @@ Have a look at the log files:
 
 It is also possible to run each part of Odemis independently. To get the maximum
 information, add ``--log-level=2`` as a start-up parameter of any of the Odemis 
-parts. By running a part from Eclipse, it's possible to use the visual debugger
+parts. By running a part from Eclipse (or PyCharm), it's possible to use the visual debugger
 to observe the internal state of the python processes and place breakpoints.
 In order to avoid the container separation in the back-end, which prevents 
-debugging of the drivers, launch with the ``--debug`` parameter.
+debugging of the drivers, launch ``odemisd`` with the ``--debug`` parameter.
+
+Due to the remote component framework that Odemis uses, when a remote call fails,
+the default traceback displayed on an Exception is cut to only contain the client
+side. This limits the information displayed in a traceback. However, Pyro4 does
+provide the remote trace on the exception, in a special attribute ``_pyroTraceback``.
+It's possible to display the complete exception this way:
+
+.. code-block:: python
+
+   try:
+       ccd.data.get()  # Failing code
+   except Exception as ex:
+       try:
+           remote_tb = ex._pyroTraceback
+           rmt_ex = f"Remote exception {''.join(remote_tb)}"
+       except AttributeError:
+           # no remote trace
+           rmt_ex = ""
+       logging.error("".join(ex) + rmt_ex)
+       raise
+
 
 Once the bug fixed, commit your code using ``git add ...`` and ``git commit -a``.
 Export the patch with ``git format-patch -1`` and send it to us 
-(bugreport@delmic.com) for inclusion in the next version of Odemis.
+(support@delmic.com) for inclusion in the next version of Odemis.
 
 
 Supporting new hardware
