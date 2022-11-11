@@ -609,6 +609,18 @@ class TestCanActuator(unittest.TestCase):
     def tearDownClass(cls):
         cls.dev.terminate()
 
+    def test_version(self):
+        """
+        Check that the hardware and software versions contain something.
+        """
+        # It shouldn't be empty
+        self.assertGreater(len(self.dev.swVersion), 0)
+        self.assertGreater(len(self.dev.hwVersion), 0)
+
+        # It shouldn't have NULL characters (there used to be a bug causing swVersion to have a NULL)
+        self.assertNotIn("\x00", self.dev.swVersion)
+        self.assertNotIn("\x00", self.dev.hwVersion)
+
     def test_simple(self):
         # The accuracy is one encoder step. This value will be improved when using a gearbox.
         stepsize = 2 * math.pi / 1024  # 1 step, 1024 encoder steps per cycle'

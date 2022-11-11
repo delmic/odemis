@@ -2723,8 +2723,8 @@ class CANController(model.Actuator):
             # Will be raised if we're already in PP_MODE
             pass
 
-        self._swVersion = "CANopen %s" % sw_version
-        self._hwVersion = "%s (firmware %d.%02d)" % (self._modl, vmaj, vmin)
+        self._swVersion = "CANopen v%s" % sw_version
+        self._hwVersion = "%s v%s (firmware %d.%02d)" % (self._modl, hw_version, vmaj, vmin)
 
         self.position = model.VigilantAttribute({}, readonly=True)
         self._updatePosition()
@@ -2790,16 +2790,22 @@ class CANController(model.Actuator):
         return (str, str, str, int, int):
              Controller ID
              Hardware version
-             Software version
+             Software version (firmware version)
              Firmware major version number
              Firmware minor version number
         """
         cont = self.GetAxisParam(axis, DEVICE_NAME)
+
         hw_version = self.GetAxisParam(axis, HW_VERSION)  # e.g. '1.0'
         sw_version = self.GetAxisParam(axis, SW_VERSION)
+        # Sometimes the string is too long: it contains a NULL and then garbage => discard anything after NULL
+        hw_version = hw_version.split("\x00")[0]
+        sw_version = sw_version.split("\x00")[0]
+
         id = int(self.GetAxisParam(axis, IDENTITY, 3))
-        vmaj = (0xFF00 & id) >> 16  # first 16 bits
-        vmin = 0x00FF & id  # last 16 bits
+        vmaj = (0xffff0000 & id) >> 16  # first 16 bits
+        vmin = 0x0000ffff & id  # last 16 bits
+
         return cont, hw_version, sw_version, vmaj, vmin
 
     def GetAxisParam(self, axis, param, idx=None):
@@ -3411,9 +3417,9 @@ class CANNodeSimulator(object):
         self.state = READY_TO_SWITCH_ON
         self._op_mode = PP_MODE
         self.device_name = SDOObject("PD-1240-fake")
-        self.hw_version = SDOObject(1)
-        self.sw_version = SDOObject(1)
-        self.identity = SDOObject(1)
+        self.hw_version = SDOObject("1.23")
+        self.sw_version = SDOObject("3.21")
+        self.identity = SDOObject(0x30015)
         self.position = SDOObject(0)
         self.switch_param = SDOObject(0)
         self.pullup = SDOObject(0)
