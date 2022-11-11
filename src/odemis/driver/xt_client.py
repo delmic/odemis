@@ -98,6 +98,9 @@ class SEM(model.HwComponent):
             self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
+            logging.debug(
+                f"Successfully connected to xtadapter with software version {self._swVersion} and hardware"
+                f"version {self._hwVersion}")
         except Exception as err:
             raise HwError("Failed to connect to XT server '%s'. Check that the "
                           "uri is correct and XT server is"
