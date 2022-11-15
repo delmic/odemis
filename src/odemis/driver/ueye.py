@@ -725,14 +725,17 @@ class Camera(model.DigitalCamera):
             sensor_res_user = self._transposeSizeToUser(self._sensor_res)
             if max_res is None:
                 max_res = sensor_res_user
+                forced_max_res = False
             else:
                 max_res = tuple(max_res)
-                # force image cropping of max_res is specified in the configuration of the camera
-                self._set_aoi(self._sensor_res, max_res)
+                forced_max_res = True
             if not all(1 <= mr <= r for mr, r in zip(max_res, sensor_res_user)):
-                raise ValueError("max_res has to be between 1, 1 and %s, but got %s", sensor_res_user, max_res)
+                raise ValueError(f"max_res has to be between (1, 1) and {sensor_res_user}, but got {max_res}")
             max_res_hw = self._transposeSizeFromUser(max_res)
 
+            # force image cropping of max_res is specified in the configuration of the camera
+            if forced_max_res:
+                self._set_aoi(self._sensor_res, max_res)
             self._metadata[model.MD_SENSOR_SIZE] = sensor_res_user
 
             # old
@@ -1157,7 +1160,7 @@ class Camera(model.DigitalCamera):
 
         # TODO use the return value to see if the command was successful??
         self._dll.is_AOI(self._hcam, AOI_IMAGE_SET_AOI, byref(rect_aoi), sizeof(rect_aoi))
-        logging.debug("Updated area of interest from %s to %s", sensor_res, max_res)
+        logging.debug("Updated area of interest from %s to %s" % (sensor_res, max_res))
 
         # the use of SetFrameRate and SetExposure afterwards is recommended by the programmer's guide
 
