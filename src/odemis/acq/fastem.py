@@ -44,12 +44,11 @@ except ImportError as err:
     fastem_calibrations = False
 
 from odemis import model, util
-from odemis.acq import stitching
+from odemis.acq import fastem_conf, stitching
 from odemis.acq.align.spot import FindGridSpots
 from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod
 from odemis.acq.stream import SEMStream
-from odemis.util import TimeoutError
-from odemis.acq import fastem_conf
+from odemis.util import img, TimeoutError
 
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
@@ -155,6 +154,12 @@ class FastEMROA(object):
         return tot_time
 
     def _calculate_field_indices(self):
+        # TODO: Old method is used since polygonal fields is not yet supported by the gui. This must be adjusted when
+        #  it is.
+        indices = self.get_square_field_indices(self.coordinates.value)
+        return indices
+
+    def get_square_field_indices(self, coordinates):
         """
         Calculates the number of single field images needed to cover the ROA (region of acquisition). Determines the
         corresponding indices of the field images in a matrix covering the ROA. If the ROA cannot be covered
@@ -179,13 +184,13 @@ class FastEMROA(object):
         6000 = 6400 * (1 - overlap) = field_size * (1 - overlap)
         => n_fields = (abs(r - l) - field_size * overlap) / (field_size * (1 - overlap))
         """
-        l, t, r, b = self.coordinates.value  # tuple of floats: l, t, r, b coordinates in m
-        px_size = self._multibeam.pixelSize.value
-        field_res = self._multibeam.resolution.value
+        l, t, r, b = coordinates  # tuple of floats: l, t, r, b coordinates in m
+        px_size = self._multibeam.pixelSize.value   # Size per pixel in m
+        field_res = self._multibeam.resolution.value    # Number of pixels per field
 
         # The size of a field consists of the effective cell images excluding overscanned pixels.
         field_size = (field_res[0] * px_size[0],
-                      field_res[1] * px_size[1])
+                      field_res[1] * px_size[1])  # [px] * [m/px] = [m]
 
         # Note: Megafields get asymmetrically extended towards the right and bottom.
         # When fields overlap the number of fields is calculated by subtracting the size of the field that overlaps
@@ -216,6 +221,143 @@ class FastEMROA(object):
         field_indices = [f[::-1] for f in field_indices]
 
         return field_indices
+
+    # TODO: should not require input argument but use self.coordinates when the behaviour is adjusted to support
+    #  multiple coordinate points in stead of 4 separate values
+    def get_poly_field_indices(self, polygon):
+        """
+        Determine the required fields within a bounding megafield to describe a polygonal ROA and return the
+        index values of these fields.
+
+        :param polygon: (list of nested tuples (y, x)) The real world coordinates of the polygon points in
+        consecutive order.
+        :return: (list of nested tuples (col, row)) The column and row indices of the field images
+        in the order they should be acquired.
+        """
+        # Shift the coordinate system to start at the minimum values of the bounding box
+        # so the indices start from this point.
+        ymin, xmin, _, _ = util.get_polygon_bbox(polygon)
+        for i in range(len(polygon)):
+            point = polygon[i]
+            polygon[i] = (point[0] - ymin, point[1] - xmin)
+
+        # Get the indices of the fields intersected by the polygon lines.
+        indices = self._get_intersected_field_indices(polygon)
+
+        # If only one index was found return that one so filling will not be applied.
+        if len(indices) == 1:
+            return [(indices[0][1], indices[0][0])]  # (col, row)
+
+        # Create a boolian numpy array to represent the megafield with True values for fields that need to be acquired.
+        # and fill it so the inside of the polygon is also acquired.
+        index_array = self._create_and_fill_megafield_rep(indices)
+
+        # The indices that represent the polygon are where the index_array has True values.
+        rows, cols = numpy.where(index_array)
+
+        # Indices are zipped in a list so that (col, row) because the data flow expects the column first and the row second.
+        index_list = list(zip(cols.tolist(), rows.tolist()))
+
+        return index_list
+
+    def _get_intersected_field_indices(self, polygon):
+        """
+        Determine which field are intersected by the lines of the polygon and return th corresponding indices.
+
+        :param polygon: (list of nested tuples (y, x)) The real world coordinates of the polygon points in
+        consecutive order.
+        :return: (list of nested tuples (row,column)) Index values of the intersected fields.
+        """
+        indices = []
+        px_size = self._multibeam.pixelSize.value  # Size per pixel in m
+        field_res = self._multibeam.resolution.value  # Number of pixels per field
+
+        field_size = (field_res[0] * px_size[0], field_res[1] * px_size[1])  # [px] * [m/px] = [m]
+        r_grid_width = field_size[1] - field_size[1] * self.overlap
+        c_grid_width = field_size[0] - field_size[0] * self.overlap
+        for i in range(len(polygon)):
+            line = numpy.array((polygon[i], polygon[i - 1]))
+            if line[0][1] <= line[1][1]:
+                p1, p2 = line
+            else:
+                p2, p1 = line
+
+            if numpy.all(p1 == p2):
+                # If the points that form the line are equal only return the indices of the field they are in,
+                # indices for a line with length zero cannot be determined.
+                r_simple = r_grid_width * (p1[0] / r_grid_width)
+                c_simple = c_grid_width * (p1[1] / c_grid_width)
+                intersected_index = (round(r_simple / r_grid_width), round(c_simple / c_grid_width))
+                if intersected_index not in indices:
+                    indices.append(intersected_index)
+                continue
+
+            # Initialize the first two points.
+            row1, row2 = p1[0], p2[0]
+            col1, col2 = p1[1], p2[1]
+
+            # Determine the difference between both directions.
+            row_diff = row2 - row1
+            col_diff = col2 - col1
+
+            # Get the largest difference so the correct slope can be determined.
+            largest_diff = max(abs(row_diff), abs(col_diff))
+            smallest_width = min(r_grid_width, c_grid_width)
+
+            # The method incrementally checks points along a line and checks in what field each point lies,
+            # this can result in "stepping over" a corner of a field. Check four times as many points to minimize
+            # the "step-over" effect.
+            rstep = smallest_width * (1 / 4) * row_diff / largest_diff
+            cstep = smallest_width * (1 / 4) * col_diff / largest_diff
+
+            if largest_diff == abs(row_diff):
+                nsteps = math.ceil(largest_diff / abs(rstep))
+            else:
+                nsteps = math.ceil(largest_diff / abs(cstep))
+
+            row = row1
+            col = col1
+            for n in range(nsteps):
+                r_simple = r_grid_width * math.floor(row / r_grid_width)
+                c_simple = c_grid_width * math.floor(col / c_grid_width)
+                # Round is used instead of int in case there is a previous floating point or rounding error.
+                intersected_index = (round(r_simple / r_grid_width), round(c_simple / c_grid_width))
+                if intersected_index not in indices:
+                    indices.append(intersected_index)
+                row += rstep
+                col += cstep
+
+        return indices
+
+    @staticmethod
+    def _create_and_fill_megafield_rep(indices):
+        """
+        Create a numpy array that represents the given indexes as True values and fills any enclosed False values.
+
+        :param indices: (list of nested tuples (row,column)) Index values of the shape that needs to be filled.
+        :return: (ndarray) Filled numpy array that represent the fields that need to be acquired.
+        """
+        # Get the bounding megafield shape by taking the maximum indices from the indices list and create a boolian
+        # numpy array to represent the megafield with True values for fields that need to be acquired
+        _, _, rmax, cmax = util.get_polygon_bbox(indices)
+        megafield_grid_shape = (rmax + 1, cmax + 1)
+        megafield_grid_rep = numpy.zeros(megafield_grid_shape, dtype=numpy.bool)
+        megafield_grid_rep[[r[0] for r in indices], [c[1] for c in indices]] = True
+
+        # Pad the array with zeros so the flood fill wil always surround the entire shape
+        padding_size = 1
+        megafield_grid_rep = numpy.pad(megafield_grid_rep, padding_size, "constant", constant_values=False)
+        # Flood filling from the outside will create the inverse of the desired result
+        # The correct indices are then the inverse of the inverted fill together with the already given line
+        inv_fill = img.apply_flood_fill(megafield_grid_rep, (0, 0))
+        indice_array = ~inv_fill | megafield_grid_rep
+
+        # Remove the padding to regain the correct shape
+        indice_array = indice_array[padding_size:-padding_size, padding_size:-padding_size]
+
+        # TODO: check if it has actually been filled
+
+        return indice_array
 
 
 class FastEMROC(object):
@@ -580,7 +722,7 @@ class AcquisitionTask(object):
 
         # Get the coordinate of the top left corner of the ROA, this corresponds to the (xmin, ymax) coordinate in the
         # role='stage' coordinate system.
-        xmin_roa, _, _, ymax_roa = self._roa.coordinates.value
+        xmin_roa, _, _, ymax_roa = self._roa.coordinates.value  # TODO: update with boundingbox instead of coordinates
 
         # The position of the stage when acquiring the top/left tile needs to be matching the center of that tile.
         # The stage coordinate system is pointing to the right in the x direction, and upwards in the y direction,

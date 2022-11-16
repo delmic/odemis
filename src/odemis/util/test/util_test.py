@@ -543,6 +543,20 @@ class ExpandRectTestCase(unittest.TestCase):
                                                        "expanded rectangle %s" % (expanded_rect, expected_rect))
 
 
+class GetMinMaxTupleTestCase(unittest.TestCase):
+
+    def test_minmax(self):
+        """Test getting the minimum and maximum values from a list of tuples"""
+        values = [(2, 3), (1, 1), (2, 5), (5, 8), (0, 5), (10, 3), (0, 1)]
+        min_0, min_1, max_0, max_1 = 0, 1, 10, 8
+        rmin_0, rmin_1, rmax_0, rmax_1 = util.get_polygon_bbox(values)
+
+        self.assertEqual(min_0, rmin_0)
+        self.assertEqual(max_0, rmax_0)
+        self.assertEqual(min_1, rmin_1)
+        self.assertEqual(max_1, rmax_1)
+
+
 class FindPlotContentTestCase(unittest.TestCase):
 
     def test_find_plot_content(self):
