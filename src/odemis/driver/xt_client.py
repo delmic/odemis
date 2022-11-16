@@ -1548,7 +1548,7 @@ class FibScanner(model.Emitter):
             self.parent.set_scan_mode("full_frame")
             current_mode = self.parent.get_scan_mode()
             if current_mode != "full_frame":
-                raise HwError("Couldn't set full_frame as scan mode on the XT client mode. Current mode is: %s",
+                raise HwError("Couldn't set full_frame as scan mode on the XT client mode. Current mode is: %s" %
                               current_mode)
 
     def finishScan(self):
