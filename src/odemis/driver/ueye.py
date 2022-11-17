@@ -717,29 +717,22 @@ class Camera(model.DigitalCamera):
 
             self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
-            # old
-            # res = (sensorinfo.nMaxWidth, sensorinfo.nMaxHeight)
-
-            # new
+            # compare the max_res parameter and the resolution of the camera sensor
+            # if the max_res param is smaller image cropping will be set through AOI
             self._sensor_res = (sensorinfo.nMaxWidth, sensorinfo.nMaxHeight)
             sensor_res_user = self._transposeSizeToUser(self._sensor_res)
+
             if max_res is None:
                 max_res = sensor_res_user
-                forced_max_res = False
             else:
                 max_res = tuple(max_res)
-                forced_max_res = True
             if not all(1 <= mr <= r for mr, r in zip(max_res, sensor_res_user)):
                 raise ValueError(f"max_res has to be between (1, 1) and {sensor_res_user}, but got {max_res}")
             max_res_hw = self._transposeSizeFromUser(max_res)
 
-            # force image cropping of max_res is specified in the configuration of the camera
-            if forced_max_res:
-                self._set_aoi(self._sensor_res, max_res)
+            # setting a specific Area Of Interest will force image cropping
+            self._set_aoi(sensor_res_user, max_res)
             self._metadata[model.MD_SENSOR_SIZE] = sensor_res_user
-
-            # old
-            # self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(res)
 
             pxs = sensorinfo.wPixelSize * 1e-8  # m
             self.pixelSize = model.VigilantAttribute(self._transposeSizeToUser((pxs, pxs)),
@@ -1146,10 +1139,6 @@ class Camera(model.DigitalCamera):
 
         note: This function is not supported by the camera models USB 3 uEye XC and XS
         """
-        # example from _setExposureTime()
-        # exp = self.SetExposure(exp)  # can take ~2s
-        # logging.debug("Updated exposure time to %g s", exp)
-
         # sets the position and size of the image by using an object of the IS_RECT type.
         rect_aoi = IS_RECT()
         # make sure the AOI rect region is centered compared to the sensor resolution
@@ -1161,8 +1150,6 @@ class Camera(model.DigitalCamera):
         # TODO use the return value to see if the command was successful??
         self._dll.is_AOI(self._hcam, AOI_IMAGE_SET_AOI, byref(rect_aoi), sizeof(rect_aoi))
         logging.debug("Updated area of interest from %s to %s" % (sensor_res, max_res))
-
-        # the use of SetFrameRate and SetExposure afterwards is recommended by the programmer's guide
 
     # Acquisition methods
     def start_generate(self):
