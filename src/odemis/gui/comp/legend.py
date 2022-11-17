@@ -36,9 +36,10 @@ from odemis.gui.comp.slider import Slider
 from odemis.gui.util import wxlimit_invocation, call_in_wx_main
 from odemis.gui.util.conversion import wxcol_to_frgb
 from odemis.gui.util.img import calculate_ticks, guess_sig_num_rng, find_first_last_finite_indices
-from odemis.model import MD_AT_SPECTRUM, MD_AT_AR, MD_AT_FLUO, \
-                         MD_AT_CL, MD_AT_OVV_FULL, MD_AT_OVV_TILES, \
-                         MD_AT_EM, MD_AT_HISTORY, MD_AT_SLIT, MD_AT_EK
+from odemis.model import (MD_AT_AR, MD_AT_CL, MD_AT_EK, MD_AT_EM, MD_AT_FLUO,
+                          MD_AT_HISTORY, MD_AT_OVV_FULL, MD_AT_OVV_TILES,
+                          MD_AT_SLIT, MD_AT_SPECTRUM, MD_AT_TEMPORAL,
+                          MD_AT_TEMPSPECTRUM, MD_AT_FIB)
 import wx
 
 import odemis.util.units as units
@@ -60,18 +61,21 @@ class InfoLegend(wx.Panel):
 
         # Cannot be a constant because loading bitmaps only works after wx.App
         # has been created.
-        self._type_to_icon = (
-            (MD_AT_AR, img.getBitmap("icon/ico_blending_ang.png")),
-            (MD_AT_SPECTRUM, img.getBitmap("icon/ico_blending_spec.png")),
-            (MD_AT_EK, img.getBitmap("icon/ico_blending_spec.png")),
-            (MD_AT_EM, img.getBitmap("icon/ico_blending_sem.png")),
-            (MD_AT_OVV_TILES, img.getBitmap("icon/ico_blending_map.png")),
-            (MD_AT_OVV_FULL, img.getBitmap("icon/ico_blending_navcam.png")),
-            (MD_AT_HISTORY, img.getBitmap("icon/ico_blending_history.png")),
-            (MD_AT_CL, img.getBitmap("icon/ico_blending_opt.png")),
-            (MD_AT_FLUO, img.getBitmap("icon/ico_blending_opt.png")),
-            (MD_AT_SLIT, img.getBitmap("icon/ico_blending_slit.png")),
-        )
+        self._type_to_icon = {
+            MD_AT_AR: img.getBitmap("icon/ico_blending_ang.png"),
+            MD_AT_SPECTRUM: img.getBitmap("icon/ico_blending_spec.png"),
+            # MD_AT_TEMPORAL: img.getBitmap("icon/ico_blending_temporal.png"),
+            MD_AT_TEMPSPECTRUM: img.getBitmap("icon/ico_blending_spec.png"),
+            # MD_AT_EK: img.getBitmap("icon/ico_blending_ek.png"),
+            MD_AT_EM: img.getBitmap("icon/ico_blending_sem.png"),
+            MD_AT_FIB: img.getBitmap("icon/ico_blending_fib.png"),
+            MD_AT_OVV_TILES: img.getBitmap("icon/ico_blending_map.png"),
+            MD_AT_OVV_FULL: img.getBitmap("icon/ico_blending_navcam.png"),
+            MD_AT_HISTORY: img.getBitmap("icon/ico_blending_history.png"),
+            MD_AT_CL: img.getBitmap("icon/ico_blending_opt.png"),
+            MD_AT_FLUO: img.getBitmap("icon/ico_blending_opt.png"),
+            MD_AT_SLIT: img.getBitmap("icon/ico_blending_slit.png"),
+        }
 
         self.SetBackgroundColour(parent.GetBackgroundColour())
         self.SetForegroundColour(parent.GetForegroundColour())
@@ -245,16 +249,14 @@ class InfoLegend(wx.Panel):
         :param acq_type: (String): acquisition type associated with stream
         """
 
-        for t, type_icon in self._type_to_icon:
-            if acq_type == t:
-                icon = type_icon
-                break
-        else:
+        try:
+            icon = self._type_to_icon[acq_type]
+        except KeyError:
             # Don't fail too bad
             icon = img.getBitmap("icon/ico_blending_opt.png")
             if self.merge_slider.IsShown():
-                logging.warning("Failed to find icon for stream of type %s",
-                                acq_type)
+                logging.warning("Failed to find icon for stream of type %s", acq_type)
+
         if side == wx.LEFT:
             self.bmp_slider_left.SetBitmap(icon)
         else:
