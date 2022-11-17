@@ -645,14 +645,17 @@ def _doCryoSwitchSamplePosition(future, target):
                         logging.info("Cancelling aligner movement...")
                         raise CancelledError()
 
-                # If the stage rotates a lot, move it first to a safe position (Moving it in X and RZ is sufficient)
+                # The movement in Rx is quite odd with the stage (moves a lot of axes).
+                # So if any large Rx rotation is needed, we do it far away from
+                # the pole-piece. The movement in X is independent of rx, so it
+                # should be always safe to go to the LOADING position in rx.
                 if abs(current_pos["rx"] - target_pos[target]["rx"]) > math.radians(2):
-                    sub_move_dict = filter_dict({"rz"}, target_pos[LOADING])
-                    logging.debug("Moving %s to a safe rotation position in RZ axis, to %s.", stage.name, sub_move_dict)
-                    run_sub_move(future, stage, sub_move_dict)
-
                     sub_move_dict = filter_dict({"x"}, target_pos[LOADING])
                     logging.debug("Moving %s to a safe position in X axis, to %s.", stage.name, sub_move_dict)
+                    run_sub_move(future, stage, sub_move_dict)
+
+                    sub_move_dict = filter_dict({"rx"}, target_pos[LOADING])
+                    logging.debug("Moving %s to a safe rotation position in Rx axis, to %s.", stage.name, sub_move_dict)
                     run_sub_move(future, stage, sub_move_dict)
 
                 for sub_move in sub_moves:
