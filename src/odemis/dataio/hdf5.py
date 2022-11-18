@@ -19,21 +19,20 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from past.builtins import basestring, unicode
-from numpy.polynomial import polynomial
-
 from collections.abc import Iterable
-import h5py
 import json
 import logging
-import numpy
-from odemis import model
-import odemis
-from odemis.util import spectrum, img, fluo
-from odemis.util.conversion import JsonExtraEncoder
 import os
 import time
 
+from numpy.polynomial import polynomial
+import h5py
+import numpy
+
+from odemis import model
+from odemis.util import fluo, img, spectrum
+from odemis.util.conversion import JsonExtraEncoder
+import odemis
 
 # User-friendly name
 FORMAT = "HDF5"
@@ -598,11 +597,11 @@ def _read_image_info(group):
                 # handle old data acquired with Odemis v2.2 and earlier,
                 # which still has WL_POLYNOMIAL (spectrograph) or OUT_WL (monochromator) in MD
                 elif dim[0].shape == ():  # C has only one entry
-                    if isinstance(group["COffset"], basestring):
+                    if isinstance(group["COffset"], (bytes, str)):
                         # Only to support some files saved with Odemis 2.3-alpha
                         logging.warning("COffset is a string, not officially supported")
                         out_wl = group["COffset"]
-                        if not isinstance(out_wl, unicode):
+                        if not isinstance(out_wl, str):
                             out_wl = out_wl.decode("utf-8", "replace")
                         md[model.MD_OUT_WL] = out_wl
                     else:
@@ -697,23 +696,23 @@ def _parse_physical_data(pdgroup, da):
         try:
             cd = pdgroup["ChannelDescription"][i]
             # For Python 2, where it returns a "str", which are actually UTF-8 encoded bytes
-            if not isinstance(cd, unicode):
+            if not isinstance(cd, str):
                 cd = cd.decode("utf-8", "replace")
             md[model.MD_DESCRIPTION] = cd
         except (KeyError, IndexError, UnicodeDecodeError):
             # maybe Title is more informative... but it's not per channel
             try:
                 title = pdgroup["Title"][()]
-                if not isinstance(cd, unicode):
+                if not isinstance(cd, str):
                     title = title.decode("utf-8", "replace")
                 md[model.MD_DESCRIPTION] = title
             except (KeyError, IndexError, UnicodeDecodeError):
                 pass
 
-        # make sure we can read both bytes (HDF5 ascii) and unicode (HDF5 utf8) metadata
+        # make sure we can read both bytes (HDF5 ascii) and string (HDF5 utf8) metadata
         # That's important because Python 2 strings are stored as bytes (ie ascii), while Python 3 strings
         # (unicode) are always stored as utf-8.
-        # This forces all the strings to be unicode
+        # This forces both ascii and utf8 to be stored as strings (unicode)
         def read_str(s):
             if isinstance(s, bytes):
                 s = s.decode('utf8')
@@ -803,8 +802,10 @@ def read_metadata(pdgroup, c_index, md, name, md_key, converter, bad_states=(ST_
             if md_key == model.MD_IN_WL:
                 md[md_key] = (converter(ds[c_index]) - h_width, converter(ds[c_index]) + h_width)  # in m
             elif md_key == model.MD_OUT_WL:
-                if isinstance(ds[c_index], basestring):
+                if isinstance(ds[c_index], str):
                     md[model.MD_OUT_WL] = ds[c_index]
+                elif isinstance(ds[c_index], bytes):  # Old ASCII data
+                    md[model.MD_OUT_WL] = ds[c_index].decode('utf8')
                 elif len(ds.shape) == 1:  # Only one value per channel
                     ewl = converter(ds[c_index])  # in m
                     # In files saved with Odemis 2.2, MD_OUT_WL could be saved with
@@ -907,7 +908,7 @@ def _add_image_metadata(group, image, mds):
             ewls.append(1e-9) # to not confuse some readers
             typ = max(typ, 1)
             state.append(ST_INVALID)
-        elif isinstance(ewl, basestring):
+        elif isinstance(ewl, str):
             # Just copy as is, hopefully there are all the same type
             ewls.append(ewl)
             state.append(ST_REPORTED)
@@ -924,7 +925,7 @@ def _add_image_metadata(group, image, mds):
 
     # Check all ewls are the same type
     for i, ewl in enumerate(ewls):
-        if isinstance(ewl, basestring) and typ > 0:
+        if isinstance(ewl, str) and typ > 0:
             logging.warning("Dropping MD_OUT_WL %s due to mix of type", ewl)
             if typ == 1:
                 ewls[i] = 1e-9
@@ -934,7 +935,7 @@ def _add_image_metadata(group, image, mds):
         elif not isinstance(ewl, Iterable) and typ > 1:
             ewls[i] = (ewl,) * typ
 
-    if isinstance(ewls[0], basestring):
+    if isinstance(ewls[0], str):
         ewls = numpy.array(ewls, dtype=dtvlen_str)
     gp["EmissionWavelength"] = ewls  # in m
     _h5svi_set_state(gp["EmissionWavelength"], state)
@@ -1202,7 +1203,7 @@ def set_metadata(gp, name, status_list, value_list):
     :parameter value_list: (list) containing the values of the specified metadata
     """
     if not all(st == ST_INVALID for st in status_list):
-        if isinstance(value_list[0], basestring):
+        if isinstance(value_list[0], str):
             dtvlen_str = h5py.special_dtype(vlen=str)
             value_list = numpy.array(value_list, dtype=dtvlen_str)
         gp[name] = value_list
@@ -1591,7 +1592,7 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
 def export(filename, data, thumbnail=None):
     '''
     Write an HDF5 file with the given image and metadata
-    filename (unicode): filename of the file to create (including path)
+    filename (str): filename of the file to create (including path)
     data (list of model.DataArray, or model.DataArray): the data to export, 
         must be 2D or more of int or float. Metadata is taken directly from the data 
         object. If it's a list, a multiple page file is created. The order of the
@@ -1614,7 +1615,7 @@ def export(filename, data, thumbnail=None):
 def read_data(filename):
     """
     Read an HDF5 file and return its content (skipping the thumbnail).
-    filename (unicode): filename of the file to read
+    filename (str): filename of the file to read
     return (list of model.DataArray): the data to import (with the metadata 
      as .metadata). It might be empty.
      Warning: reading back a file just exported might give a smaller number of
@@ -1634,7 +1635,7 @@ def read_data(filename):
 def read_thumbnail(filename):
     """
     Read the thumbnail data of a given HDF5 file.
-    filename (unicode): filename of the file to read
+    filename (str): filename of the file to read
     return (list of model.DataArray): the thumbnails attached to the file. If 
      the file contains multiple thumbnails, all of them are returned. If it 
      contains none, an empty list is returned.
@@ -1644,4 +1645,3 @@ def read_thumbnail(filename):
     # TODO: support filename to be a File or Stream
 
     return _thumbFromHDF5(filename)
-
