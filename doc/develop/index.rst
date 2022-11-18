@@ -17,6 +17,7 @@ This document covers the main aspects of development with Odemis.
 
     sys-arch
     extending
+    coding-guidelines
     base-api
     backend-api
     acq
