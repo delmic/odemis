@@ -448,7 +448,8 @@ class VirtualTestCam(with_metaclass(ABCMeta, object)):
 
         # ask for the whole image
         self.size = (self.camera.shape[0] // 2, self.camera.shape[1] // 2)
-        self.camera.resolution.value = self.size
+        if not self.camera.resolution.readonly:
+            self.camera.resolution.value = self.size
         exposure = 0.1
         self.camera.exposureTime.value = exposure
 
@@ -456,7 +457,7 @@ class VirtualTestCam(with_metaclass(ABCMeta, object)):
         im = self.camera.data.get()
         duration = time.time() - start
 
-        self.assertEqual(im.shape, self.size[::-1]) # TODO a small size diff is fine if bigger than requested
+        self.assertEqual(im.shape, self.size[::-1])  # TODO a small size diff is fine if bigger than requested
         self.assertGreaterEqual(duration, exposure, "Error execution took %f s, less than exposure time %f." % (duration, exposure))
         self.assertIn(model.MD_EXP_TIME, im.metadata)
         self.assertEqual(im.metadata[model.MD_BINNING], new_binning)
@@ -469,7 +470,8 @@ class VirtualTestCam(with_metaclass(ABCMeta, object)):
         self.size = (self.camera.shape[0] // 2, self.camera.shape[1] // 2)
         exposure = 0.1
 
-        if (self.camera.resolution.range[0][0] > self.size[0] or
+        if (self.camera.resolution.readonly or
+            self.camera.resolution.range[0][0] > self.size[0] or
             self.camera.resolution.range[0][1] > self.size[1]):
             # cannot divide the size by 2? Then it probably doesn't support AOI
             self.skipTest("Camera doesn't support area of interest")

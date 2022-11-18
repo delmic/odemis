@@ -685,13 +685,11 @@ class Camera(model.DigitalCamera):
 
     def __init__(self, name, role, device=None, max_res=None, **kwargs):
         """
-        device (None or str): serial number (eg, 1020345) of the device to use
-        or None if any device is fine.
+        device (None or str): serial number (eg, 1020345) of the device to use or None if any device is fine.
 
-        max_res (1 <= int, 1 <= int): maximum resolution possible.
-        this will restrict the maximum FoV. If None, it'll
-        use the maximum supported by the camera reported. In such case, the
-        translation is not clipped, so it can be used to move the area anywhere
+        max_res ((1 <= int, 1 <= int) or None): maximum resolution possible.
+        This will restrict the maximum FoV. If None, it'll use the maximum supported by the camera reported.
+        In such case, the translation is not clipped, so it can be used to move the area anywhere
         in full camera sensor. That is after applying the transpose.
         """
         super(Camera, self).__init__(name, role, **kwargs)
@@ -717,21 +715,26 @@ class Camera(model.DigitalCamera):
 
             self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
-            # compare the max_res parameter and the resolution of the camera sensor
-            # if the max_res param is smaller image cropping will be set through AOI
             self._sensor_res = (sensorinfo.nMaxWidth, sensorinfo.nMaxHeight)
             sensor_res_user = self._transposeSizeToUser(self._sensor_res)
 
             if max_res is None:
-                max_res = sensor_res_user
+                max_res = self._sensor_res
             else:
                 max_res = tuple(max_res)
             if not all(1 <= mr <= r for mr, r in zip(max_res, sensor_res_user)):
                 raise ValueError(f"max_res has to be between (1, 1) and {sensor_res_user}, but got {max_res}")
             max_res_hw = self._transposeSizeFromUser(max_res)
 
-            # setting a specific Area Of Interest will force image cropping
-            self._set_aoi(sensor_res_user, max_res)
+            # compare the max_res parameter and the resolution of the camera sensor
+            # if the max_res param is smaller image cropping will be set through AOI
+            if max_res_hw != self._sensor_res:
+                rect_aoi = IS_RECT()
+                rect_aoi.s32X = (self._sensor_res[0] - max_res_hw[0]) // 2
+                rect_aoi.s32Y = (self._sensor_res[1] - max_res_hw[1]) // 2
+                rect_aoi.s32Width = max_res_hw[0]
+                rect_aoi.s32Height = max_res_hw[1]
+                self.SetAOI(rect_aoi)
             self._metadata[model.MD_SENSOR_SIZE] = sensor_res_user
 
             pxs = sensorinfo.wPixelSize * 1e-8  # m
@@ -963,6 +966,18 @@ class Camera(model.DigitalCamera):
         self._dll.is_SetFrameRate(self._hcam, c_double(fr), byref(newfps))
         return newfps.value
 
+    def SetAOI(self, rect: IS_RECT):
+        """
+        Set a predefined Area Of Interest according to configuration settings.
+        This forces image cropping for a fov which is too large.
+        A specific shape is used to set the area it is centered on the image view.
+        :param rect: The selected shape set by the user to apply image cropping.
+        Note: This function is not supported by the camera models USB 3 uEye XC and XS
+        """
+        self._dll.is_AOI(self._hcam, AOI_IMAGE_SET_AOI, byref(rect), sizeof(rect))
+        rect_res = (rect.s32Width, rect.s32Height)
+        logging.debug("Updated area of interest from %s to %s" % (self._sensor_res, rect_res))
+
     def GetPixelClock(self):
         """
         return (0<int): the pixel clock in MHz
@@ -1131,25 +1146,6 @@ class Camera(model.DigitalCamera):
         self._dll.is_UnlockSeqBuf(self._hcam, IGNORE_PARAMETER, mem)
 
         return model.DataArray(na, md)
-
-    def _set_aoi(self, sensor_res: tuple, max_res: tuple):
-        """
-        :param sensor_res: tuple(int width, int height) The maximum resolution of the camera sensor
-        :param max_res: tuple(int width, int height) The maximum requested resolution of the image
-
-        note: This function is not supported by the camera models USB 3 uEye XC and XS
-        """
-        # sets the position and size of the image by using an object of the IS_RECT type.
-        rect_aoi = IS_RECT()
-        # make sure the AOI rect region is centered compared to the sensor resolution
-        rect_aoi.s32X = abs(sensor_res[0] - max_res[0]) // 2
-        rect_aoi.s32Y = abs(sensor_res[1] - max_res[1]) // 2
-        rect_aoi.s32Width = max_res[0]
-        rect_aoi.s32Height = max_res[1]
-
-        # TODO use the return value to see if the command was successful??
-        self._dll.is_AOI(self._hcam, AOI_IMAGE_SET_AOI, byref(rect_aoi), sizeof(rect_aoi))
-        logging.debug("Updated area of interest from %s to %s" % (sensor_res, max_res))
 
     # Acquisition methods
     def start_generate(self):
