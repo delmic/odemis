@@ -9,20 +9,20 @@ class TestFilterTestLog(unittest.TestCase):
     """
 
     def test_sample_input_ubuntu_18_04(self):
-        """Test that the logs are filtered correctly and the size is reduced for a too long message on Ubuntu 18.04"""
+        """Test that the logs are filtered correctly on Ubuntu 18.04"""
         with open("test_input_pytest_log_filter_18_04.txt") as f:
             log_txt = f.read()
         filtered_log = filter_test_log(log_txt)
-        self.assertEqual(46, len(filtered_log.split("\n")))
-        self.assertTrue("Logging message is too long" in filtered_log)
+        self.assertEqual(5, len(filtered_log.split("\n")))
+        self.assertTrue(filtered_log.startswith("Running /home/testing"))
 
     def test_sample_input_ubuntu_20_04(self):
-        """Test that the logs are filtered correctly and the size is reduced for a too long message on Ubuntu 20.04"""
+        """Test that the logs are filtered correctly on Ubuntu 20.04"""
         with open("test_input_pytest_log_filter_20_04.txt") as f:
             log_txt = f.read()
         filtered_log = filter_test_log(log_txt)
-        self.assertEqual(46, len(filtered_log.split("\n")))
-        self.assertTrue("Logging message is too long" in filtered_log)
+        self.assertEqual(3, len(filtered_log.split("\n")))
+        self.assertTrue(filtered_log.startswith("Running /home/testing"))
 
     def test_sample_empty_str(self):
         """Test that the logs are filtered correctly and the size is reduced for an empty string"""

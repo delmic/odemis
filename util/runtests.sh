@@ -80,6 +80,18 @@ if [ $pytest = True ]; then
   rm -f $TESTSUMMARY
   touch $TESTSUMMARY
   TESTSUMMARY="$(readlink -m "$TESTSUMMARY")"
+
+  SHORTSUMMARY=/tmp/pytest-short-summary.log
+  # Remove any files which might already exist from a previously (expected incomplete) run of that day.
+  rm -f $SHORTSUMMARY
+  touch $SHORTSUMMARY
+  SHORTSUMMARY="$(readlink -m "$SHORTSUMMARY")"
+
+  WARNINGSUMMARY=/tmp/pytest-warning-summary.log
+  # Remove any files which might already exist from a previously (expected incomplete) run of that day.
+  rm -f $WARNINGSUMMARY
+  touch $WARNINGSUMMARY
+  WARNINGSUMMARY="$(readlink -m "$WARNINGSUMMARY")"
 fi
 
 
@@ -143,9 +155,17 @@ for f in $testfiles; do
         if [ $pytest = True ]; then
           tail -n "+$prev_size" "$TESTLOG" > /tmp/latest_test_case_log.txt
           # Filter the output to only print the summary
-          python3 $ODEMIS_DIR/util/pytest_log_filter.py /tmp/latest_test_case_log.txt > /tmp/filtered_test.txt
-          cat /tmp/filtered_test.txt >> $TESTSUMMARY
-          echo -e "\n" >> $TESTSUMMARY
+          python3 $ODEMIS_DIR/util/pytest_log_filter.py /tmp/latest_test_case_log.txt 'summary' > /tmp/filtered_test.txt
+          # if the file is empty we don't want to add an empty line to the SHORTSUMMARY
+          if [ -s /tmp/filtered_test.txt ]; then
+            cat /tmp/filtered_test.txt >> $SHORTSUMMARY
+          fi
+          # Filter the output to only print the warnings
+          python3 $ODEMIS_DIR/util/pytest_log_filter.py /tmp/latest_test_case_log.txt 'warning' > /tmp/filtered_test.txt
+          # if the file is empty we don't want to add an empty line to the WARNINGSUMMARY
+          if [ -s /tmp/filtered_test.txt ]; then
+            cat /tmp/filtered_test.txt >> $WARNINGSUMMARY
+          fi
         else
           tail -n "+$prev_size" "$TESTLOG" | grep -E 'OK' | tail -1
           tail -n "+$prev_size" "$TESTLOG" | awk "/^FAIL: /,/FAILED/"
@@ -163,6 +183,9 @@ for f in $testfiles; do
     # Stops the back-end, just in case it happens to still be running
     sudo odemis-stop
 done
+
+# combine the output of the short summary and the warnings into one file
+cat $SHORTSUMMARY $WARNINGSUMMARY >> $TESTSUMMARY
 
 if [ $failures -gt 0 ]; then
     echo "$failures test failed. See $TESTLOG for error messages."
