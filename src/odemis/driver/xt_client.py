@@ -2651,17 +2651,19 @@ class XTTKDetector(Detector):
 
     def stop_generate(self):
         logging.debug("Stopping image acquisition")
+        self._genmsg.put(GEN_STOP)
         with self._cancel_access:
             self.cancel_connection._pyroClaimOwnership()
             # Directly calling set_channel_state does not work with XTToolkit.
-            # Therefore call get_channel_state, before trying to stop the channel.
+            # Therefore, call get_channel_state, before trying to stop the channel.
+            # WARNING: This code does not properly cancel the current acquisition.
             self.cancel_connection.get_channel_state(self.parent._scanner.channel)
             self.cancel_connection.set_channel_state(self.parent._scanner.channel, False)
             # Stop twice, to make sure the channel fully stops.
             self.cancel_connection.set_channel_state(self.parent._scanner.channel, False)
         if self.parent._scanner.blanker.value is None:
             self.parent.blank_beam()
-        self._genmsg.put(GEN_STOP)
+        logging.debug("Stopped generate image acquisition")
 
     def _acquire(self):
         """
@@ -2674,14 +2676,24 @@ class XTTKDetector(Detector):
                 self._acq_wait_start()
                 logging.debug("Preparing acquisition")
                 while True:
-                    if self._acq_should_stop():
+                    logging.debug("Start acquiring an image")
+
+                    # HACK: as cancellation doesn't work, to avoid acquiring an extra image
+                    # at the end of an acquisition, we wait a bit before starting the next frame.
+                    # This gives enough time for the client after receiving the previous frame to
+                    # decide that this is enough. Especially worthy when acquiring a single image.
+                    if self._acq_should_stop(timeout=0.2):
+                        logging.debug("Image acquisition should stop, exiting loop")
                         break
 
                     if hasattr(self._scanner, "blanker"):
                         if self._scanner.blanker.value is None:
                             self.parent.unblank_beam()
 
-                    # Start a complete scan.
+                    md = self.parent._scanner._metadata.copy()
+
+                    logging.debug("Start a complete scan of an image")
+                    md[model.MD_ACQ_DATE] = time.time()
                     try:
                         self.parent.scan_image()
                     except OSError as err:
@@ -2692,14 +2704,13 @@ class XTTKDetector(Detector):
                         else:
                             raise
 
-                    # Acquire the image
-                    # =================
-                    image = self.parent.get_latest_image(self.parent._scanner.channel)
-
-                    md = self.parent._scanner._metadata.copy()
+                    # Add metadata to the image
                     md.update(self._metadata)
                     md[model.MD_DWELL_TIME] = self.parent._scanner.dwellTime.value
                     md[model.MD_ROTATION] = self.parent._scanner.rotation.value
+
+                    # Acquire the image
+                    image = self.parent.get_latest_image(self.parent._scanner.channel)
 
                     da = DataArray(image, md)
                     logging.debug("Notify dataflow with new image of shape: %s.", image.shape)
