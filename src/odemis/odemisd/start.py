@@ -45,7 +45,7 @@ RE_MSG_BE_FAILURE = "Failed to instantiate the model due to component"
 RE_MSG_BE_TRACEBACK = "Full traceback of the error follows"
 RE_MSG_GUI_FAILURE = "Traceback (most recent call last)"
 RE_MSG_BE_HEADER = r"[0-9]+-[0-1][0-9]-[0-3][0-9] [0-2][0-9]:[0-6][0-9]:[0-6][0-9].[0-9]+\t\S+\t\S+:"
-MAX_SHORT_ERROR_LENGTH = 40  # lines
+MAX_SHORT_ERROR_LENGTH = 20  # lines
 
 # String as returned by xprop WM_CLASS
 GUI_WM_CLASS = "Odemis"
@@ -188,7 +188,13 @@ def display_log(type, logfile):
                 break
 
     app = wx.App()  # This variable is created to show the log_frame. Required even though it is unused.
+
     if failurelb is not None:
+        if failurele is None:
+            # Couldn't find the next message after the backtrace, possibly because
+            # the backtrace is the last thing in the log
+            failurele = len(lines)
+
         failmsg = f"Failure during {type} initialization:\n\n"
 
         # Make sure the "short" message is never too long
@@ -200,6 +206,7 @@ def display_log(type, logfile):
                        "[...]\n" +
                        "".join(lines[failurele - MAX_SHORT_ERROR_LENGTH // 2:failurele]))
         failmsg += "\nWould you like to see the full log message now?"
+
         box = wx.MessageDialog(None, failmsg,
                                caption,
                                wx.YES_NO | wx.YES_DEFAULT | wx.ICON_ERROR | wx.CENTER)
