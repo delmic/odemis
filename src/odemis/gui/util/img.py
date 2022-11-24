@@ -1012,12 +1012,8 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     # Get the horizontal/vertical space in pixels
     if orientation == wx.HORIZONTAL:
         pixel_space = client_size[0]
-        # Don't display ticks too close from the left border
-        min_pixel = 10
     else:
-        # Don't display ticks too close from the border
         pixel_space = client_size[1]
-        min_pixel = 10
 
     # Skip the NaNs. We don't check that the NaNs are just on the border. We
     # just assume it's so, and if not, the output will be incorrect.
@@ -1056,12 +1052,13 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     logging.debug("Value step is %s with range %s and requested spacing %s px",
                   value_step, value_space, tick_spacing)
 
-    first_val = (int(min_val / value_step) + 1) * value_step
+    # Find the smallest value multiple of value_step, which is within the range
+    first_val = math.ceil(min_val / value_step) * value_step
     # logging.debug("Setting first tick at value %s", first_val)
 
     tick_values = [min_val] if min_val == 0 else []
     cur_val = first_val
-    while cur_val < max_val:
+    while cur_val <= max_val:
         tick_values.append(cur_val)
         cur_val += value_step
     if len(tick_values) < 2:
@@ -1085,9 +1082,13 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
                     abs(pixel - prev_pixel) < min_margin):
                 # keep a min distance between ticks
                 continue
-            if min_pixel <= pixel <= pixel_space:
-                ticks.append(pix_val)
-                prev_pixel = pixel
+            if not 0 <= pixel <= pixel_space:
+                logging.warning("Computed a tick %s outside of pixel space (%s px)",
+                                tick_value, pixel)
+                continue
+
+            ticks.append(pix_val)
+            prev_pixel = pixel
 
     tick_list = ticks
 

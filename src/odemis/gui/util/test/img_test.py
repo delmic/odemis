@@ -137,6 +137,24 @@ class TestCalculateTicks(unittest.TestCase):
             # ticks are made of 2 values
             self.assertEqual(len(ticks[0]), 2)
 
+    def test_neg_value(self):
+        """
+        Check that a range with negative values behaves the same as a range with positive values
+        """
+        ranges = [(100, 1000), (0, 9500), (1e-3, 8e-3), (-5, 6), (-2, -1000)]
+
+        csize = (1000, 737)
+        for rng in ranges:
+            print(f"Trying range {rng}")
+            for orient in (wx.HORIZONTAL, wx.VERTICAL):
+                ticks_pos = calculate_ticks(rng, csize, orient, csize[0] / 10)
+                ticks_pos_inv = calculate_ticks((rng[1], rng[0]), csize, orient, csize[0] / 10)
+                self.assertEqual(len(ticks_pos), len(ticks_pos_inv))
+                ticks_neg = calculate_ticks((-rng[1], -rng[0]), csize, orient, csize[0] / 10)
+                self.assertEqual(len(ticks_pos), len(ticks_neg))
+                ticks_neg_inv = calculate_ticks((-rng[0], -rng[1]), csize, orient, csize[0] / 10)
+                self.assertEqual(len(ticks_pos), len(ticks_neg_inv))
+
     def test_empty_range(self):
         # Should display just one tick: the value of the range
         ticks = calculate_ticks((900, 900), (50, 600), wx.HORIZONTAL, 20)
