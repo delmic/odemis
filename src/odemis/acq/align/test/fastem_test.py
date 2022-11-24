@@ -133,6 +133,14 @@ class TestFastEMCalibration(unittest.TestCase):
 
         calibrations = [Calibrations.DARK_OFFSET, Calibrations.DIGITAL_GAIN]
 
+        descanner_md = self.descanner.getMetadata()
+
+        # The dark gain calibration requires MD_SCAN_OFFSET_CALIB to be set,
+        # which is done by image_translation_pre_align. If this test runs before
+        # test_image_translation_pre_align we need to set this value.
+        if model.MD_SCAN_OFFSET_CALIB not in descanner_md:
+            self.descanner.updateMetadata({model.MD_SCAN_OFFSET_CALIB: descanner_md[model.MD_SCAN_OFFSET]})
+
         # set current cell dark offset and cell digital gain
         # (also for simulator the calibration will find values different from 0 and 1)
         self.mppc.cellDarkOffset.value = \
