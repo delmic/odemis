@@ -130,7 +130,7 @@ def check_latest_package(
     :param current_version: The currently installed xtadapter version.
     :param adapter: The adapter type e.g. xtadapter, fastem-xtadapter to be used for filtering.
     :param bitness: The executable bitness i.e. 32bit or 64bit to be used for filtering.
-    :param is_zip: A flag stating if the package is a zip file.
+    :param is_zip: A flag stating if the package is a zip file, if not a zip file check if it is a folder.
     :return: A class containing relevant information about the latest xtadapter package, if not found return Package().
 
     """
@@ -146,7 +146,11 @@ def check_latest_package(
     if os.path.isdir(directory):
         for entity in os.listdir(directory):
             result = re.search(regex, entity)
-            if result and (is_zip == entity.endswith(".zip")):
+            if result and (
+                entity.endswith(".zip")
+                if is_zip
+                else os.path.isdir(os.path.join(directory, entity))
+            ):
                 package = Package()
                 package.adapter = result.group(1)
                 package.bitness = result.group(2) + "bit"
@@ -211,16 +215,17 @@ class SEM(model.HwComponent):
                           " connected to the network. %s" % (address, err))
 
         # Steps to transfer latest xtadapter package if available
+        # The transferred package will be a zip file in the form of bytes
         package = Package()
         try:
             # xtadapter debian package installation directory which contains xtadapter's zip files
             install_dir = "/usr/share/xtadapter"
-            bitness = self.server.get_bitness()
+            bitness = self.get_value_from_software_version("bitness", self._swVersion)
             adapter = "xtadapter"
             if "xttoolkit" in self._swVersion:
                 adapter = "fastem-xtadapter"
-            current_version = self.get_current_version(self._swVersion)
-            if current_version is not None:
+            current_version = self.get_value_from_software_version("xtadapter", self._swVersion)
+            if current_version is not None and bitness is not None:
                 package = check_latest_package(
                     directory=install_dir,
                     current_version=current_version,
@@ -295,20 +300,21 @@ class SEM(model.HwComponent):
                 self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detector)
 
-    def get_current_version(self, info: str) -> str:
+    def get_value_from_software_version(self, element: str, info: str) -> str:
         """
-        Get the current installed xtadapter's version.
+        Get an elements's value from xtadapter's software version.
 
-        :param info: Information about the package.
-        :return: The current version, if not found return None.
+        :param element: The element whose value needs to be extracted.
+        :param info: The xtadapter's software version information.
+        :return: The element's value, if not found return None.
 
         """
         # Example information: xt: 1.1.1; xtadapter: 1.2.1
         items = info.split(";")
         for item in items:
-            if "xtadapter" in item.lower():
-                current_version = item.split(":")[1].strip()
-                return current_version
+            if element in item.lower():
+                value = item.split(":")[1].strip()
+                return value
         return None
 
     def transfer_latest_package(self, data: bytes) -> None:
