@@ -27,14 +27,16 @@ import re
 import sys
 
 
-def filter_test_log(log_txt):
+def filter_test_log(log_txt, filter_type='summary'):
     """
     Filters a log file to only include the parts with a failure warning etc.
     Text regarding progress and passed tests are excluded.
     If the output log is too long the middle part of the logged is not returned.
 
     :param log_txt: (str) String with the log of a single test file.
-    :return (str): filtered log, returns None if there is nothing interesting in log_txt
+    :param filter_type: (str) The type of message that we want to filter out. Optional, default 'summary'.
+        'summary' returns the short test summary output, and 'warning' returns the warnings summary.
+    :return: (str) filtered log, returns None if there is nothing interesting in log_txt
 
     Example of filtering:
     This function expects a pytest test report of single test file as input, a string such as the example below:
@@ -68,33 +70,26 @@ def filter_test_log(log_txt):
     For a full test report only the short summary, failures, errors etc. are of interest, therefore only this part is
     outputted, the rest is filtered. An example of such an output string is the following example:
 
-        =========================== short test summary info ============================
+        Running /home/testing/development/odemis/src/odemis/gui/test/comp_canvas_test.py:
         FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_3x2
         FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_one_tile
         FAIL comp_canvas_test.py::TestDblMicroscopeCanvas::test_pyramidal_zoom
 
-        =================================== FAILURES ===================================
-        /home/kleijwegt/development/odemis/src/odemis/gui/test/comp_canvas_test.py:742: AssertionError: Tuples differ: (0, 128, 127) != (0, 76, 179)
-        /home/kleijwegt/development/odemis/src/odemis/gui/test/comp_canvas_test.py:501: AssertionError: Tuples differ: (0, 128, 127) != (0, 76, 179)
-        /home/kleijwegt/development/odemis/src/odemis/gui/test/comp_canvas_test.py:604: AssertionError: Tuples differ: (0, 127, 128) != (0, 179, 76)
-        ====================== 3 failed, 6 passed in 7.43 seconds ======================
-
     """
+    if filter_type not in ['summary', 'warning']:
+        raise ValueError(f"filter_type must be 'summary' or 'warning' not {filter_type}")
+    filter_types = {"summary": "short test summary info",
+                    "warning": "warnings summary"}
+
     # Filter to only get the usefull parts of the test report
-    test_results = re.search("\n===.*(short test|FAILURES|ERRORS|warnings)(.+?)((.|\n)*)==", log_txt)
+    test_results = re.search("(?s)(?<=" + re.escape(filter_types[filter_type]) + ").+?(?=\n{1,2}=)", log_txt)
     test_results = test_results.group() if test_results else ""  # Can only group if there is something to group
     test_results = test_results.lstrip("\n")  # Remove preceding empty lines
     # Only display when there is more to tell than just passed test cases (meaning failures, warning etc.)
     if "\n" in test_results:  # Only a message with multiple lines contains interesting information.
-        if len(test_results) > 2000:
-            test_results = test_results.split("\n")
-            # Cut out the middle part of the log and leave the first and last 20 lines.
-            test_results = "\n".join(test_results[:20]) + \
-                           "\n\n \t--The middle part of the logging message is not displayed," \
-                           " because it is too long for the default summary report. -- \n\n" + \
-                           "\n".join(test_results[-20:]) + \
-                           "\n \t--Logging message is too long for the default summary report, " \
-                           "the middle part is not displayed -- \n\n"
+        test_results = test_results.split("\n")[1:]  # skip the first line
+        test_results.insert(0, log_txt.split("\n")[0])  # start with the full test path
+        test_results = "\n".join(test_results) + "\n"  # join the results into a single string and add an empty line
     else:
         test_results = None
     return test_results
@@ -104,6 +99,7 @@ if __name__ == "__main__":
     # Run with as first argument the path to a log txt file of a single test file.
     with open(sys.argv[1]) as f:
         log_txt = f.read()
-    output = filter_test_log(log_txt)
+
+    output = filter_test_log(log_txt, sys.argv[2])
     if output:
         print(output)
