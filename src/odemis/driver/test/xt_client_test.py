@@ -615,15 +615,19 @@ class TestMicroscopeInternal(unittest.TestCase):
             self.skipTest("Chamber needs to be in vacuum, please pump.")
         self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
-    def test_get_current_version(self):
+    def test_get_value_from_software_version(self):
         """Test get current adapter version from software version"""
-        sw_version = "xt: 1.1.1; xtadapter: 1.2.1"
-        version = self.microscope.get_current_version(sw_version)
+        sw_version = "xt: 1.1.1; xtadapter: 1.2.1; bitness: 32bit"
+        version = self.microscope.get_value_from_software_version("xtadapter", sw_version)
         self.assertEqual(version, "1.2.1")
 
-        sw_version = "xt: 1.1.1; xtadapter: 11.2.1; xttoolkit"
-        version = self.microscope.get_current_version(sw_version)
+        sw_version = "xt: 1.1.1; xtadapter: 11.2.1; bitness: 32bit; xttoolkit"
+        version = self.microscope.get_value_from_software_version("xtadapter", sw_version)
         self.assertEqual(version, "11.2.1")
+
+        sw_version = "xt: 1.1.1; xtadapter: 11.2.1; bitness: 32bit; xttoolkit"
+        bitness = self.microscope.get_value_from_software_version("bitness", sw_version)
+        self.assertEqual(bitness, "32bit")
 
     def test_acquisition(self):
         """Test acquiring an image."""
@@ -1493,7 +1497,10 @@ class TestCheckLatestPackage(unittest.TestCase):
         for dir_name in self.dir_names:
             if not os.path.isdir(os.path.join(self.dir, dir_name)):
                 os.makedirs(os.path.join(self.dir, dir_name))
-        self.file_names = ["delmic-xtadapter-32bit-v1.11.2-dev.zip"]
+        self.file_names = [
+            "delmic-xtadapter-32bit-v1.11.2-dev.zip",
+            "delmic-xtadapter-32bit-v1.11.2-dev.exe",
+        ]
         for file_name in self.file_names:
             f = open(self.dir + file_name, "w")
             f.close()
