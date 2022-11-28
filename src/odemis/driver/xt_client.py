@@ -21,7 +21,9 @@ http://www.gnu.org/licenses/.
 """
 import logging
 import math
+import os
 import queue
+import re
 import threading
 import time
 from concurrent.futures import CancelledError
@@ -67,6 +69,108 @@ RESOLUTIONS = (
 )
 
 
+class Package(object):
+    """A class containing relevant information about a xtadapter package."""
+
+    def __init__(self):
+        self._adapter = None
+        self._bitness = None
+        self._name = None
+        self._path = None
+        self._version = None
+
+    @property
+    def adapter(self):
+        return self._adapter
+
+    @adapter.setter
+    def adapter(self, value):
+        self._adapter = value
+
+    @property
+    def bitness(self):
+        return self._bitness
+
+    @bitness.setter
+    def bitness(self, value):
+        self._bitness = value
+
+    @property
+    def name(self):
+        return self._name
+
+    @name.setter
+    def name(self, value):
+        self._name = value
+
+    @property
+    def path(self):
+        return self._path
+
+    @path.setter
+    def path(self, value):
+        self._path = value
+
+    @property
+    def version(self):
+        return self._version
+
+    @version.setter
+    def version(self, value):
+        self._version = value
+
+
+def check_latest_package(
+    directory: str, current_version: str, adapter: str, bitness: str, is_zip: bool
+) -> Package:
+    """
+    Check if a latest xtadapter package is available.
+
+    :param directory: The directory to check if a latest xtadapter package is available.
+    :param current_version: The currently installed xtadapter version.
+    :param adapter: The adapter type e.g. xtadapter, fastem-xtadapter to be used for filtering.
+    :param bitness: The executable bitness i.e. 32bit or 64bit to be used for filtering.
+    :param is_zip: A flag stating if the package is a zip file.
+    :return: A class containing relevant information about the latest xtadapter package, if not found return Package().
+
+    """
+    # Dict where key is the version of xtadapter package and value is information about the package
+    version_package = {}
+    # Package is named as f"delmic-{adapter}-{bitness}bit-v{version}"
+    # delmic-xtadapter-32bit-v1.11.2-dev
+    # delmic-xtadapter-32bit-v1.11.2.zip
+    # delmic-fastem-xtadapter-64bit-v1.11.2-dev
+    regex = r"delmic-([a-zA-Z-]+)-(\d+)bit-v([\d.]+)"
+    if is_zip:
+        regex += r".*.zip"
+    if os.path.isdir(directory):
+        for entity in os.listdir(directory):
+            result = re.search(regex, entity)
+            if result and (is_zip == entity.endswith(".zip")):
+                package = Package()
+                package.adapter = result.group(1)
+                package.bitness = result.group(2) + "bit"
+                package.version = result.group(3)
+                package.name = entity
+                package.path = os.path.join(directory, entity)
+                # Filter using adapter type and bitness
+                if bitness == package.bitness and adapter == package.adapter:
+                    version_package[package.version] = package
+        versions = list(version_package)
+        if len(versions):
+            # Sort the available versions in reverse order i.e. the latest version is the first element
+            versions.sort(key=lambda s: [int(u) for u in s.split(".")], reverse=True)
+            if current_version < versions[0]:
+                print("The latest version is {}.\n".format(versions[0]))
+                latest_package = version_package[versions[0]]
+                if "-dev" in latest_package.name:
+                    logging.warning(
+                        "{} is a development version.\n".format(latest_package.name)
+                    )
+                return latest_package
+    return Package()
+
+
 class SEM(model.HwComponent):
     """
     Driver to communicate with XT software on TFS microscopes. XT is the software TFS uses to control their microscopes.
@@ -105,6 +209,33 @@ class SEM(model.HwComponent):
             raise HwError("Failed to connect to XT server '%s'. Check that the "
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
+
+        # Steps to transfer latest xtadapter package if available
+        package = Package()
+        try:
+            # xtadapter debian package installation directory which contains xtadapter's zip files
+            install_dir = "/usr/share/xtadapter"
+            bitness = self.server.get_bitness()
+            adapter = "xtadapter"
+            if "xttoolkit" in self._swVersion:
+                adapter = "fastem-xtadapter"
+            current_version = self.get_current_version(self._swVersion)
+            if current_version is not None:
+                package = check_latest_package(
+                    directory=install_dir,
+                    current_version=current_version,
+                    adapter=adapter,
+                    bitness=bitness,
+                    is_zip=True,
+                )
+            if package.version is not None:
+            # Open the package's zip file as bytes and transfer them
+                with open(package.path, mode="rb") as f:
+                    data = f.read()
+                    self.transfer_latest_package(data)
+                    f.close()
+        except Exception as err:
+            logging.exception(err)
 
         # Create the scanner type child(ren)
         # Check if at least one of the required scanner types is instantiated
@@ -163,6 +294,33 @@ class SEM(model.HwComponent):
             else:
                 self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detector)
+
+    def get_current_version(self, info: str) -> str:
+        """
+        Get the current installed xtadapter's version.
+
+        :param info: Information about the package.
+        :return: The current version, if not found return None.
+
+        """
+        # Example information: xt: 1.1.1; xtadapter: 1.2.1
+        items = info.split(";")
+        for item in items:
+            if "xtadapter" in item.lower():
+                current_version = item.split(":")[1].strip()
+                return current_version
+        return None
+
+    def transfer_latest_package(self, data: bytes) -> None:
+        """
+        Transfer the latest xtadapter package.
+
+        :param data: The package's zip file data in bytes.
+
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.transfer_latest_package(data)
 
     def list_available_channels(self):
         """
