@@ -133,5 +133,15 @@ fastem_conf_test.py:54: in setUpClass
 ../../util/test.py:108: in run_backend
     raise IOError("Backend still starting after %d s" % (timeout,))
 E   OSError: Backend still starting after 30 s
+=============================== warnings summary ===============================
+src/odemis/acq/align/test/delphi_test.py::TestCalibration::test_align_offset
+  /usr/lib/python3/dist-packages/numpy/core/_methods.py:135: RuntimeWarning: Degrees of freedom <= 0 for slice
+    keepdims=keepdims)
+  /usr/lib/python3/dist-packages/numpy/core/_methods.py:105: RuntimeWarning: invalid value encountered in true_divide
+    arrmean, rcount, out=arrmean, casting='unsafe', subok=False)
+  /usr/lib/python3/dist-packages/numpy/core/_methods.py:125: RuntimeWarning: invalid value encountered in true_divide
+    ret, rcount, out=ret, casting='unsafe', subok=False)
+
+-- Docs: http://doc.pytest.org/en/latest/warnings.html
 =========================== 3 error in 34.80 seconds ===========================
 /home/testing/development/odemis/src/odemis/acq/test/fastem_conf_test.py returned 1

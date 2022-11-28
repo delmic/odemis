@@ -65,6 +65,12 @@ DEBUG    root:keypoint.py:99 Using feature detector ORB
 DEBUG    root:keypoint.py:104 Found 130 and 236 keypoints
 DEBUG    root:keypoint.py:125 Found 130 matches and 6 good ones
 DEBUG    root:keypoint_test.py:119 Computed metadata = {'Centre position': (-0.0005086268780434295, -0.00036049255362293457), 'Pixel size': (6.228309738084018e-06, 9.289514065255769e-06), 'Rotation': 0.31142635014535613, 'Shear': -1364.2415444658388}
+=============================== warnings summary ===============================
+src/odemis/odemisd/test/main_test.py::TestCommandLine::test_error_instantiate
+  /usr/lib/python3/dist-packages/Pyro4/socketserver/threadpoolserver.py:49: DeprecationWarning: The 'warn' method is deprecated, use 'warning' instead
+    log.warn("error during connect: %s", x)
+
+-- Docs: https://docs.pytest.org/en/latest/warnings.html
 =========================== short test summary info ============================
 FAILED keypoint_test.py::TestKeypoint::test_image_pair - AssertionError: 
 ====================== 1 failed, 2 passed in 9.17 seconds ======================

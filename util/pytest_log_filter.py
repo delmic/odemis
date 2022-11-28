@@ -34,7 +34,9 @@ def filter_test_log(log_txt, filter_type='summary'):
     If the output log is too long the middle part of the logged is not returned.
 
     :param log_txt: (str) String with the log of a single test file.
-    :return (str): filtered log, returns None if there is nothing interesting in log_txt
+    :param filter_type: (str) The type of message that we want to filter out. Optional, default 'summary'.
+        'summary' returns the short test summary output, and 'warning' returns the warnings summary.
+    :return: (str) filtered log, returns None if there is nothing interesting in log_txt
 
     Example of filtering:
     This function expects a pytest test report of single test file as input, a string such as the example below:
