@@ -47,7 +47,8 @@ ODEMIS_PATH = os.path.abspath(os.path.join(MY_PATH, '../'))
 # Default path to the config files
 SIM_CONF_PATH = "%s/install/linux/usr/share/odemis/sim" % ODEMIS_PATH
 # Odemis commands
-CMD_STOP = ["%s/install/linux/usr/bin/odemis-stop" % ODEMIS_PATH]
+# CMD_STOP = ["%s/install/linux/usr/bin/odemis-stop" % ODEMIS_PATH]
+CMD_STOP = ["sudo", "odemis-stop"]
 # TODO: We should use start.py here to test starting properly. However, this doesn't work
 # as long as we want to support both python interpreters, so we directly call main.py for now.
 CMD_START = ["%s/src/odemis/odemisd/main.py" % ODEMIS_PATH, "--log-target"]
