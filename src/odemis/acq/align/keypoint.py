@@ -21,6 +21,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 import logging
+import warnings
+
 import numpy
 import cv2
 from scipy import ndimage
@@ -58,6 +60,8 @@ def FindTransform(ima, imb, fd_type=None):
     raises:
     ValueError: if no good transformation is found.
     """
+
+    warnings.warn("Please be aware that the FindTransform function does not work reliably at the moment.")
 
     # Instantiate the feature detector and the matcher
     # TODO: try BRISK, AZAKE and other detectors?
