@@ -173,12 +173,12 @@ class GuiTestCase(unittest.TestCase):
     def tearDownClass(cls):
         if not MANUAL:
             cls.app.test_frame.Destroy()
-            # see fixme in runall.py. Is this needed in Phoenix?
-            # wx.CallAfter(cls.app.Exit)
         elif INSPECT:
             from wx.lib import inspection
             inspection.InspectionTool().Show()
+
         cls.app.MainLoop()
+        del cls.app  # Makes sure everything is cleaned up (before starting a new app)
 
     def setUp(self):
         self.app.test_frame.SetTitle(
