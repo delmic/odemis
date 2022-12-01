@@ -1323,16 +1323,16 @@ class StreamPanel(wx.Panel):
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
                      border=5)
         cb_wl_sz.Add(txt_scenter, 1,
-                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
+                     flag=wx.EXPAND | wx.RIGHT | wx.LEFT,
                      border=5)
         cb_wl_sz.Add(lbl_sbw, 0,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
                      border=5)
         cb_wl_sz.Add(txt_sbw, 1,
-                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
+                     flag= wx.EXPAND | wx.RIGHT | wx.LEFT,
                      border=5)
         self.gb_sizer.Add(cb_wl_sz, (self.num_rows, 0), span=(1, 3), border=5,
-                          flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND)
+                          flag=wx.BOTTOM | wx.EXPAND)
 
         return sld_spec, txt_scenter, txt_sbw
 
