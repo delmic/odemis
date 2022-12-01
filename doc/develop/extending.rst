@@ -27,7 +27,7 @@ Odemis is written almost entirely in Python language. So in theory, a simple
 text editor could be enough to edit Odemis. However in order to execute, debug,
 test, and edit efficiently Odemis, we recommend the following environment:
 
- * `Ubuntu <http://www.ubuntu.com>`_ 18.04 (x86 64 bits)
+ * `Ubuntu <http://www.ubuntu.com>`_ 20.04 (x86 64 bits)
  * `PyCharm <https://www.jetbrains.com/pycharm/>`_
 
 The source code available via a public git repository: https://github.com/delmic/odemis.
@@ -44,8 +44,8 @@ the next section to install Odemis on this operating system.
 Detailed instructions
 ---------------------
 
-Download Ubuntu 18.04 at this address:
-https://ubuntu.com/download/desktop/thank-you?version=18.04.6&architecture=amd64
+Download Ubuntu 20.04 at this address:
+https://releases.ubuntu.com/20.04.5/ubuntu-20.04.5-desktop-amd64.iso
 
 Install it by which ever way you prefer, following these instructions:
 http://www.ubuntu.com/download/desktop/install-ubuntu-desktop
@@ -813,8 +813,6 @@ data to stay in memory while not used anymore:
 * Some object still in use has a reference to the data. For example, if a
   temporary result is hold as an attribute ``self._temp``, that object will not be
   de-referenced until self is unreferenced, or ``self._temp`` is replaced.
-* Some objects have cyclic dependencies, and one of them has a ``__del__`` method.
-  Python 2 is not able to garbage collect any of these objects.
 * A ``C`` library has not free'd some data.
  
 
