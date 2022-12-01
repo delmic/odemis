@@ -1214,13 +1214,11 @@ def FindRingCenter(image):
     edge_image = (image > threshold).astype(numpy.uint8) * 255
     edge_image = cv2.medianBlur(edge_image, 5)
 
-    # tiff.export("test_contour.tiff", model.DataArray(edge_image))
-
     # Convert the edges into points
-    if opencv_v2:
-        contours, _ = cv2.findContours(edge_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
-    else:
-        _, contours, _ = cv2.findContours(edge_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)
+    # only the contours output is used from findContours and this can
+    # always be extracted from position -2 neglecting opencv version
+    contours = cv2.findContours(edge_image, cv2.RETR_TREE, cv2.CHAIN_APPROX_NONE)[-2]
+
     if not contours:
         # TODO: try a different threshold?
         raise LookupError("Failed to find any contours of the circle")

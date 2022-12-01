@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
+import math
 import numpy
 from odemis import model
 import odemis
@@ -104,8 +105,15 @@ class TestCalibration(unittest.TestCase):
         data[0].shape = Y, X
 
         hole_coordinates = delphi.FindCircleCenter(data[0], 0.02032, 6, darkest=True)
-        expected_coordinates = (0.0052705, -0.0018415)  # (391.5, 257.5) px
-        numpy.testing.assert_almost_equal(hole_coordinates, expected_coordinates)
+
+        # set fixed expected coordinates for the center also set a fixed difference
+        max_dist = 0.7e-3
+        expected_coordinates = (0.0050, -0.0024)
+
+        # measure the distance between the two centers and see if distance is less than the set max distance
+        dist = math.hypot(hole_coordinates[0] - expected_coordinates[0],
+                          hole_coordinates[1] - expected_coordinates[1])
+        self.assertLessEqual(dist, max_dist)
 
     @unittest.expectedFailure
     def test_find_sh_hole_center(self):
@@ -127,8 +135,6 @@ class TestCalibration(unittest.TestCase):
         data = hdf5.read_data(os.path.join(TEST_IMAGE_PATH, "navcam-calib2.h5"))
         imgs = img.RGB2Greyscale(img.ensureYXC(data[0]))
 
-        # lens_coordinates = delphi.FindCircleCenter(data[0][0], delphi.LENS_RADIUS, 5)
-        # expected_coordinates = (-5.9703947e-05, 1.5257675e-04)  # (451.5, 445.5) px
         lens_coordinates = delphi.FindRingCenter(imgs)
         expected_coordinates = (-1.6584835e-05, 1.3084411e-04)  # 454.75, 446.1) px
         numpy.testing.assert_almost_equal(lens_coordinates, expected_coordinates)
