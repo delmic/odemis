@@ -1491,18 +1491,29 @@ class TestCheckLatestPackage(unittest.TestCase):
     def setUp(self):
         self.dir = "/tmp/"
         self.dir_names = [
-            "delmic-fastem-xtadapter-64bit-v1.11.2",
-            "delmic-xtadapter-32bit-v1.11.2",
+            "delmic-fastem-xtadapter-64bit-v1.11.2",    # has 1 .exe file
+            "delmic-xtadapter-32bit-v1.11.2",           # has 1 .exe file
+            "delmic-fastem-xtadapter-64bit-v2.11.2",    # has 0 .exe file
+            "delmic-xtadapter-32bit-v2.11.2",           # has 0 .exe file
+            "delmic-fastem-xtadapter-64bit-v3.11.2",    # has 2 .exe file
+            "delmic-xtadapter-32bit-v3.11.2",           # has 2 .exe file
         ]
         for dir_name in self.dir_names:
             if not os.path.isdir(os.path.join(self.dir, dir_name)):
                 os.makedirs(os.path.join(self.dir, dir_name))
+            if "2.11.2" not in dir_name:
+                f1 = open(os.path.join(self.dir, dir_name, "test1.exe"), "w")
+                f1.close()
+                if "3.11.2" in dir_name:
+                    f2 = open(os.path.join(self.dir, dir_name, "test2.exe"), "w")
+                    f2.close()
+
         self.file_names = [
             "delmic-xtadapter-32bit-v1.11.2-dev.zip",
             "delmic-xtadapter-32bit-v1.11.2-dev.exe",
         ]
         for file_name in self.file_names:
-            f = open(self.dir + file_name, "w")
+            f = open(os.path.join(self.dir, file_name), "w")
             f.close()
 
     def tearDown(self):
@@ -1526,7 +1537,7 @@ class TestCheckLatestPackage(unittest.TestCase):
             bitness=bitness,
             is_zip=is_zip,
         )
-        self.assertIsNone(pkg.version)
+        self.assertIsNone(pkg)
 
         # current_version < latest version
         current_version = "1.11.1"
@@ -1554,7 +1565,7 @@ class TestCheckLatestPackage(unittest.TestCase):
             bitness=bitness,
             is_zip=is_zip,
         )
-        self.assertIsNone(pkg.version)
+        self.assertIsNone(pkg)
 
     def test_check_latest_package_adapter_parameter(self):
 
@@ -1598,7 +1609,7 @@ class TestCheckLatestPackage(unittest.TestCase):
             bitness=bitness,
             is_zip=is_zip,
         )
-        self.assertIsNone(pkg.adapter)
+        self.assertIsNone(pkg)
 
     def test_check_latest_package_bitness_parameter(self):
 
@@ -1642,7 +1653,7 @@ class TestCheckLatestPackage(unittest.TestCase):
             bitness=bitness,
             is_zip=is_zip,
         )
-        self.assertIsNone(pkg.bitness)
+        self.assertIsNone(pkg)
 
         # adapter: fastem-xtadapter, bitness: 32bit (not available)
         current_version = "1.11.1"
@@ -1656,7 +1667,7 @@ class TestCheckLatestPackage(unittest.TestCase):
             bitness=bitness,
             is_zip=is_zip,
         )
-        self.assertIsNone(pkg.bitness)
+        self.assertIsNone(pkg)
 
     def test_check_latest_package_zip_parameter(self):
 
@@ -1714,7 +1725,7 @@ class TestCheckLatestPackage(unittest.TestCase):
             bitness=bitness,
             is_zip=is_zip,
         )
-        self.assertIsNone(pkg.name)
+        self.assertIsNone(pkg)
 
 
 if __name__ == '__main__':
