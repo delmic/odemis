@@ -21,6 +21,7 @@ http://www.gnu.org/licenses/.
 """
 import logging
 import math
+import notify2
 import os
 import queue
 import re
@@ -131,7 +132,7 @@ def check_latest_package(
     :param adapter: The adapter type e.g. xtadapter, fastem-xtadapter to be used for filtering.
     :param bitness: The executable bitness i.e. 32bit or 64bit to be used for filtering.
     :param is_zip: A flag stating if the package is a zip file, if not a zip file check if it is a folder.
-    :return: A class containing relevant information about the latest xtadapter package, if not found return Package().
+    :return: A class containing relevant information about the latest xtadapter package, if not found return None.
 
     """
     # Dict where key is the version of xtadapter package and value is information about the package
@@ -146,17 +147,32 @@ def check_latest_package(
     if os.path.isdir(directory):
         for entity in os.listdir(directory):
             result = re.search(regex, entity)
+            entity_path = os.path.join(directory, entity)
             if result and (
                 entity.endswith(".zip")
                 if is_zip
-                else os.path.isdir(os.path.join(directory, entity))
+                else os.path.isdir(entity_path)
+                and len(
+                    [
+                        entity
+                        for entity in os.listdir(entity_path)
+                        if entity.endswith(".exe")
+                    ]
+                )
+                == 1
             ):
                 package = Package()
                 package.adapter = result.group(1)
                 package.bitness = result.group(2) + "bit"
                 package.version = result.group(3)
                 package.name = entity
-                package.path = os.path.join(directory, entity)
+                package.path = entity_path
+                # If not a zip file, assign the path of the executable
+                if not is_zip:
+                    for entity in os.listdir(package.path):
+                        if entity.endswith(".exe"):
+                            package.path = os.path.join(package.path, entity)
+                            break
                 # Filter using adapter type and bitness
                 if bitness == package.bitness and adapter == package.adapter:
                     version_package[package.version] = package
@@ -172,7 +188,7 @@ def check_latest_package(
                         "{} is a development version.\n".format(latest_package.name)
                     )
                 return latest_package
-    return Package()
+    return None
 
 
 class SEM(model.HwComponent):
@@ -216,7 +232,6 @@ class SEM(model.HwComponent):
 
         # Steps to transfer latest xtadapter package if available
         # The transferred package will be a zip file in the form of bytes
-        package = Package()
         try:
             # xtadapter debian package installation directory which contains xtadapter's zip files
             install_dir = "/usr/share/xtadapter"
@@ -233,12 +248,19 @@ class SEM(model.HwComponent):
                     bitness=bitness,
                     is_zip=True,
                 )
-            if package.version is not None:
+            if package is not None:
             # Open the package's zip file as bytes and transfer them
                 with open(package.path, mode="rb") as f:
                     data = f.read()
                     self.transfer_latest_package(data)
                     f.close()
+                    notify2.init("odemis:driver:xt_client")
+                    update = notify2.Notification(
+                        "Update Delmic XT Adapter", "Newer version {} is available on Thermo Fisher Windows PC."
+                        " Please first safety close Odemis and Delmic XT Adapter and then restart the Delmic XT"
+                        " Adapter to install it.".format(package.version))
+                    update.set_urgency(notify2.URGENCY_CRITICAL)
+                    update.show()
         except Exception as err:
             logging.exception(err)
 
