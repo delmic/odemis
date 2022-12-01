@@ -4870,6 +4870,8 @@ class FakePicoscale_DLL(object):
         if self.waiting:
             self.cancel_referencing = True
             self.cancel_event = True
+            # Wait for the future to be finished
+            self.executor.cancel()
 
     def SA_SI_EPK(self, key, idx0=0, idx1=0):
         return key << 16 | idx0 << 8 | idx1
