@@ -154,6 +154,7 @@ class TestPH300(unittest.TestCase):
         df.unsubscribe(self._on_det)
         self.assertGreater(self._cnt, 3)
         self.assertEqual(self._lastdata.shape, exp_shape)
+        time.sleep(2)  # consider some time for resetting the shutters
 
     def _on_det(self, df, data):
         self._cnt += 1
@@ -254,6 +255,7 @@ class TestHH400(unittest.TestCase):
         df.unsubscribe(self._on_det)
         self.assertGreater(self._cnt, 3)
         self.assertEqual(self._lastdata.shape, exp_shape)
+        time.sleep(2)  # consider some time for resetting the shutters
 
     def _on_det(self, df, data):
         self._cnt += 1
