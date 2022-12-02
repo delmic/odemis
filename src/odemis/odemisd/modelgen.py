@@ -110,15 +110,16 @@ class SafeLoader(yaml.SafeLoader):
         data = {}
         yield data
 
+        extended_data = []  # Copy of node.value, with the !extend'ed entries replaced by their content
         # Check all nodes for the "!extend" key
-        for idx, (key_node, value_node) in enumerate(node.value):
+        for key_node, value_node in node.value:
             if key_node.tag == "!extend":
                 filename = os.path.join(self._root, key_node.value)  # For supporting relative paths
                 logging.info("Loading file '%s' via the !extend key", filename)
                 try:
                     with open(filename, 'r') as f:
                         try:
-                            node_new = SafeLoader(f).get_single_node()  # Get the data from the external file.
+                            node_extension = SafeLoader(f).get_single_node()  # Get the data from the external file.
                         except yaml.parser.ParserError as error:
                             raise ParseError("Parsing of file '%s' using the '!include' key failed with the error:\n%s"
                                              % (key_node.value, error))
@@ -129,9 +130,12 @@ class SafeLoader(yaml.SafeLoader):
 
                     raise FileNotFoundError(error)
 
-                del node.value[idx]  # Delete the old ScalarNode which defined the reference to the external file.
-                for scal_node in node_new.value:  # Add the respective ScalarNodes to the main MappingNode.
-                    node.value.append(scal_node)  # Order of the output dict is in arbitrary order.
+                # Add the ScalarNodes (key+value) from the "extend" file to the main MappingNode
+                extended_data.extend(node_extension.value)
+            else:
+                extended_data.append((key_node, value_node))
+
+        node.value = extended_data
 
         try:
             value = self.construct_mapping(node)

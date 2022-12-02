@@ -1,0 +1,5 @@
+init: {
+       image: "simsem-fake-output.h5", # any large 16 bit image is fine
+       !extend yaml-merger-extend-init-user-password-SEM-Scan-Interface-test.odm.yaml,
+       !extend yaml-merger-two-keys.odm.yaml,
+}
