@@ -255,6 +255,7 @@ class SEM(model.HwComponent):
             if package is not None:
                 zip_file = zipfile.ZipFile(package.path)
                 ret = zip_file.testzip()
+                zip_file.close()
                 if ret is None:
                     # Open the package's zip file as bytes and transfer them
                     with open(package.path, mode="rb") as f:
