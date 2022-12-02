@@ -234,6 +234,7 @@ class SEM(model.HwComponent):
         # The transferred package will be a zip file in the form of bytes
         try:
             # xtadapter debian package installation directory which contains xtadapter's zip files
+            package = None
             install_dir = "/usr/share/xtadapter"
             bitness = self.get_value_from_software_version("bitness", self._swVersion)
             adapter = "xtadapter"
