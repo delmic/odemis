@@ -19,6 +19,8 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import tempfile
+
 from past.builtins import basestring
 import Pyro4
 from Pyro4.core import oneway
@@ -42,8 +44,8 @@ from odemis.util import inspect_getmembers
 # Multiplex can handle a much larger number of connections, but will always
 # execute the requests one at a time, which can cause deadlock when handling
 # callbacks.
-#Pyro4.config.SERVERTYPE = "multiplex"
-Pyro4.config.THREADPOOL_MINTHREADS = 16 # TODO: still need 48, because it can block when increasing the pool?
+# Pyro4.config.SERVERTYPE = "multiplex"
+Pyro4.config.THREADPOOL_MINTHREADS = 16  # TODO: still need 48, because it can block when increasing the pool?
 Pyro4.config.THREADPOOL_MAXTHREADS = 128
 # TODO make sure Pyro can now grow the pool: it used to allocate a huge static
 # number of threads. It seems also that when growing the pool it sometimes blocks
@@ -53,14 +55,15 @@ Pyro4.config.THREADPOOL_MAXTHREADS = 128
 INIT_TIMEOUT = 300  # s
 CALL_TIMEOUT = 30  # s
 
-# TODO needs a different value on Windows
-# TODO try a user temp directory if /var/run/odemisd doesn't exist (and cannot be created)
-BASE_DIRECTORY="/var/run/odemisd"
-BASE_GROUP="odemis" # user group that is allowed to access the backend
+# Set the base directory regardless of the os
+BASE_DIRECTORY = os.path.join(tempfile.gettempdir(), "odemisd")
+path_exists = os.path.exists(BASE_DIRECTORY)
+if not path_exists:
+    os.makedirs(BASE_DIRECTORY)  # Create a new folder because it does not exist
 
-
-BACKEND_FILE = BASE_DIRECTORY + "/backend.ipc" # the official ipc file for backend (just to detect status)
-BACKEND_NAME = "backend" # the official name for the backend container
+BASE_GROUP = "odemis"  # user group that is allowed to access the backend
+BACKEND_FILE = BASE_DIRECTORY + "/backend.ipc"  # the official ipc file for backend (just to detect status)
+BACKEND_NAME = "backend"  # the official name for the backend container
 
 _microscope = None
 

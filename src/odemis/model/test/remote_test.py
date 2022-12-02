@@ -185,7 +185,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         comp2.terminate()
         cont.terminate()
         cont2.terminate()
-        time.sleep(0.1) # give it some time to terminate
+        time.sleep(0.1)  # give it some time to terminate
 
     def test_va(self):
         cont, comp = model.createInNewContainer("testscont", SimpleHwComponent,
@@ -300,7 +300,7 @@ class ProxyOfProxyTest(unittest.TestCase):
 
         comp2.sub(comp.data)
         time.sleep(0.5)
-#         comp2.unsub()
+        comp2.unsub()
         count_arrays = comp2.get_data_count()
         logging.info("received %d arrays", count_arrays)
         nlisteners = comp.data._count_listeners()
@@ -315,7 +315,7 @@ class ProxyOfProxyTest(unittest.TestCase):
 
         comp.terminate()
         cont.terminate()
-        time.sleep(0.1) # give it some time to terminate
+        time.sleep(0.1)  # give it some time to terminate
 
     def receive_data(self, dataflow, data):
         self.count += 1
