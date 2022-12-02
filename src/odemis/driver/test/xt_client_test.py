@@ -1490,6 +1490,8 @@ class TestCheckLatestPackage(unittest.TestCase):
 
     def setUp(self):
         self.dir = "/tmp/"
+        # check_latest_package() expects a package folder to contain only one exe file
+        # Create the below list to test the correctness
         self.dir_names = [
             "delmic-fastem-xtadapter-64bit-v1.11.2",    # has 1 .exe file
             "delmic-xtadapter-32bit-v1.11.2",           # has 1 .exe file
@@ -1499,12 +1501,11 @@ class TestCheckLatestPackage(unittest.TestCase):
             "delmic-xtadapter-32bit-v3.11.2",           # has 2 .exe file
         ]
         for dir_name in self.dir_names:
-            if not os.path.isdir(os.path.join(self.dir, dir_name)):
-                os.makedirs(os.path.join(self.dir, dir_name))
-            if "2.11.2" not in dir_name:
+            os.makedirs(os.path.join(self.dir, dir_name), exist_ok=True)
+            if "2.11.2" not in dir_name:    # create one exe for packages without version 2.11.2
                 f1 = open(os.path.join(self.dir, dir_name, "test1.exe"), "w")
                 f1.close()
-                if "3.11.2" in dir_name:
+                if "3.11.2" in dir_name:    # create second exe only for packages having version 3.11.2
                     f2 = open(os.path.join(self.dir, dir_name, "test2.exe"), "w")
                     f2.close()
 

@@ -27,6 +27,7 @@ import queue
 import re
 import threading
 import time
+import zipfile
 from concurrent.futures import CancelledError
 
 import Pyro5.api
@@ -71,8 +72,17 @@ RESOLUTIONS = (
 
 
 class Package(object):
-    """A class containing relevant information about a xtadapter package."""
+    """
+    A class containing relevant information about a xtadapter package.
 
+    Attributes:
+        adapter: The type of the xtadapter.
+        bitness: The bitness 32bit or 64bit.
+        name: The filename of the package.
+        path: The absolute path of the package's zip file or exe file.
+        version: The version of the xtadapter.
+
+    """
     def __init__(self):
         self._adapter = None
         self._bitness = None
@@ -81,43 +91,43 @@ class Package(object):
         self._version = None
 
     @property
-    def adapter(self):
+    def adapter(self) -> str:
         return self._adapter
 
     @adapter.setter
-    def adapter(self, value):
+    def adapter(self, value: str) -> None:
         self._adapter = value
 
     @property
-    def bitness(self):
+    def bitness(self) -> str:
         return self._bitness
 
     @bitness.setter
-    def bitness(self, value):
+    def bitness(self, value: str) -> None:
         self._bitness = value
 
     @property
-    def name(self):
+    def name(self) -> str:
         return self._name
 
     @name.setter
-    def name(self, value):
+    def name(self, value: str) -> None:
         self._name = value
 
     @property
-    def path(self):
+    def path(self) -> str:
         return self._path
 
     @path.setter
-    def path(self, value):
+    def path(self, value: str) -> None:
         self._path = value
 
     @property
-    def version(self):
+    def version(self) -> str:
         return self._version
 
     @version.setter
-    def version(self, value):
+    def version(self, value: str) -> None:
         self._version = value
 
 
@@ -149,17 +159,8 @@ def check_latest_package(
             result = re.search(regex, entity)
             entity_path = os.path.join(directory, entity)
             if result and (
-                entity.endswith(".zip")
-                if is_zip
-                else os.path.isdir(entity_path)
-                and len(
-                    [
-                        entity
-                        for entity in os.listdir(entity_path)
-                        if entity.endswith(".exe")
-                    ]
-                )
-                == 1
+                entity.endswith(".zip") if is_zip
+                else os.path.isdir(entity_path) and len([entity for entity in os.listdir(entity_path) if entity.endswith(".exe")]) == 1
             ):
                 package = Package()
                 package.adapter = result.group(1)
@@ -236,11 +237,13 @@ class SEM(model.HwComponent):
             # xtadapter debian package installation directory which contains xtadapter's zip files
             package = None
             install_dir = "/usr/share/xtadapter"
-            bitness = self.get_value_from_software_version("bitness", self._swVersion)
+            bitness = re.search("bitness:\s*([\da-z]+)", self._swVersion)
+            bitness = bitness.group(1) if bitness is not None else None
             adapter = "xtadapter"
             if "xttoolkit" in self._swVersion:
                 adapter = "fastem-xtadapter"
-            current_version = self.get_value_from_software_version("xtadapter", self._swVersion)
+            current_version = re.search("xtadapter:\s*([\d.]+)", self._swVersion)
+            current_version = current_version.group(1) if current_version is not None else None
             if current_version is not None and bitness is not None:
                 package = check_latest_package(
                     directory=install_dir,
@@ -250,19 +253,24 @@ class SEM(model.HwComponent):
                     is_zip=True,
                 )
             if package is not None:
-            # Open the package's zip file as bytes and transfer them
-                with open(package.path, mode="rb") as f:
-                    data = f.read()
-                    self.transfer_latest_package(data)
-                    f.close()
-                    notify2.init("odemis.driver.xt_client")
-                    update = notify2.Notification(
-                        "Update Delmic XT Adapter", "Newer version {} is available on Thermo Fisher Windows PC.\n\n"
-                        "How to update?\n\n1. Safety close Odemis and Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
-                        "to install it.".format(package.version))
-                    update.set_urgency(notify2.URGENCY_NORMAL)
-                    update.set_timeout(10000)    # 10 seconds
-                    update.show()
+                zip_file = zipfile.ZipFile(package.path)
+                ret = zip_file.testzip()
+                if ret is None:
+                    # Open the package's zip file as bytes and transfer them
+                    with open(package.path, mode="rb") as f:
+                        data = f.read()
+                        self.transfer_latest_package(data)
+                        f.close()
+                        notify2.init("odemis.driver.xt_client")
+                        update = notify2.Notification(
+                            "Update Delmic XT Adapter", "Newer version {} is available on Thermo Fisher Windows PC.\n\n"
+                            "How to update?\n\n1. Safety close Odemis and Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
+                            "to install it.".format(package.version))
+                        update.set_urgency(notify2.URGENCY_NORMAL)
+                        update.set_timeout(10000)    # 10 seconds
+                        update.show()
+                else:
+                    logging.warning("{} is a bad file in {} not tranferring it.".format(ret, package.path))
         except Exception as err:
             logging.exception(err)
 
@@ -323,23 +331,6 @@ class SEM(model.HwComponent):
             else:
                 self._detector = Detector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._detector)
-
-    def get_value_from_software_version(self, element: str, info: str) -> str:
-        """
-        Get an elements's value from xtadapter's software version.
-
-        :param element: The element whose value needs to be extracted.
-        :param info: The xtadapter's software version information.
-        :return: The element's value, if not found return None.
-
-        """
-        # Example information: xt: 1.1.1; xtadapter: 1.2.1
-        items = info.split(";")
-        for item in items:
-            if element in item.lower():
-                value = item.split(":")[1].strip()
-                return value
-        return None
 
     def transfer_latest_package(self, data: bytes) -> None:
         """
