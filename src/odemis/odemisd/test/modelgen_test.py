@@ -20,12 +20,16 @@ more details.
 You should have received a copy of the GNU General Public License along with Delmic Acquisition Software. If not, see
 http://www.gnu.org/licenses/.
 """
+import logging
 import os
 import unittest
-import yaml
 
-from odemis.odemisd.modelgen import SafeLoader, ParseError
+import yaml
+from odemis.odemisd.modelgen import ParseError, SafeLoader
+
 TEST_FILES_PATH = os.path.dirname(__file__)
+
+logging.getLogger().setLevel(logging.DEBUG)
 
 
 class SafeLoaderExtensionsTest(unittest.TestCase):
@@ -96,13 +100,26 @@ class SafeLoaderExtensionsTest(unittest.TestCase):
                       'r') as f:
                 data_found = yaml.load(f, SafeLoader)
 
+    def test_extend_double(self):
+        """
+        Test for 2 extend keywords in row
+        """
+        # __init__ of the SEM Scan Interface
+        with open(os.path.join(TEST_FILES_PATH,
+                               "two-extends-in-a-row.odm.yaml"), "r") as f:
+            data_found = yaml.load(f, SafeLoader)
+
+        # Compare with expected results
+        self.assertEqual(len(data_found["init"]), 5)
+
     def test_extend(self):
         """
         Basic test for the extend keyword in a yaml file to extend a dictionary with the content of a file.
         """
         # __init__ of the SEM Scan Interface
         with open(os.path.join(TEST_FILES_PATH,
-                               "yaml-merger-extend-complete-init-SEM-Scan-Interface-test.odm.yaml"), "r") as f:
+                               "yaml-merger-extend-complete-init-SEM-Scan-Interface-test.odm.yaml"),
+                              "r") as f:
             data_found = yaml.load(f, SafeLoader)
 
         # Compare with expected results
@@ -116,19 +133,6 @@ class SafeLoaderExtensionsTest(unittest.TestCase):
 
         # Compare with expected results
         expected_result = {"SEM Scan Interface": self.expected_full_result["SEM Scan Interface"]}
-        self.assertEqual(expected_result, data_found)
-
-        # __init__ of the SEM Scan Interface
-        # Contains the entries "username" and "password" which are overwritten by the second !extend
-        with open(os.path.join(TEST_FILES_PATH,
-                               "yaml-merger-extend-complete-init-overwrite-SEM-Scan-Interface-test.odm.yaml"),
-                  "r") as f:
-            data_found = yaml.load(f, SafeLoader)
-
-        # Compare with expected results
-        expected_result = {"init": self.expected_full_result["SEM Scan Interface"]["init"].copy()}
-        expected_result["init"]["username"] = 'user1_overwritten'
-        expected_result["init"]["password"] = 'complicated_and_overwritten'
         self.assertEqual(expected_result, data_found)
 
         # __init__ of the SEM Scan Interface using a relative reference in the !include
@@ -153,6 +157,28 @@ class SafeLoaderExtensionsTest(unittest.TestCase):
                                    "yaml-merger-extend-error-reference-to-typo-in-init-SEM-Scan-Interface.odm.yaml"),
                       'r') as f:
                 data_found = yaml.load(f, SafeLoader)
+
+    def test_extend_override(self):
+        """
+        Check behaviour of extend when the key already exists (it's overriden)
+        """
+        # TODO: for now, the latest value is used... however the plan is to eventually
+        # change this behaviour and raise an error, because it's typically a sign
+        # of a mistake if a key is written twice, and there is no use case for that.
+
+        # __init__ of the SEM Scan Interface
+        # Contains the entries "username" and "password" which are overwritten by the second !extend
+        with open(os.path.join(TEST_FILES_PATH,
+                               "yaml-merger-extend-complete-init-overwrite-SEM-Scan-Interface-test.odm.yaml"),
+                  "r") as f:
+            data_found = yaml.load(f, SafeLoader)
+
+        # Compare with expected results
+        expected_result = {"init": self.expected_full_result["SEM Scan Interface"]["init"].copy()}
+        expected_result["init"]["username"] = 'user1_overwritten'
+        expected_result["init"]["password"] = 'complicated_and_overwritten'
+
+        self.assertEqual(expected_result, data_found)
 
     def test_combination_include_extend_two_components_dict(self):
         """
