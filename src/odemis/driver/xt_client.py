@@ -270,7 +270,7 @@ class SEM(model.HwComponent):
                         update.set_timeout(10000)    # 10 seconds
                         update.show()
                 else:
-                    logging.warning("{} is a bad file in {} not tranferring it.".format(ret, package.path))
+                    logging.warning("{} is a bad file in {} not tranferring latest package.".format(ret, package.path))
         except Exception as err:
             logging.exception(err)
 
