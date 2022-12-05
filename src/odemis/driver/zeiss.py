@@ -23,6 +23,8 @@ import fcntl
 import glob
 import logging
 import math
+from typing import Tuple, Dict
+
 import numpy
 from odemis import model
 from odemis import util
@@ -297,6 +299,19 @@ class SEM(model.HwComponent):
         vals = s.split(b' ')
         return tuple(float(i) for i in vals[0:3]) + (vals[3] == b"1.0",)
 
+    def GetStagePosition6(self):
+        """
+        Read absolute position of the stage for 6 axes. None existing axes get a value of 0 (cannot be left out).
+        return float, float, float, float, float, float, bool: x, y, z in mm and t, r in deg and m in mm,
+        stage moving as bool.
+        """
+        # Return something like:
+        # 65.60162 64.75846 38.91104 0.23 259.22 0.0 0.0
+        # stage moving is either 0.0 or 1.0
+        s = self._SendCmd(b'C95?')
+        vals = s.split(b' ')
+        return tuple(float(i) for i in vals[0:6]) + (vals[6] == b"1.0",)
+
     def GetBlankBeam(self):
         """
         returns (bool): True (on), False (off)
@@ -428,6 +443,16 @@ class SEM(model.HwComponent):
         c = b'STG %f %f %f' % (x, y, z)
         self._SendCmd(c)
 
+    def MoveStage6(self, x, y, z, t, r, m):
+        """
+        Absolute move. Non blocking.
+        Use GetStagePosition6() to check the move status.
+        x, y, z (floats): absolute target position in mm
+        t, r (floats): rotation in deg
+        m (float): absolute target position of z' in mm
+        """
+        c = b'C95 %f %f %f %f %f %f' % (x, y, z, t, r, m)
+        self._SendCmd(c)
 
 class Stage(model.Actuator):
     """
@@ -447,6 +472,7 @@ class Stage(model.Actuator):
         if rng is None:
             rng = {}
 
+        # Ranges are from the documentation
         if "x" not in rng:
             rng["x"] = (5e-3, 152e-3)
         if "y" not in rng:
@@ -454,12 +480,20 @@ class Stage(model.Actuator):
         if "z" not in rng:
             rng["z"] = (5e-3, 40e-3)
 
-        axes_def = {
-            # Ranges are from the documentation
-            "x": model.Axis(unit="m", range=(rng["x"][0], rng["x"][1])),
-            "y": model.Axis(unit="m", range=(rng["y"][0], rng["y"][1])),
-            "z": model.Axis(unit="m", range=(rng["z"][0], rng["z"][1])),
-        }
+        # Next 3 axes set to (0,0) meaning they are disabled by default
+        if "rx" not in rng:
+            rng["rx"] = (0, 0)
+        if "rz" not in rng:
+            rng["rz"] = (0, 0)
+        if "m" not in rng:
+            rng["m"] = (0, 0)
+
+        axes_def = {}
+        for ax, r in rng.items():
+            rng_ax = (r[0], r[1])  # Force a tuple, and check the user passed 2 values
+            if rng[ax] != (0, 0):
+                unit = "rad" if ax.startswith("r") else "m"
+                axes_def[ax] = model.Axis(unit=unit, range=rng_ax)
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def, **kwargs)
 
@@ -483,20 +517,43 @@ class Stage(model.Actuator):
             self._pos_poll.cancel()
             self._pos_poll = None
 
-    def _updatePosition(self, raw_pos=None):
+    def _getStagePosition(self) -> Tuple[Dict[str, float], bool]:
+        """
+        Read the stage position, using either GetStagePosition of GetStagePosition6 where the first supports 3
+        linear axes and the latter 6 axes including rx and rz rotational axes.
+        :return position dict str -> float: (in m/rad) with the axes supported in .axes 
+                is_moving (bool)
+        """
+        pos = {}
+        # If any of rx, rz, or m in the axes => use the 6 axes version
+        if {"rx", "rz", "m"}.intersection(self.axes.keys()):
+            x, y, z, t, r, m, is_moving = self.parent.GetStagePosition6()
+
+            pos["rx"] = math.radians(t)
+            pos["rz"] = math.radians(r)
+            pos["m"] = m * 1e-3
+        else:
+            x, y, z, is_moving = self.parent.GetStagePosition()
+
+        pos["x"] = x * 1e-3
+        pos["y"] = y * 1e-3
+        pos["z"] = z * 1e-3
+
+        # remove the axes which are not supported
+        for ax in pos.keys():
+            if ax not in self.axes:
+                del pos[ax]
+
+        return pos, is_moving
+
+    def _updatePosition(self, pos=None):
         """
         update the position VA
-        raw_pos (dict str -> float): the position in mm (as received from the SEM)
+        pos (dict str -> float): the position in m/rad
         """
-        if raw_pos is None:
-            x, y, z, _ = self.parent.GetStagePosition()
-        else:
-            x, y, z = raw_pos["x"], raw_pos["y"], raw_pos["z"]
+        if pos is None:
+            pos, _ = self._getStagePosition()
 
-        pos = {"x": x * 1e-3,
-               "y": y * 1e-3,
-               "z": z * 1e-3,
-        }
         self.position._set_value(self._applyInversion(pos), force_write=True)
 
     def _refreshPosition(self):
@@ -516,15 +573,36 @@ class Stage(model.Actuator):
         move by the shift
         shift (float): unit m
         """
-        x, y, z, _ = self.parent.GetStagePosition()
+        t, r, m = 0.0, 0.0, 0.0
+
+        # first check for 3 or more axes if any of rx, rz, or m in the axes => use the 6 axes version
+        if {"rx", "rz", "m"}.intersection(self.axes.keys()):
+            x, y, z, t, r, m, _ = self.parent.GetStagePosition6()
+        else:
+            x, y, z, _ = self.parent.GetStagePosition()
+
+        shift_dict = {}
+
         if "x" in shift:
             x += shift["x"] * 1e3
+            shift_dict["x"] = x * 1e-3
         if "y" in shift:
             y += shift["y"] * 1e3
+            shift_dict["y"] = y * 1e-3
         if "z" in shift:
             z += shift["z"] * 1e3
+            shift_dict["y"] = z * 1e-3
+        if "rx" in shift:
+            t += math.radians(shift["rx"])
+            shift_dict["rx"] = t
+        if "rz" in shift:
+            r += math.radians(shift["rz"])
+            shift_dict["rx"] = r
+        if "m" in shift:
+            m += shift["m"] * 1e3
+            shift_dict["m"] = m * 1e-3
 
-        target_pos = self._applyInversion({"x": x * 1e-3, "y": y * 1e-3, "z": z * 1e-3})
+        target_pos = self._applyInversion(shift_dict)
         # Check range (for the axes we are moving)
         for an in shift.keys():
             rng = self.axes[an].range
@@ -532,16 +610,22 @@ class Stage(model.Actuator):
             if not rng[0] <= p <= rng[1]:
                 raise ValueError("Relative move would cause axis %s out of bound (%g m)" % (an, p))
 
-        self._moveTo(future, x, y, z)
+        self._moveTo(future, x, y, z, t, r, m)
 
     def _doMoveAbs(self, future, pos):
         """
         move to position pos
         pos (float): unit m
         """
+        t, r, m = 0.0, 0.0, 0.0
 
+        # first check for 3 or more axes if any of rx, rz, or m in the axes => use the 6 axes version
         # Don't change position for unspecified coordinates
-        x, y, z, _ = self.parent.GetStagePosition()
+        if {"rx", "rz", "m"}.intersection(self.axes.keys()):
+            x, y, z, t, r, m, _ = self.parent.GetStagePosition6()
+        else:
+            x, y, z, _ = self.parent.GetStagePosition()
+
         # Convert to mm
         if "x" in pos:
             x = pos["x"] * 1e3
@@ -549,30 +633,38 @@ class Stage(model.Actuator):
             y = pos["y"] * 1e3
         if "z" in pos:
             z = pos["z"] * 1e3
+        if "rx" in pos:
+            t += math.radians(pos["rx"])
+        if "rz" in pos:
+            r += math.radians(pos["rz"])
+        if "m" in pos:
+            m += pos["m"] * 1e3
 
-        self._moveTo(future, x, y, z)
+        self._moveTo(future, x, y, z, t, r, m)
 
-    def _moveTo(self, future, x, y, z, timeout=60):
+    def _moveTo(self, future, x, y, z, t, r, m, timeout=60):
         with future._moving_lock:
             try:
                 if future._must_stop.is_set():
                     raise CancelledError()
-                logging.debug("Moving to position (%s, %s, %s)", x, y, z)
-                self.parent.MoveStage(x, y, z)
-                # documentation suggests to wait 1s before calling
-                # GetStagePosition() after MoveStage()
+                logging.debug("Moving to position " + str((x, y, z, t, r, m)))
+                # check if any of the axes contain value other than 0.0 if so use the 6 axes MoveStage command
+                if any((t, r, m)):
+                    self.parent.MoveStage6(x, y, z, t, r, m)
+                else:
+                    self.parent.MoveStage(x, y, z)
+                # documentation suggests to wait 1s before calling GetStagePosition() after MoveStage()
                 time.sleep(1)
 
-                # Wait until the move is over
-                # Don't check for future._must_stop because anyway the stage will
-                # stop moving, and so it's nice to wait until we know the stage is
-                # not moving.
+                # Wait until the move is over.
+                # Don't check for future._must_stop because anyway the stage will stop
+                # moving, and so it's nice to wait until we know the stage is not moving.
                 moving = True
                 tstart = time.time()
                 while moving:
-                    x, y, z, moving = self.parent.GetStagePosition()
+                    pos, moving = self._getStagePosition()
                     # Take the opportunity to update .position
-                    self._updatePosition({"x": x, "y": y, "z": z})
+                    self._updatePosition(pos)
 
                     if time.time() > tstart + timeout:
                         self.parent.Abort()
@@ -582,9 +674,8 @@ class Stage(model.Actuator):
                     # 50 ms is about the time it takes to read the stage status
                     time.sleep(50e-3)
 
-                # If it was cancelled, Abort() has stopped the stage before, and
-                # we still have waited until the stage stopped moving. Now let
-                # know the user that the move is not complete.
+                # If it was cancelled, Abort() has stopped the stage before, and we still have waited
+                # until the stage stopped moving. Now let know the user that the move is not complete.
                 if future._must_stop.is_set():
                     raise CancelledError()
             except RemconError:
@@ -954,17 +1045,18 @@ class RemconSimulator(object):
         self.pixelSize = 5
         self.blanker = 0
         self.external = 0
-        self.pos = numpy.array([20, 20, 5])  # X, Y, Z in mm
+        self.pos = numpy.array([20, 20, 5, 0, 0, 0])  # X, Y, Z in mm ,T, R, in deg, M in mm
         self.focus = 0
         self.eht = 0
         self.pc = 1e-6
         self.dur = 0
         # Prepare moving thread
-        self.target_pos = numpy.zeros(3)
+        self.target_pos = numpy.zeros(6)
         self._start_move = 0
         self._end_move = 0
         self._stage_stop = threading.Event()
         self._is_moving = False
+        self._mover = None
 
         # Put None in the input_q to request     the end of the thread
         self._input_q = queue.Queue()  # 1 byte at a time received from the "host computer"
@@ -991,6 +1083,25 @@ class RemconSimulator(object):
             logging.exception("Failed to run the move")
         finally:
             self._is_moving = False
+
+    def move_to_pos(self, pos):
+        """
+        TODO description
+        :param pos: iterable of float of len 3 or 6.
+        :return:
+        """
+        # fill the missing position values by filling the current position
+        pos = pos + self.pos[len(pos):]
+        self.target_pos = numpy.array(pos)
+        self._start_move = time.time()
+        dist = sum(numpy.sqrt((self.pos - self.target_pos) ** 2))
+        dur = dist / self._speed
+        self._end_move = time.time() + dur
+        self.dur = dur
+        self._is_moving = True
+        self._stage_stop.clear()
+        self._mover = threading.Thread(target=self._run_move)
+        self._mover.start()
 
     def write(self, data):
         for b in data:  # b is an int!
@@ -1063,6 +1174,10 @@ class RemconSimulator(object):
         elif com == b"STG?":
             self._sendAck(RS_VALID)
             mv_str = b"1.0" if self._is_moving else b"0.0"
+            self._sendAnswer(RS_SUCCESS, b" ".join(b"%G" % v for v in self.pos[:3]) + b" " + mv_str)
+        elif com == b"C95?":
+            self._sendAck(RS_VALID)
+            mv_str = b"1.0" if self._is_moving else b"0.0"
             self._sendAnswer(RS_SUCCESS, b" ".join(b"%G" % v for v in self.pos) + b" " + mv_str)
         elif com == b"BBL?":
             self._sendAck(RS_VALID)
@@ -1089,18 +1204,19 @@ class RemconSimulator(object):
             self._sendAck(RS_VALID)
             self._sendAnswer(RS_SUCCESS, b"%G" % self.pc)
         elif com == b"STG":
-            self._sendAck(RS_VALID)
-            self._sendAck(RS_SUCCESS)
-            self.target_pos = numpy.array([float(i) for i in args])
-            self._start_move = time.time()
-            dist = sum(numpy.sqrt((self.pos - self.target_pos) ** 2))
-            dur = dist / self._speed
-            self._end_move = time.time() + dur
-            self.dur = dur
-            self._is_moving = True
-            self._stage_stop.clear()
-            self._mover = threading.Thread(target=self._run_move)
-            self._mover.start()
+            if len(args) == 3:
+                self._sendAck(RS_VALID)
+                self._sendAck(RS_SUCCESS)
+                self._move_to_pos([float(i) for i in args])
+            else:
+                self._sendAck(RS_INVALID)
+        elif com == b"C95":
+            if len(args) == 6:
+                self._sendAck(RS_VALID)
+                self._sendAck(RS_SUCCESS)
+                self._move_to_pos([float(i) for i in args])
+            else:
+                self._sendAck(RS_INVALID)
         elif com == b"FOCS":
             self._sendAck(RS_VALID)
             self.focus = float(args[0])
