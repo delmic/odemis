@@ -27,6 +27,7 @@ import queue
 import re
 import threading
 import time
+from typing import Optional
 import zipfile
 from concurrent.futures import CancelledError
 
@@ -133,7 +134,7 @@ class Package(object):
 
 def check_latest_package(
     directory: str, current_version: str, adapter: str, bitness: str, is_zip: bool
-) -> Package:
+) -> Optional[Package]:
     """
     Check if a latest xtadapter package is available.
 
