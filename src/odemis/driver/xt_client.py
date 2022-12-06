@@ -71,6 +71,9 @@ RESOLUTIONS = (
     (6144, 4096),
 )
 
+# Xtadapter debian package installation directory which contains xtadapter's zip files
+XT_INSTALL_DIR = "/usr/share/xtadapter"
+
 
 class Package(object):
     """
@@ -183,7 +186,7 @@ def check_latest_package(
             # Sort the available versions in reverse order i.e. the latest version is the first element
             versions.sort(key=lambda s: [int(u) for u in s.split(".")], reverse=True)
             if current_version < versions[0]:
-                print("The latest version is {}.\n".format(versions[0]))
+                logging.info("The latest version is {}.\n".format(versions[0]))
                 latest_package = version_package[versions[0]]
                 if "-dev" in latest_package.name:
                     logging.warning(
@@ -232,49 +235,9 @@ class SEM(model.HwComponent):
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
 
-        # Steps to transfer latest xtadapter package if available
+        # Transfer latest xtadapter package if available
         # The transferred package will be a zip file in the form of bytes
-        try:
-            # xtadapter debian package installation directory which contains xtadapter's zip files
-            package = None
-            install_dir = "/usr/share/xtadapter"
-            bitness = re.search("bitness:\s*([\da-z]+)", self._swVersion)
-            bitness = bitness.group(1) if bitness is not None else None
-            adapter = "xtadapter"
-            if "xttoolkit" in self._swVersion:
-                adapter = "fastem-xtadapter"
-            current_version = re.search("xtadapter:\s*([\d.]+)", self._swVersion)
-            current_version = current_version.group(1) if current_version is not None else None
-            if current_version is not None and bitness is not None:
-                package = check_latest_package(
-                    directory=install_dir,
-                    current_version=current_version,
-                    adapter=adapter,
-                    bitness=bitness,
-                    is_zip=True,
-                )
-            if package is not None:
-                zip_file = zipfile.ZipFile(package.path)
-                ret = zip_file.testzip()
-                zip_file.close()
-                if ret is None:
-                    # Open the package's zip file as bytes and transfer them
-                    with open(package.path, mode="rb") as f:
-                        data = f.read()
-                        self.transfer_latest_package(data)
-                        f.close()
-                        notify2.init("odemis.driver.xt_client")
-                        update = notify2.Notification(
-                            "Update Delmic XT Adapter", "Newer version {} is available on Thermo Fisher Windows PC.\n\n"
-                            "How to update?\n\n1. Safely close Odemis and Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
-                            "to install it.".format(package.version))
-                        update.set_urgency(notify2.URGENCY_NORMAL)
-                        update.set_timeout(10000)    # 10 seconds
-                        update.show()
-                else:
-                    logging.warning("{} is a bad file in {} not tranferring latest package.".format(ret, package.path))
-        except Exception as err:
-            logging.exception(err)
+        self.check_and_transfer_latest_package()
 
         # Create the scanner type child(ren)
         # Check if at least one of the required scanner types is instantiated
@@ -338,12 +301,58 @@ class SEM(model.HwComponent):
         """
         Transfer the latest xtadapter package.
 
+        Note:
+            Pyro has a 1 gigabyte message size limitation.
+            https://pyro5.readthedocs.io/en/latest/tipstricks.html#binary-data-transfer-file-transfer
+
         :param data: The package's zip file data in bytes.
 
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.transfer_latest_package(data)
+
+    def check_and_transfer_latest_package(self) -> None:
+        """Check if a latest xtadapter package is available and then transfer it."""
+        try:
+            package = None
+            bitness = re.search("bitness:\s*([\da-z]+)", self._swVersion)
+            bitness = bitness.group(1) if bitness is not None else None
+            adapter = "xtadapter"
+            if "xttoolkit" in self._swVersion:
+                adapter = "fastem-xtadapter"
+            current_version = re.search("xtadapter:\s*([\d.]+)", self._swVersion)
+            current_version = current_version.group(1) if current_version is not None else None
+            if current_version is not None and bitness is not None:
+                package = check_latest_package(
+                    directory=XT_INSTALL_DIR,
+                    current_version=current_version,
+                    adapter=adapter,
+                    bitness=bitness,
+                    is_zip=True,
+                )
+            if package is not None:
+                # Check if it's a proper zip file
+                zip_file = zipfile.ZipFile(package.path)
+                ret = zip_file.testzip()
+                zip_file.close()
+                if ret is None:
+                    # Open the package's zip file as bytes and transfer them
+                    with open(package.path, mode="rb") as f:
+                        data = f.read()
+                    self.transfer_latest_package(data)
+                    notify2.init(__name__)
+                    update = notify2.Notification(
+                        "Update Delmic XT Adapter", "Newer version {} is available on ThermoFisher Support PC.\n\n"
+                        "How to update?\n\n1. Safely close Odemis (full stop) and Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
+                        "to install it.".format(package.version))
+                    update.set_urgency(notify2.URGENCY_NORMAL)
+                    update.set_timeout(10000)    # 10 seconds
+                    update.show()
+                else:
+                    logging.warning("{} is a bad file in {} not transferring latest package.".format(ret, package.path))
+        except Exception as err:
+            logging.exception(err)
 
     def list_available_channels(self):
         """
