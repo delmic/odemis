@@ -266,7 +266,7 @@ class SEM(model.HwComponent):
                         notify2.init("odemis.driver.xt_client")
                         update = notify2.Notification(
                             "Update Delmic XT Adapter", "Newer version {} is available on Thermo Fisher Windows PC.\n\n"
-                            "How to update?\n\n1. Safety close Odemis and Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
+                            "How to update?\n\n1. Safely close Odemis and Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
                             "to install it.".format(package.version))
                         update.set_urgency(notify2.URGENCY_NORMAL)
                         update.set_timeout(10000)    # 10 seconds
