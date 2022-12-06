@@ -644,7 +644,7 @@ class BugreporterFrame(wx.Frame):
             future.result()
         except Exception as e:
             logging.exception("osTicket upload failed: %s", e)
-            wx.CallAfter(self.open_failed_upload_dlg)
+            wx.CallAfter(self.open_failed_upload_dlg, str(e))
         else:
             # Show it went fine
             wx.CallAfter(self._on_report_sent_successful)
@@ -687,16 +687,18 @@ class BugreporterFrame(wx.Frame):
         self.Hide()
         wx.CallLater(5 * 1000, self.Destroy)
 
-    def open_failed_upload_dlg(self):
+    def open_failed_upload_dlg(self, error: str):
         """
         Ask the user to use the website in case the upload to osTicket failed.
+        :param error: short description of the error
         """
         txt = ('The bug-report could not be uploaded. Please send the report '
                'by filling in the form on https://support.delmic.com and attaching the ZIP '
                'file "%s", found on the Desktop.\n\n'
                'Alternatively, you can send the file to support@delmic.com .\n\n'
-               'After closing this window, the form will be automatically opened in your web browser.' %
-               self.bugreporter.zip_fn)
+               'After closing this window, the form will be automatically opened in your web browser.\n\n'
+               'Error: %s.' %
+               (self.bugreporter.zip_fn, error))
         dlg = wx.MessageDialog(self, txt, 'Automatic report upload unsuccessful', wx.OK)
         val = dlg.ShowModal()
         dlg.Show()
