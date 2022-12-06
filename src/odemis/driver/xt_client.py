@@ -344,7 +344,7 @@ class SEM(model.HwComponent):
                     notify2.init(__name__)
                     update = notify2.Notification(
                         "Update Delmic XT Adapter", "Newer version {} is available on ThermoFisher Support PC.\n\n"
-                        "How to update?\n\n1. Safely close Odemis (full stop) and Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
+                        "How to update?\n\n1. Full stop Odemis and close Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
                         "to install it.".format(package.version))
                     update.set_urgency(notify2.URGENCY_NORMAL)
                     update.set_timeout(10000)    # 10 seconds
