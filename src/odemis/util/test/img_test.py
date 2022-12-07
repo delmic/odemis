@@ -1184,18 +1184,23 @@ class TestRotateImage(unittest.TestCase):
 class TestFloodFill(unittest.TestCase):
 
     def test_standard_fill(self):
-        """Test the flood_fill as it is expected to be used"""
+        """Test the expected use of flood fill"""
         a = numpy.zeros((7, 7), dtype=bool)
         for i in range(min(a.shape)):
             a[i, i] = True
             a[-i - 1, i] = True
 
-        filled_array = img.apply_flood_fill(a, (3, 0))
+        expected_array = numpy.array([
+            [1, 0, 0, 0, 0, 0, 1],
+            [1, 1, 0, 0, 0, 1, 0],
+            [1, 1, 1, 0, 1, 0, 0],
+            [1, 1, 1, 1, 0, 0, 0],
+            [1, 1, 1, 0, 1, 0, 0],
+            [1, 1, 0, 0, 0, 1, 0],
+            [1, 0, 0, 0, 0, 0, 1]])
 
-        self.assertTrue(filled_array[3, 1])
-        self.assertFalse(filled_array[3, -1])
-        self.assertFalse(filled_array[0, 3])
-        self.assertFalse(filled_array[-1, 3])
+        filled_array = img.apply_flood_fill(a, (3, 0))
+        numpy.testing.assert_array_equal(expected_array, filled_array)
 
     def test_start_on_filled(self):
         """Check that the array stays the same after starting on an already filled position"""

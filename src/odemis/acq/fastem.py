@@ -167,9 +167,11 @@ class FastEMROA(object):
         full region. An ROA is a rectangle. Its coordinates are defined in the role="stage" coordinate system and
         is thus aligned with the axes of the sample carrier.
 
-        :return: (list of nested tuples (col, row)) The column and row field indices of the field images in the order
-                 they should be acquired. The tuples are re-ordered so that the single field images resembling the
-                 ROA are acquired first rows then columns.
+        :param coordinates: (tuple of floats (xmin, ymin, xmax, ymax) The minimum and maximum real world x and y
+        coordinates of the ROA in [m]
+        :return: (list of nested tuples (col, row)) The column and row field indices of
+        the field images in the order they should be acquired. The tuples are re-ordered so that the single field
+        images resembling the ROA are acquired first rows then columns.
 
         Note: The number of fields with overlap is calculated in the following way:
         An ROA with overlap can be visualized as follows:
@@ -222,14 +224,12 @@ class FastEMROA(object):
 
         return field_indices
 
-    # TODO: should not require input argument but use self.coordinates when the behaviour is adjusted to support
-    #  multiple coordinate points in stead of 4 separate values
     def get_poly_field_indices(self, polygon):
         """
         Determine the required fields within a bounding megafield to describe a polygonal ROA and return the
         index values of these fields.
 
-        :param polygon: (list of nested tuples (y, x)) The real world coordinates of the polygon points in
+        :param polygon: (list of nested tuples (y, x)) The real world coordinates in meters of the polygon points in
         consecutive order.
         :return: (list of nested tuples (col, row)) The column and row indices of the field images
         in the order they should be acquired.
@@ -237,8 +237,7 @@ class FastEMROA(object):
         # Shift the coordinate system to start at the minimum values of the bounding box
         # so the indices start from this point.
         ymin, xmin, _, _ = util.get_polygon_bbox(polygon)
-        for i in range(len(polygon)):
-            point = polygon[i]
+        for i, point in enumerate(polygon):
             polygon[i] = (point[0] - ymin, point[1] - xmin)
 
         # Get the indices of the fields intersected by the polygon lines.
@@ -248,21 +247,22 @@ class FastEMROA(object):
         if len(indices) == 1:
             return [(indices[0][1], indices[0][0])]  # (col, row)
 
-        # Create a boolian numpy array to represent the megafield with True values for fields that need to be acquired.
+        # Create a boolean numpy array to represent the megafield with True values for fields that need to be acquired.
         # and fill it so the inside of the polygon is also acquired.
         index_array = self._create_and_fill_megafield_rep(indices)
 
         # The indices that represent the polygon are where the index_array has True values.
         rows, cols = numpy.where(index_array)
 
-        # Indices are zipped in a list so that (col, row) because the data flow expects the column first and the row second.
+        # Indices are zipped in a list so that (col, row) because the data flow expects the column first and the row
+        # second.
         index_list = list(zip(cols.tolist(), rows.tolist()))
 
         return index_list
 
     def _get_intersected_field_indices(self, polygon):
         """
-        Determine which field are intersected by the lines of the polygon and return th corresponding indices.
+        Determine which fields are intersected by the lines of the polygon and return the corresponding indices.
 
         :param polygon: (list of nested tuples (y, x)) The real world coordinates of the polygon points in
         consecutive order.
@@ -276,11 +276,7 @@ class FastEMROA(object):
         r_grid_width = field_size[1] - field_size[1] * self.overlap
         c_grid_width = field_size[0] - field_size[0] * self.overlap
         for i in range(len(polygon)):
-            line = numpy.array((polygon[i], polygon[i - 1]))
-            if line[0][1] <= line[1][1]:
-                p1, p2 = line
-            else:
-                p2, p1 = line
+            p1, p2 = numpy.array((polygon[i], polygon[i - 1]))
 
             if numpy.all(p1 == p2):
                 # If the points that form the line are equal only return the indices of the field they are in,
@@ -337,14 +333,14 @@ class FastEMROA(object):
         :param indices: (list of nested tuples (row,column)) Index values of the shape that needs to be filled.
         :return: (ndarray) Filled numpy array that represent the fields that need to be acquired.
         """
-        # Get the bounding megafield shape by taking the maximum indices from the indices list and create a boolian
+        # Get the bounding megafield shape by taking the maximum indices from the indices list and create a boolean
         # numpy array to represent the megafield with True values for fields that need to be acquired
         _, _, rmax, cmax = util.get_polygon_bbox(indices)
         megafield_grid_shape = (rmax + 1, cmax + 1)
         megafield_grid_rep = numpy.zeros(megafield_grid_shape, dtype=numpy.bool)
         megafield_grid_rep[[r[0] for r in indices], [c[1] for c in indices]] = True
 
-        # Pad the array with zeros so the flood fill wil always surround the entire shape
+        # Pad the array with zeros so the flood fill will always surround the entire shape
         padding_size = 1
         megafield_grid_rep = numpy.pad(megafield_grid_rep, padding_size, "constant", constant_values=False)
         # Flood filling from the outside will create the inverse of the desired result

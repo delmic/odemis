@@ -202,7 +202,7 @@ class TestFastEMROA(unittest.TestCase):
 
     def test_get_square_field_indices(self):
         """Check that the correct number and order of field indices is returned and that row and column are in the
-                correct order."""
+        correct order."""
         x_fields = 3
         y_fields = 2
         self.multibeam.resolution.value = (6400, 6400)  # don't change

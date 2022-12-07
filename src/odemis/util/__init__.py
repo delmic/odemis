@@ -397,6 +397,13 @@ def get_polygon_bbox(coordinates):
     :param coordinates: (list of nested tuples (a,b))
     :return: a_min, b_min, a_max, b_max
     """
+    if len(coordinates) <= 1:
+        raise ValueError(f"Coordinates contains {len(coordinates)} elements, two or more are required.")
+
+    for coordinate in coordinates:
+        if len(coordinate) != 2:
+            raise ValueError(f"The function only works for 2D coordinates, coordinate: {coordinate} has {len(coordinate)} dimensions.")
+
     maximum = list(map(max, zip(*coordinates)))
     minimum = list(map(min, zip(*coordinates)))
 
