@@ -3211,7 +3211,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         """ Test ARSettingsStream """
         # Create the stream
         ars = stream.ARSettingsStream("test",
-                      self.ccd, self.ccd.data, self.ebeam, self.analyzer,
+                      self.ccd, self.ccd.data, self.ebeam, analyzer=self.analyzer,
                       detvas={"exposureTime", "readoutRate", "binning", "resolution"})
 
         # shouldn't affect
