@@ -203,7 +203,7 @@ class TestCalculateTicks(unittest.TestCase):
         ticks = calculate_ticks(value_range, csize, wx.VERTICAL, csize[1] / 10)
         self.assertGreaterEqual(len(ticks), 2)  # There should be at least 2 ticks
         for pos_px, val in ticks:
-            self.assertTrue(0 < pos_px < csize[1] / 2, f"pos_px = {pos_px}")  # Every tick should be within the first half
+            self.assertTrue(0 <= pos_px < csize[1] / 2, f"pos_px = {pos_px}")  # Every tick should be within the first half
             self.assertTrue(0 <= val <= 3)  # Every tick value should be within the value_range
 
         # Reversed vertical
@@ -213,6 +213,27 @@ class TestCalculateTicks(unittest.TestCase):
         for pos_px, val in ticks:
             self.assertTrue(csize[1] / 2 < pos_px < csize[1], f"pos_px = {pos_px}")  # Every tick should be within the first half
             self.assertTrue(0 <= val <= 3)  # Every tick value should be within the value_range
+
+    def test_empty(self):
+        """
+        Check it handles corner case where the client size is 0 (eg, a window has been
+        resized to a very small area)
+        """
+        # No space => should return either 0 or 1 tick
+        value_range = [numpy.nan] * 5 + [0, 1, 2, 3]
+        csize = (0, 0)
+        ticks = calculate_ticks(value_range, csize, wx.HORIZONTAL, 10)
+        self.assertIn(len(ticks), (0, 1))
+        if ticks:
+            # If there is a tick, it should be at pixel 0
+            self.assertEqual(ticks[0][0], 0)
+
+        # Same thing vertically
+        ticks = calculate_ticks(value_range, csize, wx.VERTICAL, 10)
+        self.assertIn(len(ticks), (0, 1))
+        if ticks:
+            # If there is a tick, it should be at pixel 0
+            self.assertEqual(ticks[0][0], 0)
 
 
 class TestARExport(unittest.TestCase):
