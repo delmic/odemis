@@ -24,11 +24,13 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Test module for Odemis' gui.comp.text module
 # ===============================================================================
 import locale
+import logging
 import unittest
-import wx
-import odemis.gui.test as test
-from odemis.gui.comp.text import FloatTextCtrl, IntegerTextCtrl, UnitFloatCtrl, UnitIntegerCtrl
 
+import odemis.gui.test as test
+import wx
+from odemis.gui.comp.text import (FloatTextCtrl, IntegerTextCtrl,
+                                  UnitFloatCtrl, UnitIntegerCtrl)
 
 test.goto_manual()
 test.set_log_level()
@@ -88,12 +90,21 @@ class OwnerDrawnComboBoxTestCase(test.GuiTestCase):
 class NumberTextCtrlTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrcbutton_frame
 
+    def _check_wxpython_41(self):
+        """
+        Skip the test if wxpython < 4.1.
+        """
+        # UIActionSimulator.Text() doesn't seem to work on wxPython 4.0.7,
+        # but it works again on wxPython 4.1.
+        # Note: on wxPython 4.0.7, this works well within Eclipse, but not from a terminal.
+        wx_ver = tuple(int(v) for v in wx.__version__.split("."))
+        if wx_ver < (4, 1, 0):
+            self.skipTest("Test case is known to fail on wxPython < 4.1 due to buggy UIActionSimulator")
+
     def test_int_txt_ctrl(self):
 
         ctrl = IntegerTextCtrl(self.panel, value=123456789)
         self.add_control(ctrl, label=ctrl.__class__.__name__, flags=wx.EXPAND | wx.ALL)
-
-        test.goto_manual()
 
     def test_float_txt_ctrl(self):
 
@@ -107,6 +118,8 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         sim = wx.UIActionSimulator()
         # Focusing the field will select all the text in it
         ctrl.SetFocus()
+
+        self._check_wxpython_41()
 
         # Type '1' followed by an [Enter]
         test.gui_loop(0.1)
@@ -135,6 +148,8 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         # Focusing the field will select all the number in it, but not the unit (Mm)
         ctrl.SetFocus()
         test.gui_loop(0.1)
+
+        self._check_wxpython_41()
 
         # Set the value to 1 Mm (period should not register)
         for c in "0.001\r":
@@ -172,6 +187,8 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         ctrl.SetFocus()
         test.gui_loop(0.1)
 
+        self._check_wxpython_41()
+
         # Set the value to 1 px (minus and period should not register)
         for c in "-0.001\r":
             sim.Char(ord(c))
@@ -207,6 +224,8 @@ class NumberTextCtrlTestCase(test.GuiTestCase):
         # Focusing the field will select all the text in it
         mctrl.SetFocus()
         test.gui_loop(0.1)
+
+        self._check_wxpython_41()
 
         # Set the value to 0.001 Mm
         for c in "0.001\r":
