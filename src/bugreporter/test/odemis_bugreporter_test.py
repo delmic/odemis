@@ -25,6 +25,7 @@ from future.moves.urllib.error import HTTPError
 import logging
 import odemis
 import os
+import socket
 import time
 import unittest
 import wx
@@ -89,7 +90,7 @@ class TestOdemisBugreporter(unittest.TestCase):
             'subject': u'Bugreporter test',
             'message': u"This is a test, including some non-ascii characters like µ or 你好",
             'topicId': REPORTER_TEST_ID,
-            'attachments': [],
+            'installation': socket.gethostname(),
             }
 
         # Check without a file
@@ -106,7 +107,7 @@ class TestOdemisBugreporter(unittest.TestCase):
             'subject': u'Bugreporter test',
             'message': u"This is a test",
             'topicId': REPORTER_TEST_ID,
-            'attachments': [],
+            'installation': "test",
             }
         incorrect_api_key = 'xxxxxxx'
         self.assertRaises(HTTPError, self.bugreporter.create_ticket,
@@ -149,7 +150,8 @@ class TestOdemisBugreporter(unittest.TestCase):
                 'subject': 'Bugreporter test',
                 'message': "This is a test.",
                 'topicId': REPORTER_TEST_ID,
-                'attachments': [],
+                # No installation field, should still work (it's optional, and old bug reporters didn't provide it)
+                # 'installation': "test"
             }
     
             try:
