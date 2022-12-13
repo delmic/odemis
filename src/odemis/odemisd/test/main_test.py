@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 10 apr 2012
 
 @author: Éric Piel
@@ -20,23 +20,24 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 try:
     import StringIO
 except ImportError:  # Python 3 naming
     import io as StringIO
 import logging
-from odemis import model
-import odemis
-from odemis.odemisd import main
-from odemis.util import timeout, testing
 import os
 import subprocess
 import sys
 import time
 import unittest
+
 import yaml
 
+import odemis
+from odemis import model
+from odemis.odemisd import main
+from odemis.util import timeout, testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -44,17 +45,19 @@ logging.getLogger().setLevel(logging.DEBUG)
 ODEMISD_CMD = [sys.executable, os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
 SIM_CONFIG = os.path.join(os.path.dirname(__file__), "optical-sim.odm.yaml")
 
+
 class TestCommandLine(unittest.TestCase):
     """
     This contains test cases for the command-line level of odemisd.
     """
+
     @classmethod
     def create_tests(cls):
         configs_pass = ["optical-sim.odm.yaml",
-           "example-optical-odemisd-config.odm.yaml",
-           "example-combined-actuator.odm.yaml",
-           "example-secom.odm.yaml",
-           ]
+                        "example-optical-odemisd-config.odm.yaml",
+                        "example-combined-actuator.odm.yaml",
+                        "example-secom.odm.yaml",
+                        ]
 
         i = 0
         for config in configs_pass:
@@ -80,7 +83,7 @@ class TestCommandLine(unittest.TestCase):
                          # test with multiple role
                          "semantic-error-8.odm.yaml",
                          "semantic-error-md.odm.yaml",
-                        ]
+                         ]
 
         i = 0
         for config in configs_error:
@@ -96,6 +99,7 @@ class TestCommandLine(unittest.TestCase):
             self.assertEqual(ret, 0, "error detected in correct config "
                                      "file '%s'" % filename)
             os.remove("test.log")
+
         return test_validate_pass
 
     @staticmethod
@@ -107,6 +111,7 @@ class TestCommandLine(unittest.TestCase):
             self.assertNotEqual(ret, 0, "no error detected in erroneous config "
                                         "file '%s'" % filename)
             os.remove("test.log")
+
         return test_validate_error
 
     def setUp(self):
@@ -137,7 +142,7 @@ class TestCommandLine(unittest.TestCase):
         try:
             cmdline = "odemisd --validate"
             ret = main.main(cmdline.split())
-        except SystemExit as exc: # because it's handled by argparse
+        except SystemExit as exc:  # because it's handled by argparse
             ret = exc.code
         self.assertNotEqual(ret, 0, "trying to run erroneous '%s'" % cmdline)
 
@@ -147,7 +152,7 @@ class TestCommandLine(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
         # a log file?
-        st = os.stat("test.log") # this tests also that the file is created
+        st = os.stat("test.log")  # this tests also that the file is created
         self.assertGreater(st.st_size, 0)
         os.remove("test.log")
 
@@ -169,7 +174,7 @@ class TestCommandLine(unittest.TestCase):
         output = out.getvalue()
         self.assertTrue("positional arguments" in output)
 
-    @timeout(15)
+    @timeout(20)
     def test_daemon(self):
         # First there should be not backend running
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
@@ -182,10 +187,10 @@ class TestCommandLine(unittest.TestCase):
         ret = subprocess.call(ODEMISD_CMD + cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
-        time.sleep(1) # give some time to start
+        time.sleep(1)  # give some time to start
 
         # now it should say it's starting, and eventually running
-        ret = self._wait_backend_starts(5)
+        ret = self._wait_backend_starts(10)
         self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
 
         # stop the backend
@@ -193,7 +198,7 @@ class TestCommandLine(unittest.TestCase):
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
-        time.sleep(5) # give some time to stop
+        time.sleep(5)  # give some time to stop
 
         # backend should be stopped by now
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
@@ -261,7 +266,7 @@ class TestCommandLine(unittest.TestCase):
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
-        time.sleep(5) # give some time to stop
+        time.sleep(5)  # give some time to stop
         ret = main.main(cmdline.split())
         os.remove("test.log")
         os.remove("testdaemon.log")
@@ -290,7 +295,7 @@ class TestCommandLine(unittest.TestCase):
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
 
-        time.sleep(5) # give some time to stop
+        time.sleep(5)  # give some time to stop
         ret = main.main(cmdline.split())
         os.remove("test.log")
         os.remove("testdaemon.log")
@@ -521,11 +526,11 @@ class TestCommandLine(unittest.TestCase):
 
         return ret
 
+
 # extends the class fully at module
 TestCommandLine.create_tests()
 
 if __name__ == '__main__':
     unittest.main()
-
 
 # vim:tabstop=4:shiftwidth=4:expandtab:spelllang=en_gb:spell:
