@@ -888,6 +888,11 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
             "Skipping test because the pre-calibration method is not mocked."
         )
 
+    def test_calibration_metadata(self):
+        self.skipTest(
+            "Skipping test because backend is required and json cannot open a mocked object."
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
