@@ -340,8 +340,10 @@ class DataFlow(DataFlowBase):
                 assert callable(listener)
                 self._listeners.add(WeakMethod(listener))
 
-            logging.debug("Listener %r subscribed, now %d subscribers on %s",
-                          listener, self._count_listeners(), self._global_name)
+            # Use '%' instead of ',' because logging may be holding on too long to the reference,
+            # which we really don't want
+            logging.debug("Listener %r subscribed, now %d subscribers on %s" % (
+                          listener, self._count_listeners(), self._global_name))
             if count_before == 0:
                 try:
                     self.start_generate()
@@ -809,4 +811,3 @@ def EventSerializer(self):
 
 
 Pyro4.Daemon.serializers[Event] = EventSerializer
-
