@@ -47,6 +47,7 @@ pyrolog.setLevel(min(pyrolog.getEffectiveLevel(), logging.DEBUG))
 # Use processes or threads? Threads are easier to debug, but less real
 USE_THREADS = True
 
+
 # @unittest.skip("simple")
 class ContainerTest(unittest.TestCase):
     def test_empty_container(self):
@@ -278,7 +279,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         comp2.terminate()
         cont.terminate()
         cont2.terminate()
-        time.sleep(0.1) # give it some time to terminate
+        time.sleep(0.1)  # give it some time to terminate
 
     @timeout(20)
     def test_dataflow_unsub(self):
@@ -300,7 +301,8 @@ class ProxyOfProxyTest(unittest.TestCase):
 
         comp2.sub(comp.data)
         time.sleep(0.5)
-        comp2.unsub()
+        # the unsub should be commented since it should
+        # comp2.unsub()
         count_arrays = comp2.get_data_count()
         logging.info("received %d arrays", count_arrays)
         nlisteners = comp.data._count_listeners()
@@ -322,6 +324,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         self.assertEqual(data.shape, (2048, 2048))
         self.data_arrays_sent = data[0][0]
         self.assertGreaterEqual(self.data_arrays_sent, self.count)
+
 
 # @unittest.skip("simple")
 class RemoteTest(unittest.TestCase):
@@ -374,7 +377,6 @@ class RemoteTest(unittest.TestCase):
 
         # non existing method
         self.assertRaises(AttributeError, self.comp.non_existing_method)
-
 
 #    @unittest.skip("simple")
     def test_roattributes(self):
@@ -682,7 +684,6 @@ class RemoteTest(unittest.TestCase):
 #        gc.collect()
 #        print gc.get_referrers(data)
 
-
 #    @unittest.skip("simple")
     def test_dataflow_get(self):
         self.comp.data.reset()
@@ -833,6 +834,7 @@ def ServerLoop(socket_name):
 class MyError(Exception):
     pass
 
+
 class SimpleComponent(model.Component):
     """
     A component that does nothing
@@ -842,6 +844,7 @@ class SimpleComponent(model.Component):
 
     def ping(self):
         return "pong"
+
 
 class SimpleHwComponent(model.HwComponent):
     """
@@ -1028,7 +1031,7 @@ class FakeDataFlow(model.DataFlow):
         self._startAcquire = sae
 
     def _create_one(self, shape, bpp, index):
-#        print self.startAcquire
+        # print self.startAcquire
         if self._startAcquire:
             self._startAcquire.notify()
             time.sleep(0.1) # if test events => simulate slow acquisition
@@ -1176,5 +1179,5 @@ class SynchronizableDataFlow(model.DataFlow):
 
 
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
+    # import sys;sys.argv = ['', 'Test.testName']
     unittest.main()

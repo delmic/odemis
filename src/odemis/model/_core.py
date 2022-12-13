@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 18 Jun 2012
 
 @author: Éric Piel
@@ -18,18 +18,19 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
-import tempfile
-
-from past.builtins import basestring
-import Pyro4
-from Pyro4.core import oneway
-from collections.abc import Mapping
+"""
 import logging
 import multiprocessing
 import os
+import tempfile
 import threading
-from future.moves.urllib.parse import quote
+from collections.abc import Mapping
+from urllib.parse import quote
+
+import Pyro4
+from Pyro4.core import oneway
+from past.builtins import basestring
+
 from odemis.util import inspect_getmembers
 
 
@@ -55,17 +56,20 @@ Pyro4.config.THREADPOOL_MAXTHREADS = 128
 INIT_TIMEOUT = 300  # s
 CALL_TIMEOUT = 30  # s
 
-# Set the base directory regardless of the os
-BASE_DIRECTORY = os.path.join(tempfile.gettempdir(), "odemisd")
+# Set the base directory
+BASE_DIRECTORY = "/var/run/odemisd"
 path_exists = os.path.exists(BASE_DIRECTORY)
 if not path_exists:
-    os.makedirs(BASE_DIRECTORY)  # Create a new folder because it does not exist
+    logging.info(f"{BASE_DIRECTORY} could not be found. Creating new temporary folder.")
+    BASE_DIRECTORY = os.path.join(tempfile.gettempdir(), "odemisd")
+    os.makedirs(BASE_DIRECTORY, exist_ok=True)
 
 BASE_GROUP = "odemis"  # user group that is allowed to access the backend
-BACKEND_FILE = BASE_DIRECTORY + "/backend.ipc"  # the official ipc file for backend (just to detect status)
+BACKEND_FILE = os.path.join(BASE_DIRECTORY, "backend.ipc")  # the official ipc file for backend (just to detect status)
 BACKEND_NAME = "backend"  # the official name for the backend container
 
 _microscope = None
+
 
 def getMicroscope():
     """
@@ -84,6 +88,7 @@ def getMicroscope():
         _microscope = backend.getRoot()
         backend._pyroTimeout = prev_to
     return _microscope
+
 
 def getComponent(name=None, role=None):
     """
@@ -246,6 +251,7 @@ else:
     def prepare_to_listen_to_more_vas(inc):
         pass
 
+
 # Container management functions and class
 class ContainerObject(Pyro4.core.DaemonObject):
     """Object which represent the daemon for remote access"""
@@ -287,6 +293,7 @@ class ContainerObject(Pyro4.core.DaemonObject):
         returns the root object, if it has been defined in the container
         """
         return self.getObject(self.daemon.rootId)
+
 
 # Basically a wrapper around the Pyro Daemon
 class Container(Pyro4.core.Daemon):
@@ -503,4 +510,3 @@ def _manageContainer(name, isready=None):
         isready.set()
     container.run()
     container.close()
-
