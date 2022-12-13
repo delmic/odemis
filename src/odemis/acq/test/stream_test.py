@@ -19,31 +19,32 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # Test module for model.Stream classes
-from concurrent.futures import CancelledError
+
 import gc
 import logging
 import math
+import os
+import threading
+import time
+import unittest
+import weakref
+from concurrent.futures import CancelledError
+
 import numpy
-from odemis import model
+from past.builtins import long
+
 import odemis
+from odemis import model
 from odemis.acq import stream, calibration, path, leech
 from odemis.acq.leech import ProbeCurrentAcquirer
-from odemis.acq.stream import POL_POSITIONS
 from odemis.acq.stream import RGBSpatialSpectrumProjection, \
     SinglePointSpectrumProjection, SinglePointTemporalProjection, \
-    LineSpectrumProjection, MeanSpectrumProjection
+    LineSpectrumProjection, MeanSpectrumProjection, POL_POSITIONS
 from odemis.dataio import tiff
 from odemis.driver import simcam
 from odemis.model import MD_POL_NONE, MD_POL_HORIZONTAL, MD_POL_VERTICAL, \
     MD_POL_POSDIAG, MD_POL_NEGDIAG, MD_POL_RHC, MD_POL_LHC, DataArrayShadow, TINT_FIT_TO_RGB
 from odemis.util import testing, conversion, img, spectrum, find_closest
-import os
-from past.builtins import long
-import threading
-import time
-import unittest
-from unittest.case import skip
-import weakref
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -60,10 +61,12 @@ TIME_CORRELATOR_CONFIG = CONFIG_PATH + "sim/sparc2-time-correlator-sim.odm.yaml"
 RGBCAM_CLASS = simcam.Camera
 RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
 
+
 class FakeEBeam(model.Emitter):
     """
     Imitates an e-beam, sufficiently for the Streams
     """
+
     def __init__(self, name):
         model.Emitter.__init__(self, name, "fakeebeam", parent=None)
         self._shape = (2048, 2048)
@@ -74,7 +77,7 @@ class FakeEBeam(model.Emitter):
         self.scale = model.TupleContinuous((1, 1), [(1, 1), self._shape],
                                            cls=(int, long, float), unit="")
         self.translation = model.TupleContinuous((0, 0), ((0, 0), (0, 0)),
-                                           cls=(int, long, float), unit="px")
+                                                 cls=(int, long, float), unit="px")
 
 
 class FakeDetector(model.Detector):
@@ -82,6 +85,7 @@ class FakeDetector(model.Detector):
     Imitates an SEM detector, but you need to send the data yourself (using
     comp.data.notify(d)
     """
+
     def __init__(self, name):
         model.Detector.__init__(self, name, "fakedet", parent=None)
         self.data = model.DataFlow()
@@ -126,7 +130,7 @@ class StreamTestCase(unittest.TestCase):
         rois = [(0, 0, 1, 1), (0.1, 0.1, 0.8, 0.8), (0.00001, 0.1, 1, 0.2)]
         epxs = ebeam.pixelSize.value
         eshape = ebeam.shape
-        phy_size = [epxs[0] * eshape[0], epxs[1] * eshape[1]] # max physical ROI
+        phy_size = [epxs[0] * eshape[0], epxs[1] * eshape[1]]  # max physical ROI
         for roi in rois:
             ss.roi.value = roi
             new_roi = ss.roi.value
@@ -136,13 +140,13 @@ class StreamTestCase(unittest.TestCase):
                             rep[1] * pxs / phy_size[1]]
             roi_size = [new_roi[2] - new_roi[0], new_roi[3] - new_roi[1]]
             testing.assert_tuple_almost_equal(roi_size, exp_roi_size,
-                             msg="with roi = %s => %s" % (roi, new_roi))
+                                              msg="with roi = %s => %s" % (roi, new_roi))
             self.assertTrue(new_roi[0] >= 0 and new_roi[1] >= 0 and
                             new_roi[2] <= 1 and new_roi[3] <= 1,
                             "with roi = %s => %s" % (roi, new_roi))
             self._check_square_pixel(ss)
 
-        ss.pixelSize.value = ss.pixelSize.range[0] # needed to get the finest grain
+        ss.pixelSize.value = ss.pixelSize.range[0]  # needed to get the finest grain
         ss.roi.value = (0.3, 0.65, 0.5, 0.9)
         # changing one repetition dimension is always respected.
         rep = list(ss.repetition.value)
@@ -178,7 +182,6 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(tuple(ss.repetition.value), ebeam.shape)
         self._check_square_pixel(ss)
 
-
         # TODO: changing pixel size to a huge number leads to a 1x1 repetition
 
         # When changing both repetition dims, they are both respected
@@ -209,7 +212,7 @@ class StreamTestCase(unittest.TestCase):
 
     def test_rgb_camera_stream(self):
         cam = RGBCAM_CLASS(**RGBCAM_KWARGS)
-        rgbs = stream.RGBCameraStream("rgb", cam, cam.data, None) # no emitter
+        rgbs = stream.RGBCameraStream("rgb", cam, cam.data, None)  # no emitter
 
         dur = 0.1
         cam.exposureTime.value = dur
@@ -268,13 +271,13 @@ class StreamTestCase(unittest.TestCase):
         #  * The histogram should be 256 long
         d = numpy.zeros(ebeam.shape[::-1], "uint8")
         md = {model.MD_BPP: 8,
-                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                    model.MD_POS: (1e-3, -30e-3), # m
-                    }
+              model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+              model.MD_POS: (1e-3, -30e-3),  # m
+              }
         da = model.DataArray(d, md)
         se.data.notify(da)
 
-        time.sleep(0.5) # make sure all the delayed code is executed
+        time.sleep(0.5)  # make sure all the delayed code is executed
         self.assertIsInstance(ss.image.value, model.DataArray)
         h = ss.histogram.value
         ir = ss.intensityRange.range
@@ -287,13 +290,13 @@ class StreamTestCase(unittest.TestCase):
         d = numpy.zeros(ebeam.shape[::-1], "uint16") + 1
         d[1] = 1561  # Next power of 2 is 2**11
         md = {model.MD_BPP: 16,
-                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                    model.MD_POS: (1e-3, -30e-3), # m
-                    }
+              model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+              model.MD_POS: (1e-3, -30e-3),  # m
+              }
         da = model.DataArray(d, md)
         se.data.notify(da)
 
-        time.sleep(0.5) # make sure all the delayed code is executed
+        time.sleep(0.5)  # make sure all the delayed code is executed
         self.assertIsInstance(ss.image.value, model.DataArray)
         h = ss.histogram.value
         ir = ss.intensityRange.range
@@ -305,13 +308,13 @@ class StreamTestCase(unittest.TestCase):
         #  * The histogram should stay not too long (<=1024 values)
         d = numpy.zeros(ebeam.shape[::-1], "uint16")
         md = {model.MD_BPP: 12,
-                    model.MD_PIXEL_SIZE: (1e-6, 2e-5), # m/px
-                    model.MD_POS: (1e-3, -30e-3), # m
-                    }
+              model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+              model.MD_POS: (1e-3, -30e-3),  # m
+              }
         da = model.DataArray(d, md)
         se.data.notify(da)
 
-        time.sleep(0.5) # make sure all the delayed code is executed
+        time.sleep(0.5)  # make sure all the delayed code is executed
         self.assertIsInstance(ss.image.value, model.DataArray)
         h = ss.histogram.value
         ir = ss.intensityRange.range
@@ -351,7 +354,7 @@ class StreamTestCase(unittest.TestCase):
         self.assertNotEqual(ebeam.scale.value, ss.emtScale.value)
 
         self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
-        ebeam.resolution.value = (128, 128) # normally automatically done
+        ebeam.resolution.value = (128, 128)  # normally automatically done
         ss.emtResolution.value = (2048, 2048)
         self.assertNotEqual(ebeam.resolution.value, ss.emtResolution.value)
 
@@ -368,15 +371,15 @@ class StreamTestCase(unittest.TestCase):
         self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
 
         # TODO: remove (now that this has been disabled)
-#         # Directly change HW VAs, and check the stream see the changes
-#         ebeam.magnification.value = 10
-#         self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
-#
-#         ebeam.scale.value = (2, 2)
-#         self.assertEqual(ebeam.scale.value, ss.emtScale.value)
-#
-#         ebeam.resolution.value = (128, 128) # normally automatically done
-#         self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
+        #     # Directly change HW VAs, and check the stream see the changes
+        #     ebeam.magnification.value = 10
+        #     self.assertEqual(ebeam.magnification.value, ss.emtMagnification.value)
+        #
+        #     ebeam.scale.value = (2, 2)
+        #     self.assertEqual(ebeam.scale.value, ss.emtScale.value)
+        #
+        #     ebeam.resolution.value = (128, 128) # normally automatically done
+        #     self.assertEqual(ebeam.resolution.value, ss.emtResolution.value)
 
         # Change the local VAs while playing
         ss.emtMagnification.value = 20
@@ -396,7 +399,7 @@ class StreamTestCase(unittest.TestCase):
         ebeam.scale.value = (2, 2)
         self.assertNotEqual(ebeam.scale.value, ss.emtScale.value)
 
-        ebeam.resolution.value = (128, 128) # normally automatically done
+        ebeam.resolution.value = (128, 128)  # normally automatically done
         self.assertNotEqual(ebeam.resolution.value, ss.emtResolution.value)
 
     def test_weakref(self):
@@ -410,7 +413,7 @@ class StreamTestCase(unittest.TestCase):
         md = {model.MD_BPP: 16,
               model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
               model.MD_POS: (1e-3, -30e-3),  # m
-        }
+              }
         da = model.DataArray(d, md)
 
         # Static stream
@@ -420,14 +423,14 @@ class StreamTestCase(unittest.TestCase):
         # self.assertIsInstance(ss.image.value, model.DataArray)
         # Check it's garbage collected
         wsts = weakref.ref(sts)
-        assert(wsts() is not None)
+        assert (wsts() is not None)
 
         del sts
         time.sleep(1)  # Give some time to disappear
         sts = wsts()
         if sts is not None:
             print(gc.get_referrers(sts))
-        assert(wsts() is None)
+        assert (wsts() is None)
 
         # Live stream
         ss = stream.SEMStream("test live", se, se.data, ebeam)
@@ -442,14 +445,14 @@ class StreamTestCase(unittest.TestCase):
 
         # Check it's garbage collected
         wss = weakref.ref(ss)
-        assert(wss() is not None)
+        assert (wss() is not None)
 
         del ss
         time.sleep(1)  # Give some time to disappear
         ss = wss()
         if ss is not None:
             print(gc.get_referrers(ss))
-        assert(wss() is None)
+        assert (wss() is None)
 
 
 # @skip("faster")
@@ -518,7 +521,7 @@ class SECOMTestCase(unittest.TestCase):
         try:
             expected_ex = min([c for c in ex_centers if c < em_center],
                               key=lambda c: em_center - c)
-        except ValueError: # no excitation < em_center
+        except ValueError:  # no excitation < em_center
             expected_ex = min(ex_centers)
         self.assertEqual(s1.excitation.value[2], expected_ex)
 
@@ -537,7 +540,7 @@ class SECOMTestCase(unittest.TestCase):
 
         # => stream excitation is based on light.emissions
         self.assertIn(s2.excitation.value, self.light.spectra.value)
-        expected_ex = self.light.spectra.value[-1] # last value of emission
+        expected_ex = self.light.spectra.value[-1]  # last value of emission
         self.assertEqual(s2.excitation.value, expected_ex)
 
     def test_fluo(self):
@@ -546,7 +549,7 @@ class SECOMTestCase(unittest.TestCase):
         """
         s1 = stream.FluoStream("fluo1", self.ccd, self.ccd.data,
                                self.light, self.light_filter)
-        self.ccd.exposureTime.value = 1 # s, to avoid acquiring too many images
+        self.ccd.exposureTime.value = 1  # s, to avoid acquiring too many images
 
         # Check we manage to get at least one image
         self._image = None
@@ -704,11 +707,11 @@ class SECOMConfocalTestCase(unittest.TestCase):
         # Find detectors & SEM components
         cls.laser_mirror = model.getComponent(role="laser-mirror")
         cls.light = model.getComponent(role="light")
-#        cls.light_filter = model.getComponent(role="filter")
+        #  cls.light_filter = model.getComponent(role="filter")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
         cls.photo_ds = []
-        for i in range(10): # very ugly way, that works
+        for i in range(10):  # very ugly way, that works
             try:
                 cls.photo_ds.append(model.getComponent(role="photo-detector%d" % (i,)))
             except LookupError:
@@ -817,11 +820,11 @@ class SECOMConfocalTestCase(unittest.TestCase):
         Check the acquisition of several confocal streams and setting stream
         """
         set_s = stream.ScannerSettingsStream("Confocal shared settings",
-                       detector=self.laser_mirror,
-                       dataflow=None,
-                       emitter=self.light,
-                       detvas={"dwellTime"},
-                      )
+                                             detector=self.laser_mirror,
+                                             dataflow=None,
+                                             emitter=self.light,
+                                             detvas={"dwellTime"},
+                                             )
 
         sfluos = []
         for d in self.photo_ds:
@@ -980,7 +983,7 @@ class SPARCTestCase(unittest.TestCase):
         logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
         return pos, pxs, res
 
-#     @skip("simple")
+    # @skip("simple")
     def test_progressive_future(self):
         """
         Test .acquire interface (should return a progressive future with updates)
@@ -996,7 +999,7 @@ class SPARCTestCase(unittest.TestCase):
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        self.ccd.binning.value = (4, 4) # hopefully always supported
+        self.ccd.binning.value = (4, 4)  # hopefully always supported
 
         # Long acquisition
         ars.detExposureTime.value = 0.2  # s
@@ -1013,7 +1016,7 @@ class SPARCTestCase(unittest.TestCase):
         data = f.result(timeout)
         self.assertEqual(len(data), num_ar + 1)
         self.assertEqual(data[0].shape, exp_shape)
-        self.assertGreaterEqual(self.updates, 4) # at least a couple of updates
+        self.assertGreaterEqual(self.updates, 4)  # at least a couple of updates
         self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
@@ -1035,12 +1038,12 @@ class SPARCTestCase(unittest.TestCase):
         data = f.result(timeout)
         self.assertEqual(len(data), num_ar + 1)
         self.assertEqual(data[0].shape, exp_shape)
-        self.assertGreaterEqual(self.updates, 5) # at least a few updates
+        self.assertGreaterEqual(self.updates, 5)  # at least a few updates
         self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
 
-#     @skip("simple")
+    # @skip("simple")
     def test_sync_future_cancel(self):
         self.image = None
 
@@ -1051,7 +1054,7 @@ class SPARCTestCase(unittest.TestCase):
         sas = stream.SEMARMDStream("test sem-ar", [sems, ars])
 
         ars.roi.value = (0.1, 0.1, 0.8, 0.8)
-        self.ccd.binning.value = (4, 4) # hopefully always supported
+        self.ccd.binning.value = (4, 4)  # hopefully always supported
 
         # Long acquisition
         self.updates = 0
@@ -1066,7 +1069,7 @@ class SPARCTestCase(unittest.TestCase):
         time.sleep(0.3)  # wait a bit
         f.cancel()
 
-        self.assertGreaterEqual(self.updates, 1) # at least at the end
+        self.assertGreaterEqual(self.updates, 1)  # at least at the end
         self.assertLessEqual(self.end, time.time())
         self.assertTrue(f.cancelled())
 
@@ -1083,7 +1086,7 @@ class SPARCTestCase(unittest.TestCase):
         time.sleep(0.03)  # wait a bit
         f.cancel()
 
-        self.assertGreaterEqual(self.updates, 1) # at least at the end
+        self.assertGreaterEqual(self.updates, 1)  # at least at the end
         self.assertLessEqual(self.end, time.time())
         self.assertTrue(f.cancelled())
 
@@ -1095,7 +1098,7 @@ class SPARCTestCase(unittest.TestCase):
         self.end = end
         self.updates += 1
 
-#     @skip("simple")
+    # @skip("simple")
     def test_acq_ar(self):
         """
         Test short & long acquisition for AR
@@ -1179,7 +1182,7 @@ class SPARCTestCase(unittest.TestCase):
             self.assertTrue(phys_roi[0] <= pos[0] <= phys_roi[2] and
                             phys_roi[1] <= pos[1] <= phys_roi[3])
 
-#     @skip("simple")
+    # @skip("simple")
     def test_acq_spec(self):
         """
         Test short & long acquisition for Spectrometer
@@ -1223,7 +1226,7 @@ class SPARCTestCase(unittest.TestCase):
         sp_da = sps.raw[1]
         sshape = sp_da.shape
         self.assertEqual(len(sshape), 5)
-        self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
         sem_md = sem_da.metadata
         spec_md = sp_da.metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
@@ -1254,7 +1257,7 @@ class SPARCTestCase(unittest.TestCase):
         sp_da = sps.raw[1]
         sshape = sp_da.shape
         self.assertEqual(len(sshape), 5)
-        self.assertGreater(sshape[0], 1) # should have at least 2 wavelengths
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
         sem_md = sem_da.metadata
         spec_md = sp_da.metadata
         numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
@@ -1264,7 +1267,7 @@ class SPARCTestCase(unittest.TestCase):
         sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
         self.assertEqual(sp_dims, "CTZYX")
 
-#     @skip("simple")
+    # @skip("simple")
     def test_acq_fuz(self):
         """
         Test short & long acquisition for Spectrometer
@@ -1359,17 +1362,17 @@ class SPARCTestCase(unittest.TestCase):
         numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
 
-#     @skip("simple")
+    # @skip("simple")
     def test_acq_mn(self):
         """
         Test short & long acquisition for SEM MD
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
-                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         mcs = stream.MonochromatorSettingsStream("test",
-                      self.mnchr, self.mnchr.data, self.ebeam,
-                      emtvas={"dwellTime", })
+                                                 self.mnchr, self.mnchr.data, self.ebeam,
+                                                 emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
         mcs.roi.value = (0.2, 0.2, 0.5, 0.6)
@@ -1457,7 +1460,7 @@ class SPARCTestCase(unittest.TestCase):
         numpy.testing.assert_allclose(md[model.MD_POS], exp_pos)
         numpy.testing.assert_allclose(md[model.MD_PIXEL_SIZE], exp_pxs)
 
-#     @skip("simple")
+    # @skip("simple")
     def test_count(self):
         cs = stream.CameraCountStream("test count", self.spec, self.spec.data, self.ebeam)
         self.spec.exposureTime.value = 0.1
@@ -1506,6 +1509,7 @@ class Fake0DDetector(model.Detector):
     Imitates a probe current detector, but you need to send the data yourself (using
     comp.data.notify(d)
     """
+
     def __init__(self, name):
         model.Detector.__init__(self, name, "fakedet", parent=None)
         self.data = Fake0DDataFlow()
@@ -1516,6 +1520,7 @@ class Fake0DDataFlow(model.DataFlow):
     """
     Mock object just sufficient for the ProbeCurrentAcquirer
     """
+
     def get(self):
         da = model.DataArray([1e-12], {model.MD_ACQ_DATE: time.time()})
         return da
@@ -1604,36 +1609,36 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
-                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         mcs = stream.CLSettingsStream("test",
-                      self.cl, self.cl.data, self.ebeam,
-                      axis_map=axes,
-                      emtvas={"dwellTime", })
+                                      self.cl, self.cl.data, self.ebeam,
+                                      axis_map=axes,
+                                      emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
-#         # Test acquisition with leech failure => it should just go on as if the
-#         # leech had not been used.
-#         mcs.roi.value = (0, 0.2, 0.3, 0.6)
-#         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
-#         dc.period.value = 5
-#         dc.roi.value = stream.UNDEFINED_ROI
-#         dc.dwellTime.value = 1e-06
-#         sems.leeches.append(dc)
-#
-#         # dwell time of sems shouldn't matter
-#         mcs.emtDwellTime.value = 1e-6  # s
-#
-#         # Start acquisition
-#         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
-#         start = time.time()
-#         f = sms.acquire()
-#
-#         # wait until it's over
-#         data = f.result(timeout)
-#         dur = time.time() - start
-#         logging.debug("Acquisition took %g s", dur)
-#         self.assertTrue(f.done())
-#         self.assertEqual(len(data), len(sms.raw))
+        # # Test acquisition with leech failure => it should just go on as if the
+        # # leech had not been used.
+        # mcs.roi.value = (0, 0.2, 0.3, 0.6)
+        # dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        # dc.period.value = 5
+        # dc.roi.value = stream.UNDEFINED_ROI
+        # dc.dwellTime.value = 1e-06
+        # sems.leeches.append(dc)
+        #
+        # # dwell time of sems shouldn't matter
+        # mcs.emtDwellTime.value = 1e-6  # s
+        #
+        # # Start acquisition
+        # timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
+        # start = time.time()
+        # f = sms.acquire()
+        #
+        # # wait until it's over
+        # data = f.result(timeout)
+        # dur = time.time() - start
+        # logging.debug("Acquisition took %g s", dur)
+        # self.assertTrue(f.done())
+        # self.assertEqual(len(data), len(sms.raw))
 
         # Now, proper acquisition
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
@@ -1714,10 +1719,10 @@ class SPARC2TestCase(unittest.TestCase):
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
-                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         mcs = stream.CLSettingsStream("test",
-                      self.cl, self.cl.data, self.ebeam,
-                      emtvas={"dwellTime", })
+                                      self.cl, self.cl.data, self.ebeam,
+                                      emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
@@ -1775,8 +1780,8 @@ class SPARC2TestCase(unittest.TestCase):
         """
         # Create the stream
         mcs = stream.CLSettingsStream("test",
-                      self.cl, self.cl.data, self.ebeam,
-                      emtvas={"dwellTime", })
+                                      self.cl, self.cl.data, self.ebeam,
+                                      emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", [mcs])
 
         mcs.roi.value = (0, 0.2, 0.3, 0.6)
@@ -1918,7 +1923,7 @@ class SPARC2TestCase(unittest.TestCase):
         """
         # Zoom in to make sure the ROI is not too big physically
         self.ebeam.horizontalFoV.value = 200e-6
-#         self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
+        # self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
 
         # Move the stage to the top-left
         posc = {"x": sum(self.sstage.axes["x"].range) / 2,
@@ -1990,7 +1995,7 @@ class SPARC2TestCase(unittest.TestCase):
         """
         # Zoom in to make sure the ROI is not too big physically
         self.ebeam.horizontalFoV.value = 200e-6
-#         self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
+        # self.ebeam.resolution.value = self.ebeam.resolution.clip((2048, 2048))
 
         # Move the stage to the top-left
         posc = {"x": sum(self.sstage.axes["x"].range) / 2,
@@ -2167,17 +2172,17 @@ class SPARC2TestCase(unittest.TestCase):
         """
         # Create the stream
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
-                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
         mcs = stream.CLSettingsStream("test",
-                      self.cl, self.cl.data, self.ebeam,
-                      emtvas={"dwellTime", })
+                                      self.cl, self.cl.data, self.ebeam,
+                                      emtvas={"dwellTime", })
         sms = stream.SEMMDStream("test sem-md", [sems, mcs])
 
         # TODO update unit tests to test for a cornerecase: where leech is set far after update_interval and
         #  therefore a non rectangular block may be scanned (case where leech and update interval run semi in
         #  phase/out of phase). Test assembleLiveData if finsishes the  current line. After which a new rectangular block
         #  is scanned instead of running into an error
-        
+
         pcd = Fake0DDetector("test")
         pca = ProbeCurrentAcquirer(pcd)
         sems.leeches.append(pca)
@@ -3115,7 +3120,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
             # include if multiple polarization images are required per ebeam position
             ar_das = sas.raw[1:]  # angle resolved data arrays
             if ars.acquireAllPol.value:
-                self.assertEqual(len(ar_das), num_ar*6)
+                self.assertEqual(len(ar_das), num_ar * 6)
             else:
                 self.assertEqual(len(ar_das), num_ar)
 
@@ -3123,7 +3128,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
             if ars.acquireAllPol.value:
                 # check for each of the 6 polarization positions
                 for i in range(6):
-                    for d in ar_das[num_ar*i: num_ar*(i+1)]:
+                    for d in ar_das[num_ar * i: num_ar * (i + 1)]:
                         md = d.metadata
                         # check if model.MD_POL_MODE is in metadata
                         self.assertIn(model.MD_POL_MODE, md)
@@ -3211,8 +3216,8 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         """ Test ARSettingsStream """
         # Create the stream
         ars = stream.ARSettingsStream("test",
-                      self.ccd, self.ccd.data, self.ebeam, analyzer=self.analyzer,
-                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+                                      self.ccd, self.ccd.data, self.ebeam, analyzer=self.analyzer,
+                                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
 
         # shouldn't affect
         ars.roi.value = (0.15, 0.6, 0.8, 0.8)
@@ -3286,7 +3291,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
 
         # HW VA should be updated with the correct value when acquiring or playing the stream
         # check explicit values of stream and HW VA
-        self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value/ars.integrationCounts.value)
+        self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value / ars.integrationCounts.value)
         self.assertEqual(ars.integrationTime.value, 11)
 
         # change stream VA --> HW VAs should change as stream is still active
@@ -3295,7 +3300,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # check stream VA shows not the same value as the HW VA
         self.assertNotEqual(ars.integrationTime.value, self.ccd.exposureTime.value)
         # check stream VA and HW VA show the correct value
-        self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value/ars.integrationCounts.value)
+        self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value / ars.integrationCounts.value)
         self.assertEqual(ars.integrationTime.value, 12)
         self.assertEqual(ars.integrationCounts.value, 2)
 
@@ -3329,7 +3334,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
 
         # check stream and HW VA still shows the same value as before and are different from each other
         self.assertNotEqual(ars.integrationTime.value, self.ccd.exposureTime.value)
-        self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value/ars.integrationCounts.value)
+        self.assertEqual(self.ccd.exposureTime.value, ars.integrationTime.value / ars.integrationCounts.value)
         self.assertEqual(ars.integrationTime.value, 12)
 
     def test_ar_acq_integrated_images(self):
@@ -3559,7 +3564,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         )
         sem_stream = stream.SpotSEMStream("Ebeam", self.sed, self.sed.data, self.ebeam)
         sem_tc_stream = stream.SEMTemporalMDStream("SEM Time Correlator",
-                                                  [sem_stream, tc_stream])
+                                                   [sem_stream, tc_stream])
 
         # randomly picked value, to simulate previous value
         self.ebeam.dwellTime.value = 0.042
@@ -3634,7 +3639,7 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         )
         sem_stream = stream.SpotSEMStream("Ebeam", self.sed, self.sed.data, self.ebeam)
         sem_tc_stream = stream.SEMTemporalMDStream("SEM Time Correlator",
-                                                  [sem_stream, tc_stream])
+                                                   [sem_stream, tc_stream])
 
         sem_tc_stream.roi.value = (0, 0, 0.1, 0.2)
         tc_stream.repetition.value = (5, 3)
@@ -3701,8 +3706,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         """ Test SpectrumSettingsStream """
         # Create the stream
         specs = stream.SpectrumSettingsStream("test",
-                      self.spec, self.spec.data, self.ebeam,
-                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+                                              self.spec, self.spec.data, self.ebeam,
+                                              detvas={"exposureTime", "readoutRate", "binning", "resolution"})
         self._image = None
         specs.image.subscribe(self._on_image)
 
@@ -3710,7 +3715,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         specs.roi.value = (0.15, 0.6, 0.8, 0.8)
         specs.repetition.value = (5, 6)
 
-        specs.detExposureTime.value = 0.3 # s
+        specs.detExposureTime.value = 0.3  # s
 
         # Start acquisition
         specs.should_update.value = True
@@ -3733,8 +3738,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         logging.debug("Testing repetitions and roi")
 
         helper = stream.SpectrumSettingsStream("test",
-                      self.spec, self.spec.data, self.ebeam,
-                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+                                               self.spec, self.spec.data, self.ebeam,
+                                               detvas={"exposureTime", "readoutRate", "binning", "resolution"})
 
         # Check it follows what we ask
         helper.pixelSize.value = helper.pixelSize.range[0]
@@ -3771,8 +3776,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         Test stopping the stream before it's done preparing
         """
         specs = stream.SpectrumSettingsStream("test",
-              self.spec, self.spec.data, self.ebeam, opm=self.optmngr,
-              detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+                                              self.spec, self.spec.data, self.ebeam, opm=self.optmngr,
+                                              detvas={"exposureTime", "readoutRate", "binning", "resolution"})
         self._image = None
         specs.image.subscribe(self._on_image)
 
@@ -3804,8 +3809,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         """ Tests MonochromatorSettingsStream """
         # Create the stream and a SpotStream (to drive the ebeam)
         mcs = stream.MonochromatorSettingsStream("test",
-                      self.mnchr, self.mnchr.data, self.ebeam,
-                      emtvas={"dwellTime", })
+                                                 self.mnchr, self.mnchr.data, self.ebeam,
+                                                 emtvas={"dwellTime", })
         spots = stream.SpotSEMStream("spot", self.sed, self.sed.data, self.ebeam)
 
         self._image = None
@@ -3819,8 +3824,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         mcs.roi.value = (0.15, 0.6, 0.8, 0.8)
         mcs.repetition.value = (5, 6)
 
-        mcs.emtDwellTime.value = 0.01 # s
-        mcs.windowPeriod.value = 10 # s
+        mcs.emtDwellTime.value = 0.01  # s
+        mcs.windowPeriod.value = 10  # s
 
         # Start live acquisition
         mcs.should_update.value = True
@@ -3837,7 +3842,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         self.assertIsNotNone(self._image, "No data received after 1.4s")
         self.assertIsInstance(self._image, model.DataArray)
         self.assertEqual(self._image.ndim, 1)
-        self.assertGreater(self._image.shape[0], 50) # we could hope 200 samples
+        self.assertGreater(self._image.shape[0], 50)  # we could hope 200 samples
         dates = self._image.metadata[model.MD_TIME_LIST]
         self.assertGreater(dates[0] + mcs.windowPeriod.value, dates[-1])
         numpy.testing.assert_array_equal(dates, sorted(dates))
@@ -3854,8 +3859,8 @@ class SettingsStreamsTestCase(unittest.TestCase):
         """ Test ARSettingsStream """
         # Create the stream
         ars = stream.ARSettingsStream("test",
-                      self.ccd, self.ccd.data, self.ebeam,
-                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
+                                      self.ccd, self.ccd.data, self.ebeam,
+                                      detvas={"exposureTime", "readoutRate", "binning", "resolution"})
         self._image = None
         ars.image.subscribe(self._on_image)
 
@@ -3863,7 +3868,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         ars.roi.value = (0.15, 0.6, 0.8, 0.8)
         ars.repetition.value = (5, 6)
 
-        ars.detExposureTime.value = 0.3 # s
+        ars.detExposureTime.value = 0.3  # s
 
         # Start acquisition
         ars.should_update.value = True
@@ -3901,9 +3906,9 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
         # Create the stream
         cls = stream.CLSettingsStream("test",
-                      self.cl, self.cl.data, self.ebeam,
-                      axis_map=axes,
-                      emtvas={"dwellTime", })  # note: not "scale", "resolution"
+                                      self.cl, self.cl.data, self.ebeam,
+                                      axis_map=axes,
+                                      emtvas={"dwellTime", })  # note: not "scale", "resolution"
         self._image = None
         cls.image.subscribe(self._on_image)
 
@@ -3911,7 +3916,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
         cls.roi.value = (0.15, 0.6, 0.8, 0.8)
         # cls.repetition.value = (5, 6) # changes the pixelSize
 
-        cls.emtDwellTime.value = 10e-6 # s
+        cls.emtDwellTime.value = 10e-6  # s
         cls.pixelSize.value *= 10
         b0, b1 = list(cls.axisFilter.choices)[:2]
         cls.axisFilter.value = b0
@@ -3981,14 +3986,14 @@ class StaticStreamsTestCase(unittest.TestCase):
         md = {
             model.MD_DESCRIPTION: "green dye",
             model.MD_BPP: 12,
-            model.MD_BINNING: (1, 1), # px, px
-            model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
-            model.MD_POS: (13.7e-3, -30e-3), # m
-            model.MD_EXP_TIME: 1, # s
-            model.MD_IN_WL: (600e-9, 620e-9), # m
-            model.MD_OUT_WL: (620e-9, 650e-9), # m
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+            model.MD_POS: (13.7e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1,  # s
+            model.MD_IN_WL: (600e-9, 620e-9),  # m
+            model.MD_OUT_WL: (620e-9, 650e-9),  # m
             model.MD_USER_TINT: (0, 0, 255),  # RGB (blue)
-            model.MD_ROTATION: 0.1, # rad
+            model.MD_ROTATION: 0.1,  # rad
             model.MD_SHEAR: 0,
         }
 
@@ -4336,7 +4341,9 @@ class StaticStreamsTestCase(unittest.TestCase):
         try:
             import arpolarimetry
         except ImportError:
-            self.skipTest("arpolarimetry package not available, type in a terminal: sudo apt install python-arpolarimetry python3-arpolarimetry")
+            self.skipTest(
+                "arpolarimetry package not available, type in a terminal: "
+                "sudo apt install python-arpolarimetry python3-arpolarimetry")
 
         data_raw = []
         bg_data = []  # list of background images
@@ -4451,16 +4458,16 @@ class StaticStreamsTestCase(unittest.TestCase):
         wld = 433e-9 + numpy.arange(data.shape[0]) * 0.1e-9
         # spectrum metadata
         md = {model.MD_SW_VERSION: "1.0-test",
-             model.MD_HW_NAME: "fake ccd",
-             model.MD_DESCRIPTION: "Spectrum",
-             model.MD_ACQ_DATE: time.time(),
-             model.MD_BPP: 12,
-             model.MD_PIXEL_SIZE: (2e-5, 2e-5), # m/px
-             model.MD_POS: (1.2e-3, -30e-3), # m
-             model.MD_EXP_TIME: 0.2, # s
-             model.MD_LENS_MAG: 60, # ratio
-             model.MD_WL_LIST: wld,
-            }
+              model.MD_HW_NAME: "fake ccd",
+              model.MD_DESCRIPTION: "Spectrum",
+              model.MD_ACQ_DATE: time.time(),
+              model.MD_BPP: 12,
+              model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+              model.MD_POS: (1.2e-3, -30e-3),  # m
+              model.MD_EXP_TIME: 0.2,  # s
+              model.MD_LENS_MAG: 60,  # ratio
+              model.MD_WL_LIST: wld,
+              }
         return model.DataArray(data, md)
 
     def test_spectrum_das(self):
@@ -4611,7 +4618,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(wl1d.shape, (spec.shape[0],))
 
         specs.selected_line.value = [(30, 65), (5, 12)]
-        specs.selectionWidth.value = 13 # brings bad luck?
+        specs.selectionWidth.value = 13  # brings bad luck?
         time.sleep(1.0)  # ensure that .image is updated
         sp1d = proj_line_spectrum.image.value
         wl1d, _ = spectrum.get_spectrum_range(sp1d)
@@ -4735,7 +4742,6 @@ class StaticStreamsTestCase(unittest.TestCase):
             for wl_index in range(0, 3):
                 for x in range(0, 3):
                     for y in range(0, 3):
-
                         tss.selected_pixel.value = (x, y)
                         tss.selected_time.value = tl[time_index]
                         tss.selected_wavelength.value = wl[wl_index]
@@ -5001,7 +5007,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # out of bounds
         with self.assertRaises(IndexError):
             pj.mpp.value = 1.0
-        pj.mpp.value = 2e-6 # second zoom level
+        pj.mpp.value = 2e-6  # second zoom level
 
         # out of bounds
         with self.assertRaises(IndexError):
@@ -5046,7 +5052,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # out of bounds
         with self.assertRaises(IndexError):
             pj.mpp.value = 1.0
-        pj.mpp.value = 2e-6 # second zoom level
+        pj.mpp.value = 2e-6  # second zoom level
 
         # out of bounds
         with self.assertRaises(IndexError):
@@ -5072,6 +5078,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
     def test_rgb_tiled_stream_pan(self):
         read_tiles = []
+
         def getTileMock(self, x, y, zoom):
             tile_desc = "(%d, %d), z: %d" % (x, y, zoom)
             read_tiles.append(tile_desc)
@@ -5106,7 +5113,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         full_image_rect = (POS[0] - 0.0015, POS[1] - 0.001, POS[0] + 0.0015, POS[1] + 0.001)
 
-        pj.mpp.value = 2e-6 # second zoom level
+        pj.mpp.value = 2e-6  # second zoom level
         # full image
         pj.rect.value = full_image_rect
         # Wait a little bit to make sure the image has been generated
@@ -5141,7 +5148,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertEqual(len(pj.image.value[0]), 1)
 
         # rect out of the image
-        with self.assertRaises(IndexError): # "rect out of bounds"
+        with self.assertRaises(IndexError):  # "rect out of bounds"
             pj.rect.value = (POS[0] - 15, POS[1] - 15, POS[0] + 16, POS[1] + 16)
             # Wait a little bit to make sure the image has been generated
             time.sleep(0.5)
@@ -5151,6 +5158,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
     def test_rgb_tiled_stream_zoom(self):
         read_tiles = []
+
         def getTileMock(self, x, y, zoom):
             tile_desc = "(%d, %d), z: %d" % (x, y, zoom)
             read_tiles.append(tile_desc)
@@ -5200,7 +5208,7 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         # change both .rect and .mpp at the same time, to the same values
         # that are set on Stream constructor
-        pj.rect.value = full_image_rect # full image
+        pj.rect.value = full_image_rect  # full image
         pj.mpp.value = pj.mpp.range[1]  # maximum zoom level
 
         # Wait a little bit to make sure the image has been generated
@@ -5230,7 +5238,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # top-left pixel of the only tile
         numpy.testing.assert_array_equal([0, 0, 0], pj.image.value[0][0][0, 0, :])
         # top-right pixel of the only tile
-        numpy.testing.assert_array_equal([173, 0, 0],pj.image.value[0][0][0, 255, :])
+        numpy.testing.assert_array_equal([173, 0, 0], pj.image.value[0][0][0, 255, :])
         # bottom-left pixel of the only tile
         numpy.testing.assert_array_equal([0, 254, 0], pj.image.value[0][0][249, 0, :])
 
@@ -5259,7 +5267,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         # However, we do the opposite here, to check it doesn't go too wrong
         # (ie, first load the entire image at min mpp, and then load again at
         # max mpp). It should at worse have loaded one tile at the min mpp.
-        pj.rect.value = full_image_rect # full image
+        pj.rect.value = full_image_rect  # full image
         # time.sleep(0.0001) # uncomment to test with slight delay between VA changes
         pj.mpp.value = pj.mpp.range[1]  # maximum zoom level
 
@@ -5377,6 +5385,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         md[model.MD_DIMS] = "YXCT"
         new_da = model.DataArray(numpy.ones((512, 1024, 3, 3), dtype=numpy.uint8), md)
         self.assertRaises(ValueError, strUpd.update, new_da)
+
 
 # TODO time correlator test cases?
 
