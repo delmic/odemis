@@ -196,15 +196,17 @@ class Chamber(model.Actuator):
         """
         # TODO: allow to cancel during the change
         now = time.time()
-        duration = self._getDuration(p) # s
+        duration = self._getDuration(p)  # s
         self._time_start = now
-        self._time_goal = now + duration # s
+        self._time_goal = now + duration  # s
         self._goal = p
 
-        time.sleep(duration / 2)
         # DEBUG: for testing wrong time estimation
         # f.set_progress(start=self._time_start, end=self._time_goal + 10)
-        time.sleep(duration / 2)
+
+        # if this time.sleep() is slightly faster than the actual pressure update the testcase will
+        # fail so lets wait a little longer (+1s) to be able to let _updatePressure finish properly
+        time.sleep(duration + 1)
 
         self._position = p
         self._updatePosition()
