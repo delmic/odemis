@@ -791,9 +791,9 @@ class TestPicoscale(unittest.TestCase):
         time.sleep(0.1)
         self.assertEqual(len(self.dev._executor._queue), 0)
 
-        # Test f.cancel()
+        # Test that cancelling at the very beginning reports the axes to not be referenced anymore
         f = self.dev.reference()
-        time.sleep(1)
+        time.sleep(0.2)  # The first adjustment in the simulator takes 1s, so needs < 1s
         f.cancel()
         time.sleep(0.1)
         self.assertTrue(f.cancelled())
