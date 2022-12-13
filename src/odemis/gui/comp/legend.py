@@ -454,7 +454,7 @@ class AxisLegend(wx.Panel):
         if self._orientation == wx.HORIZONTAL:
             self.lockBtn.SetPosition((self.ClientSize.x - 24, 0))
         else:
-            self.lockBtn.SetPosition((self.ClientSize.x - self.ClientSize.x / 2 - 12, 0))
+            self.lockBtn.SetPosition((self.ClientSize.x // 2 - 12, 0))
 
     @wxlimit_invocation(0.2)
     def Refresh(self):
@@ -536,7 +536,7 @@ class AxisLegend(wx.Panel):
 
         if self._orientation == wx.VERTICAL and max_width != self._max_tick_width:
             self._max_tick_width = max_width
-            self.SetMinSize((self._max_tick_width + 14, -1))
+            self.SetMinSize((int(self._max_tick_width + 14), -1))
             self.Parent.GetSizer().Layout()
 
 
