@@ -1025,7 +1025,7 @@ def calculate_ticks(value_range, client_size, orientation, tick_spacing):
     if value_space == 0:
         logging.info("Trying to compute legend tick with empty range %s", value_range)
         # Just one tick, at the origin
-        pixel = max(min_pixel, value_to_pixel(min_val, pixel_space, value_range, orientation))
+        pixel = value_to_pixel(min_val, pixel_space, value_range, orientation)
         tick_list = [(pixel, min_val)]
         return tick_list
 
