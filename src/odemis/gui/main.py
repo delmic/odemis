@@ -31,11 +31,11 @@ from odemis.gui.cont.menu import MenuController
 from odemis.gui.cont.temperature import TemperatureController
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.xmlh import odemis_get_resources
+from pubsub import pub
 import sys
 import threading
 import traceback
 import wx
-from wx.lib.pubsub import pub
 import warnings
 
 import odemis.gui.cont.tabs as tabs

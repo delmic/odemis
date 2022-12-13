@@ -34,7 +34,7 @@ from builtins import str
 import numpy
 import wx
 from past.builtins import basestring, long
-from wx.lib.pubsub import pub
+from pubsub import pub
 
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel

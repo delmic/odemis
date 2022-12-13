@@ -43,9 +43,9 @@ from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, 
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
+from pubsub import pub
 import wx
 import wx.lib.newevent
-from wx.lib.pubsub import pub
 from odemis.gui.conf.data import COLORMAPS
 import matplotlib.colors as colors
 
