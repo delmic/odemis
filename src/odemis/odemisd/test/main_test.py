@@ -174,7 +174,7 @@ class TestCommandLine(unittest.TestCase):
         output = out.getvalue()
         self.assertTrue("positional arguments" in output)
 
-    @timeout(15)
+    @timeout(20)
     def test_daemon(self):
         # First there should be not backend running
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
@@ -190,7 +190,7 @@ class TestCommandLine(unittest.TestCase):
         time.sleep(1)  # give some time to start
 
         # now it should say it's starting, and eventually running
-        ret = self._wait_backend_starts(5)
+        ret = self._wait_backend_starts(10)
         self.assertEqual(ret, 0, "backend status check returned %d" % (ret,))
 
         # stop the backend
