@@ -64,6 +64,8 @@ Depends: ${shlibs:Depends},
 # On Linux, uses GObject Interaction to map the GUI to the desktop launcher. It will run if it's not present.
          python3-gi,
          python3-requests,
+# wx.lib.pubsub is now based on PyPubSub package
+         python3-pubsub,
 Suggests: imagej
 Description: Open Delmic Microscope Software
  Odemis is the acquisition software for the Delmic microscopes. In particular,

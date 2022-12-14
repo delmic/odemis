@@ -258,6 +258,10 @@ class StreamController(object):
 
         self.entries = []
 
+        # Tell control bar to also discard all references to the stream
+        if self._sb_ctrl:
+             self._sb_ctrl.remove_stream(self.stream)
+
         gc.collect()
 
     def _display_metadata(self):
