@@ -615,20 +615,6 @@ class TestMicroscopeInternal(unittest.TestCase):
             self.skipTest("Chamber needs to be in vacuum, please pump.")
         self.xt_type = "xttoolkit" if "xttoolkit" in self.microscope.swVersion.lower() else "xtlib"
 
-    def test_get_value_from_software_version(self):
-        """Test get current adapter version from software version"""
-        sw_version = "xt: 1.1.1; xtadapter: 1.2.1; bitness: 32bit"
-        version = self.microscope.get_value_from_software_version("xtadapter", sw_version)
-        self.assertEqual(version, "1.2.1")
-
-        sw_version = "xt: 1.1.1; xtadapter: 11.2.1; bitness: 32bit; xttoolkit"
-        version = self.microscope.get_value_from_software_version("xtadapter", sw_version)
-        self.assertEqual(version, "11.2.1")
-
-        sw_version = "xt: 1.1.1; xtadapter: 11.2.1; bitness: 32bit; xttoolkit"
-        bitness = self.microscope.get_value_from_software_version("bitness", sw_version)
-        self.assertEqual(bitness, "32bit")
-
     def test_acquisition(self):
         """Test acquiring an image."""
         image = self.microscope.get_latest_image(channel_name='electron1')
