@@ -880,12 +880,19 @@ class pumpingSystem(model.HwComponent):
         self._system = None
 
         self.speed = model.FloatVA(0.0, readonly=True, unit="Hz")
-        self.temperature = model.FloatVA(0.0, readonly=True, unit="°C")
-        self.power = model.FloatVA(0.0, readonly=True, unit="W")
+        self._speedConnector = None
         self.speedReached = model.BooleanVA(False, readonly=True)
+        self._speedReachedConnector = None
+        self.temperature = model.FloatVA(0.0, readonly=True, unit="°C")
+        self._temperatureConnector = None
+        self.power = model.FloatVA(0.0, readonly=True, unit="W")
+        self._powerConnector = None
         self.turboPumpOn = model.BooleanVA(False, readonly=True)
+        self._turboPumpOnConnector = None
         self.primaryPumpOn = model.BooleanVA(False, readonly=True)
+        self._primaryPumpOnConnector = None
         self.nitrogenPressure = model.FloatVA(0.0, readonly=True, unit="Pa")
+        self._nitrogenPressureConnector = None
 
         self.on_connect()
 
@@ -898,13 +905,14 @@ class pumpingSystem(model.HwComponent):
 
         self._system.Manometer1.ErrorState.Subscribe(self._updateErrorState)
         self._system.TurboPump1.ErrorState.Subscribe(self._updateErrorState)
-        self._system.TurboPump1.Speed.Subscribe(self._updateSpeed)
-        self._system.TurboPump1.Temperature.Subscribe(self._updateTemperature)
-        self._system.TurboPump1.Power.Subscribe(self._updatePower)
-        self._system.TurboPump1.SpeedReached.Subscribe(self._updateSpeedReached)
-        self._system.TurboPump1.IsOn.Subscribe(self._updateTurboPumpOn)
-        self.parent.datamodel.HybridPlatform.PrimaryPumpState.Subscribe(self._updatePrimaryPumpOn)
-        self._system.Manometer1.Pressure.Subscribe(self._updateNitrogenPressure)
+
+        self._speedConnector = OrsayParameterConnector(self.speed, self._system.TurboPump1.Speed)
+        self._speedReachedConnector = OrsayParameterConnector(self.speedReached, self._system.TurboPump1.SpeedReached)
+        self._temperatureConnector = OrsayParameterConnector(self.temperature, self._system.TurboPump1.Temperature)
+        self._powerConnector = OrsayParameterConnector(self.power, self._system.TurboPump1.Power)
+        self._turboPumpOnConnector = OrsayParameterConnector(self.turboPumpOn, self._system.TurboPump1.IsOn)
+        self._primaryPumpOnConnector = OrsayParameterConnector(self.primaryPumpOn, self.parent.datamodel.HybridPlatform.PrimaryPumpState)
+        self._nitrogenPressureConnector = OrsayParameterConnector(self.nitrogenPressure, self._system.Manometer1.Pressure)
 
         self.update_VAs()
 
@@ -913,13 +921,8 @@ class pumpingSystem(model.HwComponent):
         Update the VA's. Should be called after reconnection to the server
         """
         self._updateErrorState()
-        self._updateSpeed()
-        self._updateTemperature()
-        self._updatePower()
-        self._updateSpeedReached()
-        self._updateTurboPumpOn()
-        self._updatePrimaryPumpOn()
-        self._updateNitrogenPressure()
+        for connector in get_orsay_param_connectors(self):
+            connector.update_VA()
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
@@ -945,123 +948,15 @@ class pumpingSystem(model.HwComponent):
         else:
             self.state._set_value(HwError(eState), force_write=True)
 
-    def _updateSpeed(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the turbopump's speed from the Orsay server and saves it in the speed VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.Speed
-        if attr_name != "Actual":
-            return
-        self.speed._set_value(float(parameter.Actual), force_write=True)
-
-    def _updateTemperature(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the turbopump's temperature from the Orsay server and saves it in the temperature VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.Temperature
-        if attr_name != "Actual":
-            return
-        self.temperature._set_value(float(self._system.TurboPump1.Temperature.Actual), force_write=True)
-
-    def _updatePower(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the turbopump's power from the Orsay server and saves it in the power VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.Power
-        if attr_name != "Actual":
-            return
-        self.power._set_value(float(parameter.Actual), force_write=True)
-
-    def _updateSpeedReached(self, parameter=None, attr_name="Actual"):
-        """
-        Reads if the turbopump has reached its maximum speed from the Orsay server and saves it in the speedReached VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.SpeedReached
-        if attr_name != "Actual":
-            return
-        logging.debug("Speed reached changed to %s." % str(parameter.Actual))
-        self.speedReached._set_value(str(parameter.Actual).lower() == "true", force_write=True)
-
-    def _updateTurboPumpOn(self, parameter=None, attr_name="Actual"):
-        """
-        Reads if the turbopump is currently on from the Orsay server and saves it in the turboPumpOn VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.IsOn
-        if attr_name != "Actual":
-            return
-        state = str(parameter.Actual).lower() == "true"
-        logging.debug("Turbopump turned %s.", "on" if state else "off")
-        self.turboPumpOn._set_value(state, force_write=True)
-
-    def _updatePrimaryPumpOn(self, parameter=None, attr_name="Actual"):
-        """
-        Reads if the primary pump is currently on from the Orsay server and saves it in the primaryPumpOn VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self.parent.datamodel.HybridPlatform.PrimaryPumpState
-        if attr_name != "Actual":
-            return
-        state = str(parameter.Actual).lower() == "true"
-        logging.debug("Primary pump turned %s.", "on" if state else "off")
-        self.primaryPumpOn._set_value(state, force_write=True)
-
-    def _updateNitrogenPressure(self, parameter=None, attr_name="Actual"):
-        """
-        Reads pressure on nitrogen inlet to the turbopump from the Orsay server and saves it in the nitrogenPressure VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.Manometer1.Pressure
-        if attr_name != "Actual":
-            return
-        self.nitrogenPressure._set_value(float(parameter.Actual), force_write=True)
-
     def terminate(self):
         """
         Called when Odemis is closed
         """
         if self._system:
+            for connector in get_orsay_param_connectors(self):
+                connector.disconnect()
             self._system.Manometer1.ErrorState.Unsubscribe(self._updateErrorState)
             self._system.TurboPump1.ErrorState.Unsubscribe(self._updateErrorState)
-            self._system.TurboPump1.Speed.Unsubscribe(self._updateSpeed)
-            self._system.TurboPump1.Temperature.Unsubscribe(self._updateTemperature)
-            self._system.TurboPump1.Power.Unsubscribe(self._updatePower)
-            self._system.TurboPump1.SpeedReached.Unsubscribe(self._updateSpeedReached)
-            self._system.TurboPump1.IsOn.Unsubscribe(self._updateTurboPumpOn)
-            self.parent.datamodel.HybridPlatform.PrimaryPumpState.Unsubscribe(self._updatePrimaryPumpOn)
-            self._system.Manometer1.Pressure.Unsubscribe(self._updateNitrogenPressure)
             self._system = None
 
 
@@ -1322,9 +1217,13 @@ class GISReservoir(model.HwComponent):
         self.targetTemperature = model.FloatContinuous(0, unit="°C", range=(-273.15, 1e3),
                                                        setter=self._setTargetTemperature)
         self.temperature = model.FloatContinuous(0, unit="°C", range=(-273.15, 1e3), readonly=True)
-        self.temperatureRegulation = model.BooleanVA(False, setter=self._setTemperatureRegulation)
+        self._temperatureConnector = None
+        self.temperatureRegulation = model.BooleanVA(False)
+        self._temperatureRegulationConnector = None
         self.age = model.FloatContinuous(0, unit="s", readonly=True, range=(0, 1e12))
+        self._ageConnector = None
         self.precursorType = model.StringVA("", readonly=True)
+        self._precusorTypeConnector = None
 
         self.on_connect()
 
@@ -1333,19 +1232,16 @@ class GISReservoir(model.HwComponent):
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
-        logging.debug("Current param: %r", self._temperaturePar)
         self._gis = self.parent.datamodel.HybridGIS
         self._temperaturePar = self._gis.ReservoirTemperature
-
-        logging.debug("After param: %r", self._temperaturePar)
 
         self._gis.ErrorState.Subscribe(self._updateErrorState)
         self._gis.RodPosition.Subscribe(self._updateErrorState)
         self._temperaturePar.Subscribe(self._updateTargetTemperature)
-        self._temperaturePar.Subscribe(self._updateTemperature)
-        self._gis.RegulationOn.Subscribe(self._updateTemperatureRegulation)
-        self._gis.ReservoirLifeTime.Subscribe(self._updateAge)
-        self._gis.PrecursorType.Subscribe(self._updatePrecursorType)
+        self._temperatureConnector = OrsayParameterConnector(self.temperature, self._gis.ReservoirTemperature)
+        self._temperatureRegulationConnector = OrsayParameterConnector(self.temperatureRegulation, self._gis.RegulationOn)
+        self._ageConnector = OrsayParameterConnector(self.age, self._gis.ReservoirLifeTime, factor=3600)
+        self._precusorTypeConnector = OrsayParameterConnector(self.precursorType, self._gis.PrecursorType)
 
         self.update_VAs()
 
@@ -1355,10 +1251,8 @@ class GISReservoir(model.HwComponent):
         """
         self._updateErrorState()
         self._updateTargetTemperature()
-        self._updateTemperature()
-        self._updateTemperatureRegulation()
-        self._updateAge()
-        self._updatePrecursorType()
+        for connector in get_orsay_param_connectors(self):
+            connector.update_VA()
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
@@ -1418,78 +1312,6 @@ class GISReservoir(model.HwComponent):
         self.targetTemperature._value = new_value  # to not call the setter
         self.targetTemperature.notify(new_value)
 
-    def _updateTemperature(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the actual temperature of the GIS reservoir from the Orsay server and saves it in the temperature VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._temperaturePar
-        # if float(self._temperaturePar.Actual) == float(self._temperaturePar.Target):
-        #     logging.debug("Target temperature reached.")
-
-        if attr_name != "Actual":
-            return
-
-        self.temperature._set_value(float(self._temperaturePar.Actual), force_write=True)
-
-    def _updateTemperatureRegulation(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the state of temperature regulation of the GIS reservoir from the Orsay server and saves it in the
-        temperatureRegulation VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        # datamodel.HybridGIS.RegulationRushOn parameter is also available for extra fast (agressive) control of the
-        # temperature, but this feature currently does not work and is not needed.
-        if attr_name != "Actual":
-            return
-
-        try:
-            reg = self._gis.RegulationOn.Actual.lower() == "true"
-        except AttributeError:  # in case RegulationOn.Actual is not a string
-            reg = False
-
-        logging.debug("Temperature regulation turned %s.", "on" if reg else "off")
-        self.temperatureRegulation._value = reg  # to not call the setter
-        self.temperatureRegulation.notify(reg)
-
-    def _updateAge(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the amount of hours the GIS reservoir has been open for from the Orsay server and saves it in the age VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._gis.ReservoirLifeTime
-        if attr_name != "Actual":
-            return
-        logging.debug("GIS reservoir lifetime updated to %f hours.", float(self._gis.ReservoirLifeTime.Actual))
-        self.age._set_value(float(self._gis.ReservoirLifeTime.Actual) * 3600,  # convert hours to seconds
-                            force_write=True)
-
-    def _updatePrecursorType(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the type of precursor gas in the GIS reservoir from the Orsay server and saves it in the precursorType VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._gis.PrecursorType
-        if attr_name != "Actual":
-            return
-        logging.debug("Precursor type changed to %s." % self._gis.PrecursorType.Actual)
-        self.precursorType._set_value(self._gis.PrecursorType.Actual, force_write=True)
-
     def _setTargetTemperature(self, goal):
         """
         Sets the target temperature of the GIS reservoir to goal °C
@@ -1501,28 +1323,16 @@ class GISReservoir(model.HwComponent):
         self._temperaturePar.Target = goal
         return float(self._temperaturePar.Target)
 
-    def _setTemperatureRegulation(self, goal):
-        """
-        Turns temperature regulation off (if goal = False) or on (if goal = True)
-
-        :param (boolean) goal: Mode to set the temperature regulation to. True is on, False is off.
-        """
-        logging.debug("Turning temperature regulation %s.", "on" if goal else "off")
-        self._gis.RegulationOn.Target = goal
-        return goal
-
     def terminate(self):
         """
         Called when Odemis is closed
         """
         if self._gis:
+            for connector in get_orsay_param_connectors(self):
+                connector.disconnect()
             self._gis.ErrorState.Unsubscribe(self._updateErrorState)
             self._gis.RodPosition.Unsubscribe(self._updateErrorState)
             self._temperaturePar.Unsubscribe(self._updateTargetTemperature)
-            self._temperaturePar.Unsubscribe(self._updateTemperature)
-            self._gis.RegulationOn.Unsubscribe(self._updateTemperatureRegulation)
-            self._gis.ReservoirLifeTime.Unsubscribe(self._updateAge)
-            self._gis.PrecursorType.Unsubscribe(self._updatePrecursorType)
             self._temperaturePar = None
             self._gis = None
 
@@ -1591,7 +1401,7 @@ class OrsayParameterConnector:
         self._maxpar = maxpar
 
         # Assure that self._parameters (and self._minpar and self._maxpar if applicable) is a tuple
-        if isinstance(parameter, collections.abc.Iterable):  # if multiple parameters are passed
+        if isinstance(parameter, (list, tuple)):  # if multiple parameters are passed
             self._parameters = tuple(parameter)
             if self._minpar is not None and self._maxpar is not None:
                 self._minpar = tuple(self._minpar)
@@ -1613,7 +1423,7 @@ class OrsayParameterConnector:
         # if it's a tuple or not and if it's read-only
         self._va = va
 
-        if isinstance(parameter, collections.abc.Iterable):  # if multiple parameters are passed
+        if isinstance(parameter, (list, tuple)):  # if multiple parameters are passed
             self._va_is_tuple = True  # indicates if the VA is a tuple (True) or not (False).
             self._va_value_type = type(self._va.value[0])  # if no Tuple VA is passed, this line will raise an exception
         else:
@@ -3887,3 +3697,6 @@ class FIBAperture(model.Actuator):
             self.stop()
             self._executor.shutdown()
             self._executor = None
+
+            for connector in get_orsay_param_connectors(self):
+                connector.disconnect()
