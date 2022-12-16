@@ -1083,7 +1083,7 @@ class StreamPanel(wx.Panel):
             if selectable:
                 value_ctrl = wx.TextCtrl(self._panel, value=value,
                                          style=wx.BORDER_NONE | wx.TE_READONLY)
-                value_ctrl.MinSize = (-1, 20)
+                value_ctrl.MinSize = (-1, value_ctrl.BestSize[1])
                 value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
                 value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
                 self.gb_sizer.Add(value_ctrl, (self.num_rows, 1), span=(1, 2),
@@ -1160,7 +1160,7 @@ class StreamPanel(wx.Panel):
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = wx.TextCtrl(self._panel, value=str(value or ""),
                                  style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE | (wx.TE_READONLY if readonly else 0))
-        value_ctrl.MinSize = (-1, 20)
+        value_ctrl.MinSize = (-1, value_ctrl.BestSize[1])
         if readonly:
             value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
         else:
@@ -1323,16 +1323,16 @@ class StreamPanel(wx.Panel):
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
                      border=5)
         cb_wl_sz.Add(txt_scenter, 1,
-                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
+                     flag=wx.EXPAND | wx.RIGHT | wx.LEFT,
                      border=5)
         cb_wl_sz.Add(lbl_sbw, 0,
                      flag=wx.ALIGN_CENTRE_VERTICAL | wx.LEFT,
                      border=5)
         cb_wl_sz.Add(txt_sbw, 1,
-                     flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.RIGHT | wx.LEFT,
+                     flag= wx.EXPAND | wx.RIGHT | wx.LEFT,
                      border=5)
         self.gb_sizer.Add(cb_wl_sz, (self.num_rows, 0), span=(1, 3), border=5,
-                          flag=wx.BOTTOM | wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND)
+                          flag=wx.BOTTOM | wx.EXPAND)
 
         return sld_spec, txt_scenter, txt_sbw
 

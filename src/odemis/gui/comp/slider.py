@@ -550,6 +550,9 @@ class NumberSlider(Slider):
 
         self.linked_field.Bind(wx.EVT_COMMAND_ENTER, self._update_slider)
 
+        # Make sure we give enough vertical space to the text field
+        self.SetMinSize((-1, self.linked_field.BestSize[1]))
+
     def OnSize(self, event=None):
         super(NumberSlider, self).OnSize(event)
         # Set the height of the linked field to make it's middle line up with the

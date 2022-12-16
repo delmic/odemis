@@ -4194,7 +4194,7 @@ def __init_resources():
                       </object>
                       <orient>wxHORIZONTAL</orient>
                     </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND|wxALIGN_CENTRE</flag>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
