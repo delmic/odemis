@@ -25,14 +25,14 @@ import logging
 import os
 import time
 
-from numpy.polynomial import polynomial
 import h5py
 import numpy
+from numpy.polynomial import polynomial
 
+import odemis
 from odemis import model
 from odemis.util import fluo, img, spectrum
 from odemis.util.conversion import JsonExtraEncoder
-import odemis
 
 # User-friendly name
 FORMAT = "HDF5"
@@ -51,7 +51,7 @@ CAN_SAVE_PYRAMID = False
 #     + *Offset (position on the axis)
 #   + AcquisitionName (one per set of emitter/detector)
 #     + ImageData
-#       + Image (HDF5 Image with Dimension Scales CTZXY)
+#       + Image (HDF5 Image with Dimension Scales CTZYX)
 #       + DimensionScale*
 #       + *Offset (position on the axis)
 #     + PhysicalData
@@ -1298,7 +1298,7 @@ def _findImageGroups(das):
 
 def _adjustDimensions(da):
     """
-    Ensure the DataArray has 5 dimensions ordered CTZXY or CAZYX (as dictated by the HDF5
+    Ensure the DataArray has 5 dimensions ordered CTZYX or CAZYX (as dictated by the HDF5
     SVI convention). If it seems to contain RGB data, an exception is made to
     return just CYX data.
     da (DataArray)
