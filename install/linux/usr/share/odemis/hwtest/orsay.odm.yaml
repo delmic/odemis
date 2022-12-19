@@ -1,32 +1,45 @@
-# Allows to control an Orsay from Odemis (and nothing else)
+# Allows to control an Orsay Physics FIB from Odemis (and nothing else)
 Orsay: {
     class: Microscope,
-    role: orsaymic,
-    children: ["Pneumatic Suspension", "Chamber", "Pumping System", "UPS", "GIS", "GIS-reservoir", "FIB-vacuum",
-               "FIB-source", "FIB-beam", "Light", "Scanner", "Focus"]
+    role: fib,  # Use "sem" for using the GUI
+    children: [
+        "Pneumatic Suspension", "Chamber", "Pumping System", "FIB Vacuum",
+        "UPS",
+        "GIS", "GIS Reservoir",
+        "Chamber Light",
+        "Ion Source",
+        "Ion Beam",
+        "Ion Focus",
+        "FIB Aperture",
+        "FIB Scanner",
+        "ETD",
+    ]
 }
 
 # Connection to the Orsay server
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
-"OrsayServer": {
+"Orsay Server": {
     class: orsay.OrsayComponent,
     role: null,
     init: {
            host: "192.168.56.101"
     },
-    children: { pneumatic-suspension: "Pneumatic Suspension",
-                pressure: "Chamber",
-                pumping-system: "Pumping System",
-                ups: "UPS",
-                gis: "GIS",
-                gis-reservoir: "GIS-reservoir",
-                fib-vacuum: "FIB-vacuum",
-                fib-source: "FIB-source",
-                fib-beam: "FIB-beam",
-                light: "Light",
-                scanner: "Scanner",
-                focus: "Focus"
+    children: {
+        pneumatic-suspension: "Pneumatic Suspension",
+        pressure: "Chamber",
+        pumping-system: "Pumping System",
+        fib-vacuum: "FIB Vacuum",
+        ups: "UPS",
+        gis: "GIS",
+        gis-reservoir: "GIS Reservoir",
+        light: "Chamber Light",
+        fib-source: "Ion Source",
+        fib-beam: "Ion Beam",
+        fib-aperture: "FIB Aperture",
+        scanner: "FIB Scanner",
+        focus: "Ion Focus",
+        detector: "ETD",
     }
 }
 
@@ -55,42 +68,52 @@ Orsay: {
     init: {}
 }
 
-"GIS-reservoir": {
+"GIS Reservoir": {
     role: gis-reservoir,
     init: {}
 }
 
-"FIB-vacuum": {
+"Chamber Light": {
+    role: chamber-light,
+    init: {}
+}
+
+"FIB Vacuum": {
     role: fib-vacuum,
     init: {}
 }
 
-"FIB-source": {
-    role: fib-source,
+"Ion Source": {
+    role: ion-source,
     init: {}
 }
 
-"FIB-beam": {
-    role: fib-beam,
+"Ion Beam": {
+    role: null,
     init: {}
 }
 
-"Light": {
-    role: light,
+"FIB Aperture": {
+    role: fib-aperture,
     init: {}
 }
 
-"Scanner": {
-    role: scanner,
+"FIB Scanner": {
+    role: ion-beam,  # use "e-beam" for the GUI
     init: {}
 }
 
-"Focus": {
-    role: focus,
+"ETD": {
+    role: se-detector,
+    init: {}
+}
+
+"Ion Focus": {
+    role: ion-focus,  # Use "ebeam-focus" for the GUI
     init: {
-      rng: [-2e-3, 2e-3]  # range of the focus in meter
+      rng: [0.0, 0.1]  # range of the focus in meter
     },
     metadata: {
-        CALIB: 0.18e6  # Volt per meter. Read the driver specifications for more details on this value
+        CALIB: 0.18e+6,  # Volt per meter. Read the driver specifications for more details on this value
     }
 }
