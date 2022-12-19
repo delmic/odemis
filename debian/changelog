@@ -1,3 +1,28 @@
+odemis (3.2.1-1) bionic; urgency=medium
+
+  * New version: 3.2.1
+  * Main improvements:
+    - Bug reporter also report the installation site name for easier triage
+    - In case the bug reporter encounters an error, a summary is shown to the user
+    - SmarAct driver support for generic parameter configuration
+  * Main bug fixes:
+    - On 2D plots, nearest tick from the origin is now also shown
+    - Single image acquisition on xt_client would sometimes caused two scans
+    - Esc key in GUI would sometimes be interpreted as "OK"
+    - AntiBacklash on the filter wheel would sometimes cause a unnecessary move
+    - On ENZEL, large Rx rotations should be done near the LOADING position for safety
+    - New meteor_engage_warn plugin to show a extra warning when moving to FM position on the METEOR
+    - Don't show lens2 alignment panel if EK acquisition is not supported (SPARC)
+    - EK alignment tab always sets the grating and filters to mirror/pass-through
+    - Loading an incorrect background or coefficient file wasn't showing an error message any more (SPARC)
+    - Allow to disable power check on the power control unit (SPARC)
+    - TMCM CANopen version number was incorrectly read
+    - In tile plugin, only show fine alignment option on SECOM and DELPHI
+    - Optimized tile stitching
+    - Fix use of !extend in microscope files
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 19 Dec 2022 15:45:52 +0100
+
 odemis (3.2.0-1) bionic; urgency=medium
 
   * New version: 3.2
