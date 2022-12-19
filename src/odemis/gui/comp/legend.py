@@ -64,9 +64,9 @@ class InfoLegend(wx.Panel):
         self._type_to_icon = {
             MD_AT_AR: img.getBitmap("icon/ico_blending_ang.png"),
             MD_AT_SPECTRUM: img.getBitmap("icon/ico_blending_spec.png"),
-            # MD_AT_TEMPORAL: img.getBitmap("icon/ico_blending_temporal.png"),
+            MD_AT_TEMPORAL: img.getBitmap("icon/ico_blending_temporal.png"),
             MD_AT_TEMPSPECTRUM: img.getBitmap("icon/ico_blending_spec.png"),
-            # MD_AT_EK: img.getBitmap("icon/ico_blending_ek.png"),
+            MD_AT_EK: img.getBitmap("icon/ico_blending_ek.png"),
             MD_AT_EM: img.getBitmap("icon/ico_blending_sem.png"),
             MD_AT_FIB: img.getBitmap("icon/ico_blending_fib.png"),
             MD_AT_OVV_TILES: img.getBitmap("icon/ico_blending_map.png"),
