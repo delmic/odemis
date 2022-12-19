@@ -181,13 +181,14 @@ def check_latest_package(
                 # Filter using adapter type and bitness
                 if bitness == package.bitness and adapter == package.adapter:
                     version_package[package.version] = package
+        # Check if any version is newer than the current one
         versions = list(version_package)
-        if len(versions):
-            # Sort the available versions in reverse order i.e. the latest version is the first element
-            versions.sort(key=lambda s: [int(u) for u in s.split(".")], reverse=True)
-            if current_version < versions[0]:
-                logging.info("The latest version is {}.\n".format(versions[0]))
-                latest_package = version_package[versions[0]]
+        if versions:
+            # Find the latest version
+            latest_version = max(versions, key=lambda s: [int(u) for u in s.split(".")])
+            if current_version < latest_version:
+                logging.info("The latest version is {}.\n".format(latest_version))
+                latest_package = version_package[latest_version]
                 if "-dev" in latest_package.name:
                     logging.warning(
                         "{} is a development version.\n".format(latest_package.name)
@@ -341,7 +342,8 @@ class SEM(model.HwComponent):
                     with open(package.path, mode="rb") as f:
                         data = f.read()
                     self.transfer_latest_package(data)
-                    notify2.init(__name__)
+                    # Notify the user that a newer xtadpater version is available
+                    notify2.init("Odemis")
                     update = notify2.Notification(
                         "Update Delmic XT Adapter", "Newer version {} is available on ThermoFisher Support PC.\n\n"
                         "How to update?\n\n1. Full stop Odemis and close Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
