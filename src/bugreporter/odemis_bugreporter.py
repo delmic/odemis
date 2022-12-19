@@ -187,13 +187,17 @@ class OdemisBugreporter(object):
         """
         Create ticket on osTicket server.
         :arg api_key: (String) API-Key
-        :arg fields: (String --> String) dictionary containing keys name, email, subject, message
+        :arg fields: (String --> String) dictionary containing keys name, email,
+        subject, message, topicId, installation. The "attachments" field is overridden
+        by the files argument, so it should not be provided.
         :arg files: (None or list of Strings) pathname of zip files that should be attached
         :returns: (int) response code
         :raises ValueError: ticket upload failed
         :raises urllib.error.HTTPError: key not accepted
         :raises urllib.error.URLError: connection problem
         """
+        if "attachments" in fields:
+            raise ValueError("Key 'attachments' found in fields, while 'files' argument should be used")
         if not files:
             files = []
         fields["attachments"] = []
@@ -362,13 +366,14 @@ class OdemisBugreporter(object):
             logging.exception("Failed to store bug report")
             raise
 
-    def _set_description(self, name, email, subject, message, topic_id: int):
+    def _set_description(self, name, email, subject, message, topic_id: int, installation: str):
         """
         Saves the description parameters for the ticket creation in a txt file, compresses
         the file and calls self.create_ticket.
         :arg name, email, summary, description: (String) arguments for corresponding dictionary keys
         topic_id (int): the topic ID (see TOPIC_IDS). If TEST_SUPPORT_TICKET is set,
           it's overridden by the "test" topic.
+        installation: (host)name of the system for which the bug report is related.
         """
         # Create ticket with special id when testing
         if TEST_SUPPORT_TICKET:
@@ -380,7 +385,8 @@ class OdemisBugreporter(object):
                               'email': email,
                               'subject': subject,
                               'message': message,
-                              'topicId': topic_id
+                              'topicId': topic_id,
+                              'installation': installation,
         }
 
         description = (u'Name: %s\n' % name +
@@ -395,15 +401,16 @@ class OdemisBugreporter(object):
         wx.CallAfter(self.gui.wait_lbl.SetLabel, "Sending report...")
         self.create_ticket(api_key, report_description, [self.zip_fn])
 
-    def send_report(self, name: str, email: str, subject: str, message: str, topic_id: int=TOPIC_ID_DEFAULT) -> Future:
+    def send_report(self, name: str, email: str, subject: str, message: str, topic_id: int=TOPIC_ID_DEFAULT, installation: str="") -> Future:
         """
         Calls _set_description in a thread.
         :arg name, email, summary, description: (String) arguments for corresponding dictionary keys
         topic_id (int): the topic ID (see TOPIC_IDS). If TEST_SUPPORT_TICKET is set,
           it's overridden by the "test" topic.
+        installation: (host)name of the system for which the bug report is related.
         return Future (-> None): the handle to follow the report upload
         """
-        return self._executor.submit(self._set_description, name, email, subject, message, topic_id)
+        return self._executor.submit(self._set_description, name, email, subject, message, topic_id, installation)
 
 
 class BugreporterFrame(wx.Frame):
@@ -618,6 +625,7 @@ class BugreporterFrame(wx.Frame):
         email = self.email_ctrl.GetValue()
         summary = self.summary_ctrl.GetValue()
         description = self.description_ctrl.GetValue()
+        hostname = socket.gethostname()
 
         if not name or not email or not summary or description == DESCRIPTION_DEFAULT_TXT:
             dlg = wx.MessageDialog(self, 'Please fill in all the fields.', '', wx.OK)
@@ -636,7 +644,7 @@ class BugreporterFrame(wx.Frame):
 
         # Store user info and pass description to bugreporter
         self.store_user_info(name, email)
-        f = self.bugreporter.send_report(name, email, summary, description, self._topic_id)
+        f = self.bugreporter.send_report(name, email, summary, description, self._topic_id, hostname)
         f.add_done_callback(self._on_report_sent)
 
     def _on_report_sent(self, future):
