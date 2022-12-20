@@ -43,7 +43,6 @@ class LegendTestCase(test.GuiTestCase):
     frame_class = test.test_gui.xrccanvas_frame
 
     def test_legend(self):
-        test.goto_manual()
         self.frame.SetSize((400, 60))
         leg = legend.AxisLegend(self.panel)
         leg.SetBackgroundColour(wx.RED)
