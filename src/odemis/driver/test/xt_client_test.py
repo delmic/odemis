@@ -23,6 +23,7 @@ http://www.gnu.org/licenses/.
 import logging
 import math
 import os
+import shutil
 import time
 import unittest
 
@@ -1460,6 +1461,258 @@ class TestMBScanner(unittest.TestCase):
         autostigmator_future = self.scanner.applyAutoStigmator()
         self.assertIsInstance(autostigmator_future, ProgressiveFuture)
         autostigmator_future.result(timeout=30)
+
+
+class TestCheckLatestPackage(unittest.TestCase):
+    """
+    Test the check_latest_package function.
+
+    Folders/files for testing:
+        delmic-fastem-xtadapter-64bit-v1.11.2
+        delmic-xtadapter-32bit-v1.11.2
+        delmic-xtadapter-32bit-v1.11.2-dev.zip
+
+    """
+
+    def setUp(self):
+        self.dir = "/tmp/"
+        # check_latest_package() expects a package folder to contain only one exe file
+        # Create the below list to test the correctness
+        self.dir_names = [
+            "delmic-fastem-xtadapter-64bit-v1.11.2",    # has 1 .exe file
+            "delmic-xtadapter-32bit-v1.11.2",           # has 1 .exe file
+            "delmic-fastem-xtadapter-64bit-v2.11.2",    # has 0 .exe file
+            "delmic-xtadapter-32bit-v2.11.2",           # has 0 .exe file
+            "delmic-fastem-xtadapter-64bit-v3.11.2",    # has 2 .exe file
+            "delmic-xtadapter-32bit-v3.11.2",           # has 2 .exe file
+        ]
+        for dir_name in self.dir_names:
+            os.makedirs(os.path.join(self.dir, dir_name), exist_ok=True)
+            if "2.11.2" not in dir_name:    # create one exe for packages without version 2.11.2
+                f1 = open(os.path.join(self.dir, dir_name, "test1.exe"), "w")
+                f1.close()
+                if "3.11.2" in dir_name:    # create second exe only for packages having version 3.11.2
+                    f2 = open(os.path.join(self.dir, dir_name, "test2.exe"), "w")
+                    f2.close()
+
+        self.file_names = [
+            "delmic-xtadapter-32bit-v1.11.2-dev.zip",
+            "delmic-xtadapter-32bit-v1.11.2-dev.exe",
+        ]
+        for file_name in self.file_names:
+            f = open(os.path.join(self.dir, file_name), "w")
+            f.close()
+
+    def tearDown(self):
+        for file_name in self.file_names:
+            if os.path.isfile(self.dir + file_name):
+                os.remove(self.dir + file_name)
+        for dir_name in self.dir_names:
+            if os.path.isdir(os.path.join(self.dir, dir_name)):
+                shutil.rmtree(os.path.join(self.dir, dir_name))
+
+    def test_check_latest_package_current_version_parameter(self):
+        # current_version == latest version
+        current_version = "1.11.2"
+        adapter = "xtadapter"
+        bitness = "32bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertIsNone(pkg)
+
+        # current_version < latest version
+        current_version = "1.11.1"
+        adapter = "xtadapter"
+        bitness = "32bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertEqual(pkg.version, "1.11.2")
+
+        # current_version > latest version
+        current_version = "1.11.3"
+        adapter = "xtadapter"
+        bitness = "32bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertIsNone(pkg)
+
+    def test_check_latest_package_adapter_parameter(self):
+
+        # adapter: xtadapter (available)
+        current_version = "1.11.1"
+        adapter = "xtadapter"
+        bitness = "32bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertEqual(pkg.adapter, adapter)
+
+        # adapter: fastem-xtadapter (available)
+        current_version = "1.11.1"
+        adapter = "fastem-xtadapter"
+        bitness = "64bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertEqual(pkg.adapter, adapter)
+
+        # adapter: xyzadapter (not available)
+        current_version = "1.11.1"
+        adapter = "xyzadapter"
+        bitness = "32bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertIsNone(pkg)
+
+    def test_check_latest_package_bitness_parameter(self):
+
+        # adapter: xtadapter, bitness: 32bit (available)
+        current_version = "1.11.1"
+        adapter = "xtadapter"
+        bitness = "32bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertEqual(pkg.bitness, bitness)
+
+        # adapter: fastem-xtadapter, bitness: 64bit (available)
+        current_version = "1.11.1"
+        adapter = "fastem-xtadapter"
+        bitness = "64bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertEqual(pkg.bitness, bitness)
+
+        # adapter: xtadapter, bitness: 64bit (not available)
+        current_version = "1.11.1"
+        adapter = "xtadapter"
+        bitness = "64bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertIsNone(pkg)
+
+        # adapter: fastem-xtadapter, bitness: 32bit (not available)
+        current_version = "1.11.1"
+        adapter = "fastem-xtadapter"
+        bitness = "32bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertIsNone(pkg)
+
+    def test_check_latest_package_zip_parameter(self):
+
+        # adapter: xtadapter, bitness: 32bit, is_zip: False (available)
+        current_version = "1.11.1"
+        adapter = "xtadapter"
+        bitness = "32bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertNotIn(".zip", pkg.name)
+
+        # adapter: fastem-xtadapter, bitness: 64bit, is_zip: False (available)
+        current_version = "1.11.1"
+        adapter = "fastem-xtadapter"
+        bitness = "64bit"
+        is_zip = False
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertNotIn(".zip", pkg.name)
+
+        # adapter: xtadapter, bitness: 32bit, is_zip: True (available)
+        current_version = "1.11.1"
+        adapter = "xtadapter"
+        bitness = "32bit"
+        is_zip = True
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertIn(".zip", pkg.name)
+
+        # adapter: fastem-xtadapter, bitness: 64bit, is_zip: True (not available)
+        current_version = "1.11.1"
+        adapter = "fastem-xtadapter"
+        bitness = "64bit"
+        is_zip = True
+        pkg = xt_client.check_latest_package(
+            directory=self.dir,
+            current_version=current_version,
+            adapter=adapter,
+            bitness=bitness,
+            is_zip=is_zip,
+        )
+        self.assertIsNone(pkg)
 
 
 if __name__ == '__main__':
