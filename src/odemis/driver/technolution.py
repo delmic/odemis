@@ -1094,7 +1094,7 @@ class MPPC(model.Detector):
         # The acquisition delay depends on the scan delay (EbeamScanner.scanDelay). Scan delay must be increased first.
         self.acqDelay = model.FloatContinuous(0.0, range=(0.0, 1.0), unit='s', setter=self._setAcqDelay)
         # regulates the sensitivity of the mppc sensor
-        self.overVoltage = model.FloatContinuous(1.5, range=(0, 5), unit='V')
+        self.overVoltage = model.FloatContinuous(2.2, range=(0, 5), unit='V')
 
         # Cell acquisition parameters
         self.cellTranslation = model.TupleVA(
