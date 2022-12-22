@@ -591,13 +591,13 @@ class Stage(model.Actuator):
             shift_dict["y"] = y * 1e-3
         if "z" in shift:
             z += shift["z"] * 1e3
-            shift_dict["y"] = z * 1e-3
+            shift_dict["z"] = z * 1e-3
         if "rx" in shift:
             t += math.radians(shift["rx"])
             shift_dict["rx"] = t
         if "rz" in shift:
             r += math.radians(shift["rz"])
-            shift_dict["rx"] = r
+            shift_dict["rz"] = r
         if "m" in shift:
             m += shift["m"] * 1e3
             shift_dict["m"] = m * 1e-3
@@ -607,8 +607,13 @@ class Stage(model.Actuator):
         for an in shift.keys():
             rng = self.axes[an].range
             p = target_pos[an]
-            if not rng[0] <= p <= rng[1]:
-                raise ValueError("Relative move would cause axis %s out of bound (%g m)" % (an, p))
+            # check only the rotation in rz as this is the only axis which supports full rotation
+            if an == "rz":
+                if util.almost_equal(rng[1] - rng[0], 2 * math.pi):
+                    shift[an] = (shift[an] - rng[0]) % (2 * math.pi) + rng[0]
+            else:
+                if not rng[0] <= p <= rng[1]:  # this is only for linear axes
+                    raise ValueError("Relative move would cause axis %s out of bound (%g m)" % (an, p))
 
         self._moveTo(future, x, y, z, t, r, m)
 
@@ -724,6 +729,7 @@ class Stage(model.Actuator):
         """
         if not shift:
             return model.InstantaneousFuture()
+        # TODO check if full rotation support and extent the check accordingly
         self._checkMoveRel(shift)
         shift = self._applyInversion(shift)
 
