@@ -1,0 +1,211 @@
+# For now, this is esssentially just a FM microscope, as the FIB part is handled
+# separately by the SEM
+
+MIMAS-as-METEOR-sim: {
+    class: Microscope,
+    role: mimas,
+    children: [
+        "Stage",
+        "Meteor Stage",
+        "Optical Objective",
+        "Optical Focus",
+        "Stage Focus",
+        "Light Source",
+        "Filter Wheel",
+        "Camera",
+    ],
+}
+
+# Normally provided by the SEM
+"Stage": {
+    class: tmcm.TMCLController,
+    role: stage-bare,
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["x", "y", "z", "rx", "rz"],
+        ustepsize: [1.e-7, 1.e-7, 1.e-7, 1.2e-5, 1.2e-5], # unit/µstep
+        rng: [[-0.1, 0.1], [-0.05, 0.05], [-0.05, 0.1], [-2, 2], [0, 6.28]],
+        unit: ["m", "m", "m", "rad", "rad"],
+        refproc: "Standard",
+    },
+    metadata: {
+        # Loading position:
+        FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975 },
+        # XYZ ranges for SEM & METEOR
+        SEM_IMAGING_RANGE: {"x": [-10.e-3, 10.e-3], "y": [-5.e-3, 10.e-3], "z": [-0.5e-3, 8.e-3]},
+        FM_IMAGING_RANGE: {"x": [0.040, 0.054], "y": [-5.e-3, 10.e-3], "z": [-0.5e-3, 8.e-3]},
+        # Grid centers in SEM range
+        # Adjusted so that at init (0,0,0), it's at the Grid 1.
+        SAMPLE_CENTERS: {"GRID 1": {'x': 0, 'y': 0, 'z': 0}, "GRID 2": {'x': 2.98e-3, 'y': 2.46e-3, 'z': 0}},
+        # Mirroring values between SEM - METEOR
+        POS_COR: [0.02447, -0.000017],
+        # Active tilting (rx) & rotation (rz) angles positions when switching between SEM & FM, in radians.
+        # Note: these values are calibrated at installation time.
+        FAV_FM_POS_ACTIVE: {"rx": 0.12213888553625313  , "rz":  5.06145}, # 7° - 270°
+        # Typically rz = 110°, but we make it 0 so that at init it looks like in SEM position
+        FAV_SEM_POS_ACTIVE: {"rx": 0, "rz": 0}    # Note that milling angle (rx) can be changed per session 
+    },
+}
+
+"Meteor Stage": {
+    class: actuator.MultiplexActuator,
+    role: stage,
+    dependencies: { "x": "Stage", "y": "Stage"},
+    init: {
+        axes_map: { "x": "y", "y": "x"},
+    },
+    affects: ["Camera"],
+    metadata: {
+        POS_ACTIVE_RANGE: {"x": [-5.0e-3, 5.0e-3], "y": [-5.0e-3, 5.0e-3]}
+    },
+}
+
+"Stage Focus": {
+    class: actuator.MultiplexActuator,
+    role: focus,
+    dependencies: {"z": "Stage"},
+    init: {
+        axes_map: {"z": "z",},
+    },
+    affects: ["Camera"],
+    metadata: {
+        # For the autofocus, to not try the whole range
+        # TODO: what's a good range? It seems that 0.0032 is a good position, and +0.1mm could collide with the objective lens when going down.
+        #POS_ACTIVE_RANGE: {"z": [-1.0e-3, 1.0e-3]}
+        # TODO: or should we use SAFE_REL_RANGE to contain the values relative to the "current" position?
+        # Alternatively, POS_ACTIVE_RANGE could be updated live after the alignment, based on SAFE_REL_RANGE+the current position
+
+        # FIXME: for now, we simulate a METEOR. It needs to have the ACTIVE/DEACTIVE metadata
+        # to move to these positions depending on the SEM/FM position.
+        # For the MIMAS, eventually that should be done on the "align".
+        # Loading position to retract lens
+        FAV_POS_DEACTIVE: {'z': 0.0031977},
+        # Initial active position (close from the sample, but not too close, for safety)
+        FAV_POS_ACTIVE: {'z': 0.0031977}
+    },
+}
+
+"Light Source": {
+    class: omicronxx.HubxX,
+    role: light,
+    init: {
+        port: "/dev/fakehub", # Simulator
+    },
+    affects: ["Camera"],
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+        mag: 84.0, # ratio, (actually of the complete light path)
+        na: 0.85, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
+    },
+    affects: ["Camera"]
+}
+
+# Normally a IDS uEye or Zyla
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"Camera": {
+    class: simcam.Camera,
+    role: ccd,
+    dependencies: {focus: "Stage Focus"},
+    init: {
+        image: "andorcam2-fake-clara.tiff",
+        transp: [-1, 2], # To swap/invert axes
+    },
+    metadata: {
+        # To change what the "good" focus position is on the simulator
+        # It's needed for not using the initial value, which is at deactive position.
+         FAV_POS_ACTIVE: {'z': 1.7e-3},  # good focus position
+         ROTATION: 0,  # [rad] (=-5.7°)
+    },
+}
+
+# Controller for the filter-wheel
+# DIP must be configured with address 7 (= 1110000)
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake6", # Simulator
+        address: null, # Simulator
+        axes: ["fw"],
+        ustepsize: [1.227184e-6], # [rad/µstep]
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0}, #digital output used to switch on/off sensor
+        inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
+    },
+}
+
+"AntiBacklash for Filter Wheel": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            # Force every move to always finish in the same direction
+            "fw": 50.e-3,  # rad
+        },
+    },
+    children: {"slave": "Optical Actuators"},
+}
+
+"Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: filter,
+    dependencies: {"band": "AntiBacklash for Filter Wheel"},
+    init: {
+        axis_name: "fw",
+        # This filter-wheel is made so that the light goes through two "holes":
+        # the filter, and the opposite hole (left empty). So although it has 8
+        # holes, it only supports 4 filters (from 0° to 135°), and there is no
+        # "fast-path" between the last filter and the first one.
+        positions: {
+             # pos (rad) -> m,m
+             0.08: [414.e-9, 450.e-9], # FF01-432/36
+             0.865398: [500.e-9, 530.e-9], # FF01-515/30
+             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
+             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    # TODO: a way to indicate the best filter to use during alignment and brightfield? via some metadata?
+    affects: ["Camera"],
+}
+
+
+# CLS3252dsc-1
+"Optical Focus": {
+    class: smaract.MCS2,
+    role: align,
+    init: {
+        locator: "fake",
+        ref_on_init: True,
+        speed: 0.01,  # m/s
+        accel: 0.08,  # m/s²
+        #hold_time: 5 # s, default = infinite
+        # TODO: check the ranges, and the channel
+        axes: {
+            'z': {
+                # -11.5mm is safely parked (FAV_POS_DEACTIVE)
+                # 1.7mm is typically in focus (FAV_POS_ACTIVE)
+                range: [-29.e-3, 29.e-3],
+                unit: 'm',
+                channel: 0,
+            },
+        },
+    },
+    metadata: {
+        # Loading position to retract lens
+        FAV_POS_DEACTIVE: {'z': -21.0e-3},
+        # Initial active position (close from the sample, but not too close, for safety)
+        FAV_POS_ACTIVE: {'z': -0.1e-3},
+        FAV_POS_ALIGN: {'z': -0.1e-3},
+    },
+    affects: ["Camera"],
+}
