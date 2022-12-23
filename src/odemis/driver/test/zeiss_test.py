@@ -22,6 +22,7 @@ from concurrent.futures import CancelledError
 import logging
 import math
 from odemis.driver import zeiss
+from odemis import model
 from odemis.util import testing
 import os
 import time
@@ -38,14 +39,12 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 CONFIG_SCANNER = {"name": "scanner", "role": "ebeam", "hfw_nomag": 1}
 CONFIG_STAGE = {"name": "stage", "role": "stage",
                 "rng": {"x": (5.e-3, 152.e-3), "y": (5.e-3, 152.e-3)},  # skip one axis to see if default works
-                "inverted": ["x"],
-               }
+                "inverted": ["x"], }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
 CONFIG_SEM = {"name": "sem", "role": "sem", "port": "/dev/ttyUSB*",  # "/dev/fake*"
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
-                           "stage": CONFIG_STAGE,
-                          }
+                           "stage": CONFIG_STAGE, }
               }
 
 CONFIG_SEM_SIM = CONFIG_SEM.copy()
@@ -150,9 +149,9 @@ class TestSEM(unittest.TestCase):
         self.assertAlmostEqual(orig_rot, ebeam.rotation.value)
 
     # @skip("skip")
-    def test_move(self):
+    def test_move_axes3(self):
         """
-        Check it's possible to move the stage
+        Check it's possible to move the stage on 3 axes
         """
         pos = self.stage.position.value.copy()
         f = self.stage.moveRel({"x":2e-6, "y":3e-6})
@@ -198,6 +197,82 @@ class TestSEM(unittest.TestCase):
 
         with self.assertRaises(ValueError):
             f = self.stage.moveRel({"x":-200e-3})
+
+        p = self.stage.position.value.copy()
+        subpos = self.stage.position.value.copy()
+        subpos["x"] += 50e-6
+        f = self.stage.moveAbs(subpos)
+        f.result()
+        testing.assert_pos_almost_equal(self.stage.position.value, subpos)
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, subpos)
+
+        subpos = self.stage.position.value.copy()
+        subpos.pop("y")
+        subpos["x"] -= 50e-6
+        self.stage.moveAbsSync(subpos)
+        testing.assert_pos_almost_equal(self.stage.position.value, p)
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, p)
+
+        # Check that a long move takes time (ie, that it waits until the end of the move)
+        # It's tricky, because it always waits at least 1s.
+        prev_pos = self.stage.position.value.copy()
+        tstart = time.time()
+        self.stage.moveRelSync({"x": 1e-3})
+        dur = time.time() - tstart
+        self.assertGreaterEqual(dur, 1.1, "1 mm move took only %g s" % dur)
+
+        tstart = time.time()
+        self.stage.moveAbsSync(prev_pos)
+        dur = time.time() - tstart
+        self.assertGreaterEqual(dur, 1.1, "1 mm move took only %g s" % dur)
+
+    def test_move_axes6(self):
+        """
+        Check if it's possible to move the stage on 6 axes
+        """
+        # add this to CONFIG rng -> "rz": (0, 6.283)
+        self.stage.axes["rx"] = model.Axis(unit="rad", range=(0, 1.571))
+        self.stage.axes["rz"] = model.Axis(unit="rad", range=(0, 6.283))
+        self.stage.axes["m"] = model.Axis(unit="m", range=(0, 10.e-3))
+
+        pos = self.stage.position.value.copy()
+        pos.update({"rx": 0.0, "rz": 0.0, "m": 0.0})
+
+        f = self.stage.moveRel({"x": 2e-6, "y": 3e-6, "rz": 0.7854})
+        f.result()
+        self.assertNotEqual(self.stage.position.value, pos)
+        time.sleep(6)  # wait until .position is updated
+        self.assertNotEqual(self.stage.position.value, pos)
+
+        f = self.stage.moveRel({"x": -2e-6, "y": -3e-6, "rz": 0.7854})
+        f.result()
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+
+        # Try a relative move outside of the range (less than min)
+        axes = self.stage.axes
+        toofar = {"x": axes["x"].range[0] - pos["x"] - 10e-6}
+        f = self.stage.moveRel(toofar)
+        with self.assertRaises(ValueError):
+            f.result()
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+
+        # Try a relative move outside of the range (more than max)
+        toofar = {"y": axes["y"].range[1] - pos["y"] + 10e-6}
+        f = self.stage.moveRel(toofar)
+        with self.assertRaises(ValueError):
+            f.result()
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+        time.sleep(6)
+        testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
+
+        with self.assertRaises(ValueError):
+            f = self.stage.moveRel({"x": -200e-3})
 
         p = self.stage.position.value.copy()
         subpos = self.stage.position.value.copy()

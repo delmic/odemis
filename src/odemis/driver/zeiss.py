@@ -529,20 +529,19 @@ class Stage(model.Actuator):
         if {"rx", "rz", "m"}.intersection(self.axes.keys()):
             x, y, z, t, r, m, is_moving = self.parent.GetStagePosition6()
 
-            pos["rx"] = math.radians(t)
-            pos["rz"] = math.radians(r)
+            pos["rx"] = t
+            pos["rz"] = r
             pos["m"] = m * 1e-3
         else:
             x, y, z, is_moving = self.parent.GetStagePosition()
+            # remove the axes which are not supported
+            for ax in pos.keys():
+                if ax not in self.axes:
+                    del pos[ax]
 
         pos["x"] = x * 1e-3
         pos["y"] = y * 1e-3
         pos["z"] = z * 1e-3
-
-        # remove the axes which are not supported
-        for ax in pos.keys():
-            if ax not in self.axes:
-                del pos[ax]
 
         return pos, is_moving
 
@@ -555,6 +554,7 @@ class Stage(model.Actuator):
             pos, _ = self._getStagePosition()
 
         self.position._set_value(self._applyInversion(pos), force_write=True)
+        logging.info("position of the stage is now: %s" % self.position.value)
 
     def _refreshPosition(self):
         """
@@ -593,10 +593,10 @@ class Stage(model.Actuator):
             z += shift["z"] * 1e3
             shift_dict["z"] = z * 1e-3
         if "rx" in shift:
-            t += math.radians(shift["rx"])
+            t += shift["rx"]
             shift_dict["rx"] = t
         if "rz" in shift:
-            r += math.radians(shift["rz"])
+            r += shift["rz"]
             shift_dict["rz"] = r
         if "m" in shift:
             m += shift["m"] * 1e3
@@ -639,11 +639,11 @@ class Stage(model.Actuator):
         if "z" in pos:
             z = pos["z"] * 1e3
         if "rx" in pos:
-            t += math.radians(pos["rx"])
+            t = pos["rx"]
         if "rz" in pos:
-            r += math.radians(pos["rz"])
+            r = pos["rz"]
         if "m" in pos:
-            m += pos["m"] * 1e3
+            m = pos["m"] * 1e3
 
         self._moveTo(future, x, y, z, t, r, m)
 
@@ -1090,14 +1090,15 @@ class RemconSimulator(object):
         finally:
             self._is_moving = False
 
-    def move_to_pos(self, pos):
+    def _move_to_pos(self, pos):
         """
         TODO description
         :param pos: iterable of float of len 3 or 6.
         :return:
         """
         # fill the missing position values by filling the current position
-        pos = pos + self.pos[len(pos):]
+        # pos = pos + self.pos[len(pos):]
+        pos = numpy.append(pos, self.pos[len(pos):])
         self.target_pos = numpy.array(pos)
         self._start_move = time.time()
         dist = sum(numpy.sqrt((self.pos - self.target_pos) ** 2))
