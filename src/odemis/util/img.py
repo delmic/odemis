@@ -1201,3 +1201,60 @@ def assembleZCube(images, zlevels):
         ret = DataArray(ret, metadata3d)
 
         return ret
+
+
+def apply_flood_fill(input_array, start):
+    """
+    Flood fills a 2-Dimensional numpy array with truth values from a given start position with the 4-connected method.
+    The input array contains a shape represented with truth values for the borders of the shape.
+
+    Example
+    --------
+    >>> input_array = numpy.array(
+        [[0, 0, 0, 0, 0, 0,],
+         [0, 0, 1, 1, 0, 0,],
+         [0, 1, 0, 0, 1, 0,],
+         [0, 1, 0, 0, 1, 0,],
+         [0, 0, 1, 1, 1, 0,],
+         [0, 0, 0, 0, 0, 0,]])
+
+    >>> apply_flood_fill(input_array, (2, 2))
+    array([[0, 0, 0, 0, 0, 0],
+           [0, 0, 1, 1, 0, 0],
+           [0, 1, 1, 1, 1, 0],
+           [0, 1, 1, 1, 1, 0],
+           [0, 0, 1, 1, 1, 0],
+           [0, 0, 0, 0, 0, 0]])
+
+
+    :param input_array: (ndarray(bool)) binary array of size MxN containing the shape to be filled
+    :param start: (tuple(int, int)) position from which to start flood fill
+    :return: (ndarray(bool)) array of size MxN containing the filled shape, with filled values True
+    """
+    if start >= input_array.shape:
+        raise ValueError(f"Start position of {start} does not lie within the array.")
+
+    input_array = input_array.copy()
+    max_area = input_array.shape[0] * input_array.shape[1]
+    pixel_queue = [start]
+    overflow_counter = 0
+    while len(pixel_queue) > 0:
+        # To prevent the possibility of an infinite loop count the number of iterations. If it is larger than the
+        # total number of values in the array raise an error since this should not be possible.
+        if overflow_counter > max_area:
+            raise ValueError(f"Number of loop iterations is higher than maximum iterations possible ({max_area}) in "
+                             f"array of shape: {input_array.shape}")
+        # Set the current pixel to the first element of the queue and remove it from the queue
+        row, col = pixel_queue.pop(0)
+        if not input_array[row, col]:
+            input_array[row, col] = True  # Fill current pixel
+            if not input_array[max(row - 1, 0), col]:  # Check north of pixel
+                pixel_queue.append((max(row - 1, 0), col))
+            if not input_array[row, max(col - 1, 0)]:  # Check west of pixel
+                pixel_queue.append((row, max(col - 1, 0)))
+            if not input_array[min(row + 1, input_array.shape[0] - 1), col]:  # Check south of pixel
+                pixel_queue.append((min(row + 1, input_array.shape[0] - 1), col))
+            if not input_array[row, min(col + 1, input_array.shape[1] - 1)]:  # Check east of pixel
+                pixel_queue.append((row, min(col + 1, input_array.shape[1] - 1)))
+        overflow_counter += 1
+    return input_array

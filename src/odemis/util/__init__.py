@@ -389,6 +389,27 @@ def expand_rect(rect, margin):
     return minx - margin, miny - margin, maxx + margin, maxy + margin
 
 
+def get_polygon_bbox(coordinates):
+    """
+    Get the maximum and minimum values for a and b from a list of tuples
+    with shape: [(a1,b1), (a2,b2), ....., (an,bn)]
+
+    :param coordinates: (list of nested tuples (a,b))
+    :return: a_min, b_min, a_max, b_max
+    """
+    if len(coordinates) <= 1:
+        raise ValueError(f"Coordinates contains {len(coordinates)} elements, two or more are required.")
+
+    for coordinate in coordinates:
+        if len(coordinate) != 2:
+            raise ValueError(f"The function only works for 2D coordinates, coordinate: {coordinate} has {len(coordinate)} dimensions.")
+
+    maximum = list(map(max, zip(*coordinates)))
+    minimum = list(map(min, zip(*coordinates)))
+
+    return minimum[0], minimum[1], maximum[0], maximum[1]
+
+
 def find_plot_content(xd, yd):
     """
     Locate the first leftmost non-zero value and the first rightmost non-zero

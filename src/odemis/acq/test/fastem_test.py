@@ -31,15 +31,15 @@ from datetime import datetime
 from unittest.mock import Mock
 
 import numpy
-from odemis.acq.acqmng import SettingsObserver
 
 import odemis
 from fastem_calibrations import configure_hw
 from odemis import model
 from odemis.acq import fastem, stream
+from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import estimate_acquisition_time, SETTINGS_SELECTION
-from odemis.util import driver, img, is_point_in_rect, testing
+from odemis.util import driver, get_polygon_bbox, img, is_point_in_rect, testing
 
 # * TEST_NOHW = 1: connected to the simulator or not connected to anything
 # * TEST_NOHW = 0: connected to the real hardware, the backend should be running
@@ -200,7 +200,7 @@ class TestFastEMROA(unittest.TestCase):
 
             self.assertAlmostEqual(estimated_roa_acq_time, roa_acq_time)
 
-    def test_calculate_field_indices(self):
+    def test_get_square_field_indices(self):
         """Check that the correct number and order of field indices is returned and that row and column are in the
         correct order."""
         x_fields = 3
@@ -221,13 +221,14 @@ class TestFastEMROA(unittest.TestCase):
                                self.descanner,
                                self.mppc)
 
-        expected_indices = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]  # (col, row)
+        expected_indices = [(0, 0), (1, 0), (2, 0),
+                            (0, 1), (1, 1), (2, 1)]  # (col, row)
 
-        field_indices = roa._calculate_field_indices()
+        field_indices = roa.get_square_field_indices(coordinates)
 
         self.assertListEqual(expected_indices, field_indices)
 
-    def test_calculate_field_indices_overlap(self):
+    def test_get_square_field_indices_overlap(self):
         """Check that the correct number of field indices are calculated when there is overlap between the fields."""
         x_fields = 3
         y_fields = 2
@@ -252,7 +253,7 @@ class TestFastEMROA(unittest.TestCase):
             # There are 3 fields of 8 '-' and the overlap is 2, therefore the total size is 3 * (8-2) + 2
             xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
                           field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
-            coordinates = (xmin, ymin, xmax, ymax)  # in m
+            coordinates = (xmin, ymin, xmax - px_size_x, ymax - px_size_y)  # in m
             roa = fastem.FastEMROA(roa_name,
                                    coordinates,
                                    None,
@@ -264,17 +265,21 @@ class TestFastEMROA(unittest.TestCase):
                                    overlap)
 
             expected_indices = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]  # (col, row)
-            field_indices = roa._calculate_field_indices()
+            field_indices = roa.get_square_field_indices(coordinates)
 
             # Floating point errors can result in an extra field, which is fine.
             # Check that maximum 1 extra field index in x and 1 in y is calculated and that there are not fewer fields
             # calculated than expected.
-            self.assertLessEqual(max(field_indices)[0] - max(expected_indices)[0], 1)
-            self.assertGreaterEqual(max(field_indices)[0] - max(expected_indices)[0], 0)
-            self.assertLessEqual(max(field_indices)[1] - max(expected_indices)[1], 1)
-            self.assertGreaterEqual(max(field_indices)[1] - max(expected_indices)[1], 0)
+            exp_x_min, exp_y_min, exp_x_max, exp_y_max = get_polygon_bbox(expected_indices)
+            res_x_min, res_y_min, res_x_max, res_y_max = get_polygon_bbox(field_indices)
+            self.assertEqual(exp_x_min, res_x_min)
+            self.assertEqual(exp_y_min, res_y_min)
+            self.assertLessEqual(res_x_max - exp_x_max, 1)
+            self.assertLessEqual(res_y_max - exp_y_max, 1)
+            self.assertGreaterEqual(res_x_max - exp_x_max, 0)
+            self.assertGreaterEqual(res_y_max - exp_y_max, 0)
 
-    def test_calculate_field_indices_overlap_small_roa(self):
+    def test_get_square_field_indices_overlap_small_roa(self):
         """Check that the correct number of field indices are calculated for ROA's that are smaller than the overlap."""
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
@@ -302,7 +307,117 @@ class TestFastEMROA(unittest.TestCase):
 
         # For very small ROA's we expect at least a single field.
         expected_indices = [(0, 0)]  # (col, row)
-        field_indices = roa._calculate_field_indices()
+        field_indices = roa.get_square_field_indices(coordinates)
+        self.assertListEqual(field_indices, expected_indices)
+
+    def test_get_poly_field_indices(self):
+        """Test that the correct indices are returned and that they are in the right order."""
+        x_fields = 5
+        y_fields = 4
+        self.multibeam.resolution.value = (6400, 6400)  # don't change
+        res_x, res_y = self.multibeam.resolution.value  # single field size
+        px_size_x, px_size_y = self.multibeam.pixelSize.value
+        xmax = res_x * px_size_x * x_fields
+        ymax = res_y * px_size_y * y_fields
+        coordinates = (0, 0, xmax, ymax)  # in m, don't change
+        polygon = [(0, 0), (ymax - px_size_y, xmax - px_size_x), (ymax - px_size_y, 0)]
+        roc_2 = fastem.FastEMROC("roc_2", coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa = fastem.FastEMROA(roa_name,
+                               coordinates,
+                               roc_2,
+                               roc_3,
+                               self.asm,
+                               self.multibeam,
+                               self.descanner,
+                               self.mppc)
+
+        expected_indices = [(0, 0), (1, 0),
+                            (0, 1), (1, 1), (2, 1),
+                            (0, 2), (1, 2), (2, 2), (3, 2),
+                            (0, 3), (1, 3), (2, 3), (3, 3), (4, 3)]  # (col, row)
+
+        field_indices = roa.get_poly_field_indices(polygon)
+        self.assertListEqual(expected_indices, field_indices)
+
+    def test_get_poly_field_indices_overlap(self):
+        """Test that the correct indices are returned and are in the right order with different sizes of overlap."""
+        x_fields = 5
+        y_fields = 4
+        self.multibeam.resolution.value = (6400, 6400)  # don't change
+        res_x, res_y = self.multibeam.resolution.value  # single field size
+        px_size_x, px_size_y = self.multibeam.pixelSize.value
+
+        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+
+        field_size_x = res_x * px_size_x
+        field_size_y = res_y * px_size_y
+
+        expected_indices = [(0, 0), (1, 0),
+                            (0, 1), (1, 1), (2, 1),
+                            (0, 2), (1, 2), (2, 2), (3, 2),
+                            (0, 3), (1, 3), (2, 3), (3, 3), (4, 3)]
+
+        for overlap in (0, 0.0625, 0.2, 0.5, 0.7):
+            xmin, ymin = (0, 0)
+            xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
+                          field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
+            coordinates = (xmin, ymin, xmax - px_size_x, ymax - px_size_y)  # in m
+            polygon = [(ymin, xmin), (ymax - px_size_y, xmax - px_size_x), (ymax - px_size_y, xmin)]
+            roa = fastem.FastEMROA(roa_name,
+                                   coordinates,
+                                   None,
+                                   None,
+                                   self.asm,
+                                   self.multibeam,
+                                   self.descanner,
+                                   self.mppc,
+                                   overlap)
+
+            res_field_indices = roa.get_poly_field_indices(polygon)
+
+            max_extra_fields = int(1/(1-overlap))
+
+            exp_x_min, exp_y_min, exp_x_max, exp_y_max = get_polygon_bbox(expected_indices)
+            res_x_min, res_y_min, res_x_max, res_y_max = get_polygon_bbox(res_field_indices)
+            self.assertEqual(exp_x_min, res_x_min)
+            self.assertEqual(exp_y_min, res_y_min)
+            self.assertLessEqual(res_x_max - exp_x_max, max_extra_fields)
+            self.assertLessEqual(res_y_max - exp_y_max, max_extra_fields)
+            self.assertGreaterEqual(res_x_max - exp_x_max, 0)
+            self.assertGreaterEqual(res_y_max - exp_y_max, 0)
+
+    def test_get_poly_field_indices_overlap_small_roa(self):
+        """Check that the correct number of field indices are calculated for ROA's that are smaller than the overlap."""
+        res_x, res_y = self.multibeam.resolution.value  # single field size
+        px_size_x, px_size_y = self.multibeam.pixelSize.value
+        overlap = 0.2
+
+        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+
+        field_size_x = res_x * px_size_x
+        field_size_y = res_y * px_size_y
+        # The coordinates of the ROA in meters.
+        xmin, ymin = (0, 0)
+        # Create xmax and ymax such that they are smaller than the field_size * overlap.
+        xmax, ymax = (0.8 * field_size_x * overlap,
+                      0.8 * field_size_y * overlap)
+        coordinates = (xmin, ymin, xmax, ymax)  # in m
+        polygon = [(0, 0), (ymax - px_size_y, xmax - px_size_x), (ymax - px_size_y, 0)]
+        roa = fastem.FastEMROA(roa_name,
+                               coordinates,
+                               None,
+                               None,
+                               self.asm,
+                               self.multibeam,
+                               self.descanner,
+                               self.mppc,
+                               overlap)
+
+        # For very a small ROA only single field is expected.
+        expected_indices = [(0, 0)]  # (col, row)
+        field_indices = roa.get_poly_field_indices(polygon)
         self.assertListEqual(field_indices, expected_indices)
 
 
