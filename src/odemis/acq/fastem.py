@@ -251,6 +251,10 @@ class FastEMROA(object):
         # and fill it so the inside of the polygon is also acquired.
         index_array = self._create_and_fill_megafield_rep(indices)
 
+        # The index values are acquired with the assumption that the y-axis is positive downwards.
+        # To convert to the real world definition the y-axis is flipped.
+        index_array = numpy.flip(index_array, 0)
+
         # The indices that represent the polygon are where the index_array has True values.
         rows, cols = numpy.where(index_array)
 

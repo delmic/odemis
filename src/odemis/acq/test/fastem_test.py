@@ -320,7 +320,7 @@ class TestFastEMROA(unittest.TestCase):
         xmax = res_x * px_size_x * x_fields
         ymax = res_y * px_size_y * y_fields
         coordinates = (0, 0, xmax, ymax)  # in m, don't change
-        polygon = [(0, 0), (ymax - px_size_y, xmax - px_size_x), (ymax - px_size_y, 0)]
+        polygon = [(0, 0), (ymax - px_size_y, 0), (0, xmax - px_size_x)]
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
@@ -333,7 +333,8 @@ class TestFastEMROA(unittest.TestCase):
                                self.descanner,
                                self.mppc)
 
-        expected_indices = [(0, 0), (1, 0),
+        # Index (1,0) is ignored because of the step over effect the algorithm can have with very small corners.
+        expected_indices = [(0, 0),
                             (0, 1), (1, 1), (2, 1),
                             (0, 2), (1, 2), (2, 2), (3, 2),
                             (0, 3), (1, 3), (2, 3), (3, 3), (4, 3)]  # (col, row)
@@ -364,7 +365,7 @@ class TestFastEMROA(unittest.TestCase):
             xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
                           field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
             coordinates = (xmin, ymin, xmax - px_size_x, ymax - px_size_y)  # in m
-            polygon = [(ymin, xmin), (ymax - px_size_y, xmax - px_size_x), (ymax - px_size_y, xmin)]
+            polygon = polygon = [(ymin, xmin), (ymax - px_size_y, xmin), (ymin, xmax - px_size_x)]
             roa = fastem.FastEMROA(roa_name,
                                    coordinates,
                                    None,
