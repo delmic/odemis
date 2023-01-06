@@ -365,7 +365,7 @@ class TestFastEMROA(unittest.TestCase):
             xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
                           field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
             coordinates = (xmin, ymin, xmax - px_size_x, ymax - px_size_y)  # in m
-            polygon = polygon = [(ymin, xmin), (ymax - px_size_y, xmin), (ymin, xmax - px_size_x)]
+            polygon = [(ymin, xmin), (ymax - px_size_y, xmin), (ymin, xmax - px_size_x)]
             roa = fastem.FastEMROA(roa_name,
                                    coordinates,
                                    None,
