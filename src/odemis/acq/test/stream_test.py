@@ -3669,15 +3669,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPARC_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC_CONFIG)
 
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
@@ -3694,9 +3686,7 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
+        pass
 
     def setUp(self):
         if self.backend_was_running:
@@ -3899,10 +3889,10 @@ class SettingsStreamsTestCase(unittest.TestCase):
         ars.image.unsubscribe(self._on_image)
 
     def test_cl_ss(self):
-        """ Test CLSettingsStream """
+        """ Test CLSettingsStream, with one hardware axis """
 
         # create axes
-        axes = {"filter": ("band", self.filter)}
+        axes = {"filter": ("band", self.filter)}  # Will create a .axisFilter VA
 
         # Create the stream
         cls = stream.CLSettingsStream("test",
@@ -3918,23 +3908,33 @@ class SettingsStreamsTestCase(unittest.TestCase):
 
         cls.emtDwellTime.value = 10e-6  # s
         cls.pixelSize.value *= 10
-        b0, b1 = list(cls.axisFilter.choices)[:2]
-        cls.axisFilter.value = b0
 
+        # Get 2 allowed positions on the filter, with b1 being *NOT* the current value
+        b0, b1 = list(cls.axisFilter.choices)[:2]
+        if b1 == self.filter.position.value["band"]:
+            # if b1 happens to be the current value, swap with b0
+            b0, b1 = b1, b0
+
+        logging.debug("Testing with positions %s and %s", b0, b1)
         # test that the actuator does not move when the local axis VA updates and the stream is inactive
         cls.axisFilter.value = b1
-        time.sleep(1.0)
+        time.sleep(3.0)
         self.assertNotEqual(cls.axisFilter.value, self.filter.position.value["band"])
-        cls.axisFilter.value = b0
 
-        # Start acquisition
+        # Start acquisition => axis should go to the current value
         cls.should_update.value = True
         cls.is_active.value = True
+        time.sleep(3.0)  # Axis can be long to move
+        logging.debug("Filter is now at %s", self.filter.position.value["band"])
+        self.assertEqual(cls.axisFilter.value, self.filter.position.value["band"])
+        self.assertEqual(cls.axisFilter.value, b1)
 
         # test that the actuator does move when the local axis VA updates and the stream is active
-        cls.axisFilter.value = b1
-        time.sleep(1.0)
+        cls.axisFilter.value = b0
+        time.sleep(3.0)
+        logging.debug("Filter is now at %s", self.filter.position.value["band"])
         self.assertEqual(cls.axisFilter.value, self.filter.position.value["band"])
+        self.assertEqual(cls.axisFilter.value, b0)
 
         # resolution is only updated after starting acquisition
         res = self.ebeam.resolution.value
