@@ -35,7 +35,6 @@ logging.getLogger().setLevel(logging.DEBUG)
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
-
 KWARGS = {"name": "spec", "role": "spectrometer", "sn": None}
 if TEST_NOHW:
     KWARGS["sn"] = "fake"
@@ -97,8 +96,10 @@ class AvantesTest(unittest.TestCase):
         self.assertGreater(self.spectrometer.exposureTime.value, 0)
 
     def test_acquisition(self):
-        # Three single image acquisitions at different exposure times
-        for exp in (self.spectrometer.exposureTime.range[0], 0.1, 1.01):
+        """
+        Multiple single image acquisitions at different exposure times
+        """
+        for exp in (self.spectrometer.exposureTime.range[0], 0.1, 0.2, 1.01):
             self.spectrometer.exposureTime.value = exp
             self.assertAlmostEqual(exp, self.spectrometer.exposureTime.value)
 
