@@ -143,7 +143,11 @@ class Scanner(model.Emitter):
 
         # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
         # == smallest size/ between two different ebeam positions
-        pxs = fake_img.metadata[model.MD_PIXEL_SIZE]
+        pxs = fake_img.metadata.get(model.MD_PIXEL_SIZE, (1e-6, 1e-6))
+        if not isinstance(pxs, tuple) or len(pxs) != 2:
+            logging.warning("Pixel size metadata is not 2 floats (%s), so discarding it", pxs)
+            pxs = (1e-6, 1e-6)  # m
+
         self.pixelSize = model.VigilantAttribute(pxs, unit="m", readonly=True)
 
         # the horizontalFoV VA indicates that it's possible to control the zoom
