@@ -23,12 +23,13 @@ For more information on using Sphinx, refer to:
 Note, in case you don't have it yet, install sphinx (and other needed software)
 with::
 
-    sudo apt-get install python-sphinx inkscape texlive latexmk
+    sudo apt install python-sphinx inkscape texlive latexmk
+    sudo apt install -y texlive-latex-extra
 
 To build a manual, go to its root directory (e.g., ``doc/develop/``) and depending
 on the format you want to obtain either run ``make html`` (for HTML) or 
 ``make latexpdf`` (for a PDF). This command transforms the .rst files and images
-present into the final format. The final document files are stored in ``/doc/code/_build``.
+present into the final format. The final document files are stored in ``/doc/develop/_build``.
 
 Generating the docstring documentation
 --------------------------------------
