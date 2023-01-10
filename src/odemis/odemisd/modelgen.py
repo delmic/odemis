@@ -121,12 +121,12 @@ class SafeLoader(yaml.SafeLoader):
                         try:
                             node_extension = SafeLoader(f).get_single_node()  # Get the data from the external file.
                         except yaml.parser.ParserError as error:
-                            raise ParseError("Parsing of file '%s' using the '!include' key failed with the error:\n%s"
+                            raise ParseError("Parsing of file '%s' using the '!extend' key failed with the error:\n%s"
                                              % (key_node.value, error))
                 except FileNotFoundError as error:
                     if any(c in filename for c in ("!", "\n", "\\", "/", " ", ":", "<")):
-                        logging.error("File not found, probably because an invalid character is used"
-                                      "or a comma is forgotten when using the '!include' key in a dict.")
+                        logging.error("File not found, probably because an invalid character is used "
+                                      "or a comma is forgotten when using the '!extend' key in a dict.")
 
                     raise FileNotFoundError(error)
 
