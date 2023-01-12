@@ -230,6 +230,44 @@ class xrcpnl_tab_enzel_align(wx.Panel):
 
 
 
+class xrcpnl_tab_mimas_align(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_mimas_align.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_mimas_align.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_mimas_align")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_mimas_align")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_position_btns = xrc.XRCCTRL(self, "pnl_position_btns")
+        self.btn_position_opt = xrc.XRCCTRL(self, "btn_position_opt")
+        self.btn_position_fib = xrc.XRCCTRL(self, "btn_position_fib")
+        self.btn_reset_alignment = xrc.XRCCTRL(self, "btn_reset_alignment")
+        self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.pnl_viewport = xrc.XRCCTRL(self, "pnl_viewport")
+        self.view_optical = xrc.XRCCTRL(self, "view_optical")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
+
+
+
 class xrcpnl_tab_sparc_align(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_sparc_align.PreCreate
     def PreCreate(self, *args):
@@ -2922,6 +2960,192 @@ def __init_resources():
     <bg>#333333</bg>
     <style>wxWANTS_CHARS</style>
   </object>
+
+  <object class="wxPanel" name="pnl_tab_mimas_align">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_position_btns">
+                <object class="wxBoxSizer">
+                  <object class="spacer">
+                    <option>1</option>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="GraphicRadioButton" name="btn_position_opt">
+                      <icon>img_icon_ico_optical_png</icon>
+                      <icon_on>img_icon_ico_optical_green_png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <tooltip>Engage the optical lens</tooltip>
+                      <label>OPTICAL</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+	                  <size>130,-1</size>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                    <option>0</option>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="GraphicRadioButton" name="btn_position_fib">
+                      <icon>img_icon_ico_sem_png</icon>
+                      <icon_on>img_icon_ico_sem_green_png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <tooltip>Use the FIB for imaging and milling, with the optical lens retracted</tooltip>
+                      <label>FIB</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                      <size>130,-1</size>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                    <option>0</option>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                  </object>
+                <orient>wxHORIZONTAL</orient>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_reset_alignment">
+                <height>24</height>
+                <label>Reset Z alignment</label>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND|wxALL</flag>
+              <border>10</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="wxHtmlWindow" name="html_alignment_doc">
+                <fg>#BBBBBB</fg>
+                <bg>#333333</bg>
+                <style>wxHW_SCROLLBAR_AUTO|wxHW_NO_SELECTION</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxTOP|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+          </object>
+          <size>400,-1</size>
+          <fg>#E5E5E5</fg>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>10</border>
+      </object>
+
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_viewport">
+          <object class="LiveViewport" name="view_optical">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+          </object>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <nocaption>1</nocaption>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <flag>wxEXPAND</flag>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>512,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+    <style>wxWANTS_CHARS</style>
+  </object>
+
 
   <object class="wxPanel" name="pnl_tab_sparc_align">
     <object class="wxBoxSizer">

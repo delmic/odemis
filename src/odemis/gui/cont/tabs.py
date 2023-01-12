@@ -41,11 +41,12 @@ import wx.html
 
 from odemis.gui import conf, img
 from odemis.gui.comp.overlay.view import CenteredLineOverlay, HORIZONTAL_LINE, CROSSHAIR
+from odemis.gui.comp.overlay.world import CryoFeatureOverlay
 from odemis.gui.comp.popup import show_message
 from odemis.gui.cont.features import CryoFeatureController
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog
-from odemis.model import getVAs, InstantaneousFuture
+from odemis.model import BAND_PASS_THROUGH, getVAs, InstantaneousFuture
 from odemis.util.filename import guess_pattern, create_projectname
 
 from odemis import dataio
@@ -64,9 +65,9 @@ from odemis.acq.align import AutoFocus
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.move import GRID_1, LOADING, COATING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel, \
-    FM_IMAGING, SEM_IMAGING, GRID_2, getTargetPosition, POSITION_NAMES, THREE_BEAMS, \
-    get3beamsSafePos, SAFETY_MARGIN_5DOF, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
+from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel, \
+    FM_IMAGING, SEM_IMAGING, getTargetPosition, POSITION_NAMES, THREE_BEAMS, \
+    get3beamsSafePos, ATOL_LINEAR_POS, SAFETY_MARGIN_5DOF, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
     CLStream, EMStream, LiveStream, FIBStream, \
     ARStream, AngularSpectrumStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
@@ -96,7 +97,7 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter, VigilantAttributeConnector
-from odemis.util import units, spot, limit_invocation, almost_equal
+from odemis.util import units, spot, limit_invocation, almost_equal, fluo
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.units import readable_str
 
@@ -352,7 +353,7 @@ class LocalizationTab(Tab):
         tab_data = guimod.CryoLocalizationGUIData(main_data)
         super(LocalizationTab, self).__init__(
             name, button, panel, main_frame, tab_data)
-        self.set_label("LOCALIZATION")
+        # self.set_label("LOCALIZATION")
 
         self.main_data = main_data
 
@@ -468,8 +469,14 @@ class LocalizationTab(Tab):
         elif self.main_data.role == "meteor":
             # The stage is in the FM referential, but we care about the stage-bare
             # in the SEM referential to move between positions
-            self._allowed_targets= [FM_IMAGING, SEM_IMAGING]
+            self._allowed_targets = [FM_IMAGING, SEM_IMAGING]
             self._stage = self.tab_data_model.main.stage_bare
+        elif self.main_data.role == "mimas":
+            # Only useful near the active positions: milling (FIB) or FLM
+            self._allowed_targets = [FM_IMAGING, MILLING]
+            self._stage = self.tab_data_model.main.stage
+
+        self._aligner = self.tab_data_model.main.aligner
 
         main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
 
@@ -545,9 +552,11 @@ class LocalizationTab(Tab):
         if bbox[0] is not None:
             self.panel.vp_secom_tl.canvas.fit_to_bbox(bbox)
 
-        # Display the same acquired data in the chamber tab view
-        chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
-        chamber_tab.load_overview_streams(streams)
+        # Mimas does not have the overview image in the chamber tab, so don't display it there.
+        if self.main_data.role in ["meteor", "enzel"]:
+            # Display the same acquired data in the chamber tab view
+            chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+            chamber_tab.load_overview_streams(streams)
 
     def reset_live_streams(self):
         """
@@ -685,9 +694,12 @@ class LocalizationTab(Tab):
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
         :param pos: (dict str->float or None) updated position of the stage
         """
-        guiutil.enable_tab_on_stage_position(self.button, self._stage, pos,
-                                             self._allowed_targets,
-                                             tooltip="Localization can only be performed in the three beams or SEM imaging modes")
+        guiutil.enable_tab_on_stage_position(
+            self.button, self._stage, pos,
+            self._allowed_targets,
+            self._aligner,
+            tooltip="Localization can only be performed in the three beams or SEM imaging modes"
+        )
 
     def terminate(self):
         super(LocalizationTab, self).terminate()
@@ -698,7 +710,7 @@ class LocalizationTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
-        if main_data.role in ("enzel", "meteor"):
+        if main_data.role in ("enzel", "meteor", "mimas"):
             return 2
         else:
             return None
@@ -4772,7 +4784,6 @@ class EnzelAlignTab(Tab):
                 self.tab_data_model.align_mode.value = mode
                 return
 
-
     def _on_align_mode(self, align_mode):
         """
         Subscriber for the current alignment mode. (un)toggles the correct buttons and calls the setters of each mode.
@@ -5088,6 +5099,292 @@ class EnzelAlignTab(Tab):
     def get_display_priority(cls, main_data):
         if main_data.role in ("enzel",):
             return 1
+        else:
+            return None
+
+
+class MimasAlignTab(Tab):
+    """
+    Tab to perform the beam alignment of MIMAS.
+    There are two alignments:
+    * adjust the optical focus using the "align", while the stage Z is fixed.
+    * adjust the X/Y of beam shift so that the optical lens and ion beam lens are centered
+    """
+
+    def __init__(self, name, button, panel, main_frame, main_data):
+        tab_data = guimod.MicroscopyGUIData(main_data)
+        super().__init__(name, button, panel, main_frame, tab_data)
+
+        self._stage = main_data.stage
+        self._focus = main_data.focus
+        self._aligner = main_data.aligner
+        self.panel = panel
+
+        # Show the procedure steps
+        doc_path = pkg_resources.resource_filename("odemis.gui", "doc/mimas_alignment.html")
+        self.panel.html_alignment_doc.LoadPage(doc_path)
+
+        # Connect the view (for now, only optical)
+        vpv = collections.OrderedDict([
+            (panel.pnl_viewport.viewports[0],  # focused view
+             {
+                "name": "Optical",
+                "stage": self._stage,
+                "stream_classes": OpticalStream,
+             }),
+        ])
+
+        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+
+        # Add a CryoFeatureOverlay to the canvas, not to show the features, but
+        # to support moving the stage by double clicking, even if the stream is paused.
+        # (So that the user can move the stage when looking at the FIB image in the separate computer)
+        cnvs = panel.pnl_viewport.viewports[0].canvas
+        cryofeature_overlay = CryoFeatureOverlay(cnvs, tab_data)
+        cnvs.add_world_overlay(cryofeature_overlay)
+        cryofeature_overlay.active.value = True
+
+        # Create the Optical stream.
+        # The focuser is "aligner" to calibrate the optical focus (while the stage Z stays constant)
+        # It should typically show a widefield image, but we use a "FluoStream"
+        # because that allows the user to still pick any light and filter in case it'd be useful.
+        self._opt_stream = acqstream.FluoStream("Optical",
+                                          main_data.ccd,
+                                          main_data.ccd.data,
+                                          main_data.light,
+                                          main_data.light_filter,
+                                          focuser=self._aligner,
+                                          detvas=get_local_vas(main_data.ccd, main_data.hw_settings_config),
+                                          )
+        self._opt_stream.tint.value = (255, 255, 255)  # greyscale, as it's widefield
+        # Select emission and excitation wavelengths to be widefield:
+        # * pick the smallest excitation as default
+        # * pick "pass-through" as default emission, and fallback to the smallest emission
+        ex = min(self._opt_stream.excitation.choices, key=fluo.get_one_center)
+        self._opt_stream.excitation.value = ex
+        if BAND_PASS_THROUGH in self._opt_stream.emission.choices:
+            em = BAND_PASS_THROUGH
+        else:
+            em = min(self._opt_stream.emission.choices, key=fluo.get_one_center)
+            logging.info("No pass-through filter found, will use %s", em)
+        self._opt_stream.emission.value = em
+
+        # Create scheduler/stream bar controller
+        self._streambar_controller = streamcont.StreamBarController(self.tab_data_model, panel.pnl_streams)
+
+        self._opt_spe = self._streambar_controller.addStream(self._opt_stream)
+        # remove the "remove" button and "eye" button
+        self._opt_spe.stream_panel.show_visible_btn(False)
+        self._opt_spe.stream_panel.show_remove_btn(False)
+
+        # buttons icons of MIMAS alignment tab
+        self.btn_toggle_icons = {
+            panel.btn_position_opt: ["icon/ico_optical_orange.png", "icon/ico_optical_green.png"],
+            panel.btn_position_fib: ["icon/ico_sem_orange.png", "icon/ico_sem_green.png"]}
+        self.position_btns = {FM_IMAGING: panel.btn_position_opt,
+                              MILLING: panel.btn_position_fib}
+        panel.btn_position_opt.Bind(wx.EVT_BUTTON, self._set_flm_alignment_mode)
+        panel.btn_position_fib.Bind(wx.EVT_BUTTON, self._set_fib_mode)
+        # future to handle the move
+        self._move_future = InstantaneousFuture()
+
+        # Connect the "Reset Z alignment" button
+        panel.btn_reset_alignment.Bind(wx.EVT_BUTTON, self._on_click_reset)
+
+        # Disable the reset button when switching position
+        main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
+
+    @call_in_wx_main
+    def _on_acquisition(self, is_acquiring):
+        """
+        called when is_acquiring VA changes, to disallow pressing some buttons
+        """
+        # When acquiring, the tab is automatically disabled and should be left as-is
+        self.panel.btn_reset_alignment.Enable(not is_acquiring)
+
+    def _on_click_reset(self, evt):
+        """Reset the stage and align component, when the reset button is clicked."""
+        # Note: it is blocking the GUI. However, the moves should be quite fast,
+        # so it won't be blocking for long.
+        # TODO: instead of blocking the GUI, disable the buttons, and after
+        # starting the first move, add a "done_callback" to handle the moves in
+        # the background.
+
+        current_pos_label = getCurrentPositionLabel(self._stage.position.value, self._stage, self._aligner)
+
+        if current_pos_label not in (FM_IMAGING, MILLING):
+            logging.warning("Cannot reset Z alignment while current position is %s.",
+                            POSITION_NAMES[current_pos_label])
+            return
+
+        # Move the Z stage back to the original position (same as the "focus"
+        # position, but the metadata is actually on the stage)
+        stage_pos = self._stage.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        f_stage = self._stage.moveAbs({"z": stage_pos["z"]})
+
+        # Re-reference the optical lens. Typically it shouldn't be needed, but
+        # it should always be safe and fast, and might add a tiny bit of move precision.
+        f_aligner_ref = self._aligner.reference({"z"})
+
+        # For the aligner, it depends on the state:
+        # * in optical mode: move the aligner back to the default engage position (FAV_POS_ALIGN)
+        # * in FIB mode: go back to FIB mode (because the referencing might have changed it)
+        #  and update the engage position to the default position.
+        align_md = self._aligner.getMetadata()
+        align_pos = align_md[model.MD_FAV_POS_ALIGN]
+        align_pos_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
+
+        if current_pos_label == FM_IMAGING:
+            f_aligner_mv = self._aligner.moveAbs(align_pos)
+            self._aligner.updateMetadata({model.MD_FAV_POS_ACTIVE: align_pos})
+        elif current_pos_label == MILLING:
+            f_aligner_mv = self._aligner.moveAbs(align_pos_deactive)
+            self._aligner.updateMetadata({model.MD_FAV_POS_ACTIVE: align_pos})
+        else:
+            raise ValueError(f"Unexpected position {current_pos_label}")
+
+        # Wait for all the moves to be completed
+        f_stage.result()
+        f_aligner_ref.result()
+        f_aligner_mv.result()
+
+    def _set_fib_mode(self, evt):
+        """
+        Sets the FIB mode with the retracted state of the objective and button visuals.
+        """
+        # Pause FLM stream
+        self._streambar_controller.pauseStreams()
+
+        self.tab_data_model.main.is_acquiring.value = True
+
+        # Unpress the optical button and set the icon color of the pressed button to orange
+        self.panel.btn_position_opt.SetValue(False)
+        self.panel.btn_position_fib.icon_on = img.getBitmap(self.btn_toggle_icons[self.panel.btn_position_fib][0])
+
+        # get the metadata to retract the objective
+        align_md = self._aligner.getMetadata()
+        deactive_pos = align_md[model.MD_FAV_POS_DEACTIVE]
+
+        # create a future and update the appropriate controls after it is called
+        self._move_future = self._aligner.moveAbs(deactive_pos)
+        self._move_future.add_done_callback(self._on_pos_move_done)
+
+    def _set_flm_alignment_mode(self, evt):
+        """
+        Sets the FLM alignment mode with the inserted position of the objective and button visuals.
+        """
+        self.tab_data_model.main.is_acquiring.value = True
+
+        # Unpress the FIB button and set the icon color of the pressed button to orange
+        self.panel.btn_position_fib.SetValue(False)
+        self.panel.btn_position_opt.icon_on = img.getBitmap(self.btn_toggle_icons[self.panel.btn_position_opt][0])
+
+        # TODO: use the cryoSwitchSamplePosition(), once it supports MIMAS
+
+        # get the metadata to retract the objective
+        align_md = self._aligner.getMetadata()
+        active_pos = align_md[model.MD_FAV_POS_ACTIVE]
+
+        # create a future and update the appropriate controls after it is called
+        self._move_future = self._aligner.moveAbs(active_pos)
+        self._move_future.add_done_callback(self._on_pos_move_done)
+
+    @call_in_wx_main
+    def _on_pos_move_done(self, future):
+        """
+        Done callback of any of the tab movements
+        :param future: cancellable future of the move
+        """
+        try:
+            future.result()
+        except Exception as ex:
+            # Something went wrong, don't go any further
+            if not isinstance(ex, CancelledError):
+                logging.warning("Failed to move aligner: %s", ex)
+
+        self.tab_data_model.main.is_acquiring.value = False
+
+        # Automatically activates the Optical stream at the end of a move
+        current_pos_label = getCurrentPositionLabel(self._stage.position.value, self._stage, self._aligner)
+        if current_pos_label == FM_IMAGING:
+            self._opt_spe.stream.should_update.value = True
+
+        # Make sure the button turns green
+        self._update_movement_controls()
+
+    @call_in_wx_main
+    def _on_aligner_pos(self, pos):
+        """
+        Called every time the aligner moves, to update the state of the position buttons,
+        and update the "engage" position (FAV_POS_ACTIVE).
+        """
+        # Don't update the buttons while the aligner is moving to a new position
+        if not self._move_future.done():
+            return
+
+        self._update_movement_controls()
+
+        # update ACTIVE POS iif stream is playing and not too close from the DEACTIVE
+        if self._opt_stream.is_active.value:
+            align_md = self._aligner.getMetadata()
+            pos_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
+            try:
+                if abs(pos_deactive["z"] - pos["z"]) < ATOL_LINEAR_POS:
+                    logging.warning("Aligner focus near deactive position: %s vs %s", pos, pos_deactive)
+                    return
+            except KeyError:
+                logging.warning("Aligner moved, but no Z position available")
+                return
+
+            logging.debug("Updating aligner engage position to %s", pos)
+            self._aligner.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
+    def _update_movement_controls(self):
+        """
+        Update the OPTICAL/FIB buttons according to the aligner position with enabling the pressed button and
+        disabling other buttons.
+        """
+        # Check the status of objective/aligner
+        current_pos_label = getCurrentPositionLabel(self._stage.position.value, self._stage, self._aligner)
+
+        # turn green from orange icon when the position is reached
+        # Keep the current button pressed and other buttons unpressed - toggle switch action
+        currently_pressed = self.position_btns.get(current_pos_label)  # None if pos not supported
+
+        for btn in self.position_btns.values():
+            # Disable if in some odd position (and enable back otherwise)
+            btn.Enable(current_pos_label != UNKNOWN)
+
+            if btn == currently_pressed:
+                btn.icon_on = img.getBitmap(self.btn_toggle_icons[btn][1])
+                btn.SetValue(True)
+                btn.Refresh()
+            else:
+                # Sets the un-pressed buttons to orange, so that next time they are pressed, they start orange.
+                btn.icon_on = img.getBitmap(self.btn_toggle_icons[btn][0])
+                btn.SetValue(False)
+
+        # Only allow playing the optical stream when in optical mode
+        if current_pos_label == FM_IMAGING:
+            self._opt_spe.resume()
+        else:
+            self._opt_spe.pause()
+
+    def Show(self, show=True):
+        super().Show(show)
+
+        # Pause streams when not displayed
+        if show:
+            # Update the buttons and the metadata when the aligner is moved
+            self._aligner.position.subscribe(self._on_aligner_pos, init=True)
+        else:
+            self._streambar_controller.pauseStreams()
+            self._aligner.position.unsubscribe(self._on_aligner_pos)
+
+    @classmethod
+    def get_display_priority(cls, main_data):
+        if main_data.role in ("mimas",):
+            return 5
         else:
             return None
 
