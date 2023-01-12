@@ -1,0 +1,319 @@
+# MIMAS, fully simulated
+
+MIMAS-Sim: {
+    class: Microscope,
+    role: mimas,
+    children: [
+    # TODO: need to simulate all the components commented out (typically provided by the Orsay system)
+#        "Pneumatic Suspension", "Chamber", "Pumping System", "FIB Vacuum",
+#        "UPS",
+#        "GIS", "GIS Reservoir",
+        "Chamber Cam",
+        "Chamber Light",
+#        "Ion Source",
+#        "Ion Beam",
+        "Ion Focus",
+#        "FIB Aperture",
+        "FIB Scanner",
+        "ETD",
+        "Sample Thermostat",
+        "Stage",
+        "Stage Focus",
+        "Optical Objective",
+        "Focus Aligner",
+        "Light Source",
+        "Filter Wheel",
+        "Camera",
+    ],
+}
+
+# Allows to change pressure in the chamber
+"Chamber": {
+    class: simulated.Chamber,
+    role: chamber,
+    init: {
+        # The Orsay component has these positions, but the simulator has different names: ["vented", "primary vacuum", "high vacuum"],
+        positions: ["vented", "low-vacuum", "vacuum"],
+    },
+}
+
+# Currently not available on the real MIMAS
+"Chamber Cam": {
+    class: andorcam2.AndorCam2,
+    role: chamber-ccd,
+    init: {
+       device: "fake",
+       # 8 bits greyscale
+    },
+}
+
+# (IR) light for the chamber
+"Chamber Light": {
+    class: simulated.Light,
+    role: chamber-light,
+    init: {},
+    affects: ["Chamber Cam"],
+}
+
+"FIB Simulator": {
+    class: simsem.SimSEM,
+    role: null,
+    init: {
+           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+#           drift_period: 5, # seconds
+    },
+    children: {
+        scanner: "FIB Scanner",
+        detector0: "ETD",
+        focus: "Ion Focus",
+    }
+}
+
+"FIB Scanner": {
+    role: ion-beam,
+    init: {
+        # TODO: check if we can provide better numbers to simulated the Orsay FIB
+        aperture: 200.e-6, # m
+        wd: 7.e-3, # m
+    },
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["ETD", "Camera"] # affects the CCD in case of cathodoluminescence
+}
+
+"ETD": {
+    role: se-detector,
+    init: {},
+}
+
+"Ion Focus": {
+    role: ion-focus,
+}
+
+# Lakeshore 350, which controls the temperature
+"Sample Thermostat": {
+    class: lakeshore.Lakeshore,
+    role: sample-thermostat,
+    init: {
+        port: "/dev/fake",  # For simulator
+        # First entry is "sample", which is the default value (temperture + targetTemperature)
+        sensor_input: {"": "D", "monolith": "B", "cooler": "C"}, # Simulator doesn't support D1-D5
+        output_channel: {"": 4, "monolith": 2},  # On simulator, A is always connected to 1, B to 2, etc.
+    },
+    properties: {
+        targetTemperature: -173, # °C
+    },
+    metadata: {
+        # TODO: Change values from test to real values
+        SAFE_REL_RANGE: [-5, 5],  # °C, safe operating range relative to targetTemperature
+        SAFE_SPEED_RANGE: [-0.5, 0.5], # °C/s, safe operating speed
+        FAV_POS_ACTIVE: {"heating": 2},  # Value to use when turning on the heater
+    },
+}
+
+"Stage": {
+    class: smaract.SmarPod,
+    role: stage,
+    init: {
+        locator: "fake",  # For simulator
+        hwmodel: 10077,  # CLS-32.1-D-SC
+        ref_on_init: False, # set to True if certain that the referencing cannot hit anything
+        hold_time: 1,  # s, default = infinite (.inf)
+        speed: 0.03,  # m/s
+        accel: 0.01,  # m/s²
+        axes: {
+            'x': {
+                'range': [-10.5e-3, 10.5e-3],
+                'unit': 'm',
+            },
+            'y': {
+                'range': [-10.5e-3, 10.5e-3],
+                'unit': 'm',
+            },
+            'z': {
+                'range': [-6.0e-3, 6.0e-3],
+                'unit': 'm',
+            },
+            'rx': {
+                'range': [-0.24, 0.18],  # -13,71° and +10,44°, Depends on the pivot point (50nm above top-plate)
+                'unit': 'rad',
+            },
+            'ry': {
+                'range': [-0.2, 0.2],  # +-11,43°, Depends on the pivot point (50nm above top-plate)
+                'unit': 'rad',
+            },
+            'rz': {
+                'range': [-0.345, 0.345],  # +-19.8°
+                'unit': 'rad',
+            },
+        },
+        inverted: ['y'],  # TODO Need to check that the rotations go counter-clockwise
+    },
+    metadata: {
+        # This has effect on the hardware
+        PIVOT_POS: {"x": -0.0016, "y": 0.00028, "z": 0.05154},
+
+        # Loading position (should NOT be within the POS_ACTIVE_RANGE)
+        FAV_POS_DEACTIVE: {"x": -0.008, "y": 0.00506, "z": 0.001975, "rx": 0, "rz": 0.1},
+        # Initial position when coating
+        # TODO: can it change a lot if coating is need for every grid? In such case, we might need a range
+        FAV_POS_COATING: {"x": -0.008, "y": -0.007, "z": -1.0e-3, "rx": 0, "rz": 0},
+        # Safe XYZ ranges for imaging (FM/FIB)
+        # Note: for the Z, that's the "safe" range, and the "Stage Focus" should have a subset range used to limit the autofocus
+        POS_ACTIVE_RANGE: {"x": [-5.0e-3, 10.e-3], "y": [-5.e-3, 5.e-3], "z": [-0.5e-3, 4.0e-3]},
+        # Initial position when going from loading to imaging.
+        # Typically, same as GRID 1, but also with shows the initial Z
+        FAV_POS_ACTIVE: {"x": -4.0e-3, "y": 0, "z": 40.0e-6, "rx": 0 , "rz": 0},
+        # Centers (X, Y) of each grid. The Z position is assumed to be the same for all grids.
+        # They should all be within POS_ACTIVE_RANGE!
+        SAMPLE_CENTERS: {
+            "GRID 1": {'x': -4.0e-3, 'y': 0},
+            "GRID 2": {'x': -4.0e-3, 'y': 2.46e-3},
+            # TODO: all 8 grids
+        },
+    },
+    affects: ["Camera"],
+}
+
+# Virtual extra component to control the focus by moving the stage Z
+"Stage Focus": {
+    class: actuator.MultiplexActuator,
+    role: focus,
+    dependencies: {"z": "Stage"},
+    init: {
+        axes_map: {"z": "z",},
+    },
+    metadata: {
+        # For the autofocus, to not try the whole range
+        # TODO: what's a good range? Typically it should be centered around FAV_POS_ACTIVE.z
+        POS_ACTIVE_RANGE: {"z": [-0.5e-3, 0.5e-3]}
+        # TODO: or should we use SAFE_REL_RANGE to contain the values relative to the "current" position?
+        # Alternatively, POS_ACTIVE_RANGE could be updated live after the alignment, based on SAFE_REL_RANGE+the current position
+    },
+    affects: ["Camera"],
+}
+
+"Light Source": {
+    class: omicronxx.HubxX,
+    role: light,
+    init: {
+        port: "/dev/fakehub", # Simulator
+    },
+    affects: ["Camera"],
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+        mag: 84.0, # ratio, (actually of the complete light path)
+        na: 0.85, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
+    },
+    affects: ["Camera"]
+}
+
+# Normally a Andor Zyla
+# Axes: X is horizontal on screen (going left->right), physical: far->close when looking at the door
+#       Y is vertical on screen (going bottom->top), physical: left->right when looking at the door
+"Camera": {
+    class: simcam.Camera,
+    role: ccd,
+    dependencies: {focus: "Stage Focus"},
+    init: {
+        image: "andorcam2-fake-clara.tiff",
+        transp: [-1, 2], # To swap/invert axes
+    },
+    metadata: {
+        # To change what the "good" focus position is on the simulator
+        # It's needed for not using the initial value, which is at deactive position.
+         FAV_POS_ACTIVE: {'z': 40.0e-6},  # good focus position (for simulator only)
+         ROTATION: 0,  # [rad] (=-5.7°)
+    },
+}
+
+# Controller for the filter-wheel
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake6", # Simulator
+        address: null, # Simulator
+        axes: ["fw"],
+        ustepsize: [1.227184e-5], # [rad/µstep]  (adjusted to move fast on the simulator)
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0}, #digital output used to switch on/off sensor
+        inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
+    },
+}
+
+"AntiBacklash for Filter Wheel": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            # Force every move to always finish in the same direction
+            "fw": 50.e-3,  # rad
+        },
+    },
+    children: {"slave": "Optical Actuators"},
+}
+
+"Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: filter,
+    dependencies: {"band": "AntiBacklash for Filter Wheel"},
+    init: {
+        axis_name: "fw",
+        # This filter-wheel is made so that the light goes through two "holes":
+        # the filter, and the opposite hole (left empty). So although it has 8
+        # holes, it only supports 4 filters (from 0° to 135°), and there is no
+        # "fast-path" between the last filter and the first one.
+        positions: {
+             # pos (rad) -> m,m
+             # 0.08: [414.e-9, 450.e-9], # FF01-432/36
+             0.08: "pass-through", # no filter
+             0.865398: [500.e-9, 530.e-9], # FF01-515/30
+             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
+             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    # TODO: a way to indicate the best filter to use during alignment and brightfield? via some metadata?
+    affects: ["Camera"],
+}
+
+
+# CLS3252dsc-1
+"Focus Aligner": {
+    class: smaract.MCS2,
+    role: align,
+    init: {
+        locator: "fake",
+        ref_on_init: True,
+        speed: 0.01,  # m/s
+        accel: 0.08,  # m/s²
+        #hold_time: 5 # s, default = infinite
+        # TODO: check the ranges, and the channel
+        axes: {
+            'z': {
+                # -11.5mm is safely parked (FAV_POS_DEACTIVE)
+                # 1.7mm is typically in focus (FAV_POS_ACTIVE)
+                range: [-29.e-3, 29.e-3],
+                unit: 'm',
+                channel: 0,
+            },
+        },
+    },
+    metadata: {
+        # Loading position to retract lens
+        FAV_POS_DEACTIVE: {'z': -21.0e-3},
+        # Initial active position (close from the sample, but not too close, for safety)
+        FAV_POS_ACTIVE: {'z': -0.1e-3},
+        FAV_POS_ALIGN: {'z': -0.1e-3},
+    },
+    affects: ["Camera"],
+}
