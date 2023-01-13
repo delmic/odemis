@@ -1896,8 +1896,9 @@
                     <option>1</option>
                   </object>
                   <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_position_opt">
+                    <object class="ProgressRadioButton" name="btn_position_opt">
                       <icon>img/icon/ico_optical.png</icon>
+                      <icon_progress>img/icon/ico_optical_orange.png</icon_progress>
                       <icon_on>img/icon/ico_optical_green.png</icon_on>
                       <height>48</height>
                       <face_colour>def</face_colour>
@@ -1921,8 +1922,9 @@
                     <option>1</option>
                   </object>
                   <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_position_fib">
+                    <object class="ProgressRadioButton" name="btn_position_fib">
                       <icon>img/icon/ico_sem.png</icon>
+                      <icon_progress>img/icon/ico_sem_orange.png</icon_progress>
                       <icon_on>img/icon/ico_sem_green.png</icon_on>
                       <height>48</height>
                       <face_colour>def</face_colour>
@@ -4208,9 +4210,10 @@
                 <object class="sizeritem">
                   <object class="wxGridBagSizer">
 										<object class="sizeritem">
-											<object class="GraphicRadioButton"
+											<object class="ProgressRadioButton"
       												name="btn_switch_sem_imaging">
 												<icon>img/icon/ico_sem.png</icon>
+												<icon_progress>img/icon/ico_sem_orange.png</icon_progress>
 												<icon_on>img/icon/ico_sem_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
@@ -4230,9 +4233,10 @@
 											<cellpos>0,0</cellpos>
 										</object>
 										<object class="sizeritem">
-											<object class="GraphicRadioButton"
+											<object class="ProgressRadioButton"
       												name="btn_switch_fm_imaging">
 												<icon>img/icon/ico_meteorimaging.png</icon>
+												<icon_progress>img/icon/ico_meteorimaging_orange.png</icon_progress>
 												<icon_on>img/icon/ico_meteorimaging_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
@@ -4252,9 +4256,10 @@
 											<cellpos>0,1</cellpos>
 										</object>
 										<object class="sizeritem">
-											<object class="GraphicRadioButton"
+											<object class="ProgressRadioButton"
       												name="btn_switch_grid1">
 												<icon>img/icon/ico_meteorgrid.png</icon>
+												<icon_progress>img/icon/ico_meteorgrid_orange.png</icon_progress>
 												<icon_on>img/icon/ico_meteorgrid_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
@@ -4274,9 +4279,10 @@
 											<cellpos>1,0</cellpos>
 										</object>
 										<object class="sizeritem">
-											<object class="GraphicRadioButton"
+											<object class="ProgressRadioButton"
       												name="btn_switch_grid2">
 												<icon>img/icon/ico_meteorgrid.png</icon>
+												<icon_progress>img/icon/ico_meteorgrid_orange.png</icon_progress>
 												<icon_on>img/icon/ico_meteorgrid_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
@@ -4303,10 +4309,11 @@
 								<object class="sizeritem">
 									<object class="wxGridBagSizer">
 										<object class="sizeritem">
-											<object class="GraphicRadioButton"
+											<object class="ProgressRadioButton"
       												name="btn_switch_loading">
 												<icon>img/icon/ico_eject.png</icon>
-												<icon_on>img/icon/ico_eject_orange.png</icon_on>
+												<icon_progress>img/icon/ico_eject_orange.png</icon_progress>
+												<icon_on>img/icon/ico_eject_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>LOADING</label>
@@ -4325,10 +4332,11 @@
 											<cellpos>0,0</cellpos>
 										</object>
 										<object class="sizeritem">
-											<object class="GraphicRadioButton"
+											<object class="ProgressRadioButton"
       												name="btn_switch_imaging">
 												<icon>img/icon/ico_imaging.png</icon>
-												<icon_on>img/icon/ico_imaging_orange.png</icon_on>
+												<icon_progress>img/icon/ico_imaging_orange.png</icon_progress>
+												<icon_on>img/icon/ico_imaging_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>3 BEAMS</label>
@@ -4347,9 +4355,10 @@
 											<cellpos>0,1</cellpos>
 										</object>
 										<object class="sizeritem">
-											<object class="GraphicRadioButton"
+											<object class="ProgressRadioButton"
                                                       name="btn_switch_zero_tilt_imaging">
                                                   <icon>img/icon/ico_sem.png</icon>
+                                                  <icon_progress>img/icon/ico_sem_orange.png</icon_progress>
                                                   <icon_on>img/icon/ico_sem_green.png</icon_on>
                                                   <height>48</height>
                                                   <face_colour>def</face_colour>
@@ -4369,10 +4378,11 @@
 											<cellpos>1,0</cellpos>
 										</object>
 										<object class="sizeritem">
-											<object class="GraphicRadioButton"
+											<object class="ProgressRadioButton"
       												name="btn_switch_coating">
 												<icon>img/icon/ico_coating.png</icon>
-												<icon_on>img/icon/ico_coating_orange.png</icon_on>
+												<icon_progress>img/icon/ico_coating_orange.png</icon_progress>
+												<icon_on>img/icon/ico_coating_green.png</icon_on>
 												<height>48</height>
 												<face_colour>def</face_colour>
 												<label>COATING</label>
@@ -4811,10 +4821,11 @@
                                                <object class="wxBoxSizer">
 											<orient>wxVERTICAL</orient>
 											<object class="sizeritem">
-                                              <object class="GraphicRadioButton"
+                                              <object class="ProgressRadioButton"
                                                         name="btn_switch_align">
                                                     <icon>img/icon/ico_lens.png</icon>
-                                                    <icon_on>img/icon/ico_lens_orange.png</icon_on>
+                                                    <icon_progress>img/icon/ico_lens_orange.png</icon_progress>
+                                                    <icon_on>img/icon/ico_lens_green.png</icon_on>
                                                     <height>48</height>
                                                     <face_colour>def</face_colour>
                                                     <label>FACTORY ALIGNMENT</label>
