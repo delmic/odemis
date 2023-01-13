@@ -387,6 +387,7 @@ class FastEMROCController(object):
         self.calib_model.coordinates.subscribe(self._on_coordinates)
 
         self.overlay = None
+        self.is_selected = False
 
     def fit_view_to_bbox(self):
         """
@@ -417,8 +418,9 @@ class FastEMROCController(object):
                 self._viewport.canvas.remove_overlay(self.overlay)
                 self.overlay = None  # needed so it can be added again to viewport
         else:
-            # add ROC overlay if not there yet (e.g. do not add when just moving the overlay)
-            if self.overlay is None:
+            # add ROC overlay if not there yet and only if the selection button label is OK
+            # (e.g. do not add when just moving the overlay)
+            if self.overlay is None and self.is_selected:
                 if self.calib_prefix == "calib_3":
                     self.overlay = self._viewport.canvas.\
                         add_calibration_overlay(self.calib_model.coordinates,
@@ -482,6 +484,7 @@ class FastEMCalibrationRegionsController(object):
         num = [num for num, b in self.panel.buttons.items() if b == btn][0]
 
         if btn.GetValue():
+            self.roc_ctrls[num].is_selected = True  # indicate that the button has been selected
             # update the coordinates
             # By default, the calibration region is in the center of the scintillator.
             # It is a single field image and thus its size is defined by the
@@ -498,6 +501,7 @@ class FastEMCalibrationRegionsController(object):
             self.roc_ctrls[num].calib_model.coordinates.value = (xmin, ymin, xmax, ymax)
             self.roc_ctrls[num].fit_view_to_bbox()  # Zoom to calibration region
         else:
+            self.roc_ctrls[num].is_selected = False  # indicate that the button has been de-selected
             # reset coordinates for ROC to undefined
             self.roc_ctrls[num].calib_model.coordinates.value = acqstream.UNDEFINED_ROI
 
@@ -508,27 +512,21 @@ class FastEMCalibrationRegionsController(object):
         Whenever the list of active scintillators changes and or a ROC is selected/deselected, the
         buttons are updated/enabled/disabled accordingly.
         """
-        rocs = self.calibration_regions.value
         active_scintillators = self._tab_data.main.active_scintillators.value
 
         for num, b in self.panel.buttons.items():
-            roc = rocs[num]
-
-            # scintillator selected, but undefined ROC
-            if num in active_scintillators and roc.coordinates.value == acqstream.UNDEFINED_ROI:
-                b.Enable(True)
-                b.SetLabel("?")
-                b.SetForegroundColour(odemis.gui.FG_COLOUR_RADIO_INACTIVE)
-            # scintillator selected, defined roc
-            elif num in active_scintillators and roc.coordinates.value != acqstream.UNDEFINED_ROI:
-                b.Enable(True)
-                b.SetLabel("OK")
-                if self._calib_prefix == "calib_2":
-                    b.SetForegroundColour(FG_COLOUR_WARNING)
-                else:
-                    b.SetForegroundColour(wx.GREEN)  # default to green
-            # scintillator unselected
-            else:
+            if num in active_scintillators:
+                b.Enable(True)  # always enable the button when the scintillator is active
+                if self.roc_ctrls[num].is_selected:
+                    b.SetLabel("OK")
+                    if self._calib_prefix == "calib_2":
+                        b.SetForegroundColour(FG_COLOUR_WARNING)
+                    else:
+                        b.SetForegroundColour(wx.GREEN)  # default to green
+                elif not self.roc_ctrls[num].is_selected:
+                    b.SetLabel("?")
+                    b.SetForegroundColour(odemis.gui.FG_COLOUR_RADIO_INACTIVE)
+            else:  # scintillator unselected
                 b.Enable(False)
                 b.SetLabel("?")
                 b.SetForegroundColour(odemis.gui.FG_COLOUR_BUTTON)
