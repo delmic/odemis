@@ -530,7 +530,6 @@ class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
             text_colour = None
         super(ImageTextToggleButton, self).DrawText(dc, width, height, dx=0, dy=0, text_colour=text_colour)
 
-
 class ImageStateButton(ImageToggleButton):
     """
     Multi-state graphical button that can switch between any number of states/images.
@@ -670,8 +669,10 @@ class GraphicRadioButton(ImageTextToggleButton):
         super(GraphicRadioButton, self).__init__(*args, **kwargs)
 
     def OnLeftDown(self, event):
-        """ This event handler is fired on left mouse button events, but it ignores those events
-        if the button is already active.
+        """
+        This event handler is fired on left mouse button event,
+        but it ignores those event if the button is already active.
+        (So, it stays down, instead of toggling back to "up" like a ToggleButton)
         """
         if not self.IsEnabled() or not self.up:
             return
@@ -685,6 +686,80 @@ class GraphicRadioButton(ImageTextToggleButton):
             self.CaptureMouse()
         self.SetFocus()
         self.Refresh()
+
+
+# The 3 states of the ProgressRadioButton
+BTN_TOGGLE_OFF = 0
+BTN_TOGGLE_PROGRESS = 1
+BTN_TOGGLE_COMPLETE = 2
+
+
+class ProgressRadioButton(GraphicRadioButton):
+    """
+    Button that when pressed down, first goes to a "in progress" state (and image),
+    but can also go to a "completed" state to indicate to the user the action is done.
+    So instead of having a boolean value, it has:
+     * BTN_TOGGLE_OFF (untoggled)
+     * BTN_TOGGLE_PROGRESS (toggled and in progress)
+     * BTN_TOGGLE_COMPLETE (toggled and completed).
+    There is no way for the user to explicitly set the button to completed, this
+    can only be done programmatically.
+    Pressing on the button when it's already toggled has no effect.
+    """
+
+    def __init__(self, *args, **kwargs):
+        """
+        icon: (wx.Bitmap) when untoggled
+        icon_progress: (wx.Bitmap) when toggled and in progress
+        icon_on: (wx.Bitmap) when toggled and completed
+        (wx.Bitmap)
+        """
+        self._icon_progress = kwargs.pop('icon_progress', None)
+
+        # The super class has a .icon_on, which we use to show both the progress and on icons
+        self._actual_icon_on = kwargs.get('icon_on', None)
+        self._completed = True
+        super().__init__(*args, **kwargs)
+
+    def GetValue(self):
+        if self.up:
+            if self._completed:
+                return BTN_TOGGLE_COMPLETE
+            else:
+                return BTN_TOGGLE_PROGRESS
+        else:
+            return BTN_TOGGLE_OFF
+
+    def SetValue(self, v):
+        if v == BTN_TOGGLE_OFF:
+            self._completed = False
+            self.icon_on = self._icon_progress  # For next time it's pressed down
+            self.SetToggle(False)  # updates self.up
+        elif v == BTN_TOGGLE_PROGRESS:
+            self._completed = False
+            self.icon_on = self._icon_progress
+            self.SetToggle(True)
+        elif v == BTN_TOGGLE_COMPLETE:
+            self._completed = True
+            self.icon_on = self._actual_icon_on
+            self.SetToggle(True)
+        else:
+            raise ValueError(f"Can only accept 0, 1, or 2, but got {v}")
+
+    def OnLeftDown(self, event):
+        """
+        This event handler is fired on left mouse button event,
+        but it ignores those event if the button is already active.
+        (So, it stays down, instead of toggling back to "up" like a ToggleButton)
+        """
+        if not self.IsEnabled() or not self.up:
+            return
+
+        # Always set it back to "in progress"
+        self._completed = False
+        self.icon_on = self._icon_progress
+
+        super().OnLeftDown(event)
 
 
 class TabButton(GraphicRadioButton):

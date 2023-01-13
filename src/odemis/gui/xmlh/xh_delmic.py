@@ -376,6 +376,8 @@ class _ImageButtonHandler(xrc.XmlResourceHandler):
                 kwargs["label"] = self.GetText('label')
             if self.GetParamNode("active_colour"):
                 kwargs["active_colour"] = self.GetText('active_colour')
+            if self.GetParamNode("icon_progress"):
+                kwargs["icon_progress"] = self.GetBitmap("icon_progress")
 
             w = self.klass(
                 self.GetParentAsWindow(),
@@ -413,6 +415,11 @@ HANDLER_CLASS_LIST.append(ImageTextToggleButtonHandler)
 class GraphicRadioButtonHandler(_ImageButtonHandler):
     klass = btns.GraphicRadioButton
 HANDLER_CLASS_LIST.append(GraphicRadioButtonHandler)
+
+
+class ProgressRadioButtonHandler(_ImageButtonHandler):
+    klass = btns.ProgressRadioButton
+HANDLER_CLASS_LIST.append(ProgressRadioButtonHandler)
 
 
 class TabButtonHandler(_ImageButtonHandler):

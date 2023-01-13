@@ -92,6 +92,9 @@ class OdemisXmlResourceCompiler(XmlResourceCompiler):
 
         if node.nodeName == "icon_on":
             return True
+
+        if node.nodeName == "icon_progress":
+            return True
             
         return XmlResourceCompiler.NodeContainsFilename(self, node)
 
