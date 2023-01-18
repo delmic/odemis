@@ -21,19 +21,21 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
 import math
-from numpy import fft
-import numpy
-from odemis import model
-import odemis
-from odemis.acq.align import spot
-from odemis.acq.align.spot import GRID_SIMILARITY, GRID_AFFINE
-from odemis.dataio import hdf5, tiff
-from odemis.driver.actuator import ConvertStage
-from odemis.util import testing, mock
 import os
 import time
 import unittest
 
+import numpy
+from numpy import fft
+
+import odemis
+from odemis import model
+from odemis.acq.align import spot
+from odemis.acq.align.spot import GRID_AFFINE, GRID_SIMILARITY
+from odemis.dataio import hdf5, tiff
+from odemis.driver.actuator import ConvertStage
+from odemis.util import mock, testing
+from odemis.util.transform import ScalingTransform
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -289,6 +291,34 @@ class TestFindGridSpots(unittest.TestCase):
         # Since both images have a grid with shear, the shear in both cases should not be equal to zero.
         self.assertNotEqual(shear, 0)
         self.assertNotEqual(more_shear, 0)
+
+    def test_find_grid_with_rotation(self):
+        """
+        Create an image with a grid of 8 by 8 spots. Then rotate the spots and test if the correct rotation is found.
+        """
+        # test for a rotated image
+        image = numpy.zeros((256, 256))
+        image[54:150:12, 54:150:12] = 1
+        # get the spot indices
+        indices = numpy.where(image)
+        indices = numpy.column_stack((indices[0], indices[1]))
+        img_rotation = math.radians(10)
+        transform = ScalingTransform(rotation=img_rotation)
+        # get the rotated indices
+        rotated_indices = transform.apply(indices)
+        rotated_indices -= numpy.min(rotated_indices)
+        rotated_indices += 10  # make sure each spot is at least 10 pixels away from the border
+        max_idx = int(numpy.max(rotated_indices))
+        rotated_image = numpy.zeros((max_idx + 10, max_idx + 10))
+        # set a grid of 8 by 8 rotated points to 1
+        for idx in rotated_indices:
+            row = int(round(idx[0]))
+            column = int(round(idx[1]))
+            rotated_image[row][column] = 1
+        spot_coordinates, translation, scaling, rotation, shear = spot.FindGridSpots(rotated_image, (8, 8))
+        # FindGridSpots returns a positive value for clockwise rotation, ScalingTransform rotates the coordinates
+        # counterclockwise for a positive rotation, therefore the signs of the rotation are the opposite of each other.
+        self.assertAlmostEqual(rotation, -img_rotation, places=2)
 
     def test_wrong_method(self):
         """Test that an error is raised when a wrong method is passed."""
