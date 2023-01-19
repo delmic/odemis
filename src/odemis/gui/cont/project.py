@@ -112,7 +112,6 @@ class FastEMProjectListController(object):
         a calibration or acquisition is already ongoing or not.
         :param mode: (bool) Whether the system is currently acquiring or not acquiring.
         """
-        # TODO only disable while an acquisition is ongoing. During calibration it is fine to enable.
         self._project_list.Enable(not mode)
 
 
@@ -134,8 +133,8 @@ class FastEMProjectController(object):
         self._tab_data = tab_data
         self._project_bar = project_list
         self._viewport = viewport
-        self.regions_calib_2 = getattr(tab_data, "regions_" + "calib_2")  # FIXME calib_prefix
-        self.regions_calib_3 = getattr(tab_data, "regions_" + "calib_3")  # FIXME calib_prefix
+        self.regions_calib_2 = tab_data.regions_calib_2
+        self.regions_calib_3 = tab_data.regions_calib_3
 
         self.roa_ctrls = {}  # dict int --> FastEMROAController
         self.colour = colour
