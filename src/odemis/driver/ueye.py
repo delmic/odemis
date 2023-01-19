@@ -268,6 +268,38 @@ PIXELCLOCK_CMD_GET_DEFAULT = 4
 PIXELCLOCK_CMD_GET = 5
 PIXELCLOCK_CMD_SET = 6
 
+# For is_AOI()
+AOI_IMAGE_SET_AOI = 1
+AOI_IMAGE_GET_AOI = 2
+AOI_IMAGE_SET_POS = 3
+AOI_IMAGE_GET_POS = 4
+AOI_IMAGE_SET_SIZE = 5
+AOI_IMAGE_GET_SIZE = 6
+AOI_IMAGE_GET_POS_MIN = 7
+AOI_IMAGE_GET_SIZE_MIN = 8
+AOI_IMAGE_GET_POS_MAX = 9
+AOI_IMAGE_GET_SIZE_MAX = 10
+AOI_IMAGE_GET_POS_INC = 11
+AOI_IMAGE_GET_SIZE_INC = 12
+AOI_IMAGE_GET_POS_X_ABS = 13
+AOI_IMAGE_GET_POS_Y_ABS = 14
+AOI_IMAGE_GET_ORIGINAL_AOI = 15
+AOI_IMAGE_SET_POS_FAST = 16
+AOI_IMAGE_GET_POS_FAST_SUPPORTED = 17
+AOI_AUTO_BRIGHTNESS_SET_AOI = 18
+AOI_AUTO_BRIGHTNESS_GET_AOI = 19
+AOI_AUTO_WHITEBALANCE_SET_AOI = 20
+AOI_AUTO_WHITEBALANCE_GET_AOI = 21
+
+
+class IS_RECT(Structure):
+    _fields_ = [
+        ("s32X", c_uint32),
+        ("s32Y", c_uint32),
+        ("s32Width", c_uint32),
+        ("s32Height", c_uint32)
+    ]
+
 
 class UEYE_CAPTURE_STATUS_INFO(Structure):
     _fields_ = [
@@ -275,6 +307,7 @@ class UEYE_CAPTURE_STATUS_INFO(Structure):
         ("reserved", c_uint8 * 60),
         ("adwCapStatusCnt_Detail", c_uint32 * 256),
     ]
+
 
 CAP_STATUS_API_NO_DEST_MEM = 0xa2
 CAP_STATUS_API_CONVERSION_FAILED = 0xa3
@@ -646,14 +679,18 @@ class UEyeDLL(CDLL):
 
 class Camera(model.DigitalCamera):
     """
-    Represents a IDS uEye camera.
+    Represents an IDS uEye camera.
     Currently, only greyscale mode is supported
     """
 
-    def __init__(self, name, role, device=None, **kwargs):
+    def __init__(self, name, role, device=None, max_res=None, **kwargs):
         """
-        device (None or str): serial number (eg, 1020345) of the device to use
-          or None if any device is fine.
+        device (None or str): serial number (eg, 1020345) of the device to use or None if any device is fine.
+
+        max_res ((1 <= int, 1 <= int) or None): maximum resolution possible.
+        This will restrict the maximum FoV. If None, it'll use the maximum supported by the camera reported.
+        In such case, the translation is not clipped, so it can be used to move the area anywhere
+        in full camera sensor. That is after applying the transpose.
         """
         super(Camera, self).__init__(name, role, **kwargs)
         self._dll = UEyeDLL()
@@ -678,8 +715,28 @@ class Camera(model.DigitalCamera):
 
             self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
-            res = (sensorinfo.nMaxWidth, sensorinfo.nMaxHeight)
-            self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(res)
+            self._sensor_res = (sensorinfo.nMaxWidth, sensorinfo.nMaxHeight)
+            sensor_res_user = self._transposeSizeToUser(self._sensor_res)
+
+            if max_res is None:
+                max_res = self._sensor_res
+            else:
+                max_res = tuple(max_res)
+            if not all(1 <= mr <= r for mr, r in zip(max_res, sensor_res_user)):
+                raise ValueError(f"max_res has to be between (1, 1) and {sensor_res_user}, but got {max_res}")
+            max_res_hw = self._transposeSizeFromUser(max_res)
+
+            # compare the max_res parameter and the resolution of the camera sensor
+            # if the max_res param is smaller image cropping will be set through AOI
+            if max_res_hw != self._sensor_res:
+                rect_aoi = IS_RECT()
+                rect_aoi.s32X = (self._sensor_res[0] - max_res_hw[0]) // 2
+                rect_aoi.s32Y = (self._sensor_res[1] - max_res_hw[1]) // 2
+                rect_aoi.s32Width = max_res_hw[0]
+                rect_aoi.s32Height = max_res_hw[1]
+                self.SetAOI(rect_aoi)
+            self._metadata[model.MD_SENSOR_SIZE] = sensor_res_user
+
             pxs = sensorinfo.wPixelSize * 1e-8  # m
             self.pixelSize = model.VigilantAttribute(self._transposeSizeToUser((pxs, pxs)),
                                                      unit="m", readonly=True)
@@ -712,7 +769,7 @@ class Camera(model.DigitalCamera):
             self._dtype = numpy.uint16 if bpp > 8 else numpy.uint8
             self._metadata[model.MD_BPP] = bpp
             logging.info("Set color mode to {} bits.".format(bpp))
-            self._shape = res + (numpy.iinfo(self._dtype).max + 1,)
+            self._shape = max_res_hw + (numpy.iinfo(self._dtype).max + 1,)
 
             # For now we only support software binning. Some cameras support a bit
             # of binning (not necessarily in both dimensions), but to make it
@@ -737,7 +794,7 @@ class Camera(model.DigitalCamera):
             # (re)allocate the buffer.
             self._buffers_props = res, dtype
 
-            rorate = self.GetPixelClock() * 1e6 # MHz -> Hz
+            rorate = self.GetPixelClock() * 1e6  # MHz -> Hz
             self.readoutRate = model.VigilantAttribute(rorate, readonly=True,
                                                        unit="Hz")
 
@@ -908,6 +965,18 @@ class Camera(model.DigitalCamera):
         newfps = c_double()
         self._dll.is_SetFrameRate(self._hcam, c_double(fr), byref(newfps))
         return newfps.value
+
+    def SetAOI(self, rect: IS_RECT):
+        """
+        Set a predefined Area Of Interest according to configuration settings.
+        This forces image cropping for a fov which is too large.
+        A specific shape is used to set the area it is centered on the image view.
+        :param rect: The selected shape set by the user to apply image cropping.
+        Note: This function is not supported by the camera models USB 3 uEye XC and XS
+        """
+        self._dll.is_AOI(self._hcam, AOI_IMAGE_SET_AOI, byref(rect), sizeof(rect))
+        rect_res = (rect.s32Width, rect.s32Height)
+        logging.debug("Updated area of interest from %s to %s" % (self._sensor_res, rect_res))
 
     def GetPixelClock(self):
         """
