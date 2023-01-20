@@ -35,7 +35,8 @@ from odemis.util import executeAsyncTask
 
 MAX_SUBMOVE_DURATION = 60  # s
 
-UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING, GRID_1, GRID_2, THREE_BEAMS = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
+UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, \
+    FM_IMAGING, GRID_1, GRID_2, THREE_BEAMS = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
 POSITION_NAMES = {
     UNKNOWN: "UNKNOWN",
     LOADING: "LOADING",
@@ -198,7 +199,7 @@ def _getCurrentMeteorPositionLabel(current_pos, stage):
     Detects the current stage position of meteor 
     current_pos (dict str->float): position of the stage 
     stage (Actuator): the stage-bare component
-    returns a label LOADING, SEM_IMAGIN, FM_IMAGING or UNKNOWN
+    returns a label LOADING, SEM_IMAGING, FM_IMAGING or UNKNOWN
     """
     # meta data of meteor stage positions 
     stage_md = stage.getMetadata()
@@ -216,11 +217,42 @@ def _getCurrentMeteorPositionLabel(current_pos, stage):
     return UNKNOWN
 
 
-def getCurrentPositionLabel(current_pos, stage):
+def _getCurrentMimasPositionLabel(current_stage_pos, stage, aligner):
+    """
+    Detects the current aligner position of mimas
+    :param current_stage_pos: (dict str->float) position of the stage
+    :param stage: (Actuator) the stage component
+    :param aligner: (Actuator) the align component
+    returns a label LOADING, FM_IMAGING, MILLING or UNKNOWN
+    """
+    # meta data of meteor stage positions
+    stage_md = stage.getMetadata()
+    stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
+    stage_imaging_rng = stage_md[model.MD_POS_ACTIVE_RANGE]
+
+    current_align_pos = aligner.position.value
+    aligner_md = aligner.getMetadata()
+    aligner_fib = aligner_md[model.MD_FAV_POS_DEACTIVE]
+    aligner_optical = aligner_md[model.MD_FAV_POS_ACTIVE]
+
+    if _isInRange(current_stage_pos, stage_imaging_rng, {'x', 'y', 'z'}):
+        if _isNearPosition(current_align_pos, aligner_fib, aligner.axes):
+            return MILLING
+        elif _isNearPosition(current_align_pos, aligner_optical, aligner.axes):
+            return FM_IMAGING
+    elif _isNearPosition(current_stage_pos, stage_deactive, stage.axes):
+        return LOADING
+
+    # None of the above -> unknown position
+    return UNKNOWN
+
+
+def getCurrentPositionLabel(current_pos, stage, aligner=None):
     """
     Determine where lies the current stage position
     :param current_pos: (dict str->float) Current position of the stage
-    :param stage: (Actuator) the stage component 
+    :param stage: (Actuator) the stage component
+    :param aligner: (Actuator) the align component
     :return: (int) a value representing stage position from the constants LOADING, THREE_BEAMS, COATING, etc.
     """
     role = model.getMicroscope().role
@@ -228,8 +260,11 @@ def getCurrentPositionLabel(current_pos, stage):
         return _getCurrentEnzelPositionLabel(current_pos, stage)
     elif role == 'meteor':
         return _getCurrentMeteorPositionLabel(current_pos, stage)
+    elif role == 'mimas':
+        return _getCurrentMimasPositionLabel(current_pos, stage, aligner)
     else:
         raise LookupError("Unhandled microscope role %s" % role)
+
 
 def getCurrentAlignerPositionLabel(current_pos, align):
     """

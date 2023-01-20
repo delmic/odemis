@@ -202,6 +202,12 @@ class OdemisGUIApp(wx.App):
                     "panel"     : main_xrc.xrcpnl_tab_enzel_align
                 },
                 {
+                    "name": "mimas_align",
+                    "controller": tabs.MimasAlignTab,
+                    "button": self.main_frame.btn_tab_align_enzel,  # enzel alignment button is fine
+                    "panel": main_xrc.xrcpnl_tab_mimas_align
+                },
+                {
                     "name": "sparc_align",
                     "controller": tabs.SparcAlignTab,
                     "button": self.main_frame.btn_tab_align,

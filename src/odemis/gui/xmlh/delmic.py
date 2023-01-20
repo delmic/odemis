@@ -202,6 +202,8 @@ buttons = [
      'New button', 'Icon Text Toggle Button', True),
     ('GraphicRadioButton', xh_delmic.GraphicRadioButtonHandler,
      'New button', 'Icon Text Toggle Group Button', True),
+    ('ProgressRadioButton', xh_delmic.ProgressRadioButtonHandler,
+     'New button', 'Icon Text Toggle Progress Button', True),
     ('TabButton', xh_delmic.TabButtonHandler,
      'New button', 'Tab Button', True),
     ('ViewButton', xh_delmic.ViewButtonHandler,
@@ -209,7 +211,7 @@ buttons = [
 ]
 
 for btn in buttons:
-    attrs = ['pos', 'size', 'icon', 'icon_on', 'height', 'face_colour']
+    attrs = ['pos', 'size', 'icon', 'icon_on', 'icon_progress', 'height', 'face_colour']
     attrs += ['label'] if btn[4] else []
 
     c = component.Component(
@@ -222,6 +224,8 @@ for btn in buttons:
     c.setParamClass('icon', params.ParamBitmap)
     c.setSpecial('icon_on',  attribute.BitmapAttribute)
     c.setParamClass('icon_on', params.ParamBitmap)
+    c.setSpecial('icon_progress', attribute.BitmapAttribute)
+    c.setParamClass('icon_progress', params.ParamBitmap)
     c.setParamClass('height', ButtonSizesParam)
     c.setParamClass('face_colour', ButtonFaceColourParam)
 
