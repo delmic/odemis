@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 18 Jun 2012
 
 @author: Éric Piel
@@ -18,16 +18,19 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
-from past.builtins import basestring
-import Pyro4
-from Pyro4.core import oneway
-from collections.abc import Mapping
+"""
 import logging
 import multiprocessing
 import os
+import tempfile
 import threading
-from future.moves.urllib.parse import quote
+from collections.abc import Mapping
+from urllib.parse import quote
+
+import Pyro4
+from Pyro4.core import oneway
+from past.builtins import basestring
+
 from odemis.util import inspect_getmembers
 
 
@@ -42,8 +45,8 @@ from odemis.util import inspect_getmembers
 # Multiplex can handle a much larger number of connections, but will always
 # execute the requests one at a time, which can cause deadlock when handling
 # callbacks.
-#Pyro4.config.SERVERTYPE = "multiplex"
-Pyro4.config.THREADPOOL_MINTHREADS = 16 # TODO: still need 48, because it can block when increasing the pool?
+# Pyro4.config.SERVERTYPE = "multiplex"
+Pyro4.config.THREADPOOL_MINTHREADS = 16  # TODO: still need 48, because it can block when increasing the pool?
 Pyro4.config.THREADPOOL_MAXTHREADS = 128
 # TODO make sure Pyro can now grow the pool: it used to allocate a huge static
 # number of threads. It seems also that when growing the pool it sometimes blocks
@@ -53,16 +56,20 @@ Pyro4.config.THREADPOOL_MAXTHREADS = 128
 INIT_TIMEOUT = 300  # s
 CALL_TIMEOUT = 30  # s
 
-# TODO needs a different value on Windows
-# TODO try a user temp directory if /var/run/odemisd doesn't exist (and cannot be created)
-BASE_DIRECTORY="/var/run/odemisd"
-BASE_GROUP="odemis" # user group that is allowed to access the backend
+# Set the base directory
+BASE_DIRECTORY = "/var/run/odemisd"
+path_exists = os.path.exists(BASE_DIRECTORY)
+if not path_exists:
+    logging.info(f"{BASE_DIRECTORY} could not be found. Creating new temporary folder.")
+    BASE_DIRECTORY = os.path.join(tempfile.gettempdir(), "odemisd")
+    os.makedirs(BASE_DIRECTORY, exist_ok=True)
 
-
-BACKEND_FILE = BASE_DIRECTORY + "/backend.ipc" # the official ipc file for backend (just to detect status)
-BACKEND_NAME = "backend" # the official name for the backend container
+BASE_GROUP = "odemis"  # user group that is allowed to access the backend
+BACKEND_FILE = os.path.join(BASE_DIRECTORY, "backend.ipc")  # the official ipc file for backend (just to detect status)
+BACKEND_NAME = "backend"  # the official name for the backend container
 
 _microscope = None
+
 
 def getMicroscope():
     """
@@ -81,6 +88,7 @@ def getMicroscope():
         _microscope = backend.getRoot()
         backend._pyroTimeout = prev_to
     return _microscope
+
 
 def getComponent(name=None, role=None):
     """
@@ -243,6 +251,7 @@ else:
     def prepare_to_listen_to_more_vas(inc):
         pass
 
+
 # Container management functions and class
 class ContainerObject(Pyro4.core.DaemonObject):
     """Object which represent the daemon for remote access"""
@@ -284,6 +293,7 @@ class ContainerObject(Pyro4.core.DaemonObject):
         returns the root object, if it has been defined in the container
         """
         return self.getObject(self.daemon.rootId)
+
 
 # Basically a wrapper around the Pyro Daemon
 class Container(Pyro4.core.Daemon):
@@ -500,4 +510,3 @@ def _manageContainer(name, isready=None):
         isready.set()
     container.run()
     container.close()
-
