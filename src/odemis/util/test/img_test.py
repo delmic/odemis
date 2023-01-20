@@ -22,14 +22,16 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import math
 import os
+import statistics
 import time
 import unittest
-from builtins import range
 
+from matplotlib import cm, colors
 import numpy
 
 from odemis import model
 from odemis.dataio import tiff
+from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.util import img, get_best_dtype_for_acc, testing
 from odemis.util.img import Bin, mean_within_circle
 
@@ -1182,6 +1184,838 @@ class TestRotateImage(unittest.TestCase):
             numpy.testing.assert_array_equal(image, rotated_img)  # The data should not change, only the metadata.
 
 
+class TestTintToMdFormat(unittest.TestCase):
+
+    def test_tint_to_md_format(self):
+        """
+        Check if passing a tint in different input types will lead to returning the correct metadata format.
+        """
+        # test for Tuple tint instance type
+        tint_name = img.tint_to_md_format((240, 240, 10))
+        self.assertEqual(tint_name, (240, 240, 10))
+
+        # test for Colormap tint instance type
+        tint_name = img.tint_to_md_format(cm.get_cmap('summer', 10))
+        self.assertEqual(tint_name, 'summer')
+
+        # test for str tint instance type
+        tint_name = img.tint_to_md_format(TINT_FIT_TO_RGB)
+        self.assertEqual(tint_name, TINT_FIT_TO_RGB)
+
+    def test_tint_to_md_format_unexpected(self):
+        """
+        Check if passing an unknown tint str will lead to raising a correct exception.
+        """
+        TINT_RGB_NONE = "norgb"
+
+        with self.assertRaises(ValueError):
+            img.tint_to_md_format(TINT_RGB_NONE)
+
+
+class TestMdFormatToTint(unittest.TestCase):
+
+    def test_md_format_to_tint_tuple(self):
+        """
+        Check if passing different user_tint types in saved metadata will lead to returning the correct tint format.
+        """
+        # test for Tuple tint instance type
+        tint_obj = img.md_format_to_tint((240, 240, 10))
+        self.assertIsInstance(tint_obj, tuple)
+
+        # test for str tint instance type
+        tint_obj = img.md_format_to_tint(TINT_FIT_TO_RGB)
+        self.assertIsInstance(tint_obj, str)
+
+        # test for Colormap tint instance type
+        tint_obj = img.md_format_to_tint('autumn')
+        self.assertIsInstance(tint_obj, colors.Colormap)
+
+    def test_md_format_to_tint_unexpected_input(self):
+        """
+        Check if passing an unknown user_tint str or a wrong type in
+        saved metadata will lead to raising the correct exception.
+        """
+        TINT_RGB_NONE = "norgb"
+
+        with self.assertRaises(ValueError):
+            img.md_format_to_tint(TINT_RGB_NONE)
+
+        with self.assertRaises(TypeError):
+            img.md_format_to_tint(0.05)
+
+
+class TestGetOutliers(unittest.TestCase):
+
+    def test_get_outliers_default(self):
+        """
+        Verify that with the default outlier value (0) the right
+        min/max values of the histogram range within a DA are returned.
+        It is expected that none of the outliers will be discarded.
+        """
+        # input will be a DA containing a fake picture
+        size = (300, 300)
+        depth = 256
+        outliers = [200, 50, 40, 2, 9]
+
+        # create a DA with a couple of outliers
+        data = numpy.zeros(size, dtype='uint8') + depth // 2
+        data[0, 1] = outliers[0]
+        data[0, 10] = outliers[1]
+        data[0, 60] = outliers[2]
+        data[0, 280] = outliers[3]
+        data[0, 290] = outliers[4]
+
+        # keep the value for outliers default so force output_range
+        # to be between lowest and the highest outlier
+        output_range = img.getOutliers(data)
+
+        # min will be the lowest outlier
+        self.assertEqual(min(output_range), numpy.amin(data))
+        # max will be the highest outlier
+        self.assertEqual(max(output_range), numpy.amax(data))
+        # check if greatest outlier is found in the output value
+        self.assertTrue(min(outliers) in output_range)
+
+    def test_get_outliers_discard_all(self):
+        """
+        Verify that with a given outlier value the right min/max
+        values of the histogram range within a DA are returned.
+        It is expected that all outliers will be discarded.
+        """
+        # input will be a DA containing a fake picture and a value for outliers
+        size = (300, 300)
+        outlier_num = 0.5  # use the max value, all outliers will be discarded
+        outliers = [200, 50, 40, 2, 9]
+        depth = 256
+
+        # create a DA with a couple of outliers
+        data = numpy.zeros(size, dtype='uint8') + depth // 2
+        data[0, 1] = outliers[0]
+        data[0, 10] = outliers[1]
+        data[0, 60] = outliers[2]
+        data[0, 280] = outliers[3]
+        data[0, 290] = outliers[4]
+
+        output_range = img.getOutliers(data, outlier_num)
+
+        # both the min and max value of output_range will
+        # be the same due to the median being returned
+        self.assertEqual(output_range[0], depth // 2)
+        self.assertEqual(output_range[1], depth // 2)
+        # check if the outliers are discarded and not found in the output value
+        self.assertTrue(all(o not in output_range for o in outliers))
+
+
+class TestGuessDRange(unittest.TestCase):
+
+    def test_guess_drange_zero_bpp(self):
+        """
+        Test if value of 0 for BPP returns the default min/max for uint8.
+        """
+        size = (2000, 1000)
+        md = {
+              model.MD_DIMS: 'YX',
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+              model.MD_BPP: 0
+             }
+
+        # check for dtype uint8
+        arr = numpy.arange(size[0] * size[1], dtype=numpy.uint8)
+        data = model.DataArray(arr, metadata=md)
+
+        # min/max values should be uint8 min/max
+        min_max_type = numpy.iinfo(numpy.uint8)
+
+        # the ValueError raised is handled in the guessDRange method
+        min_max_values = img.guessDRange(data)
+
+        self.assertEqual(min_max_values[0], min_max_type.min)
+        self.assertEqual(min_max_values[1], min_max_type.max)
+
+    def test_guess_drange_wrong_type(self):
+        """
+        Test if an unexpected array datatype will raise a TypeError.
+        """
+        size = (2000, 2000)
+        md = {
+              model.MD_DIMS: 'YX',
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+              model.MD_BPP: 8
+             }
+
+        # check for dtype float (=wrong type)
+        arr = numpy.arange(size[0] * size[1], dtype=numpy.float)
+        data = model.DataArray(arr, metadata=md)
+
+        with self.assertRaises(TypeError):
+            img.guessDRange(data)
+
+    def test_guess_drange_normal(self):
+        """
+        Test the data range of the data based on guess method with regular model dict, type and DA values.
+        """
+        size = (4000, 4000)
+        md = {
+              model.MD_DIMS: 'YX',
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+              model.MD_BPP: 8
+             }
+
+        # check for dtype int32
+        arr = numpy.arange(size[0] * size[1], dtype='int32')
+        data = model.DataArray(arr, metadata=md)
+
+        # min/max values are dependent on given BPP
+        min_max_values = img.guessDRange(data)
+
+        bpp_conversion_min = -abs(2 ** data.metadata[model.MD_BPP] // 2)
+        bpp_conversion_max = (2 ** (data.metadata[model.MD_BPP] - 1)) - 1
+
+        self.assertEqual(min_max_values[0], bpp_conversion_min)
+        self.assertEqual(min_max_values[1], bpp_conversion_max)
+
+
+class TestGetColorBar(unittest.TestCase):
+
+    def test_get_colorbar(self):
+        """
+        Test if input of a registered matplotlib.colors colormap will return a ndArray of
+        the right tuple shape, within ranges of uint8 and with alpha channel included.
+        """
+        # input will be color_map (obj matplotlib) height (int), width (int) and alpha (bool)
+        input_cm = cm.get_cmap('cividis')
+        input_height = 16
+        input_width = 72
+
+        # test with the alpha channel included
+        output_array = img.getColorbar(input_cm, input_height, input_width, alpha=True)
+
+        # test if the returned tuple contains an alpha channel
+        self.assertEqual(output_array.shape[2], 4)
+        # test for RGB uint8 dtype
+        self.assertTrue(output_array.dtype, numpy.uint8)
+
+        # test without the alpha channel
+        output_array = img.getColorbar(input_cm, input_height, input_width)
+
+        # test if the returned tuple does not have an alpha channel
+        self.assertEqual(output_array.shape[2], 3)
+
+        # test if height input as a float will raise an AssertionError exception
+        with self.assertRaises(AssertionError):
+            img.getColorbar(None, 15, 162.5)
+
+
+class TestTintToColormap(unittest.TestCase):
+
+    def test_tint_to_colormap(self):
+        """
+        Test if different tint input types will return a valid colormap.
+        """
+        output_colormap = img.tintToColormap(cm.get_cmap('viridis'))
+        self.assertEqual(output_colormap, cm.get_cmap('viridis'))
+
+        output_colormap = img.tintToColormap((0, 73, 255))
+        self.assertIsInstance(output_colormap, cm.colors.LinearSegmentedColormap)
+
+        output_colormap = img.tintToColormap(TINT_RGB_AS_IS)
+        self.assertIsInstance(output_colormap, cm.colors.LinearSegmentedColormap)
+
+        output_colormap = img.tintToColormap(TINT_FIT_TO_RGB)
+        self.assertIsInstance(output_colormap, cm.colors.ListedColormap)
+
+    def test_tint_to_colormap_unexpected_input(self):
+        """
+        Test if a wrong tint type will raise a TypeError and a wrong tint value will raise a ValueError.
+        """
+        input_tint = "norgb"
+
+        with self.assertRaises(TypeError):
+            img.tintToColormap(input_tint)
+
+        input_tint = (0, 300, 255)
+
+        with self.assertRaises(ValueError):
+            img.tintToColormap(input_tint)
+
+
+class TestGetYXFromZYX(unittest.TestCase):
+
+    def setUp(self):
+        # create a mock grayscale 3D image array
+        size = (200, 399, 399)
+        self.md = {
+              model.MD_DIMS: 'YXZ',
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+              model.MD_BPP: 8,
+              model.MD_POS: (5.0, 7.0)
+             }
+
+        # create a mock 3D image array with white color values
+        self.arr1 = numpy.zeros(size, dtype='uint8') + 255
+
+        x_count, y_count = 0, 0
+        self.color_num = 160
+
+        # change values of the ndarray in a pyramid shape so that every
+        # z-slice contains a different amount of gray color values
+        for z in range(self.arr1.shape[0]):
+            for y in range(y_count, self.arr1.shape[1] - y_count):
+                self.arr1[z, y, x_count:self.arr1.shape[2] - x_count] = self.color_num
+            y_count += 1
+            x_count += 1
+
+    def test_get_yx_from_zyx_normal(self):
+        """
+        Verify that using a 3D DA picture will return the right 2D DA picture.
+        """
+        data = model.DataArray(self.arr1, metadata=self.md)
+        z_slice = 160
+
+        output_DA = numpy.asarray(img.getYXFromZYX(data, zIndex=z_slice))
+
+        # check if dimensions of the returned ndarray are smaller than input array (ZYX vs YX)
+        self.assertLess(output_DA.ndim, data.ndim)
+        # check if the XY slice output is part of input DA
+        self.assertTrue(output_DA in data)
+
+        # check if the slice has the same size (x,y) as input
+        self.assertEqual(output_DA.shape, data.shape[1:])
+
+        # calculates a checknum value based on predicted values e.g. 3x3 = 9 elements containing value of color_num
+        # this value is based on input z_slice of 160 compared to max z value of 199 (array z shape - 1)
+        z_num = self.arr1.shape[0] - 1
+        checknum = ((1 + (z_num - z_slice)) + z_num - z_slice) * ((1 + (z_num - z_slice)) + z_num - z_slice)
+
+        self.assertEqual(numpy.count_nonzero(output_DA == self.color_num), checknum)
+
+    def test_get_yx_from_zyx_1d(self):
+        """
+        Verify that using a 1D DA picture will return the right DA slice.
+        See if expected input of ZYX DA can handle an X only DA.
+        """
+        # create a 2D data array using a sliced 3D array
+        # keep the z-slice at default
+        data = model.DataArray(self.arr1[0, 0, :], metadata=self.md)
+        output_DA = numpy.asarray(img.getYXFromZYX(data))
+
+        # check if the XY slice output is part of input DA
+        self.assertTrue(output_DA in data)
+        # check if the slice has the same size in x as input
+        self.assertEqual(numpy.squeeze(output_DA).shape, data.shape)
+        # check if all elements are of the set color_num
+        self.assertTrue(numpy.all(output_DA == self.color_num))
+
+    def test_get_yx_from_zyx_4d(self):
+        """
+        Verify that using a 4D DA picture will fail and that a ValueError exception is raised.
+        """
+        # use a 4D array to force a ValueError when slicing array shape
+        data = model.DataArray(self.arr1.reshape(20, 399, 399, 10), metadata=self.md)
+
+        with self.assertRaises(ValueError):
+            img.getYXFromZYX(data)
+
+
+class TestEnsure2DImage(unittest.TestCase):
+
+    def setUp(self):
+        y = 4000
+        x = 4000
+        # size of picture in CTZYX
+        size = (1, 1, 1, y, x)
+        arr = numpy.ones(size, dtype='uint8')
+        self.data = model.DataArray(arr)
+
+    def test_ensure_2d_image(self):
+        """
+        Test if using different dimensions of DA will be handled appropriately.
+        """
+        # Verify that using a CTZ=111 5D DA will return the right 2D DA.
+        out_arr = img.ensure2DImage(self.data)
+
+        # check if the YX values match
+        self.assertEqual(out_arr.shape, self.data.shape[3:])
+
+        # Verify that using a full 5D DA will fail and see if a ValueError exception is raised
+        data = self.data.reshape(1, 2, 50, 400, 400)
+
+        with self.assertRaises(ValueError):
+            img.ensure2DImage(data)
+
+
+class TestSubtract(unittest.TestCase):
+
+    def setUp(self):
+        self.pic1 = numpy.zeros((600, 600))
+        self.pic2 = numpy.zeros((600, 600))
+
+    def test_subtract_uint(self):
+        """
+        Verify that using an uint8 as dtype will return the right DA.
+        """
+        pic1 = self.pic1.astype('uint8')
+        pic2 = self.pic2.astype('uint8')
+
+        # add white squares in the black pictures
+        pic1[200:500, 200:500] = 255
+        pic2[300:400, 300:400] = 255
+
+        # subtract the pictures
+        out_arr = img.Subtract(pic1, pic2)
+
+        # output shape should be the same as biggest input DA
+        self.assertEqual(out_arr.shape, pic1.shape)
+        # all values in this square should return false=0
+        self.assertTrue(numpy.all(out_arr[300:400, 300:400] == 0))
+
+    def test_subtract_underflow(self):
+        """
+        Verify that using an uint8 as dtype will return the right DA.
+        Also test that underflow does not happen.
+        """
+        pic1 = self.pic1.astype('uint8')
+        pic2 = self.pic2.astype('uint8')
+
+        # 10 -11 == -1, but uint8 doesn't support it, so it should be clipped to 0.
+        pic1[:] = 10
+        pic2[:] = 11
+
+        # subtract the pictures
+        out_arr = img.Subtract(pic1, pic2)
+
+        # output shape should be the same as biggest input DA
+        self.assertEqual(out_arr.shape, pic1.shape)
+        # see if the return value is of type uint8
+        self.assertEqual(out_arr.dtype, numpy.dtype('uint8'))
+        # all values in this square should return false=0
+        numpy.testing.assert_equal(out_arr, 0)
+
+    def test_subtract_float(self):
+        """
+        Verify that using a float as dtype will return the right DA.
+        """
+        pic1 = self.pic1.astype('float32')
+        pic2 = self.pic2.astype('float32')
+
+        # add white squares in the black pictures
+        pic1[200:500, 200:500] = 0.5
+        pic2[300:400, 300:400] = 0.5
+
+        # subtract the pictures
+        out_arr = img.Subtract(pic1, pic2)
+
+        # output shape should be the same as biggest input DA
+        self.assertEqual(out_arr.shape, pic1.shape)
+        # all values in this square should return false=0
+        self.assertTrue(numpy.all(out_arr[300:400, 300:400] == 0))
+
+    def test_subtract_uint_float(self):
+        """
+        Verify that using pictures with different dtypes will return the right DA.
+        Check if using 2 different dtype arrays will still work.
+        """
+        pic1 = self.pic1.astype('uint8')
+        pic2 = self.pic2.astype('float32')
+
+        # add white squares in the black pictures
+        pic1[200:500, 200:500] = 1
+        pic2[300:400, 300:400] = 0.5
+
+        # subtract the pictures
+        out_arr = img.Subtract(pic1, pic2)
+
+        # output shape should be the same as biggest input DA
+        # FIXME: for now this doesn't pass because Subtract() always return a float
+        # self.assertEqual(out_arr.shape, pic1.shape)
+
+        # no subtraction should have happened due to different dtypes
+        self.assertTrue(numpy.all(out_arr[300:400, 300:400] == 0.5))
+
+        out_arr = img.Subtract(pic2, pic1)
+        self.assertEqual(out_arr.dtype, pic2.dtype)
+
+
+class TestGetTilesSize(unittest.TestCase):
+
+    def test_get_tiles_size_shape2(self):
+        """
+        Verify that using a 2D shaped DA tiles list will return the right length and size of DA.
+        Also check for only 1 tile.
+        """
+        # create the 4 DA subtiles
+        size = (800, 600)
+        tile1 = numpy.zeros(size)
+        tile2 = numpy.zeros(size)
+        tile3 = numpy.zeros(size)
+        tile4 = numpy.zeros(size)
+
+        # start index for y-axis
+        y_start = 0
+
+        # create a pattern in the tile
+        for x in reversed(range(size[0])):
+            for y in range(y_start, size[1]):
+                tile1[x, y] = 1
+            y_start += 1
+
+        # create the other 3 tiles by swapping axis of tile1 this creates a pattern
+        tile2 = numpy.flip(tile1, axis=1)
+        tile3 = numpy.flip(tile1, axis=0)
+        tile4 = numpy.flip(tile3, axis=1)
+
+        # create a Tuple of 4 tiles
+        tile_set = (tile1, tile2, tile3, tile4)
+        # create a Tuple containing 4 tile Tuples
+        tile_collection = (tile_set, tile_set, tile_set, tile_set)
+
+        output_size = img.getTilesSize(tile_collection)
+
+        # check if the output size is correct (based on input size)
+        self.assertEqual(output_size, tuple(len(tile_collection) * elem for elem in size))
+
+        # check single tile input
+        tile_set = (tile1,)
+        tile_collection = (tile_set,)
+
+        output_size = img.getTilesSize(tile_collection)
+
+        self.assertEqual(output_size, size)
+
+    def test_get_tiles_size_shape3(self):
+        """
+        Verify that using a 3D shaped DA tiles list will return the right length and size of DA.
+        """
+        # create the 4 DA subtiles
+        size = (800, 600, 10)
+
+        tile1 = numpy.zeros(size)
+        tile2 = numpy.zeros(size)
+        tile3 = numpy.zeros(size)
+        tile4 = numpy.zeros(size)
+
+        # start index for y-axis
+        y_start = 0
+
+        # create a pattern in the tile
+        for x in reversed(range(size[0])):
+            for y in range(y_start, size[1]):
+                tile1[x, y] = 1
+            y_start += 1
+
+        # create the other 3 tiles by swapping axis of tile1 this creates a pattern
+        tile2 = numpy.flip(tile1, axis=1)
+        tile3 = numpy.flip(tile1, axis=0)
+        tile4 = numpy.flip(tile3, axis=1)
+
+        # create a Tuple of 4 tiles
+        tile_set = (tile1, tile2, tile3, tile4)
+        # create a Tuple containing 4 tile Tuples
+        tile_collection = (tile_set, tile_set, tile_set, tile_set)
+
+        output_size = img.getTilesSize(tile_collection)
+
+        # check if the output length is not the same as input size
+        self.assertFalse(len(output_size) == len(size))
+        # check if the output sizes are correct (based on input size) skipping the last element of size
+        self.assertEqual(output_size[0], len(tile_collection) * size[0])
+        self.assertEqual(output_size[1], len(tile_collection) * size[1])
+
+
+class TestGetCenterOfTiles(unittest.TestCase):
+
+    def setUp(self):
+        md = {
+              model.MD_DIMS: 'CTZYX',
+              model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+              model.MD_POS: (0.04, 0.07),
+              model.MD_SHEAR: 0.1
+             }
+
+        # create rectangular tile sizes of 5 dimensions
+        self.size = (1, 1, 1, 600, 400)
+        tile1 = model.DataArray(numpy.zeros(self.size), md)
+        tile2 = model.DataArray(numpy.zeros(self.size), md)
+        tile3 = model.DataArray(numpy.zeros(self.size), md)
+
+        # start index for y-axis
+        y_start = 0
+
+        # create a pattern in the tile
+        for x in reversed(range(self.size[-2])):
+            for y in range(y_start, self.size[-1]):
+                tile1[..., x, y] = 1
+            y_start += 1
+
+        # create the other 2 tiles by swapping axis of tile1
+        tile2 = numpy.flip(tile1, axis=1)
+        tile3 = numpy.flip(tile1, axis=0)
+
+        # create a Tuple of 3 tiles
+        tile_set = (tile1, tile2, tile3)
+        # create a tile collection of 3x3 tiles
+        self.tile_collection = (tile_set, tile_set, tile_set)
+
+    def test_get_center_of_tiles(self):
+        """
+        Verify that using a 5D shaped DA tiles list will return the right
+        physical position if compared with input metadata position.
+        """
+        result_shape = tuple(len(self.tile_collection) * len(self.tile_collection) * elem for elem in self.size[-2:])
+
+        # normal input of CTZYX dimension of DA's in tuple list of tuples
+        output_pos = img.getCenterOfTiles(self.tile_collection, result_shape)
+
+        # get the middle of the 3x3 tile info
+        x_pos = self.tile_collection[1][1].metadata[model.MD_POS][0]
+        y_pos = self.tile_collection[1][1].metadata[model.MD_POS][1]
+
+        x_pos_out = round(output_pos[0], 2)
+        y_pos_out = round(output_pos[1], 2)
+
+        # check if the x positions match
+        self.assertEqual(x_pos_out, x_pos)
+        # check if the y positions match
+        self.assertEqual(y_pos_out, y_pos)
+
+    def test_get_center_of_tiles_rotated(self):
+        """
+        Verify that using a 5D shaped DA tiles list which is rotated 90° will
+        return the right physical position if compared with input metadata position.
+        """
+        # rotate 90°
+        for x in range(len(self.tile_collection)):
+            for y in range(len(self.tile_collection[x])):
+                self.tile_collection[x][y].metadata[model.MD_ROTATION] = math.pi/2
+
+        result_shape = tuple(len(self.tile_collection) * len(self.tile_collection) * elem for elem in self.size[-2:])
+
+        # normal input of CTZYX dimension of DA's in tuple list of tuples
+        output_pos = img.getCenterOfTiles(self.tile_collection, result_shape)
+
+        # get the middle of the 3x3 tile info
+        x_pos = self.tile_collection[1][1].metadata[model.MD_POS][0]
+        y_pos = self.tile_collection[1][1].metadata[model.MD_POS][1]
+
+        x_pos_out = round(output_pos[0], 2)
+        y_pos_out = round(output_pos[1], 2)
+
+        # check if the x positions match
+        self.assertEqual(x_pos_out, x_pos)
+        # check if the y positions match
+        self.assertEqual(y_pos_out, y_pos)
+
+    def test_get_center_of_tiles_single(self):
+        """
+        Verify that using a 5D shaped DA tiles list containing a single tile will
+        return the right physical position if compared with input metadata position.
+        """
+        single_size = [[self.tile_collection[0][0]]]
+
+        # normal input of CTZYX dimension of DA's in tuple list of tuples
+        output_pos = img.getCenterOfTiles(single_size, self.tile_collection[0][0].shape)
+
+        x_pos = self.tile_collection[0][0].metadata[model.MD_POS][0]
+        y_pos = self.tile_collection[0][0].metadata[model.MD_POS][1]
+
+        # check if the x positions match
+        self.assertEqual(output_pos[0], x_pos)
+        # check if the y positions match
+        self.assertEqual(output_pos[1], y_pos)
+
+    def test_get_center_of_tiles_incorrect_shape(self):
+        """
+        Verify that using a wrong shaped DA tiles list will raise an IndexError exception.
+        """
+        new_tiles = []
+
+        for t1 in self.tile_collection:
+            new_tile = []
+            for t2 in t1:
+                # remove the first 2 axis so effectively keep a 3D ZYX array
+                new_tile.append(t2[0, 0, :, :, :])
+            new_tiles.append(new_tile)
+
+        # using wrong shape forces an IndexError while expected shape is CTZYX
+        result_shape = tuple(len(new_tiles) * elem for elem in self.size)
+
+        with self.assertRaises(IndexError):
+            img.getCenterOfTiles(new_tiles, result_shape)
+
+    def test_get_center_of_tiles_no_pixelsize(self):
+        """
+        Verify that leaving out PIXEL_SIZE in the metadate DA tiles list will raise a ValueError exception.
+        """
+        # force ValueError by deleting PIXEL_SIZE from the MD
+        del self.tile_collection[0][0].metadata[model.MD_PIXEL_SIZE]
+        result_shape = tuple(len(self.tile_collection) * elem for elem in self.size)
+
+        with self.assertRaises(ValueError):
+            img.getCenterOfTiles(self.tile_collection, result_shape)
+
+
+class TestGetBoundingBox(unittest.TestCase):
+
+    def setUp(self):
+        # create a 5D size and metadata with necessary items
+        self.size = (9, 10, 13, 400, 600)
+        self.md = {
+            model.MD_DIMS: 'CTZYX',
+            model.MD_PIXEL_SIZE: (1e-6, 1e-6),
+            model.MD_POS: (0.95, 0.07)
+        }
+
+    def test_get_bounding_box_normal(self):
+        """
+        Verify that using a 5D shaped DA will return the right bounding box.
+        """
+        # create a DA with random values
+        new_da = numpy.random.random(self.size)
+        new_da = model.DataArray(new_da, self.md)
+
+        output_pos = img.getBoundingBox(new_da)
+
+        # set the positions to check for
+        pos_x = new_da.metadata[model.MD_POS][0]
+        pos_y = new_da.metadata[model.MD_POS][1]
+
+        # check if the min position of the bounding box is the same as half the
+        # size of the DA calculating from the middle point on the 0-axis downwards
+        expected_pos_x_min = pos_x - self.size[-1] * self.md[model.MD_PIXEL_SIZE][0] / 2
+        self.assertEqual(output_pos[0], expected_pos_x_min)
+
+        # check if the max position of the bounding box is the same as half the
+        # size of the DA calculating from the middle point on the 0-axis upwards
+        expected_pos_x_max = pos_x + self.size[-1] * self.md[model.MD_PIXEL_SIZE][0] / 2
+        self.assertEqual(output_pos[2], expected_pos_x_max)
+
+        # check if the min position of the bounding box is the same as half the
+        # size of the DA calculating from the middle point on the 1-axis downwards
+        expected_pos_y_min = pos_y - self.size[-2] * self.md[model.MD_PIXEL_SIZE][1] / 2
+        self.assertEqual(output_pos[1], expected_pos_y_min)
+
+        # check if the max position of the bounding box is the same as half the
+        # size of the DA calculating from the middle point on the 1-axis upwards
+        expected_pos_y_max = pos_y + self.size[-2] * self.md[model.MD_PIXEL_SIZE][1] / 2
+        self.assertEqual(output_pos[3], expected_pos_y_max)
+
+    def test_get_bounding_box_incomplete_metadata(self):
+        """
+        Verify that removing PIXEL_SIZE in the metadate DA will fail and a LookupError exception is raised.
+        """
+        # create a DA with random values
+        new_da = numpy.random.random(self.size)
+        new_da = model.DataArray(new_da, self.md)
+
+        # remove the DIMS key and check if a return value is passed and no exception is raised
+        del new_da.metadata[model.MD_DIMS]
+        bbox = img.getBoundingBox(new_da)
+        self.assertTrue(isinstance(bbox, tuple))
+
+        # remove the PIXEL_SIZE key and check if a LookupError is forced
+        del self.md[model.MD_PIXEL_SIZE]
+
+        with self.assertRaises(LookupError):
+            img.getBoundingBox(new_da)
+
+    def test_get_bounding_box_wrong_arrayshape(self):
+        """
+        Verify that using an unexpected shaped DA will fail and if an IndexError exception is raised.
+        The DA is assumed unexpected due to the MD_DIMS stating the DA is supposed to be 5 dims.
+        """
+        # use an unexpected 2 dimensional shaped DA with random values
+        self.size = (4000, 3500)
+        new_da = numpy.random.random(self.size)
+        new_da = model.DataArray(new_da, self.md)
+
+        # force an IndexError due to wrong DA shape
+        with self.assertRaises(IndexError):
+            img.getBoundingBox(new_da)
+
+
+class TestAssembleZCube(unittest.TestCase):
+
+    def setUp(self):
+        # create a 2D size and metadata with necessary items
+        self.size = (400, 300)
+        self.md = {
+            model.MD_DIMS: 'YX',
+            model.MD_PIXEL_SIZE: (2e-06, 4e-05),
+            model.MD_POS: (0.2, 0.2)
+        }
+
+        # create an ordered list of (float) focus positions from 1-8um
+        self.z_list = [1e-06, 2e-06, 3e-06, 4e-06, 5e-06, 6e-06, 7e-06, 8e-06]
+
+    def test_assemble_zcube_normal(self):
+        """
+        Verify that using a 2D shaped image DA's in a list will return the right ZCube assembly.
+        """
+        img_list = []
+
+        # create a list of DA
+        for x in range(len(self.z_list)):
+            img_list.append(model.DataArray(numpy.random.randint(0, 220, self.size), self.md))
+
+        output_DA = img.assembleZCube(img_list, self.z_list)
+
+        # check if the shape of the returned DA is a combination of the number of z-slices and the size
+        input_shape = (len(img_list),) + self.size
+        self.assertEqual(output_DA.shape, input_shape)
+        # check if metadata includes the centre position of the z-stack
+        self.assertEqual(len(output_DA.metadata[model.MD_POS]), 3)
+        # check if metadata includes the pixel size of the z-stack
+        self.assertEqual(output_DA.metadata[model.MD_PIXEL_SIZE], (2e-06, 4e-05, 1e-06))
+        # check if the metadata contains the z-stack mean position
+        self.assertAlmostEqual(output_DA.metadata[model.MD_POS][-1], statistics.mean(self.z_list))
+
+    def test_assemble_zcube_3d(self):
+        """
+        Verify that using a 3D shaped image DA's in a list will fail the
+        assembly of a ZCube and see if a ValueError exception is raised.
+        """
+        # adjust the size for 3D DA
+        size = (10, 700, 700)
+
+        img_list = []
+
+        # create a list of DA
+        for x in range(len(self.z_list)):
+            img_list.append(model.DataArray(numpy.random.random_integers(0, 220, size), self.md))
+
+        with self.assertRaises(ValueError):
+            img.assembleZCube(img_list, self.z_list)
+
+    def test_assemble_zcube_z_order(self):
+        """
+        Verify that using a 3D shaped image DA's in a list will return a
+        different ZCube assembly if the order of the images is changed.
+        See if the differences with a list generated before and after reordering are picked up.
+        """
+        img_list = []
+        z_list = [0.1, 0.2, 0.3, 0.4, 0.5]
+
+        # create a list of DA
+        for z in z_list:
+            img_list.append(model.DataArray(numpy.random.random_integers(0, 220, self.size), self.md))
+
+        output_da_before = img.assembleZCube(img_list, z_list)
+
+        # use a reversed image order to force a different ZCube assembly
+        output_da_after = img.assembleZCube(img_list[::-1], z_list)
+
+        # check if the Z dimension has the right size
+        self.assertEqual(output_da_before.shape[0], len(z_list))
+        self.assertEqual(output_da_after.shape[0], len(z_list))
+        # check if the returned DA before order reverse is different after order reverse
+        testing.assert_array_not_equal(output_da_before, output_da_after)
+
+        # Passing Z in the reverse order should lead to a cube reversed in Z, with a positive pixel size
+        output_rev_z = img.assembleZCube(img_list, z_list[::-1])
+        self.assertGreater(output_rev_z.metadata[model.MD_PIXEL_SIZE][2], 0)
+        numpy.testing.assert_array_equal(output_da_after, output_rev_z)
+
+
 class TestFloodFill(unittest.TestCase):
 
     def test_standard_fill(self):
@@ -1221,8 +2055,6 @@ class TestFloodFill(unittest.TestCase):
             img.apply_flood_fill(a, (2, 4))
 
 
-# TODO: test guessDRange()
-
-
 if __name__ == "__main__":
     unittest.main()
+

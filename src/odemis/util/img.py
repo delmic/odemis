@@ -519,7 +519,7 @@ def tintToColormap(tint):
 def getYXFromZYX(data, zIndex=0):
     """
     Extracts an XY plane from a ZYX image at the index given by zIndex (int)
-    Returns the data array, which is now 2D. The metadata of teh resulting 2D
+    Returns the data array, which is now 2D. The metadata of the resulting 2D
     image is updated such that MD_POS reflects the position of the 3D slice.
 
     data: an image DataArray typically with 3 dimensions
@@ -694,7 +694,7 @@ def Subtract(a, b):
     Subtract 2 images, with clipping if needed
     a (DataArray)
     b (DataArray or scalar)
-    return (DataArray): a - b, with same dtype and metadata as a
+    return (DataArray): a - b, with same metadata as a and with dtype depending on subtraction
     """
     # TODO: see if it is more useful to upgrade the type to a bigger if overflow
     if a.dtype.kind in "bu":
@@ -1015,7 +1015,8 @@ def getBoundingBox(content):
     """
     Compute the physical bounding-box of the given DataArray(Shadow)
     content (DataArray(Shadow)): The data of the image
-    return (tuple(minx, miny, maxx, maxy)): left,top,right,bottom positions in world coordinates where top < bottom and left < right
+    return (tuple(minx, miny, maxx, maxy)): left,top,right,bottom positions in world coordinates where top < bottom
+    and left < right
     raise LookupError if metadata is not available
     """
     # TODO: also handle if passed a 2D array of images? (as returned for pyramidal images)
