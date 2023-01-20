@@ -320,8 +320,9 @@ class SmarPod(model.Actuator):
                 network:sn:<serialnumber>
         hwmodel: the hardware model code (typically between 10000 and 10100)
         axes (dict str (axis name) -> dict (axis parameters)):
-            Typically, axes are x, y, z, rx, ry, rz
+            Axes can be x, y, z, rx, ry, rz
             axis parameters: {
+                name: (str), name of the axis as seen by the user in Odemis (default to the axis name)
                 range: [float, float], default is -1 -> 1
                 unit: (str) default will be set to 'm'
             }
@@ -331,6 +332,7 @@ class SmarPod(model.Actuator):
         accel: the maximum acceleration (in m/s²) of a point on the stage
         hold_time (float>=0): the hold time, in seconds, for the actuator after the target position is reached.
             Default is infinite (float('inf') in Python, .inf in YAML). Can be also set to 0 to disable hold.
+        inverted: (list of str) name of the axes (user names) that should be inverted
         """
         if not axes:
             raise ValueError("Needs at least 1 axis.")
@@ -344,25 +346,37 @@ class SmarPod(model.Actuator):
         else:
             self.core = SmarPodDLL()
             
-        # Not to be mistaken with axes which is a simple public view
-        self._axis_map = {}  # axis name -> axis number used by controller
+        # axis name (as seen by user) -> axis name (as used by hardware)
+        self._axis_u2hw: Dict[str, str] = {}
         axes_def = {}  # axis name -> Axis object
 
-        for axis_name, param in axes.items():
+        for axis_hw, param in axes.items():
+            if axis_hw not in ("x", "y", "z", "rx", "ry", "rz"):
+                raise ValueError(f"Axis {axis_hw} unknown")
+
+            # Name, as seen by the user (default is the same as the hardware one)
+            axis_name = param.get("name", axis_hw)
+            if axis_name in self._axis_u2hw:
+                raise ValueError(f"Axis {axis_name} used multiple times")
+            self._axis_u2hw[axis_name] = axis_hw
+
             try:
                 axis_range = param['range']
             except KeyError:
-                logging.info("Axis %s has no range. Assuming (-1, 1)", axis_name)
+                logging.info("Axis %s has no range. Assuming (-1, 1)", axis_hw)
                 axis_range = (-1, 1)
 
             try:
                 axis_unit = param['unit']
             except KeyError:
-                logging.info("Axis %s has no unit. Assuming m", axis_name)
-                axis_unit = "m"
+                axis_unit = "rad" if axis_hw.startswith("r") else "m"
+                logging.info("Axis %s has no unit. Assuming %s", axis_unit, axis_hw)
 
             ad = model.Axis(canAbs=True, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
+
+        # Compute the opposite map axis name hw -> axis name user
+        self._axis_hw2u = {h: u for u, h in self._axis_u2hw.items()}
 
         # Connect to the device
         self._id = c_uint()
@@ -392,13 +406,16 @@ class SmarPod(model.Actuator):
         # When the stage moves, the pivot point does not, which is useful if
         # needed to rotate around external object (eg, a lens).
         self.Set_ui(SmarPodDLL.PIVOT_MODE, SmarPodDLL.PIVOT_FIXED)
-        self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
+        self._metadata[model.MD_PIVOT_POS] = self._to_user_axes(self.GetPivot())
 
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
 
-        # Use a default actuator speed
+        # Speed and acceleration define the movement of the positioners, which
+        # are always linear (so in m/s), and not equivalent to the speed of the axes
+        # but in the same order of magnitude (for linear movements)
         self.SetSpeed(speed)
+        self._speed = speed
         self.speed = VigilantAttribute({}, unit="m/s", readonly=True)
         self._updateSpeed()
         self.SetAcceleration(accel)
@@ -421,6 +438,34 @@ class SmarPod(model.Actuator):
         self._update_position_timer = RepeatingTimer(1.0, self._updatePositionInBackground)
         self._update_position_timer.start()
 
+    def _to_user_axes(self, pos: dict) -> dict:
+        """
+        Convert the axis names of a position from hardware to user names.
+        It also invert the axes which are marked as "inverted".
+        :param pos: dict (str -> value), the position as expected by the hardware.
+        Not all existing axes have to be provided.
+        :return: the position with the names of the axes as the hardware/SmarPod DLL
+        expects them
+        :raise:
+        KeyError: if an axis doesn't exist in the hardware
+        """
+        pos_user = {self._axis_hw2u[u]: p for u, p in pos.items()}
+        return self._applyInversion(pos_user)
+
+    def _to_hw_axes(self, pos: dict) -> dict:
+        """
+        Convert the axis names of a position from user to hardware names.
+        It also invert the axes which are marked as "inverted".
+        :param pos: dict (str -> value), the position, as seen by the user.
+        Not all existing axes have to be provided.
+        :return: the position with the names of the axes as the hardware/SmarPod DLL
+        expects them
+        KeyError: if an axis doesn't exist in the hardware
+        """
+        pos = self._applyInversion(pos)  # Invert, using the user names
+        pos_hw = {self._axis_u2hw[u]: p for u, p in pos.items()}
+        return pos_hw
+
     def terminate(self):
         self._update_position_timer.cancel()
 
@@ -436,14 +481,17 @@ class SmarPod(model.Actuator):
     def updateMetadata(self, md):
         if model.MD_PIVOT_POS in md:
             pivot = md[model.MD_PIVOT_POS]
-            if not (isinstance(pivot, dict) and set(pivot.keys()) == {"x", "y", "z"}):
-                raise ValueError("Invalid metadata, should be a coordinate dictionary with x, y, z keys but got %s." % (pivot,))
+            if not isinstance(pivot, dict):
+                raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (pivot,))
+            pivot_hw = self._to_hw_axes(pivot)
+            if not set(pivot_hw.keys()) == {"x", "y", "z"}:
+                raise ValueError("Invalid metadata, should have x, y, z keys (in hardware names) but got %s." % (pivot_hw,))
 
-            logging.debug("Updating pivot point to %s.", pivot)
-            self.SetPivot(pivot)
+            logging.debug("Updating pivot point to %s (hw = %s).", pivot, pivot_hw)
+            self.SetPivot(pivot_hw)
 
         super().updateMetadata(md)
-        
+
     def GetDLLVersion(self):
         """
         Request the software version of the DLL file
@@ -520,7 +568,7 @@ class SmarPod(model.Actuator):
         """
         Move to pose command. It is possible and safe to call it if a previous
           movement has been called in non-blocking mode.
-        pos: (dict str -> float) axis name -> position
+        pos: (dict str -> float) axis name (hardware) -> position
             This is converted to the pose C-struct which is sent to the SmarPod DLL
         hold_time: (float >=0) specify in seconds how long to hold after the move.
             If set to float(inf), will hold forever until a stop command is issued.
@@ -617,7 +665,7 @@ class SmarPod(model.Actuator):
     def IsPoseReachable(self, pos):
         """
         Ask the controller if a pose is reachable
-        pos: (dict of str -> float): a coordinate dictionary of axis name to value
+        pos: (dict of str -> float): a coordinate dictionary of axis name to value (in hardware referential)
         returns: true if the pose is reachable - false otherwise.
         """
         reachable = c_int()
@@ -630,7 +678,7 @@ class SmarPod(model.Actuator):
         """
         Set the pivot point of the device
 
-        piv_dict: Position dictionary, with 'x', 'y', 'z' position.
+        piv_dict: Position dictionary, with 'x', 'y', 'z' position. (in hardware referential)
         """
         pivot = (c_double * 3)(piv_dict["x"], piv_dict["y"], piv_dict["z"])
         self.core.Smarpod_SetPivot(self._id, pivot)
@@ -639,7 +687,7 @@ class SmarPod(model.Actuator):
         """
         Get the pivot point from the controller
 
-        returns: position as axis name -> position of axis
+        returns: position as axis name -> position of axis (in hardware referential)
         """
         pivot = (c_double * 3)()
         self.core.Smarpod_GetPivot(self._id, pivot)
@@ -663,6 +711,7 @@ class SmarPod(model.Actuator):
         """
         try:
             p = self.GetPose().asdict()
+            p = self._to_user_axes(p)
         except SmarPodError as ex:
             if ex.errno == SmarPodDLL.NOT_REFERENCED_ERROR:
                 logging.warning("Position unknown because SmarPod is not referenced")
@@ -670,13 +719,12 @@ class SmarPod(model.Actuator):
             else:
                 raise
 
-        p = self._applyInversion(p)
         logging.debug("Updated position to %s", p)
         self.position._set_value(p, force_write=True)
 
     def _updateSpeed(self):
         """
-        update the speed
+        update the speed VA
         """
         # The set speed is the maximum speed of the positioners, not the axes
         # (which are composed by movements from several positioners), but let's
@@ -689,6 +737,7 @@ class SmarPod(model.Actuator):
                     s[axis_name] = speed
 
         logging.debug("Updated speed to %s", s)
+        self._speed = speed
         self.speed._set_value(s, force_write=True)
 
     def _createMoveFuture(self, ref=False):
@@ -771,8 +820,8 @@ class SmarPod(model.Actuator):
         
         self._checkMoveAbs(pos)
 
-        pos = self._applyInversion(pos)
-        if not self.IsPoseReachable(pos):
+        pos_hw = self._to_hw_axes(pos)
+        if not self.IsPoseReachable(pos_hw):
             raise ValueError("Pose %s is not reachable by the SmarPod controller" % (pos,))
 
         f = self._createMoveFuture()
@@ -782,29 +831,36 @@ class SmarPod(model.Actuator):
     def _estimateMoveDuration(self, new_pos) -> float:
         """
         Estimate the maximum duration of a move
-        new_pos: (dict str -> float): axis name -> absolute target position
+        new_pos: (dict str -> float): axis name -> absolute target position (in user referential)
+        Not all axes have to be provided.
         returns: the duration of the move in seconds
         """
-        pos = self._applyInversion(self.position.value)
-        # TODO: Calculate an estimated move duration
-        # Probably using the speed + accel on the translation could work as a
-        # conservative estimate for translation moves. However for the rotational
-        # moves that's harder. => Just use a hard-coded value for rotations
-        return 30  # s
+        pos = self.position.value
+        # Guess the duration by using the speed and acceleration of the positioners,
+        # for the requested distance.
+        # From Python 3.8, this can be replaced by math.hypot
+        dist_linear = math.sqrt(sum((pos[an] - new_pos[an]) ** 2.0 for an in new_pos.keys() if self.axes[an].unit == "m"))
+        dur_linear = driver.estimateMoveDuration(dist_linear, self._speed, self._accel)
+
+        # Guess the rotation takes maximum 5 s/rad  (it's hard to guess based on the positioners speed)
+        dur_rot =  5 * sum(abs(pos[an] - new_pos[an])for an in new_pos.keys() if self.axes[an].unit == "rad")
+
+        return dur_linear + dur_rot  # s
 
     def _doMoveAbs(self, future, pos):
         """
         Blocking and cancellable absolute move
         future (Future): the future it handles
-        _pos (dict str -> float): axis name -> absolute target position
+        pos (dict str -> float): axis name -> absolute target position, in user referential
         raise:
             SmarPodError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
         """
         last_upd = time.time()
+        pos_hw = self._to_hw_axes(pos)
         dur = self._estimateMoveDuration(pos)
         end = time.time() + dur
-        max_dur = dur * 2 + 1
+        max_dur = dur * 5 + 3
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
         timeout = last_upd + max_dur
 
@@ -813,7 +869,7 @@ class SmarPod(model.Actuator):
             with future._moving_lock:
                 if future._must_stop.is_set():
                     raise CancelledError()
-                self.Move(pos, self._hold_time, block=False)
+                self.Move(pos_hw, self._hold_time, block=False)
 
             # Wait until the move is done
             while not future._must_stop.is_set():
@@ -893,12 +949,13 @@ class SmarPod(model.Actuator):
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
     
-    def _doMoveRel(self, future, shift):
+    def _doMoveRel(self, future, shift: dict):
         """
         Do a relative move by converting it into an absolute move
+        :param shift: axis name -> relative movement, in user referential
         """
-        pos = self._applyInversion(add_coord(self.position.value, shift))
-        self._doMoveAbs(future, pos)
+        new_pos = add_coord(self.position.value, shift)
+        self._doMoveAbs(future, new_pos)
 
     def stop(self, axes=None):
         """
@@ -1027,6 +1084,7 @@ class FakeSmarPodDLL(object):
         self.stopping.clear()
         pose = _deref(p_pose, Smarpod_Pose)
         if self._pose_in_range(pose):
+            # Simulate every move as taking 1 s
             self._current_move_finish = time.time() + 1.0
             self.target.positionX = pose.positionX
             self.target.positionY = pose.positionY
@@ -1123,9 +1181,7 @@ class FakeSmarPodDLL(object):
         val = _deref(p_val, c_double)
         val.value = self.properties[prop.value].value
 
-"""
-Classes associated with the SmarAct MC 5DOF Controller (custom for Delmic)
-"""
+# Classes associated with the SmarAct MC 5DOF Controller (custom for Delmic)
 
 
 class SA_MC_EventData(Union):
@@ -1443,7 +1499,6 @@ class MC_5DOF(model.Actuator):
         else:
             self.core = FakeMC_5DOF_DLL(axes)
         # Not to be mistaken with axes which is a simple public view
-        self._axis_map = {}  # axis name -> axis number used by controller
         axes_def = {}  # axis name -> Axis object
         self._locator = locator
 

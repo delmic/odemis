@@ -52,11 +52,13 @@ CONFIG_SMARTPOD = {"name": "SmarPod",
         "hwmodel": 10077,  # CLS-32.1-D-SC
         "axes": {
             'x': {
+                "name": "y",
                 'range': [-0.2, 0.2],
                 'unit': 'm',
             },
             'y': {
-                'range': [-0.2, 0.2],
+                "name": "x",
+                'range': [-0.3, 0.2],
                 'unit': 'm',
             },
             'z': {
@@ -68,7 +70,7 @@ CONFIG_SMARTPOD = {"name": "SmarPod",
                 'unit': 'rad',
             },
             'ry': {
-                'range': [-0.35, 0.35],
+                'range': [-0.45, 0.35],
                 'unit': 'rad',
             },
             'rz': {
@@ -76,6 +78,7 @@ CONFIG_SMARTPOD = {"name": "SmarPod",
                 'unit': 'rad',
             },
         },
+        "inverted": ["ry"],
         "ref_on_init": False,
         "speed": 0.004,  # m/s
         "accel": 0.004,  # m/s²
@@ -103,6 +106,17 @@ class TestSmarPod(unittest.TestCase):
 
     def test_simple(self):
         print(self.dev.axes)
+
+    def test_axes_def(self):
+        """
+        Check that the axis name and invertion work as intended
+        """
+        # X & Y axes are swapped => X axis should report the bigger range
+        axes = self.dev.axes
+        self.assertEqual(axes["x"].range, (-0.3, 0.2))
+        # ry range is inverted, and in rad
+        self.assertEqual(axes["ry"].range, (-0.35, 0.45))
+        self.assertEqual(axes["ry"].unit, "rad")
 
     def test_exception_pickling(self):
         """
