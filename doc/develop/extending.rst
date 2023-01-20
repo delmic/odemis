@@ -190,7 +190,7 @@ Setup
 Open the *Anaconda prompt* and type::
 
    cd Documents\odemis
-   conda create -y --name odemisdev python==3.6.15
+   conda create -y --name odemisdev python==3.6.13
    conda activate odemisdev
    conda config --append channels conda-forge
    conda install --name odemisdev --file requirements-conda.txt
@@ -300,11 +300,11 @@ architecture for your computer (most likely 64-bit). Note that the following ins
 for conda version 4.9.2. In case you have an older version make sure that you update the conda version
 through the Anaconda prompt before proceeding to the next steps.
 
-Anaconda typically comes with a newer version of Python (eg, 3.8). It's crucial to create a new environment
-with the python version (3.6.15) on which Odemis has been well tested.
+Anaconda typically comes with a newer version of Python (eg, 3.10). It's crucial to create a new environment
+with the python version (3.6.13) on which Odemis has been well tested.
 
 #. To create a new conda environment, named odemis, open the Anaconda command prompt and type:
-   ``conda create -n odemis python=3.6.15``.
+   ``conda create -n odemis python=3.6.13``.
    
 #. Note that the new 'odemis' environment should be activated in order to do the
    following steps. To activate the environment type ``conda activate odemis``.
