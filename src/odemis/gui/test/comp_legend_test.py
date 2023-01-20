@@ -22,16 +22,16 @@ This file is part of Odemis.
 
 # Test module for Odemis' gui.comp.legend module
 import collections
+import logging
 import numbers
 import sys
 import threading
 import time
 import unittest
-import wx
 
 import odemis.gui.comp.legend as legend
 import odemis.gui.test as test
-
+import wx
 
 # test.goto_manual()
 RANGES = [(-5, 5), (0, 37)]
@@ -52,21 +52,24 @@ class LegendTestCase(test.GuiTestCase):
 
         is_done = threading.Event()
 
+        # Change the range from small to big in a separate thread
         def set_range():
-            start, end = 0, 1
-            while end < 10e6:
-                end *= 1.001
-                leg.unit = 'm'
-                leg.range = (start, end)
-                time.sleep(0.0005)
+            try:
+                start, end = 0, 1
+                while end < 10e6:
+                    end *= 1.01
+                    leg.unit = 'm'
+                    leg.range = (start, end)
+                    time.sleep(0.005)
 
-            is_done.set()
+                is_done.set()
+            except Exception:
+                logging.exception("Failed to update the legend.")
 
         test.gui_loop(0.5)
 
         t = threading.Thread(target=set_range)
-        # Setting Daemon to True, will cause the thread to exit when the parent does
-        t.setDaemon(True)
+        t.setDaemon(True)  # To automatically end when this main thread ends
         t.start()
 
         for i in range(30):  # Fail after 30s not yet finished
