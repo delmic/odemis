@@ -1,0 +1,39 @@
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  </head>
+  <body text="#BBBBBB" bgcolor="#333333">
+        <font size="2">
+        <ol>
+            In this tab, it is possible to align the FIB and Optical lens to a single coincidence point.
+        </ol>
+        <br>
+        <h5>Alignment instructions</h5>
+        <font size="2">
+        <ol>
+            The coincidence plane of the FIB is determined by setting the correct sample stage Z coordinate.
+            At the correct sample stage Z, a selected feature will line up vertically (on the same horizontal line) in FIB image.
+        </ol>
+        <ol>
+            <li>To avoid any drift in Z axis, wait until the temperature of the Cryo sample holder has been stabilized</li>
+            <li>Move the stage Z to a fixed position corresponding to a Z that gives a good alignment range for the beam shift</li>
+            <li>Move the stage X and Y to a position on a grid which has no features. (it’s possible to move the stage even if the optical image is not playing)</li>
+            <li>Play the optical stream using widefield</li>
+            <li>Focus optical using right mouse button</li>
+            <li>Switch to FIB mode</li>
+            <li>Select a FIB imaging preset (ie, 100pA ion-beam current)</li>
+            <li>Set FIB horizontal field width to 30µm</li>
+            <li>Focus FIB</li>
+            <li>Make a hole using milling pattern "align"</li>
+            <li>Switch to Optical mode</li>
+            <li>Acquire a new optical image, and locate the (new) hole. The hole will be elliptical.</li>
+            <li>Move the center of the hole to the center of the image</li>
+            <li>Switch to FIB mode</li>
+            <li>Activate the FIB imaging</li>
+            <li>Adjust the beam shift so that it's at the center of the FoV. (Note: from the stage move, it should be possible to have a very good guess of the beam shift needed)</li>
+            <li>Store the beam shift</li>
+            <li>Repeat previous step 16 and 17 for every preset (ie, ion-beam current)</li>
+        </ol>
+      </font>
+  </body>
+</html>
