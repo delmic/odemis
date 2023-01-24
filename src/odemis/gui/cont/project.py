@@ -523,7 +523,7 @@ class FastEMCalibrationRegionsController(object):
                         b.SetForegroundColour(FG_COLOUR_WARNING)
                     else:
                         b.SetForegroundColour(wx.GREEN)  # default to green
-                elif not self.roc_ctrls[num].is_selected:
+                else:
                     b.SetLabel("?")
                     b.SetForegroundColour(odemis.gui.FG_COLOUR_RADIO_INACTIVE)
             else:  # scintillator unselected
