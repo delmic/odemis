@@ -155,22 +155,27 @@ MIMAS-Sim: {
         PIVOT_POS: {"x": -0.0016, "y": 0.00028, "z": 0.05154},
 
         # Loading position (should NOT be within the POS_ACTIVE_RANGE)
-        FAV_POS_DEACTIVE: {"x": -0.008, "y": 0.00506, "z": 0.001975, "rx": 0, "rz": 0.1},
+        FAV_POS_DEACTIVE: {"x": -0.008, "y": 0.00506, "z": 0.001975, 'rx': 0, "ry": 0, "rz": 0.1},
         # Initial position when coating
         # TODO: can it change a lot if coating is need for every grid? In such case, we might need a range
-        FAV_POS_COATING: {"x": -0.008, "y": -0.007, "z": -1.0e-3, "rx": 0, "rz": 0},
+        FAV_POS_COATING: {"x": -0.008, "y": -0.007, "z": -1.0e-3, "rx": 0, "ry": 0, "rz": 0},
         # Safe XYZ ranges for imaging (FM/FIB)
         # Note: for the Z, that's the "safe" range, and the "Stage Focus" should have a subset range used to limit the autofocus
-        POS_ACTIVE_RANGE: {"x": [-5.0e-3, 10.e-3], "y": [-5.e-3, 5.e-3], "z": [-0.5e-3, 4.0e-3]},
+        POS_ACTIVE_RANGE: {"x": [-9.0e-3, 9.0e-3], "y": [-6.e-3, 6.e-3], "z": [-0.5e-3, 4.0e-3]},
         # Initial position when going from loading to imaging.
         # Typically, same as GRID 1, but also with shows the initial Z
-        FAV_POS_ACTIVE: {"x": -4.0e-3, "y": 0, "z": 40.0e-6, "rx": 0 , "rz": 0},
+        FAV_POS_ACTIVE: {"x": -4.0e-3, "y": 0, "z": 40.0e-6, "rx": 0 , "ry": 0, "rz": 0},
         # Centers (X, Y) of each grid. The Z position is assumed to be the same for all grids.
         # They should all be within POS_ACTIVE_RANGE!
         SAMPLE_CENTERS: {
-            "GRID 1": {'x': -4.0e-3, 'y': 0},
-            "GRID 2": {'x': -4.0e-3, 'y': 2.46e-3},
-            # TODO: all 8 grids
+            "GRID 1": {'x':  7.5e-3, 'y': -4.5e-3},
+            "GRID 2": {'x':  2.5e-3, 'y': -4.5e-3},
+            "GRID 3": {'x': -2.5e-3, 'y': -4.5e-3},
+            "GRID 4": {'x': -7.5e-3, 'y': -4.5e-3},
+            "GRID 5": {'x':  7.5e-3, 'y':  4.5e-3},
+            "GRID 6": {'x':  2.5e-3, 'y':  4.5e-3},
+            "GRID 7": {'x': -2.5e-3, 'y':  4.5e-3},
+            "GRID 8": {'x': -7.5e-3, 'y':  4.5e-3},
         },
     },
     affects: ["Camera"],
