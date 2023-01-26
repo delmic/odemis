@@ -306,16 +306,19 @@ class CanonicalMatrixFormTest(unittest.TestCase):
         `_canonical_matrix_form()` should return the identity matrix.
 
         """
-        for matrix in [
-            [(1, 0), (0, 1)],
-            [(0, 1), (-1, 0)],
-            [(-1, 0), (0, -1)],
-            [(0, -1), (1, 0)],
-            [(0, 1), (1, 0)],
-            [(-1, 0), (0, 1)],
-            [(0, -1), (-1, 0)],
-            [(1, 0), (0, -1)],
-        ]:
+        for matrix in map(
+            numpy.array,
+            [
+                [(1, 0), (0, 1)],
+                [(0, 1), (-1, 0)],
+                [(-1, 0), (0, -1)],
+                [(0, -1), (1, 0)],
+                [(0, 1), (1, 0)],
+                [(-1, 0), (0, 1)],
+                [(0, -1), (-1, 0)],
+                [(1, 0), (0, -1)],
+            ],
+        ):
             out = _canonical_matrix_form(matrix)
             numpy.testing.assert_array_almost_equal(out, numpy.eye(2))
 

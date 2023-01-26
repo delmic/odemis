@@ -207,13 +207,70 @@ def nearest_neighbor_graph(xy: numpy.ndarray) -> WeightedGraph:
     return graph
 
 
-_PERMUTATION_MATRIX = {
-    -2: numpy.array([(-1, 0), (0, -1)]),
-    -1: numpy.array([(0, -1), (1, 0)]),
-    0: numpy.array([(1, 0), (0, 1)]),
-    1: numpy.array([(0, 1), (-1, 0)]),
-    2: numpy.array([(-1, 0), (0, -1)]),
+_PERMUTATION_LUT = {
+    -2: ((-1, -1), (0, 1)),
+    -1: ((1, -1), (1, 0)),
+    0: ((1, 1), (0, 1)),
+    1: ((-1, 1), (1, 0)),
+    2: ((-1, -1), (0, 1)),
 }
+
+
+def _canonical_matrix_form_ex(matrix: numpy.ndarray) -> numpy.ndarray:
+    """
+    Returns the signed permutation required to convert a transformation matrix
+    into canonical form.
+
+    The multi-probe pattern has a dual mirror symmetry as well as a 4-fold
+    rotational symmetry. Hence there are 8 degenerate orientations of the
+    multi-probe pattern. This function takes as input an estimated
+    transformation matrix and returns the signed permutation such that
+    `sign * matrix[:, perm]` is in canonical form: no reflection and a rotation
+    between -pi/4 and +pi/4.
+
+    Parameters
+    ----------
+    matrix : ndarray
+        Input transformation matrix.
+
+    Returns
+    -------
+    sign : numpy.ndarray
+        Array containing the reflections to be applied to the columns of the
+        input transformation matrix.
+    perm : numpy.ndarray
+        Array containing the permutations of the columns of the input
+        transformation matrix.
+
+    Examples
+    --------
+    >>> matrix = numpy.array([(1, 0), (0, -1)])
+    >>> _canonical_matrix_form(matrix)
+    (array([ 1, -1]), array([0, 1]))
+
+    """
+    # The rotation follows from a polar decomposition of the input matrix:
+    # `A = R * S`, where `R` is an orthogonal matrix and `S` is
+    # positive-definite. Let `P` be an orthogonal permutation matrix.
+    # Then `A' = A * P` and `S' = Pᵀ * S * P`. By definition `S'` is congruent
+    # to `S`, and is thus also positive-definite. Then by the uniqueness of the
+    # polar decomposition we have `A' = R' * S'`, where `R' = R * P`.
+    R, _ = scipy.linalg.polar(matrix)
+    rotation = math.atan2(R[1, 0], R[0, 0])
+    k = math.floor(0.5 + 2 * rotation / math.pi)
+
+    # Based on the determined rotation swap and/or reflect the columns of the
+    # matrix to ensure that the resulting matrix has a rotation part that
+    # represents an angle between -pi/4 and +pi/4.
+    sign, perm = map(numpy.array, _PERMUTATION_LUT[k])
+
+    # If the transformation matrix contains a reflection, its determinant will
+    # be negative. In that case, reflect the last column (pre-permutation) of
+    # the matrix.
+    if numpy.linalg.det(matrix) < 0:
+        sign[perm[-1]] *= -1
+
+    return sign, perm
 
 
 def _canonical_matrix_form(matrix: numpy.ndarray) -> numpy.ndarray:
@@ -237,24 +294,8 @@ def _canonical_matrix_form(matrix: numpy.ndarray) -> numpy.ndarray:
         Output transformation matrix.
 
     """
-    # If the transformation matrix contains a reflection, its determinant will
-    # be negative. In that case, swap the columns of the matrix.
-    if numpy.linalg.det(matrix) < 0:
-        matrix = numpy.fliplr(matrix)
-
-    # Determine the rotation of the input matrix and flip and/or invert the
-    # columns of the matrix to ensure that the resulting matrix has a rotation
-    # part that represents an angle between -pi/4 and +pi/4.
-    #
-    # The rotation follows from a polar decomposition of the input matrix:
-    # `A = R * S`, where `R` is an orthogonal matrix and `S` is
-    # positive-definite. Let `P` be an orthogonal permutation matrix.
-    # Then `A' = A * P` and `S' = Pᵀ * S * P`. By definition `S'` is congruent
-    # to `S`, and is thus also positive-definite. Then by the uniqueness of the
-    # polar decomposition we have `A' = R' * S'`, where `R' = R * P`.
-    _, rotation, _, _ = _transformation_matrix_to_implicit(matrix)
-    k = math.floor(0.5 + 2 * rotation / math.pi)
-    return numpy.matmul(matrix, _PERMUTATION_MATRIX[k])
+    sign, perm = _canonical_matrix_form_ex(matrix)
+    return sign * matrix[:, perm]
 
 
 def _initial_estimate_grid_orientation(xy: numpy.ndarray) -> AffineTransform:
