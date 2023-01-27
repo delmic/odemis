@@ -370,7 +370,7 @@ class SmarPod(model.Actuator):
                 axis_unit = param['unit']
             except KeyError:
                 axis_unit = "rad" if axis_hw.startswith("r") else "m"
-                logging.info("Axis %s has no unit. Assuming %s", axis_unit, axis_hw)
+                logging.info("Axis %s has no unit. Assuming %s", axis_hw, axis_unit)
 
             ad = model.Axis(canAbs=True, unit=axis_unit, range=axis_range)
             axes_def[axis_name] = ad
@@ -460,7 +460,7 @@ class SmarPod(model.Actuator):
         Not all existing axes have to be provided.
         :return: the position with the names of the axes as the hardware/SmarPod DLL
         expects them
-        KeyError: if an axis doesn't exist in the hardware
+        KeyError: if an axis doesn't exist in the user-defined axes
         """
         pos = self._applyInversion(pos)  # Invert, using the user names
         pos_hw = {self._axis_u2hw[u]: p for u, p in pos.items()}
@@ -482,10 +482,10 @@ class SmarPod(model.Actuator):
         if model.MD_PIVOT_POS in md:
             pivot = md[model.MD_PIVOT_POS]
             if not isinstance(pivot, dict):
-                raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (pivot,))
+                raise ValueError(f"Invalid metadata, should be a coordinate dictionary but got {pivot}.")
             pivot_hw = self._to_hw_axes(pivot)
             if not set(pivot_hw.keys()) == {"x", "y", "z"}:
-                raise ValueError("Invalid metadata, should have x, y, z keys (in hardware names) but got %s." % (pivot_hw,))
+                raise ValueError(f"Invalid metadata, should have x, y, z keys (in hardware names) but got {pivot_hw}.")
 
             logging.debug("Updating pivot point to %s (hw = %s).", pivot, pivot_hw)
             self.SetPivot(pivot_hw)
@@ -833,6 +833,8 @@ class SmarPod(model.Actuator):
         Estimate the maximum duration of a move
         new_pos: (dict str -> float): axis name -> absolute target position (in user referential)
         Not all axes have to be provided.
+        Warning: this is very approximate as the actual speed and acceleration of
+        each axis is unknown. Especially for rotations.
         returns: the duration of the move in seconds
         """
         pos = self.position.value
@@ -860,6 +862,8 @@ class SmarPod(model.Actuator):
         pos_hw = self._to_hw_axes(pos)
         dur = self._estimateMoveDuration(pos)
         end = time.time() + dur
+        # The move estimation is really rough, so add some big margin to be on
+        # the safe side (we should *never* timeout before a successful move is completed)
         max_dur = dur * 5 + 3
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
         timeout = last_upd + max_dur
@@ -1498,7 +1502,6 @@ class MC_5DOF(model.Actuator):
             self.core = MC_5DOF_DLL()
         else:
             self.core = FakeMC_5DOF_DLL(axes)
-        # Not to be mistaken with axes which is a simple public view
         axes_def = {}  # axis name -> Axis object
         self._locator = locator
 

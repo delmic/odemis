@@ -58,6 +58,7 @@ CONFIG_SMARTPOD = {"name": "SmarPod",
             },
             'y': {
                 "name": "x",
+                # Different range from the "x" axis, to easily differentiate them
                 'range': [-0.3, 0.2],
                 'unit': 'm',
             },
@@ -66,11 +67,11 @@ CONFIG_SMARTPOD = {"name": "SmarPod",
                 'unit': 'm',
             },
             'rx': {
-                'range': [-0.35, 0.35],
+                'range': [-0.25, 0.15],
                 'unit': 'rad',
             },
             'ry': {
-                'range': [-0.45, 0.35],
+                'range': [-0.2, 0.18],  # asymmetrical, just to test "inverted" easily
                 'unit': 'rad',
             },
             'rz': {
@@ -109,13 +110,13 @@ class TestSmarPod(unittest.TestCase):
 
     def test_axes_def(self):
         """
-        Check that the axis name and invertion work as intended
+        Check that the axis name and inversion work as intended
         """
         # X & Y axes are swapped => X axis should report the bigger range
         axes = self.dev.axes
         self.assertEqual(axes["x"].range, (-0.3, 0.2))
         # ry range is inverted, and in rad
-        self.assertEqual(axes["ry"].range, (-0.35, 0.45))
+        self.assertEqual(axes["ry"].range, (-0.18, 0.2))
         self.assertEqual(axes["ry"].unit, "rad")
 
     def test_exception_pickling(self):
