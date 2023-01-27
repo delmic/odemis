@@ -20,22 +20,22 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-import Pyro4
-from concurrent import futures
-from concurrent.futures import CancelledError
 import gc
 import logging
-import numpy
-from odemis import model
-from odemis.model import roattribute, oneway, isasync, VigilantAttributeBase
-from odemis.util import mock, timeout, executeAsyncTask
 import os
 import pickle
-import sys
 import threading
 import time
 import unittest
+from concurrent import futures
 from multiprocessing import Process
+
+import numpy
+import Pyro4
+
+from odemis import model
+from odemis.model import VigilantAttributeBase, isasync, oneway, roattribute
+from odemis.util import executeAsyncTask, mock, timeout, testing
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -157,12 +157,17 @@ class SerializerTest(unittest.TestCase):
 
 # @unittest.skip("simple")
 class ProxyOfProxyTest(unittest.TestCase):
-# Test sharing a shared component from the client
+    # Test sharing a shared component from the client
 
-#  create one remote container with an object (Component)
-#  create a second remote container with a HwComponent
-#  change .affects of HwComponent to the first object
+    # @classmethod
+    # def setUpClass(cls) -> None:
+    #     testing.use_fake_backend_directory()
+
     def test_component(self):
+        # create one remote container with an object (Component)
+        # create a second remote container with a HwComponent
+        # change .affects of HwComponent to the first object
+
         cont, comp = model.createInNewContainer("testscont", model.HwComponent,
                                           {"name":"MyHwComp", "role":"affected"})
         self.assertEqual(comp.name, "MyHwComp")
@@ -1179,5 +1184,4 @@ class SynchronizableDataFlow(model.DataFlow):
 
 
 if __name__ == "__main__":
-    # import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
