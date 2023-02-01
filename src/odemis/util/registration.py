@@ -28,7 +28,7 @@ from typing import Iterator, Optional, Tuple, Type, TypeVar
 import numpy
 import scipy.spatial
 from odemis.util.cluster import kmeans2
-from odemis.util.graph import WeightedGraph
+from odemis.util.graph import WeightedGraph, remove_triangles
 from odemis.util.spot import find_spot_positions
 from odemis.util.transform import (  # noqa: F401
     AffineTransform,
@@ -202,7 +202,7 @@ def nearest_neighbor_graph(xy: numpy.ndarray) -> WeightedGraph:
     # points at the corners of the grid, and likewise 3 nearest neighbors for
     # the points on the sides of the grid. The following line takes care of
     # that.
-    graph.remove_triangles()
+    remove_triangles(graph, overwrite=True)
 
     return graph
 
