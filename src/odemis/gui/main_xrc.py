@@ -470,6 +470,10 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.btn_switch_imaging = xrc.XRCCTRL(self, "btn_switch_imaging")
         self.btn_switch_zero_tilt_imaging = xrc.XRCCTRL(self, "btn_switch_zero_tilt_imaging")
         self.btn_switch_coating = xrc.XRCCTRL(self, "btn_switch_coating")
+        self.btn_switch_loading_chamber_tab = xrc.XRCCTRL(self, "btn_switch_loading_chamber_tab")
+        self.btn_switch_optical_chamber_tab = xrc.XRCCTRL(self, "btn_switch_optical_chamber_tab")
+        self.btn_switch_milling_chamber_tab = xrc.XRCCTRL(self, "btn_switch_milling_chamber_tab")
+        self.btn_switch_coating_chamber_tab = xrc.XRCCTRL(self, "btn_switch_coating_chamber_tab")
         self.gauge_move = xrc.XRCCTRL(self, "gauge_move")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
         self.pnl_ref_msg = xrc.XRCCTRL(self, "pnl_ref_msg")
@@ -5296,6 +5300,7 @@ def __init_resources():
 													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 												</font>
 												<style>wxALIGN_CENTRE</style>
+												<hidden>1</hidden>
 												<XRCED>
 													<assign_var>1</assign_var>
 												</XRCED>
@@ -5318,6 +5323,7 @@ def __init_resources():
 													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 												</font>
 												<style>wxALIGN_CENTRE</style>
+												<hidden>1</hidden>
 												<XRCED>
 													<assign_var>1</assign_var>
 												</XRCED>
@@ -5340,6 +5346,7 @@ def __init_resources():
 													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 												</font>
 												<style>wxALIGN_CENTRE</style>
+												<hidden>1</hidden>
 												<XRCED>
 													<assign_var>1</assign_var>
 												</XRCED>
@@ -5362,6 +5369,7 @@ def __init_resources():
 													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 												</font>
 												<style>wxALIGN_CENTRE</style>
+												<hidden>1</hidden>
 												<XRCED>
 													<assign_var>1</assign_var>
 												</XRCED>
@@ -5391,6 +5399,7 @@ def __init_resources():
 													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 												</font>
 												<style>wxALIGN_CENTRE</style>
+                                                <hidden>1</hidden>
 												<XRCED>
 													<assign_var>1</assign_var>
 												</XRCED>
@@ -5413,6 +5422,7 @@ def __init_resources():
 													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 												</font>
 												<style>wxALIGN_CENTRE</style>
+                                                <hidden>1</hidden>
 												<XRCED>
 													<assign_var>1</assign_var>
 												</XRCED>
@@ -5435,6 +5445,7 @@ def __init_resources():
                                                       <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                                   </font>
                                                   <style>wxALIGN_CENTRE</style>
+                                                  <hidden>1</hidden>
                                                   <XRCED>
                                                       <assign_var>1</assign_var>
                                                   </XRCED>
@@ -5457,6 +5468,7 @@ def __init_resources():
 													<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 												</font>
 												<style>wxALIGN_CENTRE</style>
+												<hidden>1</hidden>
 												<XRCED>
 													<assign_var>1</assign_var>
 												</XRCED>
@@ -5470,6 +5482,109 @@ def __init_resources():
 									</object>
 									<flag>wxALL|wxALIGN_CENTRE</flag>
 								</object>
+								<object class="sizeritem">
+                                    <object class="wxGridBagSizer">
+                                        <object class="sizeritem">
+                                            <object class="ProgressRadioButton" name="btn_switch_loading_chamber_tab">
+                                                <hidden>1</hidden>
+                                                <icon>img_icon_ico_eject_png</icon>
+                                                <icon_progress>img_icon_ico_eject_orange_png</icon_progress>
+                                                <icon_on>img_icon_ico_eject_green_png</icon_on>
+                                                <height>48</height>
+                                                <face_colour>def</face_colour>
+                                                <label>LOADING</label>
+                                                <fg>#1A1A1A</fg>
+                                                <font>
+                                                    <size>11</size>
+                                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                                </font>
+                                                <style>wxALIGN_CENTRE</style>
+                                                <XRCED>
+                                                    <assign_var>1</assign_var>
+                                                </XRCED>
+                                                <size>140,-1</size>
+                                            </object>
+                                            <flag>wxALL|wxEXPAND</flag>
+                                            <border>10</border>
+                                            <cellpos>0,0</cellpos>
+                                        </object>
+                                        <object class="sizeritem">
+                                            <object class="ProgressRadioButton" name="btn_switch_optical_chamber_tab">
+                                                <icon>img_icon_ico_imaging_png</icon>
+                                                <icon_progress>img_icon_ico_optical_orange_png</icon_progress>
+                                                <icon_on>img_icon_ico_optical_green_png</icon_on>
+                                                <height>48</height>
+                                                <face_colour>def</face_colour>
+                                                <label>OPTICAL</label>
+                                                <fg>#1A1A1A</fg>
+                                                <font>
+                                                    <size>11</size>
+                                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                                </font>
+                                                <style>wxALIGN_CENTRE</style>
+                                                <hidden>1</hidden>
+                                                <XRCED>
+                                                    <assign_var>1</assign_var>
+                                                </XRCED>
+                                                <size>140,-1</size>
+                                            </object>
+                                            <flag>wxALL|wxEXPAND</flag>
+                                            <border>10</border>
+                                            <cellpos>0,1</cellpos>
+                                            </object>
+                                        <object class="sizeritem">
+                                            <object class="ProgressRadioButton" name="btn_switch_milling_chamber_tab">
+                                                    <icon>img_icon_ico_sem_png</icon>
+                                                    <icon_progress>img_icon_ico_sem_orange_png</icon_progress>
+                                                    <icon_on>img_icon_ico_sem_green_png</icon_on>
+                                                    <height>48</height>
+                                                    <face_colour>def</face_colour>
+                                                    <label>FIB</label>
+                                                    <fg>#1A1A1A</fg>
+                                                    <font>
+                                                        <size>11</size>
+                                                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                                    </font>
+                                                    <style>wxALIGN_CENTRE</style>
+                                                    <hidden>1</hidden>
+                                                    <XRCED>
+                                                        <assign_var>1</assign_var>
+                                                    </XRCED>
+                                                <size>140,-1</size>
+                                                </object>
+                                            <flag>wxALL|wxEXPAND</flag>
+                                            <border>10</border>
+                                            <cellpos>1,0</cellpos>
+                                        </object>
+                                        <object class="sizeritem">
+                                            <object class="ProgressRadioButton" name="btn_switch_coating_chamber_tab">
+                                                <icon>img_icon_ico_coating_png</icon>
+                                                <icon_progress>img_icon_ico_coating_orange_png</icon_progress>
+                                                <icon_on>img_icon_ico_coating_green_png</icon_on>
+                                                <height>48</height>
+                                                <face_colour>def</face_colour>
+                                                <label>COATING</label>
+                                                <fg>#1A1A1A</fg>
+                                                <font>
+                                                    <size>11</size>
+                                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                                </font>
+                                                <style>wxALIGN_CENTRE</style>
+                                                <hidden>1</hidden>
+                                                <XRCED>
+                                                    <assign_var>1</assign_var>
+                                                </XRCED>
+                                                <size>140,-1</size>
+                                            </object>
+                                            <flag>wxALL|wxEXPAND</flag>
+                                            <border>10</border>
+                                            <cellpos>1,1</cellpos>
+                                        </object>
+                                        <vgap>5</vgap>
+                                        <hgap>20</hgap>
+                                    </object>
+                                    <flag>wxALL|wxALIGN_CENTRE</flag>
+                                </object>
 								<object class="sizeritem">
 									<object class="wxBoxSizer">
 										<object class="sizeritem">
@@ -5548,6 +5663,7 @@ def __init_resources():
 											<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 										</font>
 										<style>wxALIGN_CENTRE</style>
+										<hidden>1</hidden>
 										<XRCED>
 											<assign_var>1</assign_var>
 										</XRCED>
@@ -5558,6 +5674,7 @@ def __init_resources():
 
 								<object class="sizeritem">
 									<object class="wxPanel" name="pnl_advanced_align">
+      									<hidden>1</hidden>
 										<object class="wxBoxSizer">
 											<orient>wxVERTICAL</orient>
 											<object class="sizeritem">
@@ -5878,6 +5995,7 @@ def __init_resources():
                                                         <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                                     </font>
                                                     <style>wxALIGN_CENTRE</style>
+                                                    <hidden>1</hidden>
                                                     <XRCED>
                                                         <assign_var>1</assign_var>
                                                     </XRCED>
@@ -8860,9 +8978,9 @@ def __init_resources():
                     <object class="FoldPanelBar">
 					<object class="FoldPanelItem" name="fp_feature_panel">
 						<object class="wxPanel" name="pnl_features">
-							<object class="wxBoxSizer">				
-							<object class="sizeritem">		
-								<object class="wxBoxSizer">										
+							<object class="wxBoxSizer">
+							<object class="sizeritem">
+								<object class="wxBoxSizer">
 										<object class="sizeritem">
 											<object class="OwnerDrawnComboBox" name="cmb_features">
 											  <size>155,20</size>
@@ -8886,8 +9004,8 @@ def __init_resources():
 								<flag>wxLEFT|wxTOP</flag>
 								<border>10</border>
 							</object>
-							<object class="sizeritem">		
-									<object class="wxBoxSizer">				
+							<object class="sizeritem">
+									<object class="wxBoxSizer">
 										 <object class="sizeritem">
 												<object class="wxStaticText">
 												<label>Status</label>
@@ -8922,8 +9040,8 @@ def __init_resources():
 								<flag>wxLEFT|wxTOP</flag>
 								<border>10</border>
 							</object>
-							<object class="sizeritem">		
-								<object class="wxBoxSizer">			
+							<object class="sizeritem">
+								<object class="wxBoxSizer">
 									 <object class="sizeritem">
 											<object class="wxStaticText">
 											<label>Feature Z</label>
