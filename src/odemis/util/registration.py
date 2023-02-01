@@ -22,8 +22,10 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 USA.
 
 """
+from __future__ import annotations
+
 import math
-from typing import Iterator, Optional, Tuple, Type, TypeVar
+from typing import Iterator, NamedTuple, Optional, Tuple, Type, TypeVar
 
 import numpy
 import scipy.spatial
@@ -164,7 +166,21 @@ def unit_gridpoints(shape: Tuple[int, int], *, mode: str) -> numpy.ndarray:
     return numpy.stack(numpy.broadcast_arrays(x, y), axis=-1).reshape(n * m, 2)
 
 
-def nearest_neighbor_graph(xy: numpy.ndarray) -> WeightedGraph:
+class WeightedShift(NamedTuple):
+    weight: float
+    shift: numpy.ndarray
+
+    def __float__(self) -> float:
+        return self.weight
+
+    def __lt__(self, other: WeightedShift) -> bool:
+        return self.weight < other.weight
+
+    def __neg__(self) -> WeightedShift:
+        return WeightedShift(self.weight, -self.shift)
+
+
+def nearest_neighbor_graph(xy: numpy.ndarray) -> AntiSymmetricGraph:
     """
     Returns a undirected weighted simple graph of 4-connected nearest neighbors
     of a square grid of points.
@@ -176,7 +192,7 @@ def nearest_neighbor_graph(xy: numpy.ndarray) -> WeightedGraph:
 
     Returns
     -------
-    graph : WeightedGraph
+    graph : AntiSymmetricGraph
         Undirected weighted simple graph of 4-connected nearest neighbors. For
         points located on the edge of the grid only 3 nearest neighbors are
         returned, and for the corners only 2.
@@ -190,12 +206,13 @@ def nearest_neighbor_graph(xy: numpy.ndarray) -> WeightedGraph:
     indices = indices[:, 1:]  # same
 
     # Construct an undirected weighted simple graph
-    graph = WeightedGraph(len(xy), directed=False)
+    graph = AntiSymmetricGraph(len(xy))
     for vertex, neighbors in enumerate(indices):
         for neighbor, distance in zip(neighbors, distances[vertex]):
             # An edge connects two vertices that are each others nearest neighbor.
             if (vertex < neighbor) and (vertex in indices[neighbor]):
-                graph.add_edge((vertex, neighbor), distance)
+                shift = xy[neighbor] - xy[vertex]
+                graph.add_edge((vertex, neighbor), WeightedShift(distance, shift))
 
     # The code above assumes that each point has 4 nearest neighbors. In
     # practice we would like to only consider the 2 nearest neighbors for the
@@ -427,3 +444,175 @@ def estimate_grid_orientation_from_img(
     ji = find_spot_positions(image, sigma, threshold_abs, threshold_rel, num_spots)
     xy = to_physical_space(ji, image.shape)
     return estimate_grid_orientation(xy, shape, transform_type)
+
+
+def _cluster_edges(
+    graph: AntiSymmetricGraph,
+) -> Tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]:
+    """
+    """
+    # no point in continuing if the graph is disconnected.
+    # NOTE: should never happen, remove?
+    if not is_connected(graph):
+        raise ValueError("Provided graph is disconnected!")
+
+    # Create an array `shifts` containing the displacement vectors for all
+    # edges in the graph.
+    shifts = numpy.vstack(
+        [graph.get_edge_weight(edge).shift for edge in graph.iter_edges(False)]
+    )
+
+    # The array `shifts` typically contains the lattice vectors for the 'left',
+    # 'right', 'up', and 'down' directions, but it is not guaranteed that it
+    # will contain all of them, nor that there are equal amounts of edges in
+    # each direction. The solution is to not make any distinction between
+    # 'left' and 'right', or 'up' and 'down'. This is done using a mapping of
+    # `(ρ, θ)` to `(ρ, 2*θ)`. The clustering itself is done in Cartesian
+    # coordinates to not be impacted by the branch cut at `θ = ±π`.
+    rho, theta = cartesian_to_polar(shifts)
+    dpq = polar_to_cartesian(rho, 2 * theta)
+    centroids, labels = kmeans2(dpq, 2, minit="++")
+    rho, theta = cartesian_to_polar(centroids)
+    centroids = polar_to_cartesian(rho, 0.5 * theta)
+
+    # Each rows of the array `centroid` now contains a lattice vector (direction).
+    # By transposing the array, these lattice vectors are the columns of the
+    # new matrix. This allows to directly use them as a transformation matrix.
+    # For example: let `x₁` and `x₂` be the two 2-by-1 lattice vectors, then
+    # `(x₁, x₂) * (n, m)ᵀ = n * x₁ + m * x₂`.
+    sign, perm = _canonical_matrix_form_ex(numpy.transpose(centroids))
+    centroids = sign[:, None] * centroids[perm]
+    labels = perm[labels]
+
+    # extend
+    reverse = numpy.einsum("ji,ji->j", shifts, centroids[labels]) < 0
+    labels[reverse] += 2
+    centroids = numpy.vstack((centroids, -centroids))
+
+    # determine distance to centroid
+    distances = numpy.linalg.norm(shifts - centroids[labels], axis=1)
+
+    return centroids, labels, distances
+
+
+_SHIFT_LUT = numpy.array([(1, 0), (0, 1), (-1, 0), (0, -1)], dtype=numpy.int64)
+
+
+def _enumerate_grid(
+    graph: AntiSymmetricGraph,
+    labels: numpy.ndarray,
+    distances: numpy.ndarray,
+    shape: Tuple[int, int],
+) -> numpy.ndarray:
+    """
+    Returns
+    -------
+    nodes : numpy.ndarray
+        Node indices of the grid.
+
+    """
+    # build a minimum spanning tree
+    n = len(graph)
+    mst = AntiSymmetricGraph(n)
+    edges = graph.iter_edges(False)
+    weights = map(WeightedShift, distances, _SHIFT_LUT[labels])
+    for edge, weight in zip(edges, weights):
+        mst.add_edge(edge, weight)
+    minimum_spanning_tree(mst, overwrite=True)
+
+    # number the beamlets by walking the tree
+    coords = numpy.zeros((n, 2), dtype=numpy.int64)
+    walker = depth_first_walk(mst, 0)
+    next(walker)  # skip the first `(None, start)` entry
+    for predecessor, vertex in walker:
+        shift = mst.get_edge_weight((predecessor, vertex)).shift
+        coords[vertex] = coords[predecessor] + shift
+    coords -= numpy.min(coords, axis=0)
+
+    # convert from coords to node numbering
+    nodes = numpy.ravel_multi_index(numpy.transpose(coords), dims=shape, mode="raise")
+
+    return nodes
+
+
+def estimate_grid_orientation_ex(
+    ji: numpy.ndarray, shape: Tuple[int, int], transform_type: Type[T]
+) -> T:
+    """
+    Estimate the orientation of a square grid of points.
+
+    Parameters
+    ----------
+    xy : ndarray of shape (n, 2)
+        Array with the determined coordinates of the grid points.
+    shape : tuple of two ints
+        The shape of the grid given as a tuple `(height, width)`. Current
+        implementation only supports grids of points with `height == width`.
+    transform_type : GeometricTransform
+        The transform class to use for estimating the orientation.
+
+    Returns
+    -------
+    tform : instance of `transform_type`
+        The orientation of the pattern.
+
+    """
+    if shape[0] != shape[1]:
+        raise NotImplementedError(
+            "Only grids with `shape[0] == shape[1]` are supported."
+        )
+    graph = nearest_neighbor_graph(ji)
+    _, labels, distances = _cluster_edges(graph)
+    nodes = _enumerate_grid(graph, labels, distances, shape)
+    grid = unit_gridpoints(shape, mode="ji")
+    return transform_type.from_pointset(grid[nodes], ji)
+
+
+def estimate_grid_orientation_from_img_ex(
+    image: numpy.ndarray,
+    shape: Tuple[int, int],
+    transform_type: Type[T],
+    sigma: float,
+    threshold_abs: Optional[float] = None,
+    threshold_rel: Optional[float] = None,
+    num_spots: Optional[int] = None,
+) -> T:
+    """
+    Image based estimation of the orientation of a square grid of points.
+
+    Parameters
+    ----------
+    image : ndarray
+        The input image.
+    shape : tuple of two ints
+        The shape of the grid given as a tuple `(height, width)`.
+    transform_type : GeometricTransform
+        The transform class to use for estimating the orientation.
+    sigma : float
+        Expected size of the spots. Assuming the spots are Gaussian shaped,
+        this is the standard deviation.
+    threshold_abs : float, optional
+        Minimum intensity of peaks. By default, the absolute threshold is
+        the minimum intensity of the image.
+    threshold_rel : float, optional
+        If provided, apply a threshold on the minimum intensity of peaks,
+        calculated as `max(image) * threshold_rel`.
+    num_spots : int, optional
+        Maximum number of spots. When the number of spots exceeds `num_spots`,
+        return `num_spots` peaks based on highest spot intensity. Will use
+        `num_spots = shape[0] * shape[1]` as default when set to `None`. Set
+        `num_spots = 0` to not impose a maximum. Note that this behavior is
+        different from odemis.util.spot.find_spot_position().
+
+    Returns
+    -------
+    tform : instance of `transform_type`
+        The orientation of the pattern.
+
+    """
+    if num_spots is None:
+        num_spots = shape[0] * shape[1]
+    elif num_spots == 0:
+        num_spots = None
+    ji = find_spot_positions(image, sigma, threshold_abs, threshold_rel, num_spots)
+    return estimate_grid_orientation_ex(ji, shape, transform_type)
