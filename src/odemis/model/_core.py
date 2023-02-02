@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import multiprocessing
 import os
-import tempfile
 import threading
 from collections.abc import Mapping
 from urllib.parse import quote
@@ -58,15 +57,9 @@ CALL_TIMEOUT = 30  # s
 
 # Set the base directory
 BASE_DIRECTORY = "/var/run/odemisd"
-path_exists = os.path.exists(BASE_DIRECTORY)
-if not path_exists:
-    logging.info(f"{BASE_DIRECTORY} could not be found. Creating new temporary folder.")
-    BASE_DIRECTORY = os.path.join(tempfile.gettempdir(), "odemisd")
-    os.makedirs(BASE_DIRECTORY, exist_ok=True)
-
 BASE_GROUP = "odemis"  # user group that is allowed to access the backend
-BACKEND_FILE = os.path.join(BASE_DIRECTORY, "backend.ipc")  # the official ipc file for backend (just to detect status)
 BACKEND_NAME = "backend"  # the official name for the backend container
+BACKEND_FILE = os.path.join(BASE_DIRECTORY, BACKEND_NAME + ".ipc")  # the official ipc file for backend (just to detect status)
 
 _microscope = None
 
