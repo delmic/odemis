@@ -240,10 +240,10 @@ class CalibrationTask(object):
 
             # loop over calibrations in list (order in list is important!)
             for calib in self.calibrations:
-                # TODO return a sub-future when implemented for calibrations
                 calib_cls = calib.value
                 logging.debug("Starting calibration %s", calib_cls.__name__)
                 calib_cls = calib_cls(components)
+                # TODO return a sub-future when implemented for calibrations
                 self.run_calibration(calib_cls)
 
                 # def _pass_future_progress(sub_f, start, end):
@@ -290,7 +290,7 @@ class CalibrationTask(object):
         """
         calibration.run()
 
-        if isinstance(calibration,Calibrations.SCAN_AMPLITUDE_PREALIGN.value):
+        if isinstance(calibration, Calibrations.SCAN_AMPLITUDE_PREALIGN.value):
             self.asm_config["multibeam"]["scanOffset"] = calibration.orig_config["multibeam"]["scanOffset"]
             self.asm_config["multibeam"]["scanAmplitude"] = calibration.orig_config["multibeam"]["scanAmplitude"]
 
