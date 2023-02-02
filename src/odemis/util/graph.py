@@ -214,6 +214,11 @@ class WeightedGraph(GraphBase):
     the keys form the set of neighbors of vertex `j` and the values contain the
     edge weights.
 
+    Edge weights are typically floats. It is possible to use a custom object as
+    edge weight if the object is sortable and can be converted into a float. In
+    other words, the object should implement the `__lt__` and `__float__`
+    special methods.
+
     """
 
     _item_type = dict
@@ -425,7 +430,7 @@ def _minmax_spanning_tree(
 
     """
     if graph.directed:
-        raise ValueError("Provided graph is not undirected")
+        raise ValueError("Expected an undirected graph, but got a directed graph.")
     n = len(graph)
     if not overwrite:
         graph = copy.deepcopy(graph)
