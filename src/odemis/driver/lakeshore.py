@@ -154,6 +154,14 @@ class Lakeshore(model.HwComponent):
             if output_channel_nr not in supported_output_channels:
                 raise ValueError(f"Sensor input must be one of the following: {supported_output_channels}")
 
+            # It wouldn't make sense to have target temperature without reading
+            # its temperature => detect such case
+            if va_name not in sensor_input:
+                raise ValueError("output_channel defined for VA '%s' while it's not present in input_channel",
+                                 va_name)
+            # TODO: Actually, the device also stores the information about the
+            # link between the input and output channels (see "OUTMODE?")
+            # => use it to confirm the arguments match.
             va_target_temp_setter = partial(self._set_targetTemperature, output_channel=output_channel_nr)
             va_target_heater_setter = partial(self._set_heating, output_channel=output_channel_nr)
             self._setters.append(va_target_temp_setter)

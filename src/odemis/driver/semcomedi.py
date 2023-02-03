@@ -3166,7 +3166,9 @@ class Scanner(model.Emitter):
         if nrchans != self._nrchans:
             # force updating the dwell time for this new number of read channels
             self.dwellTime.value = self.dwellTime.value
-            assert nrchans == self._nrchans
+            if nrchans != self._nrchans:
+                raise ValueError("Cannot run %s channels currently", nrchans)
+
         dwell_time, osr, dpr = self.dwellTime.value, self._osr, self._dpr
         resolution = self.resolution.value
         scale = self.scale.value
