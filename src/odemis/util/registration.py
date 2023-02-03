@@ -30,7 +30,7 @@ from typing import Iterator, NamedTuple, Optional, Tuple, Type, TypeVar
 import numpy
 import scipy.spatial
 from odemis.util.cluster import kmeans2
-from odemis.util.graph import WeightedGraph, remove_triangles
+from odemis.util.graph import SkewSymmetricAdjacencyGraph, WeightedGraph, remove_triangles
 from odemis.util.spot import find_spot_positions
 from odemis.util.transform import (  # noqa: F401
     AffineTransform,
@@ -176,11 +176,14 @@ class WeightedShift(NamedTuple):
     def __lt__(self, other: WeightedShift) -> bool:
         return self.weight < other.weight
 
+    def __gt__(self, other: WeightedShift) -> bool:
+        return self.weight > other.weight
+
     def __neg__(self) -> WeightedShift:
         return WeightedShift(self.weight, -self.shift)
 
 
-def nearest_neighbor_graph(xy: numpy.ndarray) -> AntiSymmetricGraph:
+def nearest_neighbor_graph(xy: numpy.ndarray) -> SkewSymmetricAdjacencyGraph:
     """
     Returns a undirected weighted simple graph of 4-connected nearest neighbors
     of a square grid of points.
@@ -206,7 +209,7 @@ def nearest_neighbor_graph(xy: numpy.ndarray) -> AntiSymmetricGraph:
     indices = indices[:, 1:]  # same
 
     # Construct an undirected weighted simple graph
-    graph = AntiSymmetricGraph(len(xy))
+    graph = SkewSymmetricAdjacencyGraph(len(xy))
     for vertex, neighbors in enumerate(indices):
         for neighbor, distance in zip(neighbors, distances[vertex]):
             # An edge connects two vertices that are each others nearest neighbor.
@@ -233,7 +236,7 @@ _PERMUTATION_LUT = {
 }
 
 
-def _canonical_matrix_form_ex(matrix: numpy.ndarray) -> numpy.ndarray:
+def _canonical_matrix_form(matrix: numpy.ndarray) -> numpy.ndarray:
     """
     Returns the signed permutation required to convert a transformation matrix
     into canonical form.
@@ -290,31 +293,6 @@ def _canonical_matrix_form_ex(matrix: numpy.ndarray) -> numpy.ndarray:
     return sign, perm
 
 
-def _canonical_matrix_form(matrix: numpy.ndarray) -> numpy.ndarray:
-    """
-    Returns a transformation matrix in canonical form.
-
-    The multi-probe pattern has a dual mirror symmetry as well as a 4-fold
-    rotational symmetry. Hence there are 8 degenerate orientations of the
-    multi-probe pattern. This function takes as input an estimated
-    transformation matrix and reduces it to canonical form: no reflection and
-    a rotation between -pi/4 and +pi/4.
-
-    Parameters
-    ----------
-    matrix : ndarray
-        Input transformation matrix.
-
-    Returns
-    -------
-    out : ndarray
-        Output transformation matrix.
-
-    """
-    sign, perm = _canonical_matrix_form_ex(matrix)
-    return sign * matrix[:, perm]
-
-
 def _initial_estimate_grid_orientation(xy: numpy.ndarray) -> AffineTransform:
     """
     Provide an initial estimate for the orientation of a square grid of points.
@@ -354,7 +332,9 @@ def _initial_estimate_grid_orientation(xy: numpy.ndarray) -> AffineTransform:
     # new matrix. This allows to directly use them as a transformation matrix.
     # For example: let `x₁` and `x₂` be the two 2-by-1 lattice vectors, then
     # `(x₁, x₂) * (n, m)ᵀ = n * x₁ + m * x₂`.
-    matrix = _canonical_matrix_form(numpy.transpose(dxy))
+    matrix = numpy.transpose(dxy)
+    sign, perm = _canonical_matrix_form(matrix)
+    matrix = sign * matrix[:, perm]
 
     # The estimated translated is the centroid of the input coordinates.
     translation = numpy.mean(xy, axis=0)
@@ -513,7 +493,7 @@ def _enumerate_grid(
     """
     # build a minimum spanning tree
     n = len(graph)
-    mst = AntiSymmetricGraph(n)
+    mst = SkewSymmetricAdjacencyGraph(n)
     edges = graph.iter_edges(False)
     weights = map(WeightedShift, distances, _SHIFT_LUT[labels])
     for edge, weight in zip(edges, weights):

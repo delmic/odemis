@@ -303,7 +303,8 @@ class CanonicalMatrixFormTest(unittest.TestCase):
     def test_identity(self):
         """
         Given one of the symmetrical versions of the canonical grid
-        `_canonical_matrix_form()` should return the identity matrix.
+        `_canonical_matrix_form()` should return the permutation to
+        transform it into the identity matrix.
 
         """
         for matrix in map(
@@ -319,7 +320,8 @@ class CanonicalMatrixFormTest(unittest.TestCase):
                 [(1, 0), (0, -1)],
             ],
         ):
-            out = _canonical_matrix_form(matrix)
+            sign, perm = _canonical_matrix_form(matrix)
+            out = sign * matrix[:, perm]
             numpy.testing.assert_array_almost_equal(out, numpy.eye(2))
 
     def test_random_input(self):
@@ -332,7 +334,8 @@ class CanonicalMatrixFormTest(unittest.TestCase):
         for i in range(50):
             matrix = self._rng.standard_normal((2, 2))
             with self.subTest(matrix=matrix, i=i):
-                matrix = _canonical_matrix_form(matrix)
+                sign, perm = _canonical_matrix_form(matrix)
+                matrix = sign * matrix[:, perm]
                 tform = AffineTransform(matrix)
                 self.assertGreater(numpy.linalg.det(matrix), 0)
                 self.assertGreater(tform.rotation, -0.25 * numpy.pi)
@@ -350,8 +353,9 @@ class CanonicalMatrixFormTest(unittest.TestCase):
             if numpy.linalg.det(matrix) < 0:
                 matrix = numpy.fliplr(matrix)
             with self.subTest(matrix=matrix, i=i):
+                sign, perm = _canonical_matrix_form(matrix)
                 tform1 = AffineTransform(matrix)
-                tform2 = AffineTransform(_canonical_matrix_form(matrix))
+                tform2 = AffineTransform(sign * matrix[:, perm])
                 delta = tform2.rotation - tform1.rotation
                 n = int(round(delta / (0.5 * numpy.pi)))
                 self.assertAlmostEqual(delta - n * 0.5 * numpy.pi, 0)
