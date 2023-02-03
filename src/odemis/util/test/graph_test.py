@@ -33,10 +33,10 @@ import numpy
 
 from odemis.util import pairwise
 from odemis.util.graph import (
-    AntiSymmetricGraph,
     DisjointSetUnion,
     Graph,
     GraphBase,
+    SkewSymmetricAdjacencyGraph,
     UnweightedGraph,
     WeightedGraph,
     depth_first_walk,
@@ -275,13 +275,17 @@ class GraphTest(unittest.TestCase):
                     self.assertCountEqual(edges, out)
 
 
-class AntiSymmetricGraphTest(unittest.TestCase):
-    """Unit tests for `AntiSymmetricGraph`."""
+class SkewSymmetricAdjacencyGraphTest(unittest.TestCase):
+    """Unit tests for `SkewSymmetricAdjacencyGraph`."""
 
     def test_adjacency_matrix(self) -> None:
-        """The adjacency matrix of an AntiSymmetricGraph should be skew-symmetric."""
+        """
+        The adjacency matrix of a SkewSymmetricAdjacencyGraph should be
+        skew-symmetric.
+
+        """
         n = 10
-        graph = AntiSymmetricGraph(n)
+        graph = SkewSymmetricAdjacencyGraph(n)
         for j in range(n):
             for i in range(j + 1, n):
                 graph.add_edge((j, i), weight=random.random())

@@ -238,10 +238,10 @@ class WeightedGraph(GraphBase):
         return self.data[j][i]
 
 
-class AntiSymmetricGraph(WeightedGraph):
+class SkewSymmetricAdjacencyGraph(WeightedGraph):
     """
-    Weighted graph with edge weights that are anti-symmetric, i.e. edge
-    weights are inverted when the direction is reversed.
+    Weighted undirected graph of which the adjacency matrix is skew-symmetric,
+    i.e. the edge weights change sign when the direction is reversed.
 
     """
 
