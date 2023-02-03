@@ -2,10 +2,10 @@
 """
 cluster.py : backport of k-means++ initialisation method
 
-The SciPy version available via default package managment of Ubuntu 18.04LT is
-v0.19.1, which is quite old and lacks new features. This file backports the
+The SciPy version available via default package managment of Ubuntu 18.04 LTS
+is v0.19.1, which is quite old and lacks new features. This file backports the
 k-means++ initialisation method for scipy.cluster.vq.kmeans2() which is
-available from SciPy v1.2.0 onwards. When support for Ubuntu 18.04LT is no
+available from SciPy v1.2.0 onwards. When support for Ubuntu 18.04 LTS is no
 longer required, this file can be removed.
 
 @author: Andries Effting
