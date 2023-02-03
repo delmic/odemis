@@ -249,6 +249,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
     returns:
         (float): Focus position (m)
         (float): Focus level
+        (float): Focus confidence (0<=f<=1)
     raises:
             CancelledError if cancelled
             IOError if procedure failed
@@ -462,15 +463,18 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
         worst_fm = min(focus_levels.values())
         if step_cntr == MAX_STEPS_NUMBER:
             logging.info("Auto focus gave up after %d steps @ %g m", step_cntr, best_pos)
+            confidence = 0.1
         elif (best_fm - worst_fm) < best_fm * 0.5:
             # We can be confident of the data if there is a "big" (50%) difference
             # between the focus levels.
             logging.info("Auto focus indecisive but picking level %g @ %g m (lowest = %g)",
                          best_fm, best_pos, worst_fm)
+            confidence = 0.2
         else:
             logging.info("Auto focus found best level %g @ %g m", best_fm, best_pos)
+            confidence = 0.8
 
-        return best_pos, best_fm
+        return best_pos, best_fm, confidence
 
     except CancelledError:
         # Go to the best position known so far
@@ -1297,7 +1301,7 @@ def _DoAutoFocusSpectrometer(future, spectrograph, focuser, detectors, selector,
                 # from finding the correct value.
                 _playStream(d, streams)
                 future._subfuture = AutoFocus(d, None, focuser)
-                fp, flvl = future._subfuture.result()
+                fp, flvl, _ = future._subfuture.result()
                 ret[(g, d)] = fp
                 cnts -= 1
                 _updateAFSProgress(future, (time.time() - tstart) * cnts, ngs_moves, nds_moves)
