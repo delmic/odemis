@@ -668,7 +668,7 @@ class TiledAcquisitionTask(object):
                                                   good_focus=self._good_focus,
                                                   rng_focus=self._focus_rng,
                                                   method=MTD_EXHAUSTIVE)
-            _, focus_pos = self._future.running_subf.result()  # blocks until autofocus is finished
+            _, focus_pos, _ = self._future.running_subf.result()  # blocks until autofocus is finished
 
             # Corner case where it started very badly: update the "good focus"
             # as it's likely going to be better.
