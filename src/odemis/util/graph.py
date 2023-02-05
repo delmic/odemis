@@ -145,7 +145,7 @@ class GraphBase(UserList, metaclass=ABCMeta):
         n = len(self.data)
         matrix = numpy.zeros((n, n))
         for edge in self.iter_edges(True):
-            matrix[edge] = self.get_edge_weight(edge)
+            matrix[edge] = float(self.get_edge_weight(edge))
         return matrix
 
     def iter_edges(self, directed: Optional[bool] = None) -> Iterator[Edge]:
