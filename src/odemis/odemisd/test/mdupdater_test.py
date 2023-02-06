@@ -18,14 +18,17 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+
+import unittest
+import unittest.mock
+
 import numpy
+
 from odemis import model
 from odemis.driver import static
 from odemis.model import Microscope
 from odemis.odemisd.mdupdater import MetadataUpdater
 from odemis.util import mock
-import unittest
-import unittest.mock
 
 
 class MDUpdaterTest(unittest.TestCase):
@@ -40,7 +43,8 @@ class MDUpdaterTest(unittest.TestCase):
 
         # Create Lens affects CCD (the role matters)
         lens = static.OpticalLens("Lens", "lens", mag=0.51, pole_pos=(458, 519), focus_dist=0.5e-3,
-                                  mirror_pos_top=[600.5, 0.2], mirror_pos_bottom=(-200, 0.3))
+                                  mirror_pos_top=[600.5, 0.2],  # Try with list, as when initialized from YAML it'll be a list
+                                  mirror_pos_bottom=(-200, 0.3))
         lens.affects.value = [ccd.name]
         
         # Mock model.getComponent()
@@ -58,28 +62,30 @@ class MDUpdaterTest(unittest.TestCase):
             mic.alive.value = {ccd, lens}
 
             # Now, the lens should be observed: the VAs values should be copied on the CCD metadata
-            mdccd = ccd.getMetadata()
-            self.assertEqual(mdccd[model.MD_AR_POLE], lens.polePosition.value)
-            self.assertEqual(mdccd[model.MD_AR_MIRROR_TOP], lens.mirrorPositionTop.value)
-            self.assertEqual(mdccd[model.MD_AR_MIRROR_BOTTOM], lens.mirrorPositionBottom.value)
+            md_ccd = ccd.getMetadata()
+            self.assertEqual(md_ccd[model.MD_AR_POLE], lens.polePosition.value)
+            self.assertEqual(md_ccd[model.MD_AR_MIRROR_TOP], lens.mirrorPositionTop.value)
+            self.assertEqual(md_ccd[model.MD_AR_MIRROR_BOTTOM], lens.mirrorPositionBottom.value)
 
             # change polePosition => check that the CCD metadata is updated
             pol_pos = (321, 123)
             lens.polePosition.value = pol_pos
-            mdccd = ccd.getMetadata()
-            self.assertEqual(mdccd[model.MD_AR_POLE], pol_pos)
+            md_ccd = ccd.getMetadata()
+            self.assertEqual(md_ccd[model.MD_AR_POLE], pol_pos)
 
             # change binning => check it's updated
             ccd.binning.value = (2, 4)
             exp_pol_pos = pol_pos[0] / 2, pol_pos[1] / 4
-            mdccd = ccd.getMetadata()
-            self.assertEqual(mdccd[model.MD_AR_POLE], exp_pol_pos)
+            md_ccd = ccd.getMetadata()
+            self.assertEqual(md_ccd[model.MD_AR_POLE], exp_pol_pos)
 
             # For mirror positions, only the binning in Y is used
             exp_mir_top = tuple(v / 4 for v in lens.mirrorPositionTop.value)
-            self.assertEqual(mdccd[model.MD_AR_MIRROR_TOP], exp_mir_top)
+            self.assertEqual(md_ccd[model.MD_AR_MIRROR_TOP], exp_mir_top)
             exp_mir_bot = tuple(v / 4 for v in lens.mirrorPositionBottom.value)
-            self.assertEqual(mdccd[model.MD_AR_MIRROR_BOTTOM], exp_mir_bot)
+            self.assertEqual(md_ccd[model.MD_AR_MIRROR_BOTTOM], exp_mir_bot)
+
+            mdup.terminate()
 
 
 if __name__ == "__main__":
