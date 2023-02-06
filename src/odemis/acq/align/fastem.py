@@ -37,7 +37,6 @@ try:
     from fastem_calibrations.image_rotation_pre_align import ImageRotationPreAlign
     from fastem_calibrations.image_translation import ImageTranslation
     from fastem_calibrations.image_translation_pre_align import ImageTranslationPreAlign
-    from fastem_calibrations.pattern_stigmation import PatternStigmation
     from fastem_calibrations.scan_amplitude import ScanAmplitude
     from fastem_calibrations.scan_amplitude_pre_align import ScanAmplitudePreAlign
     from fastem_calibrations.scan_rotation import ScanRotation
@@ -242,9 +241,9 @@ class CalibrationTask(object):
             for calib in self.calibrations:
                 calib_cls = calib.value
                 logging.debug("Starting calibration %s", calib_cls.__name__)
-                calib_cls = calib_cls(components)
+                calib_runner = calib_cls(components)
                 # TODO return a sub-future when implemented for calibrations
-                self.run_calibration(calib_cls)
+                self.run_calibration(calib_runner)
 
                 # def _pass_future_progress(sub_f, start, end):
                 #     f.set_progress(start, end)
@@ -290,30 +289,9 @@ class CalibrationTask(object):
         """
         calibration.run()
 
-        if isinstance(calibration, Calibrations.SCAN_AMPLITUDE_PREALIGN.value):
-            self.asm_config["multibeam"]["scanOffset"] = calibration.orig_config["multibeam"]["scanOffset"]
-            self.asm_config["multibeam"]["scanAmplitude"] = calibration.orig_config["multibeam"]["scanAmplitude"]
-
-        elif isinstance(calibration, Calibrations.IMAGE_TRANSLATION_PREALIGN.value):
-            self.asm_config["descanner"]["scanOffset"] = calibration.orig_config["descanner"]["scanOffset"]
-
-        elif isinstance(calibration, Calibrations.IMAGE_TRANSLATION_FINAL.value):
-            self.asm_config["descanner"]["scanOffset"] = calibration.orig_config["descanner"]["scanOffset"]
-
-        elif isinstance(calibration, Calibrations.DARK_OFFSET.value):
-            self.asm_config["mppc"]["cellDarkOffset"] = calibration.orig_config["mppc"]["cellDarkOffset"]
-
-        elif isinstance(calibration, Calibrations.DIGITAL_GAIN.value):
-            self.asm_config["mppc"]["cellDigitalGain"] = calibration.orig_config["mppc"]["cellDigitalGain"]
-
-        elif isinstance(calibration, Calibrations.SCAN_AMPLITUDE_FINAL.value):
-            self.asm_config["multibeam"]["scanOffset"] = calibration.orig_config["multibeam"]["scanOffset"]
-            self.asm_config["multibeam"]["scanAmplitude"] = calibration.orig_config["multibeam"]["scanAmplitude"]
-
-        elif isinstance(calibration, Calibrations.CELL_TRANSLATION.value):
-            self.asm_config["mppc"]["cellTranslation"] = calibration.orig_config["mppc"]["cellTranslation"]
-            self.asm_config["multibeam"]["resolution"] = calibration.orig_config["multibeam"]["resolution"]
-            self.asm_config["mppc"]["cellCompleteResolution"] = calibration.orig_config["mppc"]["cellCompleteResolution"]
+        # Store the calibrated settings in the ASM config.
+        for component, va in calibration.updated_settings:
+            self.asm_config[component][va] = calibration.orig_config[component][va]
 
         # TODO only needed for an acquisition -> move to acquisition code by reading the calibrated values
         #  from the respective MD (implement similar method to get_config_asm)
