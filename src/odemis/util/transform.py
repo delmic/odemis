@@ -121,10 +121,15 @@ def polar_to_cartesian(rho: numpy.ndarray, theta: numpy.ndarray) -> numpy.ndarra
 
 
 def to_physical_space(
-    ji: Union[Tuple[float, float], List[Tuple[float, float]], numpy.ndarray],
+    ji: Union[
+        Tuple[float, float],
+        List[Tuple[float, float]],
+        numpy.ndarray,
+        "GeometricTransform",
+    ],
     shape: Optional[Tuple[int, int]] = None,
     pixel_size: Optional[Union[float, Tuple[float, float]]] = None,
-) -> numpy.ndarray:
+) -> Union[numpy.ndarray, "AffineTransform"]:
     """
     Converts an image pixel index into a coordinate in physical space.
 
@@ -169,10 +174,11 @@ def to_physical_space(
 
     Parameters
     ----------
-    ji : tuple, list of tuples, ndarray
+    ji : tuple, list of tuples, ndarray, or GeometricTransform
         Pixel index, list of indices, or array of indices. For each index the
         first entry is the row-index `j` and the second entry is the
-        column-index `i`.
+        column-index `i`. Alternatively a GeometricTransform instance can be
+        provided.
     shape : tuple of ints (optional)
         Shape of the image. The first entry is the number of rows, the second
         entry is the number of columns in the image. Used to move the origin to
@@ -183,9 +189,11 @@ def to_physical_space(
 
     Returns
     -------
-    xy : ndarray
+    xy : ndarray or AffineTransform
         Physical coordinates. Same shape as `ji`. For each coordinate the first
-        entry is the x-coordinate and the second entry is the y-coordinate.
+        entry is the x-coordinate and the second entry is the y-coordinate. If
+        a GeometricTransform is provided, an AffineTransform is returned that
+        represents the same transform in physical coordinates.
 
     Raises
     ------
@@ -202,6 +210,17 @@ def to_physical_space(
     array([-2. ,  3.5])
 
     """
+    if isinstance(ji, GeometricTransform):
+        A = numpy.transpose(to_physical_space(numpy.eye(2), None, pixel_size))
+        Ainv = numpy.transpose(to_pixel_index(numpy.eye(2), None, pixel_size))
+        matrix = A @ ji.matrix @ Ainv
+        translation = to_physical_space(
+            ji.apply(to_pixel_index(numpy.zeros(2), shape, pixel_size)),
+            shape,
+            pixel_size,
+        )
+        return AffineTransform(matrix, translation)
+
     ji = numpy.asarray(ji)
 
     if ji.shape[-1] != 2:
@@ -224,10 +243,15 @@ def to_physical_space(
 
 
 def to_pixel_index(
-    xy: Union[Tuple[float, float], List[Tuple[float, float]], numpy.ndarray],
+    xy: Union[
+        Tuple[float, float],
+        List[Tuple[float, float]],
+        numpy.ndarray,
+        "GeometricTransform",
+    ],
     shape: Optional[Tuple[int, int]] = None,
     pixel_size: Optional[Union[float, Tuple[float, float]]] = None,
-) -> numpy.ndarray:
+) -> Union[numpy.ndarray, "AffineTransform"]:
     """
     Converts a coordinate in physical space into an image pixel index.
 
@@ -242,10 +266,11 @@ def to_pixel_index(
 
     Parameters
     ----------
-    xy : tuple, list of tuples, ndarray
+    xy : tuple, list of tuples, ndarray, or GeometricTransform
         Physical coordinates, list of coordinates, or array of coordinates. For
         each coordinate the first entry is the `x`-coordinate and the second
-        entry is the `y`-coordinate.
+        entry is the `y`-coordinate. Alternatively a GeometricTransform
+        instance can be provided.
     shape : tuple of ints (optional)
         Shape of the image. The first entry is the number of rows, the second
         entry is the number of columns in the image. If not provided the origin
@@ -260,7 +285,9 @@ def to_pixel_index(
         Pixel indices. Same shape as `xy`. For each index the first entry is
         the row-index `j` and the second entry is the column-index `i`. Note
         that the pixel indices are returned as floats in order to support
-        sub-pixel resolution.
+        sub-pixel resolution. If a GeometricTransform is provided, an
+        AffineTransform is returned that represents the same transform in pixel
+        indices.
 
     Raises
     ------
@@ -275,6 +302,17 @@ def to_pixel_index(
     array([ 0. ,  0.])
 
     """
+    if isinstance(xy, GeometricTransform):
+        A = numpy.transpose(to_pixel_index(numpy.eye(2), None, pixel_size))
+        Ainv = numpy.transpose(to_physical_space(numpy.eye(2), None, pixel_size))
+        matrix = A @ xy.matrix @ Ainv
+        translation = to_pixel_index(
+            xy.apply(to_physical_space(numpy.zeros(2), shape, pixel_size)),
+            shape,
+            pixel_size,
+        )
+        return AffineTransform(matrix, translation)
+
     if pixel_size is not None:
         xy = numpy.array(xy, copy=True, dtype=float)
         xy /= pixel_size
@@ -535,7 +573,7 @@ def alt_transformation_matrix_from_implicit(
 
 
 def alt_transformation_matrix_to_implicit(
-    matrix: numpy.ndarray, form: str,
+    matrix: numpy.ndarray, form: str
 ) -> Tuple[numpy.ndarray, float, float]:
     """
     Return an alternative description of the implicit parameters given a
@@ -648,9 +686,10 @@ class ImplicitParameter:
     def __set_name__(self, owner: Type["GeometricTransform"], name: str) -> None:
         self.private_name = "_" + name
 
-    def __get__(self,
+    def __get__(
+        self,
         instance: Optional["GeometricTransform"],
-        owner: Optional[Type["GeometricTransform"]]=None,
+        owner: Optional[Type["GeometricTransform"]] = None,
     ) -> Union[float, "ImplicitParameter"]:
         """
         return the value (float) when a instance is passed.

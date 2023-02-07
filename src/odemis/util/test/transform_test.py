@@ -21,26 +21,32 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import copy
 import inspect
-import numpy
-from numpy.linalg import LinAlgError
 import operator
 import unittest
+from typing import Type, TypeVar
+
+import numpy
+from numpy.linalg import LinAlgError
 
 from odemis.util.random import check_random_state
 from odemis.util.spot import GridPoints
 from odemis.util.transform import (
+    AffineTransform,
+    GeometricTransform,
+    RigidTransform,
+    ScalingTransform,
+    SimilarityTransform,
     _rotation_matrix_from_angle,
     _rotation_matrix_to_angle,
     cartesian_to_polar,
     polar_to_cartesian,
     to_physical_space,
     to_pixel_index,
-    AffineTransform,
-    ScalingTransform,
-    SimilarityTransform,
-    RigidTransform,
 )
+
 from transform_known_values import transform_known_values
+
+T = TypeVar("T", bound="GeometricTransform")
 
 
 def _angle_diff(x, y):
@@ -49,6 +55,39 @@ def _angle_diff(x, y):
     the branch cut at the negative x-axis.
     """
     return min(y - x, y - x + 2.0 * numpy.pi, y - x - 2.0 * numpy.pi, key=abs)
+
+
+def random_transform(transform_type: Type[T], rng=None) -> T:
+    """
+    Return a randomized GeometricTransform instance of selected type.
+
+    Parameters
+    ----------
+    transform_type: type(GeometricTransform)
+        Geometric transform class to use.
+    rng : numpy.random.Generator, optional
+        Random number generator.
+
+    Returns
+    -------
+    tform : GeometricTransform of type `transform_type`
+        Randomized GeometricTransform instance.
+
+    """
+    rng = numpy.random.default_rng() if rng is None else rng
+    params = {
+        "scale": 1 + 0.5 * rng.uniform(-1, 1),
+        "rotation": 0.25 * numpy.pi * rng.uniform(-1, 1),
+        "squeeze": 1 + 0.1 * rng.uniform(-1, 1),
+        "shear": 0.1 * rng.uniform(-1, 1),
+    }
+    params = {
+        key: value
+        for key, value in params.items()
+        if not getattr(transform_type, key).constrained
+    }
+    params["translation"] = 20 * (2 * rng.random((2,)) - 1)
+    return transform_type(**params)
 
 
 class PolarCoordinateTransformationTest(unittest.TestCase):
@@ -235,6 +274,59 @@ class ToPixelIndexKnownValues(PixelIndexCoordinateTransformBase):
         self.assertRaises(ValueError, to_pixel_index, (1, 2, 3))
 
 
+class GeometricTransformToFromPixelIndex(unittest.TestCase):
+    def setUp(self) -> None:
+        self._rng = check_random_state(12345)
+        self._kwargs = [
+            {},
+            {"pixel_size": 2},
+            {"pixel_size": (2, 3)},
+            {"shape": (8, 5)},
+            {"shape": (8, 5), "pixel_size": 2},
+            {"shape": (8, 5), "pixel_size": (2, 3)},
+        ]
+        self._transform_types = (
+            AffineTransform,
+            ScalingTransform,
+            SimilarityTransform,
+            RigidTransform,
+        )
+
+    def test_transform_to_physical_space(self) -> None:
+        """
+        Test that `to_physical_space()` can be called on either a
+        GeometricTransform instance, or the results of the applied transform
+        yielding identical results.
+
+        """
+        for transform_type in self._transform_types:
+            for kwargs in self._kwargs:
+                with self.subTest(transform_type=transform_type.__name__, **kwargs):
+                    tform = random_transform(transform_type, self._rng)
+                    ji = self._rng.random((10, 2))
+                    xy = to_physical_space(ji, **kwargs)
+                    expected = to_physical_space(tform.apply(ji), **kwargs)
+                    result = to_physical_space(tform, **kwargs).apply(xy)
+                    numpy.testing.assert_array_almost_equal(expected, result)
+
+    def test_transform_to_pixel_index(self) -> None:
+        """
+        Test that `to_pixel_index()` can be called on either a
+        GeometricTransform instance, or the results of the applied transform
+        yielding identical results.
+
+        """
+        for transform_type in self._transform_types:
+            for kwargs in self._kwargs:
+                with self.subTest(transform_type=transform_type.__name__, **kwargs):
+                    tform = random_transform(transform_type, self._rng)
+                    xy = self._rng.random((10, 2))
+                    ji = to_pixel_index(xy, **kwargs)
+                    expected = to_pixel_index(tform.apply(xy), **kwargs)
+                    result = to_pixel_index(tform, **kwargs).apply(ji)
+                    numpy.testing.assert_array_almost_equal(expected, result)
+
+
 class RotationMatrixKnownValues(unittest.TestCase):
     known_values = [
         (-numpy.deg2rad(180), numpy.array([(-1, 0), (0, -1)])),
@@ -348,9 +440,9 @@ class RotationMatrixRoundTripCheck(unittest.TestCase):
 
 
 class TransformTestBase:
-    @classmethod
-    def setUpClass(cls):
-        numpy.random.seed(0)
+    def setUp(self):
+        """Ensure reproducible tests."""
+        self._rng = check_random_state(12345)
 
     def test_attributes(self):
         """
@@ -459,7 +551,7 @@ class TransformTestBase:
         transformation when applied to two identical point sets.
 
         """
-        src = numpy.random.random_sample((10, 2))
+        src = self._rng.random_sample((10, 2))
         tform = self.transform_type.from_pointset(src, src)
         numpy.testing.assert_array_almost_equal(tform.matrix, numpy.eye(2))
         numpy.testing.assert_array_almost_equal(tform.translation, numpy.zeros(2))
@@ -472,15 +564,9 @@ class TransformTestBase:
         increased FRE.
 
         """
-        params = {
-            "scale": 1 + 0.5 * (2 * numpy.random.random_sample() - 1),
-            "rotation": numpy.pi * (2 * numpy.random.random_sample() - 1),
-            "squeeze": 1 + 0.2 * (2 * numpy.random.random_sample() - 1),
-            "shear": 0.2 * (2 * numpy.random.random_sample() - 1),
-        }
         src = GridPoints(8, 8)
-        noise = 0.1 * (2 * numpy.random.random_sample(src.shape) - 1)
-        dst = AffineTransform(**params).apply(src + noise)
+        noise = 0.1 * self._rng.uniform(-1, 1, src.shape)
+        dst = random_transform(AffineTransform, self._rng).apply(src + noise)
         tform0 = self.transform_type.from_pointset(src, dst)
         fre0 = tform0.fre(src, dst)
         for param in ("scale", "rotation", "squeeze", "shear"):
@@ -554,9 +640,9 @@ class RigidTransformTest(TransformTestBase, unittest.TestCase):
 
 
 class TransformFromPointsetEquivalence(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        numpy.random.seed(0)
+    def setUp(self):
+        """Ensure reproducible tests."""
+        self._rng = check_random_state(12345)
 
     def test_transform_equal_rotation(self):
         """
@@ -566,15 +652,9 @@ class TransformFromPointsetEquivalence(unittest.TestCase):
         `RigidTransform`. Note: this list excludes `ScalingTransform`.
 
         """
-        params = {
-            "scale": 1 + 0.5 * (2 * numpy.random.random_sample() - 1),
-            "rotation": numpy.pi * (2 * numpy.random.random_sample() - 1),
-            "squeeze": 1 + 0.2 * (2 * numpy.random.random_sample() - 1),
-            "shear": 0.2 * (2 * numpy.random.random_sample() - 1),
-        }
         src = GridPoints(8, 8)
-        noise = 0.1 * (2 * numpy.random.random_sample(src.shape) - 1)
-        dst = AffineTransform(**params).apply(src + noise)
+        noise = 0.1 * self._rng.uniform(-1, 1, src.shape)
+        dst = random_transform(AffineTransform, self._rng).apply(src + noise)
         rotation = None
         for transform_type in (AffineTransform, SimilarityTransform, RigidTransform):
             tform = transform_type.from_pointset(src, dst)
