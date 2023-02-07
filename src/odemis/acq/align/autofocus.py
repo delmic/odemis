@@ -249,7 +249,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
     returns:
         (float): Focus position (m)
         (float): Focus level
-        (float): Focus confidence (0<=f<=1)
+        (float): Focus confidence (0<=f<=1, 0 is not in focus and 1 is the best possible focus)
     raises:
             CancelledError if cancelled
             IOError if procedure failed
