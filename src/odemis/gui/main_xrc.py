@@ -1017,6 +1017,7 @@ class xrcfr_overview_acq(wx.Dialog):
         self.tiles_number_x = xrc.XRCCTRL(self, "tiles_number_x")
         self.tiles_number_y = xrc.XRCCTRL(self, "tiles_number_y")
         self.area_size_txt = xrc.XRCCTRL(self, "area_size_txt")
+        self.autofocus_chkbox = xrc.XRCCTRL(self, "autofocus_chkbox")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
@@ -9825,7 +9826,7 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="wxFlexGridSizer">
                       <cols>2</cols>
-                      <rows>5</rows>
+                      <rows>6</rows>
                       <vgap>10</vgap>
                       <hgap>50</hgap>
                       <object class="sizeritem">
@@ -9998,6 +9999,15 @@ def __init_resources():
                         </object>
                         <option>0</option>
                         <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxCheckBox" name="autofocus_chkbox">
+                          <label>Run Autofocus</label>
+                          <fg>#E5E5E5</fg>
+                        </object>
+                        <option>0</option>
+                        <flag>wxTOP</flag>
                         <border>10</border>
                       </object>
                       <growablecols>1</growablecols>

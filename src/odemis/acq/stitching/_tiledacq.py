@@ -39,6 +39,8 @@ from odemis.acq.stitching._simple import register, weave
 from odemis.acq.stream import Stream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
+from odemis.gui import conf
+from odemis.gui.util.raster import point_in_polygon
 from odemis.model import DataArray
 from odemis.util import dataio as udataio, img, linalg
 from odemis.util.img import assembleZCube
@@ -126,7 +128,6 @@ class TiledAcquisitionTask(object):
             raise ValueError(f"focusing_method should be of type FocusingMethod, but got {focusing_method}")
         self._focusing_method = focusing_method
         self._focus_stream = next((sd for sd in self._streams if sd.focuser is not None), None)
-        self._focus_points = focus_points
         if self._focus_stream:
             # save initial focus value to be used in the AutoFocus function
             self._good_focus = self._focus_stream.focuser.position.value['z']
@@ -185,7 +186,6 @@ class TiledAcquisitionTask(object):
 
         self._registrar = registrar
         self._weaver = weaver
-        self._focus_plane = {}
 
     def _getFov(self, sd):
         """
@@ -621,9 +621,6 @@ class TiledAcquisitionTask(object):
             self._moveToTile((ix, iy), prev_idx, self._sfov)
             prev_idx = ix, iy
 
-            if self._focus_points is not None:
-                self._refocus()
-
             das = self._getTileDAs(i, ix, iy)
 
             if i == 0:
@@ -631,10 +628,10 @@ class TiledAcquisitionTask(object):
                 self._sfov = self._updateFov(das, self._sfov)
 
             if self._focus_stream:
-                # Check if the acquisition was not good enough, then adjusts focus of current tile and reacquires image
+                # Adjust focus of current tile and reacquire image
                 das = self._adjustFocus(das, i, ix, iy)
 
-            # Save the das on disk if a log path exists
+            # Save the das on disk if an log path exists
             if self._log_path:
                 self._save_tiles(ix, iy, das)
 
@@ -718,7 +715,7 @@ class TiledAcquisitionTask(object):
           by a new version at a better focus level.
         """
         refocus = False
-        # If autofocus explicitly disabled, or MIP => don't do anything
+        # If autofocus explicitly disabled, or MPI => don't do anything
         if self._focusing_method in (FocusingMethod.NONE, FocusingMethod.MAX_INTENSITY_PROJECTION):
             return das
         elif self._focusing_method == FocusingMethod.ON_LOW_FOCUS_LEVEL:
@@ -758,7 +755,7 @@ class TiledAcquisitionTask(object):
                                                   good_focus=self._good_focus,
                                                   rng_focus=self._focus_rng,
                                                   method=MTD_EXHAUSTIVE)
-            _, focus_pos, _ = self._future.running_subf.result()  # blocks until autofocus is finished
+            _, focus_pos = self._future.running_subf.result()  # blocks until autofocus is finished
 
             # Corner case where it started very badly: update the "good focus"
             # as it's likely going to be better.
@@ -872,7 +869,7 @@ def estimateTiledAcquisitionMemory(*args, **kwargs):
 
 def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                      registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                     focus_points=None):
+                     zstep_size=None, zsteps=None, focus_points=None):
     """
     Start a tiled acquisition task for the given streams (SEM or FM) in order to
     build a complete view of the TEM grid. Needed tiles are first acquired for
@@ -891,7 +888,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     # Create a tiled acquisition task
     task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
                                 registrar=registrar, weaver=weaver, focusing_method=focusing_method,
-                                focus_points=focus_points)
+                                zstep_size=zstep_size, zsteps=zsteps, focus_points=focus_points)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()

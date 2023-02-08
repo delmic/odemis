@@ -8784,7 +8784,7 @@
                   <object class="sizeritem">
                     <object class="wxFlexGridSizer">
                       <cols>2</cols>
-                      <rows>5</rows>
+                      <rows>6</rows>
                       <vgap>10</vgap>
                       <hgap>50</hgap>
                       <object class="sizeritem">
@@ -8957,6 +8957,15 @@
                         </object>
                         <option>0</option>
                         <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxCheckBox" name="autofocus_chkbox">
+                          <label>Run Autofocus</label>
+                          <fg>#E5E5E5</fg>
+                        </object>
+                        <option>0</option>
+                        <flag>wxTOP</flag>
                         <border>10</border>
                       </object>
                       <growablecols>1</growablecols>

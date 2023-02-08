@@ -678,6 +678,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.tiles_nx, self.tiles_number_x, events=wx.EVT_COMMAND_ENTER)
         self._tiles_n_vacy = VigilantAttributeConnector(
             self.tiles_ny, self.tiles_number_y, events=wx.EVT_COMMAND_ENTER)
+        self.autofocus_roi = model.BooleanVA(False)
+        self._autofocus_roi_vac = VigilantAttributeConnector(
+            self.autofocus_roi, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
 
         self.area = None  # None or 4 floats: left, top, right, bottom positions of the acquisition area (in m)
 
@@ -1031,6 +1034,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
     def on_acquire(self, evt):
         """ Start the actual acquisition """
+        logging.info("ckbox autofocus: %s", self.autofocus_roi.value)
         logging.info("Acquire button clicked, starting acquisition")
         acq_streams = self.get_acq_streams()
         if not acq_streams:

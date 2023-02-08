@@ -3,6 +3,7 @@
 # Embed a XRC file into a Python file.
 # python ~/alien/Phoenix/wx/tools/pywxrc.py -p -e -o src/odemis/gui/main_xrc.py.new src/odemis/gui/main.xrc
 
+from __future__ import print_function
 import glob
 import os
 import re
