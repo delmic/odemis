@@ -71,7 +71,7 @@ class TiledAcquisitionTask(object):
 
     def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
                  registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                 focus_points=None, focus_range=None):
+                 focus_points=None):
         """
         :param streams: (list of Streams) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
@@ -95,8 +95,6 @@ class TiledAcquisitionTask(object):
         self._future = future
         self._streams = streams
         self._stage = stage
-        self._focus_points = focus_points
-        self._focus_range = focus_range
         # Get total area as a tuple of width, height from ltrb area points
         normalized_area = util.normalize_rect(area)
         if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
@@ -154,7 +152,6 @@ class TiledAcquisitionTask(object):
             if self._focus_stream is None:
                 logging.warning("No focuser found in any of the streams, only one acquisition will be performed.")
             self._zlevels = zlevels
-            self._init_zlevels = zlevels  # zlevels can be relative, therefore keep track of the initial zlevels
         else:
             self._zlevels = []
             self._init_zlevels = []  # zlevels can be relative, therefore keep track of the initial zlevels
@@ -698,38 +695,18 @@ class TiledAcquisitionTask(object):
         :returns (list(float) or None) zstack levels for zstack acquisition.
           return None if only one zstep is requested.
         """
-        # When initial z level is one or None, use the current focus value
-        if len(self._init_zlevels) <= 1:
+        if len(self._init_zlevels) == 1:
             return [focus_value, ]
 
         zlevels = self._init_zlevels + focus_value
 
-        # Check which focus range is available
-        if self._focus_range is not None:
-            comp_range = self._focus_range
-        else:
-            comp_range = self._focus_stream.focuser.axes['z'].range
-
-        # The number of zlevels will remain the same, but the range will be adjusted
-        zmin = min(zlevels)
-        zmax = max(zlevels)
-        if (zmax - zmin) > (comp_range[1] - comp_range[0]):
-            # Corner case: it'd be larger than the entire range => limit to the entire range
-            zmin = comp_range[0]
-            zmax = comp_range[1]
-        if zmax > comp_range[1]:
-            # Too high => shift down
-            zmax -= zmax - comp_range[1]
-            zmin -= zmax - comp_range[1]
-        if zmin < comp_range[0]:
-            # Too low => shift up
-            zmin += comp_range[0] - zmin
-            zmax += comp_range[0] - zmin
-
-        # Create focus zlevels from the given zsteps number
+        # Clip zsteps value to allowed range
+        focus_range = self._focus_stream.focuser.getMetadata()[model.MD_POS_ACTIVE_RANGE]
+        axis_range = self._focus_stream.focuser.axes['z'].range
+        zmin = max(min(zlevels), min(axis_range), min(focus_range))
+        zmax = min(max(zlevels), max(axis_range), max(focus_range))
         zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
         return zlevels
-
 
     def _adjustFocus(self, das, i, ix, iy):
         """
