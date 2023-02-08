@@ -60,6 +60,7 @@ def do_autofocus_in_roi(
     :return:
     """
     try:
+        init_pos = stage.position.value
         xmin, ymin, xmax, ymax = bbox
 
         focus_positions = []
@@ -69,17 +70,23 @@ def do_autofocus_in_roi(
                     raise CancelledError()
                 stage.moveAbsSync({"x": x, "y": y})
                 # run autofocus
-                future_focus = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
-                foc_pos, foc_lev = future_focus.result(timeout=900)
+                f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
+                foc_pos, foc_lev = f._running_subf.result(timeout=900)
                 if foc_lev >= conf_level:
                     focus_positions.append([stage.position.value["x"],
                                             stage.position.value["y"],
                                             focus.position.value["z"]])
                     logging.debug(f"Added focus with confidence of {foc_lev} at position: {focus_positions[-1]}")
         return focus_positions
+    except TimeoutError:
+        f._running_subf.cancel()
+        logging.exception(f"Timed out during autofocus at position {x, y} .")
+        raise
     except CancelledError:
-        pass
+        logging.info(f"Autofocus in roi cancelled at position {x, y}.")
     finally:
+        logging.debug(f"Moving back to initial stage position {init_pos}")
+        stage.moveAbsSync(init_pos)
         with f._autofocus_roi_lock:
             if f._autofocus_roi_state == CANCELLED:
                 raise CancelledError()
@@ -100,6 +107,7 @@ def _cancel_autofocus_bbox(future):
         if future._autofocus_roi_state == FINISHED:
             return False
         future._autofocus_roi_state = CANCELLED
+        future._running_subf.cancel()
         logging.debug("Autofocus in roi cancellation requested.")
 
     return True
