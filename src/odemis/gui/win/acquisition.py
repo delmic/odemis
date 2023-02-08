@@ -1055,25 +1055,20 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
         zlevels = self._get_zstack_levels()
-        zstep_size = self.zstep_size.value
-        zsteps = self.zsteps.value
         focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
 
         if self.filename_tiles:
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
             os.makedirs(os.path.dirname(self.filename_tiles))
 
-        self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage,
-                                                     area=self.area,
+        self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
                                                      overlap=self.overlap,
                                                      settings_obs=self._main_data_model.settings_obs,
                                                      log_path=self.filename_tiles,
                                                      weaver=WEAVER_MEAN,
                                                      registrar=REGISTER_IDENTITY,
                                                      zlevels=zlevels,
-                                                     focusing_method=focus_mtd,
-                                                     zstep_size=zstep_size,
-                                                     zsteps=zsteps,)
+                                                     focusing_method=focus_mtd)
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)
