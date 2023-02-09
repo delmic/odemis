@@ -440,7 +440,7 @@ class OrsayComponent(model.HwComponent):
 
     # Helper functions to handle presets (on top of the preset manager)
     # They can be used by other class of this module, but otherwise are considered private
-    def _load_preset(self, preset_name: str, preset_mask: str, timeout: float=300):
+    def _load_preset(self, preset_name: str, preset_mask: str, timeout: float = 300):
         """
         Load a preset, for all the device/parameters defined in the preset mask,
         and wait until it's done.
@@ -506,7 +506,7 @@ class OrsayComponent(model.HwComponent):
                 param = getattr(device, param_name)
 
                 if not bool(param.AtTarget):
-                    logging.debug(f"Preset {device_name}.{param_name} not yet at target: %s")
+                    logging.debug(f"Preset {device_name}.{param_name} not yet at target.")
                     return False
 
         return True
@@ -521,7 +521,7 @@ class OrsayComponent(model.HwComponent):
         preset_summary = self.preset_manager.GetAllPresets()
         return tuple(preset.get("name") for preset in preset_summary.iter("Preset"))
 
-    def _get_preset_setting(self, preset, sub_comp:str, setting:str, tag:str="Target") -> str:
+    def _get_preset_setting(self, preset, sub_comp: str, setting: str, tag: str = "Target") -> str:
         """
         Get a setting from a preset XML ElementTree
 
@@ -2985,13 +2985,13 @@ class Scanner(model.Emitter):
 
         # It's not possible to change the probeCurrent directly. Instead, we
         # rely on presets. They are created by the service engineer on the Orsay
-        # server, with specific names <current>pA_.... . Each preset with such
+        # server, with specific names <current>pA_... . Each preset with such
         # name corresponds to one probe current. Whenever a new probe current is
         # selected the preset is loaded. For the generic case, it's a little bit
         # more complicated, because after changing the preset, the aperture should
         # be checked that it's not worn out, and if it is, a new one should be
         # used. That part is not handled in the driver, but at a higher level in
-        # Odemis (and for now, not at all... we just expect the user to manual
+        # Odemis (and for now, not at all... we just expect the user to manually
         # update the preset in such case).
         # Loading a preset is also not as easy as it sounds like, because presets
         # contain *every* parameter of the system. Loading all of them is very
@@ -3053,13 +3053,12 @@ class Scanner(model.Emitter):
         """
         current_presets = {}
         for preset_name in self.parent._get_all_preset_names():
-            if not re.match("[0-9]+_[0-9]+pA_", preset_name):
+            m = re.match("([0-9]+)_([0-9]+)pA_", preset_name)
+            if not m:
                 logging.debug("Skipping preset %s, which doesn't look like a probe current preset", preset_name)
                 continue
 
-            # current = float(preset_name[:preset_name.find("pA_")]) * 1e-12
-            current_str = preset_name.split("_")[1]
-            current = float(current_str[:-2]) * 1e-12
+            current = float(m.group(2)) * 1e-12
             if current in current_presets:
                 logging.warning("Probe current %s pA defined in preset %s overridden by %s",
                                 current * 1e12, current_presets[current], preset_name)
@@ -3067,7 +3066,7 @@ class Scanner(model.Emitter):
 
         if not current_presets:
             logging.warning("No probe current presets found. Make sure that the presets name are "
-                            "formatted as follows: CURRENTpA_EXTRA_INFO (e.g. '20pA_20um_25200V')")
+                            "formatted as follows: NUMBER_CURRENTpA_EXTRA_INFO (e.g. '0002_20pA_20um25200V')")
         return current_presets
 
     def _guess_probe_current(self) -> Optional[float]:
