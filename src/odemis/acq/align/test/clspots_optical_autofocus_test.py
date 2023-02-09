@@ -146,7 +146,7 @@ class TestAutofocusHW(unittest.TestCase):
         numpy.testing.assert_allclose(self.stage.position.value["z"], center_position, atol=1e-7)
         # run autofocus
         future_focus = align.AutoFocus(self.diagnostic_cam, None, self.stage)
-        foc_pos, foc_lev = future_focus.result(timeout=900)
+        foc_pos, foc_lev, _ = future_focus.result(timeout=900)
         # Test if the correct focus position was found.
         logging.debug("found focus at {} good focus at {}".format(foc_pos, self._optimal_focus))
         numpy.testing.assert_allclose(foc_pos, self._optimal_focus, atol=0.5e-6)
@@ -166,7 +166,7 @@ class TestAutofocusHW(unittest.TestCase):
                 numpy.testing.assert_allclose(self.stage.position.value["z"], start_position, atol=1e-6)
                 # run autofocus
                 future_focus = align.AutoFocus(self.diagnostic_cam, None, self.stage)
-                foc_pos, foc_lev = future_focus.result(timeout=900)
+                foc_pos, foc_lev, _ = future_focus.result(timeout=900)
                 # Test if the correct focus position was found.
                 logging.debug("found focus at {} good focus at {}".format(foc_pos, self._optimal_focus))
                 result = numpy.allclose(foc_pos, self._optimal_focus, atol=1e-6)
@@ -189,7 +189,7 @@ class TestAutofocusHW(unittest.TestCase):
         numpy.testing.assert_allclose(self.stage.position.value["z"], start_position, atol=1e-7)
         # Run autofocus
         future_focus = align.AutoFocus(self.diagnostic_cam, None, self.stage)
-        foc_pos, foc_lev = future_focus.result(timeout=900)
+        foc_pos, foc_lev, _ = future_focus.result(timeout=900)
         # Test that the correct focus has been found.
         logging.debug("found focus at {} good focus at {}".format(foc_pos, self._optimal_focus))
         numpy.testing.assert_allclose(foc_pos, self._optimal_focus, atol=0.5e-6)

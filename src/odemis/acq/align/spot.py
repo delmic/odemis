@@ -186,7 +186,7 @@ def _DoAlignSpot(future, ccd, stage, escan, focus, type, dfbkg, rng_f, logpath):
                     # method to be sure not to miss the spot.
                     ccd.binning.value = ccd.binning.clip((8, 8))
                     future._autofocusf = autofocus.AutoFocus(ccd, None, focus, dfbkg, rng_focus=rng_f, method=MTD_EXHAUSTIVE)
-                    lens_pos, fm_level = future._autofocusf.result()
+                    lens_pos, fm_level, _ = future._autofocusf.result()
                     # Update progress of the future
                     future.set_progress(end=time.time() +
                                         estimateAlignmentTime(hqet, dist, 1))

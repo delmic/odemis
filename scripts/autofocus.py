@@ -94,7 +94,7 @@ def main(args):
                              "".join("\n\tgrating %d on %s @ %f m" % (g, d.name, f) for (g, d), f in foc.items()))
             else:
                 future_focus = align.AutoFocus(det, emt, focuser)
-                foc_pos, fm_final = future_focus.result(1000)  # putting a timeout allows to get KeyboardInterrupts
+                foc_pos, fm_final, _ = future_focus.result(1000)  # putting a timeout allows to get KeyboardInterrupts
                 logging.info("Focus level after applying autofocus: %f @ %f m", fm_final, foc_pos)
         except KeyboardInterrupt:
             future_focus.cancel()
