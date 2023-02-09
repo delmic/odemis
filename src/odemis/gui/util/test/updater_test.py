@@ -30,6 +30,14 @@ from odemis.gui.util import updater
 
 logging.getLogger().setLevel(logging.DEBUG)
 
+class FakeApp(wx.App):
+    """
+    Very simple version of the Odemis App class, with just
+    _is_standalone attribute, needed by the updater.
+    """
+    def __init__(self, *args, **kwargs):
+        self._is_standalone = kwargs.pop("standalone", False)
+        super().__init__(*args, **kwargs)
 
 class TestWindowsUpdater(unittest.TestCase):
     def test_version(self):
@@ -44,7 +52,7 @@ class TestWindowsUpdater(unittest.TestCase):
         # u.check_for_update()
 
     def test_downloader(self):
-        app = wx.App()
+        app = FakeApp(standalone=True)
         app.main_frame = wx.Frame()
         u = updater.WindowsUpdater()
         rv = u.get_remote_version()
