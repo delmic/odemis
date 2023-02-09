@@ -561,6 +561,40 @@ class WrapToMpiPpiTestCase(unittest.TestCase):
                                                            "with the converted value: %s" % converted_angle)
 
 
+class RotShortestMoveTestCase(unittest.TestCase):
+
+    def test_2_pi(self):
+        """Test value with 2 pi cycle"""
+        in_out = (
+            # input -> expected output
+            ((0.1, 0.2), 0.1),
+            ((0.2, 0.1), -0.1),
+            ((0, 0), 0),
+            ((0, 2 * math.pi), 0),
+            ((2 * math.pi, 0), 0),
+            ((0, 1.5 * math.pi), -0.5 *math.pi),
+            ((-10, -10 + 20 * (2 * math.pi)), 0),
+        )
+        for args, exp in in_out:
+            res = util.rot_shortest_move(*args)
+            self.assertAlmostEqual(res, exp, msg=f"Input {args} -> {res} while expected {exp}")
+
+    def test_cycles(self):
+        """Test value with different cycles"""
+        in_out = (
+            # input -> expected output
+            ((0.1, 0.2, 5), 0.1),
+            ((0.2, 0.1, 5), -0.1),
+            ((0, 0, 10), 0),
+            ((0, 2, 2), 0),
+            ((2, 0, 2), 0),
+        )
+        for args, exp in in_out:
+            res = util.rot_shortest_move(*args)
+            self.assertAlmostEqual(res, exp, msg=f"Input {args} -> {res} while expected {exp}")
+
+
+
 class RecursiveDictUpdateTestCase(unittest.TestCase):
 
     def test_dict_update(self):

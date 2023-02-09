@@ -137,6 +137,27 @@ def wrap_to_mpi_ppi(a: float) -> float:
     return (a + math.pi) % (2 * math.pi) - math.pi
 
 
+def rot_shortest_move(a: float, b: float, cycle: float = 2 * math.pi) -> float:
+    """
+    Computes the small rotational move to go from angle a to angle b, assuming
+    that a whole cycle is possible.
+    For instance, to go from 0 rad to 1.5π, with the usual cycle of 2π, the shortest move is -0.5π.
+    :param a: an angle, in any unit, can be any value
+    :param b: an angle, in the same unit as b, can be any value
+    :param cycle (> 0): the angle corresponding to a whole rotation.
+    :return: an angle between -cycle/2 and +cycle/2, in the same unit as a and b
+    """
+    vector = b - a
+    # mod1 and mod2 are always positive as cycle is positive
+    mod1 = vector % cycle
+    mod2 = -vector % cycle
+
+    if mod1 < mod2:
+        return mod1
+    else:
+        return -mod2
+
+
 def to_str_escape(s):
     """
     Escapes the given string (or bytes) in such a way that all the
