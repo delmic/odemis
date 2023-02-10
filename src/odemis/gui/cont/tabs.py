@@ -66,7 +66,7 @@ from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, getCurrentGridLabel, \
-    FM_IMAGING, SEM_IMAGING, getTargetPosition, POSITION_NAMES, THREE_BEAMS, \
+    IMAGING, FM_IMAGING, SEM_IMAGING, getTargetPosition, POSITION_NAMES, THREE_BEAMS, \
     get3beamsSafePos, ATOL_LINEAR_POS, SAFETY_MARGIN_5DOF, cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
     CLStream, EMStream, LiveStream, FIBStream, \
@@ -5242,12 +5242,12 @@ class MimasAlignTab(Tab):
         #  and update the engage position to the default position.
         align_md = self._aligner.getMetadata()
         align_pos = align_md[model.MD_FAV_POS_ALIGN]
-        align_pos_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
 
         if current_pos_label == FM_IMAGING:
             f_aligner_mv = self._aligner.moveAbs(align_pos)
             self._aligner.updateMetadata({model.MD_FAV_POS_ACTIVE: align_pos})
         elif current_pos_label == MILLING:
+            align_pos_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
             f_aligner_mv = self._aligner.moveAbs(align_pos_deactive)
             self._aligner.updateMetadata({model.MD_FAV_POS_ACTIVE: align_pos})
         else:
@@ -5270,12 +5270,8 @@ class MimasAlignTab(Tab):
         # Unpress the optical button and set the icon color of the pressed button to orange
         self.panel.btn_position_opt.SetValue(0)
 
-        # get the metadata to retract the objective
-        align_md = self._aligner.getMetadata()
-        deactive_pos = align_md[model.MD_FAV_POS_DEACTIVE]
-
         # create a future and update the appropriate controls after it is called
-        self._move_future = self._aligner.moveAbs(deactive_pos)
+        self._move_future = cryoSwitchSamplePosition(MILLING)
         self._move_future.add_done_callback(self._on_pos_move_done)
 
     def _set_flm_alignment_mode(self, evt):
@@ -5287,14 +5283,8 @@ class MimasAlignTab(Tab):
         # Unpress the FIB button and set the icon color of the pressed button to orange
         self.panel.btn_position_fib.SetValue(0)
 
-        # TODO: use the cryoSwitchSamplePosition(), once it supports MIMAS
-
-        # get the metadata to retract the objective
-        align_md = self._aligner.getMetadata()
-        active_pos = align_md[model.MD_FAV_POS_ACTIVE]
-
         # create a future and update the appropriate controls after it is called
-        self._move_future = self._aligner.moveAbs(active_pos)
+        self._move_future = cryoSwitchSamplePosition(FM_IMAGING)
         self._move_future.add_done_callback(self._on_pos_move_done)
 
     @call_in_wx_main
@@ -5361,7 +5351,7 @@ class MimasAlignTab(Tab):
 
         for btn in self.position_btns.values():
             # Disable if in some odd position (and enable back otherwise)
-            btn.Enable(current_pos_label != UNKNOWN)
+            btn.Enable(current_pos_label in (FM_IMAGING, MILLING, IMAGING))
 
             if btn == currently_pressed:
                 btn.SetValue(2)  # Completed
