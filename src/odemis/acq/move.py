@@ -55,7 +55,8 @@ POSITION_NAMES = {
 ATOL_LINEAR_POS = 100e-6  # m
 ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
 RTOL_PROGRESS = 0.3
-SCALING_FACTOR = 0.03  # m (based on fine tuning)
+# Compensation factor for a rotational move to take the same amount of time as a linear move
+ROT_DIST_SCALING_FACTOR = 0.06  # m/rad, 1° ~ 1mm
 SAFETY_MARGIN_5DOF = 100e-6  # m
 SAFETY_MARGIN_3DOF = 200e-6  # m
 
@@ -217,15 +218,24 @@ def _getCurrentMeteorPositionLabel(current_pos, stage):
     return UNKNOWN
 
 
-def _getCurrentMimasPositionLabel(current_stage_pos, stage, aligner):
+def _getCurrentMimasPositionLabel(current_stage_pos, stage, aligner) -> int:
     """
     Detects the current aligner position of mimas
     :param current_stage_pos: (dict str->float) position of the stage
     :param stage: (Actuator) the stage component
     :param aligner: (Actuator) the align component
-    returns a label LOADING, FM_IMAGING, MILLING or UNKNOWN
+    :returns: a label LOADING, FM_IMAGING, MILLING, IMAGING, COATING, or UNKNOWN.
+    IMAGING indicates that the stage is in a position compatible with FM_IMAGING and MILLING,
+    but the aligner is not in a known position.
+    UNKNKOWN is for all other unhandled positions.
     """
-    # meta data of meteor stage positions
+    # Firstly, both actuators should be referenced
+    stage_referenced = all(stage.referenced.value.values())
+    aligner_referenced = all(aligner.referenced.value.values())
+    if not stage_referenced or not aligner_referenced:
+        return UNKNOWN
+
+    # Defined stage positions
     stage_md = stage.getMetadata()
     stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
     stage_imaging_rng = stage_md[model.MD_POS_ACTIVE_RANGE]
@@ -235,12 +245,31 @@ def _getCurrentMimasPositionLabel(current_stage_pos, stage, aligner):
     aligner_fib = aligner_md[model.MD_FAV_POS_DEACTIVE]
     aligner_optical = aligner_md[model.MD_FAV_POS_ACTIVE]
 
-    if _isInRange(current_stage_pos, stage_imaging_rng, {'x', 'y', 'z'}):
+    # All MILLING, FM_IMAGING, and COATING are at the same position (ie, somewhere
+    # within the IMAGING range). To distinguish we check the position of the optical
+    # lens (aligner) and GIS needle.
+    # Note that there can be some odd combinations that do not fit any of the
+    # known positions, in which case we return "IMAGING" (to indicate it's a bit
+    # unclear but not UNKNOWN either).
+
+    if _isInRange(current_stage_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rz'}):
         if _isNearPosition(current_align_pos, aligner_fib, aligner.axes):
-            return MILLING
+            try:
+                gis = model.getComponent(role="gis")
+                gis_choices = gis.axes["arm"].choices
+                gis_pos = gis_choices[gis.position.value["arm"]] # convert position to a string
+            except Exception:
+                logging.exception("Failed to read GIS arm position, assuming it's parked")
+                gis_pos = "parked"
+            if gis_pos == "engaged":
+                return COATING
+            else:
+                return MILLING
         elif _isNearPosition(current_align_pos, aligner_optical, aligner.axes):
             return FM_IMAGING
-    elif _isNearPosition(current_stage_pos, stage_deactive, stage.axes):
+        return IMAGING
+    elif (_isNearPosition(current_stage_pos, stage_deactive, stage.axes) and
+          _isNearPosition(current_align_pos, aligner_fib, aligner.axes)):
         return LOADING
 
     # None of the above -> unknown position
@@ -309,67 +338,33 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     return UNKNOWN
 
 
-# TODO for now this function is hardcoded to work only for rz and rx. Handle
-# also the ry axis to make the function generic
 def _getDistance(start, end):
     """
-    Calculate the error/difference between two 3D postures with x, y, z, rx, rz axes
-        or a subset of these axes. If there are no common axes between the two passed
-        postures, an error would be raised. The scaling factor of the rotation error is in meter.
+    Calculate the difference between two 3D postures with x, y, z, rx, ry, rz axes
+    or a subset of these axes. If there are no common axes between the two passed
+    postures, an error would be raised. The scaling factor of the rotation error is in meter.
     start, end (dict -> float): a 3D posture
     return (float >= 0): the difference between two 3D postures.
     """
     axes = start.keys() & end.keys()
     lin_axes = axes & {'x', 'y', 'z'}  # only the axes found on both points
-    rot_axes = axes & {'rx', 'rz'}  # only the axes found on both points
+    rot_axes = axes & {'rx', 'ry', 'rz'}  # only the axes found on both points
     if not lin_axes and not rot_axes:
         raise ValueError("No common axes found between the two postures")
-    lin_error = rot_error = 0
+
+    lin_error = 0
     # for the linear error
     if lin_axes:
         sp = numpy.array([start[a] for a in sorted(lin_axes)])
         ep = numpy.array([end[a] for a in sorted(lin_axes)])
         lin_error = scipy.spatial.distance.euclidean(ep, sp)
-    # for the rotation error
-    if rot_axes:
-        Rx_start = Rx_end = Rz_start = Rz_end = numpy.eye(3)
-        for a in rot_axes:
-            if a == "rx":
-                # find the elemental rotation around x axis
-                Rx_start = getRotationMatrix(a, start["rx"])
-                Rx_end = getRotationMatrix(a, end["rx"])
-            elif a == "rz":
-                # find the elemental rotation around z axis
-                Rz_end = getRotationMatrix(a, end["rz"])
-                Rz_start = getRotationMatrix(a, start["rz"])
-        # find the total rotations
-        R_start = numpy.matmul(Rz_start, Rx_start)
-        R_end = numpy.matmul(Rz_end, Rx_end)
-        # find the rotation error matrix
-        R_diff = numpy.matmul(numpy.transpose(R_start), R_end)
-        # map to scalar error
-        rot_error = SCALING_FACTOR * abs(numpy.trace(numpy.eye(3) - R_diff))
+
+    # for the rotation error: just the sum of all rotations
+    rot_dist = sum(abs(util.rot_shortest_move(start[a], end[a])) for a in rot_axes)
+    # Convert to a value which has the same order of magnitude as linear distances (in a microscope)
+    rot_error = ROT_DIST_SCALING_FACTOR * rot_dist
+
     return lin_error + rot_error
-
-
-def getRotationMatrix(axis, angle):
-    """
-    Computes the rotation matrix of the given angle around the given axis. 
-    axis (str): the axis around which the rotation matrix is to be calculated. The axis can be 'rx', 'ry' or 'rz'.
-    angle (float): the angle of rotation. The angle must be in radians.
-    return (numpy.ndarray): the rotation matrix. It is 3x3 matrix of floats.
-    """
-    if axis == "rx":
-        Rx = numpy.array([[1, 0, 0], [0, numpy.cos(angle), -numpy.sin(angle)], [0, numpy.sin(angle), numpy.cos(angle)]])
-        return Rx
-    elif axis == "ry":
-        Ry = numpy.array([[numpy.cos(angle), 0, numpy.sin(angle)], [0, 1, 0], [-numpy.sin(angle), 0, numpy.cos(angle)]])
-        return Ry
-    elif axis == "rz":
-        Rz = numpy.array([[numpy.cos(angle), -numpy.sin(angle), 0], [numpy.sin(angle), numpy.cos(angle), 0], [0, 0, 1]])
-        return Rz
-    else:
-        raise ValueError(f"Unknown axis name {axis}")
 
 
 def getMovementProgress(current_pos, start_pos, end_pos):
@@ -433,7 +428,7 @@ def _isNearPosition(current_pos, target_position, axes):
         target_value = target_position[axis]
         if axis in {'x', 'y', 'z'}:
             is_near = abs(target_value - current_value) < ATOL_LINEAR_POS
-        elif axis in {'rx', 'rz'}:
+        elif axis in {'rx', 'ry', 'rz'}:
             is_near = util.rot_almost_equal(current_value, target_value, atol=ATOL_ROTATION_POS)
         else:
             raise ValueError("Unknown axis value %s." % axis)
@@ -725,7 +720,7 @@ def _doCryoSwitchSamplePosition(future, target):
             focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
             focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
             # To hold the ordered sub moves list
-            sub_moves = []
+            sub_moves = []  # list of tuples (component, position)
 
             # get the current label 
             current_label = getCurrentPositionLabel(stage.position.value, stage)
@@ -772,8 +767,102 @@ def _doCryoSwitchSamplePosition(future, target):
             # run the moves
             logging.info("Moving from position {} to position {}.".format(current_name, target_name))
             for component, sub_move in sub_moves:
-                logging.debug("Moving %s to %s.", component.name, sub_move)
                 run_sub_move(future, component, sub_move)
+
+        elif role == "mimas":
+            # get the stage and aligner objects
+            stage = model.getComponent(role="stage")
+            align = model.getComponent(role="align")
+            stage_md = stage.getMetadata()
+            align_md = align.getMetadata()
+            stage_imaging_rng = stage_md[model.MD_POS_ACTIVE_RANGE]
+
+            # There are actually only 2 positions for the stage: LOADING, and
+            # everything else happens at "IMAGING".
+            stage_target_pos = {
+                LOADING: stage_md[model.MD_FAV_POS_DEACTIVE],
+                COATING: stage_md[model.MD_FAV_POS_ACTIVE],
+                FM_IMAGING: stage_md[model.MD_FAV_POS_ACTIVE],
+                MILLING: stage_md[model.MD_FAV_POS_ACTIVE],
+            }
+
+            if target not in stage_target_pos:
+                raise ValueError(f"Unsupported move to target {target_name}")
+
+            aligner_fib = align_md[model.MD_FAV_POS_DEACTIVE]
+            aligner_optical = align_md[model.MD_FAV_POS_ACTIVE]
+            stage_referenced = all(stage.referenced.value.values())
+
+            # Fail early when required axes are not found on the positions metadata
+            required_axes = {'x', 'y', 'z', 'rx', 'rz'}  # ry is normally never used so it can be omitted
+            for stage_position in stage_target_pos.values():
+                if not required_axes.issubset(stage_position.keys()):
+                    raise ValueError("Stage %s metadata does not have all required axes %s." % (
+                                     list(stage_md.keys())[list(stage_md.values()).index(stage_position)],
+                                     required_axes))
+
+            current_pos = stage.position.value
+            current_label = getCurrentPositionLabel(current_pos, stage, align)
+            current_name = POSITION_NAMES[current_label]
+
+            # If no move to do => skip all
+            if target == current_label:
+                logging.debug("Position %s requested, while already in that position", target_name)
+                return
+
+            # Only loading position is allowed to go to at init, or if something odd happened
+            if target != LOADING:
+                if not stage_referenced:
+                    raise ValueError(f"Unable to move to {target_name} while stage is not referenced.")
+                if current_label == UNKNOWN:
+                    raise ValueError(f"Unable to move to {target_name} while current position is UNKNOWN.")
+
+            # Find the position of the GIS. The component is expected to have a "arm"
+            # axis with choices defining the position to "parked" and "engaged".
+            gis = model.getComponent(role="gis")
+            gis_parked = None
+            gis_engaged = None
+            for arm_pos, pos_name in gis.axes["arm"].choices.items():
+                if pos_name == "parked":
+                    gis_parked = arm_pos
+                elif pos_name == "engaged":
+                    gis_engaged = arm_pos
+
+            if gis_parked is None or gis_engaged is None:
+                raise ValueError("Failed to find the parked & engaged positions on the gis component")
+
+            logging.info("Moving from position %s to position %s.", current_name, target_name)
+
+            # Always park the GIS needle before a move
+            run_sub_move(future, gis, {"arm": gis_parked})
+
+            if target == LOADING:
+                if not stage_referenced:
+                    run_reference(future, stage)
+                run_sub_move(future, align, aligner_fib)  # park the optical lens
+                run_sub_move(future, stage, stage_target_pos[target])
+            elif target in (MILLING, FM_IMAGING, COATING):
+                # If not in imaging mode yet, move the stage to the default imaging position
+                if not _isInRange(current_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rz'}):
+                    # move stage to imaging range (with the optical lens retracted)
+                    run_sub_move(future, align, aligner_fib)
+                    run_sub_move(future, stage, stage_target_pos[target])
+
+                if target == MILLING:
+                    # retract the optical lens
+                    run_sub_move(future, align, aligner_fib)
+                elif target == FM_IMAGING:
+                    # engage the optical lens
+                    run_sub_move(future, align, aligner_optical)
+                elif target == COATING:
+                    # retract the optical lens
+                    run_sub_move(future, align, aligner_fib)
+                    # Engage the GIS needle
+                    run_sub_move(future, gis, {"arm": gis_engaged})
+                    # TODO: Turn on the GIS heater (and turn it off for every other positions?)
+                    # At least need to add it to the simulator... and get the driver working
+                    # gis_reservoir = model.getComponent(role="gis-reservoir")
+                    # gis_reservoir.temperatureRegulation.value = True
 
     except CancelledError:
         logging.info("CryoSwitchSamplePosition cancelled.")
@@ -841,16 +930,16 @@ def transformFromMeteorToSEM(pos, stage):
 
 def _cancelCryoMoveSample(future):
     """
-    Canceller of _doCryoTiltSample and _doCryoSwitchSamplePosition tasks
+    Canceller of _doCryoSwitchAlignPosition and _doCryoSwitchSamplePosition tasks
     """
-    logging.debug("Cancelling CryoMoveSample...")
+    logging.debug("Cancelling cryo switch move...")
 
     with future._task_lock:
         if future._task_state == FINISHED:
             return False
         future._task_state = CANCELLED
         future._running_subf.cancel()
-        logging.debug("CryoMoveSample cancellation requested.")
+        logging.debug("Cryo switch move cancellation requested.")
 
     return True
 
@@ -888,15 +977,17 @@ def run_sub_move(future, component, sub_move):
     try:
         with future._task_lock:
             if future._task_state == CANCELLED:
-                logging.info("Move procedure is cancelled before moving {} -> {}.".format(component.name, sub_move))
+                logging.info("Move procedure is cancelled before moving %s -> %s", component.name, sub_move)
                 raise CancelledError()
-            logging.debug("Performing sub move {} -> {}".format(component.name, sub_move))
+
+            logging.debug("Performing sub move %s -> %s", component.name, sub_move)
             future._running_subf = component.moveAbs(sub_move)
         future._running_subf.result(timeout=MAX_SUBMOVE_DURATION)
     except TimeoutError:
         future._running_subf.cancel()
-        logging.exception("Timed out during moving {} -> {}.".format(component.name, sub_move))
+        logging.exception("Timed out while moving %s -> %s", component.name, sub_move)
         raise
+
     if future._task_state == CANCELLED:
-        logging.info("Move procedure is cancelled after moving {} -> {}.".format(component.name, sub_move))
+        logging.info("Move procedure is cancelled after moving %s -> %s", component.name, sub_move)
         raise CancelledError()

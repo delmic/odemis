@@ -22,10 +22,10 @@ from odemis import model
 from odemis import util
 import odemis
 from odemis.acq.move import (ATOL_LINEAR_POS, ATOL_ROTATION_POS, FM_IMAGING, GRID_1, GRID_2,
-                             LOADING, ALIGNMENT, COATING, LOADING_PATH,
+                             LOADING, ALIGNMENT, COATING, MILLING, LOADING_PATH,
                              RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, getCurrentGridLabel,
                              cryoSwitchAlignPosition, getCurrentAlignerPositionLabel,
-                             _getDistance, SCALING_FACTOR, getRotationMatrix,
+                             _getDistance, ROT_DIST_SCALING_FACTOR,
                              cryoSwitchSamplePosition, getMovementProgress, getCurrentPositionLabel, get3beamsSafePos,
                              SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS)
 from odemis.util import testing
@@ -35,11 +35,13 @@ import time
 import unittest
 
 logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
+
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
-
+MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
 
 class TestEnzelMove(unittest.TestCase):
     """
@@ -167,28 +169,6 @@ class TestEnzelMove(unittest.TestCase):
         self.assertTrue(cancelled)
         testing.assert_pos_not_almost_equal(stage.position.value, self.stage_coating,
                                          atol=ATOL_LINEAR_POS)
-
-    def test_get_progress(self):
-        """
-        Test getMovementProgress function behaves as expected
-        """
-        start_point = {'x': 0, 'y': 0, 'z': 0}
-        end_point = {'x': 2, 'y': 2, 'z': 2}
-        current_point = {'x': 1, 'y': 1, 'z': 1}
-        progress = getMovementProgress(current_point, start_point, end_point)
-        self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
-        current_point = {'x': .998, 'y': .999, 'z': .999}  # slightly off the line
-        progress = getMovementProgress(current_point, start_point, end_point)
-        self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
-        current_point = {'x': 3, 'y': 3, 'z': 3}  # away from the line
-        progress = getMovementProgress(current_point, start_point, end_point)
-        self.assertIsNone(progress)
-        current_point = {'x': 1, 'y': 1, 'z': 3}  # away from the line
-        progress = getMovementProgress(current_point, start_point, end_point)
-        self.assertIsNone(progress)
-        current_point = {'x': -1, 'y': 0, 'z': 0}  # away from the line
-        progress = getMovementProgress(current_point, start_point, end_point)
-        self.assertIsNone(progress)
 
     def test_get_current_aligner_position(self):
         """
@@ -497,6 +477,157 @@ class TestMeteorMove(unittest.TestCase):
         self.assertEqual(current_grid, None)
 
 
+class TestMimasMove(unittest.TestCase):
+    """
+    Test move functions on the MIMAS
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        testing.start_backend(MIMAS_CONFIG)
+
+        # find components by their role
+        cls.stage = model.getComponent(role="stage")
+        cls.aligner = model.getComponent(role="align")
+        cls.gis = model.getComponent(role="gis")
+
+        cls.stage_active = cls.stage.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        cls.stage_deactive = cls.stage.getMetadata()[model.MD_FAV_POS_DEACTIVE]
+        cls.stage_coating = cls.stage.getMetadata()[model.MD_FAV_POS_COATING]
+        cls.align_deactive = cls.aligner.getMetadata()[model.MD_FAV_POS_DEACTIVE]
+        cls.align_active = cls.aligner.getMetadata()[model.MD_FAV_POS_ACTIVE]
+
+        # The 5DoF stage is not referenced automatically, so let's do it now
+        if not all(cls.stage.referenced.value.values()):
+            stage_axes = set(cls.stage.axes.keys())
+            cls.stage.reference(stage_axes).result()
+
+        # Make sure the lens is referenced too (small move will only complete after the referencing)
+        cls.aligner.moveRelSync({"z": 1e-6})
+
+    def test_sample_switch_procedures(self):
+        """
+        Test moving the sample stage from loading position to both imaging, alignment and coating, then back to loading
+        """
+        stage = self.stage
+        align = self.aligner
+        # Get the stage to loading position
+        cryoSwitchSamplePosition(LOADING).result()
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
+                                     atol=ATOL_LINEAR_POS)
+        # Align should be parked
+        testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
+        # GIS should be parked
+        gis_choices = self.gis.axes["arm"].choices
+        self.assertEqual(gis_choices[self.gis.position.value["arm"]], "parked")
+
+        # Get the stage to coating position
+        f = cryoSwitchSamplePosition(COATING)
+        f.result()
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_coating, atol=ATOL_LINEAR_POS)
+        # Align should be parked
+        testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
+        pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
+        self.assertEqual(pos_label, COATING)
+
+        # Go to FLM
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS, match_all=False)
+        # Align should be engaged
+        testing.assert_pos_almost_equal(align.position.value, self.align_active, atol=ATOL_LINEAR_POS)
+        pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
+        self.assertEqual(pos_label, FM_IMAGING)
+
+        # Test the progress update
+        progress_fm = getMovementProgress(stage.position.value, self.stage_coating, self.stage_active)
+        self.assertAlmostEqual(progress_fm, 1)
+
+        # Move a little bit around => still in FM_IMAGING
+        stage.moveRelSync({"x": 100e-6, "y": -100e-6, "z": 1e-6})
+        current_pos = self.stage.position.value
+        pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
+        self.assertEqual(pos_label, FM_IMAGING)
+
+        # Get the stage to FIB
+        f = cryoSwitchSamplePosition(MILLING)
+        f.result()
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS)
+        # Align should be parked
+        testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
+        pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
+        self.assertEqual(pos_label, MILLING)
+
+        # The stage shouldn't have moved
+        testing.assert_pos_almost_equal(stage.position.value, current_pos)
+
+        # Switch back to loading position
+        cryoSwitchSamplePosition(LOADING).result()
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive, atol=ATOL_LINEAR_POS)
+
+    def test_cancel_loading(self):
+        """
+        Test cryoSwitchSamplePosition movement cancellation is handled correctly
+        """
+        stage = self.stage
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result(30)
+
+        logging.debug("Switching to FM IMAGING")
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        time.sleep(2)
+        cancelled = f.cancel()
+        self.assertTrue(cancelled)
+
+        # It shouldn't be in LOADING position anymore, and not in FM_IMAGING yet
+        # For now, we don't test it, because the stage simulator of the MIMAS is
+        # very crude and doesn't simulate cancellation and move duration properly.
+        # testing.assert_pos_not_almost_equal(stage.position.value, self.stage_deactive,
+        #                                     atol=ATOL_LINEAR_POS)
+        pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
+        self.assertNotEqual(pos_label, LOADING)
+        self.assertNotEqual(pos_label, FM_IMAGING)
+        # Should report UNKNOWN if cancelled early, and IMAGING if cancelled later
+        #self.assertEqual(pos_label, (UNKNOWN, IMAGING))
+
+        # It should be allowed to go back to LOADING
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result(30)
+        self.assertTrue(f.done())
+        pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
+        self.assertEqual(pos_label, LOADING)
+
+    def test_unknown(self):
+        """
+        When in UNKNOWN position, it's only allowed to go to LOADING
+        """
+        stage = self.stage
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result(30)
+
+        # Move a little away to be "nowhere" known
+        stage.moveRelSync({"x": 1e-3})
+
+        pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
+        self.assertEqual(pos_label, UNKNOWN)
+
+        # Moving to FM_IMAGING should not be allowed from UNKNOWN
+        with self.assertRaises(ValueError):
+            f = cryoSwitchSamplePosition(FM_IMAGING)
+            f.result()
+
+        with self.assertRaises(ValueError):
+            f = cryoSwitchSamplePosition(MILLING)
+            f.result()
+
+        # Going to LOADING is fine
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result(30)
+        pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
+        self.assertEqual(pos_label, LOADING)
+
+
 class TestGetDifferenceFunction(unittest.TestCase):
     """
     This class is to test _getDistance() function in the move module
@@ -520,57 +651,119 @@ class TestGetDifferenceFunction(unittest.TestCase):
     def test_only_linear_axes_but_without_common_axes(self):
         point1 = {'x': 0.023, 'y': 0.032}
         point2 = {'x': 0.023, 'y': 0.032, 'z': 1}
-        common_axes = point1.keys() & point2.keys()
-        pos1 = numpy.array([point1[a] for a in common_axes])
-        pos2 = numpy.array([point2[a] for a in common_axes])
-        expected_distance = scipy.spatial.distance.euclidean(pos1, pos2)
+        expected_distance = 0
         actual_distance = _getDistance(point1, point2)
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_rotation_axes(self):
-        point1 = {'rx': 0.523599, 'rz': 0} # 30 degree
-        point2 = {'rx': 1.0472, 'rz': 0}    # 60 degree
+        point1 = {'rx': numpy.radians(30), 'rz': 0}  # 30 degree
+        point2 = {'rx': numpy.radians(60), 'rz': 0}  # 60 degree
         # the rotation difference is 30 degree
-        expected_rotation = getRotationMatrix("rx", numpy.radians(30))
-        exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
-        act_rot_error = _getDistance(point2, point1)
-        self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
+        exp_rot_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30)
+        act_rot_dist = _getDistance(point2, point1)
+        self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
 
-    def test_only_rotation_axes_but_whtout_difference(self):
-        point1 = {'rx': 0, 'rz': 0.523599} # 30 degree
-        point2 = {'rx': 0, 'rz': 0.523599}  # 30 degree
+        # Same in the other direction
+        act_rot_dist = _getDistance(point2, point1)
+        self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
+
+    def test_rotation_axes_no_difference(self):
+        point1 = {'rx': 0, 'rz': numpy.radians(30)}  # 30 degree
+        point2 = {'rx': 0, 'rz': numpy.radians(30)}  # 30 degree
         # the rotation difference is 0 degree
         exp_rot_error = 0
         act_rot_error = _getDistance(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error)
 
-    def test_only_rotation_axes_but_whtout_common_axes(self):
-        point1 = {'rx': 0, 'rz': 0.523599} # 30 degree
-        point2 = {'rz': 1.0472}  # 60 degree
-        # the rotation difference is 30 degree
-        expected_rotation = getRotationMatrix("rz", numpy.radians(30))
-        exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
-        act_rot_error = _getDistance(point2, point1)
-        self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
+        # Same in the other direction
+        act_rot_error = _getDistance(point1, point2)
+        self.assertAlmostEqual(exp_rot_error, act_rot_error)
+
+    def test_rotation_axes_missing_axis(self):
+        point1 = {'rx': numpy.radians(30), 'rz': numpy.radians(30)}  # 30 degree
+        # No rx => doesn't count it
+        point2 = {'rz': numpy.radians(60)}  # 60 degree
+        exp_rot_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30)
+        act_rot_dist = _getDistance(point2, point1)
+        self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
+
+        # Same in the other direction
+        act_rot_dist = _getDistance(point2, point1)
+        self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
 
     def test_no_common_axes(self):
-        point1 = {'rx': 0.523599, 'rz': 0.523599}
+        point1 = {'rx': numpy.radians(30), 'rz': numpy.radians(30)}
         point2 = {'x': 0.082, 'y': 0.01}
-        self.assertRaises(ValueError, _getDistance, point1, point2)
+        with self.assertRaises(ValueError):
+            _getDistance(point1, point2)
 
-    def test_both_axes(self):
-        point1 = {'rx': 0, 'rz': 0.523599, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975}
-        point2 = {'rx': 0, 'rz': 1.0472, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975}
-        lin_axes = {'x', 'y', 'z'}  
-        rot_axes = {'rx', 'rz'}
-        pos1 = numpy.array([point1[a] for a in lin_axes])
-        pos2 = numpy.array([point2[a] for a in lin_axes])
-        exp_lin_error = scipy.spatial.distance.euclidean(pos1, pos2)
-        # the rotation difference is 30 degree
-        expected_rotation = getRotationMatrix("rz", numpy.radians(30))
-        exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
-        act_error = _getDistance(point1, point2)
-        self.assertAlmostEqual(act_error, exp_rot_error+exp_lin_error, places=6)
+    def test_lin_rot_axes(self):
+        point1 = {'rx': 0, 'rz': numpy.radians(30), 'x': -0.02, 'y': 0.05, 'z': 0.019}
+        point2 = {'rx': 0, 'rz': numpy.radians(60), 'x': -0.01, 'y': 0.05, 'z': 0.019}
+        # The rotation difference is 30 degree
+        # The linear difference is 0.01
+        exp_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30) + 0.01
+        act_dist = _getDistance(point1, point2)
+        self.assertAlmostEqual(exp_dist, act_dist)
+
+        # Same in the other direction
+        act_dist = _getDistance(point2, point1)
+        self.assertAlmostEqual(exp_dist, act_dist)
+
+    def test_get_progress(self):
+        """
+        Test getMovementProgress function behaves as expected
+        """
+        start_point = {'x': 0, 'y': 0, 'z': 0}
+        end_point = {'x': 2, 'y': 2, 'z': 2}
+        current_point = {'x': 1, 'y': 1, 'z': 1}
+        progress = getMovementProgress(current_point, start_point, end_point)
+        self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
+
+        current_point = {'x': .998, 'y': .999, 'z': .999}  # slightly off the line
+        progress = getMovementProgress(current_point, start_point, end_point)
+        self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
+
+        current_point = {'x': 3, 'y': 3, 'z': 3}  # away from the line
+        progress = getMovementProgress(current_point, start_point, end_point)
+        self.assertIsNone(progress)
+
+        current_point = {'x': 1, 'y': 1, 'z': 3}  # away from the line
+        progress = getMovementProgress(current_point, start_point, end_point)
+        self.assertIsNone(progress)
+
+        current_point = {'x': -1, 'y': 0, 'z': 0}  # away from the line
+        progress = getMovementProgress(current_point, start_point, end_point)
+        self.assertIsNone(progress)
+
+    def test_get_progress_lin_rot(self):
+        """
+        Test getMovementProgress return sorted values along a path with linear and
+        rotational axes.
+        """
+        # Test also rotations
+        start_point = {'x': 0, 'rx': 0, 'rz': 0}
+        point_1 = {'x': 0.5, 'rx': 0.1, 'rz': -0.1}
+        point_2 = {'x': 1, 'rx': 0.1, 'rz': -0.1}  # middle
+        point_3 = {'x': 1.5, 'rx': 0.18, 'rz': -0.19}
+        end_point = {'x': 2, 'rx': 0.2, 'rz': -0.2}
+
+        # start_point = 0 < Point 1 < Point 2 < Point 3 < 1 = end_point
+        progress_0 = getMovementProgress(start_point, start_point, end_point)
+        self.assertAlmostEqual(progress_0, 0)
+
+        progress_1 = getMovementProgress(point_1, start_point, end_point)
+
+        # Point 2 should be in the middle
+        progress_2 = getMovementProgress(point_2, start_point, end_point)
+        self.assertTrue(util.almost_equal(progress_2, 0.5, rtol=RTOL_PROGRESS))
+
+        progress_3 = getMovementProgress(point_3, start_point, end_point)
+
+        progress_end = getMovementProgress(end_point, start_point, end_point)
+        self.assertAlmostEqual(progress_end, 1)
+
+        assert progress_0 < progress_1 < progress_2 < progress_3 < progress_end
 
 
 if __name__ == "__main__":
