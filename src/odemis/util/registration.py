@@ -22,8 +22,6 @@ Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 USA.
 
 """
-from __future__ import annotations
-
 import math
 from typing import Iterator, NamedTuple, Optional, Tuple, Type, TypeVar
 
@@ -192,30 +190,30 @@ class WeightedShift(NamedTuple):
 
     def __float__(self) -> float:
         # The ability to return an instance of a strict subclass of float is
-        # deprecated. For example it's not allowed to return a numpy.float64),
+        # deprecated. For example it's not allowed to return a numpy.float64,
         # hence the call to `float()`.
         return float(self.weight)
 
-    def __neg__(self) -> WeightedShift:
+    def __neg__(self) -> "WeightedShift":
         return WeightedShift(self.weight, -self.shift)
 
     # overriding comparison special methods in typing.NamedTuple
-    def __lt__(self, other: WeightedShift) -> bool:
+    def __lt__(self, other: "WeightedShift") -> bool:
         return self.weight < other.weight
 
-    def __le__(self, other: WeightedShift) -> bool:
+    def __le__(self, other: "WeightedShift") -> bool:
         return self.weight <= other.weight
 
-    def __eq__(self, other: WeightedShift) -> bool:
+    def __eq__(self, other: "WeightedShift") -> bool:
         return self is other
 
-    def __ne__(self, other: WeightedShift) -> bool:
+    def __ne__(self, other: "WeightedShift") -> bool:
         return self is not other
 
-    def __gt__(self, other: WeightedShift) -> bool:
+    def __gt__(self, other: "WeightedShift") -> bool:
         return self.weight > other.weight
 
-    def __ge__(self, other: WeightedShift) -> bool:
+    def __ge__(self, other: "WeightedShift") -> bool:
         return self.weight >= other.weight
 
 
