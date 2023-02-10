@@ -20,17 +20,20 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from concurrent.futures.thread import ThreadPoolExecutor
 import copy
 import logging
 import math
-from odemis import model, util
-from odemis.acq import stream
-from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
-from odemis.util import TimeoutError
 import queue
 import re
 import time
+from concurrent.futures.thread import ThreadPoolExecutor
+from typing import Dict, Tuple
+
+from odemis import model, util
+from odemis.acq import move, stream
+from odemis.acq.move import FM_IMAGING, IMAGING, MILLING, POSITION_NAMES
+from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
+from odemis.util import TimeoutError
 
 GRATING_NOT_MIRROR = "CONST:NOTMIRROR"  # A special string so that no grating position can be like this
 
@@ -278,6 +281,12 @@ SECOM_MODES = {
                 }),
             }
 
+# MIMAS modes have a different format: just detector + move target position
+MIMAS_MODES = {
+            'optical': ("ccd", FM_IMAGING),
+            'fib': ("se-detector", MILLING),
+            }
+
 ALIGN_MODES = {'mirror-align', 'lens2-align', 'ek-align', 'chamber-view',
                'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus', 'streak-focus'}
 
@@ -318,12 +327,21 @@ def affectsGraph(microscope):
     return graph
 
 
-class OpticalPathManager(object):
+class OpticalPathManager():
     """
     The purpose of this module is setting the physical components contained in
     the optical path of a SPARC system to the right position/configuration with
     respect to the mode given.
     """
+
+    def __new__(cls, microscope):
+        # Automatically create the right sub-class based on the microscope role
+        if microscope.role == "mimas":
+            return super().__new__(_MimasOpticalPathManager)
+        # TODO: extend to the other microscope types
+        else:
+            return super().__new__(cls)
+
     def __init__(self, microscope):
         """
         microscope (Microscope): the whole microscope component, thus it can
@@ -368,15 +386,8 @@ class OpticalPathManager(object):
                 logging.debug("Removing mode %s, which is not supported", m)
                 del self._modes[m]
 
-        # Create the guess information out of the mode
-        # TODO: just make it a dict comprole -> mode
-        self.guessed = self._modes.copy()
-        # No stream should ever imply alignment mode
-        for m in ALIGN_MODES:
-            try:
-                del self.guessed[m]
-            except KeyError:
-                pass  # Mode to delete is just not there
+        # Initialize the information for guessMode()
+        self._role_to_mode = self._compute_role_to_mode(self._modes)
 
         if self.microscope.role in ("secom", "delphi"):
             # To record the fan settings when in "fast" acq quality
@@ -781,6 +792,22 @@ class OpticalPathManager(object):
 
         return fmoves
 
+    def _compute_role_to_mode(self, modes: Dict[str, Tuple]) -> Tuple[Tuple[str, str]]:
+        """
+        Based on the information from a set of modes, computes the role (regex) -> mode name,
+        As needed by .guessMode()
+
+        returns: a series of roles (regex)/mode name
+        """
+        role_2_mode = []
+        for mode_name, (role, _) in modes.items():
+            # No stream should ever imply alignment mode
+            if mode_name in ALIGN_MODES:
+                continue
+            role_2_mode.append((role, mode_name))
+
+        return tuple(role_2_mode)
+
     def guessMode(self, guess_stream):
         """
         Given a stream and by checking its components (e.g. role of detector)
@@ -808,9 +835,9 @@ class OpticalPathManager(object):
         elif isinstance(guess_stream, stream.OverlayStream):
             return "overlay"
         else:
-            for mode, conf in self.guessed.items():
+            for role, mode in self._role_to_mode:
                 # match the name using regex
-                if re.match(conf[0] + '$', guess_stream.detector.role):
+                if re.match(role + '$', guess_stream.detector.role):
                     return mode
         # In case no mode was found yet
         raise LookupError("No mode can be inferred for the given stream")
@@ -835,9 +862,9 @@ class OpticalPathManager(object):
                     # Prefer the detectors which have a role in the mode, as it's much
                     # more likely to be the optical detector
                     # TODO: handle setting multiple optical paths? => return all the detectors
-                    role = st.detector.role
-                    for conf in self.guessed.values():
-                        if re.match(conf[0] + '$', role):
+                    det_role = st.detector.role
+                    for role, mode in self._role_to_mode:
+                        if re.match(role + '$', det_role):
                             return st.detector
                     dets.append(st.detector)
                 except AttributeError:
@@ -985,3 +1012,66 @@ class OpticalPathManager(object):
         raise TimeoutError("Target temperature (%g C) not reached after %g s" %
                            (comp.targetTemperature.value, timeout))
 
+
+class _MimasOpticalPathManager(OpticalPathManager):
+    """
+    Special class for the MIMAS
+    """
+    def __init__(self, microscope):
+        self.microscope = microscope
+        if microscope.role != "mimas":
+            raise NotImplementedError("Microscope role '%s' unsupported" % (microscope.role,))
+        self._modes = copy.deepcopy(MIMAS_MODES)
+
+        self._chamber_view_own_focus = False  # To keep compatibility with __del__()
+
+        # To keep compatibility with the OpticalPathManager.setAcqQuality
+        self.quality = ACQ_QUALITY_FAST
+
+        # Initialize the information for guessMode()
+        self._role_to_mode = self._compute_role_to_mode(self._modes)
+
+        # keep list of all components, to avoid creating new proxies
+        # every time the mode changes
+        self._cached_components = model.getComponents()
+
+        # will take care of executing setPath asynchronously
+        self._executor = OneTaskExecutor()
+
+    def _doSetPath(self, path, detector):
+
+        if isinstance(path, stream.Stream):
+            if detector is not None:
+                raise ValueError("Not possible to specify both a stream, and a detector")
+            try:
+                mode = self.guessMode(path)
+            except LookupError:
+                logging.debug("%s doesn't require optical path change", path)
+                return
+            target = self.getStreamDetector(path)  # target detector
+        else:
+            mode = path
+            if mode not in self._modes:
+                raise ValueError("Mode '%s' does not exist" % (mode,))
+            comp_role = self._modes[mode][0]
+            if detector is None:
+                target = self._getComponent(comp_role)
+            else:
+                target = detector
+
+        logging.debug("Going to optical path '%s', with target detector %s.", mode, target.name)
+
+        mode_position = self._modes[mode][1]
+
+        # Only accept moving if the stage is already within the "IMAGING" area (which means FM_IMAGING & MILLING)
+        # as this means the stage will not move, but only the optical lens.
+        stage = self._getComponent("stage")
+        aligner = self._getComponent("align")
+        current_pos = move.getCurrentPositionLabel(stage.position.value, stage, aligner)
+        if current_pos not in (IMAGING, FM_IMAGING, MILLING):
+            logging.warning("Optical path cannot be changed while in position %s", POSITION_NAMES[current_pos])
+            return
+
+        f = move.cryoSwitchSamplePosition(mode_position)
+        f.result()
+        logging.debug("Move to position %s completed", mode_position)
