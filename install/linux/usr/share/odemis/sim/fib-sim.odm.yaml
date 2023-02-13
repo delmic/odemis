@@ -1,0 +1,65 @@
+# Configuration to simulate a MIMAS system without having any hardware.
+SimFIB: {
+    class: Microscope,
+    role: sem,
+    children: ["SEM E-beam", "SEM Detector", "Sample Stage"],
+}
+
+# This is a more realistic SEM simulator (image-wise, but less realistic HW-wise)
+"SEM Scan Interface": {
+    class: simsem.SimSEM,
+    role: null,
+    init: {
+           drift_period: 5, # s  (disable to get a the whole resolution of the image)
+           image: "relieve_square.tif",
+    },
+    # more detectors can be added, if necessary
+    children: {scanner: "SEM E-beam",
+               detector0: "SEM Detector"
+    }
+}
+
+# Normally for a FIB it is an ion-beam and not E-beam. However, ion-beam is not yet properly supported by the GUI
+"SEM E-beam": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["SEM Detector"] # affects the CCD in case of cathodoluminescence
+}
+
+"SEM Detector": { # aka ETD
+    # Internal child of SimSEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+# Use 3 MultiplexActuators to separate the axes of the PIGCS over different roles
+
+# Axes should be synchronized with the camera
+# Stage axes are moving the sample, so they should opposite direction than convention
+# (so the stage "position" is the current position observed)
+"Sample Stage": {
+    class: actuator.MultiplexActuator,
+    role: stage,
+    affects: ["SEM E-beam"],
+    dependencies: {"x": "Stage Actuators", "y": "Stage Actuators"},
+    init: {
+        axes_map: {"x": "x", "y": "y"},
+        inverted: ["x"],
+    },
+}
+
+"Stage Actuators": {
+    class: pigcs.FakeBus,
+    role: null,
+    init: {
+        port: "/dev/ttyPIGCS",
+        # axis -> controller, channel, closed-loop?
+        axes: {"a": [1, 1, False], "b": [2, 1, False], "z": [3, 1, False],
+               "x": [4, 1, False], "y": [5, 1, False]},
+    },
+}
+
