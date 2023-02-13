@@ -646,10 +646,10 @@ class TiledAcquisitionTask(object):
 
     def _get_z_on_focus_plane(self, x, y):
         if not self._focus_plane:
-            c, normal = linalg.fit_plane_lstsq(self._focus_points)
-            self._focus_plane["c"] = c
+            gamma, normal = linalg.fit_plane_lstsq(self._focus_points)
+            self._focus_plane["gamma"] = gamma
             self._focus_plane["normal"] = normal
-        point_on_plane = (0, 0, self._focus_plane["c"])  # where the plane intersects with the z-axis
+        point_on_plane = (0, 0, self._focus_plane["gamma"])  # where the plane intersects with the z-axis
         z = linalg.get_z_pos_on_plane(x, y, point_on_plane, self._focus_plane["normal"])
         return z
 

@@ -159,18 +159,20 @@ def qlp(a, mode='reduced'):
     return numpy.flip(q), numpy.flip(r)
 
 
-def fit_plane_lstsq(coordinates):
-    """https://gist.github.com/RustingSword/e22a11e1d391f2ab1f2c"""
-    (rows, cols) = coordinates.shape
-    G = numpy.ones((rows, 3))
-    G[:, 0] = coordinates[:, 0]  # X
-    G[:, 1] = coordinates[:, 1]  # Y
-    Z = coordinates[:, 2]
-    (a, b, c), *_ = numpy.linalg.lstsq(G, Z)
+def fit_plane_lstsq(coords: list):
+    """
+    Fit a plane to a set of 3D coordinates using least-squares fitting.
+    :param coords: list of 3D coordinates
+    :return: the z-position of the plane and the normal vector
+    """
+    A = numpy.ones_like(coords)
+    A[:, :2] = coords[:, :2]
+    B = coords[:, 2]
+    # Using least-squares fitting minimize ||Ax - B||^2 with x in R3,
+    # to find the equation for a plane: z = αx + βy + γ
+    (a, b, gamma), *_ = numpy.linalg.lstsq(A, B)
     normal = (a, b, -1)
-    nn = numpy.linalg.norm(normal)
-    normal = normal / nn
-    return c, normal
+    return gamma, normal
 
 
 def get_z_pos_on_plane(x: float, y: float, point_on_plane: tuple, normal: numpy.ndarray) -> float:
