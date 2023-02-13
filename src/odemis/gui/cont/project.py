@@ -541,6 +541,7 @@ class FastEMCalibrationRegionsController(object):
             if num not in scintillators:
                 # reset coordinates for ROC to undefined
                 self.roc_ctrls[num].calib_model.coordinates.value = acqstream.UNDEFINED_ROI
+                self.roc_ctrls[num].is_selected = False
 
         # update ROC buttons
         self._on_coordinates()
