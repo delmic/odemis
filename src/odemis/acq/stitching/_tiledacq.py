@@ -138,7 +138,8 @@ class TiledAcquisitionTask(object):
 
             # used in re-focusing method
             self._focus_points = numpy.array(focus_points) if focus_points else None
-            self._tri_focus_points = Delaunay(self._focus_points[:, :2])  # triangulate focus points
+            # triangulate focus points
+            self._tri_focus_points = Delaunay(self._focus_points[:, :2]) if focus_points else None
 
         if focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION and not zlevels:
             raise ValueError("MAX_INTENSITY_PROJECTION requires zlevels, but none passed")
@@ -666,6 +667,8 @@ class TiledAcquisitionTask(object):
                 break
 
         if point_in_triangle is False:
+            # TODO determine a better way for dealing with points outside of the focused area, for instance
+            #  by using linear extrapolation.
             logging.debug("Acquiring tile outside of focused area, will use plane fitting to find the focus.")
             # If the point is not in one of the triangles fit a plane through all
             # focus points and base the z position on that plane fit.
