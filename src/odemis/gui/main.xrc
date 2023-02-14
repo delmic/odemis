@@ -2008,7 +2008,7 @@
 
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_viewport">
-          <object class="LiveViewport" name="view_optical">
+          <object class="LiveViewport" name="vp_optical">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
           </object>

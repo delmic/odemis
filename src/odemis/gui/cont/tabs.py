@@ -339,7 +339,6 @@ class Tab(object):
 AUTOFOCUS_BINNING = (8, 8)
 AUTOFOCUS_HFW = 300e-06  # m
 
-
 class LocalizationTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
@@ -381,6 +380,11 @@ class LocalizationTab(Tab):
         # remove the play overlay from the top view with static streams
         panel.vp_secom_tl.canvas.remove_view_overlay(panel.vp_secom_tl.canvas.play_overlay)
         panel.vp_secom_tr.canvas.remove_view_overlay(panel.vp_secom_tr.canvas.play_overlay)
+
+        # Add a sample overlay to each view (if we have information)
+        if main_data.sample_centers:
+            for vp in (panel.vp_secom_tl, panel.vp_secom_tr, panel.vp_secom_bl, panel.vp_secom_br):
+                vp.show_sample_overlay(main_data.sample_centers, main_data.sample_radius)
 
         # Default view is the Live 1
         tab_data.focussedView.value = panel.vp_secom_bl.view
@@ -5135,7 +5139,7 @@ class MimasAlignTab(Tab):
 
         # Connect the view (for now, only optical)
         vpv = collections.OrderedDict([
-            (panel.pnl_viewport.viewports[0],  # focused view
+            (panel.vp_optical,
              {
                 "name": "Optical",
                 "stage": self._stage,
@@ -5148,10 +5152,14 @@ class MimasAlignTab(Tab):
         # Add a CryoFeatureOverlay to the canvas, not to show the features, but
         # to support moving the stage by double clicking, even if the stream is paused.
         # (So that the user can move the stage when looking at the FIB image in the separate computer)
-        cnvs = panel.pnl_viewport.viewports[0].canvas
+        cnvs = panel.vp_optical.canvas
         cryofeature_overlay = CryoFeatureOverlay(cnvs, tab_data)
         cnvs.add_world_overlay(cryofeature_overlay)
         cryofeature_overlay.active.value = True
+
+        # Add a sample overlay (if we have information)
+        if main_data.sample_centers:
+            panel.vp_optical.show_sample_overlay(main_data.sample_centers, main_data.sample_radius)
 
         # Create the Optical stream.
         # The focuser is "aligner" to calibrate the optical focus (while the stage Z stays constant)
