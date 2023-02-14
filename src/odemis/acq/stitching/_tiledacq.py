@@ -95,6 +95,7 @@ class TiledAcquisitionTask(object):
         self._future = future
         self._streams = streams
         self._stage = stage
+        self._focus_points = focus_points
         # Get total area as a tuple of width, height from ltrb area points
         normalized_area = util.normalize_rect(area)
         if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
