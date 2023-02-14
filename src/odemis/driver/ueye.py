@@ -687,7 +687,7 @@ class Camera(model.DigitalCamera):
         """
         device (None or str): serial number (eg, 1020345) of the device to use or None if any device is fine.
 
-        max_res ((1 <= int, 1 <= int) or None): maximum resolution possible.
+        max_res ((1 <= int, 1 <= int) or None): maximum resolution possible, if not None pass (height, width).
         This will restrict the maximum FoV. If None, it'll use the maximum supported by the camera reported.
         In such case, the translation is not clipped, so it can be used to move the area anywhere
         in full camera sensor. That is after applying the transpose.
@@ -716,26 +716,26 @@ class Camera(model.DigitalCamera):
             self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
 
             self._sensor_res = (sensorinfo.nMaxWidth, sensorinfo.nMaxHeight)
-            sensor_res_user = self._transposeSizeToUser(self._sensor_res)
+            # Set the initial max resolution as the sensor resolution
+            max_res_hw = self._sensor_res
 
-            if max_res is None:
-                max_res = self._sensor_res
-            else:
-                max_res = tuple(max_res)
-            if not all(1 <= mr <= r for mr, r in zip(max_res, sensor_res_user)):
-                raise ValueError(f"max_res has to be between (1, 1) and {sensor_res_user}, but got {max_res}")
-            max_res_hw = self._transposeSizeFromUser(max_res)
+            # If max_res is specified, restrict the FoV
+            if max_res is not None:
+                max_res_hw = self._transposeSizeFromUser(tuple(max_res))
+                if not all(1 <= mr <= r for mr, r in zip(max_res_hw, self._sensor_res)):
+                    raise ValueError(f"max_res has to be between (1, 1) and {self._transposeSizeToUser(self._sensor_res)}, but got {max_res}")
 
-            # compare the max_res parameter and the resolution of the camera sensor
-            # if the max_res param is smaller image cropping will be set through AOI
-            if max_res_hw != self._sensor_res:
-                rect_aoi = IS_RECT()
-                rect_aoi.s32X = (self._sensor_res[0] - max_res_hw[0]) // 2
-                rect_aoi.s32Y = (self._sensor_res[1] - max_res_hw[1]) // 2
-                rect_aoi.s32Width = max_res_hw[0]
-                rect_aoi.s32Height = max_res_hw[1]
-                self.SetAOI(rect_aoi)
-            self._metadata[model.MD_SENSOR_SIZE] = sensor_res_user
+                # compare the max_res parameter and the resolution of the camera sensor
+                # if the max_res param is smaller image cropping will be set through AOI
+                if max_res_hw != self._sensor_res:
+                    rect_aoi = IS_RECT()
+                    rect_aoi.s32X = (self._sensor_res[0] - max_res_hw[0]) // 2
+                    rect_aoi.s32Y = (self._sensor_res[1] - max_res_hw[1]) // 2
+                    rect_aoi.s32Width = max_res_hw[0]
+                    rect_aoi.s32Height = max_res_hw[1]
+                    self.SetAOI(rect_aoi)
+
+            self._metadata[model.MD_SENSOR_SIZE] = self._transposeSizeToUser(self._sensor_res)
 
             pxs = sensorinfo.wPixelSize * 1e-8  # m
             self.pixelSize = model.VigilantAttribute(self._transposeSizeToUser((pxs, pxs)),
