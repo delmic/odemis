@@ -1048,10 +1048,7 @@ class AcquireOverviewTask(object):
                     except Exception as exp:
                         logging.exception(
                             f"Autofocus within roi failed for roi number {idx} with {roi} values due to {exp}")
-                        self._future.running_subf.cancel()
-                        logging.debug("cancelling the acquisition overview")
-                        self._future._task_state = CANCELLED
-                        raise CancelledError()
+                        raise
 
 
                 # run tiled acquisition for the selected roi
@@ -1064,10 +1061,7 @@ class AcquireOverviewTask(object):
                 except Exception as exp:
                     logging.exception(
                         f"Z-stack acquisition within roi failed for roi number {idx} with {roi} values due to {exp}")
-                    self._future.running_subf.cancel()
-                    logging.debug("cancelling the acquisition overview")
-                    self._future._task_state = CANCELLED
-                    raise CancelledError()
+                    raise
 
                 logging.debug(f"acquisition overview is completed for roi number {idx} with {roi} values")
 
@@ -1079,6 +1073,7 @@ class AcquireOverviewTask(object):
             raise
         except Exception:
             logging.exception(f"acquisition overview failed")
+            raise
         finally:
             # state that the future has finished
             with self._future._task_lock:
