@@ -2117,7 +2117,13 @@ class FastEMCalibrationPanel(wx.Panel):
         for row_idx, row in enumerate(layout):
             for col_idx, elem in enumerate(row):
                 subsz = wx.BoxSizer(wx.HORIZONTAL)
-                btn = wx.ToggleButton(self, wx.ALL | wx.ALIGN_CENTER, label="?", size=(30, 30))
+                # Hotfix: The button size is set to 35x35 for Ubuntu 20.04 so that we can see
+                # the label, 30x30 size works fine for Ubuntu 18.04. Ideally the button size
+                # should be set based on the label text length, but the button looks larger than
+                # needed. Also tried using wx.Font to lower the label text size for 30x30, but
+                # does not make a difference.
+                # btn.SetSize(btn.GetSizeFromTextSize(btn.GetTextExtent("OK"))) returns (-1, -1)
+                btn = wx.ToggleButton(self, wx.ALL | wx.ALIGN_CENTER, label="?", size=(35, 35))
                 btn.SetBackgroundColour(FG_COLOUR_BUTTON)
                 subsz.Add(btn)
                 subsz.AddSpacer(8)
