@@ -126,6 +126,7 @@ class TiledAcquisitionTask(object):
             raise ValueError(f"focusing_method should be of type FocusingMethod, but got {focusing_method}")
         self._focusing_method = focusing_method
         self._focus_stream = next((sd for sd in self._streams if sd.focuser is not None), None)
+        self._focus_points = focus_points
         if self._focus_stream:
             # save initial focus value to be used in the AutoFocus function
             self._good_focus = self._focus_stream.focuser.position.value['z']
