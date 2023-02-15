@@ -295,7 +295,7 @@ class CalibrationTask(object):
 
         # TODO only needed for an acquisition -> move to acquisition code by reading the calibrated values
         #  from the respective MD (implement similar method to get_config_asm)
-        calibration.set_components_attr(config=calibration.orig_config, eval_config=False)
+        configure_asm(self._multibeam, self._descanner, self._detector, self._dataflow, self.asm_config, upload=False)
 
     def cancel(self, future):
         """
