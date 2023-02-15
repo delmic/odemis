@@ -28,13 +28,14 @@ import unittest
 
 import numpy
 import scipy
-from odemis.util import pairwise
+from odemis.util import pairwise, synthetic
 from odemis.util.graph import WeightedGraph
 from odemis.util.random import check_random_state
 from odemis.util.registration import (
     _canonical_matrix_form,
     bijective_matching,
     estimate_grid_orientation,
+    estimate_grid_orientation_from_img,
     nearest_neighbor_graph,
     unit_gridpoints,
 )
@@ -113,6 +114,14 @@ class BijectiveMatchingTest(unittest.TestCase):
 
 class UnitGridPointsTest(unittest.TestCase):
     """Unit tests for `unit_gridpoints()`."""
+
+    def test_raises_invalid_mode(self) -> None:
+        """
+        `unit_gridpoints()` should raise a ValueError when passed an invalid
+        mode.
+
+        """
+        self.assertRaises(ValueError, unit_gridpoints, (8, 8), mode="ab")
 
     def test_shape(self):
         """
@@ -227,15 +236,15 @@ def unit_gridpoints_graph(shape, tform, index):
     n, m = shape
     graph = WeightedGraph(n * m, directed=False)
     distances = numpy.hypot(*tform.matrix)
-    for j in range(n):
-        for i in range(m - 1):
-            vertex = index[j * m + i]
-            neighbor = index[j * m + i + 1]
-            graph.add_edge((vertex, neighbor), distances[0])
     for j in range(n - 1):
         for i in range(m):
             vertex = index[j * m + i]
             neighbor = index[(j + 1) * m + i]
+            graph.add_edge((vertex, neighbor), distances[0])
+    for j in range(n):
+        for i in range(m - 1):
+            vertex = index[j * m + i]
+            neighbor = index[j * m + i + 1]
             graph.add_edge((vertex, neighbor), distances[1])
     return graph
 
@@ -260,9 +269,9 @@ class NearestNeighborGraphTest(unittest.TestCase):
                     shuffle = self._rng.permutation(n * m)
                     index = numpy.argsort(shuffle)
                     tform = random_affine_transform(self._rng)
-                    xy = tform.apply(unit_gridpoints(shape, mode="xy")[shuffle])
+                    ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])
                     graph = unit_gridpoints_graph(shape, tform, index)
-                    out = nearest_neighbor_graph(xy)
+                    out = nearest_neighbor_graph(ji)
                     numpy.testing.assert_array_almost_equal(
                         graph.adjacency_matrix(), out.adjacency_matrix()
                     )
@@ -280,14 +289,14 @@ class NearestNeighborGraphTest(unittest.TestCase):
                     shuffle = self._rng.permutation(n * m)
                     index = numpy.argsort(shuffle)
                     tform = random_affine_transform(self._rng)
-                    xy = tform.apply(unit_gridpoints(shape, mode="xy")[shuffle])[:-1]
+                    ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])[:-1]
                     _graph = unit_gridpoints_graph(shape, tform, index)
                     vertex = n * m - 1
                     # To prevent a RuntimeError loop over a copy
                     for neighbor in _graph[vertex].copy():
                         _graph.remove_edge((vertex, neighbor))
                     graph = _graph[:-1]
-                    out = nearest_neighbor_graph(xy)
+                    out = nearest_neighbor_graph(ji)
                     numpy.testing.assert_array_almost_equal(
                         graph.adjacency_matrix(), out.adjacency_matrix()
                     )
@@ -303,20 +312,25 @@ class CanonicalMatrixFormTest(unittest.TestCase):
     def test_identity(self):
         """
         Given one of the symmetrical versions of the canonical grid
-        `_canonical_matrix_form()` should return the identity matrix.
+        `_canonical_matrix_form()` should return the permutation to
+        transform it into the identity matrix.
 
         """
-        for matrix in [
-            [(1, 0), (0, 1)],
-            [(0, 1), (-1, 0)],
-            [(-1, 0), (0, -1)],
-            [(0, -1), (1, 0)],
-            [(0, 1), (1, 0)],
-            [(-1, 0), (0, 1)],
-            [(0, -1), (-1, 0)],
-            [(1, 0), (0, -1)],
-        ]:
-            out = _canonical_matrix_form(matrix)
+        for matrix in map(
+            numpy.array,
+            [
+                [(1, 0), (0, 1)],
+                [(0, 1), (-1, 0)],
+                [(-1, 0), (0, -1)],
+                [(0, -1), (1, 0)],
+                [(0, 1), (1, 0)],
+                [(-1, 0), (0, 1)],
+                [(0, -1), (-1, 0)],
+                [(1, 0), (0, -1)],
+            ],
+        ):
+            sign, perm = _canonical_matrix_form(matrix)
+            out = sign * matrix[:, perm]
             numpy.testing.assert_array_almost_equal(out, numpy.eye(2))
 
     def test_random_input(self):
@@ -329,7 +343,8 @@ class CanonicalMatrixFormTest(unittest.TestCase):
         for i in range(50):
             matrix = self._rng.standard_normal((2, 2))
             with self.subTest(matrix=matrix, i=i):
-                matrix = _canonical_matrix_form(matrix)
+                sign, perm = _canonical_matrix_form(matrix)
+                matrix = sign * matrix[:, perm]
                 tform = AffineTransform(matrix)
                 self.assertGreater(numpy.linalg.det(matrix), 0)
                 self.assertGreater(tform.rotation, -0.25 * numpy.pi)
@@ -347,15 +362,20 @@ class CanonicalMatrixFormTest(unittest.TestCase):
             if numpy.linalg.det(matrix) < 0:
                 matrix = numpy.fliplr(matrix)
             with self.subTest(matrix=matrix, i=i):
+                sign, perm = _canonical_matrix_form(matrix)
                 tform1 = AffineTransform(matrix)
-                tform2 = AffineTransform(_canonical_matrix_form(matrix))
+                tform2 = AffineTransform(sign * matrix[:, perm])
                 delta = tform2.rotation - tform1.rotation
                 n = int(round(delta / (0.5 * numpy.pi)))
                 self.assertAlmostEqual(delta - n * 0.5 * numpy.pi, 0)
 
 
 class EstimateGridOrientationTest(unittest.TestCase):
-    """Unittest for `estimate_grid_orientation()`."""
+    """
+    Unittest for `estimate_grid_orientation() and
+    `estimate_grid_orientation_from_img()`.
+
+    """
 
     def setUp(self):
         """Ensure reproducible tests."""
@@ -373,8 +393,8 @@ class EstimateGridOrientationTest(unittest.TestCase):
                     n, m = shape
                     shuffle = self._rng.permutation(n * m)
                     tform = random_affine_transform(self._rng)
-                    xy = tform.apply(unit_gridpoints(shape, mode="xy")[shuffle])
-                    out = estimate_grid_orientation(xy, shape, AffineTransform)
+                    ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])
+                    out = estimate_grid_orientation(ji, shape, AffineTransform)
                     numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
                     numpy.testing.assert_array_almost_equal(
                         tform.translation, out.translation
@@ -392,12 +412,33 @@ class EstimateGridOrientationTest(unittest.TestCase):
                     n, m = shape
                     shuffle = self._rng.permutation(n * m)
                     tform = random_affine_transform(self._rng)
-                    xy = tform.apply(unit_gridpoints(shape, mode="xy")[shuffle])[:-1]
-                    out = estimate_grid_orientation(xy, shape, AffineTransform)
+                    ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])[:-1]
+                    out = estimate_grid_orientation(ji, shape, AffineTransform)
                     numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
                     numpy.testing.assert_array_almost_equal(
                         tform.translation, out.translation
                     )
+
+    def test_from_img(self):
+        """
+        `estimate_grid_orientation_from_img()` should return the expected
+        AffineTransform for a generated test image containing a grid of points.
+
+        """
+        shape = (8, 8)
+        tform = AffineTransform(
+            matrix=numpy.array([(33, -3), (5, 41)]),
+            translation=numpy.array([770, 1030]),
+        )
+        ji = tform.apply(unit_gridpoints(shape, mode="ji"))
+
+        # Generate a test image containing the grid of points
+        sigma = 1.45
+        image = synthetic.psf_gaussian((1542, 2056), ji, sigma)
+
+        out = estimate_grid_orientation_from_img(image, shape, AffineTransform, sigma)
+        numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
+        numpy.testing.assert_array_almost_equal(tform.translation, out.translation)
 
 
 if __name__ == "__main__":
