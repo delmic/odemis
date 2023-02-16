@@ -294,7 +294,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.stage.moveAbs({'x': 0, 'y': 0}).result()
         future = acquireTiledArea(self.fm_streams, self.stage, area=area, overlap=overlap,
                                   settings_obs=settings_obs, weaver=WEAVER_COLLAGE_REVERSE,
-                                  focusing_method=FocusingMethod.ON_LOW_FOCUS_LEVEL)
+                                  focusing_method=FocusingMethod.ON_LOW_FOCUS_LEVEL, focus_points=focus_points)
         data = future.result()
         self.assertTrue(future.done())
         self.assertEqual(len(data), 2)
@@ -310,6 +310,88 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.assertEqual(len(data), 1)
         self.assertIsInstance(data[0], model.DataArray)
         self.assertEqual(len(data[0].shape), 2)
+
+    def test_refocus(self):
+        """Test the refocus function which provides the z levels for the zstack."""
+        area = (-0.001, -0.001, 0.001, 0.001)
+        overlap = 0.2
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=area, overlap=overlap, future=model.InstantaneousFuture())
+        focus_range = tiled_acq_task._focus_stream.focuser.getMetadata()[model.MD_POS_ACTIVE_RANGE]
+        axis_range = tiled_acq_task._focus_stream.focuser.axes['z'].range
+        zmin = max(min(axis_range), min(focus_range))
+        zmax = min(max(axis_range), max(focus_range))
+        # Test the min and max range of the zstack
+        tiled_acq_task._refocus()
+        self.assertGreaterEqual(tiled_acq_task._zlevels[0], zmin)
+        self.assertLessEqual(tiled_acq_task._zlevels[-1], zmax)
+
+    def test_get_z_on_focus_plane(self):
+        """Test the function that calculates the z position on the focus plane."""
+        area = (-0.001, -0.001, 0.001, 0.001)
+        overlap = 0.2
+
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=area, overlap=overlap, future=model.InstantaneousFuture())
+        # Test a point that is on the plane
+        x = 0
+        y = 0
+        z = tiled_acq_task._get_z_on_focus_plane(x, y)
+        self.assertEqual(z, tiled_acq_task._focus_plane["gamma"])
+
+        # Test a point that is not on the plane
+        x = 0.0001
+        y = 0.0001
+        z = tiled_acq_task._get_z_on_focus_plane(x, y)
+        self.assertNotEqual(z, tiled_acq_task._focus_plane["gamma"])
+
+    def test_get_triangulated_focus_point(self):
+        """Test the function that calculates the z position of a point in the focus plane."""
+        n_tiles = (3, 3)
+        overlap = 0.2
+        area = (-0.001, -0.001, 0.001, 0.001)
+
+        # Assumes the stage is referenced
+        init_pos = (self.stage.position.value["x"], self.stage.position.value["y"])
+        width, height = self.ccd.shape[:2]
+        px_size = self.ccd.getMetadata().get(model.MD_PIXEL_SIZE)
+
+        xmin = init_pos[0] - (1 - overlap) * n_tiles[0] / 2 * px_size[0] * width
+        ymin = init_pos[1] - (1 - overlap) * n_tiles[1] / 2 * px_size[1] * height
+        xmax = init_pos[0] + (1 - overlap) * n_tiles[0] / 2 * px_size[0] * width
+        ymax = init_pos[1] + (1 - overlap) * n_tiles[1] / 2 * px_size[1] * height
+
+        # create mesh of 9 points with above coordinates separated by n_tiles
+        x = numpy.linspace(xmin, xmax, n_tiles[0])
+        y = numpy.linspace(ymin, ymax, n_tiles[1])
+        xv, yv = numpy.meshgrid(x, y)
+        # create a list of coordinates from above
+        point_2d = numpy.vstack((xv.flatten(), yv.flatten())).T
+
+        focus_points = [[-0.00019889999999999998, -0.0001485167330631956, 2.5185183e-05],
+                        [0.0, -0.0001485167330631956, -1.8148142e-05],
+                        [0.00019889999999999998, -0.0001485167330631956, -3.382517e-06],
+                        [-0.00019889999999999998, 0.0, 1.3804983e-05],
+                        [0.0, 0.0, 2.320607e-06], [0.00019889999999999998, 0.0, 3e-05],
+                        [-0.00019889999999999998, 0.0001485167330631956, -1.78125e-05],
+                        [0.0, 0.0001485167330631956, -8.124999e-06],
+                        [0.00019889999999999998, 0.0001485167330631956, 4.765627e-06]]
+        # don't know if area and focus points are related
+        tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                              area=area, overlap=overlap,
+                                              future=model.InstantaneousFuture(), focus_points=focus_points)
+
+        # Test a point which is inside the triangulation area
+        point_inside = focus_points[0]
+        z = tiled_acq_task._get_triangulated_focus_point(point_inside[0], point_inside[1])
+        self.assertEqual(z, point_inside[2])
+
+        # Test a point which is outside the triangulation area
+        point_outside = focus_points[0] - (focus_points[1] - focus_points[0])
+        z = tiled_acq_task._get_triangulated_focus_point(point_outside[0], point_outside[1])
+        z_expected = tiled_acq_task._get_z_on_focus_plane(point_outside[0], point_outside[1])
+        self.assertEqual(z, z_expected)
+
 
     def test_always_focusing_method(self):
         """
