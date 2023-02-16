@@ -488,7 +488,7 @@ class AndorCam2(model.DigitalCamera):
     It also provide low-level methods corresponding to the SDK functions.
     """
 
-    def __init__(self, name, role, device=None, emgains=None, shutter_times=None,
+    def __init__(self, name, role, device, emgains=None, shutter_times=None,
                  hw_trigger_invert=False,
                  image=None, sw_trigger=None, **kwargs):
         """
@@ -529,7 +529,9 @@ class AndorCam2(model.DigitalCamera):
             self.atcore = AndorV2DLL()
 
         self._andor_capabilities = None # cached value of GetCapabilities()
-        self.temp_timer = None
+        self.temp_timer = None  # RepeatingTimer or None
+        self._acq_thread = None  # Thread or None
+
         if device is None:
             logging.info("AndorCam2 started in system mode, no actual camera connection")
             # nothing else to initialise
@@ -822,7 +824,6 @@ class AndorCam2(model.DigitalCamera):
                                                   "AndorCam2 temperature update")
             self.temp_timer.start()
 
-            self._acq_thread = None  # Thread or None
             # Queue to control the acquisition thread
             self._genmsg = queue.Queue()  # GEN_* or float
             # Queue of all synchronization events received (typically max len 1)
@@ -2074,6 +2075,7 @@ class AndorCam2(model.DigitalCamera):
         self._metadata[model.MD_EXP_TIME] = exposure
         readout = im_res[0] * im_res[1] * self._metadata[model.MD_READOUT_TIME] # s
         # accumulate should be approximately same as exposure + readout => play safe
+        # TODO: check if that includes the shutter time (can be 2 x 50 ms per frame!): kinetic?
         duration = max(accumulate, exposure + readout)
         self.frameDuration._set_value(duration, force_write=True)
 
@@ -2634,7 +2636,7 @@ class AndorCam2(model.DigitalCamera):
         if _fake:
             camera = AndorCam2("System", "bus", device="fakesys")
         else:
-            camera = AndorCam2("System", "bus")
+            camera = AndorCam2("System", "bus", device=None)
         dc = camera.GetAvailableCameras()
         logging.debug("found %d devices.", dc)
 
