@@ -48,19 +48,19 @@ try:
     fastem_calibrations = True
 except ImportError as err:
     logging.info("fastem_calibrations package not found with error: {}".format(err))
-    autofocus_multiprobe = None
-    scan_rotation_pre_align = None
-    descan_gain = None
-    scan_amplitude_pre_align = None
-    image_rotation_pre_align = None
-    image_translation_pre_align = None
-    image_rotation = None
-    image_translation = None
-    dark_offset_correction = None
-    digital_gain_correction = None
-    scan_rotation = None
-    scan_amplitude = None
-    cell_translation = None
+    AutofocusMultiprobe = None
+    ScanRotationPreAlign = None
+    DescanGain = None
+    ScanAmplitudePreAlign = None
+    ImageRotationPreAlign = None
+    ImageTranslationPreAlign = None
+    ImageRotation = None
+    ImageTranslation = None
+    DarkOffsetCorrection = None
+    DigitalGainCorrection = None
+    ScanRotation = None
+    ScanAmplitude = None
+    CellTranslation = None
 
     fastem_calibrations = False
 
