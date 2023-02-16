@@ -460,7 +460,7 @@ def _enumerate_grid(
 
 def estimate_grid_orientation(
     ji: numpy.ndarray, shape: Tuple[int, int], transform_type: Type[T]
-) -> T:
+) -> Tuple[T, float]:
     """
     Estimate the orientation of a square grid of points.
 
@@ -478,6 +478,8 @@ def estimate_grid_orientation(
     -------
     tform : instance of `transform_type`
         The orientation of the pattern.
+    error_metric : float
+        The RMS value of the fiducial error registration of the square grid compared to ji.
 
     """
     if shape[0] != shape[1]:
@@ -488,7 +490,9 @@ def estimate_grid_orientation(
     _, labels, distances = _cluster_edges(graph)
     nodes = _enumerate_grid(graph, labels, distances, shape)
     grid = unit_gridpoints(shape, mode="ji")
-    return transform_type.from_pointset(grid[nodes], ji)
+    tform = transform_type.from_pointset(grid[nodes], ji)
+    error_metric = tform.fre(grid[nodes], ji)
+    return tform, error_metric
 
 
 def estimate_grid_orientation_from_img(
@@ -499,7 +503,7 @@ def estimate_grid_orientation_from_img(
     threshold_abs: Optional[float] = None,
     threshold_rel: Optional[float] = None,
     num_spots: Optional[int] = None,
-) -> T:
+) -> Tuple[T, float]:
     """
     Image based estimation of the orientation of a square grid of points.
 
@@ -531,6 +535,9 @@ def estimate_grid_orientation_from_img(
     -------
     tform : instance of `transform_type`
         The orientation of the pattern.
+    error_metric : float
+        The RMS value of the fiducial error registration of the square grid
+        compared to the spots measured on the image.
 
     """
     if num_spots is None:

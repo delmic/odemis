@@ -394,11 +394,12 @@ class EstimateGridOrientationTest(unittest.TestCase):
                     shuffle = self._rng.permutation(n * m)
                     tform = random_affine_transform(self._rng)
                     ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])
-                    out = estimate_grid_orientation(ji, shape, AffineTransform)
+                    out, error_metric = estimate_grid_orientation(ji, shape, AffineTransform)
                     numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
                     numpy.testing.assert_array_almost_equal(
                         tform.translation, out.translation
                     )
+                    self.assertAlmostEqual(error_metric, 0.0)
 
     def test_incomplete_grid(self):
         """
@@ -413,11 +414,29 @@ class EstimateGridOrientationTest(unittest.TestCase):
                     shuffle = self._rng.permutation(n * m)
                     tform = random_affine_transform(self._rng)
                     ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])[:-1]
-                    out = estimate_grid_orientation(ji, shape, AffineTransform)
+                    out, error_metric = estimate_grid_orientation(ji, shape, AffineTransform)
                     numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
                     numpy.testing.assert_array_almost_equal(
                         tform.translation, out.translation
                     )
+                    self.assertAlmostEqual(error_metric, 0.0)
+
+    def test_grid_with_error(self):
+        """
+        `estimate_grid_orientation()` should return the expected
+        AffineTransform for a grid with one point in a different location.
+
+        """
+        for shape in [(5, 5), (8, 8)]:
+            for i in range(50):
+                with self.subTest(shape=shape, i=i):
+                    n, m = shape
+                    shuffle = self._rng.permutation(n * m)
+                    tform = random_affine_transform(self._rng)
+                    ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])
+                    ji[-1] += 0.2
+                    out, error_metric = estimate_grid_orientation(ji, shape, AffineTransform)
+                    self.assertGreater(error_metric, 0.01)
 
     def test_from_img(self):
         """
@@ -436,9 +455,10 @@ class EstimateGridOrientationTest(unittest.TestCase):
         sigma = 1.45
         image = synthetic.psf_gaussian((1542, 2056), ji, sigma)
 
-        out = estimate_grid_orientation_from_img(image, shape, AffineTransform, sigma)
+        out, error_metric = estimate_grid_orientation_from_img(image, shape, AffineTransform, sigma)
         numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
         numpy.testing.assert_array_almost_equal(tform.translation, out.translation)
+        self.assertAlmostEqual(error_metric, 0.0)
 
 
 if __name__ == "__main__":
