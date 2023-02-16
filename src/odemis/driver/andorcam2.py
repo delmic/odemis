@@ -973,13 +973,13 @@ class AndorCam2(model.DigitalCamera):
             # contains the cameras firmware.
             possibilities = ["/usr/etc/andor", "/usr/local/etc/andor"]
             try:
-                f = open("/etc/andor/andor.install")
-                # only read the first non empty line
-                for l in f.readlines():
-                    if not l:
-                        continue
-                    possibilities.insert(0, l.strip() + "/etc/andor")
-                    break
+                with open("/etc/andor/andor.install") as f:
+                    # only read the first non empty line
+                    for l in f.readlines():
+                        if not l:
+                            continue
+                        possibilities.insert(0, l.strip() + "/etc/andor")
+                        break
             except IOError:
                 pass
 
@@ -1155,8 +1155,8 @@ class AndorCam2(model.DigitalCamera):
         try:
             self.atcore.IsTriggerModeAvailable(tmode)
         except AndorV2Error as ex:  # DRV_NOT_INITIALIZED or DRV_INVALID_MODE
-            logging.warning("Trigger mode %s not supported with current settings, falling back to slow implementation: %s",
-                            tmode, ex)
+            logging.info("Trigger mode %s not supported with current settings: %s",
+                         tmode, ex)
             return False
 
         return True
@@ -1910,6 +1910,7 @@ class AndorCam2(model.DigitalCamera):
                 if self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE):
                     trigger_mode = TRIG_SW
                 else:
+                    logging.info("Software trigger mode not supported with current settings, falling back to slow implementation")
                     trigger_mode = TRIG_FAKE
             else:
                 # Fake software trigger by acquiring a single image at a time
@@ -2083,8 +2084,11 @@ class AndorCam2(model.DigitalCamera):
         # "some settings", so check one last time that it's really possible to use
         # software trigger. Or alternatively, maybe the previous settings didn't
         # allow software trigger, but the new ones do.
-        if synchronized and (trigger_mode == TRIG_SW) != self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE):
-            logging.debug("Reconfiguring trigger mode as its availability has changed")
+        if (self._supports_soft_trigger and synchronized and
+            (trigger_mode == TRIG_SW) != self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE)
+           ):
+            logging.debug("Reconfiguring trigger mode as its availability has changed (readout rate = %s, gain = %s)",
+                          self._readout_rate, self._gain)
             trigger_mode = self._configure_trigger_mode(synchronized)
 
         self._prev_settings = [new_image_settings, self._exposure_time,
