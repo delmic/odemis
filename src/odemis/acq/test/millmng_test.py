@@ -39,7 +39,7 @@ from odemis.util import testing
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
-TEST_NOHW = os.environ.get("TEST_NOHW", "1")  # Default to simulation
+TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to simulation
 
 if TEST_NOHW == "0":
     TEST_NOHW = False
@@ -51,11 +51,11 @@ else:
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
 
-# MIMAS_CONFIG="/home/dev/development/odemis/install/linux/usr/share/odemis/sim/mimas-orsay-sim.odm.yaml"
 
 def fake_do_milling(self):
     # time.sleep(self.duration * self.iteration)
     time.sleep(1)
+
 
 class MillingManagerTestCase(unittest.TestCase):
 
@@ -75,31 +75,15 @@ class MillingManagerTestCase(unittest.TestCase):
         cls.stage = model.getComponent(role="stage")
         cls.aligner = model.getComponent(role="align")
 
-        # Assumes the stage is already referenced and the lens is retracted for FIB imaging
-        # Make sure the lens is referenced
-        # cls.focus.reference({'z'}).result()
-        # The 5DoF stage is not referenced automatically, so let's do it now
-        # stage_axes = set(cls.stage.axes.keys())
-        # cls.stage.reference(stage_axes).result()
-
-        # FIB stream is not supported
-        # Create 1 FIB stream (no focus) and 1 FM streams (with focus) to be used in testing
-        # ss1 = stream.FIBStream("sem1", cls.sed, cls.sed.data, cls.ion_beam,
-        #                        emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
 
         cls.ccd.exposureTime.value = 0.1  # s, go fast (but not too fast, to still get some signal)
         # opm = acq.path.OpticalPathManager(model.getMicroscope())  # TODO ensures that the align lens is active and stage tilt is 0°
         fs1 = stream.FluoStream("fluo1", cls.ccd, cls.ccd.data,
                                 cls.light, cls.light_filter, focuser=cls.focus)
         fs1.excitation.value = sorted(fs1.excitation.choices)[0]
-        #
-        # fs2 = stream.FluoStream("fluo2", cls.ccd, cls.ccd.data,
-        #                         cls.light, cls.light_filter, focuser=cls.focus)
-        # fs2.excitation.value = sorted(fs2.excitation.choices)[-1]
-        # cls.fib_streams = [ss1]
+
         cls.acq_streams = [fs1]
 
-        #     millings = load_config(config_filename_rect1)
         current_stage_pos = cls.stage.position.value
         logging.debug("current stage position %s", current_stage_pos)
 
@@ -107,17 +91,16 @@ class MillingManagerTestCase(unittest.TestCase):
                              "y": current_stage_pos["y"],
                              "z": current_stage_pos["z"]}
 
-        target_position_2 = {"x": current_stage_pos["x"] - 15e-06,  # vertical shift in downward direction
-                             "y": current_stage_pos["y"] + 15e-06,  # horizontal shift in right direction
+        target_position_2 = {"x": current_stage_pos["x"] - 15e-06,  # horizontal stage move in left direction
+                             "y": current_stage_pos["y"] + 15e-06,  # vertical stage move in upward direction
                              "z": current_stage_pos["z"]}
 
         cls.target_position = [target_position_1, target_position_2]
 
-        #TODO remove the below comment
-
-        # cls.beam_angle = cls.stage.getMetadata()[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
-        cls.beam_angle = math.radians(6)
-
+        try:
+            cls.beam_angle = cls.stage.getMetadata()[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
+        except KeyError:
+            raise ValueError("The stage is missing an ION_BEAM_TO_SAMPLE_ANGLE metadata.")
 
         cls.sites = []
         for i in range(0, len(cls.target_position)):
@@ -127,7 +110,7 @@ class MillingManagerTestCase(unittest.TestCase):
 
         cls.feature_post_status = FEATURE_ROUGH_MILLED
 
-        # todo put a test case with different drift correction current
+        # todo support different drift correction current than the milling current in milling manager
 
     @classmethod
     def tearDownClass(cls):
@@ -141,12 +124,14 @@ class MillingManagerTestCase(unittest.TestCase):
         # A. No Drift
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=120,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=120,
                                             dc_roi=UNDEFINED_ROI, dc_period=60, dc_dwell_time=10e-6, dc_current=20e-12)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=120,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=120,
                                             dc_roi=UNDEFINED_ROI, dc_period=60, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
@@ -168,7 +153,8 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=20,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=20,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
         self.assertTrue(milling_setting_1.name.value, "rough_milling_1")
@@ -191,12 +177,14 @@ class MillingManagerTestCase(unittest.TestCase):
         # A. No Drift
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=20,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=20,
                                             dc_roi=UNDEFINED_ROI, dc_period=10, dc_dwell_time=10e-6, dc_current=20e-12)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=20,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=20,
                                             dc_roi=UNDEFINED_ROI, dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
@@ -223,13 +211,15 @@ class MillingManagerTestCase(unittest.TestCase):
         # B. With Drift
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=20,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=20,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=20,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=20,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
@@ -242,9 +232,11 @@ class MillingManagerTestCase(unittest.TestCase):
         # Time estimate in the beginning
         time_estimated = task.estimate_milling_time(site_idx=0)
         drift_estimation_1 = AnchoredEstimator(self.ion_beam, self.sed,
-                                               milling_setting_1.dcRoi.value, milling_setting_1.dcDwellTime.value, max_pixels=512 ** 2, follow_drift=False)
+                                               milling_setting_1.dcRoi.value, milling_setting_1.dcDwellTime.value,
+                                               max_pixels=512 ** 2, follow_drift=False)
         drift_estimation_2 = AnchoredEstimator(self.ion_beam, self.sed,
-                                               milling_setting_2.dcRoi.value, milling_setting_2.dcDwellTime.value, max_pixels=512 ** 2, follow_drift=False)
+                                               milling_setting_2.dcRoi.value, milling_setting_2.dcDwellTime.value,
+                                               max_pixels=512 ** 2, follow_drift=False)
         min_drift_time = drift_estimation_1.estimateAcquisitionTime() + drift_estimation_2.estimateAcquisitionTime()
 
         total_time_with_drift = milling_setting_1.duration.value + milling_setting_2.duration.value + min_drift_time
@@ -264,13 +256,15 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.2, 0.4, 0.3, 0.6),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=60,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=60,
                                             dc_roi=UNDEFINED_ROI, dc_period=20, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.6),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=60,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=60,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=35, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
@@ -286,10 +280,8 @@ class MillingManagerTestCase(unittest.TestCase):
                                self.sed, self.stage, self.aligner)
             f1.result()
 
-
         # listen to the stage position
         testing.assert_pos_almost_equal(self.stage.position.value, self.target_position[1], match_all=False, atol=1e-5)
-
 
     @patch.object(odemis.acq.orsay_milling.OrsayMilling, 'do_milling', fake_do_milling)
     def test_cancel(self):
@@ -302,13 +294,15 @@ class MillingManagerTestCase(unittest.TestCase):
         self.done = False
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=10,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=10,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=1, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle, duration=10,
+                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            duration=10,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=1, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
