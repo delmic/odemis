@@ -242,3 +242,7 @@ class TestMilling(unittest.TestCase):
         self.assertTrue(f.cancelled())
         with self.assertRaises(futures.CancelledError):
             f.result()
+
+
+if __name__ == '__main__':
+    unittest.main()

@@ -122,7 +122,6 @@ class OrsayMilling:
         """
         Function that handles milling action
         """
-        # for now the ip address is hardcoded, it will be replaced with scanner.parent.host
         rect = self.rect
         iteration = self.iteration
         duration = self.duration
@@ -132,10 +131,16 @@ class OrsayMilling:
         server = _get_orsay_connection(self.scanner)
         miller = server.datamodel.HybridPatternCreator
         self.miller = miller
+        scanner = server.datamodel.HybridScanUnit
 
         try:
-            miller.MillingActivationState.Subscribe(self.on_milling_state)
+            miller.MillingActivationState.Subscribe(self.param_logger)
+            scanner.MillingStatus.Subscribe(self.param_logger)
+            # scanner.CurrentSubList.Subscribe(self.param_logger)
+            # scanner.CurrentMillingPoint.Subscribe(self.param_logger)  # Very verbose
 
+            # It is assumed that the self.scanner.shape is always square (eg 1024x1024)
+            # If not, the physical dimension of Y should be adjust proportionally.
             fov = self.scanner.horizontalFoV.value
 
             # the Y axes in odemis and orsay are inverted, that is why centerOfMassY is always inverted
@@ -146,8 +151,6 @@ class OrsayMilling:
                 obj_to_mill.primaryAxisX = 0
                 obj_to_mill.secondaryAxisLength = 0
             else:
-                # scanner.shape gives the resolution like 1024x1024
-                # it is assumed that the scanner.shape is always square
                 obj_to_mill = Rectangle()
                 obj_to_mill.primaryAxisOverlap = overlap[0]
                 obj_to_mill.secondaryAxisOverlap = overlap[1]
@@ -181,7 +184,13 @@ class OrsayMilling:
             # it is not allowed to use ':' character in the procedure names
             proc.name = f"Odemis rectangle milling {time.time()}"
 
+            prev_milling_pt = scanner.CurrentMillingPoint.Actual
+
+            if self.future.cancelled():
+                raise futures.CancelledError()
+
             # this is going the start the milling indirectly
+            # It unsubscribes by itself
             miller.ProcedureInfoSerialNumber.Subscribe(self.on_procedure_info)
 
             # send the procedure to the server.
@@ -189,29 +198,63 @@ class OrsayMilling:
             miller.SetCurrentProcedure(proc_string)
             logging.debug("Sending procedure with name %s, using FoV = %s m", proc_string, fov)
 
-            milling_activation_timeout = time.time() + 10
+            milling_activation_timeout = time.time() + 20  # s, it often takes ~7s, so be generous
             # wait for milling action to start
             while miller.MillingActivationState.Actual != '1':
+                if self.future.cancelled():
+                    raise futures.CancelledError()
+
                 time.sleep(0.1)
                 if time.time() > milling_activation_timeout:
                     raise TimeoutError("Milling failed to start up after trying for 10 seconds.")
 
-            logging.debug("Now milling a rectangle %sm by %sm during %s passes of %s seconds",
-                          obj_to_mill.primaryAxisX*2, obj_to_mill.secondaryAxisLength*2, iteration, duration)
+            milling_start_t = time.time()
+            milling_execution_timeout = milling_start_t + (duration * iteration) * 1.1 + 5
 
-            milling_execution_timeout = time.time() + duration * iteration + 5
+            # Make sure the milling is really started by verifying that the milling
+            # point changes (and it's not 0).
+            while scanner.CurrentMillingPoint.Actual in (prev_milling_pt, "0"):
+                if self.future.cancelled():
+                    raise futures.CancelledError()
+
+                time.sleep(0.1)
+                if time.time() > milling_activation_timeout:
+                    logging.debug("Current milling point = %s, milling state = %s",
+                                  scanner.CurrentMillingPoint.Actual,
+                                  miller.MillingActivationState.Actual)
+                    raise TimeoutError("Milling failed to start up after trying for 10 seconds.")
+
+            logging.debug("Now milling a rectangle %sm by %sm during %s passes of %s seconds",
+                          obj_to_mill.primaryAxisX * 2, obj_to_mill.secondaryAxisLength * 2, iteration, duration)
+
+            # Now wait until the milling is done (the miller will set the state target to 0 at the end)
+            while miller.MillingActivationState.Target != '0':
+                time.sleep(0.1)
+                if time.time() > milling_execution_timeout:
+                    raise TimeoutError(f"Milling operation timed out after {time.time() - milling_start_t}s.")
+
+            # Wait until it's actually stopped
             while miller.MillingActivationState.Actual != '0':
                 time.sleep(0.1)
                 if time.time() > milling_execution_timeout:
-                    raise TimeoutError("Milling operation timed out. Please check whether the milling is done correctly.")
+                    raise TimeoutError(f"Milling operation timed out after {time.time() - milling_start_t}s.")
+
+            milling_dur = time.time() - milling_start_t
+            if milling_dur < duration * iteration:
+                logging.warning("Milling completely only after %s s, while expected %s s",
+                                milling_dur, duration * iteration)
+            else:
+                logging.debug("Milling completed.")
+
             if self.future.cancelled():
                 raise futures.CancelledError()
-
-            logging.debug("Milling completed.")
-
-        # make sure the Unsubscribe is always called even if any exception happens
         finally:
-            miller.MillingActivationState.Unsubscribe(self.on_milling_state)
+            # make sure the Unsubscribe is always called even if any exception happens
+            miller.MillingActivationState.Unsubscribe(self.param_logger)
+            scanner.MillingStatus.Unsubscribe(self.param_logger)
+            # scanner.CurrentSubList.Unsubscribe(self.param_logger)
+            # scanner.CurrentMillingPoint.Unsubscribe(self.param_logger)
+
 
     def cancel_milling(self, future):
         """
@@ -225,22 +268,24 @@ class OrsayMilling:
 
         return True
 
-    def on_milling_state(self, attr, param):
+    def param_logger(self, param, attr: str):
         """
-        Reports whenever the milling state is changed/updated
-        or the milling state reaches the target value
+        Logs the change of an OrsayParameter
+        param (OrsayParameter): the parameter which is subscribed to
+        attr (str): the attribute that has changed
         """
-        if attr == 'Actual':
-            logging.debug('New milling state: ' + param.Actual)
+        # Reduce log
+        if attr not in ("Actual", "Target"):
+            return
 
-        if attr == 'AtTarget':
-            logging.debug('Milling state at target: ' + param.AtTarget)
+        logging.info("param %s.%s changed to %s", param.Name, attr, getattr(param, attr))
 
     # run the procedure which has been built from scratch
     def on_procedure_info(self, param, attr):
         """
         Called when a new milling procedure is loaded
         Starts the milling process when the procedure is loaded
+        Automatically unsubscribes from the Parameter
         """
         if attr == 'Actual':
             logging.debug('New active procedure (%s) : %s', param.Actual, self.miller.ActiveProcedureName.Target)
