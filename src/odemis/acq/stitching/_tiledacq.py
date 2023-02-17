@@ -17,13 +17,18 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from concurrent.futures import CancelledError, TimeoutError
-from concurrent.futures._base import RUNNING, FINISHED, CANCELLED
 import copy
-from enum import Enum
 import logging
 import math
+import os
+import threading
+import time
+from concurrent.futures import CancelledError, TimeoutError
+from concurrent.futures._base import RUNNING, FINISHED, CANCELLED
+from enum import Enum
+
 import numpy
+import psutil
 from scipy.spatial import Delaunay
 
 from odemis import model, dataio
@@ -34,14 +39,10 @@ from odemis.acq.stitching._simple import register, weave
 from odemis.acq.stream import Stream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
-from odemis.gui.util.raster import point_in_polygon
 from odemis.model import DataArray
 from odemis.util import dataio as udataio, img, linalg
 from odemis.util.img import assembleZCube
-import os
-import psutil
-import threading
-import time
+from odemis.util.raster import point_in_polygon
 
 # TODO: Find a value that works fine with common cases
 # Ratio of the allowed difference of tile focus from good focus

@@ -23,15 +23,17 @@ Created on 8 Feb 2012
 
 """
 
-from abc import abstractmethod
 import collections
-from concurrent.futures._base import CancelledError
-from functools import partial
 import logging
 import math
-import numpy
+from abc import abstractmethod
+from concurrent.futures._base import CancelledError
+from functools import partial
+
+import wx
+
 from odemis import gui, model, util
-from odemis.acq.stream import EMStream, SpectrumStream, \
+from odemis.acq.stream import SpectrumStream, \
     StaticStream, CLStream, FluoStream, \
     StaticFluoStream, Stream, DataProjection, POL_POSITIONS
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
@@ -44,12 +46,11 @@ from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN, CryoChamberGUIData
 from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
     release_mouse_on_drag
-from odemis.gui.util.raster import rasterize_line
 from odemis.model import MD_POL_DS0, MD_POL_DS1, MD_POL_DS2, MD_POL_DS3, MD_POL_S0, MD_POL_S1, \
     MD_POL_S2, MD_POL_S3, MD_POL_EX, MD_POL_EY, MD_POL_EZ, MD_POL_ETHETA, MD_POL_EPHI, MD_POL_DOLP, MD_POL_DOP, \
     MD_POL_DOCP, MD_POL_UP, MD_POL_DS1N, MD_POL_DS2N, MD_POL_DS3N, MD_POL_S3N, MD_POL_S2N, MD_POL_S1N
 from odemis.util import units, spectrum, peak
-import wx
+from odemis.util.raster import rasterize_line
 
 
 def get_original_stream(s_or_p):
