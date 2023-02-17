@@ -34,7 +34,6 @@ from odemis.acq.stitching._simple import register, weave
 from odemis.acq.stream import Stream, EMStream, ARStream, \
     SpectrumStream, FluoStream, MultipleDetectorStream, util, executeAsyncTask, \
     CLStream
-from odemis.gui import conf
 from odemis.gui.util.raster import point_in_polygon
 from odemis.model import DataArray
 from odemis.util import dataio as udataio, img, linalg
