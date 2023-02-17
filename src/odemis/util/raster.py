@@ -129,6 +129,9 @@ def point_in_polygon(p, polygon):
     p1x, p1y = polygon[0]
     for i in range(n+1):
         p2x, p2y = polygon[i % n]
+        # consider the case where the point is on the vertex of the polygon
+        if p2x == x and p2y == y:
+            return True
         if y > min(p1y, p2y):
             if y <= max(p1y, p2y):
                 if x <= max(p1x, p2x):

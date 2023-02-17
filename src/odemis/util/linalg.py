@@ -201,6 +201,8 @@ def get_point_on_plane(x: float, y: float, tr: tuple) -> float:
     :param tr: a triangle describing the plane
     :return: the z-position of the point
     """
+    # tuple conversion to array for easy artihmetic operations
+    tr = numpy.array(tr)
     # These two vectors are in the plane
     v1 = tr[2] - tr[0]
     v2 = tr[1] - tr[0]
@@ -209,3 +211,18 @@ def get_point_on_plane(x: float, y: float, tr: tuple) -> float:
     z = get_z_pos_on_plane(x, y, tr[1], normal)
 
     return z
+
+
+def are_collinear(p1: numpy.ndarray, p2: numpy.ndarray, p3: numpy.ndarray) -> bool:
+    """
+    Check if three points are collinear.
+    :param p1: x,y,z coordinates of the first point
+    :param p2: x,y,z coordinates of the second point
+    :param p3: x,y,z coordinates of the third point
+    :return:
+    """
+    # Calculate the area of the triangle formed by the three points
+    area = 0.5 * (p1[0] * (p2[1] - p3[1]) + p2[0] * (p3[1] - p1[1]) + p3[0] * (p1[1] - p2[1]))
+
+    # Check if the area is zero (within a tolerance)
+    return abs(area) < 1e-6

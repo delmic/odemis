@@ -26,18 +26,8 @@ from odemis.util import testing
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
-TEST_NOHW = os.environ.get("TEST_NOHW", "1")  # Default to simulation
-
-if TEST_NOHW == "0":
-    TEST_NOHW = False
-elif TEST_NOHW == "1":
-    TEST_NOHW = True
-else:
-    raise ValueError("Unknown value of environment variable TEST_NOHW=%s" % TEST_NOHW)
-
-# CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-# METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
-METEOR_CONFIG = "/home/dev/development/odemis/install/linux/usr/share/odemis/sim/meteor-sim.odm.yaml"
+CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
+METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 
 
 class RoiAutofocusTestCase(unittest.TestCase):
@@ -47,8 +37,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        if TEST_NOHW is True:
-            testing.start_backend(METEOR_CONFIG)
+        testing.start_backend(METEOR_CONFIG)
 
         # create some streams connected to the backend
         # cls.microscope = model.getMicroscope()
@@ -121,7 +110,8 @@ class RoiAutofocusTestCase(unittest.TestCase):
 
         bbox = (xmin, ymin, xmax, ymax)
 
-        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_tiles[0], n_tiles[1], 0) # TODO add proper confidence value
+        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_tiles[0], n_tiles[1],
+                             0)  # TODO add proper confidence value
 
         # Test cancelling of autofocus in roi
         time.sleep(2)

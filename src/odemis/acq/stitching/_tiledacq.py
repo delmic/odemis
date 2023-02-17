@@ -156,7 +156,7 @@ class TiledAcquisitionTask(object):
             self._init_zlevels = zlevels  # zlevels can be relative, therefore keep track of the initial zlevels
         else:
             self._zlevels = []
-            self._init_zlevels = zlevels  # zlevels can be relative, therefore keep track of the initial zlevels
+            self._init_zlevels = []  # zlevels can be relative, therefore keep track of the initial zlevels
 
         if len(self._zlevels) > 1 and focusing_method != FocusingMethod.MAX_INTENSITY_PROJECTION:
             raise NotImplementedError("Multiple zlevels currently only works with focusing method MAX_INTENSITY_PROJECTION")
@@ -664,9 +664,12 @@ class TiledAcquisitionTask(object):
             triangle = [self._focus_points[:, :2][simplex[0]],
                         self._focus_points[:, :2][simplex[1]],
                         self._focus_points[:, :2][simplex[2]]]
-            point_in_triangle = point_in_polygon([x, y], polygon=triangle)
-            if point_in_triangle:
-                break
+            # check if the triangle points are not in the same line
+            points_collinear = linalg.are_collinear(triangle[0], triangle[1], triangle[2])
+            if not points_collinear:
+                point_in_triangle = point_in_polygon([x, y], polygon=triangle)
+                if point_in_triangle:
+                    break
 
         if point_in_triangle is False:
             # TODO determine a better way for dealing with points outside of the focused area, for instance
@@ -697,7 +700,8 @@ class TiledAcquisitionTask(object):
         :returns (list(float) or None) zstack levels for zstack acquisition.
           return None if only one zstep is requested.
         """
-        if len(self._init_zlevels) == 1:
+        # When initial z level is one or None, use the current focus value
+        if len(self._init_zlevels) <= 1:
             return [focus_value, ]
 
         zlevels = self._init_zlevels + focus_value

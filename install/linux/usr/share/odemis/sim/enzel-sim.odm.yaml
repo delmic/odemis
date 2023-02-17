@@ -304,7 +304,8 @@ ENZEL-Sim: {
     axes_map: { "z": "z" },
   },
   metadata: {
-    FAV_POS_ACTIVE: { 'z': 0.002 }
+    FAV_POS_ACTIVE: { 'z': 0.002 },
+    POS_ACTIVE_RANGE: [ -0.003, 0.002 ] ,
   },
 }
 
