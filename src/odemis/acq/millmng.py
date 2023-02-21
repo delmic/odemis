@@ -8,6 +8,7 @@ Assumptions:
 """
 import logging
 import math
+import os
 import threading
 import time
 from concurrent import futures
@@ -20,10 +21,10 @@ from odemis import model
 from odemis.acq.acqmng import acquire
 from odemis.acq.drift import AnchoredEstimator
 from odemis.acq.orsay_milling import mill_rectangle
-
 from odemis.acq.feature import CryoFeature
 from odemis.acq.stitching._tiledacq import MOVE_SPEED_DEFAULT
 from odemis.acq.stream import UNDEFINED_ROI
+from odemis.dataio import find_fittest_converter
 from odemis.util import executeAsyncTask, dataio
 
 ANCHOR_MAX_PIXELS = 512 ** 2  # max number of pixels for the anchor region
@@ -40,7 +41,7 @@ class MillingSettings(object):
                  dc_roi, dc_period, dc_dwell_time, dc_current):
         """
        Settings class for milling a rectangle.
-       
+
        :param name: (str) name for the given milling setting
        :param current: (float) Probe current, as available in the presets, based on the preset naming. The ion beam current in A
        :param horizontal_fov:(float) width of the FoV when milling (to be set on the ion-beam settings), keep it fixed below 45um
@@ -54,20 +55,16 @@ class MillingSettings(object):
        :param dc_period: (float) time of milling before running the drift correction in s
        :param dc_dwell_time: (float) dwell time to be used during anchor region acquisition
        :param dc_current: (float) drift correction current
-       :return: 
+       :return:
        """
-        current_choices = {20e-12, 100e-12, 350e-12, 760e-12}
-        dwell_time_choices = {1e-6, 10e-6}  # for drift correction
-        self.name = model.StringVA(name)
-        self.current = model.FloatEnumerated(current, unit="A",
-                                             choices=current_choices)
         self.horizontalFoV = model.FloatContinuous(horizontal_fov, unit="m", range=(5e-06, 45e-06))
+        self.current = model.FloatContinuous(current, unit="A", range=(0.5e-12, 3000e-12))
+        self.name = model.StringVA(name)
         self.roi = model.TupleContinuous(roi,
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, float))
         self.pixelSize = model.VigilantAttribute(pixel_size, unit="m")
-        # angles ot of this range would be dangerous for the hardware
-        # and probably not useful for the user
+        # angles ot of this range would be dangerous for the hardware and probably not useful for the user
         self.beamAngle = model.FloatContinuous(beam_angle, unit="rad", range=(math.radians(6), math.radians(10)))
         self.duration = model.FloatVA(duration, unit="s")
         # drift correction settings
@@ -75,10 +72,8 @@ class MillingSettings(object):
                                            range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                            cls=(int, float))
         self.dcPeriod = model.FloatContinuous(dc_period, unit="s", range=(1, 180))
-        self.dcDwellTime = model.FloatEnumerated(dc_dwell_time, unit="s", choices=dwell_time_choices)
-        self.dcCurrent = model.FloatEnumerated(dc_current, unit="A",
-                                               choices=current_choices)
-
+        self.dcDwellTime = model.FloatContinuous(dc_dwell_time, unit="s", range=(1e-09, 1e-03))
+        self.dcCurrent = model.FloatContinuous(dc_current, unit="A", range=(0.5e-12, 1500e-12))
 
 def load_config(yaml_filename):
     """
@@ -96,47 +91,13 @@ def load_config(yaml_filename):
     return settings_dict
 
 
-def mill_features(millings: list, sites: list, feature_post_status, acq_streams, ebeam, sed, stage,
-                  aligner) -> futures.Future:
-    """
-    Mill features on the sample.
-    :param millings: (list of MillingSettings) Settings corresponding to each milling, to be milled in order
-    :param sites: (list of Features) Each Feature to be milled
-    :param feature_post_status: (str) value to set on the Feature at the end of a complete milling series
-    :param acq_streams: type of acquisition streams to be used for milling
-    :param ebeam: model component for the scanner
-    :param sed: model component for the detector
-    :param stage: model component for the stage
-    :param aligner: model component for the objective
-    :return: ProgressiveFuture
-    """
-    # Create a progressive future with running sub future
-    future = model.ProgressiveFuture()
-    future.running_subf = model.InstantaneousFuture()
-    future._task_lock = threading.Lock()
-    # create acquisition task
-    milling_task = MillingRectangleTask(future, millings, sites, feature_post_status, acq_streams, ebeam, sed, stage,
-                                        aligner)
-    # add the ability of cancelling the future during execution
-    future.task_canceller = milling_task.cancel
-
-    # set the progress of the future
-    total_duration = milling_task.estimate_milling_time()
-    future.set_end_time(time.time() + total_duration)
-
-    # assign the acquisition task to the future
-    executeAsyncTask(future, milling_task.run)
-
-    return future
-
-
 class MillingRectangleTask(object):
     """
     This class represents a milling Task for milling rectangular regions on the sample.
     """
 
     def __init__(self, future: futures.Future, millings: list, sites: list, feature_post_status: str, acq_streams,
-                 ebeam, sed, stage, aligner):
+                 ebeam, sed, stage, aligner, log_path=None):
         """
         Constructor
         :param future: (ProgressiveFuture) the future that will be executing the task
@@ -147,6 +108,8 @@ class MillingRectangleTask(object):
         :param ebeam: model component for the scanner
         :param sed: model component for the detector
         :param stage: model component for the stage
+        :param aligner: model component for the aligner
+        :param log_path: (str) path to the log anchor region acquisition used in drift correction
         """
         self._stage = stage
         self._scanner = ebeam
@@ -158,6 +121,15 @@ class MillingRectangleTask(object):
         self._feature_status = feature_post_status  # site and feature means the same
         self.sites = sites
         self.streams = acq_streams
+
+        self._log_path = log_path
+        if log_path:
+            filename = os.path.basename(self._log_path)
+            if not filename:
+                raise ValueError("Filename is not found on log path.")
+            self._exporter = find_fittest_converter(filename)
+            self._fn_bs, self._fn_ext = dataio.splitext(filename)
+            self._log_dir = os.path.dirname(self._log_path)
 
         # internal class requirements between functions
         self._pass_duration = []  # one value per milling setting, duration(s) after which drift acquisition starts
@@ -188,8 +160,10 @@ class MillingRectangleTask(object):
                 self._iterations.append(int(1))
                 self._pass_duration.append(setting.duration.value)
 
+        prev_stage_pos_ref = None  # previous stage position used for reference in estimating time
         for site in self.sites:
-            stage_time += self.estimate_stage_movement_time(site)
+            stage_time += self.estimate_stage_movement_time(site, prev_stage_pos_ref)
+            prev_stage_pos_ref = site.pos.value
 
         self._milling_time_estimate = time_estimate + drift_acq_time  # time_estimate per feature
         self._remaining_stage_time = stage_time  # total stage movement time
@@ -232,17 +206,20 @@ class MillingRectangleTask(object):
 
         return total_duration
 
-    def estimate_stage_movement_time(self, site: CryoFeature) -> float:
+    def estimate_stage_movement_time(self, site: CryoFeature, stage_pos_ref=None) -> float:
         """
         Estimation the time taken by the stage to move from current position to the location of given site
         :param site: (CryoFeature) consists X,Y,Z coordinates for stage location in m.
         :return: (float) time to move the stage between two points in s.
         """
         # current position from x,y,z of stage position and eliminating rx,ry,rz
-        current_pos = [p[1] for p in self._stage.position.value.items() if len(p[0]) == 1]
+        if stage_pos_ref is None:
+            current_pos = [p[1] for p in self._stage.position.value.items() if len(p[0]) == 1]
+        else:
+            current_pos = stage_pos_ref
         target_pos = site.pos.value  # list
         diff = [abs(target - current) for target, current in zip(target_pos, current_pos)]
-        stage_time = math.hypot(diff[0], diff[1], diff[2]) / self._move_speed
+        stage_time = math.sqrt(sum(d ** 2 for d in diff)) / self._move_speed
 
         return stage_time
 
@@ -252,15 +229,31 @@ class MillingRectangleTask(object):
         :param setting: (MillingSettings) milling settings
         return (float): estimated time to acquire 1 anchor area
         """
-        drift_acq_time = 0
         if setting.dcRoi.value == UNDEFINED_ROI:
             return 0
 
-        nb_anchor_scanning = math.ceil(setting.duration.value / setting.dcPeriod.value)  # repeat?
+        nb_anchor_scanning = math.ceil(setting.duration.value / setting.dcPeriod.value)
         drift_estimation = AnchoredEstimator(self._scanner, self._detector,
                                              setting.dcRoi.value, setting.dcDwellTime.value, ANCHOR_MAX_PIXELS,
                                              follow_drift=False)
         return drift_estimation.estimateAcquisitionTime() * nb_anchor_scanning
+
+    def _restore_beam_shift(self, current: float):
+        """
+        Restore the beam shift to previous shift after changing the beam current
+        :param current: New beam current
+        """
+        # check if scanner current is different from the one used for drift correction
+        if current != self._scanner.probeCurrent.value:
+            # store the scanner shift value used in previous current
+            previous_shift = self._scanner.shift.value
+            # set the scanner current to the one used for drift correction
+            self._scanner.probeCurrent.value = current
+            # previous and new current
+            logging.debug("Ion-beam current changed from %s to %s", self._scanner.probeCurrent.value,
+                          current)
+            # restore the scanner shift value
+            self._scanner.shift.value = previous_shift
 
     def _milling_setting_iterator(self, site: CryoFeature):
         """
@@ -278,18 +271,22 @@ class MillingRectangleTask(object):
             except TimeoutError:
                 logging.exception("Failed to tilt the stage for feature %s within %s s", site.name.value, t)
                 raise
-
-            # Configure current
-            self._scanner.probeCurrent.value = milling_settings.current.value
-
             # Configure HoV
             self._scanner.horizontalFoV.value = milling_settings.horizontalFoV.value
+
+            # Make the blanker automatic (ie, disabled when acquiring)
+            self._scanner.blanker.value = None
+
+            # set the milling current
+            self._restore_beam_shift(milling_settings.current.value)
 
             # Initialize the drift corrector only if it is requested by the user
             # max_pixels can change according to drift correction approach
             if milling_settings.dcRoi.value == UNDEFINED_ROI:
                 pass
             else:
+                # Change the current to the drift correction current and keep the beam shift value unchanged
+                self._restore_beam_shift(milling_settings.dcCurrent.value)
                 drift_est = AnchoredEstimator(self._scanner, self._detector,
                                               milling_settings.dcRoi.value,
                                               milling_settings.dcDwellTime.value,
@@ -298,6 +295,9 @@ class MillingRectangleTask(object):
                 drift_est.acquire()
                 da = drift_est.raw[-1]
                 pxs_anchor = da.metadata[model.MD_PIXEL_SIZE]
+                if self._log_path:
+                    fn = f"{self._fn_bs}-dc-{site.name.value}-{milling_settings.name.value}-0{self._fn_ext}"
+                    self._exporter.export(os.path.join(self._log_dir, fn), [da])
 
             # Compute the probe size and overlap, based on the requested pixel size
             # For the probe size, use the pixel size in the largest dimension (typically X)
@@ -323,9 +323,6 @@ class MillingRectangleTask(object):
             trans = [hori_t, vert_t]
 
             waiting_log_time = milling_settings.duration.value + self.estimate_drift_time(milling_settings)
-
-            # Make the blanker automatic (ie, disabled when acquiring)
-            self._scanner.blanker.value = None
 
             logging.debug(f"Milling setting: {milling_settings.name.value} for feature: {site.name.value}")
             logging.info(
@@ -353,6 +350,9 @@ class MillingRectangleTask(object):
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
 
+                    # restore the milling current
+                    self._restore_beam_shift(milling_settings.current.value)
+
                     self._future.running_subf = mill_rectangle(milling_settings.roi.value, self._scanner,
                                                                iteration=1,
                                                                duration=self._pass_duration[setting_nb],
@@ -365,6 +365,8 @@ class MillingRectangleTask(object):
                             f"Milling setting: {milling_settings.name.value} for feature: {site.name.value} at iteration: {itr} failed: {exp}")
                         raise
 
+                    # Change the current to the drift correction current and keep the beam shift value unchanged
+                    self._restore_beam_shift(milling_settings.dcCurrent.value)
                     # Acquire an image at the given location (RoI)
                     drift_est.acquire()
 
@@ -375,10 +377,12 @@ class MillingRectangleTask(object):
                     previous_shift = self._scanner.shift.value
                     logging.debug("Ion-beam shift in m : %s", previous_shift)
                     self._scanner.shift.value = (pxs_anchor[0] * drift_est.drift[0] + previous_shift[0],
-                                                 -(pxs_anchor[1] * drift_est.drift[1]) + previous_shift[
-                                                     1])  # shift in m - absolute position
+                                                 -(pxs_anchor[1] * drift_est.drift[1]) + previous_shift[1])  # shift in m - absolute position
                     logging.debug("New Ion-beam shift in m : %s", self._scanner.shift.value)
                     logging.debug("pixel size in m : %s", pxs_anchor)
+                    if self._log_path:
+                        fn = f"{self._fn_bs}-dc-{site.name.value}-{milling_settings.name.value}-{itr + 1}{self._fn_ext}"
+                        self._exporter.export(os.path.join(self._log_dir, fn), drift_est.raw[-1])
 
             self._scanner.blanker.value = True
 
@@ -388,8 +392,8 @@ class MillingRectangleTask(object):
     def _acquire_feature(self, site: CryoFeature) -> CryoFeature:
         """
         Acquire the data for the given feature.
-        :param site:
-        :return:
+        :param site: (CryoFeature) The feature to acquire.
+        :return: (CryoFeature) The feature with the acquired data.
         """
         data = []
         try:
@@ -415,7 +419,6 @@ class MillingRectangleTask(object):
             site.streams.value.extend(new_streams)
             logging.info("The acquisition for stream %s for feature %s is done", self.streams, site.name)
 
-        return site
 
     def run(self):
         """
@@ -472,7 +475,7 @@ class MillingRectangleTask(object):
                 logging.debug(f"The milling of feature {site.name.value} completed")
 
                 # Acquire the stream of milled site
-                site = self._acquire_feature(site)
+                self._acquire_feature(site)
 
                 # Store the actual time during milling one site computed after moving the stage
                 actual_time_per_site = time.time() - start_time
@@ -489,3 +492,36 @@ class MillingRectangleTask(object):
             # state that the future has finished
             with self._future._task_lock:
                 self._future._task_state = FINISHED
+
+def mill_features(millings: list, sites: list, feature_post_status, acq_streams, ebeam, sed, stage,
+                  aligner, log_path=None) -> futures.Future:
+    """
+    Mill features on the sample.
+    :param millings: (list of MillingSettings) Settings corresponding to each milling, to be milled in order
+    :param sites: (list of Features) Each Feature to be milled
+    :param feature_post_status: (str) value to set on the Feature at the end of a complete milling series
+    :param acq_streams: type of acquisition streams to be used for milling
+    :param ebeam: model component for the scanner
+    :param sed: model component for the detector
+    :param stage: model component for the stage
+    :param aligner: model component for the objective
+    :return: ProgressiveFuture
+    """
+    # Create a progressive future with running sub future
+    future = model.ProgressiveFuture()
+    future.running_subf = model.InstantaneousFuture()
+    future._task_lock = threading.Lock()
+    # create acquisition task
+    milling_task = MillingRectangleTask(future, millings, sites, feature_post_status, acq_streams, ebeam, sed, stage,
+                                        aligner, log_path)
+    # add the ability of cancelling the future during execution
+    future.task_canceller = milling_task.cancel
+
+    # set the progress of the future
+    total_duration = milling_task.estimate_milling_time()
+    future.set_end_time(time.time() + total_duration)
+
+    # assign the acquisition task to the future
+    executeAsyncTask(future, milling_task.run)
+
+    return future

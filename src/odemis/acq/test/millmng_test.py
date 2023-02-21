@@ -18,13 +18,11 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
-import math
 import os
-import threading
 import time
 import unittest
 from concurrent.futures._base import CancelledError
-from unittest.mock import MagicMock, patch
+from unittest.mock import patch
 
 import odemis
 from odemis import model
@@ -39,7 +37,7 @@ from odemis.util import testing
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
-TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to simulation
+TEST_NOHW = os.environ.get("TEST_NOHW", "1")  # Default to hardware testing
 
 if TEST_NOHW == "0":
     TEST_NOHW = False
@@ -54,7 +52,7 @@ MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
 
 def fake_do_milling(self):
     # time.sleep(self.duration * self.iteration)
-    time.sleep(1)
+    time.sleep(5)
 
 
 class MillingManagerTestCase(unittest.TestCase):
@@ -63,6 +61,8 @@ class MillingManagerTestCase(unittest.TestCase):
     def setUpClass(cls):
         if TEST_NOHW:
             testing.start_backend(MIMAS_CONFIG)
+            cls.patch_obj = patch.object(orsay_milling.OrsayMilling, 'do_milling', fake_do_milling)
+            cls.patch_obj.start()
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
@@ -74,7 +74,6 @@ class MillingManagerTestCase(unittest.TestCase):
         cls.light_filter = model.getComponent(role="filter")
         cls.stage = model.getComponent(role="stage")
         cls.aligner = model.getComponent(role="align")
-
 
         cls.ccd.exposureTime.value = 0.1  # s, go fast (but not too fast, to still get some signal)
         # opm = acq.path.OpticalPathManager(model.getMicroscope())  # TODO ensures that the align lens is active and stage tilt is 0°
@@ -91,8 +90,10 @@ class MillingManagerTestCase(unittest.TestCase):
                              "y": current_stage_pos["y"],
                              "z": current_stage_pos["z"]}
 
-        target_position_2 = {"x": current_stage_pos["x"] - 15e-06,  # horizontal stage move in left direction
-                             "y": current_stage_pos["y"] + 15e-06,  # vertical stage move in upward direction
+        target_position_2 = {"x": current_stage_pos["x"] - 15e-06,
+                             # -delta moves the horizontal stage in left direction
+                             "y": current_stage_pos["y"] + 15e-06,
+                             # +delta moves the vertical stage in upward direction
                              "z": current_stage_pos["z"]}
 
         cls.target_position = [target_position_1, target_position_2]
@@ -110,42 +111,18 @@ class MillingManagerTestCase(unittest.TestCase):
 
         cls.feature_post_status = FEATURE_ROUGH_MILLED
 
-        # todo support different drift correction current than the milling current in milling manager
+        # TODO support different drift correction current than the milling current in milling manager
 
     @classmethod
     def tearDownClass(cls):
         cls.stage.moveAbs(cls.target_position[0]).result()
+        if TEST_NOHW:
+            cls.patch_obj.stop()
+            # testing.stop_backend()
 
     def setUp(self):
         # reset to current stage position
         self.stage.moveAbs(self.target_position[0]).result()
-
-    def test_aligner_position(self):
-        # A. No Drift
-        milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
-                                            roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
-                                            duration=120,
-                                            dc_roi=UNDEFINED_ROI, dc_period=60, dc_dwell_time=10e-6, dc_current=20e-12)
-
-        milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
-                                            roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
-                                            duration=120,
-                                            dc_roi=UNDEFINED_ROI, dc_period=60, dc_dwell_time=10e-6,
-                                            dc_current=20e-12)
-
-        millings = [milling_setting_1, milling_setting_2]
-
-        task = MillingRectangleTask(model.InstantaneousFuture(), millings, self.sites, self.feature_post_status,
-                                    self.acq_streams, self.ion_beam,
-                                    self.sed, self.stage, self.aligner)
-
-        current_align_pos = self.aligner.position.value
-        aligner_md = self.aligner.getMetadata()
-        aligner_fib = aligner_md[model.MD_FAV_POS_DEACTIVE]
-        self.assertTrue(_isNearPosition(current_align_pos, aligner_fib, self.aligner.axes),
-                        "Lens is not retracted for FIB imaging")
 
     def test_milling_settings(self):
         """
@@ -172,7 +149,6 @@ class MillingManagerTestCase(unittest.TestCase):
     def test_estimate_milling_time(self):
         """
         Test the time estimation for time left in the milling process
-        :return:
         """
         # A. No Drift
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
@@ -248,42 +224,40 @@ class MillingManagerTestCase(unittest.TestCase):
         self.assertLessEqual(total_est_time_without_drift, total_est_time_with_drift,
                              "milling time with drift correction is less than milling time without drift correction")
 
-    @patch.object(odemis.acq.orsay_milling.OrsayMilling, 'do_milling', fake_do_milling)
     def test_whole_procedure(self):
         """
-        Test if the stage moved for all the requested sites
-        :return:
+        Test if the stage moved for all the requested sites and the milling procedure is executed correctly.
         """
-        milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
+        milling_setting_1 = MillingSettings(name='rough_milling_1', current=760e-12, horizontal_fov=35e-6,
                                             roi=(0.2, 0.4, 0.3, 0.6),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=60,
                                             dc_roi=UNDEFINED_ROI, dc_period=20, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
-        milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
+        milling_setting_2 = MillingSettings(name='rough_milling_2', current=760e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.6),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=60,
-                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=35, dc_dwell_time=10e-6,
-                                            dc_current=20e-12)
+                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=35, dc_dwell_time=1e-6,
+                                            dc_current=100e-12)
 
         millings = [milling_setting_1, milling_setting_2]
 
-        if TEST_NOHW is True:
+        f1 = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
+                           self.sed, self.stage, self.aligner)
+        f1.result()
 
-            f1 = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
-                               self.sed, self.stage, self.aligner)
-            f1.result()
-        else:
-            f1 = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
-                               self.sed, self.stage, self.aligner)
-            f1.result()
+        # check if the objective is retracted
+        current_align_pos = self.aligner.position.value
+        aligner_md = self.aligner.getMetadata()
+        aligner_fib = aligner_md[model.MD_FAV_POS_DEACTIVE]
+        self.assertTrue(_isNearPosition(current_align_pos, aligner_fib, self.aligner.axes),
+                        "Lens is not retracted for FIB imaging")
 
         # listen to the stage position
         testing.assert_pos_almost_equal(self.stage.position.value, self.target_position[1], match_all=False, atol=1e-5)
 
-    @patch.object(odemis.acq.orsay_milling.OrsayMilling, 'do_milling', fake_do_milling)
     def test_cancel(self):
         """
         Test cancelling of mill features function
@@ -292,38 +266,31 @@ class MillingManagerTestCase(unittest.TestCase):
         self.end = None
         self.updates = 0
         self.done = False
+
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
-                                            duration=10,
-                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=1, dc_dwell_time=10e-6,
+                                            duration=120,
+                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
-                                            duration=10,
-                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=1, dc_dwell_time=10e-6,
+                                            duration=120,
+                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=20e-12)
 
         millings = [milling_setting_1, milling_setting_2]
-        # Todo will do the milling, then avoid it?
 
-        if TEST_NOHW is True:
-
-            future = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
-                                   self.sed, self.stage, self.aligner)
-
-        else:
-            future = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
-                                   self.sed, self.stage, self.aligner)
+        future = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
+                               self.sed, self.stage, self.aligner)
 
         future.add_update_callback(self.on_progress_update)
         future.add_done_callback(self.on_done)
         time.sleep(12)  # make sure it's started
         self.assertTrue(future.running())
         future.cancel()
-
         with self.assertRaises(CancelledError):
             future.result(timeout=1)
 
