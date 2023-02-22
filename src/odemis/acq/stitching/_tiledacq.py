@@ -71,7 +71,7 @@ class TiledAcquisitionTask(object):
 
     def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
                  registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                 focus_points=None):
+                 focus_points=None, focus_range=None):
         """
         :param streams: (list of Streams) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
@@ -96,6 +96,7 @@ class TiledAcquisitionTask(object):
         self._streams = streams
         self._stage = stage
         self._focus_points = focus_points
+        self._focus_range = focus_range
         # Get total area as a tuple of width, height from ltrb area points
         normalized_area = util.normalize_rect(area)
         if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
@@ -664,12 +665,9 @@ class TiledAcquisitionTask(object):
             triangle = [self._focus_points[:, :2][simplex[0]],
                         self._focus_points[:, :2][simplex[1]],
                         self._focus_points[:, :2][simplex[2]]]
-            # check if the triangle points are not in the same line
-            points_collinear = linalg.are_collinear(triangle[0], triangle[1], triangle[2])
-            if not points_collinear:
-                point_in_triangle = point_in_polygon([x, y], polygon=triangle)
-                if point_in_triangle:
-                    break
+            point_in_triangle = point_in_polygon([x, y], polygon=triangle)
+            if point_in_triangle:
+                break
 
         if point_in_triangle is False:
             # TODO determine a better way for dealing with points outside of the focused area, for instance
@@ -707,12 +705,31 @@ class TiledAcquisitionTask(object):
         zlevels = self._init_zlevels + focus_value
 
         # Clip zsteps value to allowed range
-        focus_range = self._focus_stream.focuser.getMetadata()[model.MD_POS_ACTIVE_RANGE]
-        axis_range = self._focus_stream.focuser.axes['z'].range
-        zmin = max(min(zlevels), min(axis_range), min(focus_range))
-        zmax = min(max(zlevels), max(axis_range), max(focus_range))
+        if self._focus_range is None:
+            comp_range = self._focus_stream.focuser.axes['z'].range
+        else:
+            comp_range = self._focus_range
+
+        zmin = min(zlevels)
+        zmax = max(zlevels)
+        # The number of zlevels will remain the same, but the range will be adjusted
+        if (zmax - zmin) > (comp_range[1] - comp_range[0]):
+            # Corner case: it'd be larger than the entire range => limit to the entire range
+            zmin = comp_range[0]
+            zmax = comp_range[1]
+        if zmax > comp_range[1]:
+            # Too high => shift down
+            zmax -= zmax - comp_range[1]
+            zmin -= zmax - comp_range[1]
+        if zmin < comp_range[0]:
+            # Too low => shift up
+            zmin += comp_range[0] - zmin
+            zmax += comp_range[0] - zmin
+
+        # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
         return zlevels
+
 
     def _adjustFocus(self, das, i, ix, iy):
         """

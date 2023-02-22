@@ -78,14 +78,17 @@ class PlaneFittingTestCase(unittest.TestCase):
         Test fitting a plane to a set of 3D coordinates using least-squares fitting.
         """
         # Create a plane with equation z = 2x + 3y + 4
+        # intersection of z plane given by third element of normal should be non-zero
 
         # linear points
-        # intersection of z plane given by third element of normal should be non-zero
+        # more than one plane equation possible
+        # check c is not infinity
         coords = numpy.array([(1, 2, 10), (2, 3, 17), (3, 4, 24), (4, 5, 31)])
         _, normal = fit_plane_lstsq(coords)
-        self.assertNotEqual(True, numpy.isnan(normal[2]))  # assert that c is not nan
+        self.assertFalse(numpy.isnan(normal[2]))  # assert that c is not nan
 
         # non-linear points
+        # unique plane equation
         coords = numpy.array([(1, 2, 12), (-1, -2, -4), (3, 4, 22), (-3, -4, -14)])
         z, normal = fit_plane_lstsq(coords)
         self.assertAlmostEqual(z, 4)

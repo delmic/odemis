@@ -82,7 +82,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_tiles[0], n_tiles[1], 0)
 
         # Test if the autofocus in roi is running
-        time.sleep(2)
+        time.sleep(0.1)
         self.assertTrue(f.running())
 
         # The returned focus points should be minimum three
@@ -110,19 +110,18 @@ class RoiAutofocusTestCase(unittest.TestCase):
 
         bbox = (xmin, ymin, xmax, ymax)
 
-        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_tiles[0], n_tiles[1],
-                             0)  # TODO add proper confidence value
+        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_tiles[0], n_tiles[1], 0)
 
         # Test cancelling of autofocus in roi
-        time.sleep(2)
+        time.sleep(0.1)
         self.assertTrue(f.running())
 
-        # cancel the autofocussing after 5 seconds
-        time.sleep(5)
+        # cancel the autofocussing after 0.1 second
+        time.sleep(0.1)
         f.cancel()
 
         # check if the autofocussing is cancelled
-        time.sleep(2)
+        time.sleep(0.1)
         self.assertTrue(f.cancelled())
         with self.assertRaises(futures.CancelledError):
             f.result()

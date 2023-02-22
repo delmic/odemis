@@ -21,6 +21,7 @@ import logging
 import os
 import time
 import unittest
+from _decimal import Decimal
 from concurrent.futures._base import CancelledError, FINISHED
 
 import numpy
@@ -315,52 +316,65 @@ class CRYOSECOMTestCase(unittest.TestCase):
         """Test the refocus function which provides the z levels for the zstack."""
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
-        focus_points = [[-0.00019889999999999998, -0.0001485167330631956, 2.5185183e-05],
-                        [0.0, -0.0001485167330631956, -1.8148142e-05],
-                        [0.00019889999999999998, -0.0001485167330631956, -3.382517e-06],
-                        [-0.00019889999999999998, 0.0, 1.3804983e-05],
-                        [0.0, 0.0, 2.320607e-06], [0.00019889999999999998, 0.0, 3e-05],
-                        [-0.00019889999999999998, 0.0001485167330631956, -1.78125e-05],
-                        [0.0, 0.0001485167330631956, -8.124999e-06],
-                        [0.00019889999999999998, 0.0001485167330631956, 4.765627e-06]]
-        focus_range = self.focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE)
+        focus_points = [[-0.0001989, -0.0001485, 2.519e-05],
+                        [0.0, -0.0001485, -1.815e-05],
+                        [0.0001989, -0.0001485, -3.383e-06],
+                        [-0.0001989, 0.0, 1.38e-05],
+                        [0.0, 0.0, 2.321e-06],
+                        [0.0001989, 0.0, 3e-05],
+                        [-0.0001989, 0.0001485, -1.781e-05],
+                        [0.0, 0.0001485, -8.125e-06],
+                        [0.0001989, 0.0001485, 4.766e-06]]
+        zlevels = [focus_points[0][2], focus_points[1][2], focus_points[2][2]]
+        focus_range = self.focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
         axis_range = self.focus.axes['z'].range
+        if focus_range is None:
+            comp_range = axis_range
+        else:
+            comp_range = focus_range
 
-        # Test 1 when z level is not provided
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=area, overlap=overlap, future=model.InstantaneousFuture(),
-                                              focus_points=focus_points)
-        # TODO need the following metadata in mimas-sim and meteor-sim
-        # Only the enzel file is modified to run this testcase that uses enzel-sim
-        # TODO check the values of the metaadat POS_ACTIVE_RANGE in enzel-sim for focus role
+                                              zlevels=zlevels, focus_points=focus_points,
+                                              focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
         tiled_acq_task._refocus()
         # min with none values
-        zmin = max(min(axis_range), min(focus_range))
-        zmax = min(max(axis_range), max(focus_range))
+        zmin = min(comp_range)
+        zmax = max(comp_range)
         # Test the min and max range of the zstack
         self.assertGreaterEqual(tiled_acq_task._zlevels[0], zmin)
         self.assertLessEqual(tiled_acq_task._zlevels[-1], zmax)
 
-        # Test 2 when z level is provided
-        zlevels = [focus_points[0][2], focus_points[1][2], focus_points[2][2]]
+        # Test when z level is provided and the focusing method is not max intensity projection
 
         with self.assertRaises(NotImplementedError):
             tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                                   area=area, overlap=overlap, future=model.InstantaneousFuture(),
                                                   zlevels=zlevels, focus_points=focus_points)
 
+        # Test 3 when z level, focus_points are provided and the focusing method is max intensity projection,
+        # no exception should be raised
+        try:
+            tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
+                                                area=area, overlap=overlap, future=model.InstantaneousFuture(),
+                                                zlevels=zlevels, focus_points=focus_points, focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
+        except Exception as e:
+            self.fail("Unexpected exception raised: %s" % e)
+
     def test_get_z_on_focus_plane(self):
         """Test the function that calculates the z position on the focus plane."""
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
-        focus_points = [[-0.00019889999999999998, -0.0001485167330631956, 2.5185183e-05],
-                        [0.0, -0.0001485167330631956, -1.8148142e-05],
-                        [0.00019889999999999998, -0.0001485167330631956, -3.382517e-06],
-                        [-0.00019889999999999998, 0.0, 1.3804983e-05],
-                        [0.0, 0.0, 2.320607e-06], [0.00019889999999999998, 0.0, 3e-05],
-                        [-0.00019889999999999998, 0.0001485167330631956, -1.78125e-05],
-                        [0.0, 0.0001485167330631956, -8.124999e-06],
-                        [0.00019889999999999998, 0.0001485167330631956, 4.765627e-06]]
+        focus_points = [[-0.0001989, -0.0001485, 2.519e-05],
+                        [0.0, -0.0001485, -1.815e-05],
+                        [0.0001989, -0.0001485, -3.383e-06],
+                        [-0.0001989, 0.0, 1.38e-05],
+                        [0.0, 0.0, 2.321e-06],
+                        [0.0001989, 0.0, 3e-05],
+                        [-0.0001989, 0.0001485, -1.781e-05],
+                        [0.0, 0.0001485, -8.125e-06],
+                        [0.0001989, 0.0001485, 4.766e-06]]
+
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=area, overlap=overlap, future=model.InstantaneousFuture(),
                                               focus_points=focus_points)
@@ -370,11 +384,12 @@ class CRYOSECOMTestCase(unittest.TestCase):
         z = tiled_acq_task._get_z_on_focus_plane(x, y)
         self.assertEqual(z, tiled_acq_task._focus_plane["gamma"])
 
-        # Test a point that is not on the plane
-        x = 0.0001
-        y = 0.0001
+        # Check the equation of the plane for the given focus points. Plane equation is found from the focus points
+        gamma = 3.1784e-06
+        normal = (0.008549, -0.02786, -1)
         z = tiled_acq_task._get_z_on_focus_plane(x, y)
-        self.assertNotEqual(z, tiled_acq_task._focus_plane["gamma"])
+        self.assertAlmostEqual(tiled_acq_task._focus_plane["gamma"], gamma)
+        self.assertAlmostEqual(z, gamma + normal[0] * x + normal[1] * y)
 
     def test_get_triangulated_focus_point(self):
         """Test the function that calculates the z position of a point in the focus plane."""
@@ -399,14 +414,15 @@ class CRYOSECOMTestCase(unittest.TestCase):
         # create a list of coordinates from above
         point_2d = numpy.vstack((xv.flatten(), yv.flatten())).T
 
-        focus_points = [[-0.00019889999999999998, -0.0001485167330631956, 2.5185183e-05],
-                        [0.0, -0.0001485167330631956, -1.8148142e-05],
-                        [0.00019889999999999998, -0.0001485167330631956, -3.382517e-06],
-                        [-0.00019889999999999998, 0.0, 1.3804983e-05],
-                        [0.0, 0.0, 2.320607e-06], [0.00019889999999999998, 0.0, 3e-05],
-                        [-0.00019889999999999998, 0.0001485167330631956, -1.78125e-05],
-                        [0.0, 0.0001485167330631956, -8.124999e-06],
-                        [0.00019889999999999998, 0.0001485167330631956, 4.765627e-06]]
+        focus_points = [[-0.0001989, -0.0001485, 2.519e-05],
+                        [0.0, -0.0001485, -1.815e-05],
+                        [0.0001989, -0.0001485, -3.383e-06],
+                        [-0.0001989, 0.0, 1.38e-05],
+                        [0.0, 0.0, 2.321e-06],
+                        [0.0001989, 0.0, 3e-05],
+                        [-0.0001989, 0.0001485, -1.781e-05],
+                        [0.0, 0.0001485, -8.125e-06],
+                        [0.0001989, 0.0001485, 4.766e-06]]
         # don't know if area and focus points are related
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=area, overlap=overlap,

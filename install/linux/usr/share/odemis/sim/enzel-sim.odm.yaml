@@ -305,7 +305,6 @@ ENZEL-Sim: {
   },
   metadata: {
     FAV_POS_ACTIVE: { 'z': 0.002 },
-    POS_ACTIVE_RANGE: [ -0.003, 0.002 ] ,
   },
 }
 

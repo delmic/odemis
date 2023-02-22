@@ -225,4 +225,4 @@ def are_collinear(p1: numpy.ndarray, p2: numpy.ndarray, p3: numpy.ndarray) -> bo
     area = 0.5 * (p1[0] * (p2[1] - p3[1]) + p2[0] * (p3[1] - p1[1]) + p3[0] * (p1[1] - p2[1]))
 
     # Check if the area is zero (within a tolerance)
-    return abs(area) < 1e-6
+    return abs(area) < 1e-12
