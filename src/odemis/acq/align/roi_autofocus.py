@@ -87,8 +87,15 @@ def do_autofocus_in_roi(
             f._autofocus_state = FINISHED
 
 
-def estimate_autofocus_in_roi_time(nx, ny, detector):
-    return nx * ny * (estimateAutoFocusTime(detector, None) + 0.5)  # 0.5 second for stage movement
+def estimate_autofocus_in_roi_time(n_focus_points, detector):
+    """
+    Estimate the time it will take to run autofocus in a roi with nx * ny positions.
+    :param n_focus_points: (tuple) number of focus points in x and y direction
+    :param detector: component of the detector
+    :return:
+    """
+    # add 0.5 second for stage movement
+    return n_focus_points[0] * n_focus_points[1] * (estimateAutoFocusTime(detector, None) + 0.5)
 
 
 def _cancel_autofocus_bbox(future):
@@ -112,8 +119,7 @@ def autofocus_in_roi(
         ccd: model.Component,
         focus: model.Component,
         focus_range: tuple,
-        nx: int = 3,
-        ny: int = 3,
+        n_focus_points: tuple = (3, 3),
         conf_level: int = 0
 ):
     """
@@ -123,11 +129,12 @@ def autofocus_in_roi(
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
     f = model.ProgressiveFuture(start=est_start,
-                                end=est_start + estimate_autofocus_in_roi_time(nx, ny, ccd))
+                                end=est_start + estimate_autofocus_in_roi_time(n_focus_points,
+                                                                               ccd))
     f._autofocus_roi_state = RUNNING
     f._autofocus_roi_lock = threading.Lock()
     f.task_canceller = _cancel_autofocus_bbox
 
     executeAsyncTask(f, do_autofocus_in_roi,
-                     args=(f, bbox, stage, ccd, focus, focus_range, nx, ny, conf_level))
+                     args=(f, bbox, stage, ccd, focus, focus_range, n_focus_points[0], n_focus_points[1], conf_level))
     return f
