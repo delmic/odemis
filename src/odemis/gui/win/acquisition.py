@@ -30,6 +30,7 @@ import numpy
 from odemis import model, dataio
 from odemis.acq import stream, path, acqmng, stitching
 from odemis.acq.stitching import FocusingMethod, WEAVER_MEAN, REGISTER_IDENTITY
+from odemis.acq.stitching._tiledacq import acquireOverview
 from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.acq.stream import SEMStream, CameraStream, EMStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
@@ -678,9 +679,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.tiles_nx, self.tiles_number_x, events=wx.EVT_COMMAND_ENTER)
         self._tiles_n_vacy = VigilantAttributeConnector(
             self.tiles_ny, self.tiles_number_y, events=wx.EVT_COMMAND_ENTER)
-        self.autofocus_roi = model.BooleanVA(False)
+        self.autofocus_roi_ckbox = model.BooleanVA(False)
         self._autofocus_roi_vac = VigilantAttributeConnector(
-            self.autofocus_roi, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
+            self.autofocus_roi_ckbox, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
 
         self.area = None  # None or 4 floats: left, top, right, bottom positions of the acquisition area (in m)
 
@@ -1034,7 +1035,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
     def on_acquire(self, evt):
         """ Start the actual acquisition """
-        logging.info("ckbox autofocus: %s", self.autofocus_roi.value)
+        logging.info("ckbox autofocus: %s", self.autofocus_roi_ckbox.value)
         logging.info("Acquire button clicked, starting acquisition")
         acq_streams = self.get_acq_streams()
         if not acq_streams:
@@ -1065,14 +1066,30 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
             os.makedirs(os.path.dirname(self.filename_tiles))
 
-        self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
-                                                     overlap=self.overlap,
-                                                     settings_obs=self._main_data_model.settings_obs,
-                                                     log_path=self.filename_tiles,
-                                                     weaver=WEAVER_MEAN,
-                                                     registrar=REGISTER_IDENTITY,
-                                                     zlevels=zlevels,
-                                                     focusing_method=focus_mtd)
+        if self.autofocus_roi_ckbox.value:
+            self.acq_future = acquireOverview(acq_streams,
+                                              self._main_data_model.stage,
+                                              self.area,
+                                              self._main_data_model.focus,
+                                              self._main_data_model.ccd,
+                                              overlap=self.overlap,
+                                              settings_obs=self._main_data_model.settings_obs,
+                                              log_path=self.filename_tiles,
+                                              weaver=WEAVER_MEAN,
+                                              registrar=REGISTER_IDENTITY,
+                                              zlevels=zlevels,
+                                              focusing_method=focus_mtd)
+
+        else:
+            self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
+                                                         overlap=self.overlap,
+                                                         settings_obs=self._main_data_model.settings_obs,
+                                                         log_path=self.filename_tiles,
+                                                         weaver=WEAVER_MEAN,
+                                                         registrar=REGISTER_IDENTITY,
+                                                         zlevels=zlevels,
+                                                         focusing_method=focus_mtd)
+
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)
