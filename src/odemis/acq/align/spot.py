@@ -19,12 +19,18 @@ PARTICULAR  PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-
-from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
-    RUNNING
 import logging
 import math
+import os
+import threading
+import time
+import warnings
+from concurrent.futures._base import CancelledError, CANCELLED, FINISHED, \
+    RUNNING
+
 import numpy
+from scipy.spatial import cKDTree as KDTree
+
 from odemis import model
 from odemis.acq.align import coordinates, autofocus
 from odemis.acq.align.autofocus import AcquireNoBackground, MTD_EXHAUSTIVE
@@ -32,10 +38,6 @@ from odemis.dataio import tiff
 from odemis.util import executeAsyncTask
 from odemis.util.spot import FindCenterCoordinates, GridPoints, MaximaFind, EstimateLatticeConstant
 from odemis.util.transform import AffineTransform, SimilarityTransform, alt_transformation_matrix_to_implicit
-import os
-from scipy.spatial import cKDTree as KDTree
-import threading
-import time
 
 ROUGH_MOVE = 1  # Number of max steps to reach the center in rough move
 FINE_MOVE = 10  # Number of max steps to reach the center in fine move
@@ -383,6 +385,7 @@ def FindGridSpots(image, repetition, spot_size=18, method=GRID_AFFINE):
         when similarity method is used.
 
     """
+    warnings.warn("FindGridSpots is deprecated, use estimate_grid_orientation_from_img instead.", DeprecationWarning)
     if repetition[0] * repetition[1] < 6:
         raise ValueError("Need at least 6 expected points to properly find the grid.")
     # Find the center coordinates of the spots in the image.
