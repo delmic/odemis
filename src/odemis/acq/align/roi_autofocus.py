@@ -52,7 +52,7 @@ def do_autofocus_in_roi(
     :param stage: stage component
     :param ccd: ccd component
     :param focus: focus component
-    :param focus_range: # TODO determine how to get the focus range, for mimas and for meteor
+    :param focus_range: focus range, tuple of (zmin, zmax) in meters
     :param nx: (int) the number of positions in x where to focus
     :param ny: (int) the number of positions in y where to focus
     :param conf_level: (float) confidence level of the focus metric, default 0 takes all values.
@@ -132,6 +132,13 @@ def autofocus_in_roi(
     """
     Wrapper for do_autofocus_in_roi. It provides the ability to check the progress of autofocus
     procedure and cancel it.
+    :param bbox: bounding box of the roi, tuple of (xmin, ymin, xmax, ymax) in meters
+    :param stage: stage component
+    :param ccd: ccd component
+    :param focus: focus component
+    :param focus_range: focus range, tuple of (zmin, zmax) in meters
+    :param n_focus_points: (tuple) number of focus points in x and y direction
+    :param conf_level: (float) confidence level of the focus metric, default 0 takes all values.
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1

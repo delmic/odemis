@@ -20,19 +20,23 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from builtins import str
-from concurrent.futures._base import CancelledError
 import copy
 import gc
 import logging
 import math
+import os.path
+from builtins import str
+from concurrent.futures._base import CancelledError
+
 import numpy
+import wx
+
+import odemis.gui.model as guimodel
 from odemis import model, dataio
 from odemis.acq import stream, path, acqmng, stitching
 from odemis.acq.stitching import FocusingMethod, WEAVER_MEAN, REGISTER_IDENTITY
 from odemis.acq.stitching._tiledacq import acquireOverview
-from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
-from odemis.acq.stream import SEMStream, CameraStream, EMStream
+from odemis.acq.stream import EMStream, NON_SPATIAL_STREAMS, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -46,12 +50,7 @@ from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
 from odemis.gui.util.widgets import ProgressiveFutureConnector, \
     VigilantAttributeConnector
 from odemis.util import rect_intersect, units
-from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 from odemis.util.filename import guess_pattern, create_filename, update_counter
-import os.path
-import wx
-
-import odemis.gui.model as guimodel
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -614,8 +613,10 @@ class AcquisitionDialog(xrcfr_acq):
         # Make sure the file is not overridden
         self.btn_secom_acquire.Enable()
 
+
 # Step value for z stack levels
 DEFAULT_FOV = (100e-6, 100e-6) # m
+
 
 class OverviewAcquisitionDialog(xrcfr_overview_acq):
     """
@@ -1035,7 +1036,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
     def on_acquire(self, evt):
         """ Start the actual acquisition """
-        logging.info("ckbox autofocus: %s", self.autofocus_roi_ckbox.value)
+        logging.info("Value for autofocus checkbox: %s", self.autofocus_roi_ckbox.value)
         logging.info("Acquire button clicked, starting acquisition")
         acq_streams = self.get_acq_streams()
         if not acq_streams:
