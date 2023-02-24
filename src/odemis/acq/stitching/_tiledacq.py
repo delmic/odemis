@@ -889,9 +889,10 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     future.running_subf = model.InstantaneousFuture()
     future._task_lock = threading.Lock()
     # Create a tiled acquisition task
+    # TODO input the focus_range as input argument and do not calculate it in this task
     task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
                                 registrar=registrar, weaver=weaver, focusing_method=focusing_method,
-                                focus_points=focus_points)# focus_range=focus_range)
+                                focus_points=focus_points)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()
@@ -948,7 +949,7 @@ class AcquireOverviewTask(object):
         self._future = future
         self.streams = streams
         self.area = area
-        self._rois = [area, ]  # list of roi
+        self._rois = [area, area]  # list of roi # TODO ask GUI to provide a list of rois
         self._ccd = ccd  # TODO to delete after ccd.data components is used from streams in do_autofocus_roi
         self._focus = focus
         self.focus_rng = self._focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
@@ -1013,11 +1014,7 @@ class AcquireOverviewTask(object):
         focus_points = None  # list of [x, y, z] focus points
         try:
             actual_time_per_roi = None
-            if len(self._rois) == 0:
-                logging.debug("roi location is not provided by the user, cancelling the acquisition overview")
-                self._future._task_state = CANCELLED
-                raise CancelledError()
-
+            da_rois = []
             # create a for loop for roi to create sub futures
             for idx, roi in enumerate(self._rois):
                 start_time = time.time()
@@ -1029,11 +1026,13 @@ class AcquireOverviewTask(object):
                     raise CancelledError()
 
                 # run autofocus for the selected roi
-                self._future.running_subf = autofocus_in_roi(
-                    roi, self._stage, self._ccd, self._focus,
-                    self.focus_rng,
-                    self.n_focus_points,
-                    self.conf_level)
+                self._future.running_subf = autofocus_in_roi(roi,
+                                                             self._stage,
+                                                             self._ccd,
+                                                             self._focus,
+                                                             self.focus_rng,
+                                                             self.n_focus_points,
+                                                             self.conf_level)
 
                 logging.debug(f"Autofocus is running for roi number {idx} with {roi} values")
 
@@ -1058,7 +1057,9 @@ class AcquireOverviewTask(object):
                                                              focus_range=self.focus_rng)
                 logging.debug(f"Z-stack acquisition is running for roi number {idx} with {roi} values")
                 try:
-                    self._future.running_subf.result()
+                    da = self._future.running_subf.result()
+                    # append dataArrays
+                    da_rois.append(da[0])
                 except Exception as exp:
                     logging.exception(
                         f"Z-stack acquisition within roi failed for roi number {idx} with {roi} values due to {exp}")
@@ -1080,4 +1081,4 @@ class AcquireOverviewTask(object):
             with self._future._task_lock:
                 self._future._task_state = FINISHED
 
-        return focus_points
+        return da_rois
