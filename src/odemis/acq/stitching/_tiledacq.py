@@ -909,15 +909,25 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
 def acquireOverview(streams, stage, area, focus, ccd, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
     """
-    Start a tiled acquisition task for the given streams (SEM or FM) in order to
-    build a complete view of the TEM grid. Needed tiles are first acquired for
-    each stream, then the complete view is created by stitching the tiles.
+    Start autofocus and tiled acquisition tasks for the given list of areas.
 
-    Parameters are the same as for TiledAcquisitionTask
+    :param streams: (list of Stream) the streams to acquire
+    :param stage: (Actuator) the stage to move
+    :param area: (list of area) area is defined by 4 floats :left, top, right, bottom positions
+     of the acquisition area (in m)
+    :param focus: (Actuator) the focus actuator
+    :param ccd: (Camera) the camera to use for the acquisition
+    :param overlap: (0<float<1) the overlap between tiles (in percentage)
+    :param settings_obs: (dict) the settings for the acquisition
+    :param log_path: (str) path to the log file
+    :param zlevels: (list of floats) the initial zlevels to use for the stitching
+    :param registrar: (str) the type of registration to use
+    :param weaver: (str) the type of weaver to use
+    :param focusing_method: (str) the focusing method to use
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a list of model.DataArray:
-        the stitched acquired tiles data
+        the stitched acquired tiles data for each area
     """
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
@@ -938,18 +948,17 @@ def acquireOverview(streams, stage, area, focus, ccd, overlap=0.2, settings_obs=
 
 class AcquireOverviewTask(object):
     """
-    Copied from class ZStackAcquisitionTask(object):
+    Create a task to run autofocus and tiled acquisition for each area in the list of areas
     """
 
-    def __init__(self, streams, stage, area, focus, ccd, future, overlap=0.2, settings_obs=None, log_path=None,
+    def __init__(self, streams, stage, areas, focus, ccd, future, overlap=0.2, settings_obs=None, log_path=None,
                  zlevels=None,
                  registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
         # site and feature means the same
         self._stage = stage
         self._future = future
         self.streams = streams
-        self.area = area
-        self._rois = [area, area]  # list of roi # TODO ask GUI to provide a list of rois
+        self.areas = areas  # list of areas
         self._ccd = ccd  # TODO to delete after ccd.data components is used from streams in do_autofocus_roi
         self._focus = focus
         self.focus_rng = self._focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
@@ -997,7 +1006,7 @@ class AcquireOverviewTask(object):
         :param actual_time_per_site: (float) the actual time spent for the current site
         :return: (float) the estimated time for the rest of the acquisition
         """
-        remaining_rois = (len(self._rois) - roi_idx)
+        remaining_rois = (len(self.areas) - roi_idx)
 
         if actual_time_per_roi:
             acquisition_time = actual_time_per_roi * remaining_rois
@@ -1016,7 +1025,7 @@ class AcquireOverviewTask(object):
             actual_time_per_roi = None
             da_rois = []
             # create a for loop for roi to create sub futures
-            for idx, roi in enumerate(self._rois):
+            for idx, roi in enumerate(self.areas):
                 start_time = time.time()
                 remaining_t = self.estimate_time(idx, actual_time_per_roi)
                 self._future.set_end_time(time.time() + remaining_t)
@@ -1044,7 +1053,7 @@ class AcquireOverviewTask(object):
                     raise
 
                 # run tiled acquisition for the selected roi
-                self._future.running_subf = acquireTiledArea(self.streams, self._stage, self.area,
+                self._future.running_subf = acquireTiledArea(self.streams, self._stage, roi,
                                                              overlap=self._overlap,
                                                              settings_obs=self._settings_obs,
                                                              log_path=self._log_path,

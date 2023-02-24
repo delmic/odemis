@@ -1068,9 +1068,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             os.makedirs(os.path.dirname(self.filename_tiles))
 
         if self.autofocus_roi_ckbox.value:
+            # TODO create a list of a rois to be used for autofocus and pass it to the acquireOverview function
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
-                                              self.area,
+                                              [self.area],
                                               self._main_data_model.focus,
                                               self._main_data_model.ccd,
                                               overlap=self.overlap,
