@@ -82,6 +82,8 @@ def mill_rectangle(rect: Tuple[float, float, float, float],
     now = time.time()
     f = model.ProgressiveFuture(start=now, end=now + iteration * duration + 1)
     miller = OrsayMilling(f, rect, scanner, iteration, duration, probe_size, overlap)
+    # Fake milling is used when we want to test without hardware and to fake the milling process
+    # miller = FakeOrsayMilling(f, rect, scanner, iteration, duration, probe_size, overlap)
     f.task_canceller = miller.cancel_milling
 
     # Connect the future to the task and run it in a thread.
@@ -206,7 +208,7 @@ class OrsayMilling:
 
                 time.sleep(0.1)
                 if time.time() > milling_activation_timeout:
-                    raise TimeoutError("Milling failed to start up after trying for 10 seconds.")
+                    raise TimeoutError("Milling failed to start up after trying for 20 seconds.")
 
             milling_start_t = time.time()
             milling_execution_timeout = milling_start_t + (duration * iteration) * 1.1 + 5
@@ -222,7 +224,7 @@ class OrsayMilling:
                     logging.debug("Current milling point = %s, milling state = %s",
                                   scanner.CurrentMillingPoint.Actual,
                                   miller.MillingActivationState.Actual)
-                    raise TimeoutError("Milling failed to start up after trying for 10 seconds.")
+                    raise TimeoutError("Milling failed to start up after trying for 20 seconds.")
 
             logging.debug("Now milling a rectangle %sm by %sm during %s passes of %s seconds",
                           obj_to_mill.primaryAxisX * 2, obj_to_mill.secondaryAxisLength * 2, iteration, duration)
@@ -254,7 +256,6 @@ class OrsayMilling:
             scanner.MillingStatus.Unsubscribe(self.param_logger)
             # scanner.CurrentSubList.Unsubscribe(self.param_logger)
             # scanner.CurrentMillingPoint.Unsubscribe(self.param_logger)
-
 
     def cancel_milling(self, future):
         """
@@ -291,3 +292,24 @@ class OrsayMilling:
             logging.debug('New active procedure (%s) : %s', param.Actual, self.miller.ActiveProcedureName.Target)
             self.miller.MillingActivationState.Target = 1  # Start milling once the new procedure has been loaded
             param.Unsubscribe(self.on_procedure_info)
+
+
+class FakeOrsayMilling(OrsayMilling):
+    """
+    Contains fake milling functions
+    In order to handle testing with no hardware.
+    """
+    def do_milling(self):
+        """
+        Fake milling function used during simulation
+        """
+        logging.info("Fake Milling a rectangle")
+        time.sleep(5)
+
+    def cancel_milling(self, future):
+        """
+        Fake milling function used during simulation
+        """
+        logging.info("Cancel Fake Milling a rectangle")
+
+        return True

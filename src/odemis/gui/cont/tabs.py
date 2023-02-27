@@ -57,6 +57,7 @@ import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.export as exportcont
 import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
+from odemis.gui.cont import milling
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 import odemis.gui.util.align as align
@@ -485,6 +486,11 @@ class LocalizationTab(Tab):
         self._aligner = self.tab_data_model.main.aligner
 
         main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
+
+        self._serial_milling_controller = milling.MillingButtonController(
+            tab_data,
+            panel
+        )
 
     @property
     def settingsbar_controller(self):
