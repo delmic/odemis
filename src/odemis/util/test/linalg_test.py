@@ -123,6 +123,10 @@ class PlaneFittingTestCase(unittest.TestCase):
         linear_points = numpy.array([[1, 2, 12], [2, 3, 17], [3, 4, 22]])
         self.assertTrue(are_collinear(linear_points[0], linear_points[1], linear_points[2]))
 
+        # Create points not in same line with above equation
+        non_linear_points = numpy.array([[1, 2, 12], [-1, -2, -4], [3, 4, 22]])
+        self.assertFalse(are_collinear(non_linear_points[0], non_linear_points[1], non_linear_points[2]))
+
 
 if __name__ == "__main__":
     unittest.main()

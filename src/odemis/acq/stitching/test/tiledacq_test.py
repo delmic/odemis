@@ -350,14 +350,16 @@ class CRYOSECOMTestCase(unittest.TestCase):
         with self.assertRaises(NotImplementedError):
             tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                                   area=area, overlap=overlap, future=model.InstantaneousFuture(),
-                                                  zlevels=zlevels, focus_points=focus_points)
+                                                  zlevels=zlevels, focus_points=focus_points,
+                                                  focusing_method=FocusingMethod.ON_LOW_FOCUS_LEVEL)
 
         # Test 3 when z level, focus_points are provided and the focusing method is max intensity projection,
         # no exception should be raised
         try:
             tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
-                                                area=area, overlap=overlap, future=model.InstantaneousFuture(),
-                                                zlevels=zlevels, focus_points=focus_points, focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
+                                                  area=area, overlap=overlap, future=model.InstantaneousFuture(),
+                                                  zlevels=zlevels, focus_points=focus_points,
+                                                  focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
         except Exception as e:
             self.fail("Unexpected exception raised: %s" % e)
 

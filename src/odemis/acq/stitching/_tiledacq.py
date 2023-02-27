@@ -711,9 +711,20 @@ class TiledAcquisitionTask(object):
             comp_range = self._focus_stream.focuser.axes['z'].range
 
         # The number of zlevels will remain the same, but the range will be adjusted
-        zmin = max(min(zlevels), min(comp_range))
-        zmax = min(max(zlevels), max(comp_range))
-        zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
+        zmin = min(zlevels)
+        zmax = max(zlevels)
+        if (zmax - zmin) > (comp_range[1] - comp_range[0]):
+            # Corner case: it'd be larger than the entire range => limit to the entire range
+            zmin = comp_range[0]
+            zmax = comp_range[1]
+        if zmax > comp_range[1]:
+            # Too high => shift down
+            zmax -= zmax - comp_range[1]
+            zmin -= zmax - comp_range[1]
+        if zmin < comp_range[0]:
+            # Too low => shift up
+            zmin += comp_range[0] - zmin
+            zmax += comp_range[0] - zmin
 
         # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
