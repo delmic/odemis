@@ -971,8 +971,7 @@ class AcquireOverviewTask(object):
                                   self.focus_rng[1] + self._focus.position.value)
             else:
                 self.focus_rng = (self._focus.position.value['z'] - 50e-06, self._focus.position.value['z'] + 50e-06)
-        # TODO find out the confidence level threshold
-        self.conf_level = 0
+        self.conf_level = 0.8
         self.focusing_method = focusing_method
         # The number of focus points are constant for now
         # TODO: make it variable according to the size of the ROI, is it useful?
