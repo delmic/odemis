@@ -1017,7 +1017,6 @@ class ScalingTransform(AffineTransform):
 
     """
 
-    _inverse_type = AffineTransform
     shear = ImplicitParameter(0, constrained=True)
 
     def __init__(
@@ -1032,6 +1031,7 @@ class ScalingTransform(AffineTransform):
         GeometricTransform.__init__(
             self, matrix, translation, scale=scale, rotation=rotation, squeeze=squeeze,
         )
+        self._inverse_type = AffineTransform
 
     @staticmethod
     def _estimate_matrix(x: numpy.ndarray, y: numpy.ndarray) -> numpy.ndarray:
