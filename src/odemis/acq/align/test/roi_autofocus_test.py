@@ -71,6 +71,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         height = self.height
         n_tiles = (3, 3)
         overlap = 0.2
+        condidence_level = 0.8  # focus points below this confidence level will be discarded
 
         xmin = init_pos[0] - (1 - overlap) * n_tiles[0] / 2 * px_size[0] * width
         ymin = init_pos[1] - (1 - overlap) * n_tiles[1] / 2 * px_size[1] * height
@@ -79,7 +80,8 @@ class RoiAutofocusTestCase(unittest.TestCase):
 
         bbox = (xmin, ymin, xmax, ymax)
 
-        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_tiles[0], n_tiles[1], 0)
+        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_tiles[0], n_tiles[1],
+                             condidence_level)
 
         # Test if the autofocus in roi is running
         time.sleep(0.1)
@@ -102,6 +104,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         height = self.height
         n_tiles = (3, 3)
         overlap = 0.2
+        confidence_level = 0.8  # focus points below this confidence level will be discarded
 
         xmin = init_pos[0] - (1 - overlap) * n_tiles[0] / 2 * px_size[0] * width
         ymin = init_pos[1] - (1 - overlap) * n_tiles[1] / 2 * px_size[1] * height
@@ -110,7 +113,8 @@ class RoiAutofocusTestCase(unittest.TestCase):
 
         bbox = (xmin, ymin, xmax, ymax)
 
-        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_tiles[0], n_tiles[1], 0)
+        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_tiles[0], n_tiles[1],
+                             confidence_level)
 
         # Test cancelling of autofocus in roi
         time.sleep(0.1)

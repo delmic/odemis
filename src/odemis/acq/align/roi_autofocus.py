@@ -42,7 +42,7 @@ def do_autofocus_in_roi(
         focus_range: tuple,
         nx: int = 3,
         ny: int = 3,
-        conf_level: int = 0
+        conf_level: float = 0
 ):
     """
     Run autofocus in a given roi. The roi is divided in nx * ny positions and autofocus is run at each position.
@@ -121,7 +121,7 @@ def autofocus_in_roi(
         focus_range: tuple,
         nx: int = 3,
         ny: int = 3,
-        conf_level: int = 0
+        conf_level: float = 0
 ):
     """
     Wrapper for do_autofocus_in_roi. It provides the ability to check the progress of autofocus
