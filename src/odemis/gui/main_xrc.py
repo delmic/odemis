@@ -10003,8 +10003,11 @@ def __init_resources():
                       </object>
                       <object class="sizeritem">
                         <object class="wxCheckBox" name="autofocus_chkbox">
-                          <label>Run Autofocus</label>
+                          <label>Run autofocus</label>
                           <fg>#E5E5E5</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <option>0</option>
                         <flag>wxTOP</flag>

@@ -34,8 +34,7 @@ import wx
 import odemis.gui.model as guimodel
 from odemis import model, dataio
 from odemis.acq import stream, path, acqmng, stitching
-from odemis.acq.stitching import FocusingMethod, WEAVER_MEAN, REGISTER_IDENTITY
-from odemis.acq.stitching._tiledacq import acquireOverview
+from odemis.acq.stitching import FocusingMethod, WEAVER_MEAN, REGISTER_IDENTITY, acquireOverview
 from odemis.acq.stream import EMStream, NON_SPATIAL_STREAMS, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries

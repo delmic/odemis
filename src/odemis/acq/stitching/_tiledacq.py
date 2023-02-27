@@ -54,6 +54,8 @@ FOCUS_RANGE_MARGIN = 100e-6  # m
 SKIP_TILES = 3
 
 MOVE_SPEED_DEFAULT = 100e-6  # m/s
+# Default range for the optical focus adjustment
+SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
 
 
 class FocusingMethod(Enum):
@@ -964,13 +966,11 @@ class AcquireOverviewTask(object):
         self.focus_rng = self._focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
 
         if self.focus_rng is None:
-            # METEOR is running
-            self.focus_rng = self._focus.getMetadata().get(model.MD_SAFE_REL_RANGE, None)
-            if self.focus_rng is not None:
-                self.focus_rng = (self.focus_rng[0] + self._focus.position.value,
-                                  self.focus_rng[1] + self._focus.position.value)
-            else:
-                self.focus_rng = (self._focus.position.value['z'] - 50e-06, self._focus.position.value['z'] + 50e-06)
+            # No absolute range is available, so maybe use a relative range (e.g. as on METEOR
+            self.focus_rng = self._focus.getMetadata().get(model.MD_SAFE_REL_RANGE, SAFE_REL_RANGE_DEFAULT)
+            self.focus_rng = (self.focus_rng[0] + self._focus.position.value["z"],
+                              self.focus_rng[1] + self._focus.position.value["z"])
+
         self.conf_level = 0.8
         self.focusing_method = focusing_method
         # The number of focus points are constant for now
