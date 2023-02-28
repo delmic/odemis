@@ -47,7 +47,7 @@ CONFIG_STAGE6 = {"name": "stage", "role": "stage",
                         "y": None,
                         "z": (0, 152.e-3),
                         "rx": (0, math.radians(90)),
-                        "rz": (0, math.radians(360)),
+                        "rm": (0, math.radians(360)),
                         "m": (0, 10.e-3),
                         },
                  }
@@ -373,9 +373,10 @@ class TestSEM6Axes(unittest.TestCase):
         Test if moving below 0° using a full rotational axis applies correction of underflow
         Test if moving with an inverted axis works like expected
         """
-        # shift the stage in Rz position for 8°
-        current_pos = self.stage.position.value.copy()
-        shift = {"rz": math.radians(8)}
+        # shift the stage in Rm position for 8°
+        start_pos = self.stage.position.value.copy()
+        current_pos = start_pos
+        shift = {"rm": math.radians(8)}
         expected_pos = {key: current_pos[key] + shift.get(key, 0) for key in current_pos}
 
         f = self.stage.moveRel(shift)
@@ -384,9 +385,9 @@ class TestSEM6Axes(unittest.TestCase):
         # test if the stage position is almost equal to the newly requested position
         testing.assert_pos_almost_equal(self.stage.position.value, expected_pos, atol=1e-2)
 
-        # shift the stage in Rz position almost completely back to the lower range border of 0°
+        # shift the stage in Rm position almost completely back to the lower range border of 0°
         current_pos = self.stage.position.value.copy()
-        shift = {"rz": math.radians(-7)}
+        shift = {"rm": math.radians(-7)}
         expected_pos = {key: current_pos[key] + shift.get(key, 0) for key in current_pos}
 
         f = self.stage.moveRel(shift)
@@ -395,12 +396,12 @@ class TestSEM6Axes(unittest.TestCase):
         # test if the stage position is almost equal to the newly requested position
         testing.assert_pos_almost_equal(self.stage.position.value, expected_pos, atol=1e-2)
 
-        # shift the stage in Rz position 3° backward just over the minimum range limit
+        # shift the stage in Rm position 3° backward just over the minimum range limit
         current_pos = self.stage.position.value.copy()
-        shift = {"rz": math.radians(-3)}
+        shift = {"rm": math.radians(-3)}
         expected_pos = {key: current_pos[key] + shift.get(key, 0) for key in current_pos}
         # adjust expected_pos taking passing of the minimal range limit into account
-        expected_pos["rz"] = 2 * math.pi - (0 - expected_pos["rz"])
+        expected_pos["rm"] = math.radians(math.degrees(current_pos["rm"] + shift["rm"]) % 360)
 
         f = self.stage.moveRel(shift)
         f.result()
@@ -408,7 +409,20 @@ class TestSEM6Axes(unittest.TestCase):
         # test if the stage position is almost equal to the newly requested position
         testing.assert_pos_almost_equal(self.stage.position.value, expected_pos, atol=1e-2)
 
-        # test a shift postition on the "m" axis
+        # shift the stage in Rm position 5° forward just over the minimum range limit
+        current_pos = self.stage.position.value.copy()
+        shift = {"rm": math.radians(5)}
+        expected_pos = {key: current_pos[key] + shift.get(key, 0) for key in current_pos}
+        # adjust expected_pos taking passing of the minimal range limit into account
+        expected_pos["rm"] = math.radians(math.degrees(current_pos["rm"] + shift["rm"]) % 360)
+
+        f = self.stage.moveRel(shift)
+        f.result()
+
+        # test if the stage position is almost equal to the newly requested position
+        testing.assert_pos_almost_equal(self.stage.position.value, expected_pos, atol=1e-2)
+
+        # test a shift position on the "m" axis
         current_pos = self.stage.position.value.copy()
         shift = {"m": 50e-6}
 
@@ -418,35 +432,39 @@ class TestSEM6Axes(unittest.TestCase):
         # test if the stage position shifted if compared with the original position
         self.assertNotEqual(self.stage.position.value, current_pos)
 
-        # go back to the original starting point
-        f = self.stage.moveRel({"rz": math.radians(2), "m": -50e-6})
+        # go back to the original starting point always use abs move for that
+        current_pos = self.stage.position.value.copy()
+        f = self.stage.moveAbs(start_pos)
         f.result()
+
+        self.assertNotEqual(self.stage.position.value, current_pos)
 
     def test_move_axes_absolute(self):
         """
         Test if it's possible to execute an absolute move of the stage using 6 axes
         Test if moving out of the minimal and maximum range of an axis raises a ValueError
         """
-        # move the stage in Rx position for 9°
-        pos = {"rx": math.radians(9)}
+        # move the stage in Rx position for 4°
         start_pos = self.stage.position.value.copy()
-        start_pos["rx"] = math.radians(9)
+        current_pos = start_pos
+        pos = {"rx": math.radians(4)}
+        current_pos["rx"] = math.radians(4)
 
         f = self.stage.moveAbs(pos)
         f.result()
 
         # test if the stage position is almost equal to the newly requested position
-        testing.assert_pos_almost_equal(self.stage.position.value, start_pos, atol=1e-3)
+        testing.assert_pos_almost_equal(self.stage.position.value, current_pos, atol=1e-3)
 
         # move the stage in Rx position with a small value added
-        pos = {"rx": math.radians(9.1)}  # move only 0.1 degree forward
-        start_pos = self.stage.position.value.copy()
+        pos = {"rx": math.radians(4.1)}  # move only 0.1 degree forward
+        current_pos = self.stage.position.value.copy()
 
         f = self.stage.moveAbs(pos)
         f.result()
 
         # test if the stage position moved away from the start position
-        testing.assert_pos_not_almost_equal(self.stage.position.value, start_pos, atol=1e-3)
+        testing.assert_pos_not_almost_equal(self.stage.position.value, current_pos, atol=1e-3)
 
         same_pos = self.stage.position.value.copy()
 
@@ -466,7 +484,7 @@ class TestSEM6Axes(unittest.TestCase):
             self.stage.moveAbsSync({"m": 15.e-3})
 
         # go back to the original starting point
-        f = self.stage.moveAbs({"rx": 0.0})
+        f = self.stage.moveAbs(start_pos)
         f.result()
 
     def test_stop(self):

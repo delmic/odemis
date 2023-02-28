@@ -487,8 +487,8 @@ class Stage(model.Actuator):
         # To keep compatibility with old configuration files, by default the extra axes are not used.
         if "rx" not in rng:
             rng["rx"] = None
-        if "rz" not in rng:
-            rng["rz"] = None
+        if "rm" not in rng:
+            rng["rm"] = None
         if "m" not in rng:  # Extra Z axis, in the Rx referential, to adjust eucentric height.
             rng["m"] = None
 
@@ -524,16 +524,16 @@ class Stage(model.Actuator):
     def _getStagePosition(self) -> Tuple[Dict[str, float], bool]:
         """
         Read the stage position, using either GetStagePosition of GetStagePosition6 where the first supports 3
-        linear axes and the latter 6 axes including rx and rz rotational axes.
+        linear axes and the latter 6 axes including rx and rm rotational axes.
         :return position dict str -> float: (in m/rad) with the axes supported in .axes 
                 is_moving (bool)
         """
         pos = {}
 
-        if set(self.axes.keys()).intersection({"rx", "rz", "m"}):
+        if set(self.axes.keys()).intersection({"rx", "rm", "m"}):
             x, y, z, t, r, m, is_moving = self.parent.GetStagePosition6()
             pos["rx"] = math.radians(t)
-            pos["rz"] = math.radians(r)
+            pos["rm"] = math.radians(r)
             pos["m"] = m * 1e-3
         else:
             x, y, z, is_moving = self.parent.GetStagePosition()
@@ -576,7 +576,7 @@ class Stage(model.Actuator):
         :param future: a future that can be used to manage a move
         :param shift (dict): contains float position values in m or deg
         """
-        if set(self.axes.keys()).intersection({"rx", "rz", "m"}):
+        if set(self.axes.keys()).intersection({"rx", "rm", "m"}):
             # get the stage position without the move status value
             move_list = list(self.parent.GetStagePosition6())[:-1]
             # convert the degree values of the rotational axes to radians
@@ -598,9 +598,10 @@ class Stage(model.Actuator):
         if "rx" in shift:
             move_list[3] += shift["rx"]
             target_pos["rx"] = move_list[3]
-        if "rz" in shift:
-            move_list[4] += shift["rz"]
-            target_pos["rz"] = move_list[4]
+        if "rm" in shift:
+            move_list[4] += shift["rm"]
+            # correct for full rotation under and overflow
+            target_pos["rm"] = move_list[4] % 360
         if "m" in shift:
             move_list[5] += shift["m"] * 1e3
             target_pos["m"] = move_list[5] * 1e-3
@@ -612,7 +613,7 @@ class Stage(model.Actuator):
             rng = self.axes[an].range
             p = target_pos[an]
             # full rotational axes shouldn't be checked
-            if an in ("rx", "rz") and util.almost_equal(rng[1] - rng[0], 2 * math.pi):
+            if an in ("rx", "rm") and util.almost_equal(rng[1] - rng[0], 2 * math.pi):
                 continue
             if not rng[0] <= p <= rng[1]:
                 raise ValueError("Relative move would cause axis %s out of bound (%g m)" % (an, p))
@@ -625,7 +626,7 @@ class Stage(model.Actuator):
         :param future: a future that can be used to manage a move
         :param pos (dict): contains float position values in m or deg
         """
-        if set(self.axes.keys()).intersection({"rx", "rz", "m"}):
+        if set(self.axes.keys()).intersection({"rx", "rm", "m"}):
             # get the stage position without the move status value
             move_list = list(self.parent.GetStagePosition6())[:-1]
             # convert the degree values of the rotational axes to radians
@@ -642,8 +643,8 @@ class Stage(model.Actuator):
             move_list[2] = pos["z"] * 1e3
         if "rx" in pos:
             move_list[3] = pos["rx"]
-        if "rz" in pos:
-            move_list[4] = pos["rz"]
+        if "rm" in pos:
+            move_list[4] = pos["rm"]
         if "m" in pos:
             move_list[5] = pos["m"] * 1e3
 
@@ -662,7 +663,7 @@ class Stage(model.Actuator):
                 if future._must_stop.is_set():
                     raise CancelledError()
                 # use explicitly the 3-axes or the 6-axes move command
-                if set(self.axes.keys()).intersection({"rx", "rz", "m"}):
+                if set(self.axes.keys()).intersection({"rx", "rm", "m"}):
                     self.parent.MoveStage6(*move_list)
                 else:
                     self.parent.MoveStage(*move_list)
