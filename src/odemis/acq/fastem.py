@@ -508,7 +508,7 @@ class AcquisitionTask(object):
         self._pre_calibrations = pre_calibrations
         self._settings_obs = settings_obs
 
-        self.path = fastem_util.create_image_dir("beam_shift_cor")
+        self.path = fastem_util.create_image_dir("beam-shift-correction")
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
         self.megafield = {}
@@ -799,7 +799,8 @@ class AcquisitionTask(object):
         # Determine the shift of the spots, by subtracting the good multiprobe position from the average (center)
         # spot position.
         fav_pos_active = self._ccd.getMetadata()[model.MD_FAV_POS_ACTIVE]
-        # If i and j are not in the metadata, use x and y instead.
+        # FIXME: If i and j are not in the metadata, use x and y instead.
+        #  Old yaml files used x and y, support for x and y can be removed when all yaml files are updated.
         try:
             i = fav_pos_active["i"]
         except KeyError:
@@ -819,7 +820,7 @@ class AcquisitionTask(object):
         shift_m *= -1
         beam_shift_cor = shift_m / magnification  # [m]
         # Convert the shift from pixels to meters
-        logging.debug("Beam shift adjustment required due to stage magnetic field: {} [m]".format(beam_shift_cor))
+        logging.debug("Beam shift adjustment required: {} [m]".format(beam_shift_cor))
 
         cur_beam_shift_pos = numpy.array(self._beamshift.shift.value)
         logging.debug("Current beam shift: {} [m]".format(self._beamshift.shift.value))
@@ -828,7 +829,7 @@ class AcquisitionTask(object):
         logging.debug("New beam shift m: {}".format(self._beamshift.shift.value))
 
         ccd_image = self._ccd.data.get(asap=False)
-        fastem_util.save_image(self.path, f"{self.field_idx}_after", ccd_image)
+        fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)
 
     def _create_acquisition_metadata(self):
         """
