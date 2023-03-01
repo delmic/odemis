@@ -87,11 +87,11 @@ class RoiAutofocusTestCase(unittest.TestCase):
         time.sleep(0.1)
         self.assertTrue(f.running())
 
-        # The returned focus points should be minimum three
-        # One focus point has three coordinates x,y and z
-        # The returned focus points should be minimum three to fit a plane for the autofocus
         focus_points = f.result()
+        # There should be a minimum of 3 returned focus points to fit a plane for re-focusing
         self.assertGreaterEqual(len(focus_points), 3)
+        # One focus point has three coordinates x, y and z
+        self.assertEqual(len(focus_points[0]), 3)
 
         # Test if the autofocus task is done
         self.assertTrue(f.done())
