@@ -225,7 +225,8 @@ def are_collinear(p1: Iterable[float], p2: Iterable[float], p3: Iterable[float])
     x1, y1, z1 = p1
     x2, y2, z2 = p2
     x3, y3, z3 = p3
-
+    # Computes the determinant of a 3x3 matrix formed by the three points
+    # if the determinant is very close to zero within a tolerance, the points are collinear
     return abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) < 1e-12 and \
         abs((x2 - x1) * (z3 - z1) - (x3 - x1) * (z2 - z1)) < 1e-12 and \
         abs((y2 - y1) * (z3 - z1) - (y3 - y1) * (z2 - z1)) < 1e-12
