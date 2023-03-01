@@ -20,10 +20,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import unittest
+
 import numpy
 from scipy.linalg.misc import LinAlgError
 
-from odemis.util.linalg import tri_inv
+from odemis.util.linalg import tri_inv, get_z_pos_on_plane, get_point_on_plane, are_collinear, fit_plane_lstsq
 
 
 class TriInvBadInput(unittest.TestCase):
@@ -60,7 +61,7 @@ class InverseCheck(unittest.TestCase):
             matrix = numpy.arange(float(i * i)).reshape(i, i) + 1.
             c = numpy.tril(matrix)
             self.assertTrue(numpy.allclose(numpy.dot(c, tri_inv(c, lower=True)),
-                            numpy.eye(i)))
+                                           numpy.eye(i)))
 
     def testUnity(self):
         """
@@ -69,6 +70,62 @@ class InverseCheck(unittest.TestCase):
         for i in range(1, 10):
             c = numpy.eye(i)
             self.assertTrue(numpy.allclose(tri_inv(c), c))
+
+
+class PlaneFittingTestCase(unittest.TestCase):
+    def test_fit_plane_lstsq(self):
+        """
+        Test fitting a plane to a set of 3D coordinates using least-squares fitting.
+        """
+        # Create a plane with equation z = 2x + 3y + 4
+        # intersection of z plane given by third element of normal should be non-zero
+
+        # linear points
+        # more than one plane equation possible
+        # check c is not infinity
+        coords = numpy.array([(1, 2, 10), (2, 3, 17), (3, 4, 24), (4, 5, 31)])
+        _, normal = fit_plane_lstsq(coords)
+        self.assertFalse(numpy.isnan(normal[2]))  # assert that c is not nan
+
+        # non-linear points
+        # unique plane equation
+        coords = numpy.array([(1, 2, 12), (-1, -2, -4), (3, 4, 22), (-3, -4, -14)])
+        z, normal = fit_plane_lstsq(coords)
+        self.assertAlmostEqual(z, 4)
+        self.assertTrue(numpy.allclose(normal, (2, 3, -1)))
+
+    def test_get_z_pos_on_plane(self):
+        """
+        Test getting the z position on a plane given a point on the plane and the normal vector.
+        """
+        # Create a plane with equation z = 2x + 3y + 4
+        point_on_plane = (1, 2, 12)
+        normal = [2, 3, -1]
+        z = get_z_pos_on_plane(2, 3, point_on_plane, normal)
+        self.assertEqual(z, 17)
+
+    def test_get_point_on_plane(self):
+        """
+        Test getting the z position on a plane given a triangle.
+        """
+        # Create a plane with equation z = 2x + 3y + 4
+        # Create non-linear points for the triangle
+        tr = ((1, 2, 12), (-1, -2, -4), (3, 4, 22))
+        z = get_point_on_plane(1, 5, tr)
+        self.assertEqual(z, 21)
+
+    def test_are_collinear(self):
+        """
+        Test if three points are collinear.
+        """
+        # Create a plane with equation z = 2x + 3y + 4
+        # Create points in same line with above equation
+        linear_points = numpy.array([[1, 2, 12], [2, 3, 17], [3, 4, 22]])
+        self.assertTrue(are_collinear(linear_points[0], linear_points[1], linear_points[2]))
+
+        # Create points not in same line with above equation
+        non_linear_points = numpy.array([[1, 2, 12], [-1, -2, -4], [3, 4, 22]])
+        self.assertFalse(are_collinear(non_linear_points[0], non_linear_points[1], non_linear_points[2]))
 
 
 if __name__ == "__main__":

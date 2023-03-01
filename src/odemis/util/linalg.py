@@ -43,6 +43,7 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 """
+from typing import Iterable
 
 import numpy
 from scipy.linalg.lapack import get_lapack_funcs
@@ -201,6 +202,8 @@ def get_point_on_plane(x: float, y: float, tr: tuple) -> float:
     :param tr: a triangle describing the plane
     :return: the z-position of the point
     """
+    # tuple conversion to array for easy artihmetic operations
+    tr = numpy.array(tr)
     # These two vectors are in the plane
     v1 = tr[2] - tr[0]
     v2 = tr[1] - tr[0]
@@ -209,3 +212,21 @@ def get_point_on_plane(x: float, y: float, tr: tuple) -> float:
     z = get_z_pos_on_plane(x, y, tr[1], normal)
 
     return z
+
+
+def are_collinear(p1: Iterable[float], p2: Iterable[float], p3: Iterable[float]) -> bool:
+    """
+    Check if three points are collinear.
+    :param p1: x,y,z coordinates of the first point
+    :param p2: x,y,z coordinates of the second point
+    :param p3: x,y,z coordinates of the third point
+    :return: True if the points are on same line, False otherwise
+    """
+    x1, y1, z1 = p1
+    x2, y2, z2 = p2
+    x3, y3, z3 = p3
+    # Computes the determinant of a 3x3 matrix formed by the three points
+    # if the determinant is very close to zero within a tolerance, the points are collinear
+    return abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) < 1e-12 and \
+        abs((x2 - x1) * (z3 - z1) - (x3 - x1) * (z2 - z1)) < 1e-12 and \
+        abs((y2 - y1) * (z3 - z1) - (y3 - y1) * (z2 - z1)) < 1e-12
