@@ -326,12 +326,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
                         [0.0, 0.0001485, -8.125e-06],
                         [0.0001989, 0.0001485, 4.766e-06]]
         zlevels = [focus_points[0][2], focus_points[1][2], focus_points[2][2]]
-        focus_range = self.focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
         axis_range = self.focus.axes['z'].range
-        if focus_range is None:
-            comp_range = axis_range
-        else:
-            comp_range = focus_range
+        comp_range = self.focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, axis_range)
 
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=area, overlap=overlap, future=model.InstantaneousFuture(),
