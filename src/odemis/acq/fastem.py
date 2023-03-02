@@ -569,6 +569,7 @@ class AcquisitionTask(object):
         # Move the stage to the first tile, to ensure the correct position is
         # stored in the megafield metadata yaml file.
         self.field_idx = (0, 0)
+        self._scanner.blanker.value = True  # blank the beam during the move
         self.move_stage_to_next_tile()
 
         # set the sub-directories (<acquisition date>/<project name>) and megafield id
@@ -636,7 +637,7 @@ class AcquisitionTask(object):
             logging.debug("Acquiring field with index: %s", field_idx)
 
             self.move_stage_to_next_tile()  # move stage to next field image position
-
+            self._scanner.blanker.value = False  # unblank the beam
             self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
 
             dataflow.next(field_idx)  # acquire the next field image.
@@ -658,6 +659,7 @@ class AcquisitionTask(object):
             # Update the time left for the acquisition.
             expected_time = len(self._fields_remaining) * total_field_time
             self._future.set_progress(start=time.time(), end=time.time() + expected_time)
+            self._scanner.blanker.value = True  # blank the beam
 
         logging.debug("Successfully acquired all fields of ROA.")
 
