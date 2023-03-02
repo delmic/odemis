@@ -31,6 +31,8 @@ from concurrent.futures import CancelledError
 import numpy
 
 from odemis.acq.align.fastem import align, estimate_calibration_time
+from odemis.util.registration import estimate_grid_orientation_from_img
+from odemis.util.transform import to_physical_space, SimilarityTransform
 
 try:
     from fastem_calibrations import (
@@ -38,6 +40,7 @@ try:
         image_translation_pre_align,
         configure_hw
     )
+    from fastem_calibrations import util as fastem_util
     fastem_calibrations = True
 except ImportError as err:
     logging.info("fastem_calibrations package not found with error: {}".format(err))
@@ -45,7 +48,6 @@ except ImportError as err:
 
 from odemis import model, util
 from odemis.acq import fastem_conf, stitching
-from odemis.acq.align.spot import FindGridSpots
 from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod
 from odemis.acq.stream import SEMStream
 from odemis.util import img, TimeoutError
@@ -187,8 +189,8 @@ class FastEMROA(object):
         => n_fields = (abs(r - l) - field_size * overlap) / (field_size * (1 - overlap))
         """
         l, t, r, b = coordinates  # tuple of floats: l, t, r, b coordinates in m
-        px_size = self._multibeam.pixelSize.value   # Size per pixel in m
-        field_res = self._multibeam.resolution.value    # Number of pixels per field
+        px_size = self._multibeam.pixelSize.value  # Size per pixel in m
+        field_res = self._multibeam.resolution.value  # Number of pixels per field
 
         # The size of a field consists of the effective cell images excluding overscanned pixels.
         field_size = (field_res[0] * px_size[0],
@@ -506,6 +508,8 @@ class AcquisitionTask(object):
         self._pre_calibrations = pre_calibrations
         self._settings_obs = settings_obs
 
+        self.path = fastem_util.create_image_dir("beam-shift-correction")
+
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
         self.megafield = {}
         self.field_idx = (0, 0)
@@ -783,33 +787,49 @@ class AcquisitionTask(object):
         good beam positions we calculate in what direction and how much to shift beams, such that they are always
         centered on the mppc detector.
         """
+        pixel_size = self._ccd.pixelSize.value
+        magnification = self._lens.magnification.value
+        sigma = self._ccd.pointSpreadFunctionSize.value
         # asap=False: wait until new image is acquired (don't read from buffer)
         ccd_image = self._ccd.data.get(asap=False)
-
-        # Find the location of the spots on the diagnostic camera.
-        spot_coordinates, *_ = FindGridSpots(ccd_image, (8, 8))
-
-        # Transform the spots from the diagnostic camera coordinate system to a right-handed coordinate
-        # system with the origin in the bottom left.
-        spot_coordinates[:, 1] = ccd_image.shape[1] - spot_coordinates[:, 1]  # [px]
+        tform, error = estimate_grid_orientation_from_img(ccd_image, (8, 8), SimilarityTransform, sigma,
+                                                          threshold_rel=0.5)
+        logging.debug(f"Found center of grid at {tform.translation}, error: {error}.")
 
         # Determine the shift of the spots, by subtracting the good multiprobe position from the average (center)
         # spot position.
-        good_mp_position = (self._ccd.getMetadata()[model.MD_FAV_POS_ACTIVE]["x"],
-                            self._ccd.getMetadata()[model.MD_FAV_POS_ACTIVE]["y"])
-        shift = numpy.mean(spot_coordinates, axis=0) - good_mp_position  # [px]
+        fav_pos_active = self._ccd.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        # FIXME: If i and j are not in the metadata, use x and y instead.
+        #  Old yaml files used x and y, support for x and y can be removed when all yaml files are updated.
+        try:
+            i = fav_pos_active["i"]
+        except KeyError:
+            i = fav_pos_active["x"]
+        try:
+            j = fav_pos_active["j"]
+        except KeyError:
+            j = ccd_image.shape[1] - fav_pos_active["y"]
 
+        good_mp_position = numpy.array([j, i])
+        shift = good_mp_position - tform.translation  # [px]
+        shift_m = to_physical_space(shift, pixel_size=pixel_size)  # [m]
+
+        # FIXME A positive xy-shift of the beamshift component moves the pattern to the left bottom
+        #  on the diagnostic camera. Therefore we need to invert the shift.
+        #  When the beamshift component is fixed, this should be removed.
+        shift_m *= -1
+        beam_shift_cor = shift_m / magnification  # [m]
         # Convert the shift from pixels to meters
-        pixel_size = self._ccd.pixelSize.value
-        magnification = self._lens.magnification.value
-        shift_m = shift * pixel_size / magnification  # [m] pixel size diagnostic camera divided by 40x magnification
-        logging.debug("Beam shift adjustment required due to stage magnetic field: {} [m]".format(shift_m))
+        logging.debug("Beam shift adjustment required: {} [m]".format(beam_shift_cor))
 
         cur_beam_shift_pos = numpy.array(self._beamshift.shift.value)
         logging.debug("Current beam shift: {} [m]".format(self._beamshift.shift.value))
-        self._beamshift.shift.value = (cur_beam_shift_pos + shift_m)
+        self._beamshift.shift.value = (cur_beam_shift_pos + beam_shift_cor)
 
         logging.debug("New beam shift m: {}".format(self._beamshift.shift.value))
+
+        ccd_image = self._ccd.data.get(asap=False)
+        fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)
 
     def _create_acquisition_metadata(self):
         """
