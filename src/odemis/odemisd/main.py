@@ -62,6 +62,8 @@ status_to_xtcode = {BACKEND_RUNNING: 0,
 class CustomSafeRepresenter(SafeRepresenter):
 
     def represent_numpy_float(self, data):
+        # Currently yaml does not support dumping objects of the datatype numpy.floating
+        # hence represent numpy.floating as python float
         data = float(data)
         self.represent_float(data)
 
