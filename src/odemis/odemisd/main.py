@@ -66,7 +66,7 @@ class CustomSafeRepresenter(SafeRepresenter):
         self.represent_float(data)
 
 
-CustomSafeRepresenter.add_representer(numpy.float_, CustomSafeRepresenter.represent_numpy_float)
+CustomSafeRepresenter.add_representer(numpy.floating, CustomSafeRepresenter.represent_numpy_float)
 
 
 class CustomSafeDumper(Emitter, Serializer, CustomSafeRepresenter, Resolver):
