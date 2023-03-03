@@ -672,6 +672,8 @@ class TiledAcquisitionTask(object):
                 break
 
         if point_in_triangle is False:
+            # TODO determine a better way for dealing with points outside of the focused area, for instance
+            #  by using linear extrapolation.
             logging.debug("Acquiring tile outside of focused area, will use plane fitting to find the focus.")
             # If the point is not in one of the triangles fit a plane through all
             # focus points and base the z position on that plane fit.
@@ -780,7 +782,7 @@ class TiledAcquisitionTask(object):
                                                   good_focus=self._good_focus,
                                                   rng_focus=self._focus_rng,
                                                   method=MTD_EXHAUSTIVE)
-            _, focus_pos = self._future.running_subf.result()  # blocks until autofocus is finished
+            _, focus_pos, _ = self._future.running_subf.result()  # blocks until autofocus is finished
 
             # Corner case where it started very badly: update the "good focus"
             # as it's likely going to be better.
@@ -986,7 +988,7 @@ class AcquireOverviewTask(object):
         self.focus_rng = self._focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
 
         if self.focus_rng is None:
-            # No absolute range is available, so maybe use a relative range (e.g. as on METEOR
+            # No absolute range is available, so use a relative range (e.g. as on METEOR
             self.focus_rng = self._focus.getMetadata().get(model.MD_SAFE_REL_RANGE, SAFE_REL_RANGE_DEFAULT)
             self.focus_rng = (self.focus_rng[0] + self._focus.position.value["z"],
                               self.focus_rng[1] + self._focus.position.value["z"])
