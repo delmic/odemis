@@ -74,7 +74,7 @@ class TiledAcquisitionTask(object):
 
     def __init__(self, streams, stage, area, overlap, settings_obs=None, log_path=None, future=None, zlevels=None,
                  registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                 focus_points=None):
+                 focus_points=None, focus_range=None):
         """
         :param streams: (list of Streams) the streams to acquire
         :param stage: (Actuator) the sample stage to move to the possible tiles locations
@@ -98,6 +98,7 @@ class TiledAcquisitionTask(object):
         self._future = future
         self._streams = streams
         self._stage = stage
+        self._focus_range = focus_range
         # Get total area as a tuple of width, height from ltrb area points
         normalized_area = util.normalize_rect(area)
         if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
@@ -697,16 +698,35 @@ class TiledAcquisitionTask(object):
         :returns (list(float) or None) zstack levels for zstack acquisition.
           return None if only one zstep is requested.
         """
-        if len(self._init_zlevels) == 1:
+        # When initial z level is one or None, use the current focus value
+        if len(self._init_zlevels) <= 1:
             return [focus_value, ]
 
         zlevels = self._init_zlevels + focus_value
 
-        # Clip zsteps value to allowed range
-        focus_range = self._focus_stream.focuser.getMetadata()[model.MD_POS_ACTIVE_RANGE]
-        axis_range = self._focus_stream.focuser.axes['z'].range
-        zmin = max(min(zlevels), min(axis_range), min(focus_range))
-        zmax = min(max(zlevels), max(axis_range), max(focus_range))
+        # Check which focus range is available
+        if self._focus_range is not None:
+            comp_range = self._focus_range
+        else:
+            comp_range = self._focus_stream.focuser.axes['z'].range
+
+        # The number of zlevels will remain the same, but the range will be adjusted
+        zmin = min(zlevels)
+        zmax = max(zlevels)
+        if (zmax - zmin) > (comp_range[1] - comp_range[0]):
+            # Corner case: it'd be larger than the entire range => limit to the entire range
+            zmin = comp_range[0]
+            zmax = comp_range[1]
+        if zmax > comp_range[1]:
+            # Too high => shift down
+            zmax -= zmax - comp_range[1]
+            zmin -= zmax - comp_range[1]
+        if zmin < comp_range[0]:
+            # Too low => shift up
+            zmin += comp_range[0] - zmin
+            zmax += comp_range[0] - zmin
+
+        # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
         return zlevels
 
@@ -894,7 +914,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     # TODO input the focus_range as input argument and do not calculate it in this task
     task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
                                 registrar=registrar, weaver=weaver, focusing_method=focusing_method,
-                                focus_points=focus_points)
+                                focus_points=focus_points, focus_range=focus_range)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()
@@ -1019,10 +1039,9 @@ class AcquireOverviewTask(object):
         The main function of the task class, which will be called by the future asynchronously
         """
         self._future._task_state = RUNNING
-        focus_points = None  # list of [x, y, z] focus points
+        da_rois = []
         try:
             actual_time_per_roi = None
-            da_rois = []
             # create a for loop for roi to create sub futures
             for idx, roi in enumerate(self.areas):
                 start_time = time.time()
@@ -1047,12 +1066,17 @@ class AcquireOverviewTask(object):
                 try:
                     focus_points = self._future.running_subf.result()  # timeout error can be used
                 except Exception as exp:
-                    logging.exception(
-                        f"Autofocus within roi failed for roi number {idx} with {roi} values due to {exp}")
+                    # logging.exception(
+                    #     f"Autofocus within roi failed for roi number {idx} with {roi} values due to {exp}")
                     raise
+
+                # cancel the sub future
+                if self._future._task_state == CANCELLED:
+                    raise CancelledError()
 
                 # run tiled acquisition for the selected roi
                 self._future.running_subf = acquireTiledArea(self.streams, self._stage, roi,
+                                                             focus_range=self.focus_rng,
                                                              overlap=self._overlap,
                                                              settings_obs=self._settings_obs,
                                                              log_path=self._log_path,
@@ -1060,8 +1084,7 @@ class AcquireOverviewTask(object):
                                                              registrar=self._registrar,
                                                              weaver=self._weaver,
                                                              focusing_method=self.focusing_method,
-                                                             focus_points=focus_points,
-                                                             focus_range=self.focus_rng)
+                                                             focus_points=focus_points)
                 logging.debug(f"Z-stack acquisition is running for roi number {idx} with {roi} values")
                 try:
                     da = self._future.running_subf.result()
@@ -1074,6 +1097,10 @@ class AcquireOverviewTask(object):
 
                 logging.debug(f"acquisition overview is completed for roi number {idx} with {roi} values")
 
+                # cancel the sub future
+                if self._future._task_state == CANCELLED:
+                    raise CancelledError()
+
                 # Store the actual time during acquisition one roi
                 actual_time_per_roi = time.time() - start_time
 
@@ -1082,6 +1109,7 @@ class AcquireOverviewTask(object):
             raise
         except Exception:
             logging.exception(f"acquisition overview failed")
+            self._future.running_subf.cancel()
             raise
         finally:
             # state that the future has finished

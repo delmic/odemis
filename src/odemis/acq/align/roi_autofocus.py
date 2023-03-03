@@ -59,11 +59,11 @@ def do_autofocus_in_roi(
         For values above 0 only the positions with confidence higher than conf_level are taken into account.
     :return:
     """
+    focus_positions = []
     try:
         init_pos = stage.position.value
         xmin, ymin, xmax, ymax = bbox
 
-        focus_positions = []
         for y in numpy.linspace(ymin, ymax, ny):
             for x in numpy.linspace(xmin, xmax, nx):
                 if f._autofocus_roi_state == CANCELLED:
@@ -72,18 +72,23 @@ def do_autofocus_in_roi(
                 # run autofocus
                 f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
                 foc_pos, foc_lev, conf = f._running_subf.result(timeout=900)
-                if foc_lev >= conf_level:
+                if conf >= conf_level:
                     focus_positions.append([stage.position.value["x"],
                                             stage.position.value["y"],
                                             focus.position.value["z"]])
                     logging.debug(f"Added focus with confidence of {foc_lev} at position: {focus_positions[-1]}")
+
         return focus_positions
+
     except TimeoutError:
-        f._running_subf.cancel()
         logging.exception(f"Timed out during autofocus at position {x, y} .")
+        f._running_subf.cancel()
         raise
+
     except CancelledError:
         logging.info(f"Autofocus in roi cancelled at position {x, y}.")
+        raise
+
     finally:
         logging.debug(f"Moving back to initial stage position {init_pos}")
         stage.moveAbsSync(init_pos)
@@ -127,11 +132,11 @@ def autofocus_in_roi(
         focus: model.Component,
         focus_range: tuple,
         n_focus_points: tuple = (3, 3),
-        conf_level: int = 0
+        conf_level: float = 0
 ):
     """
     Wrapper for do_autofocus_in_roi. It provides the ability to check the progress of autofocus
-    procedure and cancel it.
+    procedure and cancel it. The current position of the focus component is used as the starting position.
     :param bbox: bounding box of the roi, tuple of (xmin, ymin, xmax, ymax) in meters
     :param stage: stage component
     :param ccd: ccd component
