@@ -558,6 +558,54 @@ class TransformTestBase:
         inv = tform.inverse()
         self.assertIs(type(inv), self.inverse_type)
 
+    def test_matmul_identity(self):
+        """
+        The returned GeometricTransform instance should be equal to the
+        identity transform when combining a transform with its inverse.
+
+        """
+        tform = random_transform(self.transform_type, self._rng)
+        out = tform @ tform.inverse()
+        numpy.testing.assert_array_almost_equal(out.matrix, numpy.eye(2))
+        numpy.testing.assert_array_almost_equal(out.translation, numpy.zeros(2))
+
+    def test_matmul_sequential(self):
+        """
+        Applying the combined GeometricTransform should return the same result
+        as when sequentially applying the corresponding transforms on the same
+        coordinates.
+
+        """
+        a = random_transform(self.transform_type, self._rng)
+        b = random_transform(self.transform_type, self._rng)
+        src = self._rng.random_sample((10, 2))
+        dst = a.apply(b.apply(src))
+        out = (a @ b).apply(src)
+        numpy.testing.assert_array_almost_equal(dst, out)
+
+    def test_matmul_types(self):
+        """
+        `GeometricTransform.__matmul__` should return a transform of the
+        expected type.
+
+        """
+        transform_types = (
+            RigidTransform,
+            SimilarityTransform,
+            ScalingTransform,
+            AffineTransform,
+        )
+        for cls in transform_types:
+            a = random_transform(self.transform_type, self._rng)
+            b = random_transform(cls, self._rng)
+            out = type(a @ b)
+            if self.transform_type is ScalingTransform:
+                self.assertIs(out, AffineTransform)
+            elif issubclass(self.transform_type, cls):
+                self.assertIs(out, cls)
+            else:
+                self.assertIs(out, self.transform_type)
+
 
 class AffineTransformTest(TransformTestBase, unittest.TestCase):
     transform_type = inverse_type = AffineTransform
