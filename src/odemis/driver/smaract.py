@@ -1017,10 +1017,10 @@ class FakeSmarPodDLL(object):
         self.properties = {
             SmarPodDLL.PIVOT_MODE: SmarPodDLL.PIVOT_RELATIVE
         }
-        self._speed = c_double(0)
+        self._speed = c_double(0.1)
         self._speed_control = c_int(0)
+        self._accel = c_double(0.1)
         self._accel_control = c_int(0)
-        self._accel = c_double(0)
         self.referenced = False
 
         self._pivot = [0, 0, 0]
@@ -1039,7 +1039,7 @@ class FakeSmarPodDLL(object):
         self._current_move_start = time.time()
         self._current_move_finish = time.time()
 
-    def _pose_in_range(self, pose):
+    def _pose_in_range(self, pose: Smarpod_Pose):
         if self._range['x'][0] <= pose.positionX <= self._range['x'][1] and \
             self._range['y'][0] <= pose.positionY <= self._range['y'][1] and \
             self._range['z'][0] <= pose.positionZ <= self._range['z'][1] and \
@@ -1050,10 +1050,30 @@ class FakeSmarPodDLL(object):
         else:
             return False
 
-    """
-    DLL functions (fake)
-    These functions are provided by the real SmarPod DLL
-    """
+    def _estimate_move_duration(self, new_pose: Smarpod_Pose) -> float:
+        """
+        Estimate the maximum duration of a move
+        new_pose: target position
+        returns: the duration of the move in seconds
+        """
+        # Guess the duration by using the speed and acceleration of the positioners,
+        # for the requested distance.
+        diff_linear = (new_pose.positionX - self.pose.positionX,
+                       new_pose.positionY - self.pose.positionY,
+                       new_pose.positionZ - self.pose.positionZ)
+        dist_linear = math.sqrt(sum(d ** 2.0 for d in diff_linear))
+        dur_linear = driver.estimateMoveDuration(dist_linear, self._speed.value, self._accel.value)
+
+        diff_rot = (new_pose.rotationX - self.pose.rotationX,
+                    new_pose.rotationY - self.pose.rotationY,
+                    new_pose.rotationZ - self.pose.rotationZ)
+        # Guess the rotation takes maximum 0.1 s/degree
+        dur_rot =  0.1 * sum(abs(d) for d in diff_rot)
+
+        return dur_linear + dur_rot  # s
+
+    # DLL functions (fake)
+    # These functions are provided by the real SmarPod DLL
 
     def Smarpod_Open(self, p_id, model, locator, options):
         pass
@@ -1087,9 +1107,9 @@ class FakeSmarPodDLL(object):
     def Smarpod_Move(self, id, p_pose, hold_time, block):
         self.stopping.clear()
         pose = _deref(p_pose, Smarpod_Pose)
+        move_dur = self._estimate_move_duration(pose)
         if self._pose_in_range(pose):
-            # Simulate every move as taking 1 s
-            self._current_move_finish = time.time() + 1.0
+            self._current_move_finish = time.time() + move_dur
             self.target.positionX = pose.positionX
             self.target.positionY = pose.positionY
             self.target.positionZ = pose.positionZ
@@ -1098,6 +1118,11 @@ class FakeSmarPodDLL(object):
             self.target.rotationZ = pose.rotationZ
         else:
             raise SmarPodError(SmarPodDLL.POSE_UNREACHABLE_ERROR)
+
+        if block:
+            if self.stopping.wait(move_dur):
+                self._current_move_finish = time.time()
+                raise SmarPodError(SmarPodDLL.STOPPED_ERROR)
 
     def Smarpod_GetPose(self, id, p_pose):
         pose = _deref(p_pose, Smarpod_Pose)
@@ -1120,6 +1145,16 @@ class FakeSmarPodDLL(object):
 
     def Smarpod_Stop(self, id):
         self.stopping.set()
+        # TODO: simulate position in-between
+        # Pretend it moved by computing a position halfway between original position and target
+        if time.time() < self._current_move_finish:
+            self.pose.positionX = (self.pose.positionX + self.target.positionX) / 2
+            self.pose.positionY = (self.pose.positionY + self.target.positionY) / 2
+            self.pose.positionZ = (self.pose.positionZ + self.target.positionZ) / 2
+            self.pose.rotationX = (self.pose.rotationX + self.target.rotationX) / 2
+            self.pose.rotationY = (self.pose.rotationY + self.target.rotationY) / 2
+            self.pose.rotationZ = (self.pose.rotationZ + self.target.rotationZ) / 2
+            self._current_move_finish = time.time()
 
     def Smarpod_SetSpeed(self, id, speed_control, speed):
         self._speed = speed

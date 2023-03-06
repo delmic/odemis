@@ -1,23 +1,21 @@
-# MIMAS, fully simulated
+# MIMAS, fully simulated, using the Orsay Physics simulator running on a dedicated Windows VM.
 
 MIMAS-Sim: {
     class: Microscope,
     role: mimas,
     children: [
-    # TODO: need to simulate all the components commented out (typically provided by the Orsay system)
-#        "Pneumatic Suspension", "Chamber", "Pumping System", "FIB Vacuum",
-#        "UPS",
-        "GIS",
-        #"GIS Reservoir",
-        "Chamber Cam",
+        "Pneumatic Suspension", "Chamber", "Pumping System", "FIB Vacuum",
+        "UPS",
+        "GIS", "GIS Reservoir",
         "Chamber Light",
-#        "Ion Source",
-#        "Ion Beam",
+        "Ion Source",
+        "Ion Beam",
         "Ion Focus",
-#        "FIB Aperture",
+        "FIB Aperture",
         "FIB Scanner",
         "ETD",
         "Sample Thermostat",
+        "Chamber Cam 1",
         "Stage",
         "Stage Focus",
         "Optical Objective",
@@ -28,85 +26,121 @@ MIMAS-Sim: {
     ],
 }
 
-# Allows to change pressure in the chamber
-"Chamber": {
-    class: simulated.Chamber,
-    role: chamber,
+# Connection to the Orsay server
+# Simulation:   192.168.56.101
+# Hardware:     192.168.30.101
+"Orsay Server": {
+    class: orsay.OrsayComponent,
+    role: null,
     init: {
-        # The Orsay component has these positions, but the simulator has different names: ["vented", "primary vacuum", "high vacuum"],
-        positions: ["vented", "low-vacuum", "vacuum"],
+        host: "192.168.56.101"
+    },
+    children: {
+        pneumatic-suspension: "Pneumatic Suspension",
+        pressure: "Chamber",
+        pumping-system: "Pumping System",
+        fib-vacuum: "FIB Vacuum",
+        ups: "UPS",
+        gis: "GIS",
+        gis-reservoir: "GIS Reservoir",
+        light: "Chamber Light",
+        fib-source: "Ion Source",
+        fib-beam: "Ion Beam",
+        fib-aperture: "FIB Aperture",
+        scanner: "FIB Scanner",
+        focus: "Ion Focus",
+        detector: "ETD",
+    }
+}
+
+"Pneumatic Suspension": {
+    role: pneumatic-suspension,
+    init: {}
+}
+
+"Chamber": {
+    role: chamber,
+    init: {}
+}
+
+"Pumping System": {
+    role: pumping-system,
+    init: {}
+}
+
+"UPS": {
+    role: ups,
+    init: {}
+}
+
+"GIS": {
+    role: gis,
+    init: {}
+}
+
+"GIS Reservoir": {
+    role: gis-reservoir,
+    init: {}
+}
+
+"Chamber Light": {
+    role: chamber-light,
+    init: {}
+}
+
+"FIB Vacuum": {
+    role: fib-vacuum,
+    init: {}
+}
+
+"Ion Source": {
+    role: ion-source,
+    init: {}
+}
+
+"Ion Beam": {
+    role: null,
+    init: {}
+}
+
+"FIB Aperture": {
+    role: fib-aperture,
+    init: {}
+}
+
+"FIB Scanner": {
+    role: ion-beam,
+    init: {}
+}
+
+"ETD": {
+    role: se-detector,
+    init: {},
+    metadata: {
+        # TODO: if we want to compensate for the tilt (as defined in ION_BEAM_TO_SAMPLE_ANGLE),
+        # we could "expand" the Y using this formula: 1/cos(90°- angle)
+        # PIXEL_SIZE_COR: [1, 5.78],  # ratio
     },
 }
 
-# Simulate the GIS needle by using a simple axis simulator
-"GIS": {
-    class: simulated.GenericComponent,
-    role: gis,
+"Ion Focus": {
+    role: ion-focus,
     init: {
-        axes: {
-            "arm": {
-                # First value is the initial value
-                choices: {False: "parked", True: "engaged"},
-            },
-            "reservoir": {
-                choices: {False: "closed", True: "open"},
-            },
-        },
+      rng: [0.0, 0.1]  # range of the focus in meter
     },
+    metadata: {
+        CALIB: 0.18e+6,  # Volt per meter. Read the driver specifications for more details on this value
+    }
 }
 
 # Currently not available on the real MIMAS
-"Chamber Cam": {
+"Chamber Cam 1": {
     class: andorcam2.AndorCam2,
     role: chamber-ccd,
     init: {
        device: "fake",
        # 8 bits greyscale
     },
-}
-
-# (IR) light for the chamber
-"Chamber Light": {
-    class: simulated.Light,
-    role: chamber-light,
-    init: {},
-    affects: ["Chamber Cam"],
-}
-
-"FIB Simulator": {
-    class: simsem.SimSEM,
-    role: null,
-    init: {
-           image: "simsem-fake-output.h5", # any large 16 bit image is fine
-#           drift_period: 5, # seconds
-    },
-    children: {
-        scanner: "FIB Scanner",
-        detector0: "ETD",
-        focus: "Ion Focus",
-    }
-}
-
-"FIB Scanner": {
-    role: ion-beam,
-    init: {
-        # TODO: check if we can provide better numbers to simulated the Orsay FIB
-        aperture: 200.e-6, # m
-        wd: 7.e-3, # m
-    },
-    properties: {
-        dwellTime: 10.e-6, # s
-    },
-    affects: ["ETD", "Camera"] # affects the CCD in case of cathodoluminescence
-}
-
-"ETD": {
-    role: se-detector,
-    init: {},
-}
-
-"Ion Focus": {
-    role: ion-focus,
 }
 
 # Lakeshore 350, which controls the temperature
