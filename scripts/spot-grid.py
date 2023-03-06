@@ -23,10 +23,15 @@ from odemis.acq.align.spot import FindGridSpots
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.driver import ueye
 from odemis.util.driver import get_backend_status, BACKEND_RUNNING
+from odemis.util.registration import (
+    estimate_grid_orientation_from_img,
+    unit_gridpoints,
+)
+from odemis.util.transform import AffineTransform
 
 MAX_WIDTH = 2000  # px
 PIXEL_SIZE_SAMPLE_PLANE = 3.45e-6  # m
-DEFAULT_MAGNIFICATION = 50
+DEFAULT_MAGNIFICATION = 40
 PIXEL_SIZE = PIXEL_SIZE_SAMPLE_PLANE / DEFAULT_MAGNIFICATION
 
 
@@ -53,12 +58,22 @@ class VideoDisplayerGrid(VideoDisplayer):
         at ratio 1:1)
         data (numpy.ndarray): an 2D array containing the image (can be 3D if in RGB)
         """
-        self.app.spots, trans, scale, rot, shear = FindGridSpots(data, self.gridsize)
-        self.app.translation = trans[0], data.shape[0] - trans[1]
-        self.app.scale = scale
-        self.app.rotation = -rot
-        self.app.shear = shear
+        tform_ji = estimate_grid_orientation_from_img(
+            data,
+            (8, 8),
+            AffineTransform,
+            sigma=1.45,
+            threshold_rel=0.5,
+        )
+        grid = unit_gridpoints((8, 8), mode="ji")
+        self.app.spots = tform_ji.apply(grid)
 
+        tform_xy = to_physical_space(tform_ji, data.shape, pxsize)
+        self.app.translation = tform_xy.translation
+        self.app.scale = tform_xy.scale
+        self.app.rotation = tform_xy.rotation
+        self.app.squeeze = tform_xy.squeeze
+        self.app.shear = tform_xy.shear
         super(VideoDisplayerGrid, self).new_image(data)
 
     def waitQuit(self):
@@ -138,10 +153,10 @@ class ImageWindowApp(wx.App):
         text_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
         info = [
             "rotation: {:.1f} deg".format(numpy.rad2deg(self.rotation)),
-            "pitch-x: {:.2f} um".format(self.pixelsize * self.scale[0] * 1e6),
-            "pitch-y: {:.2f} um".format(self.pixelsize * self.scale[1] * 1e6),
-            "translation-x: {:.1f} um".format(self.pixelsize * self.translation[0] * 1e6),
-            "translation-y: {:.1f} um".format(self.pixelsize * self.translation[1] * 1e6),
+            "pitch: {:.3f} um".format(1e6 * self.scale),
+            "translation-x: {:.3f} um".format(1e6 * self.translation[0]),
+            "translation-y: {:.3f} um".format(1e6 * self.translation[1]),
+            "squeeze: {:.5f}".format(self.squeeze),
             "shear: {:.5f} ".format(self.shear),
         ]
         ctx2 = cairo.Context(text_surface)
