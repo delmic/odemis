@@ -145,11 +145,9 @@ class MillingRectangleTask(object):
         time_estimate = 0
         drift_acq_time = 0
         stage_time = 0
+
         for setting_nb, setting in enumerate(self._settings):
-            # for setting_nb in range(len(self._settings)): # enumerate does not take a single-element list
-            #     setting = self._settings[setting_nb]
             time_estimate += setting.duration.value
-            # if self._settings[i]["dcROI"] != UNDEFINED_ROI:
             if setting.dcRoi.value != UNDEFINED_ROI:
                 self._iterations.append(int(numpy.ceil(setting.duration.value / setting.dcPeriod.value)))
                 self._pass_duration.append(setting.duration.value / self._iterations[setting_nb])
@@ -160,6 +158,7 @@ class MillingRectangleTask(object):
                 self._pass_duration.append(setting.duration.value)
 
         prev_stage_pos_ref = None  # previous stage position used for reference in estimating time
+
         for site in self.sites:
             stage_time += self.estimate_stage_movement_time(site, prev_stage_pos_ref)
             prev_stage_pos_ref = site.pos.value
@@ -206,15 +205,17 @@ class MillingRectangleTask(object):
 
         return total_duration
 
-    def estimate_stage_movement_time(self, site: CryoFeature, stage_pos_ref=None) -> float:
+    def estimate_stage_movement_time(self, site: CryoFeature, stage_pos_ref: tuple = None) -> float:
         """
         Estimation the time taken by the stage to move from current position to the location of given site
         :param site: (CryoFeature) consists X,Y,Z coordinates for stage location in m.
+        :param stage_pos_ref: (tuple) reference position of the stage in m from where the stage moves.
         :return: (float) time to move the stage between two points in s.
         """
         # current position from x,y,z of stage position and eliminating rx,ry,rz
         if stage_pos_ref is None:
-            current_pos = [p[1] for p in self._stage.position.value.items() if len(p[0]) == 1]
+            stage_pos = self._stage.position.value
+            current_pos = [stage_pos[an] for an in ("x", "y", "z")]
         else:
             current_pos = stage_pos_ref
         target_pos = site.pos.value  # list
@@ -246,7 +247,6 @@ class MillingRectangleTask(object):
         # check if scanner current is different from the one used for drift correction
         if current == self._scanner.probeCurrent.value:
             return
-
         # set the scanner current to the one used for drift correction
         self._scanner.probeCurrent.value = current
         # store the scanner shift value used in previous current
