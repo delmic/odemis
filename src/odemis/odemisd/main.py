@@ -34,18 +34,14 @@ from concurrent import futures
 from logging import FileHandler
 from logging.handlers import WatchedFileHandler
 
-import numpy
 import yaml
-from yaml.emitter import Emitter
-from yaml.representer import SafeRepresenter
-from yaml.resolver import Resolver
-from yaml.serializer import Serializer
 
 import odemis
 from odemis import model
 from odemis.model import ST_STARTING, ST_UNLOADED
 from odemis.odemisd import modelgen
 from odemis.odemisd.mdupdater import MetadataUpdater
+from odemis.util.conversion import YamlExtraDumper
 from odemis.util.driver import (BACKEND_DEAD, BACKEND_RUNNING,
                                 BACKEND_STARTING, BACKEND_STOPPED,
                                 get_backend_status)
@@ -57,37 +53,6 @@ status_to_xtcode = {BACKEND_RUNNING: 0,
                     BACKEND_STOPPED: 2,
                     BACKEND_STARTING: 3,
                     }
-
-
-class CustomSafeRepresenter(SafeRepresenter):
-
-    def represent_numpy_float(self, data):
-        # Currently yaml does not support dumping objects of the datatype numpy.floating
-        # hence represent numpy.floating as python float
-        data = float(data)
-        self.represent_float(data)
-
-
-CustomSafeRepresenter.add_representer(numpy.floating, CustomSafeRepresenter.represent_numpy_float)
-
-
-class CustomSafeDumper(Emitter, Serializer, CustomSafeRepresenter, Resolver):
-
-    def __init__(self, stream,
-            default_style=None, default_flow_style=False,
-            canonical=None, indent=None, width=None,
-            allow_unicode=None, line_break=None,
-            encoding=None, explicit_start=None, explicit_end=None,
-            version=None, tags=None, sort_keys=True):
-        Emitter.__init__(self, stream, canonical=canonical,
-                indent=indent, width=width,
-                allow_unicode=allow_unicode, line_break=line_break)
-        Serializer.__init__(self, encoding=encoding,
-                explicit_start=explicit_start, explicit_end=explicit_end,
-                version=version, tags=tags)
-        CustomSafeRepresenter.__init__(self, default_style=default_style,
-                default_flow_style=default_flow_style, sort_keys=sort_keys)
-        Resolver.__init__(self)
 
 
 class BackendContainer(model.Container):
@@ -184,7 +149,7 @@ class BackendContainer(model.Container):
 
         self._settings.truncate(0)  # delete previous file contents
         self._settings.seek(0)  # go back to position 0
-        yaml.dump(self._persistent_data, self._settings, Dumper=CustomSafeDumper)
+        yaml.dump(self._persistent_data, self._settings, Dumper=YamlExtraDumper)
 
     def run(self):
         # Create the root
