@@ -22,16 +22,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import json
 import math
+import unittest
+
 import numpy
+import yaml
+
 from odemis import model
 from odemis.util import conversion
-from odemis.util.conversion import \
-    convert_to_object, \
-    reproduce_typed_value, \
-    get_img_transformation_matrix, \
-    get_tile_md_pos, get_img_transformation_md, ensure_tuple, JsonExtraEncoder, YamlExtraDumper
-import unittest
-import yaml
+from odemis.util.conversion import (JsonExtraEncoder, YamlExtraDumper,
+                                    convert_to_object, ensure_tuple,
+                                    get_img_transformation_matrix,
+                                    get_img_transformation_md, get_tile_md_pos,
+                                    reproduce_typed_value)
 
 
 class TestConversion(unittest.TestCase):
