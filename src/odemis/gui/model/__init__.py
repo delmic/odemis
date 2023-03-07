@@ -345,6 +345,8 @@ class MainGUIData(object):
                     required_roles += ["ion-beam", "se-detector-ion"]
             elif self.role == "meteor":
                 required_roles += ["light", "stage", "focus"]
+            elif self.role == "mimas":
+                required_roles += ["light", "stage", "focus", "align", "ion-beam"]
             elif self.role in ("sparc", "sparc2"):
                 # SPARCv1 can also work without a lens
                 required_roles += ["e-beam", "mirror"]

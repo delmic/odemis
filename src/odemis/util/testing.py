@@ -16,16 +16,19 @@ You should have received a copy of the GNU General Public License along with Ode
 """
 # Helper functions for unit tests
 import logging
-import numpy
-import odemis
-from odemis import model, util
-from odemis.util import driver
-from odemis.odemisd import modelgen 
 import os
 import resource
 import subprocess
 import sys
+import tempfile
 import time
+
+import numpy
+
+import odemis
+from odemis import model, util
+from odemis.odemisd import modelgen
+from odemis.util import driver
 
 # ODEMISD_CMD = ["/usr/bin/python2", "-m", "odemis.odemisd.main"]
 # -m doesn't work when run from PyDev... not entirely sure why
@@ -38,6 +41,25 @@ def setlimits():
     # objects are created
     logging.info("Setting resource limit in child (pid %d)", os.getpid())
     resource.setrlimit(resource.RLIMIT_NOFILE, (3092, 3092))
+
+def use_fake_backend_directory():
+    """
+    Switch the BASE_DIRECTORY to a temporary directory.
+    Useful if this directory is already in use, or if the user running odemis doesn't
+    have the right to that folder.
+    Has no effect if the BASE_DIRECTORY has already been changed.
+    Note: only affect the current process. So if a backend is started afterwards,
+    it will still use the default directory.
+    """
+    STD_BASE_DIRECTORY = "/var/run/odemisd"
+    if model.BASE_DIRECTORY != STD_BASE_DIRECTORY:
+        logging.debug("Not updating BASE_DIRECTORY, as it is already %s", model.BASE_DIRECTORY)
+    else:
+        # Create a unique "odemisd" directory into a temporary directory
+        temp_dir = tempfile.mkdtemp()
+        model.BASE_DIRECTORY = os.path.join(temp_dir, "odemisd")
+        os.makedirs(model.BASE_DIRECTORY, exist_ok=True)
+        logging.info(f"Creating new temporary back-end directory {model.BASE_DIRECTORY}.")
 
 
 def start_backend(config):

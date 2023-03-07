@@ -650,7 +650,7 @@ class FastEMCalibrationController:
         """
         self._update_calibration_controls()
 
-    @wxlimit_invocation(1)  # max 1/s; called in main GUI thread
+    @wxlimit_invocation(0.1)  # max 10Hz; called in main GUI thread
     def _update_calibration_controls(self, text=None, button_state=True):
         """
         Update the calibration panel controls to be ready for the next calibration.
@@ -727,6 +727,17 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         if self._tab_data.is_calibrating.value:
             logging.debug("Calibration was cancelled.")
             align_fastem._executor.cancel()  # all the rest will be handled by on_alignment_done()
+            return
+
+        # Check if there are any calibration regions, if not: return because there is nothing to calibrate
+        roc_available = any(
+            roc.coordinates.value != stream.UNDEFINED_ROI for k, roc in self.calibration_regions.value.items()
+        )
+
+        if not roc_available:
+            logging.warning("No calibration regions selected, cannot run calibration.")
+            self._tab_data.is_calibrating.value = False
+            self._on_calibration_state()  # update the controls in the panel
             return
 
         # calibrate

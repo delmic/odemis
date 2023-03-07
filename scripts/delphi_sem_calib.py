@@ -52,7 +52,7 @@ def main(args):
             efocus = model.getComponent(role="ebeam-focus")
             efocus.moveAbs({"z": delphi.SEM_KNOWN_FOCUS}).result()
             f = autofocus.AutoFocus(bsd, escan, efocus)
-            focus, fm_level = f.result()
+            focus, fm_level, _ = f.result()
             print("SEM focused @ %g m" % (focus,))
 
         logging.debug("Starting Phenom SEM calibration...")

@@ -23,14 +23,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import itertools
 import logging
 import math
-import numpy
-from scipy import misc
 import threading
+
+import numpy
 import cv2
 
 from odemis.acq.align.shift import MeasureShift
 
-MIN_RESOLUTION = (20, 20) # seems 10x10 sometimes work, but let's not tent it
+MIN_RESOLUTION = (20, 20)  # sometimes 8x8 works, but it's not reliable enough
 MAX_PIXELS = 128 ** 2  # px
 
 
@@ -44,23 +44,31 @@ class AnchoredEstimator(object):
     the global acquire, such as at the beginning of a line), and call .estimate()
     to measure the drift.
     """
-    def __init__(self, scanner, detector, region, dwell_time):
+
+    def __init__(self, scanner, detector, region, dwell_time, max_pixels=MAX_PIXELS, follow_drift=True):
         """
         scanner (Emitter)
         detector (Detector)
         region (4 floats)
         dwell_time (float)
+        max_pixels (int): the maximum number of pixels that the anchor region will use. If the region
+          acquired is large, then the scanner scale is adjusted so that the anchor region contains at most
+          max_pixels pixels.
+        follow_drift (bool): If True, the anchor region position is adjusted based on the drift measured. It is useful
+         when drift compensation is done by adjusting the scanner settings. If False, the anchor region is fixed.
+         It is useful when drift compensation is based on beam shift or stage movement.
         """
         self._emitter = scanner
         self._semd = detector
         self._dwell_time = dwell_time
+        self._follow_drift = follow_drift
 
         # Latest drift vector from the previous acquisition
         self.drift = (0, 0)  # in sem px
         # Total drift vector from the first acquisition
         self.tot_drift = (0, 0)  # in sem px
         # Maximum distance drifted from the first acquisition
-        self.max_drift = (0, 0) # in sem px
+        self.max_drift = (0, 0)  # in sem px
 
         self.raw = []  # first 2 and last 2 anchor areas acquired (in order)
         self._acq_sem_complete = threading.Event()
@@ -93,7 +101,7 @@ class AnchoredEstimator(object):
         # the anchor region is enough to calculate the drift and at the same
         # time to avoid prolonged exposure times that extremely increase the
         # acquisition time.
-        ratio = math.sqrt(numpy.prod(self._res) / MAX_PIXELS)
+        ratio = math.sqrt(numpy.prod(self._res) / max_pixels)
         self._scale = scanner.scale.clip((ratio, ratio))
 
         # adjust resolution based on the new scale
@@ -122,8 +130,8 @@ class AnchoredEstimator(object):
         cur_trans = self._emitter.translation.value
 
         try:
-            self._updateSEMSettings()
-            logging.debug("E-beam spot to anchor region: %s",
+            self._updateScannerSettings()
+            logging.debug("Beam spot to anchor region: %s",
                           self._emitter.translation.value)
             logging.debug("Scanning anchor region with resolution "
                           "%s and dwelltime %s and scale %s",
@@ -143,7 +151,7 @@ class AnchoredEstimator(object):
                 self.raw = self.raw[0:2]
             self.raw.append(data)
         finally:
-            # Restore SEM settings
+            # Restore scanner settings
             self._emitter.dwellTime.value = cur_dwell_time
             self._emitter.scale.value = cur_scale
             self._emitter.resolution.value = cur_resolution
@@ -173,7 +181,6 @@ class AnchoredEstimator(object):
             orig_drift = MeasureShift(self.raw[0], self.raw[-1], 10)
             self.drift = (orig_drift[0] * self._scale[0],
                           orig_drift[1] * self._scale[1])
-
             logging.debug("Current drift: %s", self.drift)
             logging.debug("Previous frame diff: %s", prev_drift)
             if (abs(self.drift[0] - prev_drift[0]) > 5 * self._scale[0] or
@@ -244,20 +251,23 @@ class AnchoredEstimator(object):
 
         return itertools.cycle(acq_dc_period)
 
-    def _updateSEMSettings(self):
+    def _updateScannerSettings(self):
         """
         Update the scanning area of the SEM according to the anchor region
         for drift correction.
         """
-        # translation is distance from center (situated at 0.5, 0.5), can be floats
-        # we clip translation inside of bounds in case of huge drift
-        trans = (self._trans[0] - self.drift[0],
-                 self._trans[1] - self.drift[1])
-        self._trans = (max(self._trans_range[0][0], min(trans[0], self._trans_range[1][0])),
-                       max(self._trans_range[0][1], min(trans[1], self._trans_range[1][1])))
-        if trans != self._trans:
-            logging.warning("Generated image may be incorrect due to extensive "
-                            "drift of %s clipped to %s", trans, self._trans)
+
+        if self._follow_drift:
+            # SEM settings
+            # translation is distance from center (situated at 0.5, 0.5), can be floats
+            # we clip translation inside of bounds in case of huge drift
+            trans = (self._trans[0] - self.drift[0],
+                     self._trans[1] - self.drift[1])
+            self._trans = (max(self._trans_range[0][0], min(trans[0], self._trans_range[1][0])),
+                           max(self._trans_range[0][1], min(trans[1], self._trans_range[1][1])))
+            if trans != self._trans:
+                logging.warning("Generated image may be incorrect due to extensive "
+                                "drift of %s clipped to %s", trans, self._trans)
 
         # always in this order
         self._emitter.scale.value = self._scale

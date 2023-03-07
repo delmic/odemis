@@ -1068,7 +1068,7 @@ def _DoHoleDetection(future, detector, escan, sem_stage, ebeam_focus, manual=Fal
             f.result()
             detector.data.unsubscribe(_discard_data)
             future._autofocus_f = autofocus.AutoFocus(detector, escan, ebeam_focus)
-            h_focus, fm_level = future._autofocus_f.result()
+            h_focus, fm_level, _ = future._autofocus_f.result()
 
             return h_focus
 

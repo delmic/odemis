@@ -807,8 +807,9 @@ class PH300(model.Detector):
         return numpy.array of shape (1, res): the histogram
         """
         buf = numpy.empty((1, PH_HISTCHAN), dtype=numpy.uint32)
-
         buf_ct = buf.ctypes.data_as(POINTER(c_uint32))
+
+        # Note, as of v3.0.0.3: the maximum data value is actually 65535.
         self._dll.PH_GetHistogram(self._idx, buf_ct, block)
         return buf
 

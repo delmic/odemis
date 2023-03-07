@@ -122,7 +122,7 @@ class TestAutofocus(unittest.TestCase):
         focus.moveAbs({"z": self._opt_good_focus - 400e-6}).result()
         ccd.exposureTime.value = ccd.exposureTime.range[0]
         future_focus = align.AutoFocus(ccd, ebeam, focus)
-        foc_pos, foc_lev = future_focus.result(timeout=900)
+        foc_pos, foc_lev, _ = future_focus.result(timeout=900)
         self.assertAlmostEqual(foc_pos, self._opt_good_focus, 3)
         self.assertGreater(foc_lev, 0)
 
@@ -134,7 +134,7 @@ class TestAutofocus(unittest.TestCase):
         self.efocus.moveAbs({"z": self._sem_good_focus - 100e-06}).result()
         self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
         future_focus = align.AutoFocus(self.sed, self.ebeam, self.efocus)
-        foc_pos, foc_lev = future_focus.result(timeout=900)
+        foc_pos, foc_lev, _ = future_focus.result(timeout=900)
         self.assertAlmostEqual(foc_pos, self._sem_good_focus, 3)
         self.assertGreater(foc_lev, 0)
 
@@ -148,7 +148,7 @@ class TestAutofocus(unittest.TestCase):
         # We don't give exactly the good focus position, to make it a little harder
         future_focus = align.AutoFocus(self.sed, self.ebeam, self.efocus,
                                        good_focus=self._sem_good_focus + 100e-9)
-        foc_pos, foc_lev = future_focus.result(timeout=900)
+        foc_pos, foc_lev, _ = future_focus.result(timeout=900)
         self.assertAlmostEqual(foc_pos, self._sem_good_focus, 3)
         self.assertGreater(foc_lev, 0)
 
@@ -649,7 +649,7 @@ class TestAutofocus1d(unittest.TestCase):
         self.ccd.set_image(new_img)
         self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
         f = align.AutoFocus(self.spectrometer, None, self.focus, method=MTD_BINARY)
-        foc_pos, foc_lev = f.result(timeout=900)
+        foc_pos, foc_lev, _ = f.result(timeout=900)
         logging.debug("Found focus at {} good focus at {}".format(foc_pos, self._good_focus))
         # The focus step size is 10.9e-6, the tolerance is set to 2.5e-5; approximately two focus steps.
         numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=2.5e-5)
@@ -666,13 +666,13 @@ class TestAutofocus1d(unittest.TestCase):
         self.spectrometer.binning.value = (4, 64)
         self.focus.moveAbs({"z": self._good_focus - 200e-6}).result()
         f = align.AutoFocus(self.spectrometer, None, self.focus, method=MTD_BINARY)
-        foc_pos, foc_lev = f.result(timeout=900)
+        foc_pos, foc_lev, _ = f.result(timeout=900)
         logging.debug("Found focus at {} good focus at {}".format(foc_pos, self._good_focus))
         # The focus step size is 10.9e-6, the tolerance is set to 2.5e-5; approximately two focus steps.
         numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=2.5e-5)
         self.focus.moveAbs({"z": self._good_focus + 400e-6}).result()
         f = align.AutoFocus(self.spectrometer, None, self.focus, method=MTD_BINARY)
-        foc_pos, foc_lev = f.result(timeout=900)
+        foc_pos, foc_lev, _ = f.result(timeout=900)
         logging.debug("Found focus at {} good focus at {}".format(foc_pos, self._good_focus))
         # The focus step size is 10.9e-6, the tolerance is set to 2.5e-5; approximately two focus steps.
         numpy.testing.assert_allclose(foc_pos, self._good_focus, atol=2.5e-5)

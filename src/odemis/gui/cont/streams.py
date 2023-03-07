@@ -1372,12 +1372,12 @@ class StreamController(object):
     def _add_fastem_ctrls(self):
         self.stream_panel.add_divider()
 
-        # FIXME uncomment autofocus and autostigmation, when the functionality is working correctly.
-        # _, btn_autofocus = self.stream_panel.add_run_btn("Autofocus")
+        # FIXME uncomment autostigmation, when the functionality is working correctly.
+        _, btn_autofocus = self.stream_panel.add_run_btn("Autofocus")
         _, btn_autobc = self.stream_panel.add_run_btn("Auto-brightness/contrast")
         # _, btn_autostigmation = self.stream_panel.add_run_btn("Autostigmation")
 
-        # btn_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_autofocus)
+        btn_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_autofocus)
         btn_autobc.Bind(wx.EVT_BUTTON, self._on_btn_autobc)
         # btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
 

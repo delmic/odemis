@@ -203,6 +203,47 @@ class TestOrsay(unittest.TestCase):
 
         self.gis_res.targetTemperature.value = init_state  # return to value from before test
 
+    def test_presets(self):
+        """
+        This test uses the standard preset defined in "preset_name".
+        This preset is set at the end of the test and is
+        expected to have an aperture and condenser voltage defined.
+        """
+        datamodel = self.oserver.datamodel
+        preset_name = "Odemis_test_preset"
+        mask_name = "Odemis_test_mask"
+
+        # Create a mask that limits to only the two devices we care about
+        mask_devices = (datamodel.HVPSFloatingIon, datamodel.HybridAperture)
+        self.oserver.preset_manager.CreatePresetMask(mask_name, *mask_devices)
+
+        full_preset = self.oserver.preset_manager.GetPreset(preset_name)
+        condenser_voltage = float(self.oserver._get_preset_setting(full_preset, 'HVPSFloatingIon', "CondensorVoltage", tag="Target"))
+        aperture_number = int(self.oserver._get_preset_setting(full_preset, 'HybridAperture', "SelectedDiaph", tag="Target"))
+
+        self.oserver._load_preset(full_preset, mask_name)
+
+        # Both the target and actual values should match the preset value
+        self.assertAlmostEqual(condenser_voltage,
+                               float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target))
+        self.assertAlmostEqual(condenser_voltage,
+                               float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Actual))
+        if TEST_NOHW is False:  # This only works on the real hardware
+            self.assertEqual(aperture_number,
+                             int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target))
+            self.assertEqual(aperture_number,
+                             int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Actual))
+
+    def test_get_all_preset_names(self):
+        """
+        Check that reading the available presets works
+        At least one preset called Odemis_test_preset should exists
+        """
+        preset_names = self.oserver._get_all_preset_names()
+        print(f"Found presets: {preset_names}")
+        self.assertIn("Odemis_test_preset", preset_names)
+        self.assertGreaterEqual(len(preset_names), 1)
+
 
 class TestPneumaticSuspension(unittest.TestCase):
     """
@@ -1991,99 +2032,54 @@ class TestScanner(unittest.TestCase):
 
         self.scanner.accelVoltage.value = init_value
 
-    def test_getAllPresetData(self):
-        all_preset_data = self.scanner.getAllPresetData()
-
-        # Test for each preset saved in the dict if the values are correct.
-        for preset_data in all_preset_data.values():
-            preset = self.oserver.preset_manager.GetPreset(preset_data["name"])
-            self.assertEqual(preset_data["aperture_number"],
-                             self.scanner._getApertureNmbrFromPreset(preset))
-            self.assertEqual(preset_data["condenser_voltage"],
-                             self.scanner._getCondenserVoltageFromPreset(preset))
-
-
-    def test_getApertureNmbrFromPreset(self):
+    def test_probe_current(self):
         """
-        This test uses the standard preset defined in "preset_name". This preset is set at the end of the test and is
-        expected to have an aperture defined.
+        To run, there should be at least one, and preferably two settings, named like:
+        001_10pA and 002_20pA.
         """
-        preset_name = "Odemis_test_preset"
-        if preset_name not in [p.get("name") for p in self.scanner.parent.preset_manager.GetAllPresets().iter("Preset")]:
-            self.skipTest(f"This test requires the preset {preset_name} to be defined on the machine.")
+        # Check that there is at least one probe current + None
+        current_choices = self.scanner.probeCurrent.choices
+        self.assertIn(None, current_choices)
+        self.assertGreaterEqual(len(current_choices), 2)
+        datamodel = self.oserver.datamodel
 
-        full_preset = self.oserver.preset_manager.GetPreset(preset_name)
-        aperture_number_preset = self.scanner._getApertureNmbrFromPreset(full_preset)
+        logging.info("Probe current available: %s", current_choices)
 
-        # TODO Remove try except if Orsay fixed LoadPreset to not time out.
+        # Check we can change current
         try:
-            self.oserver.preset_manager.LoadPreset(preset_name, PRESET_MASK_NAME)
-        except socket.timeout:
-            time.sleep(90)  # TODO Wait long enough to finish the preset loading process
+            orig_current = self.scanner.probeCurrent.value
+            for new_current in current_choices:
+                if new_current == orig_current:
+                    continue  # too boring
+                if new_current is None:
+                    continue  # Doesn't make sense (we'll try later)
 
-        for _ in range(90):
-            time.sleep(1)
-            if almost_equal(aperture_number_preset,
-                            int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target)):
-                break
+                logging.debug("Switching to probe current %s", new_current)
+                self.scanner.probeCurrent.value = new_current
+                logging.debug("Switching assumed completed")
+                self.assertEqual(self.scanner.probeCurrent.value, new_current)
 
-        self.assertEqual(aperture_number_preset,
-                         int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target))
+                # Check that (some of) the settings are indeed updated on the server (ie, it's blocking)
+                # self.assertTrue(bool(datamodel.HybridAperture.SelectedDiaph.AtTarget))
+                self.assertTrue(bool(datamodel.HybridAperture.XPosition.AtTarget))
+                self.assertTrue(bool(datamodel.Sed.PMT.AtTarget))
 
-    def test_getCondenserVoltageFromPreset(self):
-        """
-        This test uses the standard preset defined in "preset_name". This preset is set at the end of the test and is
-        expected to have a condenser voltage defined.
-        """
-        preset_name = "Odemis_test_preset"
-        if preset_name not in [p.get("name") for p in self.scanner.parent.preset_manager.GetAllPresets().iter("Preset")]:
-            self.skipTest(f"This test requires the preset {preset_name} to be defined on the machine.")
+                # Check that the settings are at the value we expect from the preset
+                preset_name = self.scanner._probe_current_presets[new_current]
+                preset_content = self.oserver.preset_manager.GetPreset(preset_name)
+                exp = self.oserver._get_preset_setting(preset_content, "HybridAperture", "XPosition")
+                self.assertEqual(datamodel.HybridAperture.XPosition.Target, exp)
+                exp = self.oserver._get_preset_setting(preset_content, "Sed", "PMT")
+                self.assertEqual(datamodel.Sed.PMT.Target, exp)
 
-        full_preset = self.oserver.preset_manager.GetPreset(preset_name)
-        condenser_voltage = self.scanner._getCondenserVoltageFromPreset(full_preset)
-
-        # TODO Remove try except if Orsay fixed LoadPreset to not time out.
-        try:
-            self.oserver.preset_manager.LoadPreset(preset_name, PRESET_MASK_NAME)
-        except socket.timeout:
-            time.sleep(90)  # TODO Wait long enough to finish the preset loading process
-
-        for _ in range(90):
-            time.sleep(1)
-            if almost_equal(condenser_voltage,
-                            float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target)):
-                break
-
-        self.assertAlmostEqual(condenser_voltage,
-                               float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target))
-
-    def test_getPresetSetting(self):
-        """
-        This test uses the standard preset defined in "preset_name". This preset is set at the end of the test and is
-        expected to have an aperture and condenser voltage defined.
-        """
-        preset_name = "Odemis_test_preset"
-
-        full_preset = self.oserver.preset_manager.GetPreset(preset_name)
-        condenser_voltage = float(self.scanner.getPresetSetting(full_preset, 'HVPSFloatingIon', "CondensorVoltage", tag="Target"))
-        aperture_number_preset = int(self.scanner.getPresetSetting(full_preset, 'HybridAperture', "SelectedDiaph", tag="Target"))
-
-        # TODO Remove try except if Orsay fixed LoadPreset to not time out.
-        try:
-            self.oserver.preset_manager.LoadPreset(full_preset, PRESET_MASK_NAME)
-        except socket.timeout:
-            time.sleep(90)  # TODO Wait long enough to finish the preset loading process
-
-        for _ in range(90):
-            time.sleep(1)
-            if almost_equal(condenser_voltage, float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target)) and\
-               almost_equal(aperture_number_preset, int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target)):
-                break
-
-        self.assertAlmostEqual(condenser_voltage,
-                               float(self.oserver.datamodel.HVPSFloatingIon.CondensorVoltage.Target))
-        self.assertEqual(aperture_number_preset,
-                         int(self.oserver.datamodel.HybridAperture.SelectedDiaph.Target))
+            # Test that setting None is allowed... and does nothing
+            current = self.scanner.probeCurrent.value
+            self.scanner.probeCurrent.value = None
+            self.assertEqual(self.scanner.probeCurrent.value, current)
+        finally:
+            # Revert to the original value (if it started with None, it'll have no effect... too bad)
+            logging.debug("Reverting to original probe current %s", orig_current)
+            self.scanner.probeCurrent.value = orig_current
 
 
 class TestDetector(unittest.TestCase):

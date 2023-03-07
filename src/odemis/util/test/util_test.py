@@ -29,7 +29,7 @@ import logging
 import math
 from odemis.model import CancellableFuture
 from odemis.util import limit_invocation, TimeoutError, executeAsyncTask, \
-    perpendicular_distance, to_str_escape, testing, driver, timeout
+    perpendicular_distance, to_str_escape, timeout
 import time
 import unittest
 import weakref
@@ -395,60 +395,6 @@ class CanvasTestCase(unittest.TestCase):
             self.assertEqual(clipped, clip(*orig))
 
 
-CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
-ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
-SPARC_CONFIG = CONFIG_PATH + "sim/sparc-sim.odm.yaml"
-
-
-class TestBackendStarter(unittest.TestCase):
-
-    @classmethod
-    def setUpClass(cls):
-        # make sure initially no backend is running.
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
-            testing.stop_backend()
-
-    @classmethod
-    def tearDownClass(cls):
-        # turn off everything when the testing finished.
-        if driver.get_backend_status() == driver.BACKEND_RUNNING:
-            testing.stop_backend()
-
-    def test_no_running_backend(self):
-        # check if there is no running backend
-        backend_status = driver.get_backend_status()
-        self.assertIn(backend_status, [driver.BACKEND_STOPPED, driver.BACKEND_DEAD])
-        # run enzel
-        testing.start_backend(ENZEL_CONFIG)
-        # now check if the role is enzel
-        role = model.getMicroscope().role
-        self.assertEqual(role, "enzel")
-
-    def test_running_backend_same_as_requested(self):
-        # run enzel backend
-        testing.start_backend(ENZEL_CONFIG)
-        # check if the role is enzel
-        role = model.getMicroscope().role
-        self.assertEqual(role, "enzel")
-        # run enzel backend again
-        testing.start_backend(ENZEL_CONFIG)
-        # it should still be enzel.
-        role = model.getMicroscope().role
-        self.assertEqual(role, "enzel")
-
-    def test_running_backend_different_from_requested(self):
-        # run sparc backend
-        testing.start_backend(SPARC_CONFIG)
-        # check if the role is sparc
-        role = model.getMicroscope().role
-        self.assertEqual(role, "sparc")
-        # now run another backend (enzel)
-        testing.start_backend(ENZEL_CONFIG)
-        # check if the role now is enzel instead of sparc
-        role = model.getMicroscope().role
-        self.assertEqual(role, "enzel")
-
-
 class FindClosestTestCase(unittest.TestCase):
 
     def test_simple(self):
@@ -613,6 +559,40 @@ class WrapToMpiPpiTestCase(unittest.TestCase):
         converted_angle = util.wrap_to_mpi_ppi(-5.1)
         self.assertGreaterEqual(converted_angle, -math.pi, "Failed to convert the angle to a value between -pi and +pi "
                                                            "with the converted value: %s" % converted_angle)
+
+
+class RotShortestMoveTestCase(unittest.TestCase):
+
+    def test_2_pi(self):
+        """Test value with 2 pi cycle"""
+        in_out = (
+            # input -> expected output
+            ((0.1, 0.2), 0.1),
+            ((0.2, 0.1), -0.1),
+            ((0, 0), 0),
+            ((0, 2 * math.pi), 0),
+            ((2 * math.pi, 0), 0),
+            ((0, 1.5 * math.pi), -0.5 *math.pi),
+            ((-10, -10 + 20 * (2 * math.pi)), 0),
+        )
+        for args, exp in in_out:
+            res = util.rot_shortest_move(*args)
+            self.assertAlmostEqual(res, exp, msg=f"Input {args} -> {res} while expected {exp}")
+
+    def test_cycles(self):
+        """Test value with different cycles"""
+        in_out = (
+            # input -> expected output
+            ((0.1, 0.2, 5), 0.1),
+            ((0.2, 0.1, 5), -0.1),
+            ((0, 0, 10), 0),
+            ((0, 2, 2), 0),
+            ((2, 0, 2), 0),
+        )
+        for args, exp in in_out:
+            res = util.rot_shortest_move(*args)
+            self.assertAlmostEqual(res, exp, msg=f"Input {args} -> {res} while expected {exp}")
+
 
 
 class RecursiveDictUpdateTestCase(unittest.TestCase):

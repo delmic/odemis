@@ -43,6 +43,7 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 """
+from typing import Iterable
 
 import numpy
 from scipy.linalg.lapack import get_lapack_funcs
@@ -157,3 +158,75 @@ def qlp(a, mode='reduced'):
     """
     q, r = qrp(numpy.flip(a), mode)
     return numpy.flip(q), numpy.flip(r)
+
+
+def fit_plane_lstsq(coords: list):
+    """
+    Fit a plane to a set of 3D coordinates using least-squares fitting.
+    :param coords: list of 3D coordinates
+    :return: the z-position of the plane and the normal vector
+    """
+    A = numpy.ones_like(coords)
+    A[:, :2] = coords[:, :2]
+    B = coords[:, 2]
+    # Using least-squares fitting minimize ||Ax - B||^2 with x in R3,
+    # to find the equation for a plane: z = αx + βy + γ
+    (a, b, gamma), *_ = numpy.linalg.lstsq(A, B)
+    normal = (a, b, -1)
+    return gamma, normal
+
+
+def get_z_pos_on_plane(x: float, y: float, point_on_plane: tuple, normal: numpy.ndarray) -> float:
+    """
+    Get the z position on a plane given a point on the plane and the normal vector.
+
+    :param x: the x-position of the point
+    :param y: the y-position of the point
+    :param point_on_plane: a point on the plane
+    :param normal: the normal vector of the plane
+    :return: the z-position of the point
+    """
+    d = -numpy.dot(point_on_plane, normal)
+    a, b, c = normal
+    # equation for a plane is ax + by + cz + d = 0
+    z = -(d + a * x + b * y) / c
+    return z
+
+
+def get_point_on_plane(x: float, y: float, tr: tuple) -> float:
+    """
+    Get the z position on a plane given a triangle.
+
+    :param x: the x-position of the point
+    :param y: the y-position of the point
+    :param tr: a triangle describing the plane
+    :return: the z-position of the point
+    """
+    # tuple conversion to array for easy artihmetic operations
+    tr = numpy.array(tr)
+    # These two vectors are in the plane
+    v1 = tr[2] - tr[0]
+    v2 = tr[1] - tr[0]
+    # the cross product is a vector normal to the plane
+    normal = numpy.cross(v1, v2)
+    z = get_z_pos_on_plane(x, y, tr[1], normal)
+
+    return z
+
+
+def are_collinear(p1: Iterable[float], p2: Iterable[float], p3: Iterable[float]) -> bool:
+    """
+    Check if three points are collinear.
+    :param p1: x,y,z coordinates of the first point
+    :param p2: x,y,z coordinates of the second point
+    :param p3: x,y,z coordinates of the third point
+    :return: True if the points are on same line, False otherwise
+    """
+    x1, y1, z1 = p1
+    x2, y2, z2 = p2
+    x3, y3, z3 = p3
+    # Computes the determinant of a 3x3 matrix formed by the three points
+    # if the determinant is very close to zero within a tolerance, the points are collinear
+    return abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) < 1e-12 and \
+        abs((x2 - x1) * (z3 - z1) - (x3 - x1) * (z2 - z1)) < 1e-12 and \
+        abs((y2 - y1) * (z3 - z1) - (y3 - y1) * (z2 - z1)) < 1e-12

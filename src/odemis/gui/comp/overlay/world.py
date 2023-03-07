@@ -44,9 +44,9 @@ from odemis.gui.comp.overlay.base import Vec, WorldOverlay, Label, SelectionMixi
 from odemis.gui.comp.overlay.view import CenteredLineOverlay
 from odemis.gui.model import TOOL_RULER, TOOL_LABEL, TOOL_NONE, TOOL_FEATURE
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.util.raster import rasterize_line
 from odemis.util import clip_line
 from odemis.util.comp import compute_scanner_fov, compute_camera_fov, get_fov_rect
+from odemis.util.raster import rasterize_line
 
 
 class CurrentPosCrossHairOverlay(WorldOverlay):

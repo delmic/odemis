@@ -2256,7 +2256,8 @@ class RotationActuator(model.Actuator):
         self._move_num_total += 1
 
         # calc move needed to reach requested pos
-        move, cur_pos = self._findShortestMove(target_pos)
+        cur_pos = self._dependency.position.value[self._caxis]
+        move = util.rot_shortest_move(cur_pos, target_pos, self._cycle)
 
         # Check that the move passes by the reference switch by detecting whether
         # the current and final position are not in the same multiple of cycle.
@@ -2270,13 +2271,15 @@ class RotationActuator(model.Actuator):
         # Reference if passing by the reference switch, or after N moves (if not disabled)
         if pass_ref or (self._ref_frequency is not None and self._move_num_total >= self._ref_frequency):
             # Move to pos close to ref switch
-            move, cur_pos = self._findShortestMove(self._ref_start)
+            cur_pos = self._dependency.position.value[self._caxis]
+            move = util.rot_shortest_move(cur_pos, self._ref_start, self._cycle)
                 
             self._dependency.moveRel({self._caxis: move}).result()
             self._dependency.reference({self._caxis}).result()
 
             # now calc how to move to the actual position requested
-            move, cur_pos = self._findShortestMove(target_pos)
+            cur_pos = self._dependency.position.value[self._caxis]
+            move = util.rot_shortest_move(cur_pos, target_pos, self._cycle)
                 
             self._move_num_total = 0
 
@@ -2287,20 +2290,6 @@ class RotationActuator(model.Actuator):
         # self._dep_future = self._dependency.moveRel({self._caxis: move})
         # self._dep_future.result()
         # self._dep_future = None
-
-    def _findShortestMove(self, target_pos):
-        """Find the closest way to move through in order to optimize for runtime."""
-
-        cur_pos = self._dependency.position.value[self._caxis]
-        vector = target_pos - cur_pos
-        # mod1 and mod2 should be always positive as self._cycle should be positive
-        mod1 = vector % self._cycle
-        mod2 = -vector % self._cycle
-
-        if mod1 < mod2:
-            return mod1, cur_pos
-        else:
-            return -mod2, cur_pos
 
     # TODO: need a proper implementation
     # def _cancelMovement(self, future):

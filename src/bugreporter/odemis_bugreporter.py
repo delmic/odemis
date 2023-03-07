@@ -45,7 +45,7 @@ import wx
 import zipfile
 
 logging.getLogger().setLevel(logging.DEBUG)
-DEFAULT_CONFIG = {"LOGLEVEL": "1"}
+DEFAULT_CONFIG = {"LOGLEVEL": "1", 'CONFIGPATH': '/usr/share/odemis'}
 
 OS_TICKET_URL = "https://support.delmic.com/api/tickets.json"
 CONFIG_FN = "bugreporter.config"  # Configuration file
@@ -280,11 +280,11 @@ class OdemisBugreporter(object):
             files.append(LOGFILE_BACKEND + ".1")
 
         try:
-            # Save yaml file, call MODEL_SELECTOR if needed
+            # Save microscope file, call MODEL_SELECTOR if needed
             odemis_config = parse_config("/etc/odemis.conf")
-            models = []
+            models = set()
             if odemis_config.get("MODEL"):
-                models = [odemis_config["MODEL"]]
+                models.add(odemis_config["MODEL"])
             elif odemis_config.get("MODEL_SELECTOR"):
                 logging.debug("Calling %s", odemis_config["MODEL_SELECTOR"].rstrip().split(' '))
                 try:
@@ -292,15 +292,14 @@ class OdemisBugreporter(object):
                     logging.debug("Getting the model filename using %s", cmd)
                     out = subprocess.check_output(cmd).decode("utf-8", "ignore_error").splitlines()
                     if out:
-                        models = [out[0].strip()]
+                        models.add(out[0].strip())
                     else:
                         logging.warning("Model selector failed to pick a model")
                 except Exception as ex:
                     logging.warning("Failed to run model selector: %s", ex)
 
-            if not models:
-                # just pick every potential microscope model
-                models = glob(os.path.join(odemis_config['CONFIGPATH'], '*.odm.yaml'))
+            # Also pick every potential microscope model
+            models.update(glob(os.path.join(odemis_config['CONFIGPATH'], '*.odm.yaml')))
 
             files.extend(models)
 

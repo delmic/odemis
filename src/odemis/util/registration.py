@@ -21,58 +21,25 @@ along with this program; if not, write to the Free Software
 Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301,
 USA.
 
-
-The function `_kpp()` is copied from scipy cluster/vq, which is licensed under
-the following terms and conditions:
-
-    Copyright (c) 2001-2002 Enthought, Inc.  2003-2019, SciPy Developers.
-    All rights reserved.
-
-    Redistribution and use in source and binary forms, with or without
-    modification, are permitted provided that the following conditions
-    are met:
-
-    1. Redistributions of source code must retain the above copyright
-       notice, this list of conditions and the following disclaimer.
-
-    2. Redistributions in binary form must reproduce the above
-       copyright notice, this list of conditions and the following
-       disclaimer in the documentation and/or other materials provided
-       with the distribution.
-
-    3. Neither the name of the copyright holder nor the names of its
-       contributors may be used to endorse or promote products derived
-       from this software without specific prior written permission.
-
-    THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS
-    "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT
-    LIMITED TO, THE IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR
-    A PARTICULAR PURPOSE ARE DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT
-    OWNER OR CONTRIBUTORS BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL,
-    SPECIAL, EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT
-    LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE,
-    DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY
-    THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY, OR TORT
-    (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
-    OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
-
 """
 import math
-from typing import Iterator, Optional, Tuple, Type, TypeVar
+from typing import Iterator, NamedTuple, Optional, Tuple, Type, TypeVar
 
 import numpy
-import scipy.cluster
 import scipy.spatial
-from odemis.util.graph import WeightedGraph
-from odemis.util.random import check_random_state, rng_integers
+from odemis.util.cluster import kmeans2
+from odemis.util.graph import (
+    SkewSymmetricAdjacencyGraph,
+    depth_first_walk,
+    is_connected,
+    minimum_spanning_tree,
+    remove_triangles,
+)
 from odemis.util.spot import find_spot_positions
-from odemis.util.transform import (  # noqa: F401
-    AffineTransform,
+from odemis.util.transform import (
     GeometricTransform,
-    _transformation_matrix_to_implicit,
     cartesian_to_polar,
     polar_to_cartesian,
-    to_physical_space,
 )
 
 T = TypeVar("T", bound="GeometricTransform")
@@ -200,67 +167,120 @@ def unit_gridpoints(shape: Tuple[int, int], *, mode: str) -> numpy.ndarray:
     return numpy.stack(numpy.broadcast_arrays(x, y), axis=-1).reshape(n * m, 2)
 
 
-def nearest_neighbor_graph(xy: numpy.ndarray) -> WeightedGraph:
+class WeightedShift(NamedTuple):
+    """
+    Named tuple consisting of a weight and a shift, of which the weight
+    attribute is invariant under negation (change of sign), and the shift
+    attribute is not.
+
+    Can be used as an edge weight in a graph. In particular when using a
+    WeightedShift as an edge weight in a SkewSymmetricAdjacencyGraph this
+    makes the behavior of the weight attribute symmetric, and the shift
+    attribute skew-symmetric.
+
+    Attributes
+    ----------
+    weight : float
+    shift : numpy.ndarray
+
+    """
+
+    weight: float
+    shift: numpy.ndarray
+
+    def __float__(self) -> float:
+        # The ability to return an instance of a strict subclass of float is
+        # deprecated. For example it's not allowed to return a numpy.float64,
+        # hence the call to `float()`.
+        return float(self.weight)
+
+    def __neg__(self) -> "WeightedShift":
+        return WeightedShift(self.weight, -self.shift)
+
+    # overriding comparison special methods in typing.NamedTuple
+    def __lt__(self, other: "WeightedShift") -> bool:
+        return self.weight < other.weight
+
+    def __le__(self, other: "WeightedShift") -> bool:
+        return self.weight <= other.weight
+
+    def __eq__(self, other: "WeightedShift") -> bool:
+        return self is other
+
+    def __ne__(self, other: "WeightedShift") -> bool:
+        return self is not other
+
+    def __gt__(self, other: "WeightedShift") -> bool:
+        return self.weight > other.weight
+
+    def __ge__(self, other: "WeightedShift") -> bool:
+        return self.weight >= other.weight
+
+
+def nearest_neighbor_graph(ji: numpy.ndarray) -> SkewSymmetricAdjacencyGraph:
     """
     Returns a undirected weighted simple graph of 4-connected nearest neighbors
     of a square grid of points.
 
     Parameters
     ----------
-    xy : ndarray of shape (n, 2)
+    ji : ndarray of shape (n, 2)
         Array with the determined coordinates of the grid points.
 
     Returns
     -------
-    graph : WeightedGraph
+    graph : SkewSymmetricAdjacencyGraph
         Undirected weighted simple graph of 4-connected nearest neighbors. For
         points located on the edge of the grid only 3 nearest neighbors are
         returned, and for the corners only 2.
 
     """
     # Find the closest 4 neighbors (excluding itself) for each point.
-    tree = scipy.spatial.cKDTree(xy)
+    tree = scipy.spatial.cKDTree(ji)
     # NOTE: Starting SciPy v1.6.0 the `n_jobs` argument will be renamed `workers`
-    distances, indices = tree.query(xy, k=5, n_jobs=-1)
+    distances, indices = tree.query(ji, k=5, n_jobs=-1)
     distances = distances[:, 1:]  # exclude the point itself
     indices = indices[:, 1:]  # same
 
     # Construct an undirected weighted simple graph
-    graph = WeightedGraph(len(xy), directed=False)
+    graph = SkewSymmetricAdjacencyGraph(len(ji))
     for vertex, neighbors in enumerate(indices):
         for neighbor, distance in zip(neighbors, distances[vertex]):
             # An edge connects two vertices that are each others nearest neighbor.
             if (vertex < neighbor) and (vertex in indices[neighbor]):
-                graph.add_edge((vertex, neighbor), distance)
+                shift = ji[neighbor] - ji[vertex]
+                graph.add_edge((vertex, neighbor), WeightedShift(distance, shift))
 
     # The code above assumes that each point has 4 nearest neighbors. In
     # practice we would like to only consider the 2 nearest neighbors for the
     # points at the corners of the grid, and likewise 3 nearest neighbors for
     # the points on the sides of the grid. The following line takes care of
     # that.
-    graph.remove_triangles()
+    remove_triangles(graph, overwrite=True)
 
     return graph
 
 
-_PERMUTATION_MATRIX = {
-    -2: numpy.array([(-1, 0), (0, -1)]),
-    -1: numpy.array([(0, -1), (1, 0)]),
-    0: numpy.array([(1, 0), (0, 1)]),
-    1: numpy.array([(0, 1), (-1, 0)]),
-    2: numpy.array([(-1, 0), (0, -1)]),
+_PERMUTATION_LUT = {
+    -2: ((-1, -1), (0, 1)),
+    -1: ((1, -1), (1, 0)),
+    0: ((1, 1), (0, 1)),
+    1: ((-1, 1), (1, 0)),
+    2: ((-1, -1), (0, 1)),
 }
 
 
 def _canonical_matrix_form(matrix: numpy.ndarray) -> numpy.ndarray:
     """
-    Returns a transformation matrix in canonical form.
+    Returns the signed permutation required to convert a transformation matrix
+    into canonical form.
 
     The multi-probe pattern has a dual mirror symmetry as well as a 4-fold
     rotational symmetry. Hence there are 8 degenerate orientations of the
     multi-probe pattern. This function takes as input an estimated
-    transformation matrix and reduces it to canonical form: no reflection and
-    a rotation between -pi/4 and +pi/4.
+    transformation matrix and returns the signed permutation such that
+    `sign * matrix[:, perm]` is in canonical form: no reflection and a rotation
+    between -pi/4 and +pi/4.
 
     Parameters
     ----------
@@ -269,134 +289,184 @@ def _canonical_matrix_form(matrix: numpy.ndarray) -> numpy.ndarray:
 
     Returns
     -------
-    out : ndarray
-        Output transformation matrix.
+    sign : numpy.ndarray
+        Array containing the reflections to be applied to the columns of the
+        input transformation matrix.
+    perm : numpy.ndarray
+        Array containing the permutations of the columns of the input
+        transformation matrix.
+
+    Examples
+    --------
+    >>> matrix = numpy.array([(1, 0), (0, -1)])
+    >>> _canonical_matrix_form(matrix)
+    (array([ 1, -1]), array([0, 1]))
 
     """
-    # If the transformation matrix contains a reflection, its determinant will
-    # be negative. In that case, swap the columns of the matrix.
-    if numpy.linalg.det(matrix) < 0:
-        matrix = numpy.fliplr(matrix)
-
-    # Determine the rotation of the input matrix and flip and/or invert the
-    # columns of the matrix to ensure that the resulting matrix has a rotation
-    # part that represents an angle between -pi/4 and +pi/4.
-    #
     # The rotation follows from a polar decomposition of the input matrix:
     # `A = R * S`, where `R` is an orthogonal matrix and `S` is
     # positive-definite. Let `P` be an orthogonal permutation matrix.
     # Then `A' = A * P` and `S' = Pᵀ * S * P`. By definition `S'` is congruent
     # to `S`, and is thus also positive-definite. Then by the uniqueness of the
     # polar decomposition we have `A' = R' * S'`, where `R' = R * P`.
-    _, rotation, _, _ = _transformation_matrix_to_implicit(matrix)
+    R, _ = scipy.linalg.polar(matrix)
+    rotation = math.atan2(R[1, 0], R[0, 0])
     k = math.floor(0.5 + 2 * rotation / math.pi)
-    return numpy.matmul(matrix, _PERMUTATION_MATRIX[k])
+
+    # Based on the determined rotation swap and/or reflect the columns of the
+    # matrix to ensure that the resulting matrix has a rotation part that
+    # represents an angle between -pi/4 and +pi/4.
+    sign, perm = map(numpy.array, _PERMUTATION_LUT[k])
+
+    # If the transformation matrix contains a reflection, its determinant will
+    # be negative. In that case, reflect the last column (pre-permutation) of
+    # the matrix.
+    if numpy.linalg.det(matrix) < 0:
+        sign[perm[-1]] *= -1
+
+    return sign, perm
 
 
-# Backporting k-means++ initialisation method for scipy.cluster.vq.kmeans2()
-def _kpp(data, k, rng):
+def _cluster_edges(
+    graph: SkewSymmetricAdjacencyGraph,
+) -> Tuple[numpy.ndarray, numpy.ndarray, numpy.ndarray]:
     """
-    Picks k points in the data based on the kmeans++ method.
+    Classifies the set of edges in a nearest neighbor graph of a square grid of
+    points into 4 clusters 'up', 'right', 'down', and 'left' using the k-means
+    algorithm.
 
     Parameters
     ----------
-    data : ndarray
-        Expect a rank 1 or 2 array. Rank 1 is assumed to describe 1-D
-        data, rank 2 multidimensional data, in which case one
-        row is one observation.
-    k : int
-        Number of samples to generate.
-    rng : `numpy.random.Generator` or `numpy.random.RandomState`
-        Random number generator.
+    graph : SkewSymmetricAdjacencyGraph
+        Undirected weighted simple graph of 4-connected nearest neighbors.
+        The edge weights should be of type `WeightedShift`, each having an
+        attribute `shift` equal to the displacement between the connected
+        vertices.
 
     Returns
     -------
-    init : ndarray
-        A 'k' by 'N' containing the initial centroids.
-
-    References
-    ----------
-    .. [1] D. Arthur and S. Vassilvitskii, "k-means++: the advantages of
-       careful seeding", Proceedings of the Eighteenth Annual ACM-SIAM Symposium
-       on Discrete Algorithms, 2007.
-
-    """
-    dims = data.shape[1] if len(data.shape) > 1 else 1
-    init = numpy.ndarray((k, dims))
-
-    for i in range(k):
-        if i == 0:
-            init[i, :] = data[rng_integers(rng, data.shape[0])]
-        else:
-            D2 = scipy.spatial.distance.cdist(
-                init[:i, :], data, metric="sqeuclidean"
-            ).min(axis=0)
-            probs = D2 / D2.sum()
-            cumprobs = probs.cumsum()
-            r = rng.uniform()
-            init[i, :] = data[numpy.searchsorted(cumprobs, r)]
-    return init
-
-
-def _initial_estimate_grid_orientation(xy: numpy.ndarray) -> AffineTransform:
-    """
-    Provide an initial estimate for the orientation of a square grid of points.
-
-    Parameters
-    ----------
-    xy : ndarray of shape (n, 2)
-        Array with the determined coordinates of the grid points.
-
-    Returns
-    -------
-    tform : AffineTransform
+    centroids : numpy.ndarray
+        A `4-by-2` array of centroids representing the directions 'up',
+        'right', 'down', and 'left'. The first and second centroids correspond
+        to a positive displacement in the first and second axis respectively.
+        The third and fourth centroids correspond to a negative displacement,
+        i.e. `centroid[2] = -centroid[0]`, and `centroid[3] = -centroid[1]`.
+    labels : numpy.ndarray
+        `labels[i]` is the index of the centroid the i'th edge is closest to.
+    distances : numpy.ndarray
+        The Euclidean distances between the observations passed and their
+        matched centroids.
 
     """
-    graph = nearest_neighbor_graph(xy)
+    if not is_connected(graph):
+        # no point in continuing if the graph is disconnected.
+        raise ValueError("Expected a connected graph, but got a disconnected graph.")
 
-    # Create an array `dxy` containing the displacement vectors for all edges
-    # in the graph.
-    a, b = zip(*graph.iter_edges(False))
-    dxy = xy[b, ...] - xy[a, ...]
+    # Create an array `shifts` containing the displacement vectors for all
+    # edges in the graph.
+    shifts = numpy.vstack(
+        [graph.get_edge_weight(edge).shift for edge in graph.iter_edges(False)]
+    )
 
-    # The array `dxy` typically contains the lattice vectors for the 'left',
+    # The array `shifts` typically contains the lattice vectors for the 'left',
     # 'right', 'up', and 'down' directions, but it is not guaranteed that it
     # will contain all of them, nor that there are equal amounts of edges in
     # each direction. The solution is to not make any distinction between
     # 'left' and 'right', or 'up' and 'down'. This is done using a mapping of
     # `(ρ, θ)` to `(ρ, 2*θ)`. The clustering itself is done in Cartesian
     # coordinates to not be impacted by the branch cut at `θ = ±π`.
-    rho, theta = cartesian_to_polar(dxy)
+    rho, theta = cartesian_to_polar(shifts)
     dpq = polar_to_cartesian(rho, 2 * theta)
-    # minit="++" is only available in SciPy v1.2.0 and above
-    rng = check_random_state(None)
-    code_book = _kpp(dpq, 2, rng)
-    centroid, _ = scipy.cluster.vq.kmeans2(dpq, code_book, minit="matrix")
-    rho, theta = cartesian_to_polar(centroid)
-    dxy = polar_to_cartesian(rho, 0.5 * theta)
+    centroids, labels = kmeans2(dpq, 2, minit="++")
+    rho, theta = cartesian_to_polar(centroids)
+    centroids = polar_to_cartesian(rho, 0.5 * theta)
 
-    # Each rows of the array `dxy` now contains a lattice vector (direction).
+    # Each rows of the array `centroid` now contains a lattice vector (direction).
     # By transposing the array, these lattice vectors are the columns of the
     # new matrix. This allows to directly use them as a transformation matrix.
     # For example: let `x₁` and `x₂` be the two 2-by-1 lattice vectors, then
     # `(x₁, x₂) * (n, m)ᵀ = n * x₁ + m * x₂`.
-    matrix = _canonical_matrix_form(numpy.transpose(dxy))
+    sign, perm = _canonical_matrix_form(numpy.transpose(centroids))
+    centroids = sign[:, None] * centroids[perm]
+    labels = perm[labels]
 
-    # The estimated translated is the centroid of the input coordinates.
-    translation = numpy.mean(xy, axis=0)
+    # extend
+    reverse = numpy.einsum("ji,ji->j", shifts, centroids[labels]) < 0
+    labels[reverse] += 2
+    centroids = numpy.vstack((centroids, -centroids))
 
-    return AffineTransform(matrix, translation)
+    # determine distance to centroid
+    distances = numpy.linalg.norm(shifts - centroids[labels], axis=1)
+
+    return centroids, labels, distances
+
+
+_SHIFT_LUT = numpy.array([(1, 0), (0, 1), (-1, 0), (0, -1)], dtype=numpy.int64)
+
+
+def _enumerate_grid(
+    graph: SkewSymmetricAdjacencyGraph,
+    labels: numpy.ndarray,
+    distances: numpy.ndarray,
+    shape: Tuple[int, int],
+) -> numpy.ndarray:
+    """
+    Enumerates a square grid of points.
+
+    Parameters
+    ----------
+    graph : SkewSymmetricAdjacencyGraph
+        Undirected weighted simple graph of 4-connected nearest neighbors.
+        The edge weights should be of type `WeightedShift`, each having an
+        attribute `shift` equal to the displacement between the connected
+        vertices.
+    labels : numpy.ndarray
+        `labels[i]` is the index of the centroid the i'th edge is closest to.
+    distances : numpy.ndarray
+        The Euclidean distances between the observations passed and their
+        matched centroids.
+    shape : tuple of two ints
+        The shape of the grid given as a tuple `(height, width)`.
+
+    Returns
+    -------
+    nodes : numpy.ndarray
+        Node indices of the grid.
+
+    """
+    # build a minimum spanning tree
+    n = len(graph)
+    mst = SkewSymmetricAdjacencyGraph(n)
+    edges = graph.iter_edges(False)
+    weights = map(WeightedShift, distances, _SHIFT_LUT[labels])
+    for edge, weight in zip(edges, weights):
+        mst.add_edge(edge, weight)
+    minimum_spanning_tree(mst, overwrite=True)
+
+    # number the beamlets by walking the tree
+    coords = numpy.zeros((n, 2), dtype=numpy.int64)
+    walker = depth_first_walk(mst, 0)
+    next(walker)  # skip the first `(None, start)` entry
+    for predecessor, vertex in walker:
+        shift = mst.get_edge_weight((predecessor, vertex)).shift
+        coords[vertex] = coords[predecessor] + shift
+    coords -= numpy.min(coords, axis=0)
+
+    # convert from coords to node numbering
+    nodes = numpy.ravel_multi_index(numpy.transpose(coords), dims=shape, mode="raise")
+
+    return nodes
 
 
 def estimate_grid_orientation(
-    xy: numpy.ndarray, shape: Tuple[int, int], transform_type: Type[T]
-) -> T:
+    ji: numpy.ndarray, shape: Tuple[int, int], transform_type: Type[T]
+) -> Tuple[T, float]:
     """
     Estimate the orientation of a square grid of points.
 
     Parameters
     ----------
-    xy : ndarray of shape (n, 2)
+    ji : ndarray of shape (n, 2)
         Array with the determined coordinates of the grid points.
     shape : tuple of two ints
         The shape of the grid given as a tuple `(height, width)`. Current
@@ -408,17 +478,21 @@ def estimate_grid_orientation(
     -------
     tform : instance of `transform_type`
         The orientation of the pattern.
+    error_metric : float
+        The RMS value of the fiducial error registration of the square grid compared to ji.
 
     """
     if shape[0] != shape[1]:
         raise NotImplementedError(
             "Only grids with `shape[0] == shape[1]` are supported."
         )
-    tform = _initial_estimate_grid_orientation(xy)
-    grid = unit_gridpoints(shape, mode="xy")
-    correspondences = bijective_matching(tform.apply(grid), xy)
-    a, b = zip(*correspondences)
-    return transform_type.from_pointset(grid[a, ...], xy[b, ...])
+    graph = nearest_neighbor_graph(ji)
+    _, labels, distances = _cluster_edges(graph)
+    nodes = _enumerate_grid(graph, labels, distances, shape)
+    grid = unit_gridpoints(shape, mode="ji")
+    tform = transform_type.from_pointset(grid[nodes], ji)
+    error_metric = tform.fre(grid[nodes], ji)
+    return tform, error_metric
 
 
 def estimate_grid_orientation_from_img(
@@ -429,7 +503,7 @@ def estimate_grid_orientation_from_img(
     threshold_abs: Optional[float] = None,
     threshold_rel: Optional[float] = None,
     num_spots: Optional[int] = None,
-) -> T:
+) -> Tuple[T, float]:
     """
     Image based estimation of the orientation of a square grid of points.
 
@@ -461,6 +535,9 @@ def estimate_grid_orientation_from_img(
     -------
     tform : instance of `transform_type`
         The orientation of the pattern.
+    error_metric : float
+        The RMS value of the fiducial error registration of the square grid
+        compared to the spots measured on the image.
 
     """
     if num_spots is None:
@@ -468,5 +545,4 @@ def estimate_grid_orientation_from_img(
     elif num_spots == 0:
         num_spots = None
     ji = find_spot_positions(image, sigma, threshold_abs, threshold_rel, num_spots)
-    xy = to_physical_space(ji, image.shape)
-    return estimate_grid_orientation(xy, shape, transform_type)
+    return estimate_grid_orientation(ji, shape, transform_type)

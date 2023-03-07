@@ -20,20 +20,24 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import collections.abc
-from odemis import model, util
-from odemis.model import isasync, CancellableThreadPoolExecutor, HwError, InstantaneousFuture, roattribute, \
-    MD_PIXEL_SIZE
-from odemis.util import almost_equal
-from ConsoleClient.Communication.Connection import Connection
-
-from functools import partial
+import inspect
+import logging
+import math
+import re
+import socket
 import threading
 import time
-import logging
-import inspect
+from functools import partial
 from math import pi
-import math
+from typing import Optional, Dict, Tuple
+
 import numpy
+from ConsoleClient.Communication.Connection import Connection
+
+from odemis import model, util
+from odemis.model import (MD_PIXEL_SIZE, CancellableThreadPoolExecutor,
+                          HwError, InstantaneousFuture, isasync, roattribute)
+from odemis.util import almost_equal
 
 VALVE_UNDEF = -1
 VALVE_TRANSIT = 0
@@ -433,6 +437,113 @@ class OrsayComponent(model.HwComponent):
             self._device = None
 
             super(OrsayComponent, self).terminate()
+
+    # Helper functions to handle presets (on top of the preset manager)
+    # They can be used by other class of this module, but otherwise are considered private
+    def _load_preset(self, preset_name: str, preset_mask: str, timeout: float = 300):
+        """
+        Load a preset, for all the device/parameters defined in the preset mask,
+        and wait until it's done.
+        :param preset_name: name of the preset
+        :param preset_mask: name of the preset mask
+        :param timeout: The maximum time to wait (s) for the preset to be loaded
+        :raises:
+            FileNotFound: if the preset or preset mask don't exist
+            RuntimeError: if other error happen during loading the preset (on the Orsay side)
+            TimeoutError: if the preset doesn't appear loaded within the specified timeout
+        """
+        tstart = time.time()
+        try:
+            # Will raise an exception if the preset or mask don't exist (since 2023-01-30)
+            self.preset_manager.LoadPreset(preset_name, preset_mask)
+        except socket.timeout:
+            # Loading can takes so long that the connection temporarily times out.
+            # That is fine, it reconnects automatically.
+            logging.debug("LoadPreset timed out, but that's expected")
+            pass
+
+        # We read the preset and preset masks for two reasons:
+        # * confirm they exists (because if they don't, LoadPreset failed silently)
+        # * wait until all the affected parameters are updated
+        try:
+            preset_content = self.preset_manager.GetPreset(preset_name)
+        except Exception:
+            logging.exception("Failed to retrieve preset %s", preset_name)
+            raise
+
+        try:
+            preset_mask_content = self.preset_manager.GetPresetMask(preset_mask)
+        except Exception:
+            logging.exception("Failed to retrieve preset mask %s", preset_mask)
+            raise
+
+        while not self._is_at_target_preset(preset_content, preset_mask_content):
+            time.sleep(0.5)
+            if time.time() > tstart + timeout:
+                raise TimeoutError(f"Setting preset {preset_name} timed out after {timeout} s")
+
+        logging.debug("Preset %s loaded", preset_name)
+
+    def _is_at_target_preset(self, preset, preset_mask) -> bool:
+        """
+        Function to check if the selected preset, with the given mask is fully loaded yet.
+        Warning: it only check for each preset setting that it's now at AtTarget.
+        If for some reason a setting cannot reach the target, then the preset will
+        never be considered at target.
+        preset (xml.etree.ElementTree.Element)
+        preset_mask (xml.etree.ElementTree.Element)
+        :return: True if all the setting are at target, False if any state has not reached.
+        """
+        # We actually only use the mask, and check the .AtTarget attribute.
+        # We don't compare the requested value into preset_content against the actual value.
+        # A preset mask is a series of Device/Parameter
+        for d in preset_mask.findall("Device"):
+            # sometimes the mask contains "Name" and sometime "name", so accept both
+            device_name = d.attrib['Name'] if 'Name' in d.attrib else d.attrib['name']
+            device = getattr(self.datamodel, device_name)
+            for p in d.findall("Parameter"):
+                param_name = p.attrib['name']
+                param = getattr(device, param_name)
+
+                if not bool(param.AtTarget):
+                    logging.debug(f"Preset {device_name}.{param_name} not yet at target.")
+                    return False
+
+        return True
+
+    def _get_all_preset_names(self) -> Tuple[str]:
+        """
+        Lookup the names of the existing presets on the server
+        :return: name of every presets
+        """
+        # Contrary to its name, it doesn't return all the presets, but just a
+        # list with the preset names.
+        preset_summary = self.preset_manager.GetAllPresets()
+        return tuple(preset.get("name") for preset in preset_summary.iter("Preset"))
+
+    def _get_preset_setting(self, preset, sub_comp: str, setting: str, tag: str = "Target") -> str:
+        """
+        Get a setting from a preset XML ElementTree
+
+        :param preset (xml.etree.ElementTree.Element): Full preset XML ElementTree including sub elements with all sub
+        components
+        :param sub_comp: Name of the sub component
+        :param setting: Name of the parameter with the setting
+        :param tag: tag specifying the value to obtain (Most likely 'Target' or for example 'Max', 'Min',
+        'AtTarget', 'Tolerance')
+        :return: Value found for the setting
+        :raise: LookupError if no value is found.
+        """
+        for c in preset:
+            # Only interested in presets which actually defined the right component
+            if c.get("Name") == sub_comp:
+                for s in c:
+                    if s.get("Name") == setting:
+                        for t in s:
+                            if t.tag == tag:
+                                return t.text
+
+        raise LookupError("Preset doesn't contain %s.%s.%s", sub_comp, setting, tag)
 
 
 class pneumaticSuspension(model.HwComponent):
@@ -2798,7 +2909,8 @@ class Light(model.Emitter):
             self._parameter.Unsubscribe(self._updatePower)
             self._parameter = None
 
-PRESET_MASK_NAME = "Odemis-preset-mask"
+
+PRESET_MASK_NAME = "Odemis probe current mask"
 class Scanner(model.Emitter):
     """
     Represents the Focused Ion Beam (FIB) from Orsay Physics.
@@ -2871,113 +2983,165 @@ class Scanner(model.Emitter):
 
         self.shift = self._fib_beam.shift
 
-        # Find all available presets:
-        self.presetData = self.getAllPresetData()
+        # It's not possible to change the probeCurrent directly. Instead, we
+        # rely on presets. They are created by the service engineer on the Orsay
+        # server, with specific names <current>pA_... . Each preset with such
+        # name corresponds to one probe current. Whenever a new probe current is
+        # selected the preset is loaded. For the generic case, it's a little bit
+        # more complicated, because after changing the preset, the aperture should
+        # be checked that it's not worn out, and if it is, a new one should be
+        # used. That part is not handled in the driver, but at a higher level in
+        # Odemis (and for now, not at all... we just expect the user to manually
+        # update the preset in such case).
+        # Loading a preset is also not as easy as it sounds like, because presets
+        # contain *every* parameter of the system. Loading all of them is very
+        # slow, and not recommended. So, instead, we have to pass a "mask", to
+        # limit the actual parameters loaded.
 
-        # Create a preset mask with only the relevant parameters for the presets.
-        relevant_parameters = (self.parent.datamodel.HybridAperture.SelectedDiaph,
-                               self.parent.datamodel.HybridAperture.XPosition,
-                               self.parent.datamodel.HybridAperture.YPosition,
-                               self.parent.datamodel.HVPSFloatingIon.CondensorVoltage,
-                               self.parent.datamodel.HVPSFloatingIon.ObjectiveVoltage,
-                               self.parent.datamodel.IonColumnMCS.ObjectiveStigmatorX,
-                               self.parent.datamodel.IonColumnMCS.ObjectiveStigmatorY,
-                               self.parent.datamodel.Sed.PMT,
-                               self.parent.datamodel.Sed.Level,
-                               )
+        # Dict probe current -> preset name
+        # Note: the names are loaded only once, at init, but the content of the preset
+        # is re-read every time the probe current is changed (so that the user
+        # can change them live while the Odemis backend is running)
+        self._probe_current_presets = self._get_all_probe_current_presets()
+
+        # (White-)list of parameters to be changed when adjusting the probe current
+        mask_parameters = (
+            self.parent.datamodel.HybridAperture.SelectedDiaph,
+            self.parent.datamodel.HybridAperture.XPosition,
+            self.parent.datamodel.HybridAperture.YPosition,
+            self.parent.datamodel.HVPSFloatingIon.CondensorVoltage,
+            self.parent.datamodel.HVPSFloatingIon.ObjectiveVoltage,  # Focus
+            self.parent.datamodel.IonColumnMCS.ObjectiveStigmatorX,
+            self.parent.datamodel.IonColumnMCS.ObjectiveStigmatorY,
+            self.parent.datamodel.Sed.PMT,  # Contrast
+            self.parent.datamodel.Sed.Level,  # Brightness
+            self.parent.datamodel.IonColumnMCS.ObjectiveShiftX,  # Beam shift
+            self.parent.datamodel.IonColumnMCS.ObjectiveShiftY,
+            # Extra settings, which could be per current (if they should not be changed, the preset should not include them)
+            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorX,
+            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorY,
+            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorOffsetX1,
+            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorOffsetX2,
+            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorOffsetY1,
+            self.parent.datamodel.IonColumnMCS.CondensorSteerer1StigmatorOffsetY2,
+            self.parent.datamodel.IonColumnMCS.IntermediateStigmatorX,
+            self.parent.datamodel.IonColumnMCS.IntermediateStigmatorY,
+            # If later, some other settings are current dependent, they should be added here.
+            # Example potential settings: CondensorSteerer1FieldSize, CondensorSteerer1ScanAngle, IntermediateTiltX...
+        )
         # In case the preset mask already exist it is automatically overwritten.
-        self.parent.preset_manager.CreatePresetMask(PRESET_MASK_NAME, *relevant_parameters)
+        self.parent.preset_manager.CreatePresetMask(PRESET_MASK_NAME, *mask_parameters)
 
-        # TODO K.K. The specs of the high level aperture/preset describe the implementation of the probe current Use the
-        #  currently selected preset and combine with the faraday cup measurements and make an attribute/VA of the
-        #  probe current
+        # List of available probe current: based on presets name
+        # Special "None" value for when the conditions are unknown (eg, at init and not preset matches)
+        # When changing the probe current => load the corresponding preset
+        current = self._guess_probe_current()
+        self.probeCurrent = model.VAEnumerated(current, unit="A",
+                                               choices=self._probe_current_presets.keys() | {None},
+                                               setter=self._setProbeCurrent)
 
-    def getAllPresetData(self):
+        # TODO: it seems that the standard client store the latest preset loaded in
+        # datamodel.IonColumnMCS.ConditionName. Setting .Target = PresetName
+        # seems to not bother anything else. So maybe we should do that, and rely
+        # on it to guess the preset in use (and so probe current).
+
+    def _get_all_probe_current_presets(self) -> Dict[float, str]:
         """
-        Retrieves presets from the Orsay server which allows to set a specified probe current. It retrieves for each
-        preset the settings aperture_number and condensor_voltage. And deduces the matching probe current for these
-        settings via the name of the preset. The preset name should be formated as follows: CURRENTpA_EXTRA_INFO (
-        e.g. '20pA_20um25200V').
-        :return (dict with dicts): Contains the probe current which have a matching presets and a ditch with the
-                                   matching the preset_name, aperture number, and condenser voltage as value.
-                                     {current1: {"name1": name1, "aperture_number1": aperture_number1,
-                                      "condenser_voltage1": condenser_voltage1}, current2: {"name2": name2, etc.
+        Retrieves presets (names) from the Orsay server which allows to set a specified probe current.
+        It looks for preset names formated as follows: NUMBER_CURRENTpA_EXTRA_INFO (e.g. '0002_20pA_20um25200V').
+        :return: dict probe current (A) -> preset name
         """
-        preset_data = {}
-        for preset in self.parent.preset_manager.GetAllPresets().iter("Preset"):
-            preset_name = preset.get("name")
-            if "_" not in preset_name:
-                logging.warning(f"The preset {preset_name} could not not be converted for use in Odemis. It "
-                                f"missed the necessary formatting. Presets naming for the probe current should be "
-                                f"formatted as follows: CURRENTpA_EXTRA_INFO (e.g. '20pA_20um25200V')")
+        current_presets = {}
+        for preset_name in self.parent._get_all_preset_names():
+            m = re.match("([0-9]+)_([0-9]+)pA_", preset_name)
+            if not m:
+                logging.debug("Skipping preset %s, which doesn't look like a probe current preset", preset_name)
                 continue
-            full_preset = self.parent.preset_manager.GetPreset(preset.get("name"))
-            current = preset_name[:preset_name.find("_")]
 
+            current = float(m.group(2)) * 1e-12
+            if current in current_presets:
+                logging.warning("Probe current %s pA defined in preset %s overridden by %s",
+                                current * 1e12, current_presets[current], preset_name)
+            current_presets[current] = preset_name
+
+        if not current_presets:
+            logging.warning("No probe current presets found. Make sure that the presets name are "
+                            "formatted as follows: NUMBER_CURRENTpA_EXTRA_INFO (e.g. '0002_20pA_20um25200V')")
+        return current_presets
+
+    def _guess_probe_current(self) -> Optional[float]:
+        """
+        Based on the present settings and known presets, guess the most likely probe current
+        in use.
+        :return: the probe current (A) or None if no preset fit the present settings
+        """
+        # List of parameters that are used to detect the current probe current
+        # It's a smaller list that the mask, as some parameters maybe be adjusted
+        # by the user.
+        required_parameters = (
+            # TODO: For now the presets store the X/Y position of the aperture
+            # (so that includes the alignment). Based on that position, the
+            # aperture number is inferred. It would be clearer to store directly
+            # the aperture number (aka "SelectedDiaph") in the preset. This way
+            # it's also easier to derive the aperture size... and eventually
+            # guess the current in use based on that size (in order to handle
+            # the cases of worn out aperture).
+            # ("HybridAperture", "SelectedDiaph"),
+            ("HybridAperture", "XPosition"),
+            ("HybridAperture", "YPosition"),
+            ("HVPSFloatingIon", "CondensorVoltage"),
+        )
+        for current, preset_name in self._probe_current_presets.items():
+            # Download the preset content
             try:
-                preset_data.update({current:
-                                            {"name": preset_name,
-                                             "aperture_number": self._getApertureNmbrFromPreset(full_preset),
-                                             "condenser_voltage": self._getCondenserVoltageFromPreset(full_preset)}})
-            except LookupError as ex:
-                logging.warning(f"Failed to import preset %s due to missing required setting: %s",
-                                preset_name, ex)
-        return preset_data
+                preset = self.parent.preset_manager.GetPreset(preset_name)
+            except Exception:
+                logging.exception("Failed to retrieve preset %s", preset_name)
+                raise
+            # For now the ConsoleClient hides errors (eg, preset not existing), but
+            # it returns None, which is a good hint something went wrong.
+            if preset is None:
+                raise LookupError(f"Failed to retrieve preset {preset_name}")
 
-    def getPresetSetting(self, preset, sub_comp, setting, tag="Target"):
-        """
-        Get a setting from a preset XML ElementTree
+            # Check every required parameter
+            for device_name, param_name in required_parameters:
+                try:
+                    expected = self.parent._get_preset_setting(preset, device_name, param_name, tag="Target")
+                except LookupError:
+                    logging.debug("Skipping preset %s as it doesn't have setting %s.%s",
+                                  preset_name, device_name, param_name)
+                    break
 
-        :param preset (xml.etree.ElementTree.Element): Full preset XML ElementTree including sub elements with all sub
-        components
-        :param sub_comp (str): Name of the sub component
-        :param setting (str): Name of the parameter with the setting
-        :param tag (str): tag specifying the value to obtain (Most likely 'Target' or for example 'Max', 'Min',
-        'AtTarget', 'Tolerance')
-        :return (None/Str): Value found for the setting and None if no value is found.
-        """
-        for c in preset:
-            # Only interested in presets which actually defined the right component
-            if c.get("Name") == sub_comp:
-                for s in c:
-                    if s.get("Name") == setting:
-                        for t in s:
-                            if t.tag == tag:
-                                return t.text
-        else:
-            logging.warning(f"Did not find any value for the preset {preset}, with component {sub_comp} "
-                            f"and the setting {setting} using the tag {tag}.")
-            return None
+                device = getattr(self.parent.datamodel, device_name)
+                param = getattr(device, param_name)
+                if param.Target != expected:
+                    logging.debug("Preset %s not matching present setting as %s.%s != %s",
+                                  preset_name, device_name, param_name, expected)
+                    break  # Check next preset
+            else:  # All parameters match
+                return current
 
-    def _getApertureNmbrFromPreset(self, preset):
-        """
-        Get the aperture number from a given preset.
+        logging.debug("No preset found for present settings")
+        return None
 
-        :param preset (xml.etree.ElementTree.Element): Full preset XML ElementTree including sub elements with all sub
-        components
-        :return (str): Value found for the setting
-        :raises LookupError if no condenser voltage is found for a preset
+    def _setProbeCurrent(self, current: Optional[float]) -> float:
         """
-        aperture_number = self.getPresetSetting(preset, 'HybridAperture', "SelectedDiaph", tag="Target")
-        if aperture_number:
-            return int(aperture_number)
-        else:
-            raise LookupError(f"No aperture number preset found, None type was returned.")
+        Setter for the probe current VA, sets the probe current by loading the corresponding preset.
+        :param current (float or None): probe current in Amperes
+        :return (float): probe current in Amperes
+        :raises LookupError: if no preset is found for the probe current
+        """
+        # Handle the special case where the user would ask None (which is used to say
+        # "we don't know"). Instead of raising an exception, just be lenient, and
+        # return the present value.
+        if current is None:
+            logging.debug("Not changing the probe current as 'None' requested")
+            return self.probeCurrent.value
 
-    def _getCondenserVoltageFromPreset(self, preset):
-        """
-        Get the condenser voltage from a given preset.
-
-        :param preset (xml.etree.ElementTree.Element): Full preset XML ElementTree including sub elements with all sub
-        components
-        :return (str): Value found for the setting
-        :raises LookupError if no condenser voltage is found for a preset
-        """
-        condenser_voltage = self.getPresetSetting(preset, 'HVPSFloatingIon', "CondensorVoltage", tag="Target")
-        if condenser_voltage:
-            return float(condenser_voltage)
-        else:
-            raise LookupError(f"No condenser voltage preset found, None type was returned.")
+        preset_name = self._probe_current_presets[current]
+        # Typically takes < 2s
+        self.parent._load_preset(preset_name, PRESET_MASK_NAME, timeout=20)
+        return current
 
     def _listenerImageFormat(self, image_format):
         # Duplicate the X dimension, because the hardware only support square pixels
