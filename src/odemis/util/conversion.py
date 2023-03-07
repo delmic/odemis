@@ -27,11 +27,11 @@ from collections.abc import Iterable
 import cv2
 import numpy
 import yaml
+from past.builtins import basestring, long
 from yaml.emitter import Emitter
 from yaml.representer import SafeRepresenter
 from yaml.resolver import Resolver
 from yaml.serializer import Serializer
-from past.builtins import basestring, long
 
 from odemis import model
 
