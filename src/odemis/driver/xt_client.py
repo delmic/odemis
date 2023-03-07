@@ -317,12 +317,12 @@ class SEM(model.HwComponent):
         """Check if a latest xtadapter package is available and then transfer it."""
         try:
             package = None
-            bitness = re.search("bitness:\s*([\da-z]+)", self._swVersion)
+            bitness = re.search(r"bitness:\s*([\da-z]+)", self._swVersion)
             bitness = bitness.group(1) if bitness is not None else None
             adapter = "xtadapter"
             if "xttoolkit" in self._swVersion:
                 adapter = "fastem-xtadapter"
-            current_version = re.search("xtadapter:\s*([\d.]+)", self._swVersion)
+            current_version = re.search(r"xtadapter:\s*([\d.]+)", self._swVersion)
             current_version = current_version.group(1) if current_version is not None else None
             if current_version is not None and bitness is not None:
                 package = check_latest_package(

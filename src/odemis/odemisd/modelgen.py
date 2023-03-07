@@ -192,7 +192,7 @@ def get_class(name):
         module_name, class_name = internal_classes[name].rsplit(".", 1)
     else:
         # It comes from the user, so check carefully there is no strange characters
-        if not re.match("(\w|\.)+\.(\w)+\Z", name):
+        if not re.match(r"(\w|\.)+\.(\w)+\Z", name):
             raise ParseError("Syntax error in microscope file: "
                              "class name '%s' is malformed." % name)
 
