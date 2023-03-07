@@ -739,8 +739,32 @@ class GeometricTransform(metaclass=ABCMeta):
             numpy.zeros(2, dtype=float) if translation is None else translation
         )
 
-    def __matmul__(self, other):
-        """Overloads the `@` operator to combine two transforms into one."""
+    def __matmul__(self, other: "GeometricTransform") -> "GeometricTransform":
+        """
+        Overloads the `@` operator to combine two transforms into one.
+
+        Parameters
+        ----------
+        other : GeometricTransform
+            The geometric transform with which to combine.
+
+        Returns
+        -------
+        out : GeometricTransform
+            The combined transform.
+
+        Examples
+        --------
+        >>> rotation = 0.5 * numpy.pi
+        >>> translation = numpy.array((1, 0))
+        >>> a = RigidTransform(rotation=rotation, translation=translation)
+        >>> b = a @ a
+        >>> numpy.isclose(b.rotation, numpy.pi)
+        True
+        >>> numpy.allclose(b.translation, numpy.array((1, 1)))
+        True
+
+        """
         cls = getattr(self, "_inverse_type", type(self))
         if not isinstance(other, cls):
             cls = type(other)
