@@ -491,7 +491,7 @@ class CustomSafeRepresenter(SafeRepresenter):
 
     def represent_numpy_floating(self, data):
         data = float(data)
-        self.represent_float(data)
+        return self.represent_float(data)
 
 
 CustomSafeRepresenter.add_multi_representer(
