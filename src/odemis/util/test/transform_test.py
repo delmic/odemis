@@ -517,17 +517,27 @@ class TransformTestBase:
                     tform = self.transform_type(matrix, translation).inverse()
                     numpy.testing.assert_array_almost_equal(src, tform.apply(dst))
 
+    def test_inverse_type(self):
+        """
+        `GeometricTransform.inverse()` should return a result of known type.
+
+        """
+        tform = self.transform_type()
+        inv = tform.inverse()
+        self.assertIs(type(inv), self.inverse_type)
+
 
 class AffineTransformTest(TransformTestBase, unittest.TestCase):
-    transform_type = AffineTransform
+    transform_type = inverse_type = AffineTransform
 
 
 class ScalingTransformTest(TransformTestBase, unittest.TestCase):
     transform_type = ScalingTransform
+    inverse_type = AffineTransform
 
 
 class SimilarityTransformTest(TransformTestBase, unittest.TestCase):
-    transform_type = SimilarityTransform
+    transform_type = inverse_type = SimilarityTransform
 
     def test_similarity_transform_from_pointset_umeyama(self):
         """
@@ -550,7 +560,7 @@ class SimilarityTransformTest(TransformTestBase, unittest.TestCase):
 
 
 class RigidTransformTest(TransformTestBase, unittest.TestCase):
-    transform_type = RigidTransform
+    transform_type = inverse_type = RigidTransform
 
 
 class TransformFromPointsetEquivalence(unittest.TestCase):
