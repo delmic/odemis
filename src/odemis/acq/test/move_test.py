@@ -78,7 +78,7 @@ class TestEnzelMove(unittest.TestCase):
 
         # Set custom value that works well within the simulator range
         cls.rx_angle = 0.3
-        cls.rz_angle = 0.1
+        cls.rm_angle = 0.1
 
     def test_sample_switch_procedures(self):
         """
@@ -99,8 +99,8 @@ class TestEnzelMove(unittest.TestCase):
         filter_dict = lambda keys, d: {key: d[key] for key in keys}
         testing.assert_pos_almost_equal(filter_dict({'x', 'y', 'z'}, stage.position.value),
                                      filter_dict({'x', 'y', 'z'}, self.stage_coating), atol=ATOL_LINEAR_POS)
-        testing.assert_pos_almost_equal(filter_dict({'rx', 'rz'}, stage.position.value),
-                                     filter_dict({'rx', 'rz'}, self.stage_coating), atol=ATOL_LINEAR_POS)
+        testing.assert_pos_almost_equal(filter_dict({'rx', 'rm'}, stage.position.value),
+                                     filter_dict({'rx', 'rm'}, self.stage_coating), atol=ATOL_LINEAR_POS)
         # align should be in deactive position
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 

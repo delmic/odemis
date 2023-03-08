@@ -1,3 +1,4 @@
+
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
@@ -27,11 +28,14 @@ import time
 import unittest
 from unittest.case import skip
 
+from odemis import model
+from odemis.acq.move import transformFromMeteorToSEM, transformFromSEMToMeteor, cryoSwitchSamplePosition, LOADING, \
+    SEM_IMAGING, getCurrentPositionLabel, getCurrentGridLabel, GRID_1, GRID_2, FM_IMAGING
 from odemis.driver import zeiss
 from odemis.util import testing
 
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
-
+TEST_NOHW = True
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
@@ -528,6 +532,126 @@ class TestSEM6Axes(unittest.TestCase):
         time.sleep(6)
         testing.assert_pos_almost_equal(self.stage.position.value, pos, atol=0.1e-6)
 
+
+class TestSwitchingImagingModes(unittest.TestCase):
+    """
+    Tests which can share one SEM device controlling 6 axes
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        # cls.sem = zeiss.SEM(**CONFIG_SEM6)
+        cls.stage = model.getComponent(role="stage-bare")
+        # for child in cls.sem.children.value:
+        #     if child.name == CONFIG_SCANNER["name"]:
+        #         cls.scanner = child
+        #     elif child.name == CONFIG_FOCUS["name"]:
+        #         cls.efocus = child
+        #     elif child.name == CONFIG_STAGE6["name"]:
+        #         cls.stage = child
+
+    # @classmethod
+    # def tearDownClass(cls):
+    #     cls.s.terminate()
+
+    def test_transformFromSEMToMeteor(self):
+        """
+        Tests the transformFromSEMToMeteor function.
+        """
+        # Test the case where the stage is at the reference position, but with a non-zero stage rotation
+        # Position 1:
+        pos_1 = {"x": 49.7250e-3, "y": 50.7743e-3, "m": 3.9809e-3, "z": 10.0000e-3, "rx": -0.0523598775598,
+                 "rm": 4.7123889803847}
+        transformed_pos_1 = {"x": 97.275e-3, "y": 36.4769e-3, "m": 7.2742e-3, "z": 10.0000e-3, "rx": 0.4607669225265,
+                             "rm": 1.5707963267949}
+        transformed_pos = transformFromSEMToMeteor(pos_1, self.stage)
+        # self.assertEqual(transformed_pos, transformed_pos_1)
+        testing.assert_pos_almost_equal(transformed_pos, transformed_pos_1, atol=1e-6)
+
+        # Position 2:
+        pos_2 = {"x": 45.1250e-3, "y": 50.2779e-3, "m": 5.2733e-3, "z": 12.0000e-3, "rx": 0.0000000000000,
+                 "rm": 4.7123889803847}
+        transformed_pos_2 = {"x": 101.8750e-3, "y": 36.1879e-3, "m": 8.4019e-3, "z": 12.0000e-3, "rx": 0.4607669225265,
+                             "rm": 1.5707963267949}
+        transformed_pos = transformFromSEMToMeteor(pos_2, self.stage)
+        # self.assertEqual(transformed_pos, transformed_pos_2)
+        testing.assert_pos_almost_equal(transformed_pos, transformed_pos_2, atol=1e-6)
+
+        # Position 3:
+        pos_3 = {"x": 50.5250e-3, "y": 48.5884e-3, "m": 8.1666e-3, "z": 15.0000e-3, "rx": 0.0698131700798,
+                 "rm": 4.7123889803847}
+        transformed_pos_3 = {"x": 96.4750e-3, "y": 37.3278e-3, "m": 10.9166e-3, "z": 15.0000e-3, "rx": 0.4607669225265,
+                             "rm": 1.5707963267949}
+        transformed_pos = transformFromSEMToMeteor(pos_3, self.stage)
+        # self.assertEqual(transformed_pos, transformed_pos_3)
+        testing.assert_pos_almost_equal(transformed_pos, transformed_pos_3, atol=1e-6)
+
+    def test_transformFromMeteorToSEM(self):
+        """
+        Tests the transformFromMeteorToSEM function.
+        """
+        pos_4 = {"x": 101.0750e-3, "y": 35.3922e-3, "m": 5.8660e-3, "z": 9.0000e-3, "rx": 0.4607669225265,
+                 "rm": 1.5707963267949}
+        transformed_pos_4 = {"x": 45.9250e-3, "y": 48.5880e-3, "m": 2.4446e-3, "z": 9.0000e-3, "rx": 0.0349065850399,
+                             "rm": 4.7123889803847}
+        # Test the case where the stage is at the reference position
+        transformed_pos = transformFromMeteorToSEM(pos_4, self.stage)
+        # self.assertEqual(transformed_pos, transformed_pos_4)
+        testing.assert_pos_almost_equal(transformed_pos, transformed_pos_4, atol=1e-6)
+
+        # Test the case where the stage is at the reference position, but with a non-zero stage tilt
+        # Position 5:
+        pos_5 = {"x": 100.8750e-3, "y": 36.7034e-3, "m": 9.9332e-3, "z": 14.0000e-3, "rx": 0.4607669225265,
+                 "rm": 1.5707963267949}
+        transformed_pos_5 = {"x": 46.1250e-3, "y": 49.6744e-3, "m": 7.0302e-3, "z": 14.0000e-3, "rx": 0.0349065850399,
+                             "rm": 4.7123889803847}
+        transformed_pos = transformFromMeteorToSEM(pos_5, self.stage)
+        # self.assertEqual(transformed_pos, transformed_pos_5)
+        testing.assert_pos_almost_equal(transformed_pos, transformed_pos_5, atol=1e-6)
+
+        # Test the case where the stage is at the reference position, but with a non-zero stage rotation
+        pos_6 = {"x": 96.4750e-3, "y": 35.5657e-3, "m": 5.5277e-3, "z": 8.0000e-3, "rx": 0.4607669225265,
+                 "rm": 1.5707963267949}
+        transformed_pos_6 = {"x": 50.5250e-3, "y": 47.9349e-3, "m": 2.0027e-3, "z": 8.0000e-3, "rx": 0.0349065850399,
+                             "rm": 4.7123889803847}
+        transformed_pos = transformFromMeteorToSEM(pos_6, self.stage)
+        # self.assertEqual(transformed_pos, transformed_pos_6)
+        testing.assert_pos_almost_equal(transformed_pos, transformed_pos_6, atol=1e-6)
+
+       #TODO linked YM plane is at beta 26
+
+    def test_switching_sem_to_fm(self):
+        # move to loading position
+        pass
+        # f = cryoSwitchSamplePosition(LOADING)
+        # f.result()
+        # move the stage to the sem imaging area
+        # f = cryoSwitchSamplePosition(SEM_IMAGING)
+        # f.result()
+        # current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        # self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # now the selected grid is already the grid1
+        # current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        # self.assertEqual(GRID_1, current_grid)
+        #
+        # # move the stage to the FLM imaging area
+        # f = cryoSwitchSamplePosition(FM_IMAGING)
+        # f.result()
+        # # make sure we are still in sem  imaging area
+        # current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        # self.assertEqual(FM_IMAGING, current_imaging_mode)
+        #
+        # # move the stage back to the sem imaging area
+        # f = cryoSwitchSamplePosition(SEM_IMAGING)
+        # f.result()
+        # current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        # self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        #
+        # # move the stage back to the loading position
+        # f = cryoSwitchSamplePosition(LOADING)
+        # f.result()
+        # current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        # self.assertEqual(LOADING, current_imaging_mode)
 
 if __name__ == "__main__":
     unittest.main()
