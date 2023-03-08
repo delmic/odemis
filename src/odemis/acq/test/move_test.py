@@ -76,7 +76,7 @@ class TestEnzelMove(unittest.TestCase):
 
         # Set custom value that works well within the simulator range
         cls.rx_angle = 0.3
-        cls.rz_angle = 0.1
+        cls.rm_angle = 0.1
 
     def test_sample_switch_procedures(self):
         """
@@ -97,8 +97,8 @@ class TestEnzelMove(unittest.TestCase):
         filter_dict = lambda keys, d: {key: d[key] for key in keys}
         testing.assert_pos_almost_equal(filter_dict({'x', 'y', 'z'}, stage.position.value),
                                      filter_dict({'x', 'y', 'z'}, self.stage_coating), atol=ATOL_LINEAR_POS)
-        testing.assert_pos_almost_equal(filter_dict({'rx', 'rz'}, stage.position.value),
-                                     filter_dict({'rx', 'rz'}, self.stage_coating), atol=ATOL_LINEAR_POS)
+        testing.assert_pos_almost_equal(filter_dict({'rx', 'rm'}, stage.position.value),
+                                     filter_dict({'rx', 'rm'}, self.stage_coating), atol=ATOL_LINEAR_POS)
         # align should be in deactive position
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 
@@ -528,8 +528,8 @@ class TestGetDifferenceFunction(unittest.TestCase):
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_rotation_axes(self):
-        point1 = {'rx': 0.523599, 'rz': 0} # 30 degree
-        point2 = {'rx': 1.0472, 'rz': 0}    # 60 degree
+        point1 = {'rx': 0.523599, 'rm': 0} # 30 degree
+        point2 = {'rx': 1.0472, 'rm': 0}    # 60 degree
         # the rotation difference is 30 degree
         expected_rotation = getRotationMatrix("rx", numpy.radians(30))
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
@@ -537,37 +537,37 @@ class TestGetDifferenceFunction(unittest.TestCase):
         self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
 
     def test_only_rotation_axes_but_whtout_difference(self):
-        point1 = {'rx': 0, 'rz': 0.523599} # 30 degree
-        point2 = {'rx': 0, 'rz': 0.523599}  # 30 degree
+        point1 = {'rx': 0, 'rm': 0.523599} # 30 degree
+        point2 = {'rx': 0, 'rm': 0.523599}  # 30 degree
         # the rotation difference is 0 degree
         exp_rot_error = 0
         act_rot_error = _getDistance(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error)
 
     def test_only_rotation_axes_but_whtout_common_axes(self):
-        point1 = {'rx': 0, 'rz': 0.523599} # 30 degree
-        point2 = {'rz': 1.0472}  # 60 degree
+        point1 = {'rx': 0, 'rm': 0.523599} # 30 degree
+        point2 = {'rm': 1.0472}  # 60 degree
         # the rotation difference is 30 degree
-        expected_rotation = getRotationMatrix("rz", numpy.radians(30))
+        expected_rotation = getRotationMatrix("rm", numpy.radians(30))
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
         act_rot_error = _getDistance(point2, point1)
         self.assertAlmostEqual(exp_rot_error, act_rot_error, places=5)
 
     def test_no_common_axes(self):
-        point1 = {'rx': 0.523599, 'rz': 0.523599}
+        point1 = {'rx': 0.523599, 'rm': 0.523599}
         point2 = {'x': 0.082, 'y': 0.01}
         self.assertRaises(ValueError, _getDistance, point1, point2)
 
     def test_both_axes(self):
-        point1 = {'rx': 0, 'rz': 0.523599, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975}
-        point2 = {'rx': 0, 'rz': 1.0472, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975}
+        point1 = {'rx': 0, 'rm': 0.523599, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975}
+        point2 = {'rx': 0, 'rm': 1.0472, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975}
         lin_axes = {'x', 'y', 'z'}  
-        rot_axes = {'rx', 'rz'}
+        rot_axes = {'rx', 'rm'}
         pos1 = numpy.array([point1[a] for a in lin_axes])
         pos2 = numpy.array([point2[a] for a in lin_axes])
         exp_lin_error = scipy.spatial.distance.euclidean(pos1, pos2)
         # the rotation difference is 30 degree
-        expected_rotation = getRotationMatrix("rz", numpy.radians(30))
+        expected_rotation = getRotationMatrix("rm", numpy.radians(30))
         exp_rot_error = SCALING_FACTOR*numpy.trace(numpy.eye(3)-expected_rotation)
         act_error = _getDistance(point1, point2)
         self.assertAlmostEqual(act_error, exp_rot_error+exp_lin_error, places=6)
