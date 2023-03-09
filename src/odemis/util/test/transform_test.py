@@ -21,25 +21,28 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import copy
 import inspect
-import numpy
-from numpy.linalg import LinAlgError
+import itertools
 import operator
 import unittest
 
+import numpy
+from numpy.linalg import LinAlgError
+
 from odemis.util.random import check_random_state
-from odemis.util.spot import GridPoints
+from odemis.util.registration import unit_gridpoints
 from odemis.util.transform import (
+    AffineTransform,
+    RigidTransform,
+    ScalingTransform,
+    SimilarityTransform,
     _rotation_matrix_from_angle,
     _rotation_matrix_to_angle,
     cartesian_to_polar,
     polar_to_cartesian,
     to_physical_space,
     to_pixel_index,
-    AffineTransform,
-    ScalingTransform,
-    SimilarityTransform,
-    RigidTransform,
 )
+
 from transform_known_values import transform_known_values
 
 
@@ -347,10 +350,45 @@ class RotationMatrixRoundTripCheck(unittest.TestCase):
             self.assertAlmostEqual(angle, result)
 
 
+def random_transform(transform_type=None, seed=None):
+    """
+    Return a randomized transform of specified type.
+
+    Parameters
+    ----------
+    transform_type : GeometricTransform, optional.
+        The transform type to return, default is `AffineTransform`.
+    seed : {None, int, `numpy.random.Generator`}, optional
+        If `seed` is an int or None, a new `numpy.random.Generator` is
+        created using `numpy.random.default_rng(seed)`.
+        If `seed` is already a `Generator` instance, then the provided
+        instance is used.
+
+    Returns
+    -------
+    tform : GeometricTransform
+        Randomized transform of type `transform_type`.
+
+    """
+    if transform_type is None:
+        transform_type = AffineTransform
+    rng = check_random_state(seed)
+    params = {
+        "scale": 1 + 0.5 * rng.uniform(-1, 1),
+        "rotation": 0.25 * numpy.pi * rng.uniform(-1, 1),
+        "squeeze": 1 + 0.1 * rng.uniform(-1, 1),
+        "shear": 0.1 * rng.uniform(-1, 1),
+        "translation": rng.uniform(-1, 1, (2,)),
+    }
+    sig = inspect.signature(transform_type)
+    params = {name: params[name] for name in params if name in sig.parameters}
+    return transform_type(**params)
+
+
 class TransformTestBase:
-    @classmethod
-    def setUpClass(cls):
-        numpy.random.seed(0)
+    def setUp(self):
+        """Ensure reproducible tests."""
+        self._rng = check_random_state(12345)
 
     def test_attributes(self):
         """
@@ -459,7 +497,7 @@ class TransformTestBase:
         transformation when applied to two identical point sets.
 
         """
-        src = numpy.random.random_sample((10, 2))
+        src = self._rng.random_sample((10, 2))
         tform = self.transform_type.from_pointset(src, src)
         numpy.testing.assert_array_almost_equal(tform.matrix, numpy.eye(2))
         numpy.testing.assert_array_almost_equal(tform.translation, numpy.zeros(2))
@@ -472,15 +510,9 @@ class TransformTestBase:
         increased FRE.
 
         """
-        params = {
-            "scale": 1 + 0.5 * (2 * numpy.random.random_sample() - 1),
-            "rotation": numpy.pi * (2 * numpy.random.random_sample() - 1),
-            "squeeze": 1 + 0.2 * (2 * numpy.random.random_sample() - 1),
-            "shear": 0.2 * (2 * numpy.random.random_sample() - 1),
-        }
-        src = GridPoints(8, 8)
-        noise = 0.1 * (2 * numpy.random.random_sample(src.shape) - 1)
-        dst = AffineTransform(**params).apply(src + noise)
+        src = unit_gridpoints((8, 8), mode="ji")
+        noise = 0.1 * self._rng.uniform(-1, 1, size=src.shape)
+        dst = random_transform(seed=self._rng).apply(src + noise)
         tform0 = self.transform_type.from_pointset(src, dst)
         fre0 = tform0.fre(src, dst)
         for param in ("scale", "rotation", "squeeze", "shear"):
@@ -526,6 +558,54 @@ class TransformTestBase:
         inv = tform.inverse()
         self.assertIs(type(inv), self.inverse_type)
 
+    def test_matmul_identity(self):
+        """
+        The returned GeometricTransform instance should be equal to the
+        identity transform when combining a transform with its inverse.
+
+        """
+        tform = random_transform(self.transform_type, self._rng)
+        out = tform @ tform.inverse()
+        numpy.testing.assert_array_almost_equal(out.matrix, numpy.eye(2))
+        numpy.testing.assert_array_almost_equal(out.translation, numpy.zeros(2))
+
+    def test_matmul_sequential(self):
+        """
+        Applying the combined GeometricTransform should return the same result
+        as when sequentially applying the corresponding transforms on the same
+        coordinates.
+
+        """
+        a = random_transform(self.transform_type, self._rng)
+        b = random_transform(self.transform_type, self._rng)
+        src = self._rng.random_sample((10, 2))
+        dst = a.apply(b.apply(src))
+        out = (a @ b).apply(src)
+        numpy.testing.assert_array_almost_equal(dst, out)
+
+    def test_matmul_types(self):
+        """
+        `GeometricTransform.__matmul__` should return a transform of the
+        expected type.
+
+        """
+        transform_types = (
+            RigidTransform,
+            SimilarityTransform,
+            ScalingTransform,
+            AffineTransform,
+        )
+        for cls in transform_types:
+            a = random_transform(self.transform_type, self._rng)
+            b = random_transform(cls, self._rng)
+            out = type(a @ b)
+            if self.transform_type is ScalingTransform:
+                self.assertIs(out, AffineTransform)
+            elif issubclass(self.transform_type, cls):
+                self.assertIs(out, cls)
+            else:
+                self.assertIs(out, self.transform_type)
+
 
 class AffineTransformTest(TransformTestBase, unittest.TestCase):
     transform_type = inverse_type = AffineTransform
@@ -564,9 +644,9 @@ class RigidTransformTest(TransformTestBase, unittest.TestCase):
 
 
 class TransformFromPointsetEquivalence(unittest.TestCase):
-    @classmethod
-    def setUpClass(cls):
-        numpy.random.seed(0)
+    def setUp(self):
+        """Ensure reproducible tests."""
+        self._rng = check_random_state(12345)
 
     def test_transform_equal_rotation(self):
         """
@@ -576,22 +656,17 @@ class TransformFromPointsetEquivalence(unittest.TestCase):
         `RigidTransform`. Note: this list excludes `ScalingTransform`.
 
         """
-        params = {
-            "scale": 1 + 0.5 * (2 * numpy.random.random_sample() - 1),
-            "rotation": numpy.pi * (2 * numpy.random.random_sample() - 1),
-            "squeeze": 1 + 0.2 * (2 * numpy.random.random_sample() - 1),
-            "shear": 0.2 * (2 * numpy.random.random_sample() - 1),
-        }
-        src = GridPoints(8, 8)
-        noise = 0.1 * (2 * numpy.random.random_sample(src.shape) - 1)
-        dst = AffineTransform(**params).apply(src + noise)
-        rotation = None
+        src = unit_gridpoints((8, 8), mode="ji")
+        noise = 0.1 * self._rng.uniform(-1, 1, size=src.shape)
+        dst = random_transform(seed=self._rng).apply(src + noise)
+
+        values = []
         for transform_type in (AffineTransform, SimilarityTransform, RigidTransform):
             tform = transform_type.from_pointset(src, dst)
-            if rotation is None:
-                rotation = tform.rotation
-            else:
-                self.assertAlmostEqual(rotation, tform.rotation)
+            values.append(tform.rotation)
+
+        for a, b in itertools.combinations(values, 2):
+            self.assertAlmostEqual(a, b)
 
 
 if __name__ == "__main__":

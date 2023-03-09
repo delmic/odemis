@@ -41,6 +41,8 @@ from odemis.util.registration import (
 )
 from odemis.util.transform import AffineTransform
 
+from transform_test import random_transform
+
 
 class BijectiveMatchingTest(unittest.TestCase):
     """Unit tests for `bijective_matching()`."""
@@ -193,32 +195,6 @@ class UnitGridPointsTest(unittest.TestCase):
         numpy.testing.assert_array_almost_equal(ji, _ji)
 
 
-def random_affine_transform(seed=None):
-    """
-    Return a randomized affine transform.
-
-    Parameters
-    ----------
-    rng : numpy.random.Generator, optional
-        Random number generator
-
-    Returns
-    -------
-    tform : AffineTransform
-        Randomized affine transform.
-
-    """
-    rng = check_random_state(seed)
-    params = {
-        "scale": 1 + 0.5 * rng.uniform(-1, 1),
-        "rotation": 0.25 * numpy.pi * rng.uniform(-1, 1),
-        "squeeze": 1 + 0.1 * rng.uniform(-1, 1),
-        "shear": 0.1 * rng.uniform(-1, 1),
-        "translation": rng.uniform(-1, 1, (2,)),
-    }
-    return AffineTransform(**params)
-
-
 def unit_gridpoints_graph(shape, tform, index):
     """
     Return the known good graph of the unit grid.
@@ -268,7 +244,7 @@ class NearestNeighborGraphTest(unittest.TestCase):
                     n, m = shape
                     shuffle = self._rng.permutation(n * m)
                     index = numpy.argsort(shuffle)
-                    tform = random_affine_transform(self._rng)
+                    tform = random_transform(seed=self._rng)
                     ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])
                     graph = unit_gridpoints_graph(shape, tform, index)
                     out = nearest_neighbor_graph(ji)
@@ -288,7 +264,7 @@ class NearestNeighborGraphTest(unittest.TestCase):
                     n, m = shape
                     shuffle = self._rng.permutation(n * m)
                     index = numpy.argsort(shuffle)
-                    tform = random_affine_transform(self._rng)
+                    tform = random_transform(seed=self._rng)
                     ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])[:-1]
                     _graph = unit_gridpoints_graph(shape, tform, index)
                     vertex = n * m - 1
@@ -392,7 +368,7 @@ class EstimateGridOrientationTest(unittest.TestCase):
                 with self.subTest(shape=shape, i=i):
                     n, m = shape
                     shuffle = self._rng.permutation(n * m)
-                    tform = random_affine_transform(self._rng)
+                    tform = random_transform(seed=self._rng)
                     ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])
                     out, error_metric = estimate_grid_orientation(ji, shape, AffineTransform)
                     numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
@@ -412,7 +388,7 @@ class EstimateGridOrientationTest(unittest.TestCase):
                 with self.subTest(shape=shape, i=i):
                     n, m = shape
                     shuffle = self._rng.permutation(n * m)
-                    tform = random_affine_transform(self._rng)
+                    tform = random_transform(seed=self._rng)
                     ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])[:-1]
                     out, error_metric = estimate_grid_orientation(ji, shape, AffineTransform)
                     numpy.testing.assert_array_almost_equal(tform.matrix, out.matrix)
@@ -432,7 +408,7 @@ class EstimateGridOrientationTest(unittest.TestCase):
                 with self.subTest(shape=shape, i=i):
                     n, m = shape
                     shuffle = self._rng.permutation(n * m)
-                    tform = random_affine_transform(self._rng)
+                    tform = random_transform(seed=self._rng)
                     ji = tform.apply(unit_gridpoints(shape, mode="ji")[shuffle])
                     ji[-1] += 0.2
                     out, error_metric = estimate_grid_orientation(ji, shape, AffineTransform)

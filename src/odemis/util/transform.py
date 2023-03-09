@@ -535,7 +535,7 @@ def alt_transformation_matrix_from_implicit(
 
 
 def alt_transformation_matrix_to_implicit(
-    matrix: numpy.ndarray, form: str,
+    matrix: numpy.ndarray, form: str
 ) -> Tuple[numpy.ndarray, float, float]:
     """
     Return an alternative description of the implicit parameters given a
@@ -648,9 +648,10 @@ class ImplicitParameter:
     def __set_name__(self, owner: Type["GeometricTransform"], name: str) -> None:
         self.private_name = "_" + name
 
-    def __get__(self,
+    def __get__(
+        self,
         instance: Optional["GeometricTransform"],
-        owner: Optional[Type["GeometricTransform"]]=None,
+        owner: Optional[Type["GeometricTransform"]] = None,
     ) -> Union[float, "ImplicitParameter"]:
         """
         return the value (float) when a instance is passed.
@@ -737,6 +738,39 @@ class GeometricTransform(metaclass=ABCMeta):
         self.translation = (
             numpy.zeros(2, dtype=float) if translation is None else translation
         )
+
+    def __matmul__(self, other: "GeometricTransform") -> "GeometricTransform":
+        """
+        Overloads the `@` operator to combine two transforms into one.
+
+        Parameters
+        ----------
+        other : GeometricTransform
+            The geometric transform with which to combine.
+
+        Returns
+        -------
+        out : GeometricTransform
+            The combined transform.
+
+        Examples
+        --------
+        >>> rotation = 0.5 * numpy.pi
+        >>> translation = numpy.array((1, 0))
+        >>> a = RigidTransform(rotation=rotation, translation=translation)
+        >>> b = a @ a
+        >>> numpy.isclose(b.rotation, numpy.pi)
+        True
+        >>> numpy.allclose(b.translation, numpy.array((1, 1)))
+        True
+
+        """
+        cls = getattr(self, "_inverse_type", type(self))
+        if not isinstance(other, cls):
+            cls = type(other)
+        matrix = self.matrix @ other.matrix
+        translation = self.apply(other.translation)
+        return cls(matrix, translation)
 
     @property
     def matrix(self) -> numpy.ndarray:
