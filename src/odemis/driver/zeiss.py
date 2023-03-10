@@ -600,8 +600,9 @@ class Stage(model.Actuator):
             target_pos["rx"] = move_list[3]
         if "rm" in shift:
             move_list[4] += shift["rm"]
+            move_list[4] = move_list[4] % (2 * math.pi)
             # correct for full rotation under and overflow
-            target_pos["rm"] = move_list[4] % 360
+            target_pos["rm"] = move_list[4]
         if "m" in shift:
             move_list[5] += shift["m"] * 1e3
             target_pos["m"] = move_list[5] * 1e-3
