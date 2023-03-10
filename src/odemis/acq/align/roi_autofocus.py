@@ -55,7 +55,8 @@ def do_autofocus_in_roi(
     :param focus_range: focus range, tuple of (zmin, zmax) in meters
     :param nx: (int) the number of positions in x where to focus
     :param ny: (int) the number of positions in y where to focus
-    :param conf_level: (float) confidence level of the focus metric, default 0 takes all values.
+    :param conf_level: (0<=float<=1) confidence level of the focus metric, default 0 takes all values.
+        It is the minimum confidence level that a focus metric needs to be taken into account.
         For values above 0 only the positions with confidence higher than conf_level are taken into account.
     :return:
     """
@@ -76,8 +77,9 @@ def do_autofocus_in_roi(
                     focus_positions.append([stage.position.value["x"],
                                             stage.position.value["y"],
                                             focus.position.value["z"]])
-                    logging.debug(f"Added focus with confidence of {foc_lev} at position: {focus_positions[-1]}")
-
+                    logging.debug(f"Added focus with confidence of {conf} at position: {focus_positions[-1]}")
+                else:
+                    logging.debug(f"Focus level is not added due to low confidence of {conf} at position: {x, y}.")
         return focus_positions
 
     except TimeoutError:

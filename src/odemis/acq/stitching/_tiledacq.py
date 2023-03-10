@@ -99,6 +99,8 @@ class TiledAcquisitionTask(object):
         self._streams = streams
         self._stage = stage
         self._focus_range = focus_range
+        self._future.running_subf = model.InstantaneousFuture()
+        self._future._task_lock = threading.Lock()
         # Get total area as a tuple of width, height from ltrb area points
         normalized_area = util.normalize_rect(area)
         if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
@@ -910,10 +912,7 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     """
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
-    future.running_subf = model.InstantaneousFuture()
-    future._task_lock = threading.Lock()
     # Create a tiled acquisition task
-    # TODO input the focus_range as input argument and do not calculate it in this task
     task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
                                 registrar=registrar, weaver=weaver, focusing_method=focusing_method,
                                 focus_points=focus_points, focus_range=focus_range)
@@ -955,9 +954,6 @@ def acquireOverview(streams, stage, area, focus, ccd, overlap=0.2, settings_obs=
     """
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
-    future.running_subf = model.InstantaneousFuture()
-    future._task_lock = threading.Lock()
-
     task = AcquireOverviewTask(streams, stage, area, focus, ccd, future, overlap, settings_obs,
                                log_path, zlevels,
                                registrar, weaver, focusing_method)
@@ -981,6 +977,8 @@ class AcquireOverviewTask(object):
         # site and feature means the same
         self._stage = stage
         self._future = future
+        self._future.running_subf = model.InstantaneousFuture()
+        self._future._task_lock = threading.Lock()
         self.streams = streams
         self.areas = areas  # list of areas
         self._ccd = ccd  # TODO to delete after ccd.data components is used from streams in do_autofocus_roi
@@ -1019,12 +1017,12 @@ class AcquireOverviewTask(object):
             logging.debug("acquisition overview cancelled.")
         return True
 
-    def estimate_time(self, roi_idx=0, actual_time_per_roi=None):
+    def estimate_time(self, roi_idx=0, actual_time_per_roi=None) -> float:
         """
         Estimates the time for the rest of the acquisition.
 
-        :param site_idx: (int) index of the current site
-        :param actual_time_per_site: (float) the actual time spent for the current site
+        :param roi_idx: (int) index of the current roi
+        :param actual_time_per_roi: (float) the actual time spent for the current roi
         :return: (float) the estimated time for the rest of the acquisition
         """
         remaining_rois = (len(self.areas) - roi_idx)
@@ -1044,9 +1042,9 @@ class AcquireOverviewTask(object):
         da_rois = []
         try:
             actual_time_per_roi = None
+            start_time = time.time()
             # create a for loop for roi to create sub futures
             for idx, roi in enumerate(self.areas):
-                start_time = time.time()
                 remaining_t = self.estimate_time(idx, actual_time_per_roi)
                 self._future.set_end_time(time.time() + remaining_t)
 
@@ -1066,10 +1064,11 @@ class AcquireOverviewTask(object):
                 logging.debug(f"Autofocus is running for roi number {idx} with {roi} values")
 
                 try:
-                    focus_points = self._future.running_subf.result()  # timeout error can be used
+                    # TODO use the "estimated time * 3 + 1" as timeout error
+                    focus_points = self._future.running_subf.result()
                 except Exception as exp:
-                    # logging.exception(
-                    #     f"Autofocus within roi failed for roi number {idx} with {roi} values due to {exp}")
+                    logging.exception(
+                        f"Autofocus within roi failed for roi number {idx} with {roi} values due to {exp}")
                     raise
 
                 # cancel the sub future
@@ -1091,7 +1090,7 @@ class AcquireOverviewTask(object):
                 try:
                     da = self._future.running_subf.result()
                     # append dataArrays
-                    da_rois.append(da[0])
+                    da_rois.append(da)
                 except Exception as exp:
                     logging.exception(
                         f"Z-stack acquisition within roi failed for roi number {idx} with {roi} values due to {exp}")
@@ -1104,7 +1103,7 @@ class AcquireOverviewTask(object):
                     raise CancelledError()
 
                 # Store the actual time during acquisition one roi
-                actual_time_per_roi = time.time() - start_time
+                actual_time_per_roi = (time.time() - start_time) / (idx + 1)
 
         except CancelledError:
             logging.debug("Stopping because acquisition overview was cancelled")

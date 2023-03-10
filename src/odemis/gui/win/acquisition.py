@@ -1035,7 +1035,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
     def on_acquire(self, evt):
         """ Start the actual acquisition """
-        logging.info("Value for autofocus checkbox: %s", self.autofocus_roi_ckbox.value)
         logging.info("Acquire button clicked, starting acquisition")
         acq_streams = self.get_acq_streams()
         if not acq_streams:
