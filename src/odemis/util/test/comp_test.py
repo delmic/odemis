@@ -235,6 +235,18 @@ class TestGenerateZlevels(unittest.TestCase):
         actual = generate_zlevels(self.focus, zrange, zStep)
         numpy.testing.assert_array_almost_equal(expected, actual)
 
+    def test_clipping_axis_range(self):
+        self.focus.updateMetadata({model.MD_POS_ACTIVE_RANGE: {"z": [-100e-6, 100e-6]}})
+        try:
+            self.focus.moveAbsSync({"z": 80e-6})
+            zrange = (-50e-6, 50e-6)
+            zStep = 10e-6
+            expected = numpy.arange(30e-6, 100e-6 + 1e-12, 10e-6)
+            actual = generate_zlevels(self.focus, zrange, zStep)
+            numpy.testing.assert_array_almost_equal(expected, actual)
+        finally:
+            self.focus.updateMetadata({model.MD_POS_ACTIVE_RANGE: {}})
+
 
 if __name__ == "__main__":
     unittest.main()
