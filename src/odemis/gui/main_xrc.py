@@ -1018,7 +1018,9 @@ class xrcfr_overview_acq(wx.Dialog):
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
         self.zstep_size_ctrl = xrc.XRCCTRL(self, "zstep_size_ctrl")
+        self.tiles_number_x_lbl = xrc.XRCCTRL(self, "tiles_number_x_lbl")
         self.tiles_number_x = xrc.XRCCTRL(self, "tiles_number_x")
+        self.tiles_number_y_lbl = xrc.XRCCTRL(self, "tiles_number_y_lbl")
         self.tiles_number_y = xrc.XRCCTRL(self, "tiles_number_y")
         self.area_size_txt = xrc.XRCCTRL(self, "area_size_txt")
         self.autofocus_chkbox = xrc.XRCCTRL(self, "autofocus_chkbox")
@@ -10013,16 +10015,16 @@ def __init_resources():
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="tiles_number_x_lbl">
                           <label>Tiles number x</label>
                           <fg>#DDDDDD</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
                           <font>
                             <size>9</size>
                             <sysfont> wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
+                          <XRCED>
+                              <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <option>0</option>
                         <flag>wxLEFT</flag>
@@ -10052,15 +10054,15 @@ def __init_resources():
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="tiles_number_y_lbl">
                           <label>Tiles number y</label>
                           <fg>#DDDDDD</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
                           <font>
                             <size>9</size>
                           </font>
+                          <XRCED>
+                              <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <option>0</option>
                         <flag>wxLEFT</flag>

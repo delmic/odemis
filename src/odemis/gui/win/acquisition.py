@@ -27,29 +27,34 @@ import math
 import os.path
 from builtins import str
 from concurrent.futures._base import CancelledError
+from typing import List, Tuple
 
 import numpy
 import wx
 
 import odemis.gui.model as guimodel
-from odemis import model, dataio
-from odemis.acq import stream, path, acqmng, stitching
-from odemis.acq.stitching import FocusingMethod, WEAVER_MEAN, REGISTER_IDENTITY, acquireOverview
-from odemis.acq.stream import EMStream, NON_SPATIAL_STREAMS, OpticalStream, ScannedFluoStream, LiveStream
-from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
-    get_global_settings_entries, get_local_settings_entries
+from odemis import dataio, model
+from odemis.acq import acqmng, path, stitching, stream
+from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
+                                  FocusingMethod, acquireOverview)
+from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
+                               OpticalStream, ScannedFluoStream)
+from odemis.gui.acqmng import (apply_preset, get_global_settings_entries,
+                               get_local_settings_entries, preset_as_is,
+                               presets)
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf, util
-from odemis.gui.cont.settings import SecomSettingsController, LocalizationSettingsController
+from odemis.gui.cont.settings import (LocalizationSettingsController,
+                                      SecomSettingsController)
 from odemis.gui.cont.streams import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
-from odemis.gui.model import TOOL_NONE, StreamView, AcquisitionWindowData
-from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
-    wxlimit_invocation
-from odemis.gui.util.widgets import ProgressiveFutureConnector, \
-    VigilantAttributeConnector
+from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView
+from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,
+                             wxlimit_invocation)
+from odemis.gui.util.widgets import (ProgressiveFutureConnector,
+                                     VigilantAttributeConnector)
 from odemis.util import rect_intersect, units
-from odemis.util.filename import guess_pattern, create_filename, update_counter
+from odemis.util.filename import create_filename, guess_pattern, update_counter
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -683,6 +688,26 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._autofocus_roi_vac = VigilantAttributeConnector(
             self.autofocus_roi_ckbox, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
 
+        # Slightly change the interface for the MIMAS:
+        # * Run autofocus is always enabled (so it's hidden)
+        # * number of tiles is fixed (based on the main.sample_rel_bbox
+        # * possibility to select which area is acquired (among the 8 possible)
+        if self._main_data_model.role == "mimas":
+            self.autofocus_chkbox.Hide()
+            self.autofocus_roi_ckbox.value = True
+
+            # Ideally, we would show the number of tiles based on the tile area
+            # main.sample_rel_bbox, and make them read-only. For now, just don't show them.
+            self.tiles_number_x.Hide()
+            self.tiles_number_x_lbl.Hide()
+            self.tiles_number_y.Hide()
+            self.tiles_number_y_lbl.Hide()
+
+            # TODO: show 8 toggle buttons (or build buttons based on MD_SAMPLE_CENTERS)
+
+
+        # Note: if the stage has MD_SAMPLE_CENTERS, self._get_areas() should be
+        # called to list all the areas.
         self.area = None  # None or 4 floats: left, top, right, bottom positions of the acquisition area (in m)
 
         orig_view = orig_tab_data.focussedView.value
@@ -755,6 +780,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.zsteps.subscribe(self.on_setting_change)
         self.tiles_nx.subscribe(self.on_tiles_number)
         self.tiles_ny.subscribe(self.on_tiles_number)
+        self.autofocus_roi_ckbox.subscribe(self.on_setting_change)
 
     def stop_listening_to_va(self):
         for entry in self._orig_entries:
@@ -764,6 +790,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.zsteps.unsubscribe(self.on_setting_change)
         self.tiles_nx.unsubscribe(self.on_tiles_number)
         self.tiles_ny.unsubscribe(self.on_tiles_number)
+        self.autofocus_roi_ckbox.unsubscribe(self.on_setting_change)
 
     def duplicate_tab_data_model(self, orig):
         """
@@ -862,11 +889,13 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # Disable acquisition button if no area
         self.btn_secom_acquire.Enable(self.area is not None)
 
-        if self.area is None:
+        areas = self._get_areas()
+        if areas[0] is None:
             self.area_size_txt.SetLabel("Invalid stage position")
             return
 
-        area_size = self.area[2] - self.area[0], self.area[3] - self.area[1]
+        area_size = (sum(area[2] - area[0] for area in areas),
+                     sum(area[3] - area[1] for area in areas))
         area_size_str = util.readable_str(area_size, unit="m", sig=3)
         self.area_size_txt.SetLabel(area_size_str)
 
@@ -894,7 +923,11 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if self.acquiring:
             return
 
-        if not self.area:
+        areas = self._get_areas()
+
+        if not areas[0]:
+            # This can happen if the stage is situated outside of the active range
+            # (and sample_centers is not used).
             logging.debug("Unknown acquisition area, cannot estimate acquisition time")
             return
 
@@ -904,11 +937,26 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         else:
             zlevels = self._get_zstack_levels()
             focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
-            acq_time = stitching.estimateTiledAcquisitionTime(streams,
+
+            if self.autofocus_roi_ckbox.value:
+                acq_time = stitching.estimateOverviewTime(streams,
                                                           self._main_data_model.stage,
-                                                          self.area, self.overlap,
+                                                          areas,
+                                                          self._main_data_model.focus,
+                                                          self._main_data_model.ccd,
+                                                          overlap=self.overlap,
+                                                          settings_obs=self._main_data_model.settings_obs,
+                                                          weaver=WEAVER_MEAN,
+                                                          registrar=REGISTER_IDENTITY,
                                                           zlevels=zlevels,
                                                           focusing_method=focus_mtd)
+
+            else:
+                acq_time = stitching.estimateTiledAcquisitionTime(streams,
+                                                                  self._main_data_model.stage,
+                                                                  self.area, self.overlap,
+                                                                  zlevels=zlevels,
+                                                                  focusing_method=focus_mtd)
 
         txt = "The estimated acquisition time is {}."
         txt = txt.format(units.readable_time(math.ceil(acq_time)))
@@ -1033,6 +1081,32 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         fov = (self.area[2] - self.area[0], self.area[3] - self.area[1])
         self.pnl_view_acq.set_mpp_from_fov(fov)
 
+    def _get_areas(self) -> List[Tuple[float]]:
+        """
+        return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
+        of all areas to acquire.
+        """
+        if not self._main_data_model.sample_centers:
+            return [self.area]
+
+        # TODO: for now this is only for the MIMAS, but eventually, on the METEOR,
+        # which often supports 2 grids, this should also be possible to use.
+
+        # .sample_centers contains the center position of each area
+        # .sample_rel_bbox contains the relative bounding box on an area
+        rel_bbox = self._main_data_model.sample_rel_bbox
+
+        # TODO: once there are toggle buttons, filter to only the button toggled on
+        # Sort the centers along X, and for centers with the same X, along the Y.
+        # In theory, the order doesn't really matter (at best it would safe a few
+        # seconds of stage movement), but it's nice for the user that acquisitions
+        # are done always in the same order, as it reduces "astonishment".
+        sorted_centers = sorted(self._main_data_model.sample_centers.values())
+        areas = [(center[0] + rel_bbox[0], center[1] + rel_bbox[1], center[0] + rel_bbox[2], center[1] + rel_bbox[3])
+                 for center in sorted_centers]
+
+        return areas
+
     def on_acquire(self, evt):
         """ Start the actual acquisition """
         logging.info("Acquire button clicked, starting acquisition")
@@ -1050,6 +1124,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # Freeze all the settings so that it's not possible to change anything
         self._pause_settings()
+        # TODO: also disable the area settings.
 
         self.gauge_acq.Show()
         self.Layout()  # to put the gauge at the right place
@@ -1066,10 +1141,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             os.makedirs(os.path.dirname(self.filename_tiles))
 
         if self.autofocus_roi_ckbox.value:
-            # TODO create a list of a rois to be used for autofocus and pass it to the acquireOverview function
+            areas = self._get_areas()
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
-                                              [self.area],
+                                              areas,
                                               self._main_data_model.focus,
                                               self._main_data_model.ccd,
                                               overlap=self.overlap,
