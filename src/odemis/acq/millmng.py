@@ -239,23 +239,6 @@ class MillingRectangleTask(object):
                                              follow_drift=False)
         return drift_estimation.estimateAcquisitionTime() * nb_anchor_scanning
 
-    def _restore_beam_shift(self, current: float):
-        """
-        Restore the beam shift to previous shift after changing the beam current
-        :param current: New beam current
-        """
-        # check if scanner current is different from the one used for drift correction
-        if current == self._scanner.probeCurrent.value:
-            return
-        # set the scanner current to the one used for drift correction
-        self._scanner.probeCurrent.value = current
-        # store the scanner shift value used in previous current
-        base_shift = self._scanner.shift.value
-        # Add the drift correction shift to the base shift
-        self._scanner.shift.value = (base_shift[0] + self._drift[0], base_shift[1] + self._drift[1])
-        # log previous and new current
-        logging.debug("Ion-beam current changed from %s to %s", self._scanner.probeCurrent.value,
-                      current)
 
     def _move_to_site(self, site: CryoFeature):
         """
@@ -306,15 +289,15 @@ class MillingRectangleTask(object):
             self._scanner.blanker.value = None
 
             # set the milling current
-            self._restore_beam_shift(milling_settings.current.value)
+            self._scanner.probeCurrent.value = milling_settings.current.value
 
             # Initialize the drift corrector only if it is requested by the user
             # max_pixels can change according to drift correction approach
             if milling_settings.dcRoi.value == UNDEFINED_ROI:
                 pass
             else:
-                # Change the current to the drift correction current and keep the beam shift value unchanged
-                self._restore_beam_shift(milling_settings.dcCurrent.value)
+                # Change the current to the drift correction current
+                self._scanner.probeCurrent.value = milling_settings.dcCurrent.value
                 drift_est = AnchoredEstimator(self._scanner, self._detector,
                                               milling_settings.dcRoi.value,
                                               milling_settings.dcDwellTime.value,
@@ -362,7 +345,7 @@ class MillingRectangleTask(object):
                         raise CancelledError()
 
                     # restore the milling current
-                    self._restore_beam_shift(milling_settings.current.value)
+                    self._scanner.probeCurrent.value = milling_settings.current.value
 
                     self._future.running_subf = mill_rectangle(milling_settings.roi.value, self._scanner,
                                                                iteration=self._iterations[setting_nb],
@@ -376,8 +359,8 @@ class MillingRectangleTask(object):
                             f"Milling setting: {milling_settings.name.value} for feature: {site.name.value} at iteration: {itr} failed: {exp}")
                         raise
 
-                    # Change the current to the drift correction current and keep the beam shift value unchanged
-                    self._restore_beam_shift(milling_settings.dcCurrent.value)
+                    # Change the current to the drift correction current
+                    self._scanner.probeCurrent.value = milling_settings.dcCurrent.value
                     # Acquire an image at the given location (RoI)
                     drift_est.acquire()
 

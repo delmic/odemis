@@ -57,6 +57,14 @@ def fake_do_milling(self):
     logging.info("Fake Milling a rectangle")
     time.sleep(5)
 
+def fake_do_cancelling(self, future):
+    """
+    Fake milling function used during simulation
+    """
+    logging.info("Cancel Fake Milling a rectangle")
+
+    return True
+
 
 class MillingManagerTestCase(unittest.TestCase):
 
@@ -66,6 +74,9 @@ class MillingManagerTestCase(unittest.TestCase):
             testing.start_backend(MIMAS_CONFIG)
             cls.patch_obj = patch.object(orsay_milling.OrsayMilling, 'do_milling', fake_do_milling)
             cls.patch_obj.start()
+            # mock hardware connections called during cancelling
+            cls.patch_cancel = patch.object(orsay_milling.OrsayMilling, 'cancel_milling', fake_do_cancelling)
+            cls.patch_cancel.start()
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
@@ -231,19 +242,19 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         Test if the stage moved for all the requested sites and the milling procedure is executed correctly.
         """
-        milling_setting_1 = MillingSettings(name='rough_milling_1', current=760e-12, horizontal_fov=35e-6,
-                                            roi=(0.2, 0.4, 0.3, 0.6),
+        milling_setting_1 = MillingSettings(name='rough_milling_1', current=1.3e-09, horizontal_fov=35e-6,
+                                            roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
-                                            duration=60,
-                                            dc_roi=UNDEFINED_ROI, dc_period=20, dc_dwell_time=10e-6,
-                                            dc_current=20e-12)
+                                            duration=120,
+                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
+                                            dc_current=1e-10)
 
-        milling_setting_2 = MillingSettings(name='rough_milling_2', current=760e-12, horizontal_fov=35e-6,
-                                            roi=(0.5, 0.5, 0.8, 0.6),
+        milling_setting_2 = MillingSettings(name='rough_milling_2', current=1.3e-09, horizontal_fov=35e-6,
+                                            roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
-                                            duration=60,
-                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=35, dc_dwell_time=1e-6,
-                                            dc_current=100e-12)
+                                            duration=120,
+                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
+                                            dc_current=1e-10)
 
         millings = [milling_setting_1, milling_setting_2]
 
@@ -270,19 +281,19 @@ class MillingManagerTestCase(unittest.TestCase):
         self.updates = 0
         self.done = False
 
-        milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
+        milling_setting_1 = MillingSettings(name='rough_milling_1', current=1.3e-09, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=20e-12)
+                                            dc_current=1e-10)
 
-        milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
+        milling_setting_2 = MillingSettings(name='rough_milling_2', current=1.3e-09, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=20e-12)
+                                            dc_current=1e-10)
 
         millings = [milling_setting_1, milling_setting_2]
 
@@ -291,7 +302,7 @@ class MillingManagerTestCase(unittest.TestCase):
 
         future.add_update_callback(self.on_progress_update)
         future.add_done_callback(self.on_done)
-        time.sleep(12)  # make sure it's started
+        time.sleep(13)  # make sure it's started
         self.assertTrue(future.running())
         future.cancel()
         with self.assertRaises(CancelledError):
