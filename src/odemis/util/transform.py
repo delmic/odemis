@@ -68,6 +68,8 @@ __all__ = [
     "polar_to_cartesian",
     "to_physical_space",
     "to_pixel_index",
+    "to_physical_space_transform",
+    "to_pixel_index_transform",
     "AffineTransform",
     "ScalingTransform",
     "SimilarityTransform",
