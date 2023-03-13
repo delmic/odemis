@@ -18,9 +18,11 @@ import numpy
 import yaml
 
 from odemis import model
+from odemis.acq import move
 from odemis.acq.acqmng import acquire
 from odemis.acq.drift import AnchoredEstimator
 from odemis.acq.feature import CryoFeature
+from odemis.acq.move import MILLING
 from odemis.acq.orsay_milling import mill_rectangle
 from odemis.acq.stitching._tiledacq import MOVE_SPEED_DEFAULT
 from odemis.acq.stream import UNDEFINED_ROI
@@ -90,6 +92,12 @@ def load_config(yaml_filename):
         logging.error("Syntax error in milling settings yaml file: %s", exc)
 
     return settings_dict
+
+
+# To handle the timeout error when the stage is not able to move to the desired position
+# It logs the message and raises the MoveError exception
+class MoveError(Exception):
+    pass
 
 
 class MillingRectangleTask(object):
@@ -170,7 +178,6 @@ class MillingRectangleTask(object):
 
         self._milling_time_estimate = time_estimate + drift_acq_time  # time_estimate per feature
         self._remaining_stage_time = stage_time  # total stage movement time
-        self._drift = (0, 0)  # iterable of column and row drifts
 
     def cancel(self, future):
         """
@@ -260,18 +267,18 @@ class MillingRectangleTask(object):
         try:
             self._future.running_subf.result(t)  # or 2 min should be fast enough to move anywhere
         except TimeoutError:
-            logging.warning("Failed to move the stage for feature %s within %s s", site.name.value, t)
             self._future.running_subf.cancel()
-            # TODO move.cryoSwitchSamplePosition(MILLING)
+            move.cryoSwitchSamplePosition(MILLING)
+            raise MoveError(f"Failed to move the stage for feature {site.name.value} within {t} s")
 
     def _mill_all_settings(self, site: CryoFeature):
         """
         Iterates over all the milling settings for one site
         """
         # Move the stage
-        self._move_to_site(site)
-        # if exception is timeout error, continue to the next site
-        if Exception == TimeoutError:
+        try:
+            self._move_to_site(site)
+        except MoveError:
             return
 
         for setting_nb, milling_settings in enumerate(self._settings):
@@ -296,10 +303,7 @@ class MillingRectangleTask(object):
             self._scanner.probeCurrent.value = milling_settings.current.value
 
             # Initialize the drift corrector only if it is requested by the user
-            # max_pixels can change according to drift correction approach
-            if milling_settings.dcRoi.value == UNDEFINED_ROI:
-                pass
-            else:
+            if milling_settings.dcRoi.value != UNDEFINED_ROI:
                 # Change the current to the drift correction current
                 self._scanner.probeCurrent.value = milling_settings.dcCurrent.value
                 drift_est = AnchoredEstimator(self._scanner, self._detector,
@@ -375,14 +379,14 @@ class MillingRectangleTask(object):
 
                     # Estimate the drift
                     drift_est.estimate()
-                    self._drift = (pxs_anchor[0] * drift_est.drift[0],
-                                   -(pxs_anchor[1] * drift_est.drift[1]))
+                    drift = (pxs_anchor[0] * drift_est.drift[0],
+                             -(pxs_anchor[1] * drift_est.drift[1]))
 
                     # Move FIB to compensate drift
                     previous_shift = self._scanner.shift.value
                     logging.debug("Ion-beam shift in m : %s", previous_shift)
-                    self._scanner.shift.value = (self._drift[0] + previous_shift[0],
-                                                 self._drift[1] + previous_shift[1])  # shift in m - absolute position
+                    self._scanner.shift.value = (drift[0] + previous_shift[0],
+                                                 drift[1] + previous_shift[1])  # shift in m - absolute position
                     logging.debug("New Ion-beam shift in m : %s", self._scanner.shift.value)
                     logging.debug("pixel size in m : %s", pxs_anchor)
                     if self._log_path:
@@ -439,7 +443,7 @@ class MillingRectangleTask(object):
             deactive_pos = align_md[model.MD_FAV_POS_DEACTIVE]
 
             # create a future and update the appropriate controls after it is called
-            # TODO: use move.cryoSwitchSamplePosition(MILLING)
+            move.cryoSwitchSamplePosition(MILLING)
             logging.debug(f"Retracting the objective to set the imaging in FIB mode")
             self._future.running_subf = self._aligner.moveAbs(deactive_pos)
 
@@ -449,6 +453,7 @@ class MillingRectangleTask(object):
                 raise
 
             actual_time_per_site = None
+            self._scanner.shift.value = (0, 0)  # reset drift correction to have more margin
 
             for site_idx, site in enumerate(self.sites):
                 # Update progress on the milling sites left
@@ -458,9 +463,11 @@ class MillingRectangleTask(object):
 
                 # For one given site, move the stage at the site and
                 # do milling with all milling settings for the given site
-                self._mill_all_settings(site)
                 # If timeout exception is raised during stage movement, continue milling the next site
-                if Exception == TimeoutError:
+                try:
+                    self._mill_all_settings(site)
+                except MoveError:
+                    logging.debug("Failed to move the stage for feature %s, skipping to next feature ", site.name.value)
                     continue
 
                 # Update the status of milling for the given site
