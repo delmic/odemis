@@ -63,12 +63,12 @@ class VideoDisplayerGrid(VideoDisplayer):
         """
         tform_ji, _ = estimate_grid_orientation_from_img(
             data,
-            (8, 8),
+            self.gridsize,
             AffineTransform,
             sigma=1.45,
             threshold_rel=0.5,
         )
-        grid = unit_gridpoints((8, 8), mode="ji")
+        grid = unit_gridpoints(self.gridsize, mode="ji")
         self.app.spots = tform_ji.apply(grid)
 
         tform_xy = functools.reduce(
