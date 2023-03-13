@@ -99,8 +99,9 @@ class TiledAcquisitionTask(object):
         self._streams = streams
         self._stage = stage
         self._focus_range = focus_range
-        self._future.running_subf = model.InstantaneousFuture()
-        self._future._task_lock = threading.Lock()
+        if future is not None:
+            self._future.running_subf = model.InstantaneousFuture()
+            self._future._task_lock = threading.Lock()
         # Get total area as a tuple of width, height from ltrb area points
         normalized_area = util.normalize_rect(area)
         if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
@@ -977,8 +978,9 @@ class AcquireOverviewTask(object):
         # site and feature means the same
         self._stage = stage
         self._future = future
-        self._future.running_subf = model.InstantaneousFuture()
-        self._future._task_lock = threading.Lock()
+        if future is not None:
+            self._future.running_subf = model.InstantaneousFuture()
+            self._future._task_lock = threading.Lock()
         self.streams = streams
         self.areas = areas  # list of areas
         self._ccd = ccd  # TODO to delete after ccd.data components is used from streams in do_autofocus_roi
@@ -1049,8 +1051,9 @@ class AcquireOverviewTask(object):
                 self._future.set_end_time(time.time() + remaining_t)
 
                 # cancel the sub future
-                if self._future._task_state == CANCELLED:
-                    raise CancelledError()
+                with self._future._task_lock:
+                    if self._future._task_state == CANCELLED:
+                        raise CancelledError()
 
                 # run autofocus for the selected roi
                 self._future.running_subf = autofocus_in_roi(roi,
@@ -1066,14 +1069,15 @@ class AcquireOverviewTask(object):
                 try:
                     # TODO use the "estimated time * 3 + 1" as timeout error
                     focus_points = self._future.running_subf.result()
-                except Exception as exp:
-                    logging.exception(
-                        f"Autofocus within roi failed for roi number {idx} with {roi} values due to {exp}")
+                except Exception:
+                    logging.debug(
+                        f"Autofocus within roi failed for roi number {idx} with {roi} values")
                     raise
 
                 # cancel the sub future
-                if self._future._task_state == CANCELLED:
-                    raise CancelledError()
+                with self._future._task_lock:
+                    if self._future._task_state == CANCELLED:
+                        raise CancelledError()
 
                 # run tiled acquisition for the selected roi
                 self._future.running_subf = acquireTiledArea(self.streams, self._stage, roi,
@@ -1089,18 +1093,19 @@ class AcquireOverviewTask(object):
                 logging.debug(f"Z-stack acquisition is running for roi number {idx} with {roi} values")
                 try:
                     da = self._future.running_subf.result()
-                    # append dataArrays
-                    da_rois.append(da)
-                except Exception as exp:
-                    logging.exception(
-                        f"Z-stack acquisition within roi failed for roi number {idx} with {roi} values due to {exp}")
+                    # append all of them, when multiple streams are acquired
+                    da_rois.extend(da)
+                except Exception:
+                    logging.debug(
+                        f"Z-stack acquisition within roi failed for roi number {idx} with {roi}")
                     raise
 
                 logging.debug(f"acquisition overview is completed for roi number {idx} with {roi} values")
 
                 # cancel the sub future
-                if self._future._task_state == CANCELLED:
-                    raise CancelledError()
+                with self._future._task_lock:
+                    if self._future._task_state == CANCELLED:
+                        raise CancelledError()
 
                 # Store the actual time during acquisition one roi
                 actual_time_per_roi = (time.time() - start_time) / (idx + 1)

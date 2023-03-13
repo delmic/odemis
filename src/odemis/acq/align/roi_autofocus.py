@@ -67,8 +67,9 @@ def do_autofocus_in_roi(
 
         for y in numpy.linspace(ymin, ymax, ny):
             for x in numpy.linspace(xmin, xmax, nx):
-                if f._autofocus_roi_state == CANCELLED:
-                    raise CancelledError()
+                with f._autofocus_roi_lock:
+                    if f._autofocus_roi_state == CANCELLED:
+                        raise CancelledError()
                 stage.moveAbsSync({"x": x, "y": y})
                 # run autofocus
                 f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
