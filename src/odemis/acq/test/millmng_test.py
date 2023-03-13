@@ -57,6 +57,7 @@ def fake_do_milling(self):
     logging.info("Fake Milling a rectangle")
     time.sleep(5)
 
+
 def fake_do_cancelling(self, future):
     """
     Fake milling function used during simulation
@@ -88,6 +89,11 @@ class MillingManagerTestCase(unittest.TestCase):
         cls.light_filter = model.getComponent(role="filter")
         cls.stage = model.getComponent(role="stage")
         cls.aligner = model.getComponent(role="align")
+
+        # set the current for all the milling settings
+        # minumum current is selected for both milling current and drift correction current
+        # depending on the Virtual Machine and microscope file used
+        cls.probe_current = min(cls.ion_beam.probeCurrent.choices)
 
         cls.ccd.exposureTime.value = 0.1  # s, go fast (but not too fast, to still get some signal)
         # opm = acq.path.OpticalPathManager(model.getMicroscope())  # TODO ensures that the align lens is active and stage tilt is 0°
@@ -142,14 +148,14 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         Test the values in milling settings with predefined values
         """
-        milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
+        milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=20,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=20e-12)
+                                            dc_current=self.probe_current)
         self.assertTrue(milling_setting_1.name.value, "rough_milling_1")
-        self.assertTrue(milling_setting_1.current.value, 20e-12)
+        self.assertTrue(milling_setting_1.current.value, self.probe_current)
         self.assertTrue(milling_setting_1.horizontalFoV.value, 35e-6)
         self.assertTrue(milling_setting_1.roi.value, (0.5, 0.5, 0.8, 0.8))
         self.assertTrue(milling_setting_1.pixelSize.value, (3.41796875e-08, 3.41796875e-08))
@@ -158,25 +164,25 @@ class MillingManagerTestCase(unittest.TestCase):
         self.assertTrue(milling_setting_1.dcRoi.value, (0.0, 0.3, 0.4, 0.7))
         self.assertTrue(milling_setting_1.dcPeriod.value, 60)
         self.assertTrue(milling_setting_1.dcDwellTime, 10e-06)
-        self.assertTrue(milling_setting_1.dcCurrent.value, 20e-12)
+        self.assertTrue(milling_setting_1.dcCurrent.value, self.probe_current)
 
     def test_estimate_milling_time(self):
         """
         Test the time estimation for time left in the milling process
         """
         # A. No Drift
-        milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
+        milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=20,
-                                            dc_roi=UNDEFINED_ROI, dc_period=10, dc_dwell_time=10e-6, dc_current=20e-12)
+                                            dc_roi=UNDEFINED_ROI, dc_period=10, dc_dwell_time=10e-6, dc_current=self.probe_current)
 
-        milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
+        milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=20,
                                             dc_roi=UNDEFINED_ROI, dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=20e-12)
+                                            dc_current=self.probe_current)
 
         millings = [milling_setting_1, milling_setting_2]
 
@@ -199,19 +205,19 @@ class MillingManagerTestCase(unittest.TestCase):
         total_est_time_without_drift = task.estimate_milling_time(site_idx=0)
 
         # B. With Drift
-        milling_setting_1 = MillingSettings(name='rough_milling_1', current=20e-12, horizontal_fov=35e-6,
+        milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=20,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=20e-12)
+                                            dc_current=self.probe_current)
 
-        milling_setting_2 = MillingSettings(name='rough_milling_2', current=20e-12, horizontal_fov=35e-6,
+        milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=20,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=20e-12)
+                                            dc_current=self.probe_current)
 
         millings = [milling_setting_1, milling_setting_2]
 
@@ -242,19 +248,19 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         Test if the stage moved for all the requested sites and the milling procedure is executed correctly.
         """
-        milling_setting_1 = MillingSettings(name='rough_milling_1', current=1.3e-09, horizontal_fov=35e-6,
+        milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=1e-10)
+                                            dc_current=self.probe_current)
 
-        milling_setting_2 = MillingSettings(name='rough_milling_2', current=1.3e-09, horizontal_fov=35e-6,
+        milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=1e-10)
+                                            dc_current=self.probe_current)
 
         millings = [milling_setting_1, milling_setting_2]
 
@@ -281,19 +287,19 @@ class MillingManagerTestCase(unittest.TestCase):
         self.updates = 0
         self.done = False
 
-        milling_setting_1 = MillingSettings(name='rough_milling_1', current=1.3e-09, horizontal_fov=35e-6,
+        milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=1e-10)
+                                            dc_current=self.probe_current)
 
-        milling_setting_2 = MillingSettings(name='rough_milling_2', current=1.3e-09, horizontal_fov=35e-6,
+        milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
-                                            dc_current=1e-10)
+                                            dc_current=self.probe_current)
 
         millings = [milling_setting_1, milling_setting_2]
 
