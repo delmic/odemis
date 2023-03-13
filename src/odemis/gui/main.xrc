@@ -4443,7 +4443,7 @@
                                         <object class="sizeritem">
                                             <object class="ProgressRadioButton"
                                                     name="btn_switch_optical_chamber_tab">
-                                                <icon>img/icon/ico_imaging.png</icon>
+                                                <icon>img/icon/ico_optical.png</icon>
                                                 <icon_progress>img/icon/ico_optical_orange.png</icon_progress>
                                                 <icon_on>img/icon/ico_optical_green.png</icon_on>
                                                 <height>48</height>

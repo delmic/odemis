@@ -5510,7 +5510,7 @@ def __init_resources():
                                         </object>
                                         <object class="sizeritem">
                                             <object class="ProgressRadioButton" name="btn_switch_optical_chamber_tab">
-                                                <icon>img_icon_ico_imaging_png</icon>
+                                                <icon>img_icon_ico_optical_png</icon>
                                                 <icon_progress>img_icon_ico_optical_orange_png</icon_progress>
                                                 <icon_on>img_icon_ico_optical_green_png</icon_on>
                                                 <height>48</height>
