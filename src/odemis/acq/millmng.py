@@ -20,8 +20,8 @@ import yaml
 from odemis import model
 from odemis.acq.acqmng import acquire
 from odemis.acq.drift import AnchoredEstimator
-from odemis.acq.orsay_milling import mill_rectangle
 from odemis.acq.feature import CryoFeature
+from odemis.acq.orsay_milling import mill_rectangle
 from odemis.acq.stitching._tiledacq import MOVE_SPEED_DEFAULT
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.dataio import find_fittest_converter
@@ -75,6 +75,7 @@ class MillingSettings(object):
         self.dcDwellTime = model.FloatContinuous(dc_dwell_time, unit="s", range=(1e-09, 1e-03))
         self.dcCurrent = model.FloatContinuous(dc_current, unit="A", range=(0.5e-12, 3000e-12))
 
+
 def load_config(yaml_filename):
     """
     Load user input from yaml settings file.
@@ -117,6 +118,10 @@ class MillingRectangleTask(object):
         self._aligner = aligner
 
         self._future = future
+        if future is not None:
+            self._future.running_subf = model.InstantaneousFuture()
+            self._future._task_lock = threading.Lock()
+
         self._settings = millings
         self._feature_status = feature_post_status  # site and feature means the same
         self.sites = sites
@@ -239,7 +244,6 @@ class MillingRectangleTask(object):
                                              follow_drift=False)
         return drift_estimation.estimateAcquisitionTime() * nb_anchor_scanning
 
-
     def _move_to_site(self, site: CryoFeature):
         """
         Move the stage to the given site.
@@ -280,7 +284,7 @@ class MillingRectangleTask(object):
                 t = 15  # s
                 self._future.running_subf.result(timeout=t)
             except TimeoutError:
-                logging.exception("Failed to tilt the stage for feature %s within %s s", site.name.value, t)
+                logging.debug("Failed to tilt the stage for feature %s within %s s", site.name.value, t)
                 raise
             # Configure HoV
             self._scanner.horizontalFoV.value = milling_settings.horizontalFoV.value
@@ -318,14 +322,18 @@ class MillingRectangleTask(object):
             probe_size = max(pxs)
             overlap = [1 - (pxs[0] / probe_size), 1 - (pxs[1] / probe_size)]  # Always >= 0
 
-            if self._future._task_state == CANCELLED:
-                raise CancelledError()
+            # check if cancellation happened
+            with self._future._task_lock:
+                if self._future._task_state == CANCELLED:
+                    raise CancelledError()
 
             logging.debug(f"Milling setting: {milling_settings.name.value} for feature: {site.name.value}")
 
             if milling_settings.dcRoi.value == UNDEFINED_ROI:
-                if self._future._task_state == CANCELLED:
-                    raise CancelledError()
+
+                with self._future._task_lock:
+                    if self._future._task_state == CANCELLED:
+                        raise CancelledError()
 
                 self._future.running_subf = mill_rectangle(milling_settings.roi.value, self._scanner,
                                                            iteration=self._iterations[setting_nb],
@@ -335,14 +343,15 @@ class MillingRectangleTask(object):
                     self._future.running_subf.result()
                     logging.debug(f"Milling finished for feature: {site.name.value}")
                 except Exception as exp:
-                    logging.error(
+                    logging.debug(
                         f"Milling setting: {milling_settings.name.value} for feature: {site.name.value} failed: {exp}")
                     raise
 
             else:
                 for itr in range(self._iterations[setting_nb]):
-                    if self._future._task_state == CANCELLED:
-                        raise CancelledError()
+                    with self._future._task_lock:
+                        if self._future._task_state == CANCELLED:
+                            raise CancelledError()
 
                     # restore the milling current
                     self._scanner.probeCurrent.value = milling_settings.current.value
@@ -355,7 +364,7 @@ class MillingRectangleTask(object):
                         self._future.running_subf.result()
                         logging.debug(f"Milling finished for feature: {site.name.value}")
                     except Exception as exp:
-                        logging.error(
+                        logging.debug(
                             f"Milling setting: {milling_settings.name.value} for feature: {site.name.value} at iteration: {itr} failed: {exp}")
                         raise
 
@@ -381,17 +390,20 @@ class MillingRectangleTask(object):
                         self._exporter.export(os.path.join(self._log_dir, fn), drift_est.raw[-1])
 
             self._scanner.blanker.value = True
+            with self._future._task_lock:
+                if self._future._task_state == CANCELLED:
+                    raise CancelledError()
 
-            if self._future._task_state == CANCELLED:
-                raise CancelledError()
-
-    def _acquire_feature(self, site: CryoFeature) -> CryoFeature:
+    def _acquire_feature(self, site: CryoFeature):
         """
-        Acquire the data for the given feature.
+        Acquire the data for the given feature and add to the given site.
         :param site: (CryoFeature) The feature to acquire.
-        :return: (CryoFeature) The feature with the acquired data.
         """
         data = []
+        # check if cancellation happened while the acquiring future is working
+        with self._future._task_lock:
+            if self._future._task_state == CANCELLED:
+                raise CancelledError()
         try:
             self._future.running_subf = acquire(self.streams)
             data, exp = self._future.running_subf.result()
@@ -399,11 +411,7 @@ class MillingRectangleTask(object):
                 logging.warning(
                     f"Acquisition for feature {site.name.value} partially failed: {exp}")
         except Exception as exp:
-            logging.exception(f"Acquisition for feature {site.name.value} failed: {exp}")
-
-        # check if cancellation happened while the acquiring future is working
-        if self._future._task_state == CANCELLED:
-            raise CancelledError()
+            logging.debug(f"Acquisition for feature {site.name.value} failed: {exp}")
 
         # Check on the acquired data
         if not data:
@@ -422,8 +430,9 @@ class MillingRectangleTask(object):
         self._future._task_state = RUNNING
 
         try:
-            if self._future._task_state == CANCELLED:
-                raise CancelledError()
+            with self._future._task_lock:
+                if self._future._task_state == CANCELLED:
+                    raise CancelledError()
             # set the FIB mode with the retracted state of the objective
             # get the metadata to retract the objective
             align_md = self._aligner.getMetadata()
@@ -477,6 +486,7 @@ class MillingRectangleTask(object):
             with self._future._task_lock:
                 self._future._task_state = FINISHED
 
+
 def mill_features(millings: list, sites: list, feature_post_status, acq_streams, ebeam, sed, stage,
                   aligner, log_path=None) -> futures.Future:
     """
@@ -493,8 +503,6 @@ def mill_features(millings: list, sites: list, feature_post_status, acq_streams,
     """
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
-    future.running_subf = model.InstantaneousFuture()
-    future._task_lock = threading.Lock()
     # create acquisition task
     milling_task = MillingRectangleTask(future, millings, sites, feature_post_status, acq_streams, ebeam, sed, stage,
                                         aligner, log_path)
