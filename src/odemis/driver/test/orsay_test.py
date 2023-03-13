@@ -1567,12 +1567,34 @@ class TestFIBBeam(unittest.TestCase):
         connector_test(self, self.fibbeam.objectiveVoltage, self.fibbeam._hvps.ObjectiveVoltage,
                        [(10.0, 10.0), (0.0, 0.0)], hw_safe=True, settletime=1)
 
-    def test_shift(self):
+    def test_shift_connector(self):
         """Check that the shift VA is updated correctly"""
         connector_test(self, self.fibbeam.shift, [self.fibbeam._ionColumn.ObjectiveShiftX,
                                                   self.fibbeam._ionColumn.ObjectiveShiftY],
                        [((1e-6, -1e-6), (1e-6, -1e-6)), ((0.0, 0.0), (0.0, 0.0))],
                        hw_safe=True, settletime=1)
+
+    def test_shift(self):
+        """
+        Check the beam shift accepts all the values it says it does
+        """
+        self.fibbeam.horizontalFoV.value = 100e-6  # m, a little large FoV, for the large shifts to work
+
+        self.fibbeam.shift.value = (0, 0)
+        sleep(1)
+        self.assertEqual(self.fibbeam.shift.value, (0, 0))
+
+        rng_shift = self.fibbeam.shift.range
+        self.fibbeam.shift.value = rng_shift[0]
+        sleep(1)
+        self.assertEqual(self.fibbeam.shift.value, rng_shift[0])
+
+        rng_shift = self.fibbeam.shift.range
+        self.fibbeam.shift.value = rng_shift[1]
+        sleep(1)
+        self.assertEqual(self.fibbeam.shift.value, rng_shift[1])
+
+        self.fibbeam.shift.value = (0, 0)
 
     def test_horizontalFOV(self):
         """Check that the horizontalFOV VA is updated correctly"""
@@ -1922,6 +1944,8 @@ class TestScanner(unittest.TestCase):
         sleep(1)
         self.assertEqual(self.scanner.shift.value, (0, 0))
 
+        # Using the min/max values should be accepted, but may not be directly used
+        # as-is as they could be outside of the fib_beam range.
         rng_shift = self.scanner.shift.range
         self.scanner.shift.value = rng_shift[0]
         sleep(1)
@@ -1930,10 +1954,46 @@ class TestScanner(unittest.TestCase):
         rng_shift = self.scanner.shift.range
         self.scanner.shift.value = rng_shift[1]
         sleep(1)
-        self.assertEqual(self.scanner.shift.value, rng_shift[1])
         self.assertNotEqual(self.scanner.shift.value, (0, 0))
 
         self.scanner.shift.value = (0, 0)
+
+    def test_shift_calib(self):
+        """
+        Check that the shift is independent from the probe current, based on the
+        "base shift", stored in MD_SCAN_OFFSET_CALIB.
+        """
+        self.scanner.horizontalFoV.value = 100e-6  # m, a little large FoV, for the large shifts to work
+
+        base_shifts = self.scanner.getMetadata()[model.MD_SCAN_OFFSET_CALIB]
+        logging.info("MD_SCAN_OFFSET_CALIB = %s", base_shifts)
+        # There is one more choice in the currents that the base shift, which is "None"
+        self.assertEqual(set(base_shifts.keys()), set(self.scanner.probeCurrent.choices) - {None})
+
+        orig_shift = self.scanner.shift.value
+
+        # Changing current doesn't change the shift (but it may do that on fib_beam)
+        current_choices = self.scanner.probeCurrent.choices
+        orig_current = self.scanner.probeCurrent.value
+        shift = orig_shift[0] + 1e-6, orig_shift[1] - 1e-6
+        self.scanner.shift.value = shift
+        testing.assert_tuple_almost_equal(self.scanner.shift.value, shift)
+
+        try:
+            for new_current in current_choices:
+                if new_current is None:
+                    continue  # Doesn't make sense
+                logging.debug("Testing current %s", new_current)
+                self.scanner.probeCurrent.value = new_current
+                testing.assert_tuple_almost_equal(self.scanner.shift.value, shift)
+                # The fib_beam.shift has changed according to the base shift
+                base_shift = base_shifts[new_current]
+                exp_fibbeam_shift = base_shift[0] + shift[0], base_shift[1] + shift[1]
+                testing.assert_tuple_almost_equal(self.fibbeam.shift.value, exp_fibbeam_shift,
+                              msg=f"Fib beam at current {new_current} A is {self.fibbeam.shift.value} != {exp_fibbeam_shift}")
+        finally:
+            self.scanner.probeCurrent.value = orig_current
+            self.scanner.shift.value = orig_shift
 
     def test_scale(self):
         init_res = self.scanner.resolution.value
