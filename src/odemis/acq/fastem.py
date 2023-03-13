@@ -968,7 +968,7 @@ class OverviewAcquisition(object):
     def __init__(self) -> None:
         self.sf = None
 
-    def cancel_acquisition(self, future):
+    def _cancel_acquisition(self, future):
         if self.sf:
             self.sf.cancel()
 
@@ -1005,7 +1005,9 @@ class OverviewAcquisition(object):
         # FIXME removed to provide better progress update in GUI
         #  When _tiledacq.py has proper time update implemented, add this line here again.
         # sf.add_update_callback(_pass_future_progress)
-        f.task_canceller = self.cancel_acquisition
+        # Go one level deeper to cancel the future of the underlying acquisition
+        # TiledAcquisitionTask._cancelAcquisition will hence be called
+        f.task_canceller = self._cancel_acquisition
         das = self.sf.result()
 
         if len(das) != 1:
