@@ -92,12 +92,17 @@ def callWithReconnect(fun):
             if self._reconnecting:
                 raise
             else:
-                logging.error("Communication with shamrock failed with "
-                              "exception '%s', trying to reconnect." % ex)
                 if ex.errno in (20201, 20275):  # COMMUNICATION_ERROR / NOT_INITIALIZED
+                    logging.error("Communication with shamrock failed with "
+                                  "exception '%s', trying to reconnect." % ex)
                     self._reconnect()
                     return fun(self, *args, **kwargs)
                 else:
+                    # Note that sometimes the SDK reports a different error when
+                    # the connection is bad. We could try to call another simple
+                    # function, like GetWavelength() and see if that one fails
+                    # with an communication error... but that's getting quite
+                    # convoluted. Let's just accept it as the SDK reports it.
                     raise
     return wrapper
 
