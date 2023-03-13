@@ -9,9 +9,7 @@ This script provides a command line interface for displaying a video with a spot
 
 """
 import argparse
-import functools
 import logging
-import operator
 import os
 import sys
 import threading
@@ -71,13 +69,10 @@ class VideoDisplayerGrid(VideoDisplayer):
         grid = unit_gridpoints(self.gridsize, mode="ji")
         self.app.spots = tform_ji.apply(grid)
 
-        tform_xy = functools.reduce(
-            operator.matmul,
-            (
-                to_physical_space_transform(data.shape, self.app.pixel_size),
-                tform_ji,
-                to_pixel_index_transform(),
-            ),
+        tform_xy = (
+            to_physical_space_transform(data.shape, self.app.pixel_size)
+            @ tform_ji
+            @ to_pixel_index_transform()
         )
 
         self.app.translation = tform_xy.translation
