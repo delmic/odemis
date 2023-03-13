@@ -22,15 +22,18 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import json
 import math
+import unittest
+
 import numpy
+import yaml
+
 from odemis import model
 from odemis.util import conversion
-from odemis.util.conversion import \
-    convert_to_object, \
-    reproduce_typed_value, \
-    get_img_transformation_matrix, \
-    get_tile_md_pos, get_img_transformation_md, ensure_tuple, JsonExtraEncoder
-import unittest
+from odemis.util.conversion import (JsonExtraEncoder, YamlExtraDumper,
+                                    convert_to_object, ensure_tuple,
+                                    get_img_transformation_matrix,
+                                    get_img_transformation_md, get_tile_md_pos,
+                                    reproduce_typed_value)
 
 
 class TestConversion(unittest.TestCase):
@@ -346,6 +349,27 @@ class TestConversion(unittest.TestCase):
         self.assertEqual(sorted(dec_obj["set"]), ["a", "b"])  # a list in random order => sorted
         self.assertEqual(dec_obj["complex"], [1, 2])  # as a list
         self.assertEqual(dec_obj["bytes"], "boo")
+
+    def test_yaml_numpy_floating(self):
+        """
+        Test that YAML can serialise a numpy float using YamlExtraDumper.
+        """
+        data = {
+            "floating": (numpy.float16(1.1), numpy.float32(2.1), numpy.float64(3.1)),
+            "float16": numpy.float16(1.1),
+            "float32": numpy.float32(2.1),
+            "float64": numpy.float64(3.1),
+        }
+        # The SafeDumper doesn't support numpy floats
+        self.assertRaises(yaml.representer.RepresenterError, yaml.safe_dump, data)
+        # The YamlExtraDumper does support numpy floats
+        dumped_data = yaml.dump(data, Dumper=YamlExtraDumper)
+        loaded_data = yaml.safe_load(dumped_data)
+        # Check that the data is the same
+        self.assertEqual(loaded_data["floating"], list(data["floating"]))
+        self.assertEqual(loaded_data["float16"], data["float16"])
+        self.assertEqual(loaded_data["float32"], data["float32"])
+        self.assertEqual(loaded_data["float64"], data["float64"])
 
 
 if __name__ == "__main__":

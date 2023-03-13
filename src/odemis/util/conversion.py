@@ -18,16 +18,22 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from past.builtins import basestring, long
-from collections.abc import Iterable
-import cv2
 import json
 import logging
 import math
-import numpy
-from odemis import model
 import re
+from collections.abc import Iterable
+
+import cv2
+import numpy
 import yaml
+from past.builtins import basestring, long
+from yaml.emitter import Emitter
+from yaml.representer import SafeRepresenter
+from yaml.resolver import Resolver
+from yaml.serializer import Serializer
+
+from odemis import model
 
 
 def wavelength2rgb(wavelength):
@@ -471,3 +477,42 @@ class JsonExtraEncoder(json.JSONEncoder):
             return obj.decode()
 
         return json.JSONEncoder.default(self, obj)
+
+
+class CustomSafeRepresenter(SafeRepresenter):
+    """
+    Support for data types that SafeRepresenter
+    does not do.
+    This includes:
+        * Numpy floating
+
+    Use as: yaml.dump(data, Dumper=YamlExtraDumper)
+    """
+
+    def represent_numpy_floating(self, data):
+        data = float(data)
+        return self.represent_float(data)
+
+
+CustomSafeRepresenter.add_multi_representer(
+    numpy.floating, CustomSafeRepresenter.represent_numpy_floating
+)
+
+
+class YamlExtraDumper(Emitter, Serializer, CustomSafeRepresenter, Resolver):
+
+    def __init__(self, stream,
+            default_style=None, default_flow_style=False,
+            canonical=None, indent=None, width=None,
+            allow_unicode=None, line_break=None,
+            encoding=None, explicit_start=None, explicit_end=None,
+            version=None, tags=None, sort_keys=True):
+        Emitter.__init__(self, stream, canonical=canonical,
+                indent=indent, width=width,
+                allow_unicode=allow_unicode, line_break=line_break)
+        Serializer.__init__(self, encoding=encoding,
+                explicit_start=explicit_start, explicit_end=explicit_end,
+                version=version, tags=tags)
+        CustomSafeRepresenter.__init__(self, default_style=default_style,
+                default_flow_style=default_flow_style, sort_keys=sort_keys)
+        Resolver.__init__(self)
