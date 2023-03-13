@@ -649,6 +649,7 @@ class AcquisitionTask(object):
                 #   -> check if finish megafield is called in finally when hitting here
                 raise TimeoutError("Timeout while waiting for field image.")
 
+            self._scanner.blanker.value = True  # blank the beam after the acquisition
             self._fields_remaining.discard(field_idx)
 
             # In case the acquisition was cancelled by a client, before the future returned, raise cancellation error.
@@ -659,7 +660,6 @@ class AcquisitionTask(object):
             # Update the time left for the acquisition.
             expected_time = len(self._fields_remaining) * total_field_time
             self._future.set_progress(start=time.time(), end=time.time() + expected_time)
-            self._scanner.blanker.value = True  # blank the beam
 
         logging.debug("Successfully acquired all fields of ROA.")
 
