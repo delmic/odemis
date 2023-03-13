@@ -98,6 +98,7 @@ class TiledAcquisitionTask(object):
         self._future = future
         self._streams = streams
         self._stage = stage
+        self._focus_points = focus_points
         self._focus_range = focus_range
         if future is not None:
             self._future.running_subf = model.InstantaneousFuture()
@@ -145,7 +146,8 @@ class TiledAcquisitionTask(object):
 
             # used in re-focusing method
             self._focus_points = numpy.array(focus_points) if focus_points else None
-            self._tri_focus_points = Delaunay(self._focus_points[:, :2]) if focus_points else None # triangulate focus points
+            # triangulate focus points
+            self._tri_focus_points = Delaunay(self._focus_points[:, :2]) if focus_points else None
 
         if focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION and not zlevels:
             raise ValueError("MAX_INTENSITY_PROJECTION requires zlevels, but none passed")
@@ -654,10 +656,10 @@ class TiledAcquisitionTask(object):
 
     def _get_z_on_focus_plane(self, x, y):
         if not self._focus_plane:
-            c, normal = linalg.fit_plane_lstsq(self._focus_points)
-            self._focus_plane["c"] = c
+            gamma, normal = linalg.fit_plane_lstsq(self._focus_points)
+            self._focus_plane["gamma"] = gamma
             self._focus_plane["normal"] = normal
-        point_on_plane = (0, 0, self._focus_plane["c"])  # where the plane intersects with the z-axis
+        point_on_plane = (0, 0, self._focus_plane["gamma"])  # where the plane intersects with the z-axis
         z = linalg.get_z_pos_on_plane(x, y, point_on_plane, self._focus_plane["normal"])
         return z
 
@@ -930,15 +932,16 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     return future
 
 
-def acquireOverview(streams, stage, area, focus, ccd, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
+def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
     """
-    Start autofocus and tiled acquisition tasks for the given list of areas.
+    Start autofocus and tiled acquisition tasks for each area in the list of area which is
+    given by the input argument areas.
 
     :param streams: (list of Stream) the streams to acquire
     :param stage: (Actuator) the stage to move
-    :param area: (list of area) area is defined by 4 floats :left, top, right, bottom positions
-     of the acquisition area (in m)
+    :param areas: (list of area) area is defined by 4 floats :left, top, right, bottom positions
+        of the acquisition area (in m)
     :param focus: (Actuator) the focus actuator
     :param ccd: (Camera) the camera to use for the acquisition
     :param overlap: (0<float<1) the overlap between tiles (in percentage)
@@ -955,7 +958,7 @@ def acquireOverview(streams, stage, area, focus, ccd, overlap=0.2, settings_obs=
     """
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
-    task = AcquireOverviewTask(streams, stage, area, focus, ccd, future, overlap, settings_obs,
+    task = AcquireOverviewTask(streams, stage, areas, focus, ccd, future, overlap, settings_obs,
                                log_path, zlevels,
                                registrar, weaver, focusing_method)
     future.task_canceller = task.cancel  # let the future cancel the task
@@ -1024,7 +1027,7 @@ class AcquireOverviewTask(object):
         Estimates the time for the rest of the acquisition.
 
         :param roi_idx: (int) index of the current roi
-        :param actual_time_per_roi: (float) the actual time spent for the current roi
+        :param actual_time_per_roi: (float) average actual time spent for each roi until now
         :return: (float) the estimated time for the rest of the acquisition
         """
         remaining_rois = (len(self.areas) - roi_idx)
@@ -1064,14 +1067,13 @@ class AcquireOverviewTask(object):
                                                              self.n_focus_points,
                                                              self.conf_level)
 
-                logging.debug(f"Autofocus is running for roi number {idx} with {roi} values")
+                logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
 
                 try:
                     # TODO use the "estimated time * 3 + 1" as timeout error
                     focus_points = self._future.running_subf.result()
                 except Exception:
-                    logging.debug(
-                        f"Autofocus within roi failed for roi number {idx} with {roi} values")
+                    logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
                     raise
 
                 # cancel the sub future

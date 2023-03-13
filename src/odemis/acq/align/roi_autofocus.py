@@ -43,7 +43,7 @@ def do_autofocus_in_roi(
         nx: int = 3,
         ny: int = 3,
         conf_level: float = 0
-):
+) -> list:
     """
     Run autofocus in a given roi. The roi is divided in nx * ny positions and autofocus is run at each position.
 
@@ -55,10 +55,9 @@ def do_autofocus_in_roi(
     :param focus_range: focus range, tuple of (zmin, zmax) in meters
     :param nx: (int) the number of positions in x where to focus
     :param ny: (int) the number of positions in y where to focus
-    :param conf_level: (0<=float<=1) confidence level of the focus metric, default 0 takes all values.
-        It is the minimum confidence level that a focus metric needs to be taken into account.
-        For values above 0 only the positions with confidence higher than conf_level are taken into account.
-    :return:
+    :param conf_level: (0<=float<=1) :param conf_level: (float) cut-off value for confidence level of the focus metric,
+        only focus points with a confidence above the cut-off will be saved. Default 0 saves all values.
+    :return: (list) list of focus positions in x, y, z
     """
     focus_positions = []
     try:
@@ -81,7 +80,6 @@ def do_autofocus_in_roi(
                     logging.debug(f"Added focus with confidence of {conf} at position: {focus_positions[-1]}")
                 else:
                     logging.debug(f"Focus level is not added due to low confidence of {conf} at position: {x, y}.")
-        return focus_positions
 
     except TimeoutError:
         logging.exception(f"Timed out during autofocus at position {x, y} .")
@@ -99,6 +97,8 @@ def do_autofocus_in_roi(
             if f._autofocus_roi_state == CANCELLED:
                 raise CancelledError()
             f._autofocus_state = FINISHED
+
+    return focus_positions
 
 
 def estimate_autofocus_in_roi_time(n_focus_points, detector):
@@ -146,7 +146,8 @@ def autofocus_in_roi(
     :param focus: focus component
     :param focus_range: focus range, tuple of (zmin, zmax) in meters
     :param n_focus_points: (tuple) number of focus points in x and y direction
-    :param conf_level: (float) confidence level of the focus metric, default 0 takes all values.
+    :param conf_level: :param conf_level: (0<float<1) cut-off value for confidence level of the focus metric, only focus
+        points with a confidence above the cut-off will be saved. Default 0 saves all values.
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
