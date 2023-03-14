@@ -43,7 +43,7 @@ from odemis.gui.log import observe_comp_state
 import os
 import threading
 import time
-from typing import Tuple
+from typing import Dict, Tuple
 
 
 # The different states of a microscope
@@ -501,6 +501,48 @@ class MainGUIData(object):
 
         if model.hasVA(self.lens, "mirrorPositionTop") and model.hasVA(self.lens, "mirrorPositionBottom"):
             return True
+
+
+class CryoMainGUIData(MainGUIData):
+    """
+    Data common to all Cryo tabs (METEOR/ENZEL/MIMAS).
+    """
+    SAMPLE_RADIUS_TEM_GRID = 1.8e-3  # m, standard TEM grid size including the borders
+    # Bounding-box relative to the center of a sample, corresponding to usable area
+    # for imaging/milling. Used in particular for the overview image.
+    SAMPLE_USABLE_BBOX_TEM_GRID = (-1e-3, -1e-3, 1e-3, 1e-3)  # m, minx, miny, maxx, maxy
+
+    def __init__(self, microscope):
+        super().__init__(microscope)
+        self.sample_centers : Dict[str, Tuple[float, float]] = {}  # sample name -> center position (x, y)
+
+        # stage.MD_SAMPLE_CENTERS contains the date in almost the right format, but the
+        # position is a dict instead of a tuple. => Convert it, while checking the data.
+        # Ex: {"grid 1": {"x": 0.1, "y": -0.2}} -> {"grid 1": (0.1, -0.2)}
+        sample_centers_raw = self.stage.getMetadata().get(model.MD_SAMPLE_CENTERS)
+
+        # TODO: on the METEOR, the MD_SAMPLE_CENTERS is on the stage-bare, in
+        # the stage-bare coordinates (SEM). To display them, we'd need to
+        # convert them to the stage coordinates. The acq.move code only needs
+        # the stage-bare coordinates (even if in FM), but we would need the
+        # sample centers position during the FLM mode, in the stage coordinates...
+        # and we don't have explicit functions for that. The "stage" component
+        # knows how to convert a position from it dependencies stages, which
+        # themselves are other wrappers to the "stage-bare", but we don't have
+        # an explicit way to ask "if the stage-bare was at this position, what
+        # would the stage position be?".
+
+        if sample_centers_raw:
+            try:
+                self.sample_centers = {n: (p["x"], p["y"]) for n, p in sample_centers_raw.items()}
+            except Exception as exp:
+                raise ValueError(f"Failed to parse MD_SAMPLE_CENTERS, expected format "
+                                 f"{{\"grid 1\": {{\"x\": 0.1, \"y\": -0.2}}}}: {exp}")
+
+        # Radius of a sample, for display
+        self.sample_radius = self.SAMPLE_RADIUS_TEM_GRID
+        # Bounding-box of the "useful area" relative to the center of a grid
+        self.sample_rel_bbox = self.SAMPLE_USABLE_BBOX_TEM_GRID
 
 
 class MicroscopyGUIData(with_metaclass(ABCMeta, object)):

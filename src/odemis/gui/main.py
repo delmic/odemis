@@ -133,6 +133,8 @@ class OdemisGUIApp(wx.App):
 
         if microscope and microscope.role == "mbsem":
             self.main_data = guimodel.FastEMMainGUIData(microscope)
+        elif microscope and microscope.role in ("meteor", "enzel", "mimas"):
+            self.main_data = guimodel.CryoMainGUIData(microscope)
         else:
             self.main_data = guimodel.MainGUIData(microscope)
         # Load the main frame

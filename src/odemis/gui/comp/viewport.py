@@ -29,6 +29,7 @@ import math
 from abc import abstractmethod
 from concurrent.futures._base import CancelledError
 from functools import partial
+from typing import Dict, Tuple
 
 import wx
 
@@ -282,6 +283,7 @@ class MicroscopeViewport(ViewPort):
         self._mpp_screen = 1e-3 * wx.DisplaySizeMM()[0] / wx.DisplaySize()[0]
 
         self.stage_limit_overlay = None
+        self._sample_overlay = None
 
         self._previous_size = self.canvas.ClientSize
         self.canvas.Bind(wx.EVT_SIZE, self.OnCanvasSize)
@@ -649,6 +651,27 @@ class MicroscopeViewport(ViewPort):
                 self.view.fov_buffer.value = buf_fov
 
         return fov
+
+    def show_sample_overlay(self, samples: Dict[str, Tuple[float, float]], radius: float):
+        """
+        Shows the sample background overlay. On the first time it is called, it
+        will use the arguments to define how the samples are shown. Afterwards,
+        the arguments have no effect.
+        sample: Dict of sample name -> center position (X/Y in m)
+        radius: the radius of a sample in m (all samples are shown with the same radius)
+        """
+        if not self._sample_overlay:
+            self._sample_overlay = overlay.world.SampleBackgroundOverlay(self.canvas, samples, radius)
+        self.canvas.add_world_overlay(self._sample_overlay)
+        wx.CallAfter(self.canvas.request_drawing_update)
+
+    def hide_sample_overlay(self):
+        """
+        Hides the sample background overlay, if it's already shown. Otherwise, does nothing.
+        """
+        if self._sample_overlay:
+            self.canvas.remove_world_overlay(self._sample_overlay)
+            wx.CallAfter(self.canvas.request_drawing_update)
 
     def show_stage_limit_overlay(self):
         if not self.stage_limit_overlay:

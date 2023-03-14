@@ -262,7 +262,7 @@ class xrcpnl_tab_mimas_align(wx.Panel):
         self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_viewport = xrc.XRCCTRL(self, "pnl_viewport")
-        self.view_optical = xrc.XRCCTRL(self, "view_optical")
+        self.vp_optical = xrc.XRCCTRL(self, "vp_optical")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
 
@@ -3091,7 +3091,7 @@ def __init_resources():
 
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_viewport">
-          <object class="LiveViewport" name="view_optical">
+          <object class="LiveViewport" name="vp_optical">
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
           </object>

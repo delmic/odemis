@@ -34,7 +34,7 @@ from odemis.gui.comp.overlay import view as vol
 from odemis.gui.comp.overlay import world as wol
 from odemis.gui.comp.overlay.view import HORIZONTAL_LINE, VERTICAL_LINE, CROSSHAIR
 from odemis.gui.comp.overlay.world import EKOverlay
-from odemis.gui.comp.viewport import ARLiveViewport
+from odemis.gui.comp.viewport import ARLiveViewport, MicroscopeViewport
 from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL, FeatureOverviewView
 from odemis.gui.util.img import wxImage2NDImage
 from odemis.util import mock
@@ -1217,6 +1217,32 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.Bind(wx.EVT_MOUSEWHEEL, zoom)
 
         test.gui_loop()
+
+    def test_sample_background_overlay(self):
+        # 4 samples along a rectangle of 1.5 x 1 mm, with a diameter of 1 mm
+        SAMPLE_CENTERS = {"SAMPLE 1": (0, 0), "SAMPLE 2": (1.5e-3, 0),
+                          "SAMPLE 3": (0, -1e-3), "SAMPLE 4": (1.5e-3, -1e-3)
+                         }
+        RADIUS = 0.5e-3  # m
+        vp = MicroscopeViewport(self.panel)
+        vp.show_sample_overlay(SAMPLE_CENTERS, RADIUS)
+        self.add_control(vp, wx.EXPAND, proportion=1, clear=True)
+
+        cnvs = vp.canvas
+        cnvs.scale = 20000
+        cnvs.update_drawing()
+
+        def zoom(evt):
+            if evt.GetWheelRotation() > 0:
+                cnvs.scale *= 1.1
+            else:
+                cnvs.scale *= 0.9
+            cnvs.update_drawing()
+
+        cnvs.Bind(wx.EVT_MOUSEWHEEL, zoom)
+
+        test.gui_loop()
+
 
     # END World overlay test cases
 
