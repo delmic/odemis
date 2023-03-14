@@ -914,7 +914,7 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # Connect the future to the task and run it in a thread.
-    # _run_overview_acquisition is executed by the executor and runs as soon as no other task is executed
+    # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
     overview_acq = OverviewAcquisition()
     _executor.submitf(f, overview_acq.run, f, sem_stream, stage, area, live_stream)
 
