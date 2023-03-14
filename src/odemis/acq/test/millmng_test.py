@@ -90,6 +90,11 @@ class MillingManagerTestCase(unittest.TestCase):
         cls.stage = model.getComponent(role="stage")
         cls.aligner = model.getComponent(role="align")
 
+        # The 5DoF stage is not referenced automatically, so let's do it now
+        if not all(cls.stage.referenced.value.values()):
+            stage_axes = set(cls.stage.axes.keys())
+            cls.stage.reference(stage_axes).result()
+
         # set the current for all the milling settings
         # minumum current is selected for both milling current and drift correction current
         # depending on the Virtual Machine and microscope file used
@@ -150,7 +155,7 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
                                             duration=20,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
@@ -158,7 +163,7 @@ class MillingManagerTestCase(unittest.TestCase):
         self.assertTrue(milling_setting_1.current.value, self.probe_current)
         self.assertTrue(milling_setting_1.horizontalFoV.value, 35e-6)
         self.assertTrue(milling_setting_1.roi.value, (0.5, 0.5, 0.8, 0.8))
-        self.assertTrue(milling_setting_1.pixelSize.value, (3.41796875e-08, 3.41796875e-08))
+        self.assertTrue(milling_setting_1.pixelSize.value, (3.5e-08, 3.5e-08))
         self.assertTrue(milling_setting_1.beamAngle.value, self.beam_angle)
         self.assertTrue(milling_setting_1.duration.value, 120)
         self.assertTrue(milling_setting_1.dcRoi.value, (0.0, 0.3, 0.4, 0.7))
@@ -173,13 +178,13 @@ class MillingManagerTestCase(unittest.TestCase):
         # A. No Drift
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
                                             duration=20,
                                             dc_roi=UNDEFINED_ROI, dc_period=10, dc_dwell_time=10e-6, dc_current=self.probe_current)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
                                             duration=20,
                                             dc_roi=UNDEFINED_ROI, dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
@@ -191,30 +196,30 @@ class MillingManagerTestCase(unittest.TestCase):
                                     self.sed, self.stage, self.aligner)
 
         # Time estimate in the beginning
-        time_estimated = task.estimate_milling_time(site_idx=0)
+        time_estimated = task.estimate_milling_time(sites_done=0)
         min_milling_time = milling_setting_1.duration.value + milling_setting_2.duration.value
         self.assertGreaterEqual(time_estimated, min_milling_time,
                                 "estimated time is less than the actual time set to mill two features")
 
         # Time estimate after 1 complete milling
-        time_estimated = task.estimate_milling_time(site_idx=1)
+        time_estimated = task.estimate_milling_time(sites_done=1)
         min_milling_time = milling_setting_2.duration.value
         self.assertGreaterEqual(time_estimated, min_milling_time,
                                 "estimated time is less than the actual time while milling the second feature")
 
-        total_est_time_without_drift = task.estimate_milling_time(site_idx=0)
+        total_est_time_without_drift = task.estimate_milling_time(sites_done=0)
 
         # B. With Drift
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
                                             duration=20,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
                                             duration=20,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
@@ -226,7 +231,7 @@ class MillingManagerTestCase(unittest.TestCase):
                                     self.sed, self.stage, self.aligner)
 
         # Time estimate in the beginning
-        time_estimated = task.estimate_milling_time(site_idx=0)
+        time_estimated = task.estimate_milling_time(sites_done=0)
         drift_estimation_1 = AnchoredEstimator(self.ion_beam, self.sed,
                                                milling_setting_1.dcRoi.value, milling_setting_1.dcDwellTime.value,
                                                max_pixels=512 ** 2, follow_drift=False)
@@ -240,7 +245,7 @@ class MillingManagerTestCase(unittest.TestCase):
                                 "estimated time with drift correction is less than the minimum time set to mill two features")
 
         # check milling time without drift correction is less than milling with drift correction
-        total_est_time_with_drift = task.estimate_milling_time(site_idx=0)
+        total_est_time_with_drift = task.estimate_milling_time(sites_done=0)
         self.assertLessEqual(total_est_time_without_drift, total_est_time_with_drift,
                              "milling time with drift correction is less than milling time without drift correction")
 
@@ -248,16 +253,18 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         Test if the stage moved for all the requested sites and the milling procedure is executed correctly.
         """
+        # Testing non-square pixel size, more dense in y direction
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            pixel_size=(3.5e-08, 1.5e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
 
+        # Testing non-square pixel size, more dense in x direction
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            pixel_size=(1.5e-08, 3.5e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
@@ -289,14 +296,14 @@ class MillingManagerTestCase(unittest.TestCase):
 
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
-                                            pixel_size=(3.41796875e-08, 3.41796875e-08), beam_angle=self.beam_angle,
+                                            pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
                                             duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)

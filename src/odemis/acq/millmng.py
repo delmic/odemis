@@ -152,7 +152,15 @@ class MillingRectangleTask(object):
             self._ion_beam_angle = stage_md[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
         except KeyError:
             raise ValueError("Ion beam angle not defined in stage metadata")
-        self._move_speed = MOVE_SPEED_DEFAULT  # stage speed used from _tiledacq.py
+
+        # Rough estimate of the stage movement speed, for estimating the extra
+        # duration due to movements (copied from _tiledacq.py)
+        self._move_speed = MOVE_SPEED_DEFAULT
+        if model.hasVA(stage, "speed"):
+            try:
+                self._move_speed = (stage.speed.value["x"] + stage.speed.value["y"]) / 2
+            except Exception as ex:
+                logging.warning("Failed to read the stage speed: %s", ex)
 
         # estimate milling time from the list of milling settings-> millings
         time_estimate = 0
@@ -179,9 +187,11 @@ class MillingRectangleTask(object):
         self._milling_time_estimate = time_estimate + drift_acq_time  # time_estimate per feature
         self._remaining_stage_time = stage_time  # total stage movement time
 
-    def cancel(self, future):
+    def cancel(self, future: "Future") -> bool:
         """
         Canceler of acquisition task.
+        :param future: the future that will be executing the task
+        :return: True if it successfully cancelled (stopped) the future
         """
         logging.debug("Canceling milling procedure...")
 
@@ -193,26 +203,26 @@ class MillingRectangleTask(object):
             logging.debug("Milling procedure cancelled.")  # add line number
         return True
 
-    def estimate_milling_time(self, site_idx: int = 0, actual_time_per_site: float = None) -> float:
+    def estimate_milling_time(self, sites_done: int = 0, actual_time_per_site: float = None) -> float:
         """
         Estimates the milling time for the given feature.
-        :param site_idx: (int) index of the site to be milled
-        :param actual_time_per_site: (float) actual milling time measured for a single site
-        :return: (float > 0): the estimated time
+        :param sites_done: number of sites already milled
+        :param actual_time_per_site: actual milling time measured for a single site
+        :return: (float > 0): the estimated time is in seconds
         """
         if len(self.sites) == 0:
             logging.debug("Site location is not provided by the user, cancelling the milling")
             self._future._task_state = CANCELLED
             raise CancelledError()
 
-        remaining_sites = (len(self.sites) - site_idx)
+        remaining_sites = (len(self.sites) - sites_done)
 
         if actual_time_per_site:
             milling_time = actual_time_per_site * remaining_sites
         else:
             milling_time = self._milling_time_estimate * remaining_sites
 
-        self._remaining_stage_time -= self.estimate_stage_movement_time(self.sites[site_idx])
+        self._remaining_stage_time -= self.estimate_stage_movement_time(self.sites[sites_done])
         total_duration = milling_time + self._remaining_stage_time
 
         return total_duration
@@ -255,31 +265,29 @@ class MillingRectangleTask(object):
         """
         Move the stage to the given site.
         :param site: (CryoFeature) The site to move to.
+        :raises MoveError: if the stage failed to move to the given site.
         """
         target_pos = {"x": site.pos.value[0],
                       "y": site.pos.value[1],
                       "z": site.pos.value[2]}
-        # Todo check if it is wise to move in Z direction without affecting the OPTICAL-FIB alignment
+        # TODO check if it is wise to move in Z direction without affecting the OPTICAL-FIB alignment
         logging.debug("For feature %s moving the stage to %s m", site.name.value, target_pos)
         self._future.running_subf = self._stage.moveAbs(target_pos)
         stage_time = self.estimate_stage_movement_time(site)
-        t = stage_time + 5  # adding extra margin
+        t = stage_time * 10 + 5  # adding extra margin
         try:
-            self._future.running_subf.result(t)  # or 2 min should be fast enough to move anywhere
+            self._future.running_subf.result(t)
         except TimeoutError:
             self._future.running_subf.cancel()
-            move.cryoSwitchSamplePosition(MILLING)
             raise MoveError(f"Failed to move the stage for feature {site.name.value} within {t} s")
 
     def _mill_all_settings(self, site: CryoFeature):
         """
         Iterates over all the milling settings for one site
+        :param site: The site to mill.
+        :raises MoveError: if the stage failed to move to the given site.
         """
-        # Move the stage
-        try:
-            self._move_to_site(site)
-        except MoveError:
-            return
+        self._move_to_site(site)
 
         for setting_nb, milling_settings in enumerate(self._settings):
             # Tilt stage angle
@@ -293,14 +301,11 @@ class MillingRectangleTask(object):
             except TimeoutError:
                 logging.debug("Failed to tilt the stage for feature %s within %s s", site.name.value, t)
                 raise
-            # Configure HoV
+
             self._scanner.horizontalFoV.value = milling_settings.horizontalFoV.value
 
             # Make the blanker automatic (ie, disabled when acquiring)
             self._scanner.blanker.value = None
-
-            # set the milling current
-            self._scanner.probeCurrent.value = milling_settings.current.value
 
             # Initialize the drift corrector only if it is requested by the user
             if milling_settings.dcRoi.value != UNDEFINED_ROI:
@@ -326,12 +331,9 @@ class MillingRectangleTask(object):
             probe_size = max(pxs)
             overlap = [1 - (pxs[0] / probe_size), 1 - (pxs[1] / probe_size)]  # Always >= 0
 
-            # check if cancellation happened
-            with self._future._task_lock:
-                if self._future._task_state == CANCELLED:
-                    raise CancelledError()
-
             logging.debug(f"Milling setting: {milling_settings.name.value} for feature: {site.name.value}")
+
+            self._scanner.probeCurrent.value = milling_settings.current.value
 
             if milling_settings.dcRoi.value == UNDEFINED_ROI:
 
@@ -339,10 +341,10 @@ class MillingRectangleTask(object):
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
 
-                self._future.running_subf = mill_rectangle(milling_settings.roi.value, self._scanner,
-                                                           iteration=self._iterations[setting_nb],
-                                                           duration=self._pass_duration[setting_nb],
-                                                           probe_size=probe_size, overlap=overlap)
+                    self._future.running_subf = mill_rectangle(milling_settings.roi.value, self._scanner,
+                                                               iteration=self._iterations[setting_nb],
+                                                               duration=self._pass_duration[setting_nb],
+                                                               probe_size=probe_size, overlap=overlap)
                 try:
                     self._future.running_subf.result()
                     logging.debug(f"Milling finished for feature: {site.name.value}")
@@ -357,13 +359,11 @@ class MillingRectangleTask(object):
                         if self._future._task_state == CANCELLED:
                             raise CancelledError()
 
-                    # restore the milling current
-                    self._scanner.probeCurrent.value = milling_settings.current.value
-
-                    self._future.running_subf = mill_rectangle(milling_settings.roi.value, self._scanner,
-                                                               iteration=self._iterations[setting_nb],
-                                                               duration=self._pass_duration[setting_nb],
-                                                               probe_size=probe_size, overlap=overlap)
+                        self._scanner.probeCurrent.value = milling_settings.current.value
+                        self._future.running_subf = mill_rectangle(milling_settings.roi.value, self._scanner,
+                                                                   iteration=self._iterations[setting_nb],
+                                                                   duration=self._pass_duration[setting_nb],
+                                                                   probe_size=probe_size, overlap=overlap)
                     try:
                         self._future.running_subf.result()
                         logging.debug(f"Milling finished for feature: {site.name.value}")
@@ -377,18 +377,16 @@ class MillingRectangleTask(object):
                     # Acquire an image at the given location (RoI)
                     drift_est.acquire()
 
-                    # Estimate the drift
+                    # Estimate the drift since the last correction
                     drift_est.estimate()
                     drift = (pxs_anchor[0] * drift_est.drift[0],
                              -(pxs_anchor[1] * drift_est.drift[1]))
 
                     # Move FIB to compensate drift
                     previous_shift = self._scanner.shift.value
-                    logging.debug("Ion-beam shift in m : %s", previous_shift)
                     self._scanner.shift.value = (drift[0] + previous_shift[0],
                                                  drift[1] + previous_shift[1])  # shift in m - absolute position
-                    logging.debug("New Ion-beam shift in m : %s", self._scanner.shift.value)
-                    logging.debug("pixel size in m : %s", pxs_anchor)
+                    logging.debug("Ion-beam shift in m: %s changed to: %s", previous_shift, self._scanner.shift.value)
                     if self._log_path:
                         fn = f"{self._fn_bs}-dc-{site.name.value}-{milling_settings.name.value}-{itr + 1}{self._fn_ext}"
                         self._exporter.export(os.path.join(self._log_dir, fn), drift_est.raw[-1])
@@ -434,24 +432,6 @@ class MillingRectangleTask(object):
         self._future._task_state = RUNNING
 
         try:
-            with self._future._task_lock:
-                if self._future._task_state == CANCELLED:
-                    raise CancelledError()
-            # set the FIB mode with the retracted state of the objective
-            # get the metadata to retract the objective
-            align_md = self._aligner.getMetadata()
-            deactive_pos = align_md[model.MD_FAV_POS_DEACTIVE]
-
-            # create a future and update the appropriate controls after it is called
-            move.cryoSwitchSamplePosition(MILLING)
-            logging.debug(f"Retracting the objective to set the imaging in FIB mode")
-            self._future.running_subf = self._aligner.moveAbs(deactive_pos)
-
-            try:
-                self._future.running_subf.result()
-            except Exception:
-                raise
-
             actual_time_per_site = None
             self._scanner.shift.value = (0, 0)  # reset drift correction to have more margin
 
@@ -460,6 +440,14 @@ class MillingRectangleTask(object):
                 start_time = time.time()
                 remaining_t = self.estimate_milling_time(site_idx, actual_time_per_site)
                 self._future.set_end_time(time.time() + remaining_t)
+
+                with self._future._task_lock:
+                    if self._future._task_state == CANCELLED:
+                        raise CancelledError()
+                    logging.debug(f"Retracting the objective to set the imaging in FIB mode")
+                    self._future.running_subf = move.cryoSwitchSamplePosition(MILLING)
+
+                self._future.running_subf.result()
 
                 # For one given site, move the stage at the site and
                 # do milling with all milling settings for the given site
@@ -483,15 +471,13 @@ class MillingRectangleTask(object):
         except CancelledError:
             logging.debug("Stopping because milling was cancelled")
             raise
-        except Exception as exp:
-            logging.exception(f"The milling failed due to {exp}")
+        except Exception:
+            logging.exception("The milling failed")
             raise
         finally:
             # activate the blanker
             self._scanner.blanker.value = True
-            # state that the future has finished
-            with self._future._task_lock:
-                self._future._task_state = FINISHED
+            self._future._task_state = FINISHED
 
 
 def mill_features(millings: list, sites: list, feature_post_status, acq_streams, ebeam, sed, stage,
