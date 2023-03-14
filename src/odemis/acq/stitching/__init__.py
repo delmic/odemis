@@ -16,7 +16,7 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 from odemis.acq.stitching._constants import REGISTER_GLOBAL_SHIFT, REGISTER_SHIFT, \
     REGISTER_IDENTITY, WEAVER_MEAN, WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE
-from odemis.acq.stitching._tiledacq import acquireTiledArea, estimateTiledAcquisitionTime, estimateTiledAcquisitionMemory, FocusingMethod
+from odemis.acq.stitching._tiledacq import acquireTiledArea, acquireOverview, estimateTiledAcquisitionTime, estimateTiledAcquisitionMemory, FocusingMethod
 from odemis.acq.stitching._registrar import *
 from odemis.acq.stitching._weaver import *
 from odemis.acq.stitching._simple import register, weave

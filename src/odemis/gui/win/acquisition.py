@@ -20,18 +20,22 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from builtins import str
-from concurrent.futures._base import CancelledError
 import copy
 import gc
 import logging
 import math
+import os.path
+from builtins import str
+from concurrent.futures._base import CancelledError
+
 import numpy
+import wx
+
+import odemis.gui.model as guimodel
 from odemis import model, dataio
 from odemis.acq import stream, path, acqmng, stitching
-from odemis.acq.stitching import FocusingMethod, WEAVER_MEAN, REGISTER_IDENTITY
-from odemis.acq.stream import NON_SPATIAL_STREAMS, EMStream, OpticalStream, ScannedFluoStream, LiveStream
-from odemis.acq.stream import SEMStream, CameraStream, EMStream
+from odemis.acq.stitching import FocusingMethod, WEAVER_MEAN, REGISTER_IDENTITY, acquireOverview
+from odemis.acq.stream import EMStream, NON_SPATIAL_STREAMS, OpticalStream, ScannedFluoStream, LiveStream
 from odemis.gui.acqmng import presets, preset_as_is, apply_preset, \
     get_global_settings_entries, get_local_settings_entries
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
@@ -45,12 +49,7 @@ from odemis.gui.util import call_in_wx_main, formats_to_wildcards, \
 from odemis.gui.util.widgets import ProgressiveFutureConnector, \
     VigilantAttributeConnector
 from odemis.util import rect_intersect, units
-from odemis.util.comp import compute_scanner_fov, compute_camera_fov
 from odemis.util.filename import guess_pattern, create_filename, update_counter
-import os.path
-import wx
-
-import odemis.gui.model as guimodel
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -613,8 +612,10 @@ class AcquisitionDialog(xrcfr_acq):
         # Make sure the file is not overridden
         self.btn_secom_acquire.Enable()
 
+
 # Step value for z stack levels
 DEFAULT_FOV = (100e-6, 100e-6) # m
+
 
 class OverviewAcquisitionDialog(xrcfr_overview_acq):
     """
@@ -678,6 +679,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.tiles_nx, self.tiles_number_x, events=wx.EVT_COMMAND_ENTER)
         self._tiles_n_vacy = VigilantAttributeConnector(
             self.tiles_ny, self.tiles_number_y, events=wx.EVT_COMMAND_ENTER)
+        self.autofocus_roi_ckbox = model.BooleanVA(False)
+        self._autofocus_roi_vac = VigilantAttributeConnector(
+            self.autofocus_roi_ckbox, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
 
         self.area = None  # None or 4 floats: left, top, right, bottom positions of the acquisition area (in m)
 
@@ -1061,14 +1065,31 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
             os.makedirs(os.path.dirname(self.filename_tiles))
 
-        self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
-                                                     overlap=self.overlap,
-                                                     settings_obs=self._main_data_model.settings_obs,
-                                                     log_path=self.filename_tiles,
-                                                     weaver=WEAVER_MEAN,
-                                                     registrar=REGISTER_IDENTITY,
-                                                     zlevels=zlevels,
-                                                     focusing_method=focus_mtd)
+        if self.autofocus_roi_ckbox.value:
+            # TODO create a list of a rois to be used for autofocus and pass it to the acquireOverview function
+            self.acq_future = acquireOverview(acq_streams,
+                                              self._main_data_model.stage,
+                                              [self.area],
+                                              self._main_data_model.focus,
+                                              self._main_data_model.ccd,
+                                              overlap=self.overlap,
+                                              settings_obs=self._main_data_model.settings_obs,
+                                              log_path=self.filename_tiles,
+                                              weaver=WEAVER_MEAN,
+                                              registrar=REGISTER_IDENTITY,
+                                              zlevels=zlevels,
+                                              focusing_method=focus_mtd)
+
+        else:
+            self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
+                                                         overlap=self.overlap,
+                                                         settings_obs=self._main_data_model.settings_obs,
+                                                         log_path=self.filename_tiles,
+                                                         weaver=WEAVER_MEAN,
+                                                         registrar=REGISTER_IDENTITY,
+                                                         zlevels=zlevels,
+                                                         focusing_method=focus_mtd)
+
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)

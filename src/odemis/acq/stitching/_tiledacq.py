@@ -34,6 +34,7 @@ from scipy.spatial import Delaunay
 from odemis import model, dataio
 from odemis.acq import acqmng
 from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MTD_EXHAUSTIVE
+from odemis.acq.align.roi_autofocus import autofocus_in_roi, estimate_autofocus_in_roi_time
 from odemis.acq.stitching._constants import WEAVER_MEAN, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
 from odemis.acq.stitching._simple import register, weave
 from odemis.acq.stream import Stream, EMStream, ARStream, \
@@ -53,6 +54,8 @@ FOCUS_RANGE_MARGIN = 100e-6  # m
 SKIP_TILES = 3
 
 MOVE_SPEED_DEFAULT = 100e-6  # m/s
+# Default range for the optical focus adjustment
+SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
 
 
 class FocusingMethod(Enum):
@@ -97,6 +100,9 @@ class TiledAcquisitionTask(object):
         self._stage = stage
         self._focus_points = focus_points
         self._focus_range = focus_range
+        if future is not None:
+            self._future.running_subf = model.InstantaneousFuture()
+            self._future._task_lock = threading.Lock()
         # Get total area as a tuple of width, height from ltrb area points
         normalized_area = util.normalize_rect(area)
         if area[0] != normalized_area[0] or area[1] != normalized_area[1]:
@@ -128,7 +134,6 @@ class TiledAcquisitionTask(object):
             raise ValueError(f"focusing_method should be of type FocusingMethod, but got {focusing_method}")
         self._focusing_method = focusing_method
         self._focus_stream = next((sd for sd in self._streams if sd.focuser is not None), None)
-        self._focus_points = focus_points
         if self._focus_stream:
             # save initial focus value to be used in the AutoFocus function
             self._good_focus = self._focus_stream.focuser.position.value['z']
@@ -160,7 +165,8 @@ class TiledAcquisitionTask(object):
             self._init_zlevels = []  # zlevels can be relative, therefore keep track of the initial zlevels
 
         if len(self._zlevels) > 1 and focusing_method != FocusingMethod.MAX_INTENSITY_PROJECTION:
-            raise NotImplementedError("Multiple zlevels currently only works with focusing method MAX_INTENSITY_PROJECTION")
+            raise NotImplementedError(
+                "Multiple zlevels currently only works with focusing method MAX_INTENSITY_PROJECTION")
 
         # For "ON_LOW_FOCUS_LEVEL" method: a focus level which is corresponding to a in-focus image.
         self._good_focus_level = None  # float
@@ -544,7 +550,8 @@ class TiledAcquisitionTask(object):
 
         if self._future._task_state == CANCELLED:
             raise CancelledError()
-        logging.debug(f"Zstack acquisition for tile {ix}x{iy}, stream {stream.name} finished, compressing data into a single image.")
+        logging.debug(
+            f"Zstack acquisition for tile {ix}x{iy}, stream {stream.name} finished, compressing data into a single image.")
         # Convert zstack into a cube
         fm_cube = assembleZCube(zstack, self._zlevels)
         # Save the cube on disk if a log path exists
@@ -730,7 +737,6 @@ class TiledAcquisitionTask(object):
         zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
         return zlevels
 
-
     def _adjustFocus(self, das, i, ix, iy):
         """
         das (list of DataArray): the data of each stream which has just been acquired
@@ -766,8 +772,8 @@ class TiledAcquisitionTask(object):
             # Run autofocus if current focus got worse than permitted deviation,
             # or it was very bad (0) originally.
             if (self._good_focus_level != 0 and
-                (self._good_focus_level - current_focus_level) / self._good_focus_level < FOCUS_FIDELITY
-               ):
+                    (self._good_focus_level - current_focus_level) / self._good_focus_level < FOCUS_FIDELITY
+            ):
                 return das
         elif self._focusing_method == FocusingMethod.ALWAYS:
             pass
@@ -895,7 +901,7 @@ def estimateTiledAcquisitionMemory(*args, **kwargs):
 
 def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                      registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                     focus_points=None):
+                     focus_points=None, focus_range=None):
     """
     Start a tiled acquisition task for the given streams (SEM or FM) in order to
     build a complete view of the TEM grid. Needed tiles are first acquired for
@@ -909,12 +915,10 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     """
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
-    future.running_subf = model.InstantaneousFuture()
-    future._task_lock = threading.Lock()
     # Create a tiled acquisition task
     task = TiledAcquisitionTask(streams, stage, area, overlap, settings_obs, log_path, future=future, zlevels=zlevels,
                                 registrar=registrar, weaver=weaver, focusing_method=focusing_method,
-                                focus_points=focus_points)
+                                focus_points=focus_points, focus_range=focus_range)
     future.task_canceller = task._cancelAcquisition  # let the future cancel the task
     # Estimate memory and check if it's sufficient to decide on running the task
     mem_sufficient, mem_est = task.estimateMemory()
@@ -926,3 +930,202 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     executeAsyncTask(future, task.run)
 
     return future
+
+
+def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
+                    registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
+    """
+    Start autofocus and tiled acquisition tasks for each area in the list of area which is
+    given by the input argument areas.
+
+    :param streams: (list of Stream) the streams to acquire
+    :param stage: (Actuator) the stage to move
+    :param areas: (list of areas) List of areas where an overview image should be acquired.
+        Each area is defined by 4 floats :left, top, right, bottom positions
+        of the acquisition area (in m)
+    :param focus: (Actuator) the focus actuator
+    :param ccd: (Camera) the camera to use for the acquisition
+    :param overlap: (0<float<1) the overlap between tiles (in percentage)
+    :param settings_obs: (dict) the settings for the acquisition
+    :param log_path: (str) path to the log file
+    :param zlevels: (list of floats) the initial zlevels to use for the stitching
+    :param registrar: (str) the type of registration to use
+    :param weaver: (str) the type of weaver to use
+    :param focusing_method: (str) the focusing method to use
+    :return: (ProgressiveFuture) an object that represents the task, allow to
+        know how much time before it is over and to cancel it. It also permits
+        to receive the result of the task, which is a list of model.DataArray:
+        the stitched acquired tiles data for each area
+    """
+    # Create a progressive future with running sub future
+    future = model.ProgressiveFuture()
+    task = AcquireOverviewTask(streams, stage, areas, focus, ccd, future, overlap, settings_obs,
+                               log_path, zlevels,
+                               registrar, weaver, focusing_method)
+    future.task_canceller = task.cancel  # let the future cancel the task
+
+    future.set_progress(end=task.estimate_time() + time.time())
+    # connect the future to the task and run in a thread
+    executeAsyncTask(future, task.run)
+
+    return future
+
+
+class AcquireOverviewTask(object):
+    """
+    Create a task to run autofocus and tiled acquisition for each area in the list of areas
+    """
+
+    def __init__(self, streams, stage, areas, focus, ccd, future, overlap=0.2, settings_obs=None, log_path=None,
+                 zlevels=None,
+                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
+        # site and feature means the same
+        self._stage = stage
+        self._future = future
+        if future is not None:
+            self._future.running_subf = model.InstantaneousFuture()
+            self._future._task_lock = threading.Lock()
+        self.streams = streams
+        self.areas = areas  # list of areas
+        self._ccd = ccd  # TODO to delete after ccd.data components is used from streams in do_autofocus_roi
+        self._focus = focus
+        self.focus_rng = self._focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
+
+        if self.focus_rng is None:
+            # No absolute range is available, so use a relative range (e.g. as on METEOR
+            self.focus_rng = self._focus.getMetadata().get(model.MD_SAFE_REL_RANGE, SAFE_REL_RANGE_DEFAULT)
+            self.focus_rng = (self.focus_rng[0] + self._focus.position.value["z"],
+                              self.focus_rng[1] + self._focus.position.value["z"])
+
+        self.conf_level = 0.8
+        self.focusing_method = focusing_method
+        # The number of focus points are constant for now
+        # TODO: make it variable according to the size of the ROI, is it useful?
+        self.n_focus_points = (3, 3)
+        self._overlap = overlap
+        self._settings_obs = settings_obs
+        self._log_path = log_path
+        self._zlevels = zlevels
+        self._registrar = registrar
+        self._weaver = weaver
+
+    def cancel(self, future):
+        """
+        Canceler of acquisition task.
+        """
+        logging.debug("canceling acquisition overview...")
+
+        with future._task_lock:
+            if future._task_state == FINISHED:
+                return False
+            future._task_state = CANCELLED
+            future.running_subf.cancel()
+            logging.debug("acquisition overview cancelled.")
+        return True
+
+    def estimate_time(self, roi_idx=0, actual_time_per_roi=None) -> float:
+        """
+        Estimates the time for the rest of the acquisition.
+
+        :param roi_idx: (int) index of the current roi
+        :param actual_time_per_roi: (float) average actual time spent for each roi until now
+        :return: (float) the estimated time for the rest of the acquisition
+        """
+        remaining_rois = (len(self.areas) - roi_idx)
+
+        if actual_time_per_roi:
+            acquisition_time = actual_time_per_roi * remaining_rois
+        else:
+            acquisition_time = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * remaining_rois
+
+        return acquisition_time
+
+    def run(self):
+        """
+        The main function of the task class, which will be called by the future asynchronously
+        """
+        self._future._task_state = RUNNING
+        da_rois = []
+        try:
+            actual_time_per_roi = None
+            start_time = time.time()
+            # create a for loop for roi to create sub futures
+            for idx, roi in enumerate(self.areas):
+                remaining_t = self.estimate_time(idx, actual_time_per_roi)
+                self._future.set_end_time(time.time() + remaining_t)
+
+                # cancel the sub future
+                with self._future._task_lock:
+                    if self._future._task_state == CANCELLED:
+                        raise CancelledError()
+
+                    logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
+                    # run autofocus for the selected roi
+                    self._future.running_subf = autofocus_in_roi(roi,
+                                                                 self._stage,
+                                                                 self._ccd,
+                                                                 self._focus,
+                                                                 self.focus_rng,
+                                                                 self.n_focus_points,
+                                                                 self.conf_level)
+
+                try:
+                    t = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * 3 + 1
+                    focus_points = self._future.running_subf.result(t)
+                except TimeoutError:
+                    logging.debug(f"Autofocus timed out for roi number {idx}, with bounding box: {roi} [m]")
+                    raise
+                except Exception:
+                    logging.debug(f"Autofocus failed for roi number {idx}, with bounding box: {roi} [m]")
+                    raise
+
+                # cancel the sub future
+                with self._future._task_lock:
+                    if self._future._task_state == CANCELLED:
+                        raise CancelledError()
+
+                    # run tiled acquisition for the selected roi
+                    logging.debug(f"Z-stack acquisition is running for roi number {idx} with {roi} values")
+                    self._future.running_subf = acquireTiledArea(self.streams, self._stage, roi,
+                                                                 focus_range=self.focus_rng,
+                                                                 overlap=self._overlap,
+                                                                 settings_obs=self._settings_obs,
+                                                                 log_path=self._log_path,
+                                                                 zlevels=self._zlevels,
+                                                                 registrar=self._registrar,
+                                                                 weaver=self._weaver,
+                                                                 focusing_method=self.focusing_method,
+                                                                 focus_points=focus_points)
+
+                try:
+                    da = self._future.running_subf.result()
+                    # append all of them, when multiple streams are acquired
+                    da_rois.extend(da)
+                except Exception:
+                    logging.debug(
+                        f"Z-stack acquisition within roi failed for roi number {idx} with {roi}")
+                    raise
+
+                logging.debug(f"acquisition overview is completed for roi number {idx} with {roi} values")
+
+                # cancel the sub future
+                with self._future._task_lock:
+                    if self._future._task_state == CANCELLED:
+                        raise CancelledError()
+
+                # Store the actual time during acquisition one roi
+                actual_time_per_roi = (time.time() - start_time) / (idx + 1)
+
+        except CancelledError:
+            logging.debug("Stopping because acquisition overview was cancelled")
+            raise
+        except Exception:
+            logging.exception(f"acquisition overview failed")
+            self._future.running_subf.cancel()
+            raise
+        finally:
+            # state that the future has finished
+            with self._future._task_lock:
+                self._future._task_state = FINISHED
+
+        return da_rois
