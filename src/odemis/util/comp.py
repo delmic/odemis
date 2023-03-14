@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 31 May 2018
 
 @author: Éric Piel
@@ -13,7 +13,7 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 import copy
 import math
 from typing import List, Tuple
@@ -115,6 +115,7 @@ def get_fov_rect(comp, fov):
 
 MAX_ZLEVELS = 500
 
+
 def generate_zlevels(focuser: "Actuator", zrange: Tuple[float, float], zstep: float) -> List[float]:
     """
     Calculates the zlevels for a zstack acquisition, using the zmax, zmin
@@ -156,24 +157,25 @@ def generate_zlevels(focuser: "Actuator", zrange: Tuple[float, float], zstep: fl
     if zrange_abs[0] == zrange_abs[1]:
         return focuser_pos + zrange[0]
 
-    # find number of samples 
+    # find number of zlevels
     n = (zrange_abs[1] - zrange_abs[0]) / abs(zstep) + 1
     if n > MAX_ZLEVELS:
         raise IndexError(f"The number of zlevels, {n}, is too large. Reduce the zstep value to < {MAX_ZLEVELS}.")
 
-    # try the floor and ceil values for the number of samples, and 
-    # take the one that give smaller error.
-    # note: if n is 1 -> division by zero and step_c will always be picked,
-    # so just choose any large value for step_f (e.g infinite)
-    try:
-        step_f = (zrange_abs[1] - zrange_abs[0]) / (math.floor(n) - 1)
-    except ZeroDivisionError:
-        step_f = math.inf
-    step_c = (zrange_abs[1] - zrange_abs[0]) / (math.ceil(n) - 1)
-    # errors 
-    ef = abs(step_f - abs(zstep))
-    ec = abs(step_c - abs(zstep))
-    n = math.floor(n) if ef < ec else math.ceil(n)
+    # zstep often doesn't exactly fit to have a round number of zlevels. So try
+    # the floor and ceil values for the number of zlevels, and take the one that
+    # give a step closest to the requested zstep.
+    n_f = math.floor(n)
+    n_c = math.ceil(n)
+
+    if n_f <= 1:  # would cause a division by zero
+        # => do the minimum amount of steps
+        n = 2
+    else:
+        # errors
+        ef = abs((zrange_abs[1] - zrange_abs[0]) / (n_f - 1) - abs(zstep))
+        ec = abs((zrange_abs[1] - zrange_abs[0]) / (n_c - 1) - abs(zstep))
+        n = n_f if ef < ec else n_c
 
     if zstep > 0:
         return numpy.linspace(zrange_abs[0], zrange_abs[1], n).tolist()

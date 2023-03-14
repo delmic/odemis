@@ -240,9 +240,9 @@ class TestGenerateZlevels(unittest.TestCase):
         try:
             self.focus.moveAbsSync({"z": 80e-6})
             zrange = (-50e-6, 50e-6)
-            zStep = 10e-6
-            expected = numpy.arange(30e-6, 100e-6 + 1e-12, 10e-6)
-            actual = generate_zlevels(self.focus, zrange, zStep)
+            zstep = 10e-6
+            expected = numpy.arange(30e-6, 100e-6 + 1e-12, zstep)
+            actual = generate_zlevels(self.focus, zrange, zstep)
             numpy.testing.assert_array_almost_equal(expected, actual)
         finally:
             self.focus.updateMetadata({model.MD_POS_ACTIVE_RANGE: {}})
