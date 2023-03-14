@@ -521,13 +521,15 @@ class CryoMainGUIData(MainGUIData):
         # Ex: {"grid 1": {"x": 0.1, "y": -0.2}} -> {"grid 1": (0.1, -0.2)}
         sample_centers_raw = self.stage.getMetadata().get(model.MD_SAMPLE_CENTERS)
 
-        # TODO: on the METEOR, the MD_SAMPLE_CENTER is on the stage-bare, in the stage-bare
-        # coordinates (SEM). To display them, we'd need to convert them to the stage coordinates.
-        # The acq.move code only needs the stage-bare coordinates (even if in FM), but we
-        # would need the sample centers position during the FLM mode, in the stage coordinates...
-        # and we don't have explicit functions for that (the stage wrapper knows how to convert
-        # a position from the dependencies stages, which can be ot her wrappers, but we don't
-        # have an explicit way to ask "if the stage-bare was at this position, what
+        # TODO: on the METEOR, the MD_SAMPLE_CENTERS is on the stage-bare, in
+        # the stage-bare coordinates (SEM). To display them, we'd need to
+        # convert them to the stage coordinates. The acq.move code only needs
+        # the stage-bare coordinates (even if in FM), but we would need the
+        # sample centers position during the FLM mode, in the stage coordinates...
+        # and we don't have explicit functions for that. The "stage" component
+        # knows how to convert a position from it dependencies stages, which
+        # themselves are other wrappers to the "stage-bare", but we don't have
+        # an explicit way to ask "if the stage-bare was at this position, what
         # would the stage position be?".
 
         if sample_centers_raw:

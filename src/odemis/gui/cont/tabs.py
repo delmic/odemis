@@ -339,6 +339,7 @@ class Tab(object):
 AUTOFOCUS_BINNING = (8, 8)
 AUTOFOCUS_HFW = 300e-06  # m
 
+
 class LocalizationTab(Tab):
 
     def __init__(self, name, button, panel, main_frame, main_data):
