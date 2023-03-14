@@ -200,7 +200,7 @@ class MillingRectangleTask(object):
                 return False
             future._task_state = CANCELLED
             future.running_subf.cancel()
-            logging.debug("Milling procedure cancelled.")  # add line number
+            logging.debug("Milling procedure cancelled.")
         return True
 
     def estimate_milling_time(self, sites_done: int = 0, actual_time_per_site: float = None) -> float:
@@ -210,11 +210,6 @@ class MillingRectangleTask(object):
         :param actual_time_per_site: actual milling time measured for a single site
         :return: (float > 0): the estimated time is in seconds
         """
-        if len(self.sites) == 0:
-            logging.debug("Site location is not provided by the user, cancelling the milling")
-            self._future._task_state = CANCELLED
-            raise CancelledError()
-
         remaining_sites = (len(self.sites) - sites_done)
 
         if actual_time_per_site:
@@ -270,7 +265,6 @@ class MillingRectangleTask(object):
         target_pos = {"x": site.pos.value[0],
                       "y": site.pos.value[1],
                       "z": site.pos.value[2]}
-        # TODO check if it is wise to move in Z direction without affecting the OPTICAL-FIB alignment
         logging.debug("For feature %s moving the stage to %s m", site.name.value, target_pos)
         self._future.running_subf = self._stage.moveAbs(target_pos)
         stage_time = self.estimate_stage_movement_time(site)
@@ -402,12 +396,12 @@ class MillingRectangleTask(object):
         :param site: (CryoFeature) The feature to acquire.
         """
         data = []
-        # check if cancellation happened while the acquiring future is working
-        with self._future._task_lock:
-            if self._future._task_state == CANCELLED:
-                raise CancelledError()
         try:
-            self._future.running_subf = acquire(self.streams)
+            # check if cancellation happened while the acquiring future is working
+            with self._future._task_lock:
+                if self._future._task_state == CANCELLED:
+                    raise CancelledError()
+                self._future.running_subf = acquire(self.streams)
             data, exp = self._future.running_subf.result()
             if exp:
                 logging.warning(
