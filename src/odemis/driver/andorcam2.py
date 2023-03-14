@@ -488,7 +488,7 @@ class AndorCam2(model.DigitalCamera):
     It also provide low-level methods corresponding to the SDK functions.
     """
 
-    def __init__(self, name, role, device=None, emgains=None, shutter_times=None,
+    def __init__(self, name, role, device, emgains=None, shutter_times=None,
                  hw_trigger_invert=False,
                  image=None, sw_trigger=None, **kwargs):
         """
@@ -529,7 +529,9 @@ class AndorCam2(model.DigitalCamera):
             self.atcore = AndorV2DLL()
 
         self._andor_capabilities = None # cached value of GetCapabilities()
-        self.temp_timer = None
+        self.temp_timer = None  # RepeatingTimer or None
+        self._acq_thread = None  # Thread or None
+
         if device is None:
             logging.info("AndorCam2 started in system mode, no actual camera connection")
             # nothing else to initialise
@@ -822,7 +824,6 @@ class AndorCam2(model.DigitalCamera):
                                                   "AndorCam2 temperature update")
             self.temp_timer.start()
 
-            self._acq_thread = None  # Thread or None
             # Queue to control the acquisition thread
             self._genmsg = queue.Queue()  # GEN_* or float
             # Queue of all synchronization events received (typically max len 1)
@@ -973,13 +974,13 @@ class AndorCam2(model.DigitalCamera):
             # contains the cameras firmware.
             possibilities = ["/usr/etc/andor", "/usr/local/etc/andor"]
             try:
-                f = open("/etc/andor/andor.install")
-                # only read the first non empty line
-                for l in f.readlines():
-                    if not l:
-                        continue
-                    possibilities.insert(0, l.strip() + "/etc/andor")
-                    break
+                with open("/etc/andor/andor.install") as f:
+                    # only read the first non empty line
+                    for l in f.readlines():
+                        if not l:
+                            continue
+                        possibilities.insert(0, l.strip() + "/etc/andor")
+                        break
             except IOError:
                 pass
 
@@ -1155,8 +1156,8 @@ class AndorCam2(model.DigitalCamera):
         try:
             self.atcore.IsTriggerModeAvailable(tmode)
         except AndorV2Error as ex:  # DRV_NOT_INITIALIZED or DRV_INVALID_MODE
-            logging.warning("Trigger mode %s not supported with current settings, falling back to slow implementation: %s",
-                            tmode, ex)
+            logging.info("Trigger mode %s not supported with current settings: %s",
+                         tmode, ex)
             return False
 
         return True
@@ -1910,6 +1911,7 @@ class AndorCam2(model.DigitalCamera):
                 if self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE):
                     trigger_mode = TRIG_SW
                 else:
+                    logging.info("Software trigger mode not supported with current settings, falling back to slow implementation")
                     trigger_mode = TRIG_FAKE
             else:
                 # Fake software trigger by acquiring a single image at a time
@@ -2073,6 +2075,7 @@ class AndorCam2(model.DigitalCamera):
         self._metadata[model.MD_EXP_TIME] = exposure
         readout = im_res[0] * im_res[1] * self._metadata[model.MD_READOUT_TIME] # s
         # accumulate should be approximately same as exposure + readout => play safe
+        # TODO: check if that includes the shutter time (can be 2 x 50 ms per frame!): kinetic?
         duration = max(accumulate, exposure + readout)
         self.frameDuration._set_value(duration, force_write=True)
 
@@ -2083,8 +2086,11 @@ class AndorCam2(model.DigitalCamera):
         # "some settings", so check one last time that it's really possible to use
         # software trigger. Or alternatively, maybe the previous settings didn't
         # allow software trigger, but the new ones do.
-        if synchronized and (trigger_mode == TRIG_SW) != self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE):
-            logging.debug("Reconfiguring trigger mode as its availability has changed")
+        if (self._supports_soft_trigger and synchronized and
+            (trigger_mode == TRIG_SW) != self.IsTriggerModeAvailable(AndorV2DLL.TM_SOFTWARE)
+           ):
+            logging.debug("Reconfiguring trigger mode as its availability has changed (readout rate = %s, gain = %s)",
+                          self._readout_rate, self._gain)
             trigger_mode = self._configure_trigger_mode(synchronized)
 
         self._prev_settings = [new_image_settings, self._exposure_time,
@@ -2630,7 +2636,7 @@ class AndorCam2(model.DigitalCamera):
         if _fake:
             camera = AndorCam2("System", "bus", device="fakesys")
         else:
-            camera = AndorCam2("System", "bus")
+            camera = AndorCam2("System", "bus", device=None)
         dc = camera.GetAvailableCameras()
         logging.debug("found %d devices.", dc)
 
