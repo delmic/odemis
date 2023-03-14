@@ -940,7 +940,8 @@ def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs
 
     :param streams: (list of Stream) the streams to acquire
     :param stage: (Actuator) the stage to move
-    :param areas: (list of area) area is defined by 4 floats :left, top, right, bottom positions
+    :param areas: (list of areas) List of areas where an overview image should be acquired.
+        Each area is defined by 4 floats :left, top, right, bottom positions
         of the acquisition area (in m)
     :param focus: (Actuator) the focus actuator
     :param ccd: (Camera) the camera to use for the acquisition
@@ -1058,22 +1059,24 @@ class AcquireOverviewTask(object):
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
 
-                # run autofocus for the selected roi
-                self._future.running_subf = autofocus_in_roi(roi,
-                                                             self._stage,
-                                                             self._ccd,
-                                                             self._focus,
-                                                             self.focus_rng,
-                                                             self.n_focus_points,
-                                                             self.conf_level)
-
-                logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
+                    logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
+                    # run autofocus for the selected roi
+                    self._future.running_subf = autofocus_in_roi(roi,
+                                                                 self._stage,
+                                                                 self._ccd,
+                                                                 self._focus,
+                                                                 self.focus_rng,
+                                                                 self.n_focus_points,
+                                                                 self.conf_level)
 
                 try:
-                    # TODO use the "estimated time * 3 + 1" as timeout error
-                    focus_points = self._future.running_subf.result()
+                    t = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * 3 + 1
+                    focus_points = self._future.running_subf.result(t)
+                except TimeoutError:
+                    logging.debug(f"Autofocus timed out for roi number {idx}, with bounding box: {roi} [m]")
+                    raise
                 except Exception:
-                    logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
+                    logging.debug(f"Autofocus failed for roi number {idx}, with bounding box: {roi} [m]")
                     raise
 
                 # cancel the sub future
@@ -1081,18 +1084,19 @@ class AcquireOverviewTask(object):
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
 
-                # run tiled acquisition for the selected roi
-                self._future.running_subf = acquireTiledArea(self.streams, self._stage, roi,
-                                                             focus_range=self.focus_rng,
-                                                             overlap=self._overlap,
-                                                             settings_obs=self._settings_obs,
-                                                             log_path=self._log_path,
-                                                             zlevels=self._zlevels,
-                                                             registrar=self._registrar,
-                                                             weaver=self._weaver,
-                                                             focusing_method=self.focusing_method,
-                                                             focus_points=focus_points)
-                logging.debug(f"Z-stack acquisition is running for roi number {idx} with {roi} values")
+                    # run tiled acquisition for the selected roi
+                    logging.debug(f"Z-stack acquisition is running for roi number {idx} with {roi} values")
+                    self._future.running_subf = acquireTiledArea(self.streams, self._stage, roi,
+                                                                 focus_range=self.focus_rng,
+                                                                 overlap=self._overlap,
+                                                                 settings_obs=self._settings_obs,
+                                                                 log_path=self._log_path,
+                                                                 zlevels=self._zlevels,
+                                                                 registrar=self._registrar,
+                                                                 weaver=self._weaver,
+                                                                 focusing_method=self.focusing_method,
+                                                                 focus_points=focus_points)
+
                 try:
                     da = self._future.running_subf.result()
                     # append all of them, when multiple streams are acquired

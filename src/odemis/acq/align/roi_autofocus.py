@@ -69,9 +69,10 @@ def do_autofocus_in_roi(
                 with f._autofocus_roi_lock:
                     if f._autofocus_roi_state == CANCELLED:
                         raise CancelledError()
-                stage.moveAbsSync({"x": x, "y": y})
-                # run autofocus
-                f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
+                    stage.moveAbsSync({"x": x, "y": y})
+                    # run autofocus
+                    f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
+
                 foc_pos, foc_lev, conf = f._running_subf.result(timeout=900)
                 if conf >= conf_level:
                     focus_positions.append([stage.position.value["x"],
@@ -82,7 +83,7 @@ def do_autofocus_in_roi(
                     logging.debug(f"Focus level is not added due to low confidence of {conf} at position: {x, y}.")
 
     except TimeoutError:
-        logging.exception(f"Timed out during autofocus at position {x, y} .")
+        logging.debug(f"Timed out during autofocus at position {x, y} .")
         f._running_subf.cancel()
         raise
 
