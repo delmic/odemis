@@ -214,7 +214,7 @@ class TestWithBackend(unittest.TestCase):
     
     def test_set_attr(self):
         # to read attribute power (which is a list of numbers)
-        regex = re.compile(b"\spower.+ value: \[(.*?)\]")
+        regex = re.compile(br"\spower.+ value: \[(.*?)\]")
         
         # read before
         try:
