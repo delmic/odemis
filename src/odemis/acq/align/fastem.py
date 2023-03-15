@@ -234,8 +234,7 @@ class CalibrationTask(object):
 
             if self.stage_pos:
                 # move to region of calibration (ROC) position
-                sf = self._stage.moveAbs({'x': self.stage_pos[0], 'y': self.stage_pos[1]})
-                sf.result()  # wait until stage is at correct position
+                self._stage.moveAbsSync({'x': self.stage_pos[0], 'y': self.stage_pos[1]})
 
             # loop over calibrations in list (order in list is important!)
             for calib in self.calibrations:

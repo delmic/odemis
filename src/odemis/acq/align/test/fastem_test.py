@@ -82,7 +82,7 @@ class TestFastEMCalibration(unittest.TestCase):
         self.ccd.updateMetadata({model.MD_FAV_POS_ACTIVE: fav_pos})
 
         # move the stage so that the image is in focus
-        self.stage.moveAbs({"z": self.good_focus}).result()
+        self.stage.moveAbsSync({"z": self.good_focus})
 
     def test_optical_autofocus(self):
         """Run the optical autofocus calibration. Can also be tested with simulator."""
@@ -91,7 +91,7 @@ class TestFastEMCalibration(unittest.TestCase):
 
         # move the stage so that the image is out of focus
         center_position = -30e-6
-        self.stage.moveAbs({"z": center_position}).result()
+        self.stage.moveAbsSync({"z": center_position})
 
         # Run auto focus
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
