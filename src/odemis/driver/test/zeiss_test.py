@@ -621,18 +621,18 @@ class TestSwitchingImagingModes(unittest.TestCase):
        #TODO linked YM plane is at beta 26
 
     def test_switching_sem_to_fm(self):
+        #TODO add logging commands
         # move to loading position
-        pass
-        # f = cryoSwitchSamplePosition(LOADING)
-        # f.result()
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
         # move the stage to the sem imaging area
-        # f = cryoSwitchSamplePosition(SEM_IMAGING)
-        # f.result()
-        # current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
-        # self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
         # now the selected grid is already the grid1
-        # current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
-        # self.assertEqual(GRID_1, current_grid)
+        current_grid = getCurrentGridLabel(self.stage.position.value, self.stage)
+        self.assertEqual(GRID_1, current_grid)
         #
         # # move the stage to the FLM imaging area
         # f = cryoSwitchSamplePosition(FM_IMAGING)

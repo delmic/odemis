@@ -89,6 +89,7 @@ def getTargetPosition(target_pos_lbl, stage):
             if current_position == LOADING:
                 # if at loading and fm is pressed, choose grid1 by default
                 sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+                sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
                 fm_target_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
             elif current_position == SEM_IMAGING:
                 fm_target_pos = transformFromSEMToMeteor(stage.position.value, stage)
@@ -96,9 +97,11 @@ def getTargetPosition(target_pos_lbl, stage):
     elif current_position == FM_IMAGING:
         if target_pos_lbl == GRID_1:
             sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+            sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
             end_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
         elif target_pos_lbl == GRID_2:
             sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+            sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
             end_pos = transformFromSEMToMeteor(sem_grid2_pos, stage)
         elif target_pos_lbl == SEM_IMAGING:
             end_pos = transformFromMeteorToSEM(stage.position.value, stage)
@@ -210,9 +213,9 @@ def _getCurrentMeteorPositionLabel(current_pos, stage):
     # Check the stage is near the loading position
     if _isNearPosition(current_pos, stage_deactive, stage.axes):
         return LOADING
-    if _isInRange(current_pos, stage_fm_imaging_rng, {'x', 'y', 'z'}):
+    if _isInRange(current_pos, stage_fm_imaging_rng, {'x', 'y', 'm'}):
         return FM_IMAGING
-    if _isInRange(current_pos, stage_sem_imaging_rng, {'x', 'y', 'z'}):
+    if _isInRange(current_pos, stage_sem_imaging_rng, {'x', 'y', 'm'}):
         return SEM_IMAGING
     # None of the above -> unknown position
     return UNKNOWN
@@ -252,7 +255,7 @@ def _getCurrentMimasPositionLabel(current_stage_pos, stage, aligner) -> int:
     # known positions, in which case we return "IMAGING" (to indicate it's a bit
     # unclear but not UNKNOWN either).
 
-    if _isInRange(current_stage_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rz'}):
+    if _isInRange(current_stage_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rm'}):
         if _isNearPosition(current_align_pos, aligner_fib, aligner.axes):
             try:
                 gis = model.getComponent(role="gis")
@@ -347,8 +350,8 @@ def _getDistance(start, end):
     return (float >= 0): the difference between two 3D postures.
     """
     axes = start.keys() & end.keys()
-    lin_axes = axes & {'x', 'y', 'z'}  # only the axes found on both points
-    rot_axes = axes & {'rx', 'ry', 'rz'}  # only the axes found on both points
+    lin_axes = axes & {'x', 'y', 'z', 'm'}  # only the axes found on both points
+    rot_axes = axes & {'rx', 'ry', 'rm'}  # only the axes found on both points
     if not lin_axes and not rot_axes:
         raise ValueError("No common axes found between the two postures")
 
@@ -426,9 +429,9 @@ def _isNearPosition(current_pos, target_position, axes):
     for axis in axes:
         current_value = current_pos[axis]
         target_value = target_position[axis]
-        if axis in {'x', 'y', 'z'}:
+        if axis in {'x', 'y', 'z', 'm'}:
             is_near = abs(target_value - current_value) < ATOL_LINEAR_POS
-        elif axis in {'rx', 'ry', 'rz'}:
+        elif axis in {'rx', 'ry', 'rm'}:
             is_near = util.rot_almost_equal(current_value, target_value, atol=ATOL_ROTATION_POS)
         else:
             raise ValueError("Unknown axis value %s." % axis)
@@ -576,7 +579,7 @@ def _doCryoSwitchSamplePosition(future, target):
 
     try:
         if role == "enzel":
-            #TODO enzel code broken as rm is used in other functions insteas of rz
+            #TODO enzel code broken as rm is used in other functions insteas of rm
             # get the stage and aligner objects
             stage = model.getComponent(role='stage')
             align = model.getComponent(role='align')
@@ -736,6 +739,7 @@ def _doCryoSwitchSamplePosition(future, target):
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
             # by SEM_IMAGING and then go to the actual requested position.
+            # logging.info("Current position is %s", stage.position.value)
             if current_label == UNKNOWN:
                 logging.warning("Moving stage while current position is unknown.")
                 if target not in (LOADING, SEM_IMAGING):
@@ -743,7 +747,7 @@ def _doCryoSwitchSamplePosition(future, target):
                     target_pos_sem = getTargetPosition(SEM_IMAGING, stage)
                     if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
                         sub_moves.append((focus, focus_deactive))
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z'}, target_pos_sem)))
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z', 'm'}, target_pos_sem)))
                     sub_moves.append((stage, filter_dict({'rx', 'rm'}, target_pos_sem)))
 
             if target in (GRID_1, GRID_2):
@@ -755,12 +759,16 @@ def _doCryoSwitchSamplePosition(future, target):
                 # x, y, m
 
             elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
-                # pass # TODO be sure to remove this
                 # Park the focuser for safety
                 if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
                     sub_moves.append((focus, focus_deactive))
 
-                if target in (LOADING, SEM_IMAGING):
+                if target == LOADING:
+                    # TODO lower the z position
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'z', 'm'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'rx', 'rm'}, target_pos)))
+                    # TODO increase the z position
+                if target == SEM_IMAGING:
                     # when switching from FM to SEM
                     # move in the following order
                     # (optional reset z), x, rx, rm, y, m, (original z)
@@ -778,6 +786,8 @@ def _doCryoSwitchSamplePosition(future, target):
                     sub_moves.append((stage, filter_dict({'rm'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                    # sub_moves.append((stage, filter_dict({'x', 'y', 'z', 'm'}, target_pos)))
+                    # sub_moves.append((stage, filter_dict({'rx', 'rm'}, target_pos)))
                     # Engage the focuser
                     sub_moves.append((focus, focus_active))
             else:
@@ -787,6 +797,9 @@ def _doCryoSwitchSamplePosition(future, target):
             logging.info("Moving from position {} to position {}.".format(current_name, target_name))
             for component, sub_move in sub_moves:
                 run_sub_move(future, component, sub_move)
+
+            # k = stage.position.value
+            # logging.info("Moved to position {}.".format(getCurrentPositionLabel(k, stage)))
 
         elif role == "mimas":
             # get the stage and aligner objects
@@ -813,7 +826,7 @@ def _doCryoSwitchSamplePosition(future, target):
             stage_referenced = all(stage.referenced.value.values())
 
             # Fail early when required axes are not found on the positions metadata
-            required_axes = {'x', 'y', 'z', 'rx', 'rz'}  # ry is normally never used so it can be omitted
+            required_axes = {'x', 'y', 'z', 'rx', 'rm'}  # ry is normally never used so it can be omitted
             for stage_position in stage_target_pos.values():
                 if not required_axes.issubset(stage_position.keys()):
                     raise ValueError("Stage %s metadata does not have all required axes %s." % (
@@ -862,7 +875,7 @@ def _doCryoSwitchSamplePosition(future, target):
                 run_sub_move(future, stage, stage_target_pos[target])
             elif target in (MILLING, FM_IMAGING, COATING):
                 # If not in imaging mode yet, move the stage to the default imaging position
-                if not _isInRange(current_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rz'}):
+                if not _isInRange(current_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rm'}):
                     # move stage to imaging range (with the optical lens retracted)
                     run_sub_move(future, align, aligner_fib)
                     run_sub_move(future, stage, stage_target_pos[target])
@@ -1066,7 +1079,8 @@ def run_sub_move(future, component, sub_move):
 
             logging.debug("Performing sub move %s -> %s", component.name, sub_move)
             future._running_subf = component.moveAbs(sub_move)
-        future._running_subf.result(timeout=MAX_SUBMOVE_DURATION)
+        # future._running_subf.result(timeout=MAX_SUBMOVE_DURATION)
+        future._running_subf.result()
     except TimeoutError:
         future._running_subf.cancel()
         logging.exception("Timed out while moving %s -> %s", component.name, sub_move)
