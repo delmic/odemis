@@ -29,7 +29,7 @@ from odemis import model
 from odemis.acq import stream, orsay_milling
 from odemis.acq.drift import AnchoredEstimator
 from odemis.acq.feature import CryoFeature, FEATURE_ROUGH_MILLED
-from odemis.acq.millmng import mill_features, MillingSettings, MillingRectangleTask
+from odemis.acq.millmng import load_config, mill_features, MillingSettings, MillingRectangleTask
 from odemis.acq.move import _isNearPosition
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.util import testing
@@ -48,6 +48,8 @@ else:
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
+
+MILLING_CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../src/odemis/odemisd/test/"
 
 
 def fake_do_milling(self):
@@ -71,6 +73,8 @@ class MillingManagerTestCase(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        cls.millings = load_config(MILLING_CONFIG_PATH + "/milling-series-test-working-config.mill.yaml")
+
         if TEST_NOHW:
             testing.start_backend(MIMAS_CONFIG)
             cls.patch_obj = patch.object(orsay_milling.OrsayMilling, 'do_milling', fake_do_milling)
@@ -333,6 +337,34 @@ class MillingManagerTestCase(unittest.TestCase):
         self.start = start
         self.end = end
         self.updates += 1
+
+    def test_yaml_loader_attribute_types(self):
+        """
+        Test the data types of the milling attributes
+        """
+        for milling in self.millings:
+            self.assertTrue(type(milling.name.value) is str)
+            self.assertTrue(type(milling.current.value) is float)
+            self.assertTrue(type(milling.horizontalFoV.value) is float)
+            self.assertTrue(type(milling.duration.value) is float)
+            self.assertTrue(type(milling.roi.value) is tuple)
+            self.assertTrue(type(milling.pixelSize.value) is list)
+
+    def test_milling_settings_from_yaml(self):
+        """
+        Test mill features function using the milling settings from a YAML file
+        """
+        logging.debug(self.millings)
+        f = mill_features(self.millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
+                          self.sed, self.stage, self.aligner)
+
+        time.sleep(13)
+        self.assertTrue(f.running())
+        f.cancel()
+        with self.assertRaises(CancelledError):
+            f.result(timeout=1)
+
+        self.assertTrue(f.cancelled())
 
 
 if __name__ == '__main__':
