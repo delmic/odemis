@@ -68,6 +68,8 @@ __all__ = [
     "polar_to_cartesian",
     "to_physical_space",
     "to_pixel_index",
+    "to_physical_space_transform",
+    "to_pixel_index_transform",
     "AffineTransform",
     "ScalingTransform",
     "SimilarityTransform",
@@ -294,6 +296,86 @@ def to_pixel_index(
         ji[..., 1] += 0.5 * (m - 1)
 
     return ji
+
+
+def to_physical_space_transform(
+    shape: Optional[Tuple[int, int]] = None,
+    pixel_size: Optional[Union[float, Tuple[float, float]]] = None,
+) -> "ScalingTransform":
+    """
+    Returns the geometric transformation to convert an image pixel index into a
+    coordinate in physical space.
+
+    Specifically,
+
+        `to_physical_space_transform(shape, pixel_size).apply(ji)`
+
+    is equivalent to
+
+        `to_physical_space(ji, shape, pixel_size)`.
+
+    For more information see `to_physical_space`.
+
+    Parameters
+    ----------
+    shape : tuple of ints (optional)
+        Shape of the image. The first entry is the number of rows, the second
+        entry is the number of columns in the image. Used to move the origin to
+        the center of the image. If not provided the origin is not altered.
+    pixel_size : tuple of 2 floats, float (optional)
+        Pixel size in (x, y). For square pixels, a single float can be
+        provided.
+
+    Returns
+    -------
+    tform : ScalingTransform
+        The geometric transformation to convert an image pixel index into a
+        coordinate in physical space.
+
+    """
+    matrix = numpy.transpose(to_physical_space(numpy.eye(2), None, pixel_size))
+    translation = to_physical_space(numpy.zeros(2), shape, pixel_size)
+    return ScalingTransform(matrix, translation)
+
+
+def to_pixel_index_transform(
+    shape: Optional[Tuple[int, int]] = None,
+    pixel_size: Optional[Union[float, Tuple[float, float]]] = None,
+) -> "ScalingTransform":
+    """
+    Returns the geometric transformation to convert a coordinate in physical
+    space into an image pixel index.
+
+    Specifically,
+
+        `to_pixel_index_transform(shape, pixel_size).apply(xy)`
+
+    is equivalent to
+
+        `to_pixel_index(xy, shape, pixel_size)`.
+
+    For more information see `to_pixel_index`.
+
+    Parameters
+    ----------
+    shape : tuple of ints (optional)
+        Shape of the image. The first entry is the number of rows, the second
+        entry is the number of columns in the image. If not provided the origin
+        is not altered.
+    pixel_size : tuple of 2 floats, float (optional)
+        Pixel size in (x, y). For square pixels, a single float can be
+        provided. If not specified, a pixel size of 1 is used.
+
+    Returns
+    -------
+    tform : ScalingTransform
+        The geometric transformation to convert a coordinate in physical space
+        into an image pixel index.
+
+    """
+    matrix = numpy.transpose(to_pixel_index(numpy.eye(2), None, pixel_size))
+    translation = to_pixel_index(numpy.zeros(2), shape, pixel_size)
+    return ScalingTransform(matrix, translation)
 
 
 def _assert_is_rotation_matrix(matrix: numpy.ndarray) -> None:

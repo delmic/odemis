@@ -40,7 +40,9 @@ from odemis.util.transform import (
     cartesian_to_polar,
     polar_to_cartesian,
     to_physical_space,
+    to_physical_space_transform,
     to_pixel_index,
+    to_pixel_index_transform,
 )
 
 from transform_known_values import transform_known_values
@@ -191,6 +193,17 @@ class ToPhysicalSpaceKnownValues(PixelIndexCoordinateTransformBase):
         self.assertRaises(ValueError, to_physical_space, (1,))
         self.assertRaises(ValueError, to_physical_space, (1, 2, 3))
 
+    def test_to_physical_space_transform_equivalent(self):
+        """
+        The geometric transform returned by to_physical_space_transform should
+        be equivalent to the transform applied by to_physical_space.
+
+        """
+        for ji, xy, kwargs in self._known_values:
+            tform = to_physical_space_transform(**kwargs)
+            res = tform.apply(ji)
+            numpy.testing.assert_array_almost_equal(xy, res)
+
 
 class ToPixelIndexKnownValues(PixelIndexCoordinateTransformBase):
     def test_to_pixel_index_known_values(self):
@@ -236,6 +249,17 @@ class ToPixelIndexKnownValues(PixelIndexCoordinateTransformBase):
         self.assertRaises(ValueError, to_pixel_index, ())
         self.assertRaises(ValueError, to_pixel_index, (1,))
         self.assertRaises(ValueError, to_pixel_index, (1, 2, 3))
+
+    def test_to_pixel_index_transform_equivalent(self):
+        """
+        The geometric transform returned by to_pixel_index_transform should
+        be equivalent to the transform applied by to_pixel_index.
+
+        """
+        for ji, xy, kwargs in self._known_values:
+            tform = to_pixel_index_transform(**kwargs)
+            res = tform.apply(xy)
+            numpy.testing.assert_array_almost_equal(ji, res)
 
 
 class RotationMatrixKnownValues(unittest.TestCase):
