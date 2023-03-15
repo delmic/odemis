@@ -1,0 +1,29 @@
+# Milling settings with finely set attributes. Created for testing purposes
+[
+{
+    name: "rough milling top",
+    current: 760.0e-12,
+    horizontal_fov: 35.0e-6, # m
+    roi: [0.3571, 0.4285, 0.6428, 0.2285],  # from bottom to top
+    pixel_size: [10.0e-9, 10.0e-9 / 5],
+    beam_angle: beam_angle,
+    duration: 660, # s
+    dc_roi: [0.34, 0.41, 0.65, 0.23],
+    dc_period: 60, # s
+    dc_dwell_time: 5.0e-6,
+    dc_current: 760e-12,
+},
+{
+    name: "Mill the quarter of the fov",
+    current: 100.0e-12,
+    horizontal_fov: 35.0e-6, # m
+    roi: [0, 0, 1, 1],
+    pixel_size: [4.0e-9, 8.0e-10],
+    duration: 300, # s
+    beam_angle: 0.15, # rad
+#    dc_roi: [0.05, 0.2, 0.32, 0.8],
+#    dc_period: 60,
+#    dc_dwell_time: 5.0e-6,
+#    dc_current: 100.0e-12,
+}
+]
