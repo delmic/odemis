@@ -296,7 +296,7 @@ class TestMeteorMove(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        testing.start_backend(METEOR_ZEISS_CONFIG)
+        # testing.start_backend(METEOR_ZEISS_CONFIG)
 
         # get the stage components
         cls.stage = model.getComponent(role="stage-bare")
@@ -470,7 +470,7 @@ class TestMeteorMove(unittest.TestCase):
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
 
     def test_unknown_label_at_initialization(self):
-        arbitrary_position = {"x": 0.0, "y": 0.0, "z":-1.0e-3}
+        arbitrary_position = {"x": 2.0e-3, "y":2.0e-3, "z":2.0e-3}
         self.stage.moveAbs(arbitrary_position).result()
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(UNKNOWN, current_imaging_mode)

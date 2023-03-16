@@ -128,10 +128,14 @@ def getCurrentGridLabel(current_pos, stage):
     grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
     grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
     if current_pos_label == SEM_IMAGING:
+        grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+        grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
         distance_to_grid1 = _getDistance(current_pos, grid1_pos)
         distance_to_grid2 = _getDistance(current_pos, grid2_pos)
         return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1 
     elif current_pos_label == FM_IMAGING:
+        grid1_pos.update(stage_md[model.MD_FAV_FM_POS_ACTIVE])
+        grid2_pos.update(stage_md[model.MD_FAV_FM_POS_ACTIVE])
         distance_to_grid1 = _getDistance(current_pos, transformFromSEMToMeteor(grid1_pos, stage))
         distance_to_grid2 = _getDistance(current_pos, transformFromSEMToMeteor(grid2_pos, stage))
         return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
@@ -747,15 +751,17 @@ def _doCryoSwitchSamplePosition(future, target):
                     target_pos_sem = getTargetPosition(SEM_IMAGING, stage)
                     if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
                         sub_moves.append((focus, focus_deactive))
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z', 'm'}, target_pos_sem)))
-                    sub_moves.append((stage, filter_dict({'rx', 'rm'}, target_pos_sem)))
+                    sub_moves.append((stage, filter_dict({'z', 'm'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'x','y' 'rm'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
 
             if target in (GRID_1, GRID_2):
                 # The current mode doesn't change. Only X/Y/Z should move (typically
                 # only X/Y).
                 # It could be both SEM and FM position # TODO check
                 # TODO How to work Linked YM position and its associated not used METADATA POS_COR, CALIB_VAL
-                sub_moves.append((stage, filter_dict({'x', 'y', 'm'}, target_pos)))
+                sub_moves.append((stage, filter_dict({'x', 'y', 'm', 'z'}, target_pos)))
+                sub_moves.append((stage, filter_dict({'rx', 'rm'}, target_pos)))
                 # x, y, m
 
             elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
@@ -765,39 +771,48 @@ def _doCryoSwitchSamplePosition(future, target):
 
                 if target == LOADING:
                     # TODO lower the z position
-                    sub_moves.append((stage, filter_dict({'x', 'y', 'z', 'm'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rx', 'rm'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'z', 'm'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'x', 'y', 'rm'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
                     # TODO increase the z position
                 if target == SEM_IMAGING:
                     # when switching from FM to SEM
                     # move in the following order
                     # (optional reset z), x, rx, rm, y, m, (original z)
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+
                     sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'rm'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'y'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'m'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'m','z'}, target_pos)))
                 if target == FM_IMAGING:
 
                     if current_label == LOADING:
                         # first switch from Loafing to SEM_IMAGING
                         sem_int_posit = getTargetPosition(SEM_IMAGING, stage)
-                        sub_moves.append((stage, filter_dict({'x'}, sem_int_posit)))
+
                         sub_moves.append((stage, filter_dict({'rx'}, sem_int_posit)))
                         sub_moves.append((stage, filter_dict({'rm'}, sem_int_posit)))
+                        sub_moves.append((stage, filter_dict({'x'}, sem_int_posit)))
                         sub_moves.append((stage, filter_dict({'y'}, sem_int_posit)))
-                        sub_moves.append((stage, filter_dict({'m'}, sem_int_posit)))
+                        sub_moves.append((stage, filter_dict({'m','z'}, sem_int_posit)))
+
+                        sub_moves.append((stage, filter_dict({'m','z'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'y'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'x'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'rm'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
 
                     # when switching from SEM to FM
                     # move in the following order :
                     # (optional reset z), m, y, rm, rx, x, (original z)
-                    current_label = getCurrentPositionLabel(stage.position.value, stage)
+                    # current_label = getCurrentPositionLabel(stage.position.value, stage)
                     if current_label == SEM_IMAGING:
-                        sub_moves.append((stage, filter_dict({'m'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'m','z'}, target_pos)))
                         sub_moves.append((stage, filter_dict({'y'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'x'}, target_pos)))
                         sub_moves.append((stage, filter_dict({'rm'}, target_pos)))
                         sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'x'}, target_pos)))
                     # sub_moves.append((stage, filter_dict({'x', 'y', 'z', 'm'}, target_pos)))
                     # sub_moves.append((stage, filter_dict({'rx', 'rm'}, target_pos)))
                     # Engage the focuser
