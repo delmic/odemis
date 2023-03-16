@@ -768,14 +768,8 @@ class AcquisitionTask(object):
 
         pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
         logging.debug(f"Moving to stage position x: {pos_hor}, y: {pos_vert}")
-        f = self._stage.moveAbs({'x': pos_hor, 'y': pos_vert})  # move the stage
-        timeout = 100
-        try:
-            f.result(timeout=timeout)  # don't wait forever
-            logging.debug("Moved to stage position %s" % (self._stage.position.value,))
-        except TimeoutError:
-            raise TimeoutError("Stage movement to position (%s, %s) timed out after %s s."
-                               % (timeout, pos_hor, pos_vert))
+        self._stage.moveAbsSync({'x': pos_hor, 'y': pos_vert})  # move the stage
+        logging.debug(f"Moved to stage position {self._stage.position.value}")
 
     def correct_beam_shift(self):
         """
