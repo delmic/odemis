@@ -187,8 +187,8 @@ class TestFastEMCalibration(unittest.TestCase):
         try:
             config = f.result()
         except ValueError:
-            # Handle optical autofocus calibration raised ValueError.
-            # For now, pass and continue with the test.
+            # Handle optical autofocus calibration raised ValueError when confidence is low.
+            # For now, pass and continue with the test, even with low confidence the stage should be close to the good position.
             pass
 
         self.assertIsNotNone(config)  # check configuration dictionary is returned
