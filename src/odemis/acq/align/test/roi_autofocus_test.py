@@ -71,7 +71,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         height = self.height
         n_focus_points = (3, 3)
         overlap = 0.2
-        condidence_level = 0.8  # focus points below this confidence level will be discarded
+        confidence_level = 0.2  # focus points below this confidence level will be discarded
 
         xmin = init_pos[0] - (1 - overlap) * n_focus_points[0] / 2 * px_size[0] * width
         ymin = init_pos[1] - (1 - overlap) * n_focus_points[1] / 2 * px_size[1] * height
@@ -81,7 +81,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         bbox = (xmin, ymin, xmax, ymax)
 
         f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_focus_points,
-                             condidence_level)
+                             confidence_level)
 
         # Test if the autofocus in roi is running
         time.sleep(0.1)
@@ -106,7 +106,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         height = self.height
         n_focus_points = (3, 3)
         overlap = 0.2
-        confidence_level = 0.8  # focus points below this confidence level will be discarded
+        confidence_level = 0.2  # focus points below this confidence level will be discarded
 
         xmin = init_pos[0] - (1 - overlap) * n_focus_points[0] / 2 * px_size[0] * width
         ymin = init_pos[1] - (1 - overlap) * n_focus_points[1] / 2 * px_size[1] * height
