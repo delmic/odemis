@@ -296,7 +296,7 @@ class TestMeteorMove(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        # testing.start_backend(METEOR_ZEISS_CONFIG)
+        testing.start_backend(METEOR_ZEISS_CONFIG)
 
         # get the stage components
         cls.stage = model.getComponent(role="stage-bare")

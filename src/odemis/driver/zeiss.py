@@ -683,8 +683,8 @@ class Stage(model.Actuator):
 
                     if time.time() > tstart + timeout:
                         self.parent.Abort()
-                        logging.error("Timeout after submitting stage move. Aborting move.")
-                        break
+                        logging.error(f"Timeout after submitting stage move {pos}. Aborting move.")
+                        raise TimeoutError(f"Timeout after {timeout} s going to {pos}.")
 
                     # 50 ms is about the time it takes to read the stage status
                     time.sleep(50e-3)
@@ -1050,7 +1050,7 @@ class RemconSimulator(object):
     def __init__(self, timeout=1, *args, **kwargs):
         self.timeout = timeout
 
-        self._speed_lin = 0.1  # mm/s
+        self._speed_lin = 2.0  # mm/s
         self._speed_rot = 10  # deg/s
         self._hfw_nomag = 1  # m
 
@@ -1116,9 +1116,9 @@ class RemconSimulator(object):
         pos = numpy.append(pos, self.pos[len(pos):])
         self.target_pos = numpy.array(pos)
         self._start_move = time.time()
-        dur_lin = sum(numpy.sqrt((self.pos[[0, 1, 2, 5]] - self.target_pos[[0, 1, 2, 5]]) ** 2)) / self._speed_lin
-        dur_rot = sum(abs(self.pos[[3, 4]] - self.target_pos[[3, 4]])) / self._speed_rot
-        dur = dur_lin + dur_rot
+        dur_lin = max(numpy.sqrt((self.pos[[0, 1, 2, 5]] - self.target_pos[[0, 1, 2, 5]]) ** 2)) / self._speed_lin
+        dur_rot = max(abs(self.pos[[3, 4]] - self.target_pos[[3, 4]])) / self._speed_rot
+        dur = max(dur_lin, dur_rot)
         self._end_move = time.time() + dur
         self.dur = dur
         self._is_moving = True
