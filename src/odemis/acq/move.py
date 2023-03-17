@@ -108,9 +108,9 @@ def getTargetPosition(target_pos_lbl, stage):
 
     if end_pos is None:
         raise ValueError("Unknown target position {} when in {}".format(
-                        POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
-                        POSITION_NAMES.get(current_position, current_position))
-                        )
+            POSITION_NAMES.get(target_pos_lbl, target_pos_lbl),
+            POSITION_NAMES.get(current_position, current_position))
+        )
 
     return end_pos
 
@@ -132,14 +132,14 @@ def getCurrentGridLabel(current_pos, stage):
         grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
         distance_to_grid1 = _getDistance(current_pos, grid1_pos)
         distance_to_grid2 = _getDistance(current_pos, grid2_pos)
-        return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1 
+        return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1
     elif current_pos_label == FM_IMAGING:
         grid1_pos.update(stage_md[model.MD_FAV_FM_POS_ACTIVE])
         grid2_pos.update(stage_md[model.MD_FAV_FM_POS_ACTIVE])
         distance_to_grid1 = _getDistance(current_pos, transformFromSEMToMeteor(grid1_pos, stage))
         distance_to_grid2 = _getDistance(current_pos, transformFromSEMToMeteor(grid2_pos, stage))
         return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
-    else: 
+    else:
         logging.warning("Cannot guess between grid 1 and grid2 in %s position" % POSITION_NAMES[current_pos_label])
         return None
 
@@ -167,7 +167,7 @@ def _getCurrentEnzelPositionLabel(current_pos, stage):
         return COATING
     # Check the stage X,Y,Z are within the active range and on the tilted plane -> imaging position
     if _isInRange(
-        current_pos, stage_active_range, {'x', 'y', 'z'}
+            current_pos, stage_active_range, {'x', 'y', 'z'}
     ):
         if _isNearPosition(current_pos, {'rx': stage_active['rx']}, {'rx'}):
             return THREE_BEAMS
@@ -264,7 +264,7 @@ def _getCurrentMimasPositionLabel(current_stage_pos, stage, aligner) -> int:
             try:
                 gis = model.getComponent(role="gis")
                 gis_choices = gis.axes["arm"].choices
-                gis_pos = gis_choices[gis.position.value["arm"]] # convert position to a string
+                gis_pos = gis_choices[gis.position.value["arm"]]  # convert position to a string
             except Exception:
                 logging.exception("Failed to read GIS arm position, assuming it's parked")
                 gis_pos = "parked"
@@ -327,9 +327,9 @@ def getCurrentAlignerPositionLabel(current_pos, align):
     # exactly at POS_ACTIVE.
     # TODO: should have a POS_ACTIVE_RANGE to define the whole region
     if (_isNearPosition(current_pos, align_active, align.axes) or
-        _isNearPosition(current_pos, align_alignment, align.axes) or
-        _isNearPosition(current_pos, three_beams, align.axes)
-       ):
+            _isNearPosition(current_pos, align_alignment, align.axes) or
+            _isNearPosition(current_pos, three_beams, align.axes)
+    ):
         return THREE_BEAMS
 
     # Check the current position is near the line between DEACTIVE and ACTIVE
@@ -413,7 +413,7 @@ def _isInRange(current_pos, active_range, axes):
         axis_active_range = [r for r in active_range[axis]]
         # Add 1% margin for hardware slight errors
         margin = (axis_active_range[1] - axis_active_range[0]) * 0.01
-        if not((axis_active_range[0] - margin) <= pos <= (axis_active_range[1] + margin)):
+        if not ((axis_active_range[0] - margin) <= pos <= (axis_active_range[1] + margin)):
             return False
     return True
 
@@ -455,6 +455,7 @@ def get3beamsSafePos(active_pos, safety_margin):
     three_beams_pos['z'] -= safety_margin
     return three_beams_pos
 
+
 def cryoSwitchAlignPosition(target):
     """
     Provide the ability to switch between loading, imaging and alignment position, without bumping into anything.
@@ -473,6 +474,7 @@ def cryoSwitchAlignPosition(target):
     # Run in separate thread
     executeAsyncTask(f, _doCryoSwitchAlignPosition, args=(f, align, target))
     return f
+
 
 def _doCryoSwitchAlignPosition(future, align, target):
     """
@@ -498,7 +500,8 @@ def _doCryoSwitchAlignPosition(future, align, target):
         required_axes = {'x', 'y', 'z'}
         for align_position in target_pos.values():
             if not required_axes.issubset(align_position.keys()):
-                raise ValueError("Aligner %s metadata does not have all required axes %s." % (list(align_md.keys())[list(align_md.values()).index(align_position)], required_axes))
+                raise ValueError("Aligner %s metadata does not have all required axes %s." % (
+                    list(align_md.keys())[list(align_md.values()).index(align_position)], required_axes))
         current_pos = align.position.value
         # To hold the ordered sub moves list
         sub_moves = []
@@ -583,7 +586,7 @@ def _doCryoSwitchSamplePosition(future, target):
 
     try:
         if role == "enzel":
-            #TODO enzel code broken as rm is used in other functions insteas of rm
+            # TODO enzel code broken as rm is used in other functions insteas of rm
             # get the stage and aligner objects
             stage = model.getComponent(role='stage')
             align = model.getComponent(role='align')
@@ -604,7 +607,7 @@ def _doCryoSwitchSamplePosition(future, target):
             for stage_position in target_pos.values():
                 if not required_axes.issubset(stage_position.keys()):
                     raise ValueError("Stage %s metadata does not have all required axes %s." % (
-                    list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
+                        list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
             current_pos = stage.position.value
             # To hold the sub moves to run if normal ordering failed
             fallback_submoves = [{'x', 'y', 'z'}, {'rx', 'rm'}]
@@ -752,7 +755,7 @@ def _doCryoSwitchSamplePosition(future, target):
                     if not _isNearPosition(focus.position.value, focus_deactive, focus.axes):
                         sub_moves.append((focus, focus_deactive))
                     sub_moves.append((stage, filter_dict({'z', 'm'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'x','y' 'rm'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'x', 'y' 'rm'}, target_pos)))
                     sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
 
             if target in (GRID_1, GRID_2):
@@ -778,43 +781,32 @@ def _doCryoSwitchSamplePosition(future, target):
                 if target == SEM_IMAGING:
                     # when switching from FM to SEM
                     # move in the following order
-                    # (optional reset z), x, rx, rm, y, m, (original z)
-
                     sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rm'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'y'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'m','z'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'rm', 'x', 'y'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'m', 'z'}, target_pos)))
                 if target == FM_IMAGING:
 
                     if current_label == LOADING:
-                        # first switch from Loafing to SEM_IMAGING
+                        # In practice, the user will not go directly from LOADING to FM_IMAGING
+                        # but will go through SEM_IMAGING first. But just in case, we handle the case
+                        # where the current position is LOADING and the target is FM_IMAGING, do the following:
+                        # First switch from Loading to SEM_IMAGING
                         sem_int_posit = getTargetPosition(SEM_IMAGING, stage)
-
                         sub_moves.append((stage, filter_dict({'rx'}, sem_int_posit)))
-                        sub_moves.append((stage, filter_dict({'rm'}, sem_int_posit)))
-                        sub_moves.append((stage, filter_dict({'x'}, sem_int_posit)))
-                        sub_moves.append((stage, filter_dict({'y'}, sem_int_posit)))
-                        sub_moves.append((stage, filter_dict({'m','z'}, sem_int_posit)))
-
-                        sub_moves.append((stage, filter_dict({'m','z'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'y'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'rm'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'rm', 'x', 'y'}, sem_int_posit)))
+                        sub_moves.append((stage, filter_dict({'m', 'z'}, sem_int_posit)))
+                        # Then switch the stage from SEM_IMAGING to FM_IMAGING
+                        sub_moves.append((stage, filter_dict({'m', 'z'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'y', 'x', 'rm'}, target_pos)))
                         sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
 
-                    # when switching from SEM to FM
-                    # move in the following order :
-                    # (optional reset z), m, y, rm, rx, x, (original z)
-                    # current_label = getCurrentPositionLabel(stage.position.value, stage)
                     if current_label == SEM_IMAGING:
-                        sub_moves.append((stage, filter_dict({'m','z'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'y'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'x'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'rm'}, target_pos)))
+                        # when switching from SEM to FM
+                        # move in the following order :
+                        sub_moves.append((stage, filter_dict({'m', 'z'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'y', 'x', 'rm'}, target_pos)))
                         sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                    # sub_moves.append((stage, filter_dict({'x', 'y', 'z', 'm'}, target_pos)))
-                    # sub_moves.append((stage, filter_dict({'rx', 'rm'}, target_pos)))
+
                     # Engage the focuser
                     sub_moves.append((focus, focus_active))
             else:
@@ -824,9 +816,6 @@ def _doCryoSwitchSamplePosition(future, target):
             logging.info("Moving from position {} to position {}.".format(current_name, target_name))
             for component, sub_move in sub_moves:
                 run_sub_move(future, component, sub_move)
-
-            # k = stage.position.value
-            # logging.info("Moved to position {}.".format(getCurrentPositionLabel(k, stage)))
 
         elif role == "mimas":
             # get the stage and aligner objects
@@ -857,8 +846,8 @@ def _doCryoSwitchSamplePosition(future, target):
             for stage_position in stage_target_pos.values():
                 if not required_axes.issubset(stage_position.keys()):
                     raise ValueError("Stage %s metadata does not have all required axes %s." % (
-                                     list(stage_md.keys())[list(stage_md.values()).index(stage_position)],
-                                     required_axes))
+                        list(stage_md.keys())[list(stage_md.values()).index(stage_position)],
+                        required_axes))
 
             current_pos = stage.position.value
             current_label = getCurrentPositionLabel(current_pos, stage, align)
@@ -934,6 +923,7 @@ def _doCryoSwitchSamplePosition(future, target):
                 raise CancelledError()
             future._task_state = FINISHED
 
+
 # Note: this transformation consists of translation and rotation.
 # The translations are along the x, y and m axes. They are calculated based on
 # the current position and some calibrated values existing in metadata "CAL_VAL".
@@ -948,8 +938,6 @@ def transformFromSEMToMeteor(pos, stage):
     stage (Actuator): the stage component. The stage has to have metadata "MD_POS_COR" and "MD_FAV_FM_POS_ACTIVE"
     return (dict str->float): the transformed position. It returns the updated axes x, y, m, z, rx, rm. The axis z is same as the input.
     """
-    # TODO: Ask Eric?
-    # TODO: check the sign convention of the axes. The below axes convention is based on Zeiss stage system.
     if not {"x", "y", "m", "z", "rx", "rm"}.issubset(stage.axes):
         raise KeyError("The stage misses 'x', 'y', 'm', 'z', 'rx' or 'rm' axes")
     stage_md = stage.getMetadata()
@@ -960,13 +948,6 @@ def transformFromSEMToMeteor(pos, stage):
     fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
     sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 
-    #todo uncomment below
-
-    # Check 'rm' value
-    # if not _isInRange(pos["rm"], [sem_pos_active["rm"] - 0.01, sem_pos_active["rm"] + 0.01], "rm"):
-    #     raise KeyError("The rotation axis does not have the correct value for the SEM/FM switch to work properly, "
-    #                    "please set it to", str(math.degrees(sem_pos_active["rm"])), "degrees")
-
     # Define values that are used more than once
     rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
     rx_fm = fm_pos_active["rx"]  # Calibrated tilt angle, for imaging perpendicular to objective
@@ -975,18 +956,19 @@ def transformFromSEMToMeteor(pos, stage):
     y_0 = calibrated_values["y"]
     m_0 = calibrated_values["m"]
 
-    # Calculate the equivalent coordinates of the (0 degree tilt) calibrated position, at the SEM position stage tilt
+    # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
     sem_reference_pos_x = x_0
-    sem_reference_pos_y = y_0 + b_0*math.sin(rx_sem)
-    sem_reference_pos_m = m_0 + b_0*(math.cos(rx_sem) - 1)
+    sem_reference_pos_y = y_0 + b_0 * math.sin(rx_sem)
+    sem_reference_pos_m = m_0 + b_0 * (math.cos(rx_sem) - 1)
 
     # Calculate the equivalent coordinates of the calibrated position, at the FM position
     fm_reference_pos_x = x_0 + calibrated_values["dx"]
-    fm_reference_pos_y = y_0 + calibrated_values["dy"] + b_0*math.sin(rx_fm)
-    fm_reference_pos_m = m_0 + b_0*(math.cos(rx_fm) - 1)
+    fm_reference_pos_y = y_0 + calibrated_values["dy"] + b_0 * math.sin(rx_fm)
+    fm_reference_pos_m = m_0 + b_0 * (math.cos(rx_fm) - 1)
 
-    # Use the above reference positions to calculate the equivalent coordinates of the point of interest, at the FM position.
-    # Note that the 180 degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
+    # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
+    # at the FM position.
+    # Note that the 180-degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
     transformed_pos["x"] = fm_reference_pos_x + (sem_reference_pos_x - pos["x"])
     transformed_pos["y"] = fm_reference_pos_y + (sem_reference_pos_y - pos["y"])
     transformed_pos["m"] = fm_reference_pos_m + (pos["m"] - sem_reference_pos_m)
@@ -1029,18 +1011,19 @@ def transformFromMeteorToSEM(pos, stage):
     y_0 = calibrated_values["y"]
     m_0 = calibrated_values["m"]
 
-    # Calculate the equivalent coordinates of the (0 degree tilt) calibrated position, at the SEM position stage tilt
+    # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
     sem_ref_pos_x = x_0
-    sem_ref_pos_y = y_0 + b_0*math.sin(rx_sem)
-    sem_ref_pos_m = m_0 + b_0*(math.cos(rx_sem) - 1)
+    sem_ref_pos_y = y_0 + b_0 * math.sin(rx_sem)
+    sem_ref_pos_m = m_0 + b_0 * (math.cos(rx_sem) - 1)
 
     # Calculate the equivalent coordinates of the calibrated position, at the FM position
     fm_ref_pos_x = x_0 + calibrated_values["dx"]
-    fm_ref_pos_y = y_0 + calibrated_values["dy"] + b_0*math.sin(rx_fm)
-    fm_ref_pos_m = m_0 + b_0*(math.cos(rx_fm) - 1)
+    fm_ref_pos_y = y_0 + calibrated_values["dy"] + b_0 * math.sin(rx_fm)
+    fm_ref_pos_m = m_0 + b_0 * (math.cos(rx_fm) - 1)
 
-    # Use the above reference positions to calculate the equivalent coordinates of the point of interest, at the FM position.
-    # Note that the 180 degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
+    # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
+    # at the FM position.
+    # Note that the 180-degree rotation is taken care of by swapping the +/- signs for x and y (wrt the m equation).
     transformed_pos["x"] = sem_ref_pos_x + (fm_ref_pos_x - pos["x"])
     transformed_pos["y"] = sem_ref_pos_y + (fm_ref_pos_y - pos["y"])
     transformed_pos["m"] = sem_ref_pos_m + (pos["m"] - fm_ref_pos_m)
@@ -1066,6 +1049,7 @@ def _cancelCryoMoveSample(future):
         logging.debug("Cryo switch move cancellation requested.")
 
     return True
+
 
 def run_reference(future, component):
     """
