@@ -303,6 +303,9 @@ class TestMeteorMove(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
+        # Check the linked YM plane which is at a pre-tit angle beta of 26-degrees using GUI simulation
+        # to cover all the test cases
+
         testing.start_backend(METEOR_ZEISS_CONFIG)
 
         # get the stage components
@@ -377,8 +380,6 @@ class TestMeteorMove(unittest.TestCase):
         # self.assertEqual(transformed_pos, transformed_pos_6)
         testing.assert_pos_almost_equal(transformed_pos, transformed_pos_6, atol=1e-6)
 
-    # Check the linked YM plane which is at pre-tit angle beta 26-degrees
-
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
         # move the stage to the loading position  
         f = cryoSwitchSamplePosition(LOADING)
@@ -390,6 +391,11 @@ class TestMeteorMove(unittest.TestCase):
         grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
         self.assertEqual(position_label, SEM_IMAGING)
         self.assertEqual(grid_label, GRID_1)
+        # check the values of tilt and rotation
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], sem_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], sem_angles["rm"], places=6)
+
 
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_2nd_method(self):
         # move the stage to the loading position  
@@ -402,6 +408,10 @@ class TestMeteorMove(unittest.TestCase):
         grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
         self.assertEqual(position_label, SEM_IMAGING)
         self.assertEqual(grid_label, GRID_1)
+        # check the values of tilt and rotation
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], sem_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], sem_angles["rm"], places=6)
 
     def test_moving_to_grid1_in_fm_imaging_area_after_loading(self):
         # move the stage to the loading position  
@@ -414,6 +424,10 @@ class TestMeteorMove(unittest.TestCase):
         grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
         self.assertEqual(position_label, FM_IMAGING)
         self.assertEqual(grid_label, GRID_1)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], fm_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], fm_angles["rm"], places=6)
 
     def test_moving_to_grid2_in_sem_imaging_area_after_loading(self):
         # move the stage to the loading position  
@@ -426,6 +440,10 @@ class TestMeteorMove(unittest.TestCase):
         grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
         self.assertEqual(position_label, SEM_IMAGING)
         self.assertEqual(grid_label, GRID_2)
+        # check the values of tilt and rotation
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], sem_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], sem_angles["rm"], places=6)
 
     def test_moving_from_grid1_to_grid2_in_sem_imaging_area(self):
         # move to loading position
@@ -447,6 +465,10 @@ class TestMeteorMove(unittest.TestCase):
         # make sure we are still in sem  imaging area 
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # check the values of tilt and rotation
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], sem_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], sem_angles["rm"], places=6)
 
     def test_moving_from_grid2_to_grid1_in_sem_imaging_area(self):
         # move to loading position
@@ -470,6 +492,10 @@ class TestMeteorMove(unittest.TestCase):
         # make sure we are still in the sem imaging area
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # check the values of tilt and rotation
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], sem_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], sem_angles["rm"], places=6)
 
     def test_moving_from_sem_to_fm(self):
         # move to loading position
@@ -485,6 +511,9 @@ class TestMeteorMove(unittest.TestCase):
         f.result()
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(FM_IMAGING, current_imaging_mode)
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], fm_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], fm_angles["rm"], places=6)
 
     def test_moving_from_grid1_to_grid2_in_fm_imaging_Area(self):
         f = cryoSwitchSamplePosition(LOADING)
@@ -505,6 +534,9 @@ class TestMeteorMove(unittest.TestCase):
         # make sure we are still in fm imaging area
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(FM_IMAGING, current_imaging_mode)
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], fm_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], fm_angles["rm"], places=6)
 
     def test_moving_from_grid2_to_grid1_in_fm_imaging_Area(self):
         f = cryoSwitchSamplePosition(LOADING)
@@ -527,6 +559,9 @@ class TestMeteorMove(unittest.TestCase):
         # make sure we are still in fm imaging area
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(FM_IMAGING, current_imaging_mode)
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], fm_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], fm_angles["rm"], places=6)
 
     def test_moving_to_sem_from_fm(self):
         f = cryoSwitchSamplePosition(LOADING)
@@ -541,6 +576,9 @@ class TestMeteorMove(unittest.TestCase):
         f.result()
         current_imaging_mode = getCurrentPositionLabel(self.stage.position.value, self.stage)
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], sem_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], sem_angles["rm"], places=6)
 
     def test_unknown_label_at_initialization(self):
         arbitrary_position = {"x": 2.0e-3, "y": 2.0e-3, "z": 2.0e-3}
