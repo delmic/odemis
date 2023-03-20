@@ -355,7 +355,7 @@ class MillingRectangleTask(object):
 
                         self._scanner.probeCurrent.value = milling_settings.current.value
                         self._future.running_subf = mill_rectangle(milling_settings.roi.value, self._scanner,
-                                                                   iteration=self._iterations[setting_nb],
+                                                                   iteration=1,
                                                                    duration=self._pass_duration[setting_nb],
                                                                    probe_size=probe_size, overlap=overlap)
                     try:
