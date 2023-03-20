@@ -65,7 +65,9 @@ class MillingSettings(object):
         self.roi = model.TupleContinuous(roi,
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, float))
-        self.pixelSize = model.VigilantAttribute(pixel_size, unit="m")
+        self.pixelSize = model.TupleContinuous(pixel_size, unit="m",
+                                               range=((0, 0), (1e-3, 1e-3)),  # max 1 mm: arbitrary gigantic value
+                                               cls=(int, float))
         # angles ot of this range would be dangerous for the hardware and probably not useful for the user
         self.beamAngle = model.FloatContinuous(beam_angle, unit="rad", range=(math.radians(6), math.radians(10)))
         self.duration = model.FloatVA(duration, unit="s")
