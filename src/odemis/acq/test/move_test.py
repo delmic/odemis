@@ -323,27 +323,27 @@ class TestMeteorMove(unittest.TestCase):
         # Test the case where the stage is at the reference position, but with a non-zero stage rotation
         # Position 1:
         pos_1 = {"x": 49.7250e-3, "y": 50.7743e-3, "m": 3.9809e-3, "z": 10.0000e-3, "rx": -0.0523598775598,
-                 "rm": 4.7123889803847}
+                 "rm": 4.886921905584122}
         transformed_pos_1 = {"x": 97.275e-3, "y": 36.4769e-3, "m": 7.2742e-3, "z": 10.0000e-3, "rx": 0.4607669225265,
-                             "rm": 1.5707963267949}
+                             "rm": 1.7453292519943295}
         transformed_pos = transformFromSEMToMeteor(pos_1, self.stage)
         # self.assertEqual(transformed_pos, transformed_pos_1)
         testing.assert_pos_almost_equal(transformed_pos, transformed_pos_1, atol=1e-6)
 
         # Position 2:
         pos_2 = {"x": 45.1250e-3, "y": 50.2779e-3, "m": 5.2733e-3, "z": 12.0000e-3, "rx": 0.0000000000000,
-                 "rm": 4.7123889803847}
+                 "rm": 4.886921905584122}
         transformed_pos_2 = {"x": 101.8750e-3, "y": 36.1879e-3, "m": 8.4019e-3, "z": 12.0000e-3, "rx": 0.4607669225265,
-                             "rm": 1.5707963267949}
+                             "rm": 1.7453292519943295}
         transformed_pos = transformFromSEMToMeteor(pos_2, self.stage)
         # self.assertEqual(transformed_pos, transformed_pos_2)
         testing.assert_pos_almost_equal(transformed_pos, transformed_pos_2, atol=1e-6)
 
         # Position 3:
         pos_3 = {"x": 50.5250e-3, "y": 48.5884e-3, "m": 8.1666e-3, "z": 15.0000e-3, "rx": 0.0698131700798,
-                 "rm": 4.7123889803847}
+                 "rm": 4.886921905584122}
         transformed_pos_3 = {"x": 96.4750e-3, "y": 37.3278e-3, "m": 10.9166e-3, "z": 15.0000e-3, "rx": 0.4607669225265,
-                             "rm": 1.5707963267949}
+                             "rm": 1.7453292519943295}
         transformed_pos = transformFromSEMToMeteor(pos_3, self.stage)
         # self.assertEqual(transformed_pos, transformed_pos_3)
         testing.assert_pos_almost_equal(transformed_pos, transformed_pos_3, atol=1e-6)
@@ -353,9 +353,9 @@ class TestMeteorMove(unittest.TestCase):
         Tests the conversion calculations of transformFromMeteorToSEM function.
         """
         pos_4 = {"x": 101.0750e-3, "y": 35.3922e-3, "m": 5.8660e-3, "z": 9.0000e-3, "rx": 0.4607669225265,
-                 "rm": 1.5707963267949}
+                 "rm": 1.7453292519943295}
         transformed_pos_4 = {"x": 45.9250e-3, "y": 48.5880e-3, "m": 2.4446e-3, "z": 9.0000e-3, "rx": 0.0349065850399,
-                             "rm": 4.7123889803847}
+                             "rm": 4.886921905584122}
         # Test the case where the stage is at the reference position
         transformed_pos = transformFromMeteorToSEM(pos_4, self.stage)
         # self.assertEqual(transformed_pos, transformed_pos_4)
@@ -364,18 +364,18 @@ class TestMeteorMove(unittest.TestCase):
         # Test the case where the stage is at the reference position, but with a non-zero stage tilt
         # Position 5:
         pos_5 = {"x": 100.8750e-3, "y": 36.7034e-3, "m": 9.9332e-3, "z": 14.0000e-3, "rx": 0.4607669225265,
-                 "rm": 1.5707963267949}
+                 "rm": 1.7453292519943295}
         transformed_pos_5 = {"x": 46.1250e-3, "y": 49.6744e-3, "m": 7.0302e-3, "z": 14.0000e-3, "rx": 0.0349065850399,
-                             "rm": 4.7123889803847}
+                             "rm": 4.886921905584122}
         transformed_pos = transformFromMeteorToSEM(pos_5, self.stage)
         # self.assertEqual(transformed_pos, transformed_pos_5)
         testing.assert_pos_almost_equal(transformed_pos, transformed_pos_5, atol=1e-6)
 
         # Test the case where the stage is at the reference position, but with a non-zero stage rotation
         pos_6 = {"x": 96.4750e-3, "y": 35.5657e-3, "m": 5.5277e-3, "z": 8.0000e-3, "rx": 0.4607669225265,
-                 "rm": 1.5707963267949}
+                 "rm": 1.7453292519943295}
         transformed_pos_6 = {"x": 50.5250e-3, "y": 47.9349e-3, "m": 2.0027e-3, "z": 8.0000e-3, "rx": 0.0349065850399,
-                             "rm": 4.7123889803847}
+                             "rm": 4.886921905584122}
         transformed_pos = transformFromMeteorToSEM(pos_6, self.stage)
         # self.assertEqual(transformed_pos, transformed_pos_6)
         testing.assert_pos_almost_equal(transformed_pos, transformed_pos_6, atol=1e-6)
