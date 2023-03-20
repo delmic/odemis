@@ -915,8 +915,8 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
 
     # Connect the future to the task and run it in a thread.
     # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
-    overview_acq = OverviewAcquisition()
-    _executor.submitf(f, overview_acq.run, f, sem_stream, stage, area, live_stream)
+    overview_acq = OverviewAcquisition(future=f)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, area, live_stream)
 
     return f
 
@@ -965,18 +965,18 @@ def estimateTiledAcquisitionTime(stream, stage, area):
 
 class OverviewAcquisition(object):
     """Class to run the acquisition of one overview image (typically one scintillator)."""
-    def __init__(self) -> None:
-        self.sf = None
+    def __init__(self, future: model.ProgressiveFuture) -> None:
+        self._sub_future = model.ProgressiveFuture()
+        future.task_canceller = self._cancel_acquisition
 
-    def _cancel_acquisition(self, future):
-        if self.sf:
-            self.sf.cancel()
+    def _cancel_acquisition(self, future) -> bool:
+        self._sub_future.cancel()
+        return True
 
-    def run(self, f, stream, stage, area, live_stream):
+    def run(self, stream, stage, area, live_stream):
         """
         Runs the acquisition of one overview image (typically one scintillator).
 
-        :param f: (ProgressiveFuture) Acquisition future object.
         :param stream: (SEMstream) The stream used for the acquisition.
         :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
             The x and y axes are aligned with the x and y axes of the ebeam scanner.
@@ -995,28 +995,22 @@ class OverviewAcquisition(object):
         overlap = STAGE_PRECISION / stream.emitter.horizontalFoV.value
         logging.debug("Overlap is %s%%", overlap * 100)  # normally < 1%
 
-        def _pass_future_progress(sub_f, start, end):
-            f.set_progress(start, end)
-
         # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
-        self.sf = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
+        self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
                                         focusing_method=FocusingMethod.NONE)
-        # Connect the progress of the underlying future to the main future
-        # FIXME removed to provide better progress update in GUI
-        #  When _tiledacq.py has proper time update implemented, add this line here again.
-        # sf.add_update_callback(_pass_future_progress)
-        # Go one level deeper to cancel the future of the underlying acquisition
-        # TiledAcquisitionTask._cancelAcquisition will hence be called
-        f.task_canceller = self._cancel_acquisition
-        das = self.sf.result()
 
-        if len(das) != 1:
+        das = []
+        try:
+            das = self._sub_future.result()
+        finally:
+            # Switch immersion mode back on, so we can focus the SEM from the TFS GUI.
+            stream.emitter.immersion.value = True
+
+            # FIXME auto blanking not working properly, so force beam blanking after image acquisition for now.
+            stream.emitter.blanker.value = True
+
+        if len(das) == 1:
+            return das[0]
+        else:
             logging.warning("Expected 1 DataArray, but got %d: %r", len(das), das)
-
-        # Switch immersion mode back on, so we can focus the SEM from the TFS GUI.
-        stream.emitter.immersion.value = True
-
-        # FIXME auto blanking not working properly, so force beam blanking after image acquisition for now.
-        stream.emitter.blanker.value = True
-
-        return das[0]
+            return []

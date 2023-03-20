@@ -251,12 +251,8 @@ class FastEMOverviewAcquiController(object):
         try:
             da = future.result()
         except CancelledError:
-            self._reset_acquisition_gui()
             return
         except Exception:
-            # leave the gauge, to give a hint on what went wrong.
-            logging.exception("Acquisition failed")
-            self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
             return
 
         # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
