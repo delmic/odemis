@@ -275,17 +275,16 @@ class FastEMOverviewAcquiController(object):
         """
         self.gauge_acq.Hide()
         self._main_data_model.is_acquiring.value = False
-        self.acq_future = None
-        self._fs_connector = None
         try:
             future.result()
             self._reset_acquisition_gui("Acquisition done.")
         except CancelledError:
             self._reset_acquisition_gui("Acquisition cancelled.")
-            return
         except Exception:
             self._reset_acquisition_gui("Acquisition failed (see log panel).", level=logging.WARNING)
-            return
+        finally:
+            self.acq_future = None
+            self._fs_connector = None
 
 
 class FastEMAcquiController(object):
