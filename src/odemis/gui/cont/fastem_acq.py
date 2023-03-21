@@ -251,8 +251,10 @@ class FastEMOverviewAcquiController(object):
         try:
             da = future.result()
         except CancelledError:
+            # Just return because the error is handled in full_acquisition_done
             return
         except Exception:
+            # Just return because the error is handled in full_acquisition_done
             return
 
         # Store DataArray as TIFF in pyramidal format and reopen as static stream (to be memory-efficient)
