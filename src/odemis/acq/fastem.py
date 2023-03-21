@@ -967,7 +967,8 @@ class OverviewAcquisition(object):
     """Class to run the acquisition of one overview image (typically one scintillator)."""
     def __init__(self, future: model.ProgressiveFuture) -> None:
         self._sub_future = model.ProgressiveFuture()
-        future.task_canceller = self._cancel_acquisition
+        self._future = future
+        self._future.task_canceller = self._cancel_acquisition
 
     def _cancel_acquisition(self, future) -> bool:
         self._sub_future.cancel()
@@ -995,9 +996,17 @@ class OverviewAcquisition(object):
         overlap = STAGE_PRECISION / stream.emitter.horizontalFoV.value
         logging.debug("Overlap is %s%%", overlap * 100)  # normally < 1%
 
+        def _pass_future_progress(sub_f, start, end):
+           self._future.set_progress(start, end)
+
         # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
         self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
                                         focusing_method=FocusingMethod.NONE)
+
+        # Connect the progress of the underlying future to the main future
+        # FIXME removed to provide better progress update in GUI
+        # When _tiledacq.py has proper time update implemented, add this line here again.
+        # self._sub_future.add_update_callback(_pass_future_progress)
 
         das = []
         try:
