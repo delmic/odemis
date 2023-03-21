@@ -2981,8 +2981,6 @@ class Scanner(model.Emitter):
         self.scale.subscribe(self._updatePixelSize)
         self._fib_beam.horizontalFoV.subscribe(self._updatePixelSize, init=True)
 
-        self.shift = self._fib_beam.shift
-
         # It's not possible to change the probeCurrent directly. Instead, we
         # rely on presets. They are created by the service engineer on the Orsay
         # server, with specific names <current>pA_... . Each preset with such
@@ -3039,11 +3037,37 @@ class Scanner(model.Emitter):
         self.probeCurrent = model.VAEnumerated(current, unit="A",
                                                choices=self._probe_current_presets.keys() | {None},
                                                setter=self._setProbeCurrent)
+        self.probeCurrent.subscribe(self._onProbeCurrent, init=True)
 
         # TODO: it seems that the standard client store the latest preset loaded in
         # datamodel.IonColumnMCS.ConditionName. Setting .Target = PresetName
         # seems to not bother anything else. So maybe we should do that, and rely
         # on it to guess the preset in use (and so probe current).
+
+        # The .shift represents fib_beam.shift but with the value being
+        # independent from the probe current. Changing the probe current in the
+        # Orsay API automatically resets the beam to the preset values (which
+        # are calibrated so that the center of the FoV corresponds to the same
+        # point). We hide this confusing behaviour by only storing the shift
+        # which is extra to the preset shift (aka "base" shift). Every time the
+        # probe current is changed, the fib_beam.shift is adjusted to keep the
+        # extra shift correct. That means the user can set a shift of (x, y) µm,
+        # and it will always stay (x, y) µm, even if the current changes. The
+        # "base" shifts for each probe current are read from the presets and
+        # stored in MD_SCAN_OFFSET_CALIB. Note: if the Orsay beam shift is
+        # modified on the Orsay side, this shift is not updated (while
+        # fib_beam.shift is updated). Making it automatically update would be a
+        # lot more work/complexity to make sure that we 100% are certain it's
+        # due to a manual change and not just reset after changing probe
+        # current. Also, the probeCurrent also doesn't update automatically, so
+        # it's the same behaviour.
+        base_shifts = {c: self._get_base_shift(pn) for c, pn in self._probe_current_presets.items()}
+        self._metadata[model.MD_SCAN_OFFSET_CALIB] = base_shifts
+        self.shift = model.TupleContinuous((0.0, 0.0), unit="m",
+                                           cls=(int, float),
+                                           range=self._fib_beam.shift.range,
+                                           setter=self._set_shift)
+        self._set_shift(self.shift.value)  # ensure it's up-to-date
 
     def _get_all_probe_current_presets(self) -> Dict[float, str]:
         """
@@ -3098,10 +3122,6 @@ class Scanner(model.Emitter):
             except Exception:
                 logging.exception("Failed to retrieve preset %s", preset_name)
                 raise
-            # For now the ConsoleClient hides errors (eg, preset not existing), but
-            # it returns None, which is a good hint something went wrong.
-            if preset is None:
-                raise LookupError(f"Failed to retrieve preset {preset_name}")
 
             # Check every required parameter
             for device_name, param_name in required_parameters:
@@ -3141,7 +3161,71 @@ class Scanner(model.Emitter):
         preset_name = self._probe_current_presets[current]
         # Typically takes < 2s
         self.parent._load_preset(preset_name, PRESET_MASK_NAME, timeout=20)
+
+        # Update the base shift, in case it has changed (in the preset)
+        self._metadata[model.MD_SCAN_OFFSET_CALIB][current] = self._get_base_shift(preset_name)
+
+        # Set back the shift to the current shift (need to pass the current as
+        # .probeCurrent hasn't been updated yet)
+        self._set_shift(self.shift.value, current)
+
         return current
+
+    def _set_shift(self, shift: Tuple[float, float], current: Optional[float] = None) -> Tuple[float, float]:
+        """
+        Setter for .shift
+        :param shift: requested shift (in m)
+        :param current: the probe current for which to set the shift. If None, it will
+        use the .probeCurrent value.
+        :return: actual shift set (in m)
+        """
+        if current is None:
+            current = self.probeCurrent.value
+        try:
+            base_shift = self._metadata[model.MD_SCAN_OFFSET_CALIB][current]
+        except KeyError as ex:
+            logging.debug("No base shift known for current %s, using (0,0)", ex)
+            base_shift = (0, 0)
+
+        # Add the base shift, and make sure it still fits the range
+        act_shift = base_shift[0] + shift[0], base_shift[1] + shift[1]
+        act_shift = self._fib_beam.shift.clip(act_shift)
+        self._fib_beam.shift.value = act_shift
+
+        shift_clipped = act_shift[0] - base_shift[0], act_shift[1] - base_shift[1]
+        if shift != shift_clipped:
+            logging.info("Requested shift %s clipped to %s", shift, shift_clipped)
+        return shift_clipped
+
+    def _get_base_shift(self, preset_name: str) -> Tuple[float, float]:
+        """
+        Find the default beam shift for a given preset.
+        Note that this value is allowed to change over time (ie, the user can update
+        the preset), so the preset is read again every time.
+        :param preset_name: name of the preset
+        :return: the base beam shift, X/Y in meters
+        :raise: LookupError if the preset doesn't exists.
+        """
+        try:
+            preset = self.parent.preset_manager.GetPreset(preset_name)
+        except Exception:
+            logging.exception("Failed to retrieve preset %s", preset_name)
+            raise
+
+        try:
+            x = self.parent._get_preset_setting(preset, "IonColumnMCS", "ObjectiveShiftX", tag="Target")
+            x = -1 * float(x)  # X is inverted (see _shiftConnector)
+        except LookupError:
+            logging.warning("Preset %s has no beam shift X information")
+            x = 0
+        try:
+            y = self.parent._get_preset_setting(preset, "IonColumnMCS", "ObjectiveShiftY", tag="Target")
+            y = float(y)
+        except LookupError:
+            logging.warning("Preset %s has no beam shift Y information")
+            y = 0
+
+        return x, y
 
     def _listenerImageFormat(self, image_format):
         # Duplicate the X dimension, because the hardware only support square pixels
@@ -3181,6 +3265,8 @@ class Scanner(model.Emitter):
     def _onAccelVoltage(self, volt):
         self._metadata[model.MD_EBEAM_VOLTAGE] = volt
 
+    def _onProbeCurrent(self, current):
+        self._metadata[model.MD_EBEAM_CURRENT] = current
 
 class Detector(model.Detector):
     """
