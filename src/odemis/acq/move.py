@@ -217,9 +217,9 @@ def _getCurrentMeteorPositionLabel(current_pos, stage):
     # Check the stage is near the loading position
     if _isNearPosition(current_pos, stage_deactive, stage.axes):
         return LOADING
-    if _isInRange(current_pos, stage_fm_imaging_rng, {'x', 'y', 'm'}):
+    if _isInRange(current_pos, stage_fm_imaging_rng, {'x', 'y', 'z', 'm'}):
         return FM_IMAGING
-    if _isInRange(current_pos, stage_sem_imaging_rng, {'x', 'y', 'm'}):
+    if _isInRange(current_pos, stage_sem_imaging_rng, {'x', 'y', 'z', 'm'}):
         return SEM_IMAGING
     # None of the above -> unknown position
     return UNKNOWN
