@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+import math
 import os
 import time
 import unittest
@@ -26,10 +27,11 @@ from unittest.mock import patch
 
 import odemis
 from odemis import model
-from odemis.acq import stream, orsay_milling
+from odemis.acq import orsay_milling, stream
 from odemis.acq.drift import AnchoredEstimator
-from odemis.acq.feature import CryoFeature, FEATURE_ROUGH_MILLED
-from odemis.acq.millmng import mill_features, MillingSettings, MillingRectangleTask
+from odemis.acq.feature import FEATURE_ROUGH_MILLED, CryoFeature
+from odemis.acq.millmng import (MillingRectangleTask, MillingSettings,
+                                mill_features)
 from odemis.acq.move import _isNearPosition
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.util import testing
@@ -156,20 +158,64 @@ class MillingManagerTestCase(unittest.TestCase):
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
-                                            duration=20,
+                                            duration=120,
                                             dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
-        self.assertTrue(milling_setting_1.name.value, "rough_milling_1")
-        self.assertTrue(milling_setting_1.current.value, self.probe_current)
-        self.assertTrue(milling_setting_1.horizontalFoV.value, 35e-6)
-        self.assertTrue(milling_setting_1.roi.value, (0.5, 0.5, 0.8, 0.8))
-        self.assertTrue(milling_setting_1.pixelSize.value, (3.5e-08, 3.5e-08))
-        self.assertTrue(milling_setting_1.beamAngle.value, self.beam_angle)
-        self.assertTrue(milling_setting_1.duration.value, 120)
-        self.assertTrue(milling_setting_1.dcRoi.value, (0.0, 0.3, 0.4, 0.7))
-        self.assertTrue(milling_setting_1.dcPeriod.value, 60)
-        self.assertTrue(milling_setting_1.dcDwellTime, 10e-06)
-        self.assertTrue(milling_setting_1.dcCurrent.value, self.probe_current)
+        self.assertEqual(milling_setting_1.name.value, "rough_milling_1")
+        self.assertEqual(milling_setting_1.current.value, self.probe_current)
+        self.assertEqual(milling_setting_1.horizontalFoV.value, 35e-6)
+        self.assertEqual(milling_setting_1.roi.value, (0.5, 0.5, 0.8, 0.8))
+        self.assertEqual(milling_setting_1.pixelSize.value, (3.5e-08, 3.5e-08))
+        self.assertEqual(milling_setting_1.beamAngle.value, self.beam_angle)
+        self.assertEqual(milling_setting_1.duration.value, 120)
+        self.assertEqual(milling_setting_1.dcRoi.value, (0.0, 0.3, 0.4, 0.7))
+        self.assertEqual(milling_setting_1.dcPeriod.value, 10)
+        self.assertEqual(milling_setting_1.dcDwellTime.value, 10e-06)
+        self.assertEqual(milling_setting_1.dcCurrent.value, self.probe_current)
+
+        milling_setting_2 = MillingSettings(name='no drift correction',
+                                            current=self.probe_current,
+                                            horizontal_fov=35e-6,
+                                            roi=(0.5, 0.5, 0.8, 0.8),
+                                            pixel_size=(3.5e-08, 3.5e-08),
+                                            beam_angle=math.radians(9),
+                                            duration=10 * 60,
+                                            dc_roi=UNDEFINED_ROI,
+        # TODO the next arguments should not be required
+                                            dc_period=10,
+                                            dc_dwell_time=10e-6,
+                                            dc_current=self.probe_current)
+        self.assertEqual(milling_setting_2.dcRoi.value, UNDEFINED_ROI)
+
+    def test_bad_milling_settings(self):
+        """
+        Test initializing with wrong values or missing arguments
+        """
+        with self.assertRaises(ValueError):
+            ms = MillingSettings(name='rough_milling_1',
+                                 current=self.probe_current,
+                                 horizontal_fov=35e-6,
+                                 roi=(0.5, 0.5, 0.8, 0.8),
+                                 pixel_size=3.5e-08,  # Error: should be a tuple
+                                 beam_angle=self.beam_angle,
+                                 duration=20,
+                                 dc_roi=(0, 0.3, 0.4, 0.7),
+                                 dc_period=10,
+                                 dc_dwell_time=10e-6,
+                                 dc_current=self.probe_current)
+
+        with self.assertRaises(TypeError):
+            ms = MillingSettings(# Error: missing name
+                                 current=self.probe_current,
+                                 horizontal_fov=35e-6,
+                                 roi=(0.5, 0.5, 0.8, 0.8),
+                                 pixel_size=(3.5e-08, 3.5e-08),
+                                 beam_angle=self.beam_angle,
+                                 duration=20,
+                                 dc_roi=UNDEFINED_ROI,
+                                 dc_period=10,
+                                 dc_dwell_time=10e-6,
+                                 dc_current=self.probe_current)
 
     def test_estimate_milling_time(self):
         """
