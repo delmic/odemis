@@ -63,7 +63,7 @@ Zeiss-METEOR: {
         # Grid centers in SEM range
         SAMPLE_CENTERS: {"GRID 1": {'x': 50.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}, "GRID 2": {'x': 46.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}},
         # Calibrated values used for the SEM/FM switching behaviour
-        CAL_VAL: {"x": 50.e-3  , "y":  50.e-3  , "m":  3.3309e-3  , "z":  10.e-3  , "z_et":  42.e-3  , "dx":  47.e-3  , "dy":  -0.1952e-3},
+        CALIB: {"x": 50.e-3  , "y":  50.e-3  , "m":  3.3309e-3  , "z":  10.e-3  , "z_et":  42.e-3  , "dx":  47.e-3  , "dy":  -0.1952e-3},
         # Active tilting (rx) & rotation (rm) angles positions when switching between SEM & FM, in radians.
         # Note: these values are calibrated during installation.
         FAV_FM_POS_ACTIVE: {"rx": 0.4607669225265  , "rm":  1.7453292519943295}, # 26.4° & 100°, respectively

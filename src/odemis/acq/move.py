@@ -924,6 +924,18 @@ def _doCryoSwitchSamplePosition(future, target):
             future._task_state = FINISHED
 
 
+def check_keys_in_md_calib(calibrated_values: dict) -> bool:
+    """
+    Check the required keys in the calibrated values.
+    :param calibrated_values:
+    :return: True if all keys are in the calibrated values, False otherwise.
+    """
+    required_keys = {'x', 'y', 'm', 'z', 'z_et', 'dx', 'dy'}
+    if not required_keys.issubset(calibrated_values.keys()):
+        raise ValueError("Calibrated parameter does not have all required keys %s." % required_keys)
+    return True
+
+
 # Note: this transformation consists of translation and rotation.
 # The translations are along the x, y and m axes. They are calculated based on
 # the current position and some calibrated values existing in metadata "CAL_VAL".
@@ -944,7 +956,8 @@ def transformFromSEMToMeteor(pos, stage):
     transformed_pos = pos.copy()
 
     # Call out calibrated values and stage tilt and rotation angles
-    calibrated_values = stage_md[model.MD_CAL_VAL]
+    calibrated_values = stage_md[model.MD_CALIB]
+    check_keys_in_md_calib(calibrated_values)
     fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
     sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 
@@ -999,7 +1012,8 @@ def transformFromMeteorToSEM(pos, stage):
     transformed_pos = pos.copy()
 
     # Call out calibrated values and stage tilt and rotation angles
-    calibrated_values = stage_md[model.MD_CAL_VAL]
+    calibrated_values = stage_md[model.MD_CALIB]
+    check_keys_in_md_calib(calibrated_values)
     fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
     sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 

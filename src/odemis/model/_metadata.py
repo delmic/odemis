@@ -201,7 +201,6 @@ MD_SEM_IMAGING_RANGE = "SEM imaging range"  # dict str → [float, float] defini
 MD_FM_IMAGING_RANGE = "FM imaging range"  # dict str → [float, float] defining the volume of the FM imaging area, along x, y and z axes.
 MD_FAV_FM_POS_ACTIVE = "Favourite FM position active"  # dict str->float representing the position required for FM imaging
 MD_FAV_SEM_POS_ACTIVE = "Favourite SEM position active"  # dict -> float representing the position required for SEM imaging
-MD_CAL_VAL = "Calibration values for stage switching" # dict str -> float representing the calibration values to find axes coordinates during stage switching
 
 # The following metadata is used to store the destination components of the
 # specific known positions for the actuators.
