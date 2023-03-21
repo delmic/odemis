@@ -110,7 +110,8 @@ class MillingManagerTestCase(unittest.TestCase):
 
         cls.acq_streams = [fs1]
 
-        current_stage_pos = cls.stage.position.value
+        # set the current stage position same as GRID 1 for milling
+        current_stage_pos = cls.stage.getMetadata()[model.MD_FAV_POS_ACTIVE]
         logging.debug("current stage position %s", current_stage_pos)
 
         target_position_1 = {"x": current_stage_pos["x"],
