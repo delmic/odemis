@@ -42,7 +42,7 @@ Zeiss-METEOR: {
     init: {
         rng: {
             # For Zeiss XB550
-            "x": [0, 100.e-3],
+            "x": [0, 102.5e-3],
             "y": [0, 100.e-3],
             "z": [0, 50.e-3],
             "rx": [-0.06981317007977318, 0.7853981633974],  # rad (-4° -> 45°) # T tilt , -4° is the minimum
@@ -56,14 +56,14 @@ Zeiss-METEOR: {
     metadata: {
         # TODO: put potential correct value
         # Loading position:
-        FAV_POS_DEACTIVE: { 'rx': 0.0, 'rm': 0.7417649320975901, 'x': 54.976e-3, 'y': 56.806e-3, 'z': 0.0, 'm': 7.060e-3 }, # To be filled in based on integration data, rm is 142.5°
+        FAV_POS_DEACTIVE: { 'rx': 0.0, 'rm': 0.7417649320975901, 'x': 54.976e-3, 'y': 56.806e-3, 'z': 0.0, 'm': 7.060e-3 }, # To be filled in based on integration data, rm is 42.5°
         # XYZM ranges for SEM & METEOR
         SEM_IMAGING_RANGE: {"x": [40.e-3, 60.e-3], "y": [30.e-3, 60.e-3], "z": [0.e-3, 20.e-3], "m": [0.e-3, 13.e-3]},
-        FM_IMAGING_RANGE: {"x": [90.e-3, 100.e-3], "y": [30.e-3, 60.e-3], "z": [0.e-3, 20.e-3], "m": [0.e-3, 13.e-3]},
+        FM_IMAGING_RANGE: {"x": [90.e-3, 102.5e-3], "y": [30.e-3, 60.e-3], "z": [0.e-3, 20.e-3], "m": [0.e-3, 13.e-3]},
         # Grid centers in SEM range
         SAMPLE_CENTERS: {"GRID 1": {'x': 50.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}, "GRID 2": {'x': 46.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}},
         # Calibrated values used for the SEM/FM switching behaviour
-        CALIB: {"x": 50.e-3  , "y":  50.e-3  , "m":  3.3309e-3  , "z":  10.e-3  , "z_et":  42.e-3  , "dx":  47.e-3  , "dy":  -0.1952e-3},
+        CALIB: {"x": 50.e-3  , "y":  50.e-3  , "m":  3.3309e-3  , "z":  10.e-3  , "z_ct":  42.e-3  , "dx":  47.e-3  , "dy":  -0.1952e-3},
         # Active tilting (rx) & rotation (rm) angles positions when switching between SEM & FM, in radians.
         # Note: these values are calibrated during installation.
         FAV_FM_POS_ACTIVE: {"rx": 0.4607669225265  , "rm":  1.7453292519943295}, # 26.4° & 100°, respectively

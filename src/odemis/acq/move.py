@@ -930,7 +930,7 @@ def check_keys_in_md_calib(calibrated_values: dict) -> bool:
     :param calibrated_values:
     :return: True if all keys are in the calibrated values, False otherwise.
     """
-    required_keys = {'x', 'y', 'm', 'z', 'z_et', 'dx', 'dy'}
+    required_keys = {'x', 'y', 'm', 'z', 'z_ct', 'dx', 'dy'}
     if not required_keys.issubset(calibrated_values.keys()):
         raise ValueError("Calibrated parameter does not have all required keys %s." % required_keys)
     return True
@@ -964,7 +964,7 @@ def transformFromSEMToMeteor(pos, stage):
     # Define values that are used more than once
     rx_sem = pos["rx"]  # Current tilt angle (can differ per point of interest)
     rx_fm = fm_pos_active["rx"]  # Calibrated tilt angle, for imaging perpendicular to objective
-    b_0 = pos["z"] - calibrated_values["z_et"]
+    b_0 = pos["z"] - calibrated_values["z_ct"]
     x_0 = calibrated_values["x"]
     y_0 = calibrated_values["y"]
     m_0 = calibrated_values["m"]
@@ -1020,7 +1020,7 @@ def transformFromMeteorToSEM(pos, stage):
     # Define values that are used more than once
     rx_sem = sem_pos_active["rx"]
     rx_fm = fm_pos_active["rx"]
-    b_0 = pos["z"] - calibrated_values["z_et"]
+    b_0 = pos["z"] - calibrated_values["z_ct"]
     x_0 = calibrated_values["x"]
     y_0 = calibrated_values["y"]
     m_0 = calibrated_values["m"]

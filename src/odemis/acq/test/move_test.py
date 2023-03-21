@@ -17,6 +17,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import copy
 import logging
+import math
 import os
 import time
 import unittest
@@ -310,6 +311,7 @@ class TestMeteorMove(unittest.TestCase):
 
         # get the stage components
         cls.stage = model.getComponent(role="stage-bare")
+        cls.linked_ym_stage = model.getComponent(role="stage")
 
         # get the metadata
         stage_md = cls.stage.getMetadata()
@@ -422,12 +424,72 @@ class TestMeteorMove(unittest.TestCase):
         f.result()
         position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
         grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
-        self.assertEqual(position_label, FM_IMAGING)
+        self.assertEqual(position_label, FM_IMAGING, "The stage is not in the fm imaging area.")
         self.assertEqual(grid_label, GRID_1)
         # check the values of tilt and rotation
         fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
         self.assertAlmostEqual(self.stage.position.value["rx"], fm_angles["rx"], places=6)
         self.assertAlmostEqual(self.stage.position.value["rm"], fm_angles["rm"], places=6)
+
+    # test linked ym axis movement when in fm imaging area
+    def test_moving_in_grid1_fm_imaging_area_after_loading(self):
+        """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
+        # move the stage to the loading position
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the fm imaging area, and grid1 will be chosen by default
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, FM_IMAGING)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], fm_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], fm_angles["rm"], places=6)
+
+        # move in the same imaging mode using linked YM stage
+        old_stage_pos = self.stage.position.value
+        self.linked_ym_stage.moveRel({"y": 1e-3}).result()
+        new_stage_pos = self.stage.position.value
+        # the stage moved in the right direction if the pre-tilt angle was maintained at -26-degrees
+        beta = -0.4537856055185  # -26-degrees in radians which is
+        estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
+        self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
+                                                                   "the FM imaging grid 1 area.")
+
+    def test_moving_in_grid2_fm_imaging_area_after_loading(self):
+        """Check if the stage moves in the right direction when moving in the fm imaging grid 2 area."""
+        # move the stage to the loading position
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the fm imaging area, and grid1 will be chosen by default
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, FM_IMAGING)
+
+        # move to grid2
+        f = cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        grid_label = getCurrentGridLabel(self.stage.position.value, self.stage)
+        position_label = getCurrentPositionLabel(self.stage.position.value, self.stage)
+        self.assertEqual(position_label, FM_IMAGING)
+        self.assertEqual(grid_label, GRID_2)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], fm_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], fm_angles["rm"], places=6)
+
+        # move in the same imaging mode using linked YM stage
+        old_stage_pos = self.stage.position.value
+        self.linked_ym_stage.moveRel({"x": -1e-3}).result()
+        self.linked_ym_stage.moveRel({"y": 1e-3}).result()
+        new_stage_pos = self.stage.position.value
+        # the stage moved in the right direction if the pre-tilt angle was maintained at -26-degrees
+        beta = -0.4537856055185  # -26-degrees in radians which is
+        estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
+        self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
+                                                                   "the FM imaging grid 2 area.")
 
     def test_moving_to_grid2_in_sem_imaging_area_after_loading(self):
         # move the stage to the loading position  
