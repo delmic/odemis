@@ -763,7 +763,7 @@ class TestMimasMove(unittest.TestCase):
         self.assertNotEqual(pos_label, LOADING)
         self.assertNotEqual(pos_label, FM_IMAGING)
         # Should report UNKNOWN if cancelled early, and IMAGING if cancelled later
-        #self.assertEqual(pos_label, (UNKNOWN, IMAGING))
+        # self.assertEqual(pos_label, (UNKNOWN, IMAGING))
 
         # It should be allowed to go back to LOADING
         f = cryoSwitchSamplePosition(LOADING)
@@ -806,6 +806,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
     """
     This class is to test _getDistance() function in the move module
     """
+
     def test_only_linear_axes(self):
         point1 = {'x': 0.023, 'y': 0.032, 'z': 0.01}
         point2 = {'x': 0.082, 'y': 0.01, 'z': 0.028}
@@ -830,8 +831,8 @@ class TestGetDifferenceFunction(unittest.TestCase):
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_rotation_axes(self):
-        point1 = {'rx': numpy.radians(30), 'rz': 0}  # 30 degree
-        point2 = {'rx': numpy.radians(60), 'rz': 0}  # 60 degree
+        point1 = {'rx': numpy.radians(30), 'rm': 0}  # 30 degree
+        point2 = {'rx': numpy.radians(60), 'rm': 0}  # 60 degree
         # the rotation difference is 30 degree
         exp_rot_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30)
         act_rot_dist = _getDistance(point2, point1)
@@ -842,8 +843,8 @@ class TestGetDifferenceFunction(unittest.TestCase):
         self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
 
     def test_rotation_axes_no_difference(self):
-        point1 = {'rx': 0, 'rz': numpy.radians(30)}  # 30 degree
-        point2 = {'rx': 0, 'rz': numpy.radians(30)}  # 30 degree
+        point1 = {'rx': 0, 'rm': numpy.radians(30)}  # 30 degree
+        point2 = {'rx': 0, 'rm': numpy.radians(30)}  # 30 degree
         # the rotation difference is 0 degree
         exp_rot_error = 0
         act_rot_error = _getDistance(point2, point1)

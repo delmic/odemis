@@ -28,14 +28,11 @@ import time
 import unittest
 from unittest.case import skip
 
-from odemis import model
-from odemis.acq.move import transformFromMeteorToSEM, transformFromSEMToMeteor, cryoSwitchSamplePosition, LOADING, \
-    SEM_IMAGING, getCurrentPositionLabel, getCurrentGridLabel, GRID_1, GRID_2, FM_IMAGING
 from odemis.driver import zeiss
 from odemis.util import testing
 
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
-TEST_NOHW = True
+
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
