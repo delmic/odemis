@@ -1022,4 +1022,4 @@ class OverviewAcquisition(object):
             return das[0]
         else:
             logging.warning("Expected 1 DataArray, but got %d: %r", len(das), das)
-            return []
+            return das[:1]
