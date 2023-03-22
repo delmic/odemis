@@ -502,17 +502,23 @@ CustomSafeRepresenter.add_multi_representer(
 class YamlExtraDumper(Emitter, Serializer, CustomSafeRepresenter, Resolver):
 
     def __init__(self, stream,
-            default_style=None, default_flow_style=False,
-            canonical=None, indent=None, width=None,
-            allow_unicode=None, line_break=None,
-            encoding=None, explicit_start=None, explicit_end=None,
-            version=None, tags=None):
+                 default_style=None, default_flow_style=False,
+                 canonical=None, indent=None, width=None,
+                 allow_unicode=None, line_break=None,
+                 encoding=None, explicit_start=None, explicit_end=None,
+                 version=None, tags=None,
+                 **kwargs):  # kwargs added to support sort_keys argument in newer PyYaml versions
         Emitter.__init__(self, stream, canonical=canonical,
-                indent=indent, width=width,
-                allow_unicode=allow_unicode, line_break=line_break)
+                         indent=indent, width=width,
+                         allow_unicode=allow_unicode, line_break=line_break)
         Serializer.__init__(self, encoding=encoding,
-                explicit_start=explicit_start, explicit_end=explicit_end,
-                version=version, tags=tags)
+                            explicit_start=explicit_start, explicit_end=explicit_end,
+                            version=version, tags=tags)
+
+        kwargs_representer = {}
+        if "sort_keys" in kwargs:
+            kwargs_representer["sort_keys"] = kwargs["sort_keys"]
         CustomSafeRepresenter.__init__(self, default_style=default_style,
-                default_flow_style=default_flow_style)
+                                       default_flow_style=default_flow_style,
+                                       **kwargs_representer)
         Resolver.__init__(self)
