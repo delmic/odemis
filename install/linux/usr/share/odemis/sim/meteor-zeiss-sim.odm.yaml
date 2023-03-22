@@ -80,7 +80,7 @@ Zeiss-METEOR: {
     },
     init: {
       axes: [ "y", "m" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
-      rotation: -0.4537856055185, # rad , -26° (negative because the m axis is pointed downwards)
+      rotation: 0.4537856055185, # rad , -26° (negative because the m axis is pointed downwards)
     },
 }
 # not sure if all z will be changed to m below, for now m is used

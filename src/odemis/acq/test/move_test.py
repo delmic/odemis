@@ -449,10 +449,15 @@ class TestMeteorMove(unittest.TestCase):
 
         # move in the same imaging mode using linked YM stage
         old_stage_pos = self.stage.position.value
+        old_linked_ym_pos = self.linked_ym_stage.position.value
         self.linked_ym_stage.moveRel({"y": 1e-3}).result()
         new_stage_pos = self.stage.position.value
+        new_linked_ym_pos = self.linked_ym_stage.position.value
+
+        self.assertAlmostEqual(old_linked_ym_pos["y"] + 1e-3, new_linked_ym_pos["y"], places=6)
+        self.assertTrue(old_stage_pos["y"] < new_stage_pos["y"])
         # the stage moved in the right direction if the pre-tilt angle was maintained at -26-degrees
-        beta = -0.4537856055185  # -26-degrees in radians which is
+        beta = 0.4537856055185  # -26-degrees in radians which is
         estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
         self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
                                                                    "the FM imaging grid 1 area.")
@@ -482,11 +487,18 @@ class TestMeteorMove(unittest.TestCase):
 
         # move in the same imaging mode using linked YM stage
         old_stage_pos = self.stage.position.value
+        old_linked_ym_pos = self.linked_ym_stage.position.value
         self.linked_ym_stage.moveRel({"x": -1e-3}).result()
         self.linked_ym_stage.moveRel({"y": 1e-3}).result()
         new_stage_pos = self.stage.position.value
+        new_linked_ym_pos = self.linked_ym_stage.position.value
+
+        self.assertAlmostEqual(new_linked_ym_pos["x"], old_linked_ym_pos["x"] - 1e-3, places=6)
+        self.assertAlmostEqual(new_linked_ym_pos["y"], old_linked_ym_pos["y"] + 1e-3, places=6)
+        self.assertTrue(new_stage_pos["x"] < old_stage_pos["x"])
+        self.assertTrue(new_stage_pos["y"] > old_stage_pos["y"])
         # the stage moved in the right direction if the pre-tilt angle was maintained at -26-degrees
-        beta = -0.4537856055185  # -26-degrees in radians which is
+        beta = 0.4537856055185  # -26-degrees in radians which is
         estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
         self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
                                                                    "the FM imaging grid 2 area.")
