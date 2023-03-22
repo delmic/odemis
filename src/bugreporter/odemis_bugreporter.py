@@ -215,7 +215,10 @@ class OdemisBugreporter(object):
 
         description = json.dumps(fields).encode("utf-8")
         # data must be bytes, but the headers can be str or bytes
-        req = Request(OS_TICKET_URL, data=description, headers={"X-API-Key": api_key})
+        # Note the content type does matter in some cases: the default is "x-www-form-urlencoded",
+        # which is incorrect and some servers will refuse the request because of that.
+        req = Request(OS_TICKET_URL, data=description,
+                      headers={"X-API-Key": api_key, "Content-Type": "application/json"})
         f = urlopen(req)
         response = f.getcode()
         f.close()
@@ -223,7 +226,7 @@ class OdemisBugreporter(object):
             return
         else:
             raise ValueError('Ticket creation failed with error code %s.' % response)
-        
+
     def search_api_key(self):
         """
         Searches for a valid osTicket key on the system. First, the customer key
