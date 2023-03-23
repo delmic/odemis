@@ -99,12 +99,12 @@ class TestFastEMCalibration(unittest.TestCase):
 
         try:
             config = f.result(timeout=900)
+            self.assertIsNotNone(config)  # check configuration dictionary is returned
         except ValueError:
             # Handle optical autofocus calibration raised ValueError when confidence is low.
             # For now, pass and continue with the test, even with low confidence the stage should be close to the good position.
             pass
 
-        self.assertIsNotNone(config)  # check configuration dictionary is returned
         # check that z stage position is close to good position
         # Note: This accuracy is dependent on the value chosen for the magnification on the lens.
         numpy.testing.assert_allclose(self.stage.position.value["z"], self.good_focus, atol=2e-6)
@@ -186,12 +186,12 @@ class TestFastEMCalibration(unittest.TestCase):
 
         try:
             config = f.result()
+            self.assertIsNotNone(config)  # check configuration dictionary is returned
         except ValueError:
             # Handle optical autofocus calibration raised ValueError when confidence is low.
             # For now, pass and continue with the test, even with low confidence the stage should be close to the good position.
             pass
 
-        self.assertIsNotNone(config)  # check configuration dictionary is returned
         self.assertTrue(self.done)
         # at least one update per calibration plus once at start of calibration, plus once at end of calibration
         self.assertGreaterEqual(self.updates, 4)
