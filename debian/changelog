@@ -1,3 +1,13 @@
+odemis (3.2.2-1) bionic; urgency=medium
+
+  * New version: 3.2.2
+  * Main bug fixes:
+    - bug reporter: fix upload of large logs to new support webserver
+    - bug reporter: always include all YAML files from the default directory
+    - andorcam2: only warn once about unsupported software trigger mode
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 23 Mar 2023 16:47:10 +0100
+
 odemis (3.2.1-1) bionic; urgency=medium
 
   * New version: 3.2.1
