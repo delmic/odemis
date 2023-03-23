@@ -146,6 +146,7 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         # Wait a bit for the acquisition to happen and then cancel it
         time.sleep(5)
         f.cancel()
+        time.sleep(1)
         # Assert that the acquisition was cancelled
         self.assertTrue(self.acquisition_cancelled)
 
