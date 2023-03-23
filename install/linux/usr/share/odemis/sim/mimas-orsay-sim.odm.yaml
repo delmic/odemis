@@ -224,7 +224,7 @@ MIMAS-Sim: {
                            },
         # Initial position when going from loading to imaging.
         # Typically, same as GRID 1, but also with shows the initial Z
-        FAV_POS_ACTIVE: {"x": -4.0e-3, "y": 0, "z": 40.0e-6, "rx": 0 , "ry": 0, "rz": 0},
+        FAV_POS_ACTIVE: {"x": 7.5e-3, "y": -4.5e-3, "z": 40.0e-6, "rx": 0 , "ry": 0, "rz": 0},
         # Centers (X, Y) of each grid. The Z position is assumed to be the same for all grids.
         # They should all be within POS_ACTIVE_RANGE!
         SAMPLE_CENTERS: {
