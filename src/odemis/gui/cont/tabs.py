@@ -5217,6 +5217,17 @@ class MimasAlignTab(Tab):
         # When acquiring, the tab is automatically disabled and should be left as-is
         self.panel.btn_reset_alignment.Enable(not is_acquiring)
 
+        # When acquiring/milling, the tab is automatically disabled and should be left as-is
+        # In particular, that's the state when moving between positions in the
+        # Chamber tab, and the tab should wait for the move to be complete before
+        # actually be enabled.
+        if is_acquiring:
+            self._stage.position.unsubscribe(self._on_stage_pos)
+            self._aligner.position.unsubscribe(self._on_stage_pos)
+        else:
+            self._stage.position.subscribe(self._on_stage_pos)
+            self._aligner.position.subscribe(self._on_stage_pos, init=True)
+
     def _on_click_reset(self, evt):
         """Reset the stage and align component, when the reset button is clicked."""
         # Note: it is blocking the GUI. However, the moves should be quite fast,
@@ -5381,6 +5392,19 @@ class MimasAlignTab(Tab):
         else:
             self._streambar_controller.pauseStreams()
             self._aligner.position.unsubscribe(self._on_aligner_pos)
+
+    def _on_stage_pos(self, _=None):
+        """
+        Called when the stage, or aligner are moved, enable the tab if position is imaging mode, disable otherwise
+
+        :param pos: (dict str->float or None) updated position of the stage
+        """
+        targets = (MILLING, FM_IMAGING, IMAGING)
+        guiutil.enable_tab_on_stage_position(self.button, self._stage,
+                                             self._stage.position.value,
+                                             aligner=self._aligner,
+                                             target=targets,
+                                             tooltip="Alignment can only be performed in optical or FIB position")
 
     @classmethod
     def get_display_priority(cls, main_data):
