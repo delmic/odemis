@@ -908,8 +908,9 @@ def acquireTiledArea(stream, stage, area, live_stream=None):
     f = model.ProgressiveFuture(start=time.time(), end=time.time() + est_dur)
 
     # Connect the future to the task and run it in a thread.
-    # _run_overview_acquisition is executed by the executor and runs as soon as no other task is executed
-    _executor.submitf(f, _run_overview_acquisition, f, sem_stream, stage, area, live_stream)
+    # OverviewAcquisition.run is executed by the executor and runs as soon as no other task is executed
+    overview_acq = OverviewAcquisition(future=f)
+    _executor.submitf(f, overview_acq.run, sem_stream, stage, area, live_stream)
 
     return f
 
@@ -956,49 +957,63 @@ def estimateTiledAcquisitionTime(stream, stage, area):
 
     return acq_time_overview
 
+class OverviewAcquisition(object):
+    """Class to run the acquisition of one overview image (typically one scintillator)."""
+    def __init__(self, future: model.ProgressiveFuture) -> None:
+        self._sub_future = model.ProgressiveFuture()
+        self._future = future
+        self._future.task_canceller = self._cancel_acquisition
 
-def _run_overview_acquisition(f, stream, stage, area, live_stream):
-    """
-    Runs the acquisition of one overview image (typically one scintillator).
+    def _cancel_acquisition(self, future) -> bool:
+        self._sub_future.cancel()
+        return True
 
-    :param f: (ProgressiveFuture) Acquisition future object.
-    :param stream: (SEMstream) The stream used for the acquisition.
-    :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
-        The x and y axes are aligned with the x and y axes of the ebeam scanner.
-    :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region.
-    :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
-           to build up live the whole acquisition. NOT SUPPORTED YET.
+    def run(self, stream, stage, area, live_stream):
+        """
+        Runs the acquisition of one overview image (typically one scintillator).
 
-    :returns: (DataArray) The complete overview image.
-    """
-    fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE)
+        :param stream: (SEMstream) The stream used for the acquisition.
+        :param stage: (actuator.MultiplexActuator) The stage in the sample carrier coordinate system.
+            The x and y axes are aligned with the x and y axes of the ebeam scanner.
+        :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region.
+        :param live_stream: (StaticStream or None): StaticStream to be updated with each tile acquired,
+               to build up live the whole acquisition. NOT SUPPORTED YET.
 
-    # The stage movement precision is quite good (just a few pixels). The stage's
-    # position reading is much better, and we can assume it's below a pixel.
-    # So as long as we are sure there is some overlap, the tiles will be positioned
-    # correctly and without gap.
-    overlap = STAGE_PRECISION / stream.emitter.horizontalFoV.value
-    logging.debug("Overlap is %s%%", overlap * 100)  # normally < 1%
+        :returns: (DataArray) The complete overview image.
+        """
+        fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE)
 
-    def _pass_future_progress(sub_f, start, end):
-        f.set_progress(start, end)
+        # The stage movement precision is quite good (just a few pixels). The stage's
+        # position reading is much better, and we can assume it's below a pixel.
+        # So as long as we are sure there is some overlap, the tiles will be positioned
+        # correctly and without gap.
+        overlap = STAGE_PRECISION / stream.emitter.horizontalFoV.value
+        logging.debug("Overlap is %s%%", overlap * 100)  # normally < 1%
 
-    # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
-    sf = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
-                                    focusing_method=FocusingMethod.NONE)
-    # Connect the progress of the underlying future to the main future
-    # FIXME removed to provide better progress update in GUI
-    #  When _tiledacq.py has proper time update implemented, add this line here again.
-    # sf.add_update_callback(_pass_future_progress)
-    das = sf.result()
+        def _pass_future_progress(sub_f, start, end):
+           self._future.set_progress(start, end)
 
-    if len(das) != 1:
-        logging.warning("Expected 1 DataArray, but got %d: %r", len(das), das)
+        # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
+        self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
+                                        focusing_method=FocusingMethod.NONE)
 
-    # Switch immersion mode back on, so we can focus the SEM from the TFS GUI.
-    stream.emitter.immersion.value = True
+        # Connect the progress of the underlying future to the main future
+        # FIXME removed to provide better progress update in GUI
+        # When _tiledacq.py has proper time update implemented, add this line here again.
+        # self._sub_future.add_update_callback(_pass_future_progress)
 
-    # FIXME auto blanking not working properly, so force beam blanking after image acquisition for now.
-    stream.emitter.blanker.value = True
+        das = []
+        try:
+            das = self._sub_future.result()
+        finally:
+            # Switch immersion mode back on, so we can focus the SEM from the TFS GUI.
+            stream.emitter.immersion.value = True
 
-    return das[0]
+            # FIXME auto blanking not working properly, so force beam blanking after image acquisition for now.
+            stream.emitter.blanker.value = True
+
+        if len(das) == 1:
+            return das[0]
+        else:
+            logging.warning("Expected 1 DataArray, but got %d: %r", len(das), das)
+            return das[:1]

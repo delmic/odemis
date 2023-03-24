@@ -74,6 +74,7 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
         self.stream = stream.SEMStream("Single beam", self.sed, self.sed.data, self.ebeam,
                                        focuser=self.efocuser,  # Not used during acquisition, but done by the GUI
                                        hwemtvas={"scale", "dwellTime", "horizontalFoV"})
+        self.acquisition_cancelled = False
 
     def test_overview_acquisition(self):
         """Test the full overview image acquisition."""
@@ -129,6 +130,35 @@ class TestFASTEMOverviewAcquisition(unittest.TestCase):
 
         # check that estimated time increases with dwell time
         self.assertGreater(est_time_2, est_time_1)
+
+    def test_overview_acquisition_cancel(self):
+        """Test cancelling the overview image acquisition."""
+        # This should be used by the acquisition
+        self.stream.dwellTime.value = 1e-6  # s
+
+        # Known position of the center scintillator in the sample carrier coordinate system
+        scintillator5_area = (-0.007, -0.007, 0.007, 0.007)  # l, b, r, t
+
+        # Future to acquire the overview image
+        f = fastem.acquireTiledArea(self.stream, self.stage, scintillator5_area)
+        f.add_done_callback(self.on_acquisition_done)
+
+        # Wait a bit for the acquisition to happen and then cancel it
+        time.sleep(5)
+        f.cancel()
+        time.sleep(1)
+        # Assert that the acquisition was cancelled
+        self.assertTrue(self.acquisition_cancelled)
+
+    def on_acquisition_done(self, future):
+        """Callback called when the one overview image acquisition is finished."""
+        try:
+            future.result()
+        except CancelledError:
+            self.acquisition_cancelled = True
+            return
+        except Exception:
+            return
 
 
 class TestFastEMROA(unittest.TestCase):
