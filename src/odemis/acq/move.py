@@ -948,7 +948,9 @@ def transformFromSEMToMeteor(pos, stage):
     return (dict str->float): the transformed position. It returns the updated axes x, y, m, z, rx, rm. The axis z is same as the input.
     """
     if not {"x", "y", "m", "z", "rx", "rm"}.issubset(stage.axes):
-        raise KeyError("The stage misses 'x', 'y', 'm', 'z', 'rx' or 'rm' axes")
+        missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - stage.axes.keys()
+        raise KeyError("The stage misses %s axes" % missed_axes)
+
     stage_md = stage.getMetadata()
     transformed_pos = pos.copy()
 
@@ -1004,7 +1006,9 @@ def transformFromMeteorToSEM(pos, stage):
     returns (dict str->float): the transformed stage position. 
     """
     if not {"x", "y", "m", "z", "rx", "rm"}.issubset(stage.axes):
-        raise KeyError("The stage misses 'x', 'y', 'm', 'z', 'rx' or 'rm' axes")
+        missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - stage.axes.keys()
+        raise KeyError("The stage misses %s axes" % missed_axes)
+
     stage_md = stage.getMetadata()
     transformed_pos = pos.copy()
 
