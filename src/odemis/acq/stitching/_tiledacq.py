@@ -932,6 +932,17 @@ def acquireTiledArea(streams, stage, area, overlap=0.2, settings_obs=None, log_p
     return future
 
 
+def estimateOverviewTime(*args, **kwargs):
+    """
+    Estimate the time required to complete a overview acquisition for a list of areas.
+    Parameters are the same as for acquireOverview
+    :returns: (float) estimated required time
+    """
+    # Create an overview acquisition task with future = None
+    task = AcquireOverviewTask(*args, **kwargs)
+    return task.estimate_time()
+
+
 def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
     """
@@ -976,7 +987,7 @@ class AcquireOverviewTask(object):
     Create a task to run autofocus and tiled acquisition for each area in the list of areas
     """
 
-    def __init__(self, streams, stage, areas, focus, ccd, future, overlap=0.2, settings_obs=None, log_path=None,
+    def __init__(self, streams, stage, areas, focus, ccd, future=None, overlap=0.2, settings_obs=None, log_path=None,
                  zlevels=None,
                  registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
         # site and feature means the same
@@ -1037,6 +1048,17 @@ class AcquireOverviewTask(object):
             acquisition_time = actual_time_per_roi * remaining_rois
         else:
             acquisition_time = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * remaining_rois
+            for area in self.areas:
+                acquisition_time += estimateTiledAcquisitionTime(
+                                        self.streams, self._stage, area,
+                                        focus_range=self.focus_rng,
+                                        overlap=self._overlap,
+                                        settings_obs=self._settings_obs,
+                                        log_path=self._log_path,
+                                        zlevels=self._zlevels,
+                                        registrar=self._registrar,
+                                        weaver=self._weaver,
+                                        focusing_method=self.focusing_method)
 
         return acquisition_time
 
@@ -1044,6 +1066,9 @@ class AcquireOverviewTask(object):
         """
         The main function of the task class, which will be called by the future asynchronously
         """
+        if not self._future:
+            raise ValueError("To execute the task, you should pass a Future at init")
+
         self._future._task_state = RUNNING
         da_rois = []
         try:

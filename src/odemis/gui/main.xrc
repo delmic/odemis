@@ -8971,16 +8971,16 @@
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="tiles_number_x_lbl">
                           <label>Tiles number x</label>
                           <fg>#DDDDDD</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
                           <font>
                             <size>9</size>
                             <sysfont> wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
+                          <XRCED>
+                              <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <option>0</option>
                         <flag>wxLEFT</flag>
@@ -9010,15 +9010,15 @@
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="tiles_number_y_lbl">
                           <label>Tiles number y</label>
                           <fg>#DDDDDD</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
                           <font>
                             <size>9</size>
                           </font>
+                          <XRCED>
+                              <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
                         <option>0</option>
                         <flag>wxLEFT</flag>
