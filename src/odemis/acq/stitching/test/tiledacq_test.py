@@ -21,7 +21,6 @@ import logging
 import os
 import time
 import unittest
-from _decimal import Decimal
 from concurrent.futures._base import CancelledError, FINISHED
 
 import numpy
@@ -327,7 +326,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
                         [0.0001989, 0.0001485, 4.766e-06]]
         zlevels = [focus_points[0][2], focus_points[1][2], focus_points[2][2]]
         axis_range = self.focus.axes['z'].range
-        comp_range = self.focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, axis_range)
+        comp_range = self.focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE["z"], axis_range)
 
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=area, overlap=overlap, future=model.InstantaneousFuture(),
