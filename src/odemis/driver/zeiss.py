@@ -1116,6 +1116,8 @@ class RemconSimulator(object):
         pos = numpy.append(pos, self.pos[len(pos):])
         self.target_pos = numpy.array(pos)
         self._start_move = time.time()
+        # the stage moves through the shortest path to the target position
+        # the movement time is the longest of the linear and rotational movement
         dur_lin = max(numpy.sqrt((self.pos[[0, 1, 2, 5]] - self.target_pos[[0, 1, 2, 5]]) ** 2)) / self._speed_lin
         dur_rot = max(abs(self.pos[[3, 4]] - self.target_pos[[3, 4]])) / self._speed_rot
         dur = max(dur_lin, dur_rot)

@@ -347,7 +347,7 @@ def getCurrentAlignerPositionLabel(current_pos, align):
 
 def _getDistance(start, end):
     """
-    Calculate the error/difference between two 3D postures with x, y, z, rx, rm axes
+    Calculate the error/difference between two 3D postures with x, y, z, m, rx, rm axes
         or a subset of these axes. If there are no common axes between the two passed
         postures, an error would be raised. The scaling factor of the rotation error is in meter.
     start, end (dict -> float): a 3D posture
@@ -586,7 +586,7 @@ def _doCryoSwitchSamplePosition(future, target):
 
     try:
         if role == "enzel":
-            # TODO enzel code broken as rm is used in other functions insteas of rm
+            # TODO enzel code broken as rm is used in other functions insteasd of rz
             # get the stage and aligner objects
             stage = model.getComponent(role='stage')
             align = model.getComponent(role='align')
@@ -759,13 +759,9 @@ def _doCryoSwitchSamplePosition(future, target):
                     sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
 
             if target in (GRID_1, GRID_2):
-                # The current mode doesn't change. Only X/Y/Z should move (typically
-                # only X/Y).
-                # It could be both SEM and FM position # TODO check
-                # TODO How to work Linked YM position and its associated not used METADATA POS_COR, CALIB_VAL
+                # The current mode doesn't change.
                 sub_moves.append((stage, filter_dict({'x', 'y', 'm', 'z'}, target_pos)))
                 sub_moves.append((stage, filter_dict({'rx', 'rm'}, target_pos)))
-                # x, y, m
 
             elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
                 # Park the focuser for safety
@@ -927,7 +923,8 @@ def _doCryoSwitchSamplePosition(future, target):
 def check_keys_in_md_calib(calibrated_values: dict) -> bool:
     """
     Check the required keys in the calibrated values.
-    :param calibrated_values:
+    :param calibrated_values:Is a dictionary containing the calibrated values to carry out the transformation
+        from SEM to FM.
     :return: True if all keys are in the calibrated values, False otherwise.
     """
     required_keys = {'x', 'y', 'm', 'z', 'z_ct', 'dx', 'dy'}
