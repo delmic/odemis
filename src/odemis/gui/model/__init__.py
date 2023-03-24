@@ -507,10 +507,11 @@ class CryoMainGUIData(MainGUIData):
     """
     Data common to all Cryo tabs (METEOR/ENZEL/MIMAS).
     """
-    SAMPLE_RADIUS_TEM_GRID = 1.8e-3  # m, standard TEM grid size including the borders
+    SAMPLE_RADIUS_TEM_GRID = 1.25e-3  # m, standard TEM grid size including the borders
     # Bounding-box relative to the center of a sample, corresponding to usable area
     # for imaging/milling. Used in particular for the overview image.
-    SAMPLE_USABLE_BBOX_TEM_GRID = (-1e-3, -1e-3, 1e-3, 1e-3)  # m, minx, miny, maxx, maxy
+    hwidth = SAMPLE_RADIUS_TEM_GRID / math.sqrt(2)
+    SAMPLE_USABLE_BBOX_TEM_GRID = (-hwidth, -hwidth, hwidth, hwidth)  # m, minx, miny, maxx, maxy
 
     def __init__(self, microscope):
         super().__init__(microscope)
