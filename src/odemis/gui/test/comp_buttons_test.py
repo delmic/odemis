@@ -397,6 +397,27 @@ class ButtonsTestCase(test.GuiTestCase):
 
         self.view_button.Bind(wx.EVT_LEFT_DOWN, switch_image)
 
+    def test_grid_selection(self):
+        """
+        Test a GridSelectionPanel
+        """
+        grid_layout = [["GRID 1", "GRID 2", "GRID 3"],
+                       ["GRID 4", "GRID 5", "GRID 6"]]
+        grid_pnl = buttons.GridSelectionPanel(self.panel, grid_layout)
+        self.add_control(grid_pnl, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        test.gui_loop()
+
+    def test_grid_selection_sparse(self):
+        """
+        Test a GridSelectionPanel with some element empty (None)
+        """
+        grid_layout = [["GRID 1", None, "GRID 3"],
+                       [None, "GRID 5", "GRID 6"]]
+        grid_pnl = buttons.GridSelectionPanel(self.panel, grid_layout)
+        self.add_control(grid_pnl, wx.ALL | wx.ALIGN_CENTER_HORIZONTAL)
+
+        test.gui_loop()
 
 if __name__ == "__main__":
     unittest.main()
