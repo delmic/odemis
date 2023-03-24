@@ -21,6 +21,8 @@ import odemis
 from odemis import model
 from odemis.acq.align.autofocus import estimateAutoFocusTime
 from odemis.acq.align.roi_autofocus import autofocus_in_roi, estimate_autofocus_in_roi_time
+from odemis.acq.move import cryoSwitchSamplePosition, FM_IMAGING
+from odemis.driver import simsem
 from odemis.util import testing
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -29,6 +31,12 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 
+CONFIG_SED = {"name": "sed", "role": "sed"}
+CONFIG_SCANNER = {"name": "scanner", "role": "ebeam"}
+CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
+              "drift_period": 0.1,
+              "children": {"detector0": CONFIG_SED, "scanner": CONFIG_SCANNER}
+              }
 
 class RoiAutofocusTestCase(unittest.TestCase):
     """
@@ -41,9 +49,12 @@ class RoiAutofocusTestCase(unittest.TestCase):
 
         # create some streams connected to the backend
         # cls.microscope = model.getMicroscope()
+        # cls.sem = simsem.SimSEM(**CONFIG_SEM)
+        # cls.stage = model.getComponent(role="stage-bare")
         cls.ccd = model.getComponent(role="ccd")
         cls.focus = model.getComponent(role="focus")
         cls.stage = model.getComponent(role="stage")
+        cls.stage_bare = model.getComponent(role="stage-bare")
 
         # Assumes the stage is referenced
         cls.init_pos = (cls.stage.position.value["x"], cls.stage.position.value["y"])
@@ -56,10 +67,19 @@ class RoiAutofocusTestCase(unittest.TestCase):
         # Allow a range of +/- 30 µm around the focused position
         cls.focus_range = (current_focus - 30.0e-6, current_focus + 30.0e-6)
 
+        # # move the stage to the fm imaging area, and grid1 will be chosen by default
+        # f = cryoSwitchSamplePosition(FM_IMAGING)
+        # f.result()
+        fm_imaging_pos = {'rx': 0.12213600000000001, 'rz': 5.061456, 'x': 0.04894, 'y': -3.4e-05, 'z': 0.0}
+        cls.stage_bare.moveAbs(fm_imaging_pos).result()
+        fm_imaging_position ={'x': 0.04894, 'y': -0.004455559943006875, 'z': 0.0002610909693431902}
+        cls.stage.moveAbs(fm_imaging_position).result()
+
     @classmethod
     def tearDownClass(cls):
-        logging.debug("moving back to initial position")
-        cls.stage.moveAbs({"x": cls.init_pos[0], "y": cls.init_pos[1]}).result()
+        pass
+        # logging.debug("moving back to initial position")
+        # cls.stage.moveAbs({"x": cls.init_pos[0], "y": cls.init_pos[1]}).result()
 
     def test_autofocus_in_roi(self):
         """
@@ -71,7 +91,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         height = self.height
         n_focus_points = (3, 3)
         overlap = 0.2
-        confidence_level = 0.2  # focus points below this confidence level will be discarded
+        confidence_level = 0.8  # focus points below this confidence level will be discarded
 
         xmin = init_pos[0] - (1 - overlap) * n_focus_points[0] / 2 * px_size[0] * width
         ymin = init_pos[1] - (1 - overlap) * n_focus_points[1] / 2 * px_size[1] * height
@@ -80,13 +100,19 @@ class RoiAutofocusTestCase(unittest.TestCase):
 
         bbox = (xmin, ymin, xmax, ymax)
 
+        # move the stage to the fm imaging area, and grid1 will be chosen by default
+        # fi = cryoSwitchSamplePosition(FM_IMAGING)
+        # fi.result()
+
         f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_focus_points,
                              confidence_level)
 
         # Test if the autofocus in roi is running
         time.sleep(0.1)
         self.assertTrue(f.running())
-
+        # # move the stage to the fm imaging area, and grid1 will be chosen by default
+        # fi = cryoSwitchSamplePosition(FM_IMAGING)
+        # fi.result()
         focus_points = f.result()
         # There should be a minimum of 3 returned focus points to fit a plane for re-focusing
         self.assertGreaterEqual(len(focus_points), 3)
@@ -106,7 +132,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         height = self.height
         n_focus_points = (3, 3)
         overlap = 0.2
-        confidence_level = 0.2  # focus points below this confidence level will be discarded
+        confidence_level = 0.8  # focus points below this confidence level will be discarded
 
         xmin = init_pos[0] - (1 - overlap) * n_focus_points[0] / 2 * px_size[0] * width
         ymin = init_pos[1] - (1 - overlap) * n_focus_points[1] / 2 * px_size[1] * height
