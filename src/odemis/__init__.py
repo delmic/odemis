@@ -93,11 +93,13 @@ def get_version_simplified():
 __version__ = _get_version()
 __fullname__ = "Open Delmic Microscope Software"
 __shortname__ = "Odemis"
-__copyright__ = "Copyright © 2012-2022 Delmic"
+__copyright__ = "Copyright © 2012-2023 Delmic"
 __authors__ = ["Éric Piel", "Rinze de Laat", "Kimon Tsitsikas",
                "Philip Winkler", "Anders Muskens", "Sabrina Rossberger",
                "Thera Pals", "Victoria Mavrikopoulou", "Kornee Kleijwegt",
-               "Bassim Lazem", "Mahmoud Barazi", "Arthur Helsloot"]
+               "Bassim Lazem", "Mahmoud Barazi", "Arthur Helsloot", "Bas Holweg",
+               "Canberk Akın", "Stefan Sneep", "Karishma Kumar", "Nandish Patel",
+               ]
 __license__ = "GNU General Public License version 2"
 __licensetxt__ = (
 """Odemis is free software: you can redistribute it and/or modify it under the terms
