@@ -109,7 +109,7 @@ class OrsayComponent(model.HwComponent):
     This is an overarching component to represent the Orsay hardware
     """
 
-    def __init__(self, name, role, children, host, daemon=None, **kwargs):
+    def __init__(self, name, role, children, host: str, login: str = None, password: str = None, daemon=None, **kwargs):
         """
         Defines the following VA's and links them to the callbacks from the Orsay server:
         + processInfo (StringVA, read-only, value is datamodel.HybridPlatform.ProcessInfo.Actual)
@@ -119,14 +119,25 @@ class OrsayComponent(model.HwComponent):
             "ups", "gis", "gis-reservoir", "light", "fib-vacuum", "fib-source",
             "fib-beam", "scanner", "focus", "detector", and "fib-aperture"
             They will be provided back in the .children VA
-        :param (string) host: ip address of the Orsay server
+        :param host: ip address of the Orsay server
+        :param login: login name to use to connect to the server.
+        If not specified, uses the default value of the API.
+        :param password: password to use to connect to the server.
+        If not specified, uses the default value of the API.
         """
 
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
         self._host = host  # IP address of the Orsay server
+        # Only pass the login and password if specified, so that the default API values
+        # are used in the case nothing is specified.
+        credentials = {}
+        if login is not None:
+            credentials["login"] = login
+        if password is not None:
+            credentials["password"] = password
         try:
-            self._device = Connection(self._host)
+            self._device = Connection(self._host, **credentials)
         except Exception as ex:
             msg = "Failed to connect to Orsay server: %s. Check the network connection to the Orsay server." % str(ex)
             raise HwError(msg)
@@ -2877,7 +2888,14 @@ class Scanner(model.Emitter):
             # Example potential settings: CondensorSteerer1FieldSize, CondensorSteerer1ScanAngle, IntermediateTiltX...
         )
         # In case the preset mask already exist it is automatically overwritten.
-        self.parent.preset_manager.CreatePresetMask(PRESET_MASK_NAME, *mask_parameters)
+        try:
+            self.parent.preset_manager.CreatePresetMask(PRESET_MASK_NAME, *mask_parameters)
+        except Exception:
+            # If the connection is done using the default "Python" user, the
+            # access level is too low, and this fails because it has no rights
+            # to delete/change presets and masks. In this case, we get an error 500.
+            logging.error("Failed CreatePresetMask(), check the connection login has sufficient access level (>= Standard)")
+            raise
 
         # List of available probe current: based on presets name
         # Special "None" value for when the conditions are unknown (eg, at init and not preset matches)

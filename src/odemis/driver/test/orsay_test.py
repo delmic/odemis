@@ -36,10 +36,9 @@ from math import pi
 from time import sleep
 
 from odemis.driver import orsay
-from odemis.driver.orsay import PRESET_MASK_NAME
 from odemis.model import HwError
 from odemis import model
-from odemis.util import almost_equal, find_closest, testing, timeout
+from odemis.util import find_closest, testing, timeout
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -62,6 +61,7 @@ CONFIG_DETECTOR = {"name": "detector", "role": "detector"}
 # Simulation:   192.168.56.101
 # Hardware:     192.168.30.101
 CONFIG_ORSAY = {"name": "Orsay", "role": "orsay", "host": "192.168.30.101",
+                "login": "Python",  # default login name, but here for testing
                 "children": {"pneumatic-suspension": CONFIG_PSUS,
                              "pressure": CONFIG_PRESSURE,
                              "pumping-system": CONFIG_PSYS,
