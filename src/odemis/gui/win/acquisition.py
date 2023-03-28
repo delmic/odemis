@@ -732,6 +732,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 btn.SetValue(name in self._selected_grids)
                 btn.Bind(wx.EVT_BUTTON, self.on_grid_button)
 
+            self.pnl_view_acq.show_sample_overlay(self._main_data_model.sample_centers,
+                                                  self._main_data_model.sample_radius)
+
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
 
