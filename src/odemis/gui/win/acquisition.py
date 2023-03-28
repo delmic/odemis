@@ -1138,7 +1138,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         if self.filename_tiles:
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
-            os.makedirs(os.path.dirname(self.filename_tiles))
+            os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
         if self.autofocus_roi_ckbox.value:
             areas = self._get_areas()
