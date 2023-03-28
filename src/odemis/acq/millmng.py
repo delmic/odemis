@@ -277,11 +277,24 @@ class MillingRectangleTask(object):
             self._future.running_subf.cancel()
             raise MoveError(f"Failed to move the stage for feature {site.name.value} within {t} s")
 
+        # The stage never *exactly* reaches the target position. => Store how
+        # far it was away, according to the stage encoders. We could try to
+        # compensate using beam shift. However, on the MIMAS stage, there is
+        # currently too much imprecision that the encoders do not detect, so we
+        # just log the information.
+        actual_pos = self._stage.position.value
+        diff_pos = [target_pos[a] - actual_pos[a] for a in ("x", "y", "z")]
+        logging.debug("Stage reached %s, away from target by %s m", actual_pos, diff_pos)
+
+        # Reset the beam shift to 0,0 in order to start from scratch with drift
+        # compensation, to reduce the chances of reaching the limits of the shift.
+        self._scanner.shift.value = 0, 0
+
     def _mill_all_settings(self, site: CryoFeature):
         """
         Iterates over all the milling settings for one site
         :param site: The site to mill.
-        :raises MoveError: if the stage failed to move to the given site.
+        :raises MoveError: if the stage failed to move to the given site, or the beam shift failed to compensate drift.
         """
         self._move_to_site(site)
 
@@ -343,10 +356,10 @@ class MillingRectangleTask(object):
                                                                probe_size=probe_size, overlap=overlap)
                 try:
                     self._future.running_subf.result()
-                    logging.debug(f"Milling finished for feature: {site.name.value}")
+                    logging.debug(f"Milling {milling_settings.name.value} for feature {site.name.value} finished")
                 except Exception as exp:
-                    logging.debug(
-                        f"Milling setting: {milling_settings.name.value} for feature: {site.name.value} failed: {exp}")
+                    logging.error(
+                        f"Milling setting {milling_settings.name.value} for feature {site.name.value} failed: {exp}")
                     raise
 
             else:
@@ -362,10 +375,10 @@ class MillingRectangleTask(object):
                                                                    probe_size=probe_size, overlap=overlap)
                     try:
                         self._future.running_subf.result()
-                        logging.debug(f"Milling finished for feature: {site.name.value}")
+                        logging.debug(f"Milling {milling_settings.name.value} for feature {site.name.value} iteration {itr} finished")
                     except Exception as exp:
-                        logging.debug(
-                            f"Milling setting: {milling_settings.name.value} for feature: {site.name.value} at iteration: {itr} failed: {exp}")
+                        logging.error(
+                            f"Milling {milling_settings.name.value} for feature {site.name.value} at iteration {itr} failed: {exp}")
                         raise
 
                     # Change the current to the drift correction current
@@ -380,8 +393,10 @@ class MillingRectangleTask(object):
 
                     # Move FIB to compensate drift
                     previous_shift = self._scanner.shift.value
-                    self._scanner.shift.value = (drift[0] + previous_shift[0],
-                                                 drift[1] + previous_shift[1])  # shift in m - absolute position
+                    shift = (drift[0] + previous_shift[0], drift[1] + previous_shift[1])  # m
+                    self._scanner.shift.value = self._scanner.shift.clip(shift)
+                    if self._scanner.shift.value != shift:  # check if it has been clipped
+                        raise MoveError(f"Failed to set the beam shift to {shift} m, limited to {self._scanner.shift.value}")
                     logging.debug("Ion-beam shift in m: %s changed to: %s", previous_shift, self._scanner.shift.value)
                     if self._log_path:
                         fn = f"{self._fn_bs}-dc-{site.name.value}-{milling_settings.name.value}-{itr + 1}{self._fn_ext}"
@@ -406,10 +421,10 @@ class MillingRectangleTask(object):
                 self._future.running_subf = acquire(self.streams)
             data, exp = self._future.running_subf.result()
             if exp:
-                logging.warning(
+                logging.error(
                     f"Acquisition for feature {site.name.value} partially failed: {exp}")
         except Exception as exp:
-            logging.debug(f"Acquisition for feature {site.name.value} failed: {exp}")
+            logging.error(f"Acquisition for feature {site.name.value} failed: {exp}")
 
         # Check on the acquired data
         if not data:
@@ -450,8 +465,8 @@ class MillingRectangleTask(object):
                 # If timeout exception is raised during stage movement, continue milling the next site
                 try:
                     self._mill_all_settings(site)
-                except MoveError:
-                    logging.debug("Failed to move the stage for feature %s, skipping to next feature ", site.name.value)
+                except MoveError as ex:
+                    logging.warning("Feature %s: %s. Skipping to next feature.", site.name.value, ex)
                     continue
 
                 # Update the status of milling for the given site
