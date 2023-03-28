@@ -695,6 +695,13 @@ class LocalizationTab(Tab):
         else:
             self._stage.position.subscribe(self._on_stage_pos, init=True)
 
+    # role -> tooltip message
+    DISABLED_TAB_TOOLTIP = {
+        "enzel": "Localization can only be performed in the three beams or SEM imaging modes",
+        "meteor": "Localization can only be performed in FM mode",
+        "mimas": "Localization and milling can only be performed in optical or FIB mode",
+    }
+
     def _on_stage_pos(self, pos):
         """
         Called when the stage is moved, enable the tab if position is imaging mode, disable otherwise
@@ -704,7 +711,7 @@ class LocalizationTab(Tab):
             self.button, self._stage, pos,
             self._allowed_targets,
             self._aligner,
-            tooltip="Localization can only be performed in the three beams or SEM imaging modes"
+            tooltip=self.DISABLED_TAB_TOOLTIP.get(self.main_data.role)
         )
 
     def terminate(self):
