@@ -352,7 +352,7 @@ class MillingRectangleTask(object):
             # X is horizontal axis, Y is vertical axis
             pxs = milling_settings.pixelSize.value
             probe_size = max(pxs)
-            overlap = [1 - (pxs[0] / probe_size), 1 - (pxs[1] / probe_size)]  # Always >= 0
+            overlap = [1 - (float(pxs[0]) / float(probe_size)), 1 - (float(pxs[1]) / float(probe_size))]  # Always >= 0
 
             logging.debug(f"Milling setting: {milling_settings.name.value} for feature: {site.name.value}")
 

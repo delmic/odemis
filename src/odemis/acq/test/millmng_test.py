@@ -39,7 +39,7 @@ from odemis.util import testing
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
-TEST_NOHW = os.environ.get("TEST_NOHW", "1")  # Default to hardware testing
+TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to hardware testing
 
 if TEST_NOHW == "0":
     TEST_NOHW = False

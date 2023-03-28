@@ -1,0 +1,14 @@
+# Milling settings for testing purposes. Duration attribute is missing in this example
+"Missing milling duration": {
+    scanner: "FIB Scanner",
+    iteration: 5,
+    probe_size: 5e-6,
+    rect: [0, 0, 1, 1],
+}
+"Mill the quarter of the fov": {
+    scanner: "FIB Scanner",
+    duration: 600,
+    iteration: 1,
+    probe_size: 15e-6,
+    rect: [0.5, 0.5, 1, 1],
+}
