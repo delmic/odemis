@@ -712,7 +712,7 @@ def main(args):
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     logpath = os.path.join(os.path.expanduser(u"~"), aligndelphi.CALIB_DIRECTORY,
                            time.strftime(u"%Y%m%d-%H%M%S"))
-    os.makedirs(logpath)
+    os.makedirs(logpath, exist_ok=True)
     hdlr_calib = logging.FileHandler(os.path.join(logpath, aligndelphi.CALIB_LOG))
     hdlr_calib.setFormatter(formatter)
     hdlr_calib.setLevel(logging.DEBUG)  # Store always all the messages

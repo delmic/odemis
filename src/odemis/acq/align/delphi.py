@@ -189,7 +189,7 @@ def _DoDelphiCalibration(future, main_data):
     formatter = logging.Formatter('%(asctime)s %(levelname)s %(message)s')
     logpath = os.path.join(os.path.expanduser(u"~"), CALIB_DIRECTORY,
                            time.strftime(u"%Y%m%d-%H%M%S"))
-    os.makedirs(logpath)
+    os.makedirs(logpath, exist_ok=True)
     hdlr_calib = logging.FileHandler(os.path.join(logpath, CALIB_LOG))
     hdlr_calib.setFormatter(formatter)
     hdlr_calib.addFilter(logging.Filter())
