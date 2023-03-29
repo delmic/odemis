@@ -803,7 +803,7 @@ class TestMimasMove(unittest.TestCase):
         self.assertNotEqual(pos_label, LOADING)
         self.assertNotEqual(pos_label, FM_IMAGING)
         # Should report UNKNOWN if cancelled early, and IMAGING if cancelled later
-        # self.assertEqual(pos_label, (UNKNOWN, IMAGING))
+        #self.assertEqual(pos_label, (UNKNOWN, IMAGING))
 
         # It should be allowed to go back to LOADING
         f = cryoSwitchSamplePosition(LOADING)
@@ -871,8 +871,8 @@ class TestGetDifferenceFunction(unittest.TestCase):
         self.assertAlmostEqual(expected_distance, actual_distance)
 
     def test_only_rotation_axes(self):
-        point1 = {'rx': numpy.radians(30), 'rm': 0}  # 30 degree
-        point2 = {'rx': numpy.radians(60), 'rm': 0}  # 60 degree
+        point1 = {'rx': numpy.radians(30), 'rz': 0}  # 30 degree
+        point2 = {'rx': numpy.radians(60), 'rz': 0}  # 60 degree
         # the rotation difference is 30 degree
         exp_rot_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30)
         act_rot_dist = _getDistance(point2, point1)
@@ -883,8 +883,8 @@ class TestGetDifferenceFunction(unittest.TestCase):
         self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
 
     def test_rotation_axes_no_difference(self):
-        point1 = {'rx': 0, 'rm': numpy.radians(30)}  # 30 degree
-        point2 = {'rx': 0, 'rm': numpy.radians(30)}  # 30 degree
+        point1 = {'rx': 0, 'rz': numpy.radians(30)}  # 30 degree
+        point2 = {'rx': 0, 'rz': numpy.radians(30)}  # 30 degree
         # the rotation difference is 0 degree
         exp_rot_error = 0
         act_rot_error = _getDistance(point2, point1)
@@ -927,55 +927,6 @@ class TestGetDifferenceFunction(unittest.TestCase):
 
     def test_get_progress(self):
         """
-        Test if the getMovementProgress function behaves as expected
-        """
-        start_point = {'x': 0, 'y': 0, 'z': 0}
-        end_point = {'x': 2, 'y': 2, 'z': 2}
-        current_point = {'x': 1, 'y': 1, 'z': 1}
-        progress = getMovementProgress(current_point, start_point, end_point)
-        self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
-
-        current_point = {'x': .998, 'y': .999, 'z': .999}  # slightly off the line
-        progress = getMovementProgress(current_point, start_point, end_point)
-        self.assertTrue(util.almost_equal(progress, 0.5, rtol=RTOL_PROGRESS))
-
-        # Same in the other direction
-        act_rot_error = _getDistance(point1, point2)
-        self.assertAlmostEqual(exp_rot_error, act_rot_error)
-
-    def test_rotation_axes_missing_axis(self):
-        point1 = {'rx': numpy.radians(30), 'rm': numpy.radians(30)}  # 30 degree
-        # No rx => doesn't count it
-        point2 = {'rm': numpy.radians(60)}  # 60 degree
-        exp_rot_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30)
-        act_rot_dist = _getDistance(point2, point1)
-        self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
-
-        # Same in the other direction
-        act_rot_dist = _getDistance(point2, point1)
-        self.assertAlmostEqual(exp_rot_dist, act_rot_dist)
-
-    def test_no_common_axes(self):
-        point1 = {'rx': numpy.radians(30), 'rm': numpy.radians(30)}
-        point2 = {'x': 0.082, 'y': 0.01}
-        with self.assertRaises(ValueError):
-            _getDistance(point1, point2)
-
-    def test_lin_rot_axes(self):
-        point1 = {'rx': 0, 'rm': numpy.radians(30), 'x': -0.02, 'y': 0.05, 'z': 0.019}
-        point2 = {'rx': 0, 'rm': numpy.radians(60), 'x': -0.01, 'y': 0.05, 'z': 0.019}
-        # The rotation difference is 30 degree
-        # The linear difference is 0.01
-        exp_dist = ROT_DIST_SCALING_FACTOR * numpy.radians(30) + 0.01
-        act_dist = _getDistance(point1, point2)
-        self.assertAlmostEqual(exp_dist, act_dist)
-
-        # Same in the other direction
-        act_dist = _getDistance(point2, point1)
-        self.assertAlmostEqual(exp_dist, act_dist)
-
-    def test_get_progress(self):
-        """
         Test getMovementProgress function behaves as expected
         """
         start_point = {'x': 0, 'y': 0, 'z': 0}
@@ -1006,11 +957,11 @@ class TestGetDifferenceFunction(unittest.TestCase):
         rotational axes.
         """
         # Test also rotations
-        start_point = {'x': 0, 'rx': 0, 'rm': 0}
-        point_1 = {'x': 0.5, 'rx': 0.1, 'rm': -0.1}
-        point_2 = {'x': 1, 'rx': 0.1, 'rm': -0.1}  # middle
-        point_3 = {'x': 1.5, 'rx': 0.18, 'rm': -0.19}
-        end_point = {'x': 2, 'rx': 0.2, 'rm': -0.2}
+        start_point = {'x': 0, 'rx': 0, 'rz': 0}
+        point_1 = {'x': 0.5, 'rx': 0.1, 'rz': -0.1}
+        point_2 = {'x': 1, 'rx': 0.1, 'rz': -0.1}  # middle
+        point_3 = {'x': 1.5, 'rx': 0.18, 'rz': -0.19}
+        end_point = {'x': 2, 'rx': 0.2, 'rz': -0.2}
 
         # start_point = 0 < Point 1 < Point 2 < Point 3 < 1 = end_point
         progress_0 = getMovementProgress(start_point, start_point, end_point)
