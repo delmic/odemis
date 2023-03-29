@@ -54,7 +54,6 @@ Zeiss-METEOR: {
         # inverted: ["x", "y"],  # TODO: check
     },
     metadata: {
-        # TODO: put potential correct value
         # Loading position:
         FAV_POS_DEACTIVE: { 'rx': 0.0, 'rm': 0.7417649320975901, 'x': 54.976e-3, 'y': 56.806e-3, 'z': 0.0, 'm': 7.060e-3 }, # To be filled in based on integration data, rm is 42.5°
         # XYZM ranges for SEM & METEOR
@@ -80,7 +79,7 @@ Zeiss-METEOR: {
     },
     init: {
       axes: [ "y", "m" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
-      rotation: 0.4537856055185, # rad , -26° (negative because the m axis is pointed downwards)
+      rotation: 0.4537856055185, # rad , 26° 
     },
 }
 # not sure if all z will be changed to m below, for now m is used
@@ -90,6 +89,7 @@ Zeiss-METEOR: {
     dependencies: { "x": "Stage", "y": "Linked YM", "z": "Linked YM", },
     init: {
         axes_map: { "x": "x", "y": "x", "z": "y",},
+        # inverted: ["x", "y"],  # TODO: check
     },
     affects: ["Camera", "EBeam"],
     metadata: {
@@ -119,22 +119,6 @@ Zeiss-METEOR: {
     affects: ["Camera"]
 }
 
-# Zyla
-#"Camera": {
-#    class: andorcam3.AndorCam3,
-#    role: ccd,
-#    init: {
-#        device: 0,  # if a real camera is plugged in, it's usually 0
-#        # TODO: adjust the axes so that they match the SEM orientation (with scan rotation = 0)
-#        transp: [2, 1], # To swap/invert axes
-#        # Normally not necessary for the testing
-#        # max_res: [1040, 828], # Crop the image as the optical FoV is smaller than the whole CMOS area
-#    },
-#    properties: {
-#        # To change some default settings
-##        targetTemperature: 0,
-#    }
-#}
 
 # Camera simulator
 "Camera": {
@@ -152,9 +136,6 @@ Zeiss-METEOR: {
     class: tmcm.TMCLController,
     role: null,
     init: {
-        # port: "/dev/ttyTMCM*",
-        # address: 7,  # TMCM-6110
-        # address: 17,  # TMCM-1211
         port: "/dev/fake", # Simulator
         address: null, # Simulator
         # param_file: "/usr/share/odemis/meteor-tmcm1211-filterwheel.tmcm.tsv",

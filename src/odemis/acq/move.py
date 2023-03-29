@@ -78,30 +78,30 @@ def getTargetPosition(target_pos_lbl, stage):
     elif current_position in [LOADING, SEM_IMAGING]:
         if target_pos_lbl in [SEM_IMAGING, GRID_1]:
             # if at loading, and sem is pressed, choose grid1 by default
-            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-            sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+            sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # get the base
+            sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
             end_pos = sem_grid1_pos
         elif target_pos_lbl == GRID_2:
-            sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
-            sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+            sem_grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+            sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
             end_pos = sem_grid2_pos
         elif target_pos_lbl == FM_IMAGING:
             if current_position == LOADING:
                 # if at loading and fm is pressed, choose grid1 by default
-                sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-                sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+                sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+                sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
                 fm_target_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
             elif current_position == SEM_IMAGING:
                 fm_target_pos = transformFromSEMToMeteor(stage.position.value, stage)
             end_pos = fm_target_pos
     elif current_position == FM_IMAGING:
         if target_pos_lbl == GRID_1:
-            sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-            sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+            sem_grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # get the base
+            sem_grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
             end_pos = transformFromSEMToMeteor(sem_grid1_pos, stage)
         elif target_pos_lbl == GRID_2:
-            sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
-            sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+            sem_grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+            sem_grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
             end_pos = transformFromSEMToMeteor(sem_grid2_pos, stage)
         elif target_pos_lbl == SEM_IMAGING:
             end_pos = transformFromMeteorToSEM(stage.position.value, stage)
@@ -259,7 +259,7 @@ def _getCurrentMimasPositionLabel(current_stage_pos, stage, aligner) -> int:
     # known positions, in which case we return "IMAGING" (to indicate it's a bit
     # unclear but not UNKNOWN either).
 
-    if _isInRange(current_stage_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rm'}):
+    if _isInRange(current_stage_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rz'}):
         if _isNearPosition(current_align_pos, aligner_fib, aligner.axes):
             try:
                 gis = model.getComponent(role="gis")
@@ -348,14 +348,14 @@ def getCurrentAlignerPositionLabel(current_pos, align):
 def _getDistance(start, end):
     """
     Calculate the error/difference between two 3D postures with x, y, z, m, rx, rm axes
-        or a subset of these axes. If there are no common axes between the two passed
-        postures, an error would be raised. The scaling factor of the rotation error is in meter.
-    start, end (dict -> float): a 3D posture
-    return (float >= 0): the difference between two 3D postures.
+    or a subset of these axes. If there are no common axes between the two passed
+    postures, an error would be raised. The scaling factor of the rotation error is in meter.
+    :param start, end (dict -> float): a 3D posture
+    :return (float >= 0): the difference between two 3D postures.
     """
     axes = start.keys() & end.keys()
     lin_axes = axes & {'x', 'y', 'z', 'm'}  # only the axes found on both points
-    rot_axes = axes & {'rx', 'ry', 'rm'}  # only the axes found on both points
+    rot_axes = axes & {'rx', 'ry', 'rz', 'rm'}  # only the axes found on both points
     if not lin_axes and not rot_axes:
         raise ValueError("No common axes found between the two postures")
 
@@ -435,7 +435,7 @@ def _isNearPosition(current_pos, target_position, axes):
         target_value = target_position[axis]
         if axis in {'x', 'y', 'z', 'm'}:
             is_near = abs(target_value - current_value) < ATOL_LINEAR_POS
-        elif axis in {'rx', 'ry', 'rm'}:
+        elif axis in {'rx', 'ry', 'rz', 'rm'}:
             is_near = util.rot_almost_equal(current_value, target_value, atol=ATOL_ROTATION_POS)
         else:
             raise ValueError("Unknown axis value %s." % axis)
@@ -838,7 +838,7 @@ def _doCryoSwitchSamplePosition(future, target):
             stage_referenced = all(stage.referenced.value.values())
 
             # Fail early when required axes are not found on the positions metadata
-            required_axes = {'x', 'y', 'z', 'rx', 'rm'}  # ry is normally never used so it can be omitted
+            required_axes = {'x', 'y', 'z', 'rx', 'rz'}  # ry is normally never used so it can be omitted
             for stage_position in stage_target_pos.values():
                 if not required_axes.issubset(stage_position.keys()):
                     raise ValueError("Stage %s metadata does not have all required axes %s." % (
@@ -887,7 +887,7 @@ def _doCryoSwitchSamplePosition(future, target):
                 run_sub_move(future, stage, stage_target_pos[target])
             elif target in (MILLING, FM_IMAGING, COATING):
                 # If not in imaging mode yet, move the stage to the default imaging position
-                if not _isInRange(current_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rm'}):
+                if not _isInRange(current_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rz'}):
                     # move stage to imaging range (with the optical lens retracted)
                     run_sub_move(future, align, aligner_fib)
                     run_sub_move(future, stage, stage_target_pos[target])
@@ -920,17 +920,15 @@ def _doCryoSwitchSamplePosition(future, target):
             future._task_state = FINISHED
 
 
-def check_keys_in_md_calib(calibrated_values: dict) -> bool:
+def check_stage_metadata(calibrated_values: dict):
     """
-    Check the required keys in the calibrated values.
-    :param calibrated_values:Is a dictionary containing the calibrated values to carry out the transformation
-        from SEM to FM.
-    :return: True if all keys are in the calibrated values, False otherwise.
+    Check the required keys in the stage metadata based on given stage type in the microscope file.
+    :param calibrated_values: calibrated values to carry out stage transformation.
+    :raises ValueError: if the metadata does not have all required keys.
     """
     required_keys = {'x', 'y', 'm', 'z', 'z_ct', 'dx', 'dy'}
     if not required_keys.issubset(calibrated_values.keys()):
         raise ValueError("Calibrated parameter does not have all required keys %s." % required_keys)
-    return True
 
 
 # Note: this transformation consists of translation and rotation.
@@ -956,7 +954,7 @@ def transformFromSEMToMeteor(pos, stage):
 
     # Call out calibrated values and stage tilt and rotation angles
     calibrated_values = stage_md[model.MD_CALIB]
-    check_keys_in_md_calib(calibrated_values)
+    check_stage_metadata(calibrated_values)
     fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
     sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 
@@ -1014,7 +1012,7 @@ def transformFromMeteorToSEM(pos, stage):
 
     # Call out calibrated values and stage tilt and rotation angles
     calibrated_values = stage_md[model.MD_CALIB]
-    check_keys_in_md_calib(calibrated_values)
+    check_stage_metadata(calibrated_values)
     fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
     sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 

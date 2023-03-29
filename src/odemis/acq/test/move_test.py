@@ -382,6 +382,34 @@ class TestMeteorMove(unittest.TestCase):
         # self.assertEqual(transformed_pos, transformed_pos_6)
         testing.assert_pos_almost_equal(transformed_pos, transformed_pos_6, atol=1e-6)
 
+    def test_moving_from_sem_to_fm_to_sem(self):
+        # move to loading position
+        f = cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the sem imaging area
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        sem_stage_position = self.stage.position.value
+        current_imaging_mode = getCurrentPositionLabel(sem_stage_position, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move to the fm imaging area
+        f = cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        fm_stage_position = self.stage.position.value
+        current_imaging_mode = getCurrentPositionLabel(fm_stage_position, self.stage)
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        self.assertAlmostEqual(self.stage.position.value["rx"], fm_angles["rx"], places=6)
+        self.assertAlmostEqual(self.stage.position.value["rm"], fm_angles["rm"], places=6)
+        # move the stage back to the sem imaging area
+        f = cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        sem_current_stage_position = self.stage.position.value
+        current_imaging_mode = getCurrentPositionLabel(sem_current_stage_position, self.stage)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # The stage position should be the same as the one before moving to fm imaging area
+        testing.assert_pos_almost_equal(sem_stage_position, sem_current_stage_position, atol=1e-6)
+
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
         # move the stage to the loading position  
         f = cryoSwitchSamplePosition(LOADING)
@@ -457,7 +485,7 @@ class TestMeteorMove(unittest.TestCase):
         self.assertAlmostEqual(old_linked_ym_pos["y"] + 1e-3, new_linked_ym_pos["y"], places=6)
         self.assertTrue(old_stage_pos["y"] < new_stage_pos["y"])
         # the stage moved in the right direction if the pre-tilt angle was maintained at -26-degrees
-        beta = 0.4537856055185  # -26-degrees in radians which is
+        beta = 0.4537856055185  # -26-degrees in radians
         estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
         self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
                                                                    "the FM imaging grid 1 area.")
@@ -899,7 +927,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
 
     def test_get_progress(self):
         """
-        Test getMovementProgress function behaves as expected
+        Test if the getMovementProgress function behaves as expected
         """
         start_point = {'x': 0, 'y': 0, 'z': 0}
         end_point = {'x': 2, 'y': 2, 'z': 2}
