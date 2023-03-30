@@ -1206,24 +1206,27 @@ class GIS(model.Actuator):
         :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
         :param (str) attr_name: the name of the attribute of parameter which was changed
         """
-        if attr_name == "Actual":
-            arm_pos = self._positionPar.Actual
-            gas_pos = self._reservoirPar.Actual
-            new_pos = {"arm": arm_pos == STR_WORK, "reservoir": gas_pos == STR_OPEN}
-            logging.debug("GIS position is %s.", new_pos)
-            self.position._set_value(new_pos, force_write=True)
+        if attr_name != "Actual":
+            return
 
-        if self._positionPar.Actual == self._positionPar.Target:
+        # Update the position
+        arm_pos = self._positionPar.Actual  # Can be WORK, PARK, MOVING
+        gas_pos = self._reservoirPar.Actual  # Can be CLOSED, OPEN, MOVING
+        new_pos = {"arm": arm_pos == STR_WORK, "reservoir": gas_pos == STR_OPEN}
+        logging.debug("GIS position is %s.", new_pos)
+        self.position._set_value(new_pos, force_write=True)
+
+        # Check whether a move is completed
+        # Note: as of 2023-02-16, .AtTarget is always False, even when it's at target,
+        # so explicitly compare target vs actual.
+        if not self._armPositionReached.is_set() and self._positionPar.Actual == self._positionPar.Target:
             logging.debug("Target arm position reached.")
             self._armPositionReached.set()
-        else:
-            self._armPositionReached.clear()
+            # Don't clear when it's not in target, as it's not related to "our" move
 
-        if self._reservoirPar.Actual == self._reservoirPar.Target:
+        if not self._reservoirPositionReached.is_set() and self._reservoirPar.Actual == self._reservoirPar.Target:
             logging.debug("Target reservoir position reached.")
             self._reservoirPositionReached.set()
-        else:
-            self._reservoirPositionReached.clear()
 
     def _doMove(self, goal):
         """
@@ -1237,7 +1240,7 @@ class GIS(model.Actuator):
         if "arm" in goal and goal["arm"] != self.position.value["arm"]:  # if the arm needs to move
             if self.position.value["reservoir"]:
                 logging.warning("Moving GIS while gas flow is on.")
-            self._armPositionReached.clear()  # to assure it waits
+            self._armPositionReached.clear()  # to ensure it waits
             if goal["arm"]:
                 logging.debug("Moving GIS to working position.")
                 self._positionPar.Target = STR_WORK
@@ -1249,7 +1252,7 @@ class GIS(model.Actuator):
         if "reservoir" in goal and goal["reservoir"] != self.position.value["reservoir"]:
             if not self.position.value["arm"] and goal["reservoir"]:
                 logging.warning("Gas flow opened while not in working position.")
-            self._reservoirPositionReached.clear()  # to assure it waits
+            self._reservoirPositionReached.clear()  # to ensure it waits
             if goal["reservoir"]:
                 logging.debug("Starting gas flow.")
                 self._reservoirPar.Target = STR_OPEN
@@ -1257,8 +1260,12 @@ class GIS(model.Actuator):
                 logging.debug("Stopping gas flow.")
                 self._reservoirPar.Target = STR_CLOSED
 
-        self._reservoirPositionReached.wait()  # wait for both axes to reach their new position
-        self._armPositionReached.wait()
+        # wait for both axes to reach their new position
+        if not self._reservoirPositionReached.wait(timeout=30):
+            raise TimeoutError(f"GIS reservoir didn't reach position {goal['reservoir']} within 30s")
+
+        if not self._armPositionReached.wait(timeout=30):
+            raise TimeoutError(f"GIS arm didn't reach position {goal['arm']} within 30s")
 
     @isasync
     def moveAbs(self, pos):
