@@ -1672,8 +1672,8 @@ class DraggableCanvas(BitmapCanvas):
             csize[0],  # size of area to copy
             csize[1],  # size of area to copy
             self._dc_buffer,  # source
-            src_pos[0],  # source point
-            src_pos[1]  # source point
+            int(src_pos[0]),  # source point
+            int(src_pos[1])  # source point
         )
 
         # Remember that the device context of the view port is passed!
