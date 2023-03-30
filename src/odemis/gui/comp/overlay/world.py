@@ -898,7 +898,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
                 blit = horz_dc.Blit
                 for i in range(buf_rep_x):
-                    x = i * step_x + half_step_x
+                    x = int(i * step_x + half_step_x)
                     blit(x, 0, 3, 3, point_dc, 0, 0)
 
                 total_dc = wx.MemoryDC()
@@ -909,7 +909,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
                 blit = total_dc.Blit
                 for j in range(buf_rep_y):
-                    y = j * step_y + half_step_y
+                    y = int(j * step_y + half_step_y)
                     blit(0, y, int(end_x - start_x), 3, horz_dc, 0, 0)
 
                 self._bmp.SetMaskColour(wx.BLACK)
