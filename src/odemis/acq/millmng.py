@@ -39,8 +39,8 @@ class MillingSettings(object):
     """
 
     def __init__(self, name, current, horizontal_fov, roi,
-                 pixel_size, beam_angle, duration,
-                 dc_roi, dc_period, dc_dwell_time, dc_current):
+                 pixel_size, duration, beam_angle=None,
+                 dc_roi=UNDEFINED_ROI, dc_period=None, dc_dwell_time=None, dc_current=None):
         """
        Settings class for milling a rectangle.
 
@@ -62,20 +62,42 @@ class MillingSettings(object):
         self.horizontalFoV = model.FloatContinuous(horizontal_fov, unit="m", range=(5e-06, 45e-06))
         self.current = model.FloatContinuous(current, unit="A", range=(0.5e-12, 3000e-12))
         self.name = model.StringVA(name)
-        self.roi = model.TupleContinuous(roi,
+        self.roi = model.TupleContinuous(tuple(roi),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                          cls=(int, float))
-        self.pixelSize = model.TupleContinuous(pixel_size, unit="m",
+        self.pixelSize = model.TupleContinuous(tuple(pixel_size), unit="m",
                                                range=((0, 0), (1e-3, 1e-3)),  # max 1 mm: arbitrary gigantic value
                                                cls=(int, float))
         # angles ot of this range would be dangerous for the hardware and probably not useful for the user
-        self.beamAngle = model.FloatContinuous(beam_angle, unit="rad", range=(math.radians(6), math.radians(10)))
-        self.duration = model.FloatVA(duration, unit="s")
+        if beam_angle is None:
+            stage = model.getComponent(role="stage")
+            stage_md = stage.getMetadata()
+            try:
+                self._ion_beam_angle = stage_md[model.MD_ION_BEAM_TO_SAMPLE_ANGLE]
+            except KeyError:
+                raise ValueError("Ion beam angle not defined in stage metadata")
+        else:
+            self.beamAngle = model.FloatContinuous(beam_angle, unit="rad", range=(math.radians(6), math.radians(10)))
+        self.duration = model.FloatContinuous(duration, unit="s", range=(0.1, 100e3))
         # drift correction settings
-        self.dcRoi = model.TupleContinuous(dc_roi,
+        if dc_roi == UNDEFINED_ROI:
+            if dc_period is None:
+                dc_period = duration
+            if dc_dwell_time is None:
+                dc_dwell_time = 1e-09
+            if dc_current is None:
+                dc_current = 1e-12
+        else:
+            if dc_period is None:
+                raise ValueError("dc_period has to be provided.")
+            if dc_dwell_time is None:
+                raise ValueError("dc_dwell_time has to be provided.")
+            if dc_current is None:
+                raise ValueError("dc_current has to be provided.")
+        self.dcRoi = model.TupleContinuous(tuple(dc_roi),
                                            range=((0, 0, 0, 0), (1, 1, 1, 1)),
                                            cls=(int, float))
-        self.dcPeriod = model.FloatContinuous(dc_period, unit="s", range=(1, 180))
+        self.dcPeriod = model.FloatContinuous(dc_period, unit="s", range=(0.1, 100e3))
         self.dcDwellTime = model.FloatContinuous(dc_dwell_time, unit="s", range=(1e-09, 1e-03))
         self.dcCurrent = model.FloatContinuous(dc_current, unit="A", range=(0.5e-12, 3000e-12))
 
@@ -84,16 +106,21 @@ def load_config(yaml_filename):
     """
     Load user input from yaml settings file.
     :param yaml_filename: (str) Filename path of user configuration file.
-    :return: (dict) Dictionary containing user input settings.
+    :return: (list) List containing MillingSettings.
     """
     try:
         with open(yaml_filename, "r") as f:
-            settings_dict = yaml.safe_load(f)
+            settings = yaml.safe_load(f)
 
     except yaml.YAMLError as exc:
         logging.error("Syntax error in milling settings yaml file: %s", exc)
 
-    return settings_dict
+    millings = []
+    for ms in settings:
+        milling_setting = MillingSettings(**ms)
+        millings.append(milling_setting)
+
+    return millings
 
 
 # To handle the timeout error when the stage is not able to move to the desired position

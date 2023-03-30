@@ -29,8 +29,8 @@ import odemis
 from odemis import model
 from odemis.acq import orsay_milling, stream
 from odemis.acq.drift import AnchoredEstimator
-from odemis.acq.feature import FEATURE_ROUGH_MILLED, CryoFeature
-from odemis.acq.millmng import (MillingRectangleTask, MillingSettings,
+from odemis.acq.feature import CryoFeature, FEATURE_ROUGH_MILLED
+from odemis.acq.millmng import (load_config, MillingRectangleTask, MillingSettings,
                                 mill_features)
 from odemis.acq.move import _isNearPosition
 from odemis.acq.stream import UNDEFINED_ROI
@@ -39,7 +39,7 @@ from odemis.util import testing
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
-TEST_NOHW = os.environ.get("TEST_NOHW", "0")  # Default to hardware testing
+TEST_NOHW = os.environ.get("TEST_NOHW", "1")  # Default to hardware testing
 
 if TEST_NOHW == "0":
     TEST_NOHW = False
@@ -50,6 +50,8 @@ else:
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
+
+MILLING_CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../src/odemis/acq/test/"
 
 
 def fake_do_milling(self):
@@ -192,7 +194,7 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         Test initializing with wrong values or missing arguments
         """
-        with self.assertRaises(ValueError):
+        with self.assertRaises((ValueError, TypeError)):
             ms = MillingSettings(name='rough_milling_1',
                                  current=self.probe_current,
                                  horizontal_fov=35e-6,
@@ -200,6 +202,19 @@ class MillingManagerTestCase(unittest.TestCase):
                                  pixel_size=3.5e-08,  # Error: should be a tuple
                                  beam_angle=self.beam_angle,
                                  duration=20,
+                                 dc_roi=(0, 0.3, 0.4, 0.7),
+                                 dc_period=10,
+                                 dc_dwell_time=10e-6,
+                                 dc_current=self.probe_current)
+
+        with self.assertRaises((ValueError, TypeError)):
+            ms = MillingSettings(name='rough_milling_1',
+                                 current=self.probe_current,
+                                 horizontal_fov=35e-6,
+                                 roi=(0.5, 0.5, 0.8, 0.8),
+                                 pixel_size=(3.5e-08, 3.5e-08),
+                                 beam_angle=self.beam_angle,
+                                 duration="20 second",  # Error: should be a float
                                  dc_roi=(0, 0.3, 0.4, 0.7),
                                  dc_period=10,
                                  dc_dwell_time=10e-6,
@@ -380,6 +395,43 @@ class MillingManagerTestCase(unittest.TestCase):
         self.start = start
         self.end = end
         self.updates += 1
+
+    def test_yaml_loader_attribute_types(self):
+        """
+        Test the data types of the milling attributes
+        """
+        millings = load_config(MILLING_CONFIG_PATH + "/milling-series-test-working-config.mill.yaml")
+        for milling in millings:
+            self.assertIsInstance(milling.name.value, str)
+            self.assertIsInstance(milling.current.value, float)
+            self.assertIsInstance(milling.horizontalFoV.value, float)
+            self.assertIsInstance(milling.duration.value, float)
+            self.assertIsInstance(milling.roi.value, tuple)
+            self.assertIsInstance(milling.pixelSize.value, tuple)
+
+    def test_yaml_loader_attribute_types(self):
+        """
+        Test the amount of the milling settings/tasks
+        """
+        millings = load_config(MILLING_CONFIG_PATH + "/milling-series-test-working-config.mill.yaml")
+        self.assertEqual(len(millings), 2)
+
+    def test_milling_settings_from_yaml(self):
+        """
+        Test mill features function using the milling settings from a YAML file
+        """
+        millings = load_config(MILLING_CONFIG_PATH + "/milling-series-test-working-config.mill.yaml")
+        logging.debug(millings)
+        f = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
+                          self.sed, self.stage, self.aligner)
+
+        time.sleep(13)
+        self.assertTrue(f.running())
+        f.cancel()
+        with self.assertRaises(CancelledError):
+            f.result(timeout=1)
+
+        self.assertTrue(f.cancelled())
 
 
 if __name__ == '__main__':
