@@ -362,7 +362,7 @@ class ProgressiveFutureConnector(object):
             self._last_update = now
 
         # Update progress bar
-        self._bar.Value = int(PROGRESS_RANGE * ratio)
+        self._bar.Value = round(PROGRESS_RANGE * ratio)
 
         if self._future.done():
             # Make sure we don't update the lbl_txt after the future is over as
