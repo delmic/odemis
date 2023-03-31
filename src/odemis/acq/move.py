@@ -33,7 +33,7 @@ import scipy
 from odemis import model, util
 from odemis.util import executeAsyncTask
 
-MAX_SUBMOVE_DURATION = 60  # s
+MAX_SUBMOVE_DURATION = 90  # s
 
 UNKNOWN, LOADING, IMAGING, ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, \
     FM_IMAGING, GRID_1, GRID_2, THREE_BEAMS = -1, 0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10
@@ -586,7 +586,6 @@ def _doCryoSwitchSamplePosition(future, target):
 
     try:
         if role == "enzel":
-            # TODO enzel code broken as rm is used in other functions insteasd of rz
             # get the stage and aligner objects
             stage = model.getComponent(role='stage')
             align = model.getComponent(role='align')
@@ -603,14 +602,14 @@ def _doCryoSwitchSamplePosition(future, target):
             align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
             stage_referenced = all(stage.referenced.value.values())
             # Fail early when required axes are not found on the positions metadata
-            required_axes = {'x', 'y', 'z', 'rx', 'rm'}
+            required_axes = {'x', 'y', 'z', 'rx', 'rz'}
             for stage_position in target_pos.values():
                 if not required_axes.issubset(stage_position.keys()):
                     raise ValueError("Stage %s metadata does not have all required axes %s." % (
                         list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
             current_pos = stage.position.value
             # To hold the sub moves to run if normal ordering failed
-            fallback_submoves = [{'x', 'y', 'z'}, {'rx', 'rm'}]
+            fallback_submoves = [{'x', 'y', 'z'}, {'rx', 'rz'}]
 
             current_label = getCurrentPositionLabel(current_pos, stage)
             current_name = POSITION_NAMES[current_label]
@@ -640,7 +639,7 @@ def _doCryoSwitchSamplePosition(future, target):
                     # After referencing the stage could move near the maximum axes range,
                     # and moving single axes may result in an invalid/reachable position error,
                     # so all linear axes will be moved together for this special case.
-                    sub_moves = [{'x', 'y', 'z'}, {'rx', 'rm'}]
+                    sub_moves = [{'x', 'y', 'z'}, {'rx', 'rz'}]
                 else:
                     # Notes on the movement on the typical case:
                     # - Moving each linear axis separately to be easily trackable by the user from the chamber cam.
@@ -650,7 +649,7 @@ def _doCryoSwitchSamplePosition(future, target):
                     # - The X/Y/Z movement is in the Rx referential. So if the rx is tilted (eg, we are in IMAGING),
                     # and Y/Z are far from the pivot point, we have a good chance of hitting something.
                     # Moving along X should always be safe (as Rx is not affected by this axis position).
-                    sub_moves = [{'x'}, {'y'}, {'z'}, {'rx', 'rm'}]
+                    sub_moves = [{'x'}, {'y'}, {'z'}, {'rx', 'rz'}]
 
             elif target in (ALIGNMENT, IMAGING, SEM_IMAGING, COATING, THREE_BEAMS):
                 if current_label is LOADING:
@@ -667,9 +666,9 @@ def _doCryoSwitchSamplePosition(future, target):
                 if current_label == LOADING:
                     # As moving from loading position requires re-referencing the stage, move linked axes (y & z)
                     # together to prevent invalid/reachable position error
-                    sub_moves = [{'y', 'z'}, {'rx', 'rm'}, {'x'}]
+                    sub_moves = [{'y', 'z'}, {'rx', 'rz'}, {'x'}]
                 else:
-                    sub_moves = [{'z'}, {'y'}, {'rx', 'rm'}, {'x'}]
+                    sub_moves = [{'z'}, {'y'}, {'rx', 'rz'}, {'x'}]
             else:
                 raise ValueError(f"Unsupported move to target {target_name}")
 
@@ -746,7 +745,6 @@ def _doCryoSwitchSamplePosition(future, target):
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
             # by SEM_IMAGING and then go to the actual requested position.
-            # logging.info("Current position is %s", stage.position.value)
             if current_label == UNKNOWN:
                 logging.warning("Moving stage while current position is unknown.")
                 if target not in (LOADING, SEM_IMAGING):
@@ -920,12 +918,14 @@ def _doCryoSwitchSamplePosition(future, target):
             future._task_state = FINISHED
 
 
-def check_stage_metadata(calibrated_values: dict):
+def check_stage_metadata():
     """
     Check the required keys in the stage metadata based on given stage type in the microscope file.
-    :param calibrated_values: calibrated values to carry out stage transformation.
     :raises ValueError: if the metadata does not have all required keys.
     """
+    stage = model.getComponent(role="stage-bare")
+    stage_md = stage.getMetadata()
+    calibrated_values = stage_md[model.MD_CALIB]
     required_keys = {'x', 'y', 'm', 'z', 'z_ct', 'dx', 'dy'}
     if not required_keys.issubset(calibrated_values.keys()):
         raise ValueError("Calibrated parameter does not have all required keys %s." % required_keys)
@@ -954,7 +954,7 @@ def transformFromSEMToMeteor(pos, stage):
 
     # Call out calibrated values and stage tilt and rotation angles
     calibrated_values = stage_md[model.MD_CALIB]
-    check_stage_metadata(calibrated_values)
+    check_stage_metadata()
     fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
     sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 
@@ -1012,7 +1012,7 @@ def transformFromMeteorToSEM(pos, stage):
 
     # Call out calibrated values and stage tilt and rotation angles
     calibrated_values = stage_md[model.MD_CALIB]
-    check_stage_metadata(calibrated_values)
+    check_stage_metadata()
     fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
     sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 
@@ -1103,8 +1103,7 @@ def run_sub_move(future, component, sub_move):
 
             logging.debug("Performing sub move %s -> %s", component.name, sub_move)
             future._running_subf = component.moveAbs(sub_move)
-        # future._running_subf.result(timeout=MAX_SUBMOVE_DURATION)
-        future._running_subf.result()
+        future._running_subf.result(timeout=MAX_SUBMOVE_DURATION)
     except TimeoutError:
         future._running_subf.cancel()
         logging.exception("Timed out while moving %s -> %s", component.name, sub_move)
