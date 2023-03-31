@@ -45,6 +45,8 @@ class RoiAutofocusTestCase(unittest.TestCase):
         cls.focus = model.getComponent(role="focus")
         cls.stage = model.getComponent(role="stage")
 
+        # Switch to FM imaging as the focus position will be its "good" position
+        # and simulator will autofocus in (almost) focussed images
         cryoSwitchSamplePosition(FM_IMAGING).result()
 
         # Assumes the stage is referenced
@@ -57,11 +59,6 @@ class RoiAutofocusTestCase(unittest.TestCase):
         current_focus = cls.focus.position.value["z"]  # assume manual focus before running the script
         # Allow a range of +/- 30 µm around the focused position
         cls.focus_range = (current_focus - 30.0e-6, current_focus + 30.0e-6)
-
-    @classmethod
-    def tearDownClass(cls):
-        # move the stage to SEM imaging mode
-        cryoSwitchSamplePosition(SEM_IMAGING).result()
 
     def test_autofocus_in_roi(self):
         """
