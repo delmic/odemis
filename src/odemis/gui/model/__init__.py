@@ -1657,8 +1657,8 @@ class StreamView(View):
         # drawn, including the margins, via fov_buffer). This is used to update
         # the (static) streams with a projection which can be resized via .rect
         # and .mpp.
-        self.fov = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1e9, 1e9)))
-        self.fov_buffer = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1e9, 1e9)))
+        self.fov = model.TupleContinuous((0.0, 0.0), cls=(int, float), range=((0.0, 0.0), (1e9, 1e9)))
+        self.fov_buffer = model.TupleContinuous((0.0, 0.0), cls=(int, float), range=((0.0, 0.0), (1e9, 1e9)))
         self.fov_buffer.subscribe(self._onFovBuffer)
 
         # Will be created on the first time it's needed
