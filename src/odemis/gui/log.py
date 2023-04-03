@@ -75,7 +75,7 @@ def init_logger(level=logging.DEBUG, log_file=None):
     file_handler = RotatingFileHandler(logfile_path, maxBytes=10 * (2 ** 20), backupCount=5)
 
     file_handler.setFormatter(file_format)
-    log.addHandler(file_handler)
+    l.addHandler(file_handler)
 
 
 def create_gui_logger(log_field, debug_va=None, level_va=None):
