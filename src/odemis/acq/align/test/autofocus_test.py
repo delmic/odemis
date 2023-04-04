@@ -59,7 +59,7 @@ class TestAutofocus(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-
+        pass
         try:
             testing.start_backend(SECOM_CONFIG)
         except LookupError:
@@ -121,7 +121,10 @@ class TestAutofocus(unittest.TestCase):
         ccd = self.ccd
         focus.moveAbs({"z": self._opt_good_focus - 400e-6}).result()
         ccd.exposureTime.value = ccd.exposureTime.range[0]
-        future_focus = align.AutoFocus(ccd, ebeam, focus)
+        from odemis import model
+        ccd = model.getComponent(role="ccd")
+        focus = model.getComponent(role="focus")
+        future_focus = align.AutoFocus(ccd, None, focus)
         foc_pos, foc_lev, _ = future_focus.result(timeout=900)
         self.assertAlmostEqual(foc_pos, self._opt_good_focus, 3)
         self.assertGreater(foc_lev, 0)
