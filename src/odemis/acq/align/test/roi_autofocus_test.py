@@ -21,6 +21,8 @@ import odemis
 from odemis import model
 from odemis.acq.align.autofocus import estimateAutoFocusTime
 from odemis.acq.align.roi_autofocus import autofocus_in_roi, estimate_autofocus_in_roi_time
+from odemis.acq.move import cryoSwitchSamplePosition, FM_IMAGING, SEM_IMAGING
+from odemis.driver import simsem
 from odemis.util import testing
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -39,11 +41,13 @@ class RoiAutofocusTestCase(unittest.TestCase):
     def setUpClass(cls):
         testing.start_backend(METEOR_CONFIG)
 
-        # create some streams connected to the backend
-        # cls.microscope = model.getMicroscope()
         cls.ccd = model.getComponent(role="ccd")
         cls.focus = model.getComponent(role="focus")
         cls.stage = model.getComponent(role="stage")
+
+        # Switch to FM imaging as the focus position will be its "good" position
+        # and simulator will autofocus in (almost) focussed images
+        cryoSwitchSamplePosition(FM_IMAGING).result()
 
         # Assumes the stage is referenced
         cls.init_pos = (cls.stage.position.value["x"], cls.stage.position.value["y"])
@@ -56,14 +60,9 @@ class RoiAutofocusTestCase(unittest.TestCase):
         # Allow a range of +/- 30 µm around the focused position
         cls.focus_range = (current_focus - 30.0e-6, current_focus + 30.0e-6)
 
-    @classmethod
-    def tearDownClass(cls):
-        logging.debug("moving back to initial position")
-        cls.stage.moveAbs({"x": cls.init_pos[0], "y": cls.init_pos[1]}).result()
-
     def test_autofocus_in_roi(self):
         """
-        Tests the autofus in roi is running and returns the focus points:
+        Tests the autofocus in roi is running and returns the focus points:
         """
         init_pos = self.init_pos
         px_size = self.px_size
@@ -71,7 +70,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         height = self.height
         n_focus_points = (3, 3)
         overlap = 0.2
-        condidence_level = 0.8  # focus points below this confidence level will be discarded
+        confidence_level = 0.8  # focus points below this confidence level will be discarded
 
         xmin = init_pos[0] - (1 - overlap) * n_focus_points[0] / 2 * px_size[0] * width
         ymin = init_pos[1] - (1 - overlap) * n_focus_points[1] / 2 * px_size[1] * height
@@ -81,7 +80,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         bbox = (xmin, ymin, xmax, ymax)
 
         f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_focus_points,
-                             condidence_level)
+                             confidence_level)
 
         # Test if the autofocus in roi is running
         time.sleep(0.1)
