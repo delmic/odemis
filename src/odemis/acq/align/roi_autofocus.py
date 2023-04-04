@@ -64,12 +64,15 @@ def do_autofocus_in_roi(
         init_pos = stage.position.value
         xmin, ymin, xmax, ymax = bbox
 
-        for y in numpy.linspace(ymin, ymax, ny):
-            for x in numpy.linspace(xmin, xmax, nx):
+        delta_x = (2/20)*(xmax - xmin)
+        delta_y = (2/20)*(ymax - ymin)
+        for y in numpy.linspace(ymin + delta_y, ymax - delta_y, ny):
+            for x in numpy.linspace(xmin + delta_x, xmax - delta_x, nx):
                 with f._autofocus_roi_lock:
                     if f._autofocus_roi_state == CANCELLED:
                         raise CancelledError()
                     stage.moveAbsSync({"x": x, "y": y})
+                    logging.debug(f"Moving the stage to autofocus at position: {x, y}")
                     # run autofocus
                     f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
 

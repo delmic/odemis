@@ -1050,6 +1050,8 @@ class AcquireOverviewTask(object):
             acquisition_time = actual_time_per_roi * remaining_rois
         else:
             acquisition_time = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * remaining_rois
+            logging.debug(f"the estimated autofocus time for 1 area is {acquisition_time}")
+            acquisition_time = 60*self.n_focus_points[0]*self.n_focus_points[1] # roughly 1 minute per focus point
             for area in self.areas:
                 acquisition_time += estimateTiledAcquisitionTime(
                                         self.streams, self._stage, area,
@@ -1061,6 +1063,8 @@ class AcquireOverviewTask(object):
                                         registrar=self._registrar,
                                         weaver=self._weaver,
                                         focusing_method=self.focusing_method)
+                tiled_time = acquisition_time - 60*self.n_focus_points[0]*self.n_focus_points[1]
+                logging.debug(f"the estimated tiled acquisition time is {tiled_time}")
 
         return acquisition_time
 

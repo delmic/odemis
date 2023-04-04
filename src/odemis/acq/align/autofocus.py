@@ -330,8 +330,8 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 logging.debug("Using 1d method to estimate focus")
                 Measure = Measure1d
             else:
-                logging.debug("Using Optical method to estimate focus")
-                Measure = MeasureOpticalFocus
+                logging.debug("Using Spot method to estimate focus")
+                Measure = MeasureSpotsFocus
         else:
             logging.debug("Using SEM method to estimate focus")
             Measure = MeasureSEMFocus
