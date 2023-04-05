@@ -688,41 +688,35 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._autofocus_roi_vac = VigilantAttributeConnector(
             self.autofocus_roi_ckbox, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
 
-        # Note: if the stage has MD_SAMPLE_CENTERS, self._get_areas() should be
-        # called to list all the areas.
-        self.area = None  # None or 4 floats: left, top, right, bottom positions of the acquisition area (in m)
 
-        # Slightly change the interface for the MIMAS:
-        # * Run autofocus is always enabled (so it's hidden)
-        # * number of tiles is fixed (based on the main.sample_rel_bbox
-        # * possibility to select which area is acquired (among the 8 possible)
-        if self._main_data_model.role == "mimas":
+
+        # Slightly change the interface if multiple grids available (sample centers).
+        # For now this only works on the MIMAS. So in total we have this whole display:
+        # * zstack steps
+        # * step size
+        # [] whole grid acquisition (if sample centers)
+        # * tile nb x
+        # * tile nb y
+        # * selected grid area (if sample centers)
+        # * grid selection panel (if sample centers) -> uses a placeholder panel
+        # * Total area
+        # [] autofocus (if not sample centers)
+
+        if self._main_data_model.sample_centers:
             self.autofocus_chkbox.Hide()
             self.autofocus_roi_ckbox.value = True
 
-            # Ideally, we would show the number of tiles based on the tile area
-            # main.sample_rel_bbox, and make them read-only. For now, just don't show them.
-            self.tiles_number_x.Hide()
-            self.tiles_number_x_lbl.Hide()
-            self.tiles_number_y.Hide()
-            self.tiles_number_y_lbl.Hide()
+            self.whole_grid_chkbox.Value = True
 
-        # Add grid selection, if position of grids is known
-        if self._main_data_model.sample_centers:
-            panel_sizer = self.scr_win_right.GetSizer()
-
-            line_ctrl = wx.StaticLine(self.scr_win_right, size=(-1, 1))
-            line_ctrl.SetBackgroundColour(gui.BG_COLOUR_SEPARATOR)
-            panel_sizer.Add(line_ctrl, flag=wx.ALL | wx.EXPAND, border=5)
-
-            label_grids = wx.StaticText(self.scr_win_right, label="Selected grid areas", style=wx.NO_BORDER)
-            label_grids.SetFont(wx.Font(9, wx.DEFAULT, wx.NORMAL, wx.DEFAULT))
-            label_grids.SetForegroundColour(gui.FG_COLOUR_MAIN)
-            panel_sizer.Add(label_grids, flag=wx.LEFT, border=13)
-
+            # GridSelectionPanel doesn't have xmlh helper, and in addition a refactoring
+            # would be needed to allow changing the grid layout after init. So
+            # for now we use a placeholder panel, and insert the GridSelectionPanel
+            # here at runtime.
             layout = self.sample_positions_to_layout(self._main_data_model.sample_centers)
-            self._grids = buttons.GridSelectionPanel(self.scr_win_right, layout)
-            panel_sizer.Add(self._grids, flag=wx.LEFT | wx.EXPAND, border=5)
+            subsizer = wx.BoxSizer(wx.VERTICAL)
+            self.selected_grid_pnl_holder.SetSizer(subsizer)
+            self._grids = buttons.GridSelectionPanel(self.selected_grid_pnl_holder, layout)
+            subsizer.Add(self._grids, flag=wx.EXPAND)
 
             # Default to selecting all grids
             self._selected_grids = set(self._main_data_model.sample_centers.keys())
@@ -732,8 +726,17 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                 btn.SetValue(name in self._selected_grids)
                 btn.Bind(wx.EVT_BUTTON, self.on_grid_button)
 
+            # Connect, and make sure the status is correct
+            self.whole_grid_chkbox.Bind(wx.EVT_CHECKBOX, self._on_whole_grid_chkbox)
+            self._on_whole_grid_chkbox()
+
             self.pnl_view_acq.show_sample_overlay(self._main_data_model.sample_centers,
                                                   self._main_data_model.sample_radius)
+        else:
+            self.whole_grid_chkbox.Hide()
+            self.whole_grid_chkbox.Value = False
+            self.selected_grid_lbl.Hide()
+            self.selected_grid_pnl_holder.Hide()
 
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
@@ -871,11 +874,13 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
         of all areas to acquire.
         """
-        if not self._main_data_model.sample_centers:
-            if self.area is None:
+        whole_grid = self.whole_grid_chkbox.Value
+        if not whole_grid:
+            area = self._compute_area_size()
+            if area is None:
                 return []
             else:
-                return [self.area]
+                return [area]
 
         # TODO: for now this is only for the MIMAS, but eventually, on the METEOR,
         # which often supports 2 grids, this should also be possible to use.
@@ -896,9 +901,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         return areas
 
-    def update_area_size(self):
+    def _compute_area_size(self) -> Optional[Tuple[float,float]]:
         """
         Calculates the requested tiling area size, based on the tiles number
+        :return: the size (in m) in X and Y. If no area at all, returns None. 
         """
         # get smallest fov
         fovs = [self.get_fov(s) for s in self.get_acq_streams()]
@@ -918,10 +924,12 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         pos = self._tab_data_model.main.stage.position.value
         # Note the area can accept LTRB or LBRT.
-        self.area = self.clip_tiling_area_to_range(w, h, pos, self._tiling_rng)
-        if self.area is None:
+        area = self.clip_tiling_area_to_range(w, h, pos, self._tiling_rng)
+        if area is None:
             # there is no intersection
             logging.warning("Couldn't find intersection between stage pos %s and tiling range %s" % (pos, self._tiling_rng))
+
+        return area
 
     def sample_positions_to_layout(self, sample_centers: Dict[str, Tuple[float, float]]) -> List[List[Optional[str]]]:
         """
@@ -963,6 +971,21 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # Update the areas and estimated acquisition time
         self.update_setting_display()
 
+    def _on_whole_grid_chkbox(self, evt: wx.Event=None):
+        """
+        Called when the "whole grid acquisition" checkbox is clicked
+        => Switch between number of tiles and grid numbers
+        """
+        whole_grid = self.whole_grid_chkbox.Value
+        # Enable the grid selection
+        self._grids.Enable(whole_grid)
+
+        # Disable the tile numbers
+        self.tiles_number_x.Enable(not whole_grid)
+        self.tiles_number_y.Enable(not whole_grid)
+
+        self.update_setting_display()
+
     @wxlimit_invocation(0.1)
     def update_setting_display(self):
         if not self:
@@ -978,8 +1001,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # Some settings can affect the FoV. Also, adding/removing the stream with
         # the smallest FoV would also affect the area.
-        self.update_area_size()
-
         areas = self._get_areas()
 
         # Disable acquisition button if no area
@@ -1047,9 +1068,11 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                                                           focusing_method=focus_mtd)
 
             else:
+                # If there are several areas, the autofocus should be automatically selected
+                # => no autofocus only works with a single area
                 acq_time = stitching.estimateTiledAcquisitionTime(streams,
                                                                   self._main_data_model.stage,
-                                                                  self.area, self.overlap,
+                                                                  areas[0], self.overlap,
                                                                   zlevels=zlevels,
                                                                   focusing_method=focus_mtd)
 
@@ -1124,6 +1147,12 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.streambar_controller.pause()
         self.streambar_controller.enable(False)
 
+        self.whole_grid_chkbox.Enable(False)
+        self.tiles_number_x.Enable(False)
+        self.tiles_number_y.Enable(False)
+        self.autofocus_chkbox.Enable(False)
+        self._grids.Enable(False)
+
     def _resume_settings(self):
         """ Resume the settings of the GUI and save the values for restoring them later """
         self._settings_controller.enable(True)
@@ -1131,6 +1160,11 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.streambar_controller.enable(True)
         self.streambar_controller.resume()
+
+        self.whole_grid_chkbox.Enable(True)
+        self.autofocus_chkbox.Enable(True)
+        # Enable/disable the grid and tile numbers based on the "whole grid" checkbox
+        self._on_whole_grid_chkbox()
 
     def _get_zstack_levels(self):
         """
@@ -1164,16 +1198,12 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
         return zlevels
 
-    def _fit_view_to_area(self):
-        if self.area is None:
-            logging.warning("Unknown area, cannot fit view")
-            return
-
-        center = ((self.area[0] + self.area[2]) / 2,
-                  (self.area[1] + self.area[3]) / 2)
+    def _fit_view_to_area(self, area: Tuple[float,float]):
+        center = ((area[0] + area[2]) / 2,
+                  (area[1] + area[3]) / 2)
         self._view.view_pos.value = center
 
-        fov = (self.area[2] - self.area[0], self.area[3] - self.area[1])
+        fov = (area[2] - area[0], area[3] - area[1])
         self.pnl_view_acq.set_mpp_from_fov(fov)
 
     def on_acquire(self, evt):
@@ -1187,7 +1217,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.acquiring = True
 
         # Adjust view FoV to the whole area, so that it's possible to follow the acquisition
-        self._fit_view_to_area()
+        areas = self._get_areas()
+        self._fit_view_to_area(areas[0])
 
         self.btn_secom_acquire.Disable()
 
@@ -1210,7 +1241,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
         if self.autofocus_roi_ckbox.value:
-            areas = self._get_areas()
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
                                               areas,
@@ -1225,7 +1255,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                                               focusing_method=focus_mtd)
 
         else:
-            self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=self.area,
+            # If there are several areas, the autofocus should be automatically selected
+            # => no autofocus only works with a single area
+            self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=areas[0],
                                                          overlap=self.overlap,
                                                          settings_obs=self._main_data_model.settings_obs,
                                                          log_path=self.filename_tiles,
