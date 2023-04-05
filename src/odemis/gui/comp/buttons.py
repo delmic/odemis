@@ -412,13 +412,13 @@ class BtnMixin(object):
         dc.SetFont(self.GetFont())
 
         if text_colour is None:
-            if self.fg_colour_set:
-                text_colour = self.GetForegroundColour()
-            else:
-                if self.IsEnabled():
-                    text_colour = self.btns[self.face_colour]['text_colour']
+            if self.IsEnabled():
+                if self.fg_colour_set:
+                    text_colour = self.GetForegroundColour()
                 else:
-                    text_colour = self.btns[self.face_colour]['text_col_dis']
+                    text_colour = self.btns[self.face_colour]['text_colour']
+            else:
+                text_colour = self.btns[self.face_colour]['text_col_dis']
 
         dc.SetTextForeground(text_colour)
 
@@ -526,10 +526,11 @@ class ImageTextToggleButton(BtnMixin, wxbuttons.GenBitmapTextToggleButton):
         super(ImageTextToggleButton, self).__init__(*args, **kwargs)
 
     def DrawText(self, dc, width, height, dx=0, dy=0):
-        if self.active_colour and self.GetValue():
+        if self.active_colour and self.GetValue() and self.IsEnabled():
             text_colour = self.active_colour
         else:
             text_colour = None
+
         super(ImageTextToggleButton, self).DrawText(dc, width, height, dx=0, dy=0, text_colour=text_colour)
 
 class ImageStateButton(ImageToggleButton):
