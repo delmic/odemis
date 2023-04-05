@@ -118,6 +118,7 @@ class SettingsPanel(wx.Panel):
     def add_divider(self):
         """ Add a horizontal divider to the panel """
         line_ctrl = wx.StaticLine(self, size=(-1, 1))
+        line_ctrl.SetBackgroundColour(gui.BG_COLOUR_SEPARATOR)
         self.gb_sizer.Add(line_ctrl, (self.num_rows, 0), span=(1, 2),
                           flag=wx.ALL | wx.EXPAND, border=5)
 

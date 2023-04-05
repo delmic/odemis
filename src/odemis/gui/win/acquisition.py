@@ -27,13 +27,12 @@ import math
 import os.path
 from builtins import str
 from concurrent.futures._base import CancelledError
-from typing import List, Tuple
+from typing import Dict, List, Optional, Tuple
 
 import numpy
-import wx
-
 import odemis.gui.model as guimodel
-from odemis import dataio, model
+import wx
+from odemis import dataio, gui, model
 from odemis.acq import acqmng, path, stitching, stream
 from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
                                   FocusingMethod, acquireOverview)
@@ -42,6 +41,7 @@ from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
 from odemis.gui.acqmng import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
                                presets)
+from odemis.gui.comp import buttons
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.settings import (LocalizationSettingsController,
@@ -688,6 +688,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._autofocus_roi_vac = VigilantAttributeConnector(
             self.autofocus_roi_ckbox, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
 
+        # Note: if the stage has MD_SAMPLE_CENTERS, self._get_areas() should be
+        # called to list all the areas.
+        self.area = None  # None or 4 floats: left, top, right, bottom positions of the acquisition area (in m)
+
         # Slightly change the interface for the MIMAS:
         # * Run autofocus is always enabled (so it's hidden)
         # * number of tiles is fixed (based on the main.sample_rel_bbox
@@ -703,12 +707,33 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.tiles_number_y.Hide()
             self.tiles_number_y_lbl.Hide()
 
-            # TODO: show 8 toggle buttons (or build buttons based on MD_SAMPLE_CENTERS)
+        # Add grid selection, if position of grids is known
+        if self._main_data_model.sample_centers:
+            panel_sizer = self.scr_win_right.GetSizer()
 
+            line_ctrl = wx.StaticLine(self.scr_win_right, size=(-1, 1))
+            line_ctrl.SetBackgroundColour(gui.BG_COLOUR_SEPARATOR)
+            panel_sizer.Add(line_ctrl, flag=wx.ALL | wx.EXPAND, border=5)
 
-        # Note: if the stage has MD_SAMPLE_CENTERS, self._get_areas() should be
-        # called to list all the areas.
-        self.area = None  # None or 4 floats: left, top, right, bottom positions of the acquisition area (in m)
+            label_grids = wx.StaticText(self.scr_win_right, label="Selected grid areas", style=wx.NO_BORDER)
+            label_grids.SetFont(wx.Font(9, wx.DEFAULT, wx.NORMAL, wx.DEFAULT))
+            label_grids.SetForegroundColour(gui.FG_COLOUR_MAIN)
+            panel_sizer.Add(label_grids, flag=wx.LEFT, border=13)
+
+            layout = self.sample_positions_to_layout(self._main_data_model.sample_centers)
+            self._grids = buttons.GridSelectionPanel(self.scr_win_right, layout)
+            panel_sizer.Add(self._grids, flag=wx.LEFT | wx.EXPAND, border=5)
+
+            # Default to selecting all grids
+            self._selected_grids = set(self._main_data_model.sample_centers.keys())
+
+            # Connect the buttons (and update their status)
+            for name, btn in self._grids.buttons.items():
+                btn.SetValue(name in self._selected_grids)
+                btn.Bind(wx.EVT_BUTTON, self.on_grid_button)
+
+            self.pnl_view_acq.show_sample_overlay(self._main_data_model.sample_centers,
+                                                  self._main_data_model.sample_radius)
 
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
@@ -769,7 +794,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # To update the estimated time & area when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed, init=True)
-
 
     def start_listening_to_va(self):
         # Get all the VA's from the stream and subscribe to them for changes.
@@ -842,6 +866,36 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         streams = self._view.getStreams()
         return streams
 
+    def _get_areas(self) -> List[Tuple[float]]:
+        """
+        return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
+        of all areas to acquire.
+        """
+        if not self._main_data_model.sample_centers:
+            if self.area is None:
+                return []
+            else:
+                return [self.area]
+
+        # TODO: for now this is only for the MIMAS, but eventually, on the METEOR,
+        # which often supports 2 grids, this should also be possible to use.
+
+        # .sample_centers contains the center position of each area
+        # .sample_rel_bbox contains the relative bounding box on an area
+        rel_bbox = self._main_data_model.sample_rel_bbox
+
+        # Sort the (selected) centers along X, and for centers with the same X, along the Y.
+        # In theory, the order doesn't really matter (at best it would safe a few
+        # seconds of stage movement), but it's nice for the user that acquisitions
+        # are done always in the same order, as it reduces "astonishment".
+        sorted_centers = sorted(pos
+                                for name, pos in self._main_data_model.sample_centers.items()
+                                if name in self._selected_grids)
+        areas = [(center[0] + rel_bbox[0], center[1] + rel_bbox[1], center[0] + rel_bbox[2], center[1] + rel_bbox[3])
+                 for center in sorted_centers]
+
+        return areas
+
     def update_area_size(self):
         """
         Calculates the requested tiling area size, based on the tiles number
@@ -869,6 +923,46 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             # there is no intersection
             logging.warning("Couldn't find intersection between stage pos %s and tiling range %s" % (pos, self._tiling_rng))
 
+    def sample_positions_to_layout(self, sample_centers: Dict[str, Tuple[float, float]]) -> List[List[Optional[str]]]:
+        """
+        Convert sample positions to a grid layout
+        :param sample_centers: the name -> position of each sample
+        returns: 2D grid layout containing the names of the samples (or None if 
+        no sample at that grid position)
+        """
+        # Find the number of rows and columns
+        xpositions = sorted({p[0] for p in sample_centers.values()})
+        ypositions = sorted({p[1] for p in sample_centers.values()}, reverse=True)  # Y goes up
+
+        # TODO merge values which are very similar (but not identical due to floating point error)
+
+        nx, ny = len(xpositions), len(ypositions)
+
+        layout = [[None for i in range(nx)] for j in range(ny)]
+
+        # Fill up the layout based on the content of sample_centers
+        for name, pos in sample_centers.items():
+            i = xpositions.index(pos[0])
+            j = ypositions.index(pos[1])
+            layout[j][i] = name
+
+        return layout
+
+    def on_grid_button(self, evt: wx.Event = None):
+        """
+        Called when a grid selection button is pressed
+        """
+        # Updates the selected grids based on the button states
+        selected_grids = set()
+        for name, btn in self._grids.buttons.items():
+            if btn.GetValue():
+                selected_grids.add(name)
+
+        self._selected_grids = selected_grids
+
+        # Update the areas and estimated acquisition time
+        self.update_setting_display()
+
     @wxlimit_invocation(0.1)
     def update_setting_display(self):
         if not self:
@@ -886,18 +980,18 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # the smallest FoV would also affect the area.
         self.update_area_size()
 
-        # Disable acquisition button if no area
-        self.btn_secom_acquire.Enable(self.area is not None)
-
         areas = self._get_areas()
-        if areas[0] is None:
-            self.area_size_txt.SetLabel("Invalid stage position")
-            return
 
-        area_size = (sum(area[2] - area[0] for area in areas),
-                     sum(area[3] - area[1] for area in areas))
-        area_size_str = util.readable_str(area_size, unit="m", sig=3)
-        self.area_size_txt.SetLabel(area_size_str)
+        # Disable acquisition button if no area
+        self.btn_secom_acquire.Enable(bool(areas))
+
+        if not areas:
+            self.area_size_txt.SetLabel("Invalid stage position")
+        else:
+            area_size = (sum(area[2] - area[0] for area in areas),
+                         sum(area[3] - area[1] for area in areas))
+            area_size_str = util.readable_str(area_size, unit="m", sig=3)
+            self.area_size_txt.SetLabel(area_size_str)
 
         self.update_acquisition_time()
 
@@ -925,10 +1019,11 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         areas = self._get_areas()
 
-        if not areas[0]:
+        if not areas:
             # This can happen if the stage is situated outside of the active range
-            # (and sample_centers is not used).
+            # or all areas have been unselected (when sample_centers is used).
             logging.debug("Unknown acquisition area, cannot estimate acquisition time")
+            self.lbl_acqestimate.SetLabel("Select an area to acquire.")
             return
 
         streams = self.get_acq_streams()
@@ -1080,32 +1175,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         fov = (self.area[2] - self.area[0], self.area[3] - self.area[1])
         self.pnl_view_acq.set_mpp_from_fov(fov)
-
-    def _get_areas(self) -> List[Tuple[float]]:
-        """
-        return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
-        of all areas to acquire.
-        """
-        if not self._main_data_model.sample_centers:
-            return [self.area]
-
-        # TODO: for now this is only for the MIMAS, but eventually, on the METEOR,
-        # which often supports 2 grids, this should also be possible to use.
-
-        # .sample_centers contains the center position of each area
-        # .sample_rel_bbox contains the relative bounding box on an area
-        rel_bbox = self._main_data_model.sample_rel_bbox
-
-        # TODO: once there are toggle buttons, filter to only the button toggled on
-        # Sort the centers along X, and for centers with the same X, along the Y.
-        # In theory, the order doesn't really matter (at best it would safe a few
-        # seconds of stage movement), but it's nice for the user that acquisitions
-        # are done always in the same order, as it reduces "astonishment".
-        sorted_centers = sorted(self._main_data_model.sample_centers.values())
-        areas = [(center[0] + rel_bbox[0], center[1] + rel_bbox[1], center[0] + rel_bbox[2], center[1] + rel_bbox[3])
-                 for center in sorted_centers]
-
-        return areas
 
     def on_acquire(self, evt):
         """ Start the actual acquisition """
