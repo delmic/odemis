@@ -3445,7 +3445,7 @@ class FastEMROAOverlay(FastEMSelectOverlay):
         Check if left click was in ROA. If so, activate the overlay. Otherwise, deactivate.
         """
         abort_roa_creation = (self._coordinates.value == UNDEFINED_ROI and
-                              max(self.get_height(), self.get_width()) < gui.SELECTION_MINIMUM)
+                              max(self.get_height() or 0, self.get_width() or 0) < gui.SELECTION_MINIMUM)
         if abort_roa_creation:
             # Process aborted by clicking in the viewport
             # VA did not change, so notify explicitly to make sure aborting the process works
