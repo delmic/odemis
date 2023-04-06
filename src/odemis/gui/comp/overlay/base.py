@@ -620,7 +620,7 @@ class SelectionMixin(DragMixin):
 
         logging.debug("Stopping selection")
 
-        if max(self.get_height(), self.get_width()) < gui.SELECTION_MINIMUM:
+        if max(self.get_height() or 0, self.get_width() or 0) < gui.SELECTION_MINIMUM:
             logging.debug("Selection too small")
             self.clear_selection()
         else:
