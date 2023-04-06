@@ -175,6 +175,7 @@ class MainGUIData(object):
         "pcd-selector": "pcd_sel",
         "chamber": "chamber",
         "light": "light",
+        "light-aligner": "light_aligner",  # mirror of SPARCv2
         "brightlight": "brightlight",
         "backlight": "backlight",
         "filter": "light_filter",
@@ -233,6 +234,7 @@ class MainGUIData(object):
         self.mirror = None  # actuator to change the mirror position (SPARC)
         self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
+        self.light_aligner = None  # actuator to move/calibrate the light aligner mirror (SPARCv2)
         self.light = None  # epi-fluorescence light (SECOM/DELPHI)
         self.brightlight = None  # special light for white illumination (SECOM) or calibration (SPARC)
         self.backlight = None  # for dark field illumination (SECOM)

@@ -5871,6 +5871,10 @@ class Sparc2AlignTab(Tab):
             self.streak_unit.timeRange.value = self.streak_unit.timeRange.value
 
         # Create stream & view
+        # ====== For DEBUGGING purpose ======
+        # if "FSLM" in main_data.microscope.name.upper():
+        #     wx.MessageBox("Actual SPARC module is FSLM", caption="Notice")
+
         self._stream_controller = streamcont.StreamBarController(
             tab_data,
             panel.pnl_streams,
