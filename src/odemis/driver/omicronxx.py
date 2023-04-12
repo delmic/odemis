@@ -27,7 +27,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # one which contain multiple source (ie, the LedHUB). In the second case, the
 # commands are indexed with the source number: [X].
 
-from future.utils import with_metaclass
 from abc import ABCMeta, abstractmethod
 import fcntl
 import glob
@@ -619,7 +618,7 @@ class DevxX(object):
         self._setValue("POf")
 
 
-class GenericxX(with_metaclass(ABCMeta, model.Emitter)):
+class GenericxX(model.Emitter, metaclass=ABCMeta):
 
     def __init__(self, name, role, ports, **kwargs):
         """

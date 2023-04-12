@@ -15,7 +15,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from future.utils import with_metaclass
 from abc import ABCMeta
 import logging
 import copy
@@ -33,7 +32,7 @@ from odemis.util import img
 # directly copy the image already transformed.
 # TODO: handle higher dimensions by just copying them as-is
 
-class Weaver(with_metaclass(ABCMeta, object)):
+class Weaver(metaclass=ABCMeta):
     """
     Abstract class representing a weaver.
     A weaver assembles a set of small images with MD_POS metadata (tiles) into one large image.

@@ -20,7 +20,6 @@ see http://www.gnu.org/licenses/.
 
 """
 
-from future.utils import with_metaclass
 from functools import partial
 from abc import ABCMeta, abstractmethod, abstractproperty
 import glob
@@ -158,7 +157,7 @@ def load_plugin(filename, microscope, main_app):
     return ret
 
 
-class Plugin(with_metaclass(ABCMeta, object)):
+class Plugin(metaclass=ABCMeta):
     """
     This is the root class for Odemis GUI plugins.
     Every plugin must be a subclass of that class.

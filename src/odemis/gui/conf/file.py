@@ -17,7 +17,6 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
-from future.utils import with_metaclass
 from abc import ABCMeta, abstractproperty
 import configparser
 from configparser import NoOptionError
@@ -35,7 +34,7 @@ CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
 ACQUI_PATH = get_picture_folder()
 
 
-class Config(with_metaclass(ABCMeta, object)):
+class Config(metaclass=ABCMeta):
     """ Abstract configuration super class
 
     Configurations are built around the :py:class:`configparser.ConfigParser` class.

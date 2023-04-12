@@ -20,7 +20,6 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from future.utils import with_metaclass
 from past.builtins import basestring, long
 import queue
 from abc import ABCMeta
@@ -546,7 +545,7 @@ class CryoMainGUIData(MainGUIData):
         self.sample_rel_bbox = self.SAMPLE_USABLE_BBOX_TEM_GRID
 
 
-class MicroscopyGUIData(with_metaclass(ABCMeta, object)):
+class MicroscopyGUIData(metaclass=ABCMeta):
     """Contains all the data corresponding to a GUI tab.
 
     In the Odemis GUI, there's basically one MicroscopyGUIData per tab (or just

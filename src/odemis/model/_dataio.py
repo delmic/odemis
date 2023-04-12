@@ -19,11 +19,10 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from future.utils import with_metaclass
 from abc import ABCMeta, abstractmethod
 
 
-class DataArrayShadow(with_metaclass(ABCMeta, object)):
+class DataArrayShadow(metaclass=ABCMeta):
     """
     This class contains information about a DataArray.
     It has all the useful attributes of a DataArray, but not the actual data.
@@ -79,7 +78,7 @@ class DataArrayShadow(with_metaclass(ABCMeta, object)):
 #         """
 
 
-class AcquisitionData(with_metaclass(ABCMeta, object)):
+class AcquisitionData(metaclass=ABCMeta):
     """
     It's an abstract class to represent an opened file. It allows
     to have random access to a sub-part of any image in the file. It's extended by
