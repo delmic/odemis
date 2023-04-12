@@ -507,7 +507,7 @@ class TestPumpingSystem(unittest.TestCase):
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.TurboPump1.Speed.Actual
-        test_value = 1.0
+        test_value = 2000
         self.psys._system.TurboPump1.Speed.Actual = test_value
         sleep(1)
         self.assertEqual(self.psys.speed.value, test_value)
@@ -521,7 +521,7 @@ class TestPumpingSystem(unittest.TestCase):
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.TurboPump1.Temperature.Actual
-        test_value = 1.0
+        test_value = 25.0
         self.psys._system.TurboPump1.Temperature.Actual = test_value
         sleep(1)
         self.assertEqual(self.psys.temperature.value, test_value)
@@ -535,7 +535,7 @@ class TestPumpingSystem(unittest.TestCase):
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.TurboPump1.Power.Actual
-        test_value = 1.0
+        test_value = 1.1
         self.psys._system.TurboPump1.Power.Actual = test_value
         sleep(1)
         self.assertEqual(self.psys.power.value, test_value)
@@ -595,7 +595,7 @@ class TestPumpingSystem(unittest.TestCase):
             self.skipTest(CANT_FORCE_ACTUAL_MSG)
 
         init_state = self.psys._system.Manometer1.Pressure.Actual
-        test_value = 1.0
+        test_value = 1.234
         self.psys._system.Manometer1.Pressure.Actual = test_value
         sleep(1)
         self.assertEqual(self.psys.nitrogenPressure.value, test_value)
@@ -864,6 +864,16 @@ class TestGISReservoir(unittest.TestCase):
         Terminate the Orsay client
         """
         cls.oserver.terminate()
+
+    def test_basic(self):
+        """
+        Test each VA has an expected value
+        """
+        self.assertGreaterEqual(self.gis_res.age.value, 0)  # s
+        self.assertTrue(-200 <= self.gis_res.temperature.value <= 50)  # °C
+        self.assertTrue(-200 <= self.gis_res.targetTemperature.value <= 50)  # °C
+        self.assertIn(self.gis_res.temperatureRegulation.value, (True, False))
+        self.assertIsInstance(self.gis_res.precursorType.value, str)
 
     def test_errorstate(self):
         """
