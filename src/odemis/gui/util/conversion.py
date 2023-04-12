@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from typing import Dict, List, Optional, Tuple
 
 import wx
-from past.builtins import basestring
 
 from odemis.util.conversion import (frgb_to_rgb, hex_to_frgb, hex_to_rgb,
                                     rgb_to_frgb)
@@ -101,7 +100,7 @@ def change_brightness(colour, weight):
 
     _alpha = None
 
-    if isinstance(colour, basestring):
+    if isinstance(colour, str):
         _col = hex_to_frgb(colour)
         _alpha = None
     elif isinstance(colour, tuple):

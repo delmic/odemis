@@ -22,8 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # This is a basic command line interface to the odemis back-end
 
-from past.builtins import basestring, unicode
-from builtins import str
 from collections.abc import Iterable, Mapping
 import argparse
 import codecs
@@ -152,7 +150,7 @@ def print_component(comp, pretty=True, level=0):
         pstr = u""
         try:
             pname = comp.parent.name
-            if isinstance(pname, basestring):
+            if isinstance(pname, str):  # Due to Pyro, it could be a (non-existent) RemoteMethod
                 pstr = u"\tparent:" + pname
         except AttributeError:
             pass
@@ -409,7 +407,7 @@ def print_metadata(component, pretty):
         print("\tMetadata:")
         for key, value in md.items():
             name = md2name.get(key, "'%s'" % (key,))
-            if isinstance(value, basestring):
+            if isinstance(value, str):
                 print(u"\t\t%s: '%s'" % (name, value))
             else:
                 print(u"\t\t%s: %s" % (name, value))
@@ -513,7 +511,7 @@ def set_attr(comp_name, attr_val_str):
 
         # Special case for None being referred to as "null" in YAML, but we should
         # also accept "None"
-        elif new_val == "None" and not isinstance(attr.value, basestring):
+        elif new_val == "None" and not isinstance(attr.value, str):
             new_val = None
             logging.debug("Adjusting value to %s (null)", new_val)
         elif isinstance(new_val, list) and isinstance(attr.value, tuple):
@@ -793,7 +791,7 @@ def acquire(comp_name, dataflow_names, filename):
     Acquire an image from one (or more) dataflow
     comp_name (string): name of the detector to find
     dataflow_names (list of string): name of each dataflow to access
-    filename (unicode): name of the output file (format depends on the extension)
+    filename (str): name of the output file (format depends on the extension)
     """
     component = get_detector(comp_name)
 
@@ -1053,7 +1051,7 @@ def main(args):
         if options.scan:
             if status == BACKEND_RUNNING:
                 raise ValueError("Back-end running while trying to scan for devices")
-            if isinstance(options.scan, basestring):
+            if isinstance(options.scan, str):
                 scan(options.scan)
             else:
                 scan()
@@ -1104,10 +1102,7 @@ def main(args):
                 dataflows = ["data"]
             else:
                 dataflows = options.acquire[1:]
-            if isinstance(options.output, unicode):  # python3
-                filename = options.output
-            else:  # python2
-                filename = options.output.decode(sys.getfilesystemencoding())
+            filename = options.output
             acquire(component, dataflows, filename)
         elif options.live is not None:
             component = options.live[0]

@@ -19,8 +19,6 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from builtins import str
-from past.builtins import basestring
 import wx
 from decorator import decorator
 
@@ -138,11 +136,9 @@ class SettingsPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
 
-        # Convert value object to str (unicode) iif necessary.
-        # unicode() (which is str() from Python3) fails in Python2 if argument
-        # is bytes with non-ascii characters.
-        # => If value is already bytes or unicode, just pass it as-is to wx.TextCtrl.
-        if not isinstance(value, basestring):
+        # Convert value object to str, only if necessary.
+        # => If value is already bytes or str, just pass it as-is to wx.TextCtrl.
+        if not isinstance(value, (str, bytes)):
             value = str(value)
 
         if value is not None:

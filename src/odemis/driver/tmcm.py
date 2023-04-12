@@ -29,14 +29,12 @@ You should have received a copy of the GNU General Public License along with Ode
 # is connected)
 # Bug reported to Trinamic 2015-10-19. => They don't really seem to believe it.
 
-from past.builtins import basestring
 import glob
 import logging
 import os
 import random
 import re
 import struct
-import subprocess
 import threading
 from collections import OrderedDict
 from concurrent.futures import CancelledError
@@ -52,7 +50,6 @@ except ImportError:
     canopen = None
 
 import fcntl
-import math
 import numpy
 import serial
 import time
@@ -428,7 +425,7 @@ class TMCLController(model.Actuator):
                 # If it times out, the user should specify an axis range.
                 self._ref_max_length[i] = sz * 4e6  # m
 
-            if not isinstance(unit[i], basestring):
+            if not isinstance(unit[i], str):
                 raise ValueError("unit argument must only contain strings, but got %s" % (unit[i],))
             axes_def[n] = model.Axis(range=phy_rng, unit=unit[i])
             self._init_axis(i)
@@ -2694,7 +2691,7 @@ class CANController(model.Actuator):
                 # If it times out, the user should specify an axis range.
                 self._ref_max_length[i] = sz * 4e6  # m
 
-            if not isinstance(unit[i], basestring):
+            if not isinstance(unit[i], str):
                 raise ValueError("unit argument must only contain strings, but got %s" % (unit[i],))
             axes_def[n] = model.Axis(range=phy_rng, unit=unit[i])
             try:

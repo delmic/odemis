@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # updated. Typically it is used to transmit video (sequence of images). It does it
 # losslessly and with metadata attached (see _metadata for the conventional ones).
 
-from past.builtins import basestring
 import Pyro4
 import logging
 import numpy
@@ -334,7 +333,7 @@ class DataFlow(DataFlowBase):
             count_before = self._count_listeners()
 
             # add string to listeners if listener is string
-            if isinstance(listener, basestring):
+            if isinstance(listener, str):
                 self._remote_listeners.add(listener)
             else:
                 assert callable(listener)
@@ -349,7 +348,7 @@ class DataFlow(DataFlowBase):
                     self.start_generate()
                 except Exception as ex:
                     logging.error("Subscribing listener %r to the dataflow failed. %s", listener, ex)
-                    if isinstance(listener, basestring):
+                    if isinstance(listener, str):
                         # remove string from listeners
                         self._remote_listeners.discard(listener)
                     else:
@@ -361,7 +360,7 @@ class DataFlow(DataFlowBase):
     def unsubscribe(self, listener):
         with self._lock:
             count_before = self._count_listeners()
-            if isinstance(listener, basestring):
+            if isinstance(listener, str):
                 # remove string from listeners
                 self._remote_listeners.discard(listener)
             else:

@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # This is a driver for the Andor Shamrock & Kymera spectographs.
 
-from past.builtins import basestring
 from ctypes import *
 import ctypes
 import logging
@@ -359,7 +358,7 @@ class Shamrock(model.Actuator):
         for i, slitn in slits.items():
             if not SLIT_INDEX_MIN <= i <= SLIT_INDEX_MAX:
                 raise ValueError("Slit number must be between 1 and 4, but got %s" % (i,))
-            if isinstance(slitn, basestring):
+            if isinstance(slitn, str):
                 self._slit_names[i] = slitn
             elif len(slitn) >= 2:  # ["name", "option"]
                 self._slit_names[i] = slitn[0]
@@ -372,7 +371,7 @@ class Shamrock(model.Actuator):
         self._reconnecting = False
 
         try:
-            if isinstance(device, basestring):
+            if isinstance(device, str):
                 self._device = self._findDevice(device)
             else:
                 nd = self.GetNumberDevices()
@@ -473,7 +472,7 @@ class Shamrock(model.Actuator):
                                 raise ValueError("Filter position should be between %d and "
                                                  "%d, but got %d." % (FILTERMIN, FILTERMAX, pos))
                             # To support "weird" filter, we accept strings
-                            if isinstance(band, basestring):
+                            if isinstance(band, str):
                                 if not band.strip():
                                     raise ValueError("Name of filter %d is empty" % pos)
                             else:

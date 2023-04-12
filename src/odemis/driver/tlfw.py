@@ -15,7 +15,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from past.builtins import basestring
 import glob
 import logging
 from odemis import model
@@ -73,7 +72,7 @@ class FW102c(model.Actuator):
                     raise ValueError("Filter position should be between 1 and "
                                      "%d, but got %d." % (self._maxpos, pos))
                 # To support "weird" filter, we accept strings
-                if isinstance(band, basestring):
+                if isinstance(band, str):
                     if not band.strip():
                         raise ValueError("Name of filter %d is empty" % pos)
                 else:

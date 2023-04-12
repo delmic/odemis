@@ -20,7 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from past.builtins import basestring, long
+from past.builtins import long
 import Pyro4
 from Pyro4.core import oneway
 from collections.abc import Iterable, Set
@@ -306,7 +306,7 @@ class VigilantAttribute(VigilantAttributeBase):
         listener (callable) => method to call (locally)
         """
         # add string to listeners if listener is string
-        if isinstance(listener, basestring):
+        if isinstance(listener, str):
             self._remote_listeners.add(listener)
         else:
             VigilantAttributeBase.subscribe(self, listener, init)
@@ -321,7 +321,7 @@ class VigilantAttribute(VigilantAttributeBase):
         listener (string) => uri of listener of zmq
         listener (callable) => method to call (locally)
         """
-        if isinstance(listener, basestring):
+        if isinstance(listener, str):
             # remove string from listeners
             self._remote_listeners.discard(listener)
         else:
@@ -623,7 +623,7 @@ class StringVA(VigilantAttribute):
         VigilantAttribute.__init__(self, value, *args, **kwargs)
 
     def _check(self, value):
-        if not isinstance(value, basestring):
+        if not isinstance(value, str):
             raise TypeError("Value '%r' is not a string." % value)
 
 

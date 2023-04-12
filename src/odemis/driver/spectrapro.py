@@ -19,7 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from past.builtins import basestring
 from collections.abc import Iterable
 import glob
 import logging
@@ -291,7 +290,7 @@ class SpectraPro(model.Actuator):
         rawv (str or number)
         return (float)
         """
-        if isinstance(rawv, basestring):
+        if isinstance(rawv, str):
             if rawv.startswith("hex:"):
                 rawv = rawv[4:]
             return hextof(rawv)

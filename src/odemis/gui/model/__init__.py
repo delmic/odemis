@@ -20,7 +20,7 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from past.builtins import basestring, long
+from past.builtins import long
 import queue
 from abc import ABCMeta
 from collections.abc import Mapping
@@ -1559,16 +1559,16 @@ class FileInfo(object):
 
     def __init__(self, a_file=None, metadata=None):
         """
-        :param a_file: (unicode or File or None): the full name of the file or
+        :param a_file: (str or File or None): the full name of the file or
             a File that contains the acquisition. If provided (and the file
             exists), some fields will be automatically filled in.
-        :param metadata: (dict String -> value): The meta-data as model.MD_*.
+        :param metadata: (dict str -> value): The meta-data as model.MD_*.
         """
 
         self.file_name = None
         self.file_obj = None
 
-        if isinstance(a_file, basestring):
+        if isinstance(a_file, str):
             # The given parameter is a file name
             self.file_name = a_file
         elif a_file is not None:

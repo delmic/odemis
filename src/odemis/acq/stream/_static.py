@@ -23,7 +23,7 @@ see http://www.gnu.org/licenses/.
 # Contains all the static streams, which only provide projections of the data
 # they were initialised with.
 
-from past.builtins import basestring, long
+from past.builtins import long
 from collections.abc import Iterable
 import copy
 import gc
@@ -290,7 +290,7 @@ class StaticCLStream(Static2DStream):
         Static2DStream.__init__(self, name, raw, *args, **kwargs)
         try:
             em_range = raw.metadata[model.MD_OUT_WL]
-            if isinstance(em_range, basestring):
+            if isinstance(em_range, str):
                 unit = None
             else:
                 unit = "m"
@@ -338,7 +338,7 @@ class StaticFluoStream(Static2DStream):
         default_tint = (0, 255, 0)  # green is most typical
         try:
             em_range = raw.metadata[model.MD_OUT_WL]
-            if isinstance(em_range, basestring):
+            if isinstance(em_range, str):
                 unit = None
             else:
                 unit = "m"
