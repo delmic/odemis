@@ -125,23 +125,26 @@ def getCurrentGridLabel(current_pos, stage):
     """
     current_pos_label = getCurrentPositionLabel(current_pos, stage)
     stage_md = stage.getMetadata()
-    grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
-    grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+
     if current_pos_label == SEM_IMAGING:
-        grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-        grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-        distance_to_grid1 = _getDistance(current_pos, grid1_pos)
-        distance_to_grid2 = _getDistance(current_pos, grid2_pos)
-        return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1
+        grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+        grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+        grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
+        grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
     elif current_pos_label == FM_IMAGING:
-        grid1_pos.update(stage_md[model.MD_FAV_FM_POS_ACTIVE])
-        grid2_pos.update(stage_md[model.MD_FAV_FM_POS_ACTIVE])
-        distance_to_grid1 = _getDistance(current_pos, transformFromSEMToMeteor(grid1_pos, stage))
-        distance_to_grid2 = _getDistance(current_pos, transformFromSEMToMeteor(grid2_pos, stage))
-        return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
+        grid1_pos = stage_md[model.MD_FAV_FM_POS_ACTIVE]
+        grid2_pos = stage_md[model.MD_FAV_FM_POS_ACTIVE]
+        grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
+        grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
+        grid1_pos = transformFromSEMToMeteor(grid1_pos, stage)
+        grid2_pos = transformFromSEMToMeteor(grid2_pos, stage)
     else:
         logging.warning("Cannot guess between grid 1 and grid2 in %s position" % POSITION_NAMES[current_pos_label])
         return None
+    distance_to_grid1 = _getDistance(current_pos, grid1_pos)
+    distance_to_grid2 = _getDistance(current_pos, grid2_pos)
+
+    return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
 
 
 def _getCurrentEnzelPositionLabel(current_pos, stage):

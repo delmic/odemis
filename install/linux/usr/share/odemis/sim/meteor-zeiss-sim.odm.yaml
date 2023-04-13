@@ -5,7 +5,7 @@ Zeiss-METEOR: {
     class: Microscope,
     role: meteor,
     children: [
-        "Stage",
+        "AntiBacklash Stage",
         "Meteor Stage",
         "Optical Objective",
         "Optical Focus",
@@ -38,7 +38,7 @@ Zeiss-METEOR: {
 
 
 "Stage": {
-    role: stage-bare,
+    role: null,
     init: {
         rng: {
             # For Zeiss XB550
@@ -53,6 +53,16 @@ Zeiss-METEOR: {
         # increase the Y position => see at the center something which was at the top
         # inverted: ["x", "y"],  # TODO: check
     },
+}
+
+"AntiBacklash Stage": {
+    class: actuator.AntiBacklashActuator,
+    role: stage-bare,
+    init: {
+        # Force a move on the m axis to always finish by +10µm to workaround the backlash.
+        backlash: {},  # Other axes have no anti-backlash
+    },
+    dependencies: {"slave": "Stage"},
     metadata: {
         # Loading position:
         FAV_POS_DEACTIVE: { 'rx': 0.0, 'rm': 0.7417649320975901, 'x': 54.976e-3, 'y': 56.806e-3, 'z': 0.0, 'm': 7.060e-3 }, # To be filled in based on integration data, rm is 42.5°
@@ -67,7 +77,6 @@ Zeiss-METEOR: {
         # Note: these values are calibrated during installation.
         FAV_FM_POS_ACTIVE: {"rx": 0.4607669225265  , "rm":  1.7453292519943295}, # 26.4° & 100°, respectively
         FAV_SEM_POS_ACTIVE: {"rx": 0.0349065850399, "rm": 4.886921905584122},   # 2° & 280° Note that the default milling angle (rx_sem) can be chosen by the customer, and that rm_sem should always be 180 degrees different from rm_fm
-
     },
 }
 
@@ -75,7 +84,7 @@ Zeiss-METEOR: {
     class: actuator.ConvertStage,
     role: null,
     dependencies: {
-        "under": "Stage"
+        "under": "AntiBacklash Stage"
     },
     init: {
       axes: [ "y", "m" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
@@ -86,14 +95,14 @@ Zeiss-METEOR: {
 "Meteor Stage": {
     class: actuator.MultiplexActuator,
     role: stage,
-    dependencies: { "x": "Stage", "y": "Linked YM", "z": "Linked YM", },
+    dependencies: { "x": "AntiBacklash Stage", "y": "Linked YM", "z": "Linked YM", },
     init: {
         axes_map: { "x": "x", "y": "x", "z": "y",},
         # inverted: ["x", "y"],  # TODO: check
     },
     affects: ["Camera", "EBeam"],
     metadata: {
-        POS_ACTIVE_RANGE: {"x":[-2.0e-3, 2.0e-3], "y": [-2.0e-3, 2.0e-3]}
+        POS_ACTIVE_RANGE: {"x":[90.e-3, 102.5e-3], "y": [30.e-3, 70.e-3]}
     },
 }
 
