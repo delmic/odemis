@@ -821,13 +821,15 @@ class SECOMConfocalTestCase(unittest.TestCase):
         f.add_update_callback(self._on_progress_update)
         f.add_done_callback(self._on_done)
 
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
+        self.assertIsNone(exp)
         self.assertEqual(len(data), 1)
         self.assertEqual(data[0].shape, exp_shape)
         self.assertGreaterEqual(self.updates, 1)  # at least 1 update
         self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
         self.assertTrue(not f.cancelled())
+
 
     def test_acq_conf_multi_det(self):
         """
@@ -879,7 +881,8 @@ class SECOMConfocalTestCase(unittest.TestCase):
         f.add_update_callback(self._on_progress_update)
         f.add_done_callback(self._on_done)
 
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(self.photo_ds))
         for d in data:
             self.assertEqual(d.shape, exp_shape)
@@ -1027,7 +1030,8 @@ class SPARCTestCase(unittest.TestCase):
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
+        self.assertIsNone(exp)
         self.assertEqual(len(data), num_ar + 1)
         self.assertEqual(data[0].shape, exp_shape)
         self.assertGreaterEqual(self.updates, 4)  # at least a couple of updates
@@ -1049,7 +1053,8 @@ class SPARCTestCase(unittest.TestCase):
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
+        self.assertIsNone(exp)
         self.assertEqual(len(data), num_ar + 1)
         self.assertEqual(data[0].shape, exp_shape)
         self.assertGreaterEqual(self.updates, 5)  # at least a few updates
@@ -1144,10 +1149,11 @@ class SPARCTestCase(unittest.TestCase):
         f = sas.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sas.raw))
         sem_da = sas.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -1179,10 +1185,12 @@ class SPARCTestCase(unittest.TestCase):
         f = sas.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
+
         self.assertEqual(len(data), len(sas.raw))
         sem_da = sas.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -1230,10 +1238,11 @@ class SPARCTestCase(unittest.TestCase):
         testing.assert_array_not_equal(im1, im2)
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -1261,10 +1270,11 @@ class SPARCTestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -1307,10 +1317,11 @@ class SPARCTestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         # The SEM res should have at least 2x2 sub-pixels per pixel
@@ -1348,10 +1359,11 @@ class SPARCTestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         # The SEM res should have at least 2x2 sub-pixels per pixel
@@ -1409,12 +1421,13 @@ class SPARCTestCase(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result()
+        data, exp = f.result()
         for l in sms.leeches:
             l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         # No SEM data with monochromator (currently), so only PMT + anchor
         self.assertEqual(len(data), 2)
         mcsd = None
@@ -1449,12 +1462,13 @@ class SPARCTestCase(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result()
+        data, exp = f.result()
         for l in sms.leeches:
             l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         # No SEM data with monochromator (currently), so only PMT + anchor
         self.assertEqual(len(data), 2)
         mcsd = None
@@ -1635,10 +1649,11 @@ class SPARC2TestCase(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sms.raw))
 
         # Both SEM and CL should have the same shape
@@ -1674,11 +1689,12 @@ class SPARC2TestCase(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dc.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sms.raw))
         # Both SEM and CL should have the same shape (and last one is anchor region)
         self.assertEqual(len(sms.raw), 3)
@@ -1735,12 +1751,13 @@ class SPARC2TestCase(unittest.TestCase):
             f = sms.acquire()
 
         # Finally acquire something really, and check it worked
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         for l in sms.leeches:
             l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sms.raw))
 
         # Both SEM and CL should have the same shape (and last one is anchor region)
@@ -1785,12 +1802,13 @@ class SPARC2TestCase(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         for l in sms.leeches:
             l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sms.raw))
 
         # Both SEM and CL should have the same shape (and last one is anchor region)
@@ -1841,10 +1859,11 @@ class SPARC2TestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -1879,10 +1898,11 @@ class SPARC2TestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -1951,10 +1971,11 @@ class SPARC2TestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -2016,12 +2037,13 @@ class SPARC2TestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         for l in sps.leeches:
             l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         # The SEM res should have at least 2x2 sub-pixels per pixel
@@ -2067,12 +2089,13 @@ class SPARC2TestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         for l in sps.leeches:
             l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s (while expected %g s)", dur, estt)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         sem_da = sps.raw[0]
         # The SEM res should have at least 2x2 sub-pixels per pixel
         self.assertGreaterEqual(sem_da.shape[1], exp_res[0] * 2)
@@ -2125,10 +2148,11 @@ class SPARC2TestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -2189,12 +2213,13 @@ class SPARC2TestCase(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         for l in sms.leeches:
             l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sms.raw))
 
         # Both SEM and CL should have the same shape (and last one is anchor region)
@@ -2279,8 +2304,9 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         f.add_update_callback(self.on_progress_update)
         f.add_done_callback(self.on_done)
 
-        self.data = f.result()
+        self.data, exp = f.result()
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
         # check if the ProgressiveFuture used to start the acquisition request is done
         time.sleep(0.1)  # wait a tiny bit to assert done status
@@ -2863,7 +2889,8 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         im2 = streaks.image.value
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
+        self.assertIsNone(exp)
 
         # Check if the image changed (live update is working)
         testing.assert_array_not_equal(im1, im2)
@@ -2903,10 +2930,11 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # data: array should contain same images as stss.raw
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
         # Confirm protections are applied on the hardware
         self.assertEqual(self.streak_unit.MCPGain.value, 0)
@@ -2948,10 +2976,11 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         start = time.time()
         f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
         # wait until it's over
-        f.result(timeout2)
+        data, exp = f.result(timeout2)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
     def test_streak_acq_leech(self):
         """
@@ -2998,7 +3027,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # data: array should contain same images as stss.raw
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
 
         for l in streaks.leeches:
             l.series_complete(data)
@@ -3006,6 +3035,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
         # check if number of images in the received data (sem image + temporal spectrum images) is the same as
         # number of images stored in raw
@@ -3067,10 +3097,11 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # data: array should contain same images as stss.raw
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
         ts_da = data[1]  # temporal spectrum data array
         shape = ts_da.shape
@@ -3104,7 +3135,8 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         timeout = 1.5 * stss.estimateAcquisitionTime()
         f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
         # wait until it's over
-        data2 = f.result(timeout)
+        data2, exp = f.result(timeout)
+        self.assertIsNone(exp)
         ts_da2 = data2[1]  # temporal spectrum data array
 
         # test that the values in the second acquisition are greater (integrationCount greater than first acq)
@@ -3119,7 +3151,8 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         timeout = 1.5 * stss.estimateAcquisitionTime()
         f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
         # wait until it's over
-        data3 = f.result(timeout)
+        data3, exp = f.result(timeout)
+        self.assertIsNone(exp)
         ts_da3 = data3[1]  # temporal spectrum data array
 
         # check baseline is not multiplied by integrationCount (we keep only one baseline level for integrated img)
@@ -3175,7 +3208,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # data: array should contain same images as stss.raw
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
 
         for l in streaks.leeches:
             l.series_complete(data)
@@ -3183,6 +3216,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
         ts_da = data[1]  # temporal spectrum data array
         shape = ts_da.shape
@@ -3246,10 +3280,11 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sms.raw))
 
         # Both SEM and the two CLs should have the same shape
@@ -3293,11 +3328,12 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dc.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sms.raw))
         # Both SEM and CL should have the same shape (and last one is anchor region)
         self.assertEqual(len(sms.raw), 4)
@@ -3406,10 +3442,11 @@ class SPARC2HwSyncTestCase(unittest.TestCase):
         testing.assert_array_not_equal(im1, im2)
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -3437,10 +3474,11 @@ class SPARC2HwSyncTestCase(unittest.TestCase):
         f = sps.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
         sem_da = sps.raw[0]
         self.assertEqual(sem_da.shape, exp_res[::-1])
@@ -3590,10 +3628,11 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
             # data: array should contain same images as sas.raw
 
             # wait until it's over
-            data = f.result(timeout)
+            data, exp = f.result(timeout)
             dur = time.time() - start
             logging.debug("Acquisition took %g s", dur)
             self.assertTrue(f.done())
+            self.assertIsNone(exp)
 
             # check if number of images in the received data (sem image + ar images) is the same as
             # number of images stored in raw
@@ -3673,13 +3712,14 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         f = sas.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
 
         for l in sas.leeches:
             l.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
         # check if number of images in the received data (sem image + ar images) is the same as
         # number of images stored in raw
@@ -3865,10 +3905,11 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # data: array should contain same images as sas.raw
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
         ar_da = data[1:]  # angle resolved data arrays
         # check that the number of acquired ar images matches the number of ebeam position
@@ -3901,8 +3942,9 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         timeout = 1.5 * sas.estimateAcquisitionTime()
         f = sas.acquire()  # calls acquire method in MultiDetectorStream in sync.py
         # wait until it's over
-        data2 = f.result(timeout)
+        data2, exp = f.result(timeout)
         ar_da2 = data2[1:]  # angle resolved data arrays
+        self.assertIsNone(exp)
 
         # test that the values in the second acquisition are smaller
         numpy.testing.assert_array_less(ar_da2[0], ar_da[0])
@@ -3916,8 +3958,9 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         timeout = 1.5 * sas.estimateAcquisitionTime()
         f = sas.acquire()  # calls acquire method in MultiDetectorStream in sync.py
         # wait until it's over
-        data3 = f.result(timeout)
+        data3, exp = f.result(timeout)
         ar_da3 = data3[1:]  # angle resolved data arrays
+        self.assertIsNone(exp)
 
         # check baseline is not multiplied by integrationCount (we keep only one baseline level for integrated img)
         self.assertEqual(ar_da3[0].metadata[model.MD_BASELINE], 100)
@@ -3971,7 +4014,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # data: array should contain same images as sas.raw
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
 
         for l in ars.leeches:
             l.series_complete(data)
@@ -3979,6 +4022,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
 
         ar_da = data[1:-1]  # angle resolved data arrays
         # check that the number of acquired angle resolved images matches the number of ebeam position
@@ -4093,10 +4137,11 @@ class SPARC2TestCaseFPLM(unittest.TestCase):
         self.assertEqual(self.light.power.value, [light_pwr])
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sps.raw))
 
         # The light should be off
@@ -4197,7 +4242,7 @@ class SPARC2TestCaseIndependentDetector(unittest.TestCase):
         ebics.roi.value = (0, 0.2, 0.3, 0.6)
 
         # dwell time of sems shouldn't matter
-        ebics.detDwellTime.value = 1e-6  # s
+        ebics.detDwellTime.value = 2e-6  # s
 
         ebics.repetition.value = (500, 700)
         exp_pos, exp_pxs, exp_res = roi_to_phys(ebics)
@@ -4208,10 +4253,11 @@ class SPARC2TestCaseIndependentDetector(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        self.assertIsNone(exp)
         self.assertEqual(len(data), len(sms.raw))
 
         # Both SEM and EBIC should have the same shape
@@ -4231,7 +4277,7 @@ class SPARC2TestCaseIndependentDetector(unittest.TestCase):
         dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
         dc.period.value = 1
         dc.roi.value = (0.525, 0.525, 0.6, 0.6)
-        dc.dwellTime.value = 2e-06
+        dc.dwellTime.value = 3e-06
         sems.leeches.append(dc)
 
         ebics.repetition.value = (1200, 1100)
@@ -4244,11 +4290,16 @@ class SPARC2TestCaseIndependentDetector(unittest.TestCase):
         f = sms.acquire()
 
         # wait until it's over
-        data = f.result(timeout)
+        data, exp = f.result(timeout)
+        self.assertIsNone(exp)
         dc.series_complete(data)
         dur = time.time() - start
         logging.debug("Acquisition took %g s", dur)
         self.assertTrue(f.done())
+        for da in sms.raw:
+            print(f"raw shape {da.shape}, dtype {da.dtype}, metadata {da.metadata.get(model.MD_DESCRIPTION)}")
+        for da in data:
+            print(f"data shape {da.shape}, dtype {da.dtype}, metadata {da.metadata.get(model.MD_DESCRIPTION)}")
         self.assertEqual(len(data), len(sms.raw))
         # Both SEM and CL should have the same shape (and last one is anchor region)
         self.assertEqual(len(sms.raw), 3)
@@ -4328,7 +4379,8 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         # the dwell time would be >> 1s.
         tc_stream.detDwellTime.value = 5e-3
         f = sem_tc_stream.acquire()
-        data = f.result()
+        data, exp = f.result()
+        self.assertIsNone(exp)
 
         self.assertEqual(len(data), 2)  # 1 array for se, the other for tc data
         for d in data:
@@ -4367,7 +4419,8 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         self.assertEqual(self.time_correlator.dwellTime.value, 1)
         # SEM dwell time might be either 1s, or the drift correction dwell time
         self.assertIn(self.ebeam.dwellTime.value, (1, 1e-6))
-        data = f.result()
+        data, exp = f.result()
+        self.assertIsNone(exp)
         # Dwell time on detector and emitter should be back to normal
         self.assertEqual(self.time_correlator.dwellTime.value, 2)
         self.assertEqual(self.ebeam.dwellTime.value, 0.042)
@@ -4406,7 +4459,8 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         im2 = tc_stream.image.value
 
         # wait until it's over
-        data = f.result()
+        data, exp = f.result()
+        self.assertIsNone(exp)
 
         # Check if the image changed (live update is working)
         testing.assert_array_not_equal(im1, im2)
