@@ -4357,9 +4357,10 @@ class SettingsStreamsTestCase(unittest.TestCase):
         self._image = None
         mcs.image.subscribe(self._on_image)
 
-        # start spot mode
-        spots.should_update.value = True
-        spots.is_active.value = True
+        # FIXME Monochromator cannot be read at the same time as the se-detector, and that confuses the acqusition
+        # # start spot mode
+        # spots.should_update.value = True
+        # spots.is_active.value = True
 
         # shouldn't affect
         mcs.roi.value = (0.15, 0.6, 0.8, 0.8)
