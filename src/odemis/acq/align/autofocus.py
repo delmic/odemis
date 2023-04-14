@@ -348,7 +348,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             good_focus = focus.position.value["z"]
             image = AcquireNoBackground(detector, dfbkg, timeout)
             fm_good = Measure(image)
-            logging.debug("Focus level at %.7g is %.7g", good_focus, fm_good)
+            logging.debug("Focus level at %.7g is %.7g, good focus known", good_focus, fm_good)
             focus_levels[good_focus] = fm_good
             last_pos = good_focus
 
@@ -543,8 +543,10 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
                 logging.debug("Using 1d method to estimate focus")
                 Measure = Measure1d
             else:
-                logging.debug("Using Optical method to estimate focus")
-                Measure = MeasureOpticalFocus
+                # logging.debug("Using Optical method to estimate focus")
+                # Measure = MeasureOpticalFocus
+                logging.debug("Using Spot method to estimate focus")
+                Measure = MeasureSpotsFocus
         else:
             logging.debug("Using SEM method to estimate focus")
             Measure = MeasureSEMFocus
@@ -556,6 +558,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
 
         if good_focus:
             focus.moveAbsSync({"z": good_focus})
+            logging.debug(f"moving to good focus level at z:{good_focus}")
 
         focus_levels = []  # list with focus levels measured so far
         best_pos = orig_pos = focus.position.value['z']
@@ -1043,7 +1046,7 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None,
      order to do background subtraction. If None, no background subtraction is
      performed.
     good_focus (float): if provided, an already known good focus position to be
-      taken into consideration while autofocusing
+      taken into consideration while autofocusing (in m)
     rng_focus (tuple): if provided, the search of the best focus position is limited
       within this range
     method (MTD_*): focusing method, if BINARY we follow a dichotomic method while in
