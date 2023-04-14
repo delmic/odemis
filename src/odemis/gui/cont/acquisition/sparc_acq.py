@@ -47,6 +47,7 @@ from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
 from odemis.util import units
+from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 
 
@@ -429,6 +430,12 @@ class SparcAcquiController(object):
         data, exp = acq_future.result()
 
         filename = self.filename.value
+        # If it only contains part of the full acquisition, due to a failure, change the name to highlight it
+        if exp:
+            fn_root, ext = splitext(filename)
+            filename = f"{fn_root}-failed{ext}"
+            # TODO: if *only* survey: don't report partial failure, but complete failure.
+
         if data:
             exporter = dataio.get_converter(self.conf.last_format)
             exporter.export(filename, data, thumb)
@@ -467,7 +474,7 @@ class SparcAcquiController(object):
 
         # Handle the case acquisition failed "a bit"
         if exp:
-            logging.error("Acquisition failed (after %d streams): %s",
+            logging.error("Acquisition partially failed (%d streams will still be saved): %s",
                           len(data), exp)
 
         #  REMOVE the overlay (live_update) in the SEM window which displays the SEM measurements of the current
@@ -510,6 +517,7 @@ class SparcAcquiController(object):
             # display in the analysis tab
             self._show_acquisition(data, open(filename))
         else:
-            self._reset_acquisition_gui("Acquisition failed (see log panel).",
+            # TODO: open the data in the analysis tab... but don't switch
+            self._reset_acquisition_gui("Acquisition failed (see log panel), partial data saved.",
                                         level=logging.WARNING,
                                         keep_filename=(not data))
