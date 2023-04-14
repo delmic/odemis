@@ -2690,7 +2690,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         ts_da = stss.raw[1]  # temporal spectrum data array
         shape = ts_da.shape
         self.assertEqual(shape[3] * shape[4], num_ts)
-        # len of shape should be 5: CTZXY
+        # len of shape should be 5: CTZYX
         self.assertEqual(len(shape), 5)
 
         # check if metadata is correctly stored
@@ -2785,7 +2785,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         ts_da = stss.raw[1]  # temporal spectrum data array
         shape = ts_da.shape
         self.assertEqual(shape[3] * shape[4], num_ts)
-        # len of shape should be 5: CTZXY
+        # len of shape should be 5: CTZYX
         self.assertEqual(len(shape), 5)
 
         # check last image in .raw has a time axis greater than 1
@@ -2963,7 +2963,7 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         ts_da = stss.raw[1]  # temporal spectrum data array
         shape = ts_da.shape
         self.assertEqual(shape[3] * shape[4], num_ts)
-        # len of shape should be 5: CTZXY
+        # len of shape should be 5: CTZYX
         self.assertEqual(len(shape), 5)
 
         # check last image in .raw has a time axis greater than 1 (last image is the drift correction image)
