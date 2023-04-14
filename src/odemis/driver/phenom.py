@@ -19,7 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from future.utils import with_metaclass
 from past.builtins import long
 from abc import abstractmethod, ABCMeta
 import base64
@@ -1371,7 +1370,7 @@ class Stage(model.Actuator):
             self._executor = None
 
 
-class PhenomFocus(with_metaclass(ABCMeta, model.Actuator)):
+class PhenomFocus(model.Actuator, metaclass=ABCMeta):
     """
     This is an extension of the model.Actuator class and represents a focus
     actuator. This is an abstract class that should be inherited.

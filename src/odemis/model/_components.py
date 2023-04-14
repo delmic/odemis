@@ -19,21 +19,20 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from future.utils import with_metaclass
-from past.builtins import basestring
-
-import Pyro4
-from Pyro4.core import isasync
-from abc import ABCMeta, abstractmethod
 import logging
 import math
-import odemis
-from future.moves.urllib.parse import quote
 import weakref
+from abc import abstractmethod, ABCMeta
 
-from . import _core, _dataflow, _vattributes, _metadata
-from ._core import roattribute
+import Pyro4
+from future.moves.urllib.parse import quote
+from past.builtins import basestring
+from Pyro4.core import isasync
+
+import odemis
 from odemis.util import inspect_getmembers, synthetic
+from . import _core, _dataflow, _metadata, _vattributes
+from ._core import roattribute
 
 
 class HwError(IOError):
@@ -96,7 +95,7 @@ def getEvents(component):
     return dict(evts)
 
 
-class ComponentBase(with_metaclass(ABCMeta, object)):
+class ComponentBase(metaclass=ABCMeta):
     """Abstract class for a component"""
 
 
@@ -276,7 +275,7 @@ def ComponentSerializer(self):
 Pyro4.Daemon.serializers[Component] = ComponentSerializer
 
 
-class HwComponent(with_metaclass(ABCMeta, Component)):
+class HwComponent(Component, metaclass=ABCMeta):
     """
     A generic class which represents a physical component of the microscope
     This is an abstract class that should be inherited.
@@ -573,7 +572,7 @@ class Microscope(HwComponent):
         return self._model
 
 
-class Detector(with_metaclass(ABCMeta, HwComponent)):
+class Detector(HwComponent, metaclass=ABCMeta):
     """
     A component which represents a detector.
     This is an abstract class that should be inherited.
@@ -618,7 +617,7 @@ class Detector(with_metaclass(ABCMeta, HwComponent)):
         return self._transposeSizeToUser(self._shape)
 
 
-class DigitalCamera(with_metaclass(ABCMeta, Detector)):
+class DigitalCamera(Detector, metaclass=ABCMeta):
     """
     A component which represent a digital camera (i.e., CCD or CMOS)
     It's basically a detector with a few more compulsory VAs
@@ -771,7 +770,7 @@ class Axis(object):
         return "%s in %s%s%s" % (self.__class__.__name__, pos_str, abs_str, speed_str)
 
 
-class Actuator(with_metaclass(ABCMeta, HwComponent)):
+class Actuator(HwComponent, metaclass=ABCMeta):
     """
     A component which represents an actuator (motorised part).
     This is an abstract class that should be inherited.
@@ -966,7 +965,7 @@ class Actuator(with_metaclass(ABCMeta, HwComponent)):
             raise ValueError("Cannot reference the following axes: %s" % (nonref,))
 
 
-class PowerSupplier(with_metaclass(ABCMeta, HwComponent)):
+class PowerSupplier(HwComponent, metaclass=ABCMeta):
     """
     A component which represents a power supplier for one or multiple components.
     This is an abstract class that should be inherited.
@@ -1003,7 +1002,7 @@ class PowerSupplier(with_metaclass(ABCMeta, HwComponent)):
                 raise ValueError("Unknown component %s" % (component,))
 
 
-class Emitter(with_metaclass(ABCMeta, HwComponent)):
+class Emitter(HwComponent, metaclass=ABCMeta):
     """
     A component which represents an emitter.
     This is an abstract class that should be inherited.

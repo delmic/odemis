@@ -33,7 +33,6 @@ import odemis.gui.img as guiimg
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 import wx
-from future.utils import with_metaclass
 from odemis import model, util
 from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_DEACTIVE,
                                 FEATURE_POLISHED, FEATURE_ROUGH_MILLED)
@@ -1211,7 +1210,7 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
         WorldOverlay._deactivate(self)
 
 
-class GadgetToolInterface(with_metaclass(ABCMeta, object)):
+class GadgetToolInterface(metaclass=ABCMeta):
     """
     This abstract GadgetToolInterface class forms the base for a series of classes that
     refer to gadgets tools and their functionality.
@@ -1284,7 +1283,7 @@ LINE_MODE_EDIT_END = 3
 LINE_MODE_EDIT_TEXT = 4
 
 
-class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
+class GenericGadgetLine(GadgetToolInterface, metaclass=ABCMeta):
     """ This abstract GenericGadgetLine class forms the base for all gadget classes showing a line.
     Used to draw a line and also handle the mouse interaction when dragging/moving the line """
 

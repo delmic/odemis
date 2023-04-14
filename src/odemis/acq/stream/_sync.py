@@ -28,7 +28,6 @@ from abc import ABCMeta, abstractmethod
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED, TimeoutError, \
     CancelledError
 from functools import partial
-from future.utils import with_metaclass
 import logging
 import math
 import numpy
@@ -74,7 +73,7 @@ GUI_BLUE = (47, 167, 212) # FG_COLOUR_EDIT - from src/odemis/gui/__init__.py
 GUI_ORANGE = (255, 163, 0) # FG_COLOUR_HIGHLIGHT - from src/odemis/gui/__init__.py
 
 
-class MultipleDetectorStream(with_metaclass(ABCMeta, Stream)):
+class MultipleDetectorStream(Stream, metaclass=ABCMeta):
     """
     Abstract class for all specialised streams which are actually a combination
     of multiple streams acquired simultaneously. The main difference from a
