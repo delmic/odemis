@@ -562,7 +562,7 @@ class AcquisitionTask(object):
 
                 # Wait for the acquisition to be finished.
                 # Will pass down exceptions, included in case it's cancelled
-                das = f.result()
+                das, acq_exp = f.result()
                 if not isinstance(das, Iterable):
                     logging.warning("Future of %s didn't return a list of DataArrays, but '%s'", s, das)
                     das = []
@@ -573,6 +573,10 @@ class AcquisitionTask(object):
                     for da in das:
                         da.metadata[model.MD_EXTRA_SETTINGS] = copy.deepcopy(settings)
                 raw_images[s] = das
+
+                # Now the data is stored, the exception handler will take care of the error
+                if acq_exp:
+                    raise acq_exp
 
                 # update the time left
                 expected_time -= self._streamTimes[s]
