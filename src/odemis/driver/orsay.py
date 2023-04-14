@@ -502,7 +502,7 @@ class OrsayComponent(model.HwComponent):
             device_name = d.attrib['Name'] if 'Name' in d.attrib else d.attrib['name']
             device = getattr(self.datamodel, device_name)
             for p in d.findall("Parameter"):
-                param_name = p.attrib['name']
+                param_name = p.attrib['Name'] if 'Name' in p.attrib else p.attrib['name']
                 param = getattr(device, param_name)
 
                 if not bool(param.AtTarget):
@@ -2378,7 +2378,7 @@ class FIBBeam(model.HwComponent):
                                                          minpar=self._ionColumn.ObjectiveXYRatio_Minvalue,
                                                          maxpar=self._ionColumn.ObjectiveXYRatio_Maxvalue)
         self._mirrorImageConnector = OrsayParameterConnector(self.mirrorImage, self._ionColumn.Mirror,
-                                                             mapping={True: -1, False: 1})
+                                                             mapping={True: 1, False: 0})
         # Note: Currently unused and unsafe
         # self._imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
         #                                                            self._ionColumn.ObjectiveScanSteerer,
@@ -2456,9 +2456,16 @@ class FIBBeam(model.HwComponent):
             # automatically sets the ImageArea to full FoV. We don't want that.
             # We want to keep the resolution and translation as they were
             # (except for appropriate scaling).
-            self._set_and_wait_update(self._ionColumn.ImageSize, im_size)
+            try:
+                # When ImageSize changes, the ImageArea is reset by the Orsay server
+                # => don't use that value for resolution and translation
+                self._ionColumn.ImageArea.Unsubscribe(self._updateTranslationResolution)
+                self._set_and_wait_update(self._ionColumn.ImageSize, im_size)
+            finally:
+                self._ionColumn.ImageArea.Subscribe(self._updateTranslationResolution)
 
         # This works because the new ImageFormat value has already been set by _updateImageFormat
+        # This also enforces that ImageArea is in sync with resolution and translation
         self.resolution.value = new_resolution  # set new resolution with calling the setter
 
         return value
@@ -2539,19 +2546,25 @@ class FIBBeam(model.HwComponent):
         :return: ((int, int)) new_translation: actual translation set
         """
         im_fmt = self.imageFormat.value
+        im_fmt_mx = self.imageFormat.range[1]
+
+        # translation is in "smallest pixels"
+        px_scale = (im_fmt_mx[0] / im_fmt[0], im_fmt_mx[1] / im_fmt[1])
+
         # find the current limits for translation and clip the new value
-        trans_max = (int(im_fmt[0] / 2 - target_resolution[0] / 2),
-                     int(im_fmt[1] / 2 - target_resolution[1] / 2))
+        trans_max = ((im_fmt[0] / 2 - target_resolution[0] / 2) * px_scale[0],
+                     (im_fmt[1] / 2 - target_resolution[1] / 2) * px_scale[1])
         # the min is just the opposite of the max (eg, -512 -> 512)
-        target_translation = (max(-trans_max[0], min(target_translation[0], trans_max[0])),
-                              max(-trans_max[1], min(target_translation[1], trans_max[1])))
+        trans = (max(-trans_max[0], min(target_translation[0], trans_max[0])),
+                 max(-trans_max[1], min(target_translation[1], trans_max[1])))
 
         # Convert coordinates from center to left-top
-        target_trans_lt = (int(im_fmt[0] / 2 + target_translation[0] - target_resolution[0] / 2),
-                           int(im_fmt[1] / 2 + target_translation[1] - target_resolution[1] / 2))
+        trans_lt = (int(im_fmt[0] / 2 + trans[0] / px_scale[0] - target_resolution[0] / 2),
+                    int(im_fmt[1] / 2 + trans[1] / px_scale[1] - target_resolution[1] / 2))
 
-        target = map(str, target_trans_lt + target_resolution)
+        target = map(str, trans_lt + target_resolution)
         target = " ".join(target)
+        logging.debug("Converted fmt %s, res %s and trans %s to %s", im_fmt, target_resolution, target_translation, target)
 
         # Wait until the settings are actually set. It's especially important in
         # case there are consecutive calls to change the resolution/translation.
@@ -2564,8 +2577,8 @@ class FIBBeam(model.HwComponent):
 
         # Compute the actual translation, based on the rounding (if resolution is
         # an odd number, the translation will be -0.5).
-        new_translation = (target_trans_lt[0] - im_fmt[0] / 2 + target_resolution[0] / 2,
-                           target_trans_lt[1] - im_fmt[1] / 2 + target_resolution[1] / 2)
+        new_translation = ((trans_lt[0] - im_fmt[0] / 2 + target_resolution[0] / 2) * px_scale[0],
+                           (trans_lt[1] - im_fmt[1] / 2 + target_resolution[1] / 2) * px_scale[1])
 
         return new_translation
 
@@ -2582,8 +2595,7 @@ class FIBBeam(model.HwComponent):
         (resolution VA) to prevent the new translation from placing part of the image area outside of the image format.
         """
         with self.updatingImageArea:  # translation and resolution cannot be updated simultaneously
-            trans = tuple(int(round(t)) for t in value)
-            trans = self._clip_and_set_image_area(self.resolution.value, trans)
+            trans = self._clip_and_set_image_area(self.resolution.value, value)
             return trans
 
     def _resolution_setter(self, value):
@@ -2626,9 +2638,15 @@ class FIBBeam(model.HwComponent):
         logging.debug("Received ImageArea: %s.", area)
         area = list(map(int, area.split(" ")))
 
+        im_fmt = self.imageFormat.value
+        im_fmt_mx = self.imageFormat.range[1]
+
+        # translation is in "smallest pixels"
+        px_scale = (im_fmt_mx[0] / im_fmt[0], im_fmt_mx[1] / im_fmt[1])
+
         # Convert translation from upper left corner to center
-        new_translation = (area[0] - self.imageFormat.value[0] / 2 + area[2] / 2,
-                           area[1] - self.imageFormat.value[1] / 2 + area[3] / 2)
+        new_translation = ((area[0] - im_fmt[0] / 2 + area[2] / 2) * px_scale[0],
+                           (area[1] - im_fmt[1] / 2 + area[3] / 2) * px_scale[1])
 
         # Note: when the resolution is an odd number of pixels, the center cannot
         # be exactly at the center, and as we always round down, it's shifted by
