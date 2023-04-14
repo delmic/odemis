@@ -274,6 +274,36 @@ class GraphTest(unittest.TestCase):
                     out = graph.iter_edges(directed=True)
                     self.assertCountEqual(edges, out)
 
+    def test_size_undirected(self) -> None:
+        """
+        `size()` should return the number of edges in an undirected complete
+        graph. The edges `(j, i)` and `(i, j)` should be counted as a single
+        edge when `directed=False`.
+
+        """
+        for graph_type in GraphBase.__subclasses__():
+            with self.subTest(graph_type=graph_type.__name__):
+                for n in range(3, 10):
+                    graph = complete_graph(n, graph_type)
+                    expected = n * (n - 1) // 2
+                    out = graph.size(directed=False)
+                    self.assertEqual(out, expected)
+
+    def test_size_directed(self) -> None:
+        """
+        `size()` should return the number of edges in a directed complete
+        graph. The edges `(j, i)` and `(i, j)` should be counted as two
+        distinct edges when `directed=True`.
+
+        """
+        for graph_type in GraphBase.__subclasses__():
+            with self.subTest(graph_type=graph_type.__name__):
+                for n in range(3, 10):
+                    graph = complete_graph(n, graph_type)
+                    expected = n * (n - 1)
+                    out = graph.size(directed=True)
+                    self.assertEqual(out, expected)
+
 
 class SkewSymmetricAdjacencyGraphTest(unittest.TestCase):
     """Unit tests for `SkewSymmetricAdjacencyGraph`."""

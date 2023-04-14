@@ -172,6 +172,27 @@ class GraphBase(UserList, metaclass=ABCMeta):
                     continue
                 yield (vertex, neighbor)
 
+    def size(self, directed: Optional[bool] = None) -> int:
+        """
+        Return the number of edges in the graph.
+
+        Parameters
+        ----------
+        directed : bool, optional
+            If `True` the edges `(j, i)` and `(i, j)` will be considered as
+            being two separate edges. If `False`, these are counted as a single
+            edge. If not specified, uses `self.directed`.
+
+        Returns
+        -------
+        size : int
+            The number of edges in the graph.
+
+        """
+        counter = itertools.count()
+        collections.deque(zip(self.iter_edges(directed), counter), maxlen=0)
+        return next(counter)
+
 
 class UnweightedGraph(GraphBase):
     """
