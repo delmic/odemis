@@ -134,9 +134,9 @@ class OrsayComponent(model.HwComponent):
         self.datamodel = None
         self.preset_manager = None
 
-        self.processInfo = model.StringVA("", readonly=True)  # Contains a lot of information about the currently 
-        # running process and a wide range thereof. For example it will show which valves are being closed and when 
-        # the pumps are activated when setting the vacuum state to a new value. 
+        self.processInfo = model.StringVA("", readonly=True)  # Contains a lot of information about the currently
+        # running process and a wide range thereof. For example it will show which valves are being closed and when
+        # the pumps are activated when setting the vacuum state to a new value.
 
         self.on_connect()
 
@@ -1769,8 +1769,6 @@ class FIBVacuum(model.HwComponent):
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
         """
-        errorParameters = (recursive_getattr(self.parent.datamodel, device).ErrorState
-                           for device in self.DEVICES_WITH_ERROR_STATES)
         if attr_name != "Actual":
             return
 
@@ -1785,7 +1783,12 @@ class FIBVacuum(model.HwComponent):
         if eState == "":
             self.state._set_value(model.ST_RUNNING, force_write=True)
         else:
-            self.state._set_value(HwError(eState), force_write=True)
+            # Two exceptions are always considered different, so it'll keep
+            # sending notifications even if the state is the same.
+            # => compare the content of the current value.
+            prev_val = self.state.value
+            if not isinstance(prev_val, HwError) or str(prev_val) != eState:
+                self.state._set_value(HwError(eState), force_write=True)
 
     def _updateInterlockInChamberTriggered(self, parameter=None, attr_name="Actual"):
         """
@@ -2025,6 +2028,9 @@ class FIBSource(model.HwComponent):
         self._hvps.HeaterState.Subscribe(self._updateErrorState)
         # self._hvps.HeaterState.Subscribe(self._updateHeater) # Note: Currently unused and unsafe
 
+        # TODO: While going from ON->OFF, the (transition) state is "DOWN", for ~30 s.
+        # It is not properly handled and shown currently as as "(DOWN,)". Should be just False.
+        # It also has ERROR_INTERLOCK in case of errors. In such case, .state is set. Also set gunOn to False?
         self._gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
                                                        mapping={True: "ON", False: "OFF"})
         self._lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime,
@@ -2073,16 +2079,24 @@ class FIBSource(model.HwComponent):
         if attr_name != "Actual":
             return
 
-        eState = ""
-
+        errors = []
         heater_state = self._hvps.HeaterState.Actual
         if heater_state == HEATER_ERROR:  # in case of heater error
-            eState += "FIB source forced to shut down"
+            errors.append("FIB source forced to shut down")
+        gun_state = self._hvps.GunState.Actual
+        if "error" in gun_state.lower():
+            errors.append(f"Gun error: {gun_state}")
 
-        if eState == "":
+        if not errors:
             self.state._set_value(model.ST_RUNNING, force_write=True)
         else:
-            self.state._set_value(HwError(eState), force_write=True)
+            # Two exceptions are always considered different, so it'll keep
+            # sending notifications even if the state is the same.
+            # => compare the content of the current value.
+            error_str = ", ".join(errors)
+            prev_val = self.state.value
+            if not isinstance(prev_val, HwError) or str(prev_val) != error_str:
+                self.state._set_value(HwError(error_str), force_write=True)
 
     # Note: Currently unused and unsafe
     # def _updateHeater(self, parameter=None, attr_name="Actual"):
