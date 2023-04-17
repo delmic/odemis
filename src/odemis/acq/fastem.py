@@ -852,7 +852,8 @@ class AcquisitionTask(object):
 # Overview image acquisition
 
 # Fixed settings
-STAGE_PRECISION = 1e-6  # m, how far the stage may go from the requested position
+# FIXME: in theory the precision of the stage should be better, update this value when the stage precision has improved
+STAGE_PRECISION = 29e-6  # m, acceptable precision of the stage position, is used to determine the overview overlap
 
 
 def acquireTiledArea(stream, stage, area, live_stream=None):
@@ -957,8 +958,10 @@ def estimateTiledAcquisitionTime(stream, stage, area):
 
     return acq_time_overview
 
+
 class OverviewAcquisition(object):
     """Class to run the acquisition of one overview image (typically one scintillator)."""
+
     def __init__(self, future: model.ProgressiveFuture) -> None:
         self._sub_future = model.ProgressiveFuture()
         self._future = future
@@ -991,11 +994,11 @@ class OverviewAcquisition(object):
         logging.debug("Overlap is %s%%", overlap * 100)  # normally < 1%
 
         def _pass_future_progress(sub_f, start, end):
-           self._future.set_progress(start, end)
+            self._future.set_progress(start, end)
 
         # Note, for debugging, it's possible to keep the intermediary tiles with log_path="./tile.ome.tiff"
         self._sub_future = stitching.acquireTiledArea([stream], stage, area, overlap, registrar=REGISTER_IDENTITY,
-                                        focusing_method=FocusingMethod.NONE)
+                                                      focusing_method=FocusingMethod.NONE)
 
         # Connect the progress of the underlying future to the main future
         # FIXME removed to provide better progress update in GUI
