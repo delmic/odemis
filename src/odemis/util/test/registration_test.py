@@ -277,6 +277,16 @@ class NearestNeighborGraphTest(unittest.TestCase):
                         graph.adjacency_matrix(), out.adjacency_matrix()
                     )
 
+    def test_empty_graph(self):
+        """
+        `nearest_neighbor_graph()` should return a graph of zero size (i.e. no
+        neighbors) when given only a single coordinate as input.
+
+        """
+        ji = self._rng.random_sample((1, 2))
+        out = nearest_neighbor_graph(ji)
+        self.assertEqual(out.size(False), 0)
+
 
 class CanonicalMatrixFormTest(unittest.TestCase):
     """Unittest for `_canonical_matrix_form()`."""
