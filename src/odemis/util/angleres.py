@@ -612,10 +612,11 @@ def ExtractThetaList(data):
     the slit is closed and focused on the center of the mirror and based on the mirror geometry,
     the detector plane is calculated and the list of angles is derived.
 
-    : param data (model.DataArray): The data array containing the image that was projected on the
-    detector after being reflected in the parabolic mirror and passing the grating. Shape is (x, y).
+    :param data (model.DataArray): The data array containing the image that was projected on the
+    detector after being reflected in the parabolic mirror and passing the grating.
+    Shape is (A, C), ie angle vs wavelength.
 
-    Returns: the list of angles (in radians) with length equal to data.shape[0], corresponding
+    :returns: the list of angles (in radians) with length equal to data.shape[0], corresponding
       to the pixels at the center wavelength. A mask, calculated from
     the parameters of the mirror, is applied on the data to place NaN values in the positions outside of
     the detector plane. The angle list should be within the range [-90, 90] in degrees, approximately
