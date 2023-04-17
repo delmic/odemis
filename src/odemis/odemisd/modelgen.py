@@ -266,7 +266,6 @@ class Instantiator(object):
         self._fill_creator()
 
         # Sanity checks
-        self._check_lone_component(strict=dry_run)
         self._check_affects(strict=dry_run)
         self._check_duplicate_roles()
 
@@ -299,22 +298,16 @@ class Instantiator(object):
         self._microscope_name = cname
         self._microscope_ast = microscope
 
-        if "children" not in microscope:
-            microscope["children"] = {}
-        elif not isinstance(microscope["children"], Mapping):
-            # upgrade from list -> dict
-            logging.debug("Upgrading the microscope children list to a dict")
-            d = {"c%d" % i: c for i, c in enumerate(microscope["children"])}
-            microscope["children"] = d
-
-        for a in ("actuators", "detectors", "emitters"):
+        # We used to request that all the "useful" components (the ones with a role)
+        # be listed as "children" of the microscope. However, there are "dependencies",
+        # not "children" (ie, created by that code). In addition, for already a long
+        # time all the code relies on .ghost and .alive to find all the components.
+        # Even longer time ago, we had "actuators", "detectors", and "emitters".
+        # They used to be converted to "children".
+        # => it's now useless, and we just force it empty, to make sure to really not rely on it.
+        for a in ("actuators", "detectors", "emitters", "children"):
             if a in microscope:
-                logging.warning("Microscope component contains field '%s', which is "
-                                "deprecated and can be merged in field 'children'.",
-                                a)
-                for i, name in enumerate(microscope[a]):
-                    role = "%s%d" % (a[:-1], i)
-                    microscope["children"][role] = name
+                logging.warning("Removing deprecated parameter %s from the Microscope", a)
                 del microscope[a]
 
     def _fill_creator(self):
@@ -386,51 +379,6 @@ class Instantiator(object):
             raise SemanticError("Some components could not be instantiated due "
                                 "to cyclic dependency: %s" %
                                 (", ".join(left)))
-
-    def _check_lone_component(self, strict=False):
-        """
-        Check that every component is instantiated for eventually being a part
-        of the microscope.
-        Every component should be either:
-         * A child of the microscope
-         * Creator of a child of the microscope
-        strict (bool): if strict, will raise an error, instead of just printing
-          warnings
-        """
-        # All the components used for the microscope
-        comps_used = {self._microscope_name}
-        comps_used |= self.get_required_components(self._microscope_name)
-        for cname in comps_used.copy():
-            # If a used component creates non-used components (as side effect),
-            # these created components are not required by the microscope, but used
-            attrs = self.ast[cname]
-            while "creator" in attrs:
-                comps_used |= self.get_children_names(cname)
-                cname = attrs["creator"]  # look at the creator too
-                attrs = self.ast[cname]
-            comps_used |= self.get_children_names(cname)
-
-        for cname, attrs in self.ast.items():
-            if cname not in comps_used:
-                role = attrs.get("role")
-                if role is not None:
-                    # Note: some old microscope files had 'none' instead of 'null'
-                    # which was turning into the string 'none' instead of None.
-                    # TODO: don't warn if the role == 'none' or 'None'?
-                    if strict:
-                        raise SemanticError("Component '%s' has role %s but it is not marked as child of the microscope" % (cname, role))
-                    else:
-                        logging.warning("Component '%s' has role %s but it is not used by the microscope",
-                                        cname, role)
-
-                creations = self.get_children_names(cname)
-                if not creations & comps_used:
-                    if len(creations) > 1:
-                        logging.info("Component '%s' will create non-used components %s", cname, creations)
-                    if strict:
-                        raise SemanticError("Component '%s' is defined but not required by the microscope" % (cname,))
-                    else:
-                        logging.warning("Component '%s' is defined but not required by the microscope", cname)
 
     def _check_affects(self, strict=False):
         """
@@ -941,16 +889,12 @@ class Instantiator(object):
 
         comp = self._instantiate_comp(name)
 
-        # Add to the microscope all the new components that should be child
-        mchildren = self._microscope_ast["children"].values()
-        # we only care about children created by delegation, but all is fine
+        # Post-instantiation changes
         newcmps = self.get_children(comp) # that includes comp itself
         for c in newcmps:
             self._update_properties(c.name)
             self._update_metadata(c.name)
             self._update_affects(c.name)
-        newchildren = set(c for c in newcmps if c.name in mchildren)
-        self.microscope.children.value = self.microscope.children.value | newchildren
 
         return comp
 

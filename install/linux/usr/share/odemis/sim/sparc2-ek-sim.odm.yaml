@@ -2,13 +2,6 @@
 SPARC2: {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
-               "Optical Path Properties", "Spectrometer Vis-NIR",
-               "Camera", "Spectrometer IR", "CL Detector",
-               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
-               "Mirror Actuators", "Mirror Actuators in XY referential",
-               "Slit", "CL Selector", "CL Filter Wheel",
-               "Lens1 Mover", "Lens2 Switch"],
 }
 
 # Light (lamp with known spectrum)

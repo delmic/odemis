@@ -5,7 +5,6 @@
 SPARC2: {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "CL Detector"],
 }
 
 "SEM Scan Interface": {
@@ -32,7 +31,6 @@ SPARC2: {
 
 "CL PMT": {
     # Internal child of SEM Scan Interface, so no class but instead a creator
-    creator: "SEM Scan Interface",
     role: null,
     init: {
         channel: 1,
