@@ -363,7 +363,7 @@ def _cluster_edges(
         matched centroids.
 
     """
-    n_edges = graph.size(False)
+    n_edges = graph.size(directed=False)
     if n_edges < 2:
         # theoretical minimum
         raise ValueError(

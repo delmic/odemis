@@ -189,9 +189,7 @@ class GraphBase(UserList, metaclass=ABCMeta):
             The number of edges in the graph.
 
         """
-        counter = itertools.count()
-        collections.deque(zip(self.iter_edges(directed), counter), maxlen=0)
-        return next(counter)
+        return sum(1 for _ in self.iter_edges(directed))
 
 
 class UnweightedGraph(GraphBase):
