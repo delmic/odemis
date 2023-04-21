@@ -59,27 +59,32 @@ class VideoDisplayerGrid(VideoDisplayer):
         at ratio 1:1)
         data (numpy.ndarray): an 2D array containing the image (can be 3D if in RGB)
         """
-        tform_ji, _ = estimate_grid_orientation_from_img(
-            data,
-            self.gridsize,
-            AffineTransform,
-            sigma=1.45,
-            threshold_rel=0.5,
-        )
-        grid = unit_gridpoints(self.gridsize, mode="ji")
-        self.app.spots = tform_ji.apply(grid)
+        try:
+            tform_ji, _ = estimate_grid_orientation_from_img(
+                data,
+                self.gridsize,
+                AffineTransform,
+                sigma=1.45,
+                threshold_rel=0.5,
+            )
+            grid = unit_gridpoints(self.gridsize, mode="ji")
+            self.app.spots = tform_ji.apply(grid)
 
-        tform_xy = (
-            to_physical_space_transform(data.shape, self.app.pixel_size)
-            @ tform_ji
-            @ to_pixel_index_transform()
-        )
+            tform_xy = (
+                    to_physical_space_transform(data.shape, self.app.pixel_size)
+                    @ tform_ji
+                    @ to_pixel_index_transform()
+            )
 
-        self.app.translation = tform_xy.translation
-        self.app.scale = tform_xy.scale
-        self.app.rotation = tform_xy.rotation
-        self.app.squeeze = tform_xy.squeeze
-        self.app.shear = tform_xy.shear
+            self.app.translation = tform_xy.translation
+            self.app.scale = tform_xy.scale
+            self.app.rotation = tform_xy.rotation
+            self.app.squeeze = tform_xy.squeeze
+            self.app.shear = tform_xy.shear
+        except ValueError as err:
+            logging.warning("No grid found on image, cannot display spots: %s", err)
+            self.app.spots = None
+
         super(VideoDisplayerGrid, self).new_image(data)
 
     def waitQuit(self):
@@ -123,58 +128,62 @@ class ImageWindowApp(wx.App):
         height = self.img.Height
         width = self.img.Width
         spot_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
-        ctx = cairo.Context(spot_surface)
+        # only draw spots if they are found in the image
+        if self.spots is not None:
+            ctx = cairo.Context(spot_surface)
 
-        # the matrix applied here makes Cairo accept coordinates of the form `(j, i)`.
-        matrix = cairo.Matrix(0, 1, 1, 0, 0, 0)
-        ctx.set_matrix(matrix)
+            # the matrix applied here makes Cairo accept coordinates of the form `(j, i)`.
+            matrix = cairo.Matrix(0, 1, 1, 0, 0, 0)
+            ctx.set_matrix(matrix)
 
-        # window shape may be unequal to image shape.
-        ctx.scale(self.magn, self.magn)
+            # window shape may be unequal to image shape.
+            ctx.scale(self.magn, self.magn)
 
-        # draw a polygon connecting all spots
-        ctx.save()
-        ctx.set_source_rgb(0.98, 0.91, 0.62)
-        ctx.set_line_width(2)
-        ctx.set_dash((10, 4))
-        spot = self.spots[0]
-        ctx.move_to(*spot)
-        for spot in self.spots[1:]:
-            ctx.line_to(*spot)
-        ctx.stroke()
-        ctx.restore()
+            # draw a polygon connecting all spots
+            ctx.save()
+            ctx.set_source_rgb(0.98, 0.91, 0.62)
+            ctx.set_line_width(2)
+            ctx.set_dash((10, 4))
+            spot = self.spots[0]
+            ctx.move_to(*spot)
+            for spot in self.spots[1:]:
+                ctx.line_to(*spot)
+            ctx.stroke()
+            ctx.restore()
 
-        # draw a square at the first spot, and a circle at every other spot
-        ctx.save()
-        ctx.set_source_rgb(0.8, 0.1, 0.1)
-        ctx.set_line_width(2)
-        spot = self.spots[0]
-        ctx.rectangle(spot[0] - 8, spot[1] - 8, 16, 16)
-        ctx.stroke()
-        for spot in self.spots[1:]:
-            ctx.arc(spot[0], spot[1], 4, 0, 2 * numpy.pi)
-            ctx.fill()
-        ctx.restore()
+            # draw a square at the first spot, and a circle at every other spot
+            ctx.save()
+            ctx.set_source_rgb(0.8, 0.1, 0.1)
+            ctx.set_line_width(2)
+            spot = self.spots[0]
+            ctx.rectangle(spot[0] - 8, spot[1] - 8, 16, 16)
+            ctx.stroke()
+            for spot in self.spots[1:]:
+                ctx.arc(spot[0], spot[1], 4, 0, 2 * numpy.pi)
+                ctx.fill()
+            ctx.restore()
 
         text_surface = cairo.ImageSurface(cairo.FORMAT_ARGB32, width, height)
-        info = [
-            "rotation: {:.1f} deg".format(numpy.rad2deg(self.rotation)),
-            "pitch: {:.3f} um".format(1e6 * self.scale),
-            "translation-x: {:.3f} um".format(1e6 * self.translation[0]),
-            "translation-y: {:.3f} um".format(1e6 * self.translation[1]),
-            "squeeze: {:.5f}".format(self.squeeze),
-            "shear: {:.5f} ".format(self.shear),
-        ]
-        ctx2 = cairo.Context(text_surface)
-        ctx2.set_source_rgb(1.00, 0.83, 0.00)
-        font_size = 20
-        ctx2.set_font_size(font_size)
-        ctx2.translate(font_size, font_size)
-        # Cairo doesn't do multiline text plotting, so loop over the text and show at a lower location.
-        for text in info:
-            ctx2.translate(0, font_size)
-            ctx2.show_text(text)
-            ctx2.stroke()
+        # only show the text if there are spots in the image
+        if self.spots is not None:
+            info = [
+                "rotation: {:.1f} deg".format(numpy.rad2deg(self.rotation)),
+                "pitch: {:.3f} um".format(1e6 * self.scale),
+                "translation-x: {:.3f} um".format(1e6 * self.translation[0]),
+                "translation-y: {:.3f} um".format(1e6 * self.translation[1]),
+                "squeeze: {:.5f}".format(self.squeeze),
+                "shear: {:.5f} ".format(self.shear),
+            ]
+            ctx2 = cairo.Context(text_surface)
+            ctx2.set_source_rgb(1.00, 0.83, 0.00)
+            font_size = 20
+            ctx2.set_font_size(font_size)
+            ctx2.translate(font_size, font_size)
+            # Cairo doesn't do multiline text plotting, so loop over the text and show at a lower location.
+            for text in info:
+                ctx2.translate(0, font_size)
+                ctx2.show_text(text)
+                ctx2.stroke()
 
         if wx.MAJOR_VERSION <= 3:
             self.imageCtrl.SetBitmap(wx.BitmapFromImage(self.img))
