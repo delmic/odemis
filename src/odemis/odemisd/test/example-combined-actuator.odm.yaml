@@ -1,9 +1,6 @@
 Optical: {
     class: Microscope,
     role: epifluorescent,
-    emitters: [Light],
-    detectors: ["Andor SimCam"],
-    actuators: ["Complete Stage"],
 }
 
 Light: {

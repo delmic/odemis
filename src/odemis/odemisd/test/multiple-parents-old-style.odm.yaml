@@ -5,6 +5,7 @@
 SPARC2: {
     class: Microscope,
     role: sparc2,
+    # old style, not used anymore
     children: ["SEM E-beam", "CL Detector"],
 }
 

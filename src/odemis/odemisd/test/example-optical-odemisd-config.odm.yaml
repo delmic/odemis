@@ -1,6 +1,7 @@
 Optical: {
     class: Microscope,
     role: epifluorescent,
+    # Old style config, unused
     emitters: [Light],
     detectors: ["Andor Clara"],
     actuators: ["Redstone Stage"],

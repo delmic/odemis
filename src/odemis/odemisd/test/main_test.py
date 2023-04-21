@@ -68,7 +68,6 @@ class TestCommandLine(unittest.TestCase):
                          "syntax-error-2.odm.yaml",
                          # Skipped: for now, double key def is only a warning
                          # "syntax-error-3.odm.yaml",
-                         "semantic-error-1.odm.yaml",
                          "semantic-error-2.odm.yaml",
                          # This one can only be detected on a real instantiation
                          # "semantic-error-3.odm.yaml",
@@ -76,8 +75,6 @@ class TestCommandLine(unittest.TestCase):
                          # "semantic-error-4.odm.yaml",
                          # wrong affects
                          "semantic-error-5.odm.yaml",
-                         # unused components
-                         "semantic-error-6.odm.yaml",
                          # test creating a component without parent and without class
                          "semantic-error-7.odm.yaml",
                          # test with multiple role
