@@ -548,6 +548,16 @@ class CryoAcquiController(object):
             events=wx.EVT_COMMAND_ENTER,
         )
 
+        self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
+
+    @call_in_wx_main
+    def _on_acquisition(self, is_acquiring: bool):
+        """
+        Called when is_acquiring changes
+        Enable/Disable acquire button
+        """
+        self._panel.btn_cryosecom_acquire.Enable(not is_acquiring)
+
     def _on_acquire(self, _):
         """
         called when the button "acquire" is pressed
@@ -560,7 +570,6 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Show()
         self._panel.txt_cryosecom_left_time.Show()
         self._panel.txt_cryosecom_est_time.Hide()
-        self._panel.btn_cryosecom_acquire.Disable()
         self._panel.btn_cryosecom_change_file.Disable()
         self._panel.btn_acquire_overview.Disable()
         self._panel.z_stack_chkbox.Disable()

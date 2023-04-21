@@ -29,7 +29,7 @@ import odemis
 from odemis import model
 from odemis.acq import orsay_milling, stream
 from odemis.acq.drift import AnchoredEstimator
-from odemis.acq.feature import CryoFeature, FEATURE_ROUGH_MILLED
+from odemis.acq.feature import CryoFeature, FEATURE_ROUGH_MILLED, FEATURE_ACTIVE
 from odemis.acq.millmng import (load_config, MillingRectangleTask, MillingSettings,
                                 mill_features)
 from odemis.acq.move import _isNearPosition
@@ -333,9 +333,16 @@ class MillingManagerTestCase(unittest.TestCase):
 
         millings = [milling_setting_1, milling_setting_2]
 
+        for site in self.sites:
+            site.status.value = FEATURE_ACTIVE
+
         f1 = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
                            self.sed, self.stage, self.aligner)
         f1.result()
+
+        # Check the feature status got updated
+        for site in self.sites:
+            self.assertEqual(site.status.value, FEATURE_ROUGH_MILLED)
 
         # check if the objective is retracted
         current_align_pos = self.aligner.position.value
@@ -372,6 +379,9 @@ class MillingManagerTestCase(unittest.TestCase):
 
         millings = [milling_setting_1, milling_setting_2]
 
+        for site in self.sites:
+            site.status.value = FEATURE_ACTIVE
+
         future = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
                                self.sed, self.stage, self.aligner)
 
@@ -382,6 +392,10 @@ class MillingManagerTestCase(unittest.TestCase):
         future.cancel()
         with self.assertRaises(CancelledError):
             future.result(timeout=1)
+
+        # Check the feature status did NOT change
+        for site in self.sites:
+            self.assertEqual(site.status.value, FEATURE_ACTIVE)
 
         self.assertGreaterEqual(self.updates, 1)  # at least one update at cancellation
         self.assertLessEqual(self.end, time.time())

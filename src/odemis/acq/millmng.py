@@ -194,7 +194,6 @@ class MillingRectangleTask(object):
         # estimate milling time from the list of milling settings-> millings
         time_estimate = 0
         drift_acq_time = 0
-        stage_time = 0
 
         for setting_nb, setting in enumerate(self._settings):
             time_estimate += setting.duration.value
@@ -207,14 +206,7 @@ class MillingRectangleTask(object):
                 self._iterations.append(1)
                 self._pass_duration.append(setting.duration.value)
 
-        prev_stage_pos_ref = None  # previous stage position used for reference in estimating time
-
-        for site in self.sites:
-            stage_time += self.estimate_stage_movement_time(site, prev_stage_pos_ref)
-            prev_stage_pos_ref = site.pos.value
-
         self._milling_time_estimate = time_estimate + drift_acq_time  # time_estimate per feature
-        self._remaining_stage_time = stage_time  # total stage movement time
 
     def cancel(self, future: "Future") -> bool:
         """
@@ -240,16 +232,19 @@ class MillingRectangleTask(object):
         :return: (float > 0): the estimated time is in seconds
         """
         remaining_sites = (len(self.sites) - sites_done)
-
         if actual_time_per_site:
             milling_time = actual_time_per_site * remaining_sites
         else:
             milling_time = self._milling_time_estimate * remaining_sites
 
-        self._remaining_stage_time -= self.estimate_stage_movement_time(self.sites[sites_done])
-        total_duration = milling_time + self._remaining_stage_time
+        # Time it takes to go from one site to the other
+        prev_stage_pos_ref = None  # previous stage position used for reference in estimating time
+        stage_time = 0
+        for site in self.sites:
+            stage_time += self.estimate_stage_movement_time(site, prev_stage_pos_ref)
+            prev_stage_pos_ref = site.pos.value
 
-        return total_duration
+        return milling_time + stage_time
 
     def estimate_stage_movement_time(self, site: CryoFeature, stage_pos_ref: tuple = None) -> float:
         """
@@ -497,7 +492,7 @@ class MillingRectangleTask(object):
                     continue
 
                 # Update the status of milling for the given site
-                site.status = self._feature_status
+                site.status.value = self._feature_status
                 logging.debug(f"The milling of feature {site.name.value} completed")
 
                 # Acquire the streams of the milled site
@@ -548,3 +543,13 @@ def mill_features(millings: list, sites: list, feature_post_status, acq_streams,
     executeAsyncTask(future, milling_task.run)
 
     return future
+
+
+def estimate_milling_time(*args, **kwargs) -> float:
+    """
+    Estimate the duration of milling.
+    :params: arguments are the same as mill_features() arguments.
+    :return: (float > 0): estimated milling time in seconds
+    """
+    milling_task = MillingRectangleTask(None, *args, **kwargs)
+    return milling_task.estimate_milling_time()

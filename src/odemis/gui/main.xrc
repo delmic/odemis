@@ -8508,6 +8508,101 @@
                     </object>
                     <flag>wxEXPAND</flag>
                   </object>
+                      <object class="sizeritem">
+                        <object class="wxFlexGridSizer">
+                            <object class="sizeritem">
+                                <object class="ImageTextButton" name="btn_mill_active_features">
+                                    <icon>img/icon/ico_sem.png</icon>
+                                    <height>48</height>
+                                    <face_colour>blue</face_colour>
+                                    <label>MILL</label>
+                                    <fg>#FFFFFF</fg>
+                                    <font>
+                                        <size>15</size>
+                                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                    </font>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                        <assign_var>1</assign_var>
+                                    </XRCED>
+                                </object>
+                                <flag>wxALL|wxEXPAND</flag>
+                                <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                                <object class="wxBoxSizer">
+                                    <object class="sizeritem">
+                                        <object class="wxStaticText" name="txt_milling_est_time">
+                                            <label>Estimated time ...</label>
+                                            <fg>#E5E5E5</fg>
+                                            <hidden>0</hidden>
+                                        </object>
+                                        <flag>wxLEFT</flag>
+                                        <border>-2</border>
+                                    </object>
+                                    <orient>wxHORIZONTAL</orient>
+                                </object>
+                                <flag>wxTOP</flag>
+                                <border>17</border>
+                            </object>
+                            <object class="sizeritem">
+                                <object class="wxBoxSizer">
+                                    <object class="sizeritem">
+                                        <object class="wxBoxSizer">
+                                            <object class="sizeritem">
+                                                <object class="wxGauge" name="gauge_milling_series">
+                                                    <size>-1,10</size>
+                                                    <range>100</range>
+                                                    <value>0</value>
+                                                    <style>wxGA_SMOOTH</style>
+                                                    <XRCED>
+                                                        <assign_var>1</assign_var>
+                                                    </XRCED>
+                                                </object>
+                                                <option>1</option>
+                                                <flag>wxTOP</flag>
+                                                <border>10</border>
+                                            </object>
+                                            <object class="sizeritem">
+                                                <object class="wxStaticText" name="txt_milling_series_left_time">
+                                                    <label></label>
+                                                    <fg>#E5E5E5</fg>
+                                                    <hidden>0</hidden>
+                                                </object>
+                                                <option>1</option>
+                                                <flag>wxTOP</flag>
+                                                <border>10</border>
+                                            </object>
+                                            <orient>wxVERTICAL</orient>
+                                        </object>
+                                        <flag>wxTOP</flag>
+                                        <border>-8</border>
+                                    </object>
+                                    <object class="sizeritem">
+                                        <object class="ImageTextButton" name="btn_milling_cancel">
+                                            <height>24</height>
+                                            <face_colour>def</face_colour>
+                                            <label>cancel</label>
+                                            <XRCED>
+                                                <assign_var>1</assign_var>
+                                            </XRCED>
+                                        </object>
+                                        <flag>wxTOP</flag>
+                                        <border>12</border>
+                                        <option>0</option>
+                                    </object>
+                                    <orient>wxHORIZONTAL</orient>
+                                </object>
+                                <flag>wxEXPAND</flag>
+                            </object>
+                            <cols>3</cols>
+                            <rows>1</rows>
+                            <vgap>0</vgap>
+                            <hgap>5</hgap>
+                            <growablecols>1</growablecols>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                      </object>
                 </object>
                 <size>400,-1</size>
                 <bg>#333333</bg>
