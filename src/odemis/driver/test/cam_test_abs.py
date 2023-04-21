@@ -23,7 +23,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # This is not a real test case, but just a stub to be used for each camera driver.
 
 from abc import ABCMeta, abstractproperty
-from future.utils import with_metaclass
 import gc
 import logging
 import numpy
@@ -52,7 +51,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "device": "/dev/comedi0",
               }
 
 
-class VirtualStaticTestCam(with_metaclass(ABCMeta, object)):
+class VirtualStaticTestCam(metaclass=ABCMeta):
     """
     For tests which don't need a camera ready
     """
@@ -86,7 +85,7 @@ class VirtualStaticTestCam(with_metaclass(ABCMeta, object)):
 
 # It doesn't inherit from TestCase because it should not be run by itself
 #class VirtualTestCam(unittest.TestCase):
-class VirtualTestCam(with_metaclass(ABCMeta, object)):
+class VirtualTestCam(metaclass=ABCMeta):
     """
     Abstract class for all the DigitalCameras
     """
@@ -516,7 +515,7 @@ class VirtualTestCam(with_metaclass(ABCMeta, object)):
             pass # good!
 
 
-class VirtualTestSynchronized(with_metaclass(ABCMeta, object)):
+class VirtualTestSynchronized(metaclass=ABCMeta):
     """
     Test the synchronizedOn(Event) interface, using the fake SEM
     """

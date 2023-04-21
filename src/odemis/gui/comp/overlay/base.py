@@ -30,7 +30,6 @@ They will *only* receive mouse events if they are active!
 
 """
 
-from future.utils import with_metaclass
 import cairo
 import logging
 import math
@@ -295,7 +294,7 @@ class Vec(tuple):
         return self[1]
 
 
-class Overlay(with_metaclass(ABCMeta, object)):
+class Overlay(metaclass=ABCMeta):
     """ This abstract Overlay class forms the base for a series of classes that
     allow for the drawing of images, text and shapes on top of a Canvas, while
     also facilitating the processing of various (mouse) events.
@@ -620,7 +619,7 @@ class SelectionMixin(DragMixin):
 
         logging.debug("Stopping selection")
 
-        if max(self.get_height(), self.get_width()) < gui.SELECTION_MINIMUM:
+        if max(self.get_height() or 0, self.get_width() or 0) < gui.SELECTION_MINIMUM:
             logging.debug("Selection too small")
             self.clear_selection()
         else:
@@ -1143,7 +1142,7 @@ class WorldOverlay(Overlay):
         pass
 
 
-class SpotModeBase(with_metaclass(ABCMeta, object)):
+class SpotModeBase(metaclass=ABCMeta):
 
     def __init__(self, cnvs, spot_va=None):
         self.colour = conversion.hex_to_frgb(gui.FG_COLOUR_EDIT)

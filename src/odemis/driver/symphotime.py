@@ -15,19 +15,16 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from future.utils import with_metaclass
 import logging
-import abc
+import os
+import socket
+import struct
+import threading
+import time
+from abc import ABCMeta, abstractmethod
 
 from odemis import model
 from odemis.model import HwError
-
-import os
-import time
-import threading
-import socket
-import struct
-from abc import abstractmethod
 
 # Define constants
 DEFAULT_PORT = 6000
@@ -275,7 +272,7 @@ def DecodeOptionalDataRecordString(data):
     return records
 
 
-class Message(with_metaclass(abc.ABCMeta, object)):
+class Message(metaclass=ABCMeta):
     '''
     Defines a base class for Messages sent between client and server.
     '''
@@ -1019,4 +1016,3 @@ class DetectorLive(model.Detector):
         '''
         if not self.parent.CheckMeasurement(PQ_MEASTYPE_TEST_POINTMEAS):
             raise RuntimeError("A measurement is already running!")
-

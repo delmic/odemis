@@ -20,7 +20,6 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from future.utils import with_metaclass
 from past.builtins import basestring, long
 import queue
 from abc import ABCMeta
@@ -507,10 +506,11 @@ class CryoMainGUIData(MainGUIData):
     """
     Data common to all Cryo tabs (METEOR/ENZEL/MIMAS).
     """
-    SAMPLE_RADIUS_TEM_GRID = 1.8e-3  # m, standard TEM grid size including the borders
+    SAMPLE_RADIUS_TEM_GRID = 1.25e-3  # m, standard TEM grid size including the borders
     # Bounding-box relative to the center of a sample, corresponding to usable area
     # for imaging/milling. Used in particular for the overview image.
-    SAMPLE_USABLE_BBOX_TEM_GRID = (-1e-3, -1e-3, 1e-3, 1e-3)  # m, minx, miny, maxx, maxy
+    hwidth = SAMPLE_RADIUS_TEM_GRID / math.sqrt(2)
+    SAMPLE_USABLE_BBOX_TEM_GRID = (-hwidth, -hwidth, hwidth, hwidth)  # m, minx, miny, maxx, maxy
 
     def __init__(self, microscope):
         super().__init__(microscope)
@@ -545,7 +545,7 @@ class CryoMainGUIData(MainGUIData):
         self.sample_rel_bbox = self.SAMPLE_USABLE_BBOX_TEM_GRID
 
 
-class MicroscopyGUIData(with_metaclass(ABCMeta, object)):
+class MicroscopyGUIData(metaclass=ABCMeta):
     """Contains all the data corresponding to a GUI tab.
 
     In the Odemis GUI, there's basically one MicroscopyGUIData per tab (or just
@@ -1657,8 +1657,8 @@ class StreamView(View):
         # drawn, including the margins, via fov_buffer). This is used to update
         # the (static) streams with a projection which can be resized via .rect
         # and .mpp.
-        self.fov = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1e9, 1e9)))
-        self.fov_buffer = model.TupleContinuous((0.0, 0.0), range=((0.0, 0.0), (1e9, 1e9)))
+        self.fov = model.TupleContinuous((0.0, 0.0), cls=(int, float), range=((0.0, 0.0), (1e9, 1e9)))
+        self.fov_buffer = model.TupleContinuous((0.0, 0.0), cls=(int, float), range=((0.0, 0.0), (1e9, 1e9)))
         self.fov_buffer.subscribe(self._onFovBuffer)
 
         # Will be created on the first time it's needed

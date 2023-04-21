@@ -235,6 +235,8 @@ def nearest_neighbor_graph(ji: numpy.ndarray) -> SkewSymmetricAdjacencyGraph:
         returned, and for the corners only 2.
 
     """
+    n, m = ji.shape
+
     # Find the closest 4 neighbors (excluding itself) for each point.
     tree = scipy.spatial.cKDTree(ji)
     # NOTE: Starting SciPy v1.6.0 the `n_jobs` argument will be renamed `workers`
@@ -246,6 +248,9 @@ def nearest_neighbor_graph(ji: numpy.ndarray) -> SkewSymmetricAdjacencyGraph:
     graph = SkewSymmetricAdjacencyGraph(len(ji))
     for vertex, neighbors in enumerate(indices):
         for neighbor, distance in zip(neighbors, distances[vertex]):
+            # Missing neighbors are indicated with `n`, see `scipy.spatial.cKDTree`.
+            if neighbor == n:
+                continue
             # An edge connects two vertices that are each others nearest neighbor.
             if (vertex < neighbor) and (vertex in indices[neighbor]):
                 shift = ji[neighbor] - ji[vertex]
@@ -358,6 +363,13 @@ def _cluster_edges(
         matched centroids.
 
     """
+    n_edges = graph.size(directed=False)
+    if n_edges < 2:
+        # theoretical minimum
+        raise ValueError(
+            "Expected a graph with at least 2 edges, but got %d." % n_edges
+        )
+
     if not is_connected(graph):
         # no point in continuing if the graph is disconnected.
         raise ValueError("Expected a connected graph, but got a disconnected graph.")
@@ -479,7 +491,13 @@ def estimate_grid_orientation(
     tform : instance of `transform_type`
         The orientation of the pattern.
     error_metric : float
-        The RMS value of the fiducial error registration of the square grid compared to ji.
+        The RMS value of the fiducial error registration of the square grid
+        compared to `ji`.
+
+    Raises
+    ------
+    ValueError
+        If the orientation of the square grid cannot be determined.
 
     """
     if shape[0] != shape[1]:
@@ -538,6 +556,11 @@ def estimate_grid_orientation_from_img(
     error_metric : float
         The RMS value of the fiducial error registration of the square grid
         compared to the spots measured on the image.
+
+    Raises
+    ------
+    ValueError
+        If the orientation of the square grid cannot be determined.
 
     """
     if num_spots is None:

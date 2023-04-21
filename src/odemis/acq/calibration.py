@@ -270,7 +270,7 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
             supported for chronograph data. Spectrum efficiency correction do not apply for this type of data.
     :param bckg: (None or DataArray of at least 5 dims) The background data, with
         CTZYX = C1111 (spectrum), CTZYX = CT111 (temporal spectrum) or CTZYX = 1T111 (time correlator).
-    :param coef: (None or DataArray of at least 5 dims) The coefficient data, with CTZXY = C1111.
+    :param coef: (None or DataArray of at least 5 dims) The coefficient data, with CTZYX = C1111.
     :returns: (DataArray) Same shape as original data. Can have dtype=float.
       If MD_THETA_LIST is present and contains NaN values (which is typical), then
       the A dimension (theta angles) is shorten by removing the indices where the

@@ -134,9 +134,9 @@ class OrsayComponent(model.HwComponent):
         self.datamodel = None
         self.preset_manager = None
 
-        self.processInfo = model.StringVA("", readonly=True)  # Contains a lot of information about the currently 
-        # running process and a wide range thereof. For example it will show which valves are being closed and when 
-        # the pumps are activated when setting the vacuum state to a new value. 
+        self.processInfo = model.StringVA("", readonly=True)  # Contains a lot of information about the currently
+        # running process and a wide range thereof. For example it will show which valves are being closed and when
+        # the pumps are activated when setting the vacuum state to a new value.
 
         self.on_connect()
 
@@ -502,7 +502,7 @@ class OrsayComponent(model.HwComponent):
             device_name = d.attrib['Name'] if 'Name' in d.attrib else d.attrib['name']
             device = getattr(self.datamodel, device_name)
             for p in d.findall("Parameter"):
-                param_name = p.attrib['name']
+                param_name = p.attrib['Name'] if 'Name' in p.attrib else p.attrib['name']
                 param = getattr(device, param_name)
 
                 if not bool(param.AtTarget):
@@ -880,12 +880,19 @@ class pumpingSystem(model.HwComponent):
         self._system = None
 
         self.speed = model.FloatVA(0.0, readonly=True, unit="Hz")
-        self.temperature = model.FloatVA(0.0, readonly=True, unit="°C")
-        self.power = model.FloatVA(0.0, readonly=True, unit="W")
+        self._speedConnector = None
         self.speedReached = model.BooleanVA(False, readonly=True)
+        self._speedReachedConnector = None
+        self.temperature = model.FloatVA(0.0, readonly=True, unit="°C")
+        self._temperatureConnector = None
+        self.power = model.FloatVA(0.0, readonly=True, unit="W")
+        self._powerConnector = None
         self.turboPumpOn = model.BooleanVA(False, readonly=True)
+        self._turboPumpOnConnector = None
         self.primaryPumpOn = model.BooleanVA(False, readonly=True)
+        self._primaryPumpOnConnector = None
         self.nitrogenPressure = model.FloatVA(0.0, readonly=True, unit="Pa")
+        self._nitrogenPressureConnector = None
 
         self.on_connect()
 
@@ -898,13 +905,14 @@ class pumpingSystem(model.HwComponent):
 
         self._system.Manometer1.ErrorState.Subscribe(self._updateErrorState)
         self._system.TurboPump1.ErrorState.Subscribe(self._updateErrorState)
-        self._system.TurboPump1.Speed.Subscribe(self._updateSpeed)
-        self._system.TurboPump1.Temperature.Subscribe(self._updateTemperature)
-        self._system.TurboPump1.Power.Subscribe(self._updatePower)
-        self._system.TurboPump1.SpeedReached.Subscribe(self._updateSpeedReached)
-        self._system.TurboPump1.IsOn.Subscribe(self._updateTurboPumpOn)
-        self.parent.datamodel.HybridPlatform.PrimaryPumpState.Subscribe(self._updatePrimaryPumpOn)
-        self._system.Manometer1.Pressure.Subscribe(self._updateNitrogenPressure)
+
+        self._speedConnector = OrsayParameterConnector(self.speed, self._system.TurboPump1.Speed)
+        self._speedReachedConnector = OrsayParameterConnector(self.speedReached, self._system.TurboPump1.SpeedReached)
+        self._temperatureConnector = OrsayParameterConnector(self.temperature, self._system.TurboPump1.Temperature)
+        self._powerConnector = OrsayParameterConnector(self.power, self._system.TurboPump1.Power)
+        self._turboPumpOnConnector = OrsayParameterConnector(self.turboPumpOn, self._system.TurboPump1.IsOn)
+        self._primaryPumpOnConnector = OrsayParameterConnector(self.primaryPumpOn, self.parent.datamodel.HybridPlatform.PrimaryPumpState)
+        self._nitrogenPressureConnector = OrsayParameterConnector(self.nitrogenPressure, self._system.Manometer1.Pressure)
 
         self.update_VAs()
 
@@ -913,13 +921,8 @@ class pumpingSystem(model.HwComponent):
         Update the VA's. Should be called after reconnection to the server
         """
         self._updateErrorState()
-        self._updateSpeed()
-        self._updateTemperature()
-        self._updatePower()
-        self._updateSpeedReached()
-        self._updateTurboPumpOn()
-        self._updatePrimaryPumpOn()
-        self._updateNitrogenPressure()
+        for connector in get_orsay_param_connectors(self):
+            connector.update_VA()
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
@@ -945,123 +948,15 @@ class pumpingSystem(model.HwComponent):
         else:
             self.state._set_value(HwError(eState), force_write=True)
 
-    def _updateSpeed(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the turbopump's speed from the Orsay server and saves it in the speed VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.Speed
-        if attr_name != "Actual":
-            return
-        self.speed._set_value(float(parameter.Actual), force_write=True)
-
-    def _updateTemperature(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the turbopump's temperature from the Orsay server and saves it in the temperature VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.Temperature
-        if attr_name != "Actual":
-            return
-        self.temperature._set_value(float(self._system.TurboPump1.Temperature.Actual), force_write=True)
-
-    def _updatePower(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the turbopump's power from the Orsay server and saves it in the power VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.Power
-        if attr_name != "Actual":
-            return
-        self.power._set_value(float(parameter.Actual), force_write=True)
-
-    def _updateSpeedReached(self, parameter=None, attr_name="Actual"):
-        """
-        Reads if the turbopump has reached its maximum speed from the Orsay server and saves it in the speedReached VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.SpeedReached
-        if attr_name != "Actual":
-            return
-        logging.debug("Speed reached changed to %s." % str(parameter.Actual))
-        self.speedReached._set_value(str(parameter.Actual).lower() == "true", force_write=True)
-
-    def _updateTurboPumpOn(self, parameter=None, attr_name="Actual"):
-        """
-        Reads if the turbopump is currently on from the Orsay server and saves it in the turboPumpOn VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.TurboPump1.IsOn
-        if attr_name != "Actual":
-            return
-        state = str(parameter.Actual).lower() == "true"
-        logging.debug("Turbopump turned %s.", "on" if state else "off")
-        self.turboPumpOn._set_value(state, force_write=True)
-
-    def _updatePrimaryPumpOn(self, parameter=None, attr_name="Actual"):
-        """
-        Reads if the primary pump is currently on from the Orsay server and saves it in the primaryPumpOn VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self.parent.datamodel.HybridPlatform.PrimaryPumpState
-        if attr_name != "Actual":
-            return
-        state = str(parameter.Actual).lower() == "true"
-        logging.debug("Primary pump turned %s.", "on" if state else "off")
-        self.primaryPumpOn._set_value(state, force_write=True)
-
-    def _updateNitrogenPressure(self, parameter=None, attr_name="Actual"):
-        """
-        Reads pressure on nitrogen inlet to the turbopump from the Orsay server and saves it in the nitrogenPressure VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._system.Manometer1.Pressure
-        if attr_name != "Actual":
-            return
-        self.nitrogenPressure._set_value(float(parameter.Actual), force_write=True)
-
     def terminate(self):
         """
         Called when Odemis is closed
         """
         if self._system:
+            for connector in get_orsay_param_connectors(self):
+                connector.disconnect()
             self._system.Manometer1.ErrorState.Unsubscribe(self._updateErrorState)
             self._system.TurboPump1.ErrorState.Unsubscribe(self._updateErrorState)
-            self._system.TurboPump1.Speed.Unsubscribe(self._updateSpeed)
-            self._system.TurboPump1.Temperature.Unsubscribe(self._updateTemperature)
-            self._system.TurboPump1.Power.Unsubscribe(self._updatePower)
-            self._system.TurboPump1.SpeedReached.Unsubscribe(self._updateSpeedReached)
-            self._system.TurboPump1.IsOn.Unsubscribe(self._updateTurboPumpOn)
-            self.parent.datamodel.HybridPlatform.PrimaryPumpState.Unsubscribe(self._updatePrimaryPumpOn)
-            self._system.Manometer1.Pressure.Unsubscribe(self._updateNitrogenPressure)
             self._system = None
 
 
@@ -1329,9 +1224,13 @@ class GISReservoir(model.HwComponent):
         self.targetTemperature = model.FloatContinuous(0, unit="°C", range=(-273.15, 1e3),
                                                        setter=self._setTargetTemperature)
         self.temperature = model.FloatContinuous(0, unit="°C", range=(-273.15, 1e3), readonly=True)
-        self.temperatureRegulation = model.BooleanVA(False, setter=self._setTemperatureRegulation)
+        self._temperatureConnector = None
+        self.temperatureRegulation = model.BooleanVA(False)
+        self._temperatureRegulationConnector = None
         self.age = model.FloatContinuous(0, unit="s", readonly=True, range=(0, 1e12))
+        self._ageConnector = None
         self.precursorType = model.StringVA("", readonly=True)
+        self._precusorTypeConnector = None
 
         self.on_connect()
 
@@ -1340,19 +1239,16 @@ class GISReservoir(model.HwComponent):
         Defines direct pointers to server components and connects parameter callbacks for the Orsay server.
         Needs to be called after connection and reconnection to the server.
         """
-        logging.debug("Current param: %r", self._temperaturePar)
         self._gis = self.parent.datamodel.HybridGIS
         self._temperaturePar = self._gis.ReservoirTemperature
-
-        logging.debug("After param: %r", self._temperaturePar)
 
         self._gis.ErrorState.Subscribe(self._updateErrorState)
         self._gis.RodPosition.Subscribe(self._updateErrorState)
         self._temperaturePar.Subscribe(self._updateTargetTemperature)
-        self._temperaturePar.Subscribe(self._updateTemperature)
-        self._gis.RegulationOn.Subscribe(self._updateTemperatureRegulation)
-        self._gis.ReservoirLifeTime.Subscribe(self._updateAge)
-        self._gis.PrecursorType.Subscribe(self._updatePrecursorType)
+        self._temperatureConnector = OrsayParameterConnector(self.temperature, self._gis.ReservoirTemperature)
+        self._temperatureRegulationConnector = OrsayParameterConnector(self.temperatureRegulation, self._gis.RegulationOn)
+        self._ageConnector = OrsayParameterConnector(self.age, self._gis.ReservoirLifeTime, factor=3600)
+        self._precusorTypeConnector = OrsayParameterConnector(self.precursorType, self._gis.PrecursorType)
 
         self.update_VAs()
 
@@ -1362,10 +1258,8 @@ class GISReservoir(model.HwComponent):
         """
         self._updateErrorState()
         self._updateTargetTemperature()
-        self._updateTemperature()
-        self._updateTemperatureRegulation()
-        self._updateAge()
-        self._updatePrecursorType()
+        for connector in get_orsay_param_connectors(self):
+            connector.update_VA()
 
     def _updateErrorState(self, parameter=None, attr_name="Actual"):
         """
@@ -1425,78 +1319,6 @@ class GISReservoir(model.HwComponent):
         self.targetTemperature._value = new_value  # to not call the setter
         self.targetTemperature.notify(new_value)
 
-    def _updateTemperature(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the actual temperature of the GIS reservoir from the Orsay server and saves it in the temperature VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._temperaturePar
-        # if float(self._temperaturePar.Actual) == float(self._temperaturePar.Target):
-        #     logging.debug("Target temperature reached.")
-
-        if attr_name != "Actual":
-            return
-
-        self.temperature._set_value(float(self._temperaturePar.Actual), force_write=True)
-
-    def _updateTemperatureRegulation(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the state of temperature regulation of the GIS reservoir from the Orsay server and saves it in the
-        temperatureRegulation VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        # datamodel.HybridGIS.RegulationRushOn parameter is also available for extra fast (agressive) control of the
-        # temperature, but this feature currently does not work and is not needed.
-        if attr_name != "Actual":
-            return
-
-        try:
-            reg = self._gis.RegulationOn.Actual.lower() == "true"
-        except AttributeError:  # in case RegulationOn.Actual is not a string
-            reg = False
-
-        logging.debug("Temperature regulation turned %s.", "on" if reg else "off")
-        self.temperatureRegulation._value = reg  # to not call the setter
-        self.temperatureRegulation.notify(reg)
-
-    def _updateAge(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the amount of hours the GIS reservoir has been open for from the Orsay server and saves it in the age VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._gis.ReservoirLifeTime
-        if attr_name != "Actual":
-            return
-        logging.debug("GIS reservoir lifetime updated to %f hours.", float(self._gis.ReservoirLifeTime.Actual))
-        self.age._set_value(float(self._gis.ReservoirLifeTime.Actual) * 3600,  # convert hours to seconds
-                            force_write=True)
-
-    def _updatePrecursorType(self, parameter=None, attr_name="Actual"):
-        """
-        Reads the type of precursor gas in the GIS reservoir from the Orsay server and saves it in the precursorType VA.
-        Gets called as callback by the Orsay server when the parameter changes value.
-
-        :param (Orsay Parameter) parameter: the parameter on the Orsay server to use to update the VA
-        :param (str) attr_name: the name of the attribute of parameter which was changed
-        """
-        if parameter is None:
-            parameter = self._gis.PrecursorType
-        if attr_name != "Actual":
-            return
-        logging.debug("Precursor type changed to %s." % self._gis.PrecursorType.Actual)
-        self.precursorType._set_value(self._gis.PrecursorType.Actual, force_write=True)
-
     def _setTargetTemperature(self, goal):
         """
         Sets the target temperature of the GIS reservoir to goal °C
@@ -1508,28 +1330,16 @@ class GISReservoir(model.HwComponent):
         self._temperaturePar.Target = goal
         return float(self._temperaturePar.Target)
 
-    def _setTemperatureRegulation(self, goal):
-        """
-        Turns temperature regulation off (if goal = False) or on (if goal = True)
-
-        :param (boolean) goal: Mode to set the temperature regulation to. True is on, False is off.
-        """
-        logging.debug("Turning temperature regulation %s.", "on" if goal else "off")
-        self._gis.RegulationOn.Target = goal
-        return goal
-
     def terminate(self):
         """
         Called when Odemis is closed
         """
         if self._gis:
+            for connector in get_orsay_param_connectors(self):
+                connector.disconnect()
             self._gis.ErrorState.Unsubscribe(self._updateErrorState)
             self._gis.RodPosition.Unsubscribe(self._updateErrorState)
             self._temperaturePar.Unsubscribe(self._updateTargetTemperature)
-            self._temperaturePar.Unsubscribe(self._updateTemperature)
-            self._gis.RegulationOn.Unsubscribe(self._updateTemperatureRegulation)
-            self._gis.ReservoirLifeTime.Unsubscribe(self._updateAge)
-            self._gis.PrecursorType.Unsubscribe(self._updatePrecursorType)
             self._temperaturePar = None
             self._gis = None
 
@@ -1598,7 +1408,7 @@ class OrsayParameterConnector:
         self._maxpar = maxpar
 
         # Assure that self._parameters (and self._minpar and self._maxpar if applicable) is a tuple
-        if isinstance(parameter, collections.abc.Iterable):  # if multiple parameters are passed
+        if isinstance(parameter, (list, tuple)):  # if multiple parameters are passed
             self._parameters = tuple(parameter)
             if self._minpar is not None and self._maxpar is not None:
                 self._minpar = tuple(self._minpar)
@@ -1620,7 +1430,7 @@ class OrsayParameterConnector:
         # if it's a tuple or not and if it's read-only
         self._va = va
 
-        if isinstance(parameter, collections.abc.Iterable):  # if multiple parameters are passed
+        if isinstance(parameter, (list, tuple)):  # if multiple parameters are passed
             self._va_is_tuple = True  # indicates if the VA is a tuple (True) or not (False).
             self._va_value_type = type(self._va.value[0])  # if no Tuple VA is passed, this line will raise an exception
         else:
@@ -1959,8 +1769,6 @@ class FIBVacuum(model.HwComponent):
         :param (Orsay Parameter) parameter: The parameter on the Orsay server that calls this callback
         :param (str) attr_name: The name of the attribute of parameter which was changed
         """
-        errorParameters = (recursive_getattr(self.parent.datamodel, device).ErrorState
-                           for device in self.DEVICES_WITH_ERROR_STATES)
         if attr_name != "Actual":
             return
 
@@ -1975,7 +1783,12 @@ class FIBVacuum(model.HwComponent):
         if eState == "":
             self.state._set_value(model.ST_RUNNING, force_write=True)
         else:
-            self.state._set_value(HwError(eState), force_write=True)
+            # Two exceptions are always considered different, so it'll keep
+            # sending notifications even if the state is the same.
+            # => compare the content of the current value.
+            prev_val = self.state.value
+            if not isinstance(prev_val, HwError) or str(prev_val) != eState:
+                self.state._set_value(HwError(eState), force_write=True)
 
     def _updateInterlockInChamberTriggered(self, parameter=None, attr_name="Actual"):
         """
@@ -2215,6 +2028,9 @@ class FIBSource(model.HwComponent):
         self._hvps.HeaterState.Subscribe(self._updateErrorState)
         # self._hvps.HeaterState.Subscribe(self._updateHeater) # Note: Currently unused and unsafe
 
+        # TODO: While going from ON->OFF, the (transition) state is "DOWN", for ~30 s.
+        # It is not properly handled and shown currently as as "(DOWN,)". Should be just False.
+        # It also has ERROR_INTERLOCK in case of errors. In such case, .state is set. Also set gunOn to False?
         self._gunOnConnector = OrsayParameterConnector(self.gunOn, self._hvps.GunState,
                                                        mapping={True: "ON", False: "OFF"})
         self._lifetimeConnector = OrsayParameterConnector(self.lifetime, self._hvps.SourceLifeTime,
@@ -2263,16 +2079,24 @@ class FIBSource(model.HwComponent):
         if attr_name != "Actual":
             return
 
-        eState = ""
-
+        errors = []
         heater_state = self._hvps.HeaterState.Actual
         if heater_state == HEATER_ERROR:  # in case of heater error
-            eState += "FIB source forced to shut down"
+            errors.append("FIB source forced to shut down")
+        gun_state = self._hvps.GunState.Actual
+        if "error" in gun_state.lower():
+            errors.append(f"Gun error: {gun_state}")
 
-        if eState == "":
+        if not errors:
             self.state._set_value(model.ST_RUNNING, force_write=True)
         else:
-            self.state._set_value(HwError(eState), force_write=True)
+            # Two exceptions are always considered different, so it'll keep
+            # sending notifications even if the state is the same.
+            # => compare the content of the current value.
+            error_str = ", ".join(errors)
+            prev_val = self.state.value
+            if not isinstance(prev_val, HwError) or str(prev_val) != error_str:
+                self.state._set_value(HwError(error_str), force_write=True)
 
     # Note: Currently unused and unsafe
     # def _updateHeater(self, parameter=None, attr_name="Actual"):
@@ -2568,7 +2392,7 @@ class FIBBeam(model.HwComponent):
                                                          minpar=self._ionColumn.ObjectiveXYRatio_Minvalue,
                                                          maxpar=self._ionColumn.ObjectiveXYRatio_Maxvalue)
         self._mirrorImageConnector = OrsayParameterConnector(self.mirrorImage, self._ionColumn.Mirror,
-                                                             mapping={True: -1, False: 1})
+                                                             mapping={True: 1, False: 0})
         # Note: Currently unused and unsafe
         # self._imageFromSteerersConnector = OrsayParameterConnector(self.imageFromSteerers,
         #                                                            self._ionColumn.ObjectiveScanSteerer,
@@ -2646,9 +2470,16 @@ class FIBBeam(model.HwComponent):
             # automatically sets the ImageArea to full FoV. We don't want that.
             # We want to keep the resolution and translation as they were
             # (except for appropriate scaling).
-            self._set_and_wait_update(self._ionColumn.ImageSize, im_size)
+            try:
+                # When ImageSize changes, the ImageArea is reset by the Orsay server
+                # => don't use that value for resolution and translation
+                self._ionColumn.ImageArea.Unsubscribe(self._updateTranslationResolution)
+                self._set_and_wait_update(self._ionColumn.ImageSize, im_size)
+            finally:
+                self._ionColumn.ImageArea.Subscribe(self._updateTranslationResolution)
 
         # This works because the new ImageFormat value has already been set by _updateImageFormat
+        # This also enforces that ImageArea is in sync with resolution and translation
         self.resolution.value = new_resolution  # set new resolution with calling the setter
 
         return value
@@ -2729,19 +2560,25 @@ class FIBBeam(model.HwComponent):
         :return: ((int, int)) new_translation: actual translation set
         """
         im_fmt = self.imageFormat.value
+        im_fmt_mx = self.imageFormat.range[1]
+
+        # translation is in "smallest pixels"
+        px_scale = (im_fmt_mx[0] / im_fmt[0], im_fmt_mx[1] / im_fmt[1])
+
         # find the current limits for translation and clip the new value
-        trans_max = (int(im_fmt[0] / 2 - target_resolution[0] / 2),
-                     int(im_fmt[1] / 2 - target_resolution[1] / 2))
+        trans_max = ((im_fmt[0] / 2 - target_resolution[0] / 2) * px_scale[0],
+                     (im_fmt[1] / 2 - target_resolution[1] / 2) * px_scale[1])
         # the min is just the opposite of the max (eg, -512 -> 512)
-        target_translation = (max(-trans_max[0], min(target_translation[0], trans_max[0])),
-                              max(-trans_max[1], min(target_translation[1], trans_max[1])))
+        trans = (max(-trans_max[0], min(target_translation[0], trans_max[0])),
+                 max(-trans_max[1], min(target_translation[1], trans_max[1])))
 
         # Convert coordinates from center to left-top
-        target_trans_lt = (int(im_fmt[0] / 2 + target_translation[0] - target_resolution[0] / 2),
-                           int(im_fmt[1] / 2 + target_translation[1] - target_resolution[1] / 2))
+        trans_lt = (int(im_fmt[0] / 2 + trans[0] / px_scale[0] - target_resolution[0] / 2),
+                    int(im_fmt[1] / 2 + trans[1] / px_scale[1] - target_resolution[1] / 2))
 
-        target = map(str, target_trans_lt + target_resolution)
+        target = map(str, trans_lt + target_resolution)
         target = " ".join(target)
+        logging.debug("Converted fmt %s, res %s and trans %s to %s", im_fmt, target_resolution, target_translation, target)
 
         # Wait until the settings are actually set. It's especially important in
         # case there are consecutive calls to change the resolution/translation.
@@ -2754,8 +2591,8 @@ class FIBBeam(model.HwComponent):
 
         # Compute the actual translation, based on the rounding (if resolution is
         # an odd number, the translation will be -0.5).
-        new_translation = (target_trans_lt[0] - im_fmt[0] / 2 + target_resolution[0] / 2,
-                           target_trans_lt[1] - im_fmt[1] / 2 + target_resolution[1] / 2)
+        new_translation = ((trans_lt[0] - im_fmt[0] / 2 + target_resolution[0] / 2) * px_scale[0],
+                           (trans_lt[1] - im_fmt[1] / 2 + target_resolution[1] / 2) * px_scale[1])
 
         return new_translation
 
@@ -2772,8 +2609,7 @@ class FIBBeam(model.HwComponent):
         (resolution VA) to prevent the new translation from placing part of the image area outside of the image format.
         """
         with self.updatingImageArea:  # translation and resolution cannot be updated simultaneously
-            trans = tuple(int(round(t)) for t in value)
-            trans = self._clip_and_set_image_area(self.resolution.value, trans)
+            trans = self._clip_and_set_image_area(self.resolution.value, value)
             return trans
 
     def _resolution_setter(self, value):
@@ -2816,9 +2652,15 @@ class FIBBeam(model.HwComponent):
         logging.debug("Received ImageArea: %s.", area)
         area = list(map(int, area.split(" ")))
 
+        im_fmt = self.imageFormat.value
+        im_fmt_mx = self.imageFormat.range[1]
+
+        # translation is in "smallest pixels"
+        px_scale = (im_fmt_mx[0] / im_fmt[0], im_fmt_mx[1] / im_fmt[1])
+
         # Convert translation from upper left corner to center
-        new_translation = (area[0] - self.imageFormat.value[0] / 2 + area[2] / 2,
-                           area[1] - self.imageFormat.value[1] / 2 + area[3] / 2)
+        new_translation = ((area[0] - im_fmt[0] / 2 + area[2] / 2) * px_scale[0],
+                           (area[1] - im_fmt[1] / 2 + area[3] / 2) * px_scale[1])
 
         # Note: when the resolution is an odd number of pixels, the center cannot
         # be exactly at the center, and as we always round down, it's shifted by
@@ -3894,3 +3736,6 @@ class FIBAperture(model.Actuator):
             self.stop()
             self._executor.shutdown()
             self._executor = None
+
+            for connector in get_orsay_param_connectors(self):
+                connector.disconnect()

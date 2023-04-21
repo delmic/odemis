@@ -33,7 +33,6 @@ import odemis.gui.img as guiimg
 import odemis.util.conversion as conversion
 import odemis.util.units as units
 import wx
-from future.utils import with_metaclass
 from odemis import model, util
 from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_DEACTIVE,
                                 FEATURE_POLISHED, FEATURE_ROUGH_MILLED)
@@ -1211,7 +1210,7 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
         WorldOverlay._deactivate(self)
 
 
-class GadgetToolInterface(with_metaclass(ABCMeta, object)):
+class GadgetToolInterface(metaclass=ABCMeta):
     """
     This abstract GadgetToolInterface class forms the base for a series of classes that
     refer to gadgets tools and their functionality.
@@ -1284,7 +1283,7 @@ LINE_MODE_EDIT_END = 3
 LINE_MODE_EDIT_TEXT = 4
 
 
-class GenericGadgetLine(with_metaclass(ABCMeta, GadgetToolInterface)):
+class GenericGadgetLine(GadgetToolInterface, metaclass=ABCMeta):
     """ This abstract GenericGadgetLine class forms the base for all gadget classes showing a line.
     Used to draw a line and also handle the mouse interaction when dragging/moving the line """
 
@@ -3445,7 +3444,7 @@ class FastEMROAOverlay(FastEMSelectOverlay):
         Check if left click was in ROA. If so, activate the overlay. Otherwise, deactivate.
         """
         abort_roa_creation = (self._coordinates.value == UNDEFINED_ROI and
-                              max(self.get_height(), self.get_width()) < gui.SELECTION_MINIMUM)
+                              max(self.get_height() or 0, self.get_width() or 0) < gui.SELECTION_MINIMUM)
         if abort_roa_creation:
             # Process aborted by clicking in the viewport
             # VA did not change, so notify explicitly to make sure aborting the process works

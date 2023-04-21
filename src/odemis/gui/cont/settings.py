@@ -26,7 +26,6 @@ user interface.
 """
 
 from past.builtins import long
-from future.utils import with_metaclass
 from abc import ABCMeta
 from collections.abc import Iterable
 import locale
@@ -54,7 +53,7 @@ import wx
 import odemis.gui.conf as guiconf
 
 
-class SettingsController(with_metaclass(ABCMeta, object)):
+class SettingsController(metaclass=ABCMeta):
     """ Settings base class which describes an indirect wrapper for FoldPanelItems
 
     :param fold_panel_item: (FoldPanelItem) Parent window

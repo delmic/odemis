@@ -1000,13 +1000,15 @@ class AcquireOverviewTask(object):
         self.areas = areas  # list of areas
         self._ccd = ccd  # TODO to delete after ccd.data components is used from streams in do_autofocus_roi
         self._focus = focus
-        self.focus_rng = self._focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
+        active_rng = self._focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
 
-        if self.focus_rng is None:
+        if active_rng and "z" in active_rng:
+            self.focus_rng = tuple(active_rng["z"])
+        else:
             # No absolute range is available, so use a relative range (e.g. as on METEOR
-            self.focus_rng = self._focus.getMetadata().get(model.MD_SAFE_REL_RANGE, SAFE_REL_RANGE_DEFAULT)
-            self.focus_rng = (self.focus_rng[0] + self._focus.position.value["z"],
-                              self.focus_rng[1] + self._focus.position.value["z"])
+            rel_rng = self._focus.getMetadata().get(model.MD_SAFE_REL_RANGE, SAFE_REL_RANGE_DEFAULT)
+            self.focus_rng = (self._focus.position.value["z"] + rel_rng[0],
+                              self._focus.position.value["z"] + rel_rng[1])
 
         self.conf_level = 0.8
         self.focusing_method = focusing_method

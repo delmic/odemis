@@ -30,13 +30,15 @@
 
 import logging
 import math
-import numpy
-from odemis.gui import FG_COLOUR_HIGHLIGHT
-from odemis.gui import img
-from odemis.gui.util.img import wxImageScaleKeepRatio
-import wx
+from typing import Any, List
 
+import numpy
+import wx
 import wx.lib.buttons as wxbuttons
+
+from odemis.gui import (FG_COLOUR_HIGHLIGHT, FG_COLOUR_RADIO_ACTIVE,
+                        FG_COLOUR_RADIO_INACTIVE, img)
+from odemis.gui.util.img import wxImageScaleKeepRatio
 
 
 def resize_bmp(btn_size, bmp):
@@ -1069,3 +1071,47 @@ class PopupImageButton(ImageTextButton):
             if menu_item.GetId() == event_id:
                 logging.debug("Performing %s callback", label)
                 callback()
+
+
+class GridSelectionPanel(wx.Panel):
+    """
+    Panel to display a grid of toggle buttons.
+    Each button can be toggled on/off independent of each other.
+    """
+
+    def __init__(self, parent, layout: List[List[Any]], *args, **kwargs):
+        """
+        :param layout: layout of grid, given as 2D list of positions. The value
+        will be used as label for the button, and also as key for the .buttons attribute
+        (dict[Any, wx.Button]). If the value at a position is None, then no button
+        is created at that position.
+        e.g. [[6, 5, 4], [3, 2, 1]]
+        """
+        super().__init__(parent, *args, **kwargs)
+
+        # TODO: provide a way to override the label
+        self.buttons = {}  # value --> wx.Button
+
+        self._panel_sizer = wx.BoxSizer(wx.VERTICAL)
+        self.SetSizer(self._panel_sizer)
+
+        # The panel doesn't draw any colour, but the buttons use the parent's
+        # background colour, so this allows to pass the background colour information.
+        self.SetBackgroundColour(self.Parent.GetBackgroundColour())
+
+        nrows = len(layout)
+        ncols = max(len(row) for row in layout)
+        calgrid_sz = wx.GridBagSizer(nrows, ncols)
+        for row_idx, row in enumerate(layout):
+            for col_idx, elem in enumerate(row):
+                if elem is None:
+                    continue
+                btn = ImageTextToggleButton(self, wx.ALIGN_CENTER, height=32, size=(-1, 32),
+                                                    active_colour=FG_COLOUR_RADIO_ACTIVE,
+                                                    label=str(elem))
+                btn.SetForegroundColour(FG_COLOUR_RADIO_INACTIVE)
+
+                calgrid_sz.Add(btn, pos=(row_idx, col_idx), flag=wx.BOTTOM | wx.LEFT | wx.RIGHT , border=5)
+
+                self.buttons[elem] = btn
+        self._panel_sizer.Add(calgrid_sz, 0, wx.ALL | wx.ALIGN_CENTER, 10)
