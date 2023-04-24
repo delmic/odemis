@@ -168,9 +168,11 @@ class Lakeshore(model.HwComponent):
             self._setters.append(va_target_heater_setter)
 
             # Vigilant attributes of the target temperature.
+            # Minimum limit for the target temperature is set precisely to -273.15 C because when the output is not set,
+            # the target temperature is automatically set to 0 K(-273.15 C) by lakeshore
             va_target_temp = FloatContinuous(value=self.GetSetpoint(output_channel_nr),
                                              unit=u"°C",
-                                             range=[-273, 50],
+                                             range=[-273.15, 50],
                                              setter=va_target_temp_setter)
 
             va_heating = IntEnumerated(value=self.GetHeaterRange(output_channel_nr),
