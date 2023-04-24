@@ -1186,7 +1186,10 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Mode values are different from the modes of the OpticalPathManager
-        amodes = ["lens-align", "mirror-align", "lens2-align", "center-align", "ek-align", "streak-align", "fiber-align"]
+        amodes = [
+                  "lens-align", "mirror-align", "lens2-align", "center-align",
+                  "ek-align", "streak-align", "fiber-align", "specswitch-align"
+                 ]
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
@@ -1240,6 +1243,9 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         if main.streak_ccd is None:
             amodes.remove("streak-align")
+
+        if main.spec_sel is None:
+            amodes.remove("specswitch-align")
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 

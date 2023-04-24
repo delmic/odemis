@@ -6323,6 +6323,14 @@ class Sparc2AlignTab(Tab):
             else:
                 logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
+        if "specswitch-align" not in tab_data.align_mode.choices:
+            # TODO add applicable code for spec-selector settings.
+            # hide the button of spec-selector not a valid mode
+            # else bind the button click event
+            pass
+        else:
+            pass
+
         # Switch between alignment modes
         # * lens-align: first auto-focus spectrograph, then align lens1
         # * mirror-align: move x, y of mirror with moment of inertia feedback
@@ -6333,6 +6341,8 @@ class Sparc2AlignTab(Tab):
         # * streak-align: vertical and horizontal alignment of the streak camera,
         #                 change of the mag due to changed input optics and
         #                 calibration of the trigger delays for temporal resolved acq
+        # * specswitch-align: engage or retract the folding mirror to switch to
+        #                     internal or external spectrograph
         self._alignbtn_to_mode = collections.OrderedDict((
             (panel.btn_align_lens, "lens-align"),
             (panel.btn_align_mirror, "mirror-align"),
@@ -6341,6 +6351,7 @@ class Sparc2AlignTab(Tab):
             (panel.btn_align_ek, "ek-align"),
             (panel.btn_align_fiber, "fiber-align"),
             (panel.btn_align_streakcam, "streak-align"),
+            (panel.btn_align_spec_switch, "specswitch-align"),
         ))
 
         # The GUI mode to the optical path mode (see acq.path.py)
@@ -6352,6 +6363,7 @@ class Sparc2AlignTab(Tab):
             "ek-align": "ek-align",
             "fiber-align": "fiber-align",
             "streak-align": "streak-align",
+            "specswitch-align": "light-out-alignment",
         }
         # Note: ActuatorController hides the fiber alignment panel if not needed.
         for btn, mode in list(self._alignbtn_to_mode.items()):
@@ -6683,6 +6695,9 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(True)
+        elif mode == "specswitch-align":
+            # enable the two laser buttons to be able to switch between
+            pass
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
 

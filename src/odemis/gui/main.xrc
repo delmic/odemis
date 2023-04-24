@@ -3002,6 +3002,26 @@
                         <flag>wxEXPAND</flag>
                         <cellpos>5,6</cellpos>
                       </object>
+                      <object class="sizeritem">
+                        <object class="GraphicRadioButton" name="btn_align_spec_switch">
+                          <icon>img/icon/ico_fib.png</icon>
+                          <icon_on>img/icon/ico_fib_green.png</icon_on>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>LASER</label>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>5,7</cellpos>
+                      </object>
                       <vgap>10</vgap>
                       <hgap>10</hgap>
                     </object>

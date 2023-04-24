@@ -370,6 +370,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_align_ek = xrc.XRCCTRL(self, "btn_align_ek")
         self.btn_align_streakcam = xrc.XRCCTRL(self, "btn_align_streakcam")
         self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
+        self.btn_align_spec_switch = xrc.XRCCTRL(self, "btn_align_spec_switch")
         self.pnl_focus = xrc.XRCCTRL(self, "pnl_focus")
         self.btn_autofocus = xrc.XRCCTRL(self, "btn_autofocus")
         self.gauge_autofocus = xrc.XRCCTRL(self, "gauge_autofocus")
@@ -4096,6 +4097,26 @@ def __init_resources():
                         </object>
                         <flag>wxEXPAND</flag>
                         <cellpos>5,6</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="GraphicRadioButton" name="btn_align_spec_switch">
+                          <icon>img_icon_ico_fib_png</icon>
+                          <icon_on>img_icon_ico_fib_green_png</icon_on>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>LASER</label>
+                          <fg>#1A1A1A</fg>
+                          <font>
+                            <size>11</size>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                        <cellpos>5,7</cellpos>
                       </object>
                       <vgap>10</vgap>
                       <hgap>10</hgap>
