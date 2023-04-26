@@ -775,7 +775,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
         # Set parameters for tiled acq
-        self.overlap = 0.2
+        self.overlap = 0.05
         try:
             # Use the stage range, which can be overridden by the MD_POS_ACTIVE_RANGE.
             # Note: this last one might be temporary, until we have a RoA tool provided in the GUI.
@@ -1001,6 +1001,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # Some settings can affect the FoV. Also, adding/removing the stream with
         # the smallest FoV would also affect the area.
+        self.update_area_size()
+
         areas = self._get_areas()
 
         # Disable acquisition button if no area
@@ -1241,6 +1243,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
         if self.autofocus_roi_ckbox.value:
+            areas = self._get_areas()
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
                                               areas,

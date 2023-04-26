@@ -28,7 +28,7 @@ from odemis import model, acq
 import odemis
 from odemis.acq import align, stream
 from odemis.acq.align import autofocus
-from odemis.acq.align.autofocus import Sparc2AutoFocus, MTD_BINARY
+from odemis.acq.align.autofocus import Sparc2AutoFocus, MTD_BINARY, getNextImage
 from odemis.dataio import hdf5
 from odemis.util import testing, timeout, img
 import os
@@ -60,39 +60,40 @@ class TestAutofocus(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         pass
-        try:
-            testing.start_backend(SECOM_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
-
-        # find components by their role
-        cls.ebeam = model.getComponent(role="e-beam")
-        cls.sed = model.getComponent(role="se-detector")
-        cls.ccd = model.getComponent(role="ccd")
-        cls.focus = model.getComponent(role="focus")
-        cls.efocus = model.getComponent(role="ebeam-focus")
-        cls.light = model.getComponent(role="light")
-        cls.light_filter = model.getComponent(role="filter")
-
-        # The good focus positions are at the start up positions
-        cls._opt_good_focus = cls.focus.position.value["z"]
-        cls._sem_good_focus = cls.efocus.position.value["z"]
+        # try:
+        #     testing.start_backend(SECOM_CONFIG)
+        # except LookupError:
+        #     logging.info("A running backend is already found, skipping tests")
+        #     cls.backend_was_running = True
+        #     return
+        # except IOError as exp:
+        #     logging.error(str(exp))
+        #     raise
+        #
+        # # find components by their role
+        # cls.ebeam = model.getComponent(role="e-beam")
+        # cls.sed = model.getComponent(role="se-detector")
+        # cls.ccd = model.getComponent(role="ccd")
+        # cls.focus = model.getComponent(role="focus")
+        # cls.efocus = model.getComponent(role="ebeam-focus")
+        # cls.light = model.getComponent(role="light")
+        # cls.light_filter = model.getComponent(role="filter")
+        #
+        # # The good focus positions are at the start up positions
+        # cls._opt_good_focus = cls.focus.position.value["z"]
+        # cls._sem_good_focus = cls.efocus.position.value["z"]
 
     @classmethod
     def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
+        pass
+        # if cls.backend_was_running:
+        #     return
+        # testing.stop_backend()
 
     def setUp(self):
-
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
+        pass
+        # if self.backend_was_running:
+        #     self.skipTest("Running backend found")
 
     def test_measure_focus(self):
         """
@@ -110,24 +111,55 @@ class TestAutofocus(unittest.TestCase):
             self.assertGreater(prev_res, res)
             prev_res = res
 
+    def test_save_image_stack(self):
+        # focus = self.focus
+        # ebeam = self.ebeam
+        # ccd = self.ccd
+        # nb_images = 40
+        from odemis import model
+        ccd = model.getComponent(role="ccd")
+        focus = model.getComponent(role="focus")
+        path = "/home/mimas/Documents/karishma/20230417"
+
+        # rng = focus.axes["z"].range
+        step_size = 1e-06
+        current_pos = focus.position.value["z"]
+        rge = (current_pos - 50e-06,
+                 current_pos + 50e-06)
+        for i in numpy.arange(rge[0], rge[1], step_size):
+            file_name = f"{i}.tiff"
+            focus.moveAbsSync({"z": i})
+            print(f"{i}")
+            image = getNextImage(ccd, timeout=None)
+            file_path = os.path.join(path, file_name)
+            tiff.export(file_path, image)
+
     @timeout(1000)
     def test_autofocus_opt(self):
         """
         Test AutoFocus on CCD
         """
         # The way to measure focus is a bit different between CCD and SEM
-        focus = self.focus
-        ebeam = self.ebeam
-        ccd = self.ccd
-        focus.moveAbs({"z": self._opt_good_focus - 400e-6}).result()
-        ccd.exposureTime.value = ccd.exposureTime.range[0]
+        # focus = self.focus
+        # ebeam = self.ebeam
+        # ccd = self.ccd
         from odemis import model
         ccd = model.getComponent(role="ccd")
         focus = model.getComponent(role="focus")
-        future_focus = align.AutoFocus(ccd, None, focus)
-        foc_pos, foc_lev, _ = future_focus.result(timeout=900)
-        self.assertAlmostEqual(foc_pos, self._opt_good_focus, 3)
+        self._opt_good_focus = focus.position.value["z"]
+        logging.debug(f"the value of good focus {self._opt_good_focus}")
+        # focus.moveAbs({"z": self._opt_good_focus}).result()  # - 400e-6}).result()
+        # ccd.exposureTime.value = ccd.exposureTime.range[0]
+        focus_range = [self._opt_good_focus - 30.0e-6, self._opt_good_focus + 30.0e-6]
+        focus_range = (-0.0005 , 0.0005)
+        future_focus = align.AutoFocus(ccd, None, focus, method=0, rng_focus=focus_range)#,good_focus=-0.00003240638201485535,method=0)
+        foc_pos, foc_lev, foc_mes = future_focus.result(timeout=900)
+        logging.debug(f"the value of FOCUS POSITION {foc_pos}")
+        logging.debug(f"the value of FOCUS LEVEL {foc_lev}")
+        logging.debug(f"the value of FOCUS MEASURE {foc_mes}")
+        self.assertAlmostEqual(foc_pos, self._opt_good_focus, 8)
         self.assertGreater(foc_lev, 0)
+
 
     @timeout(1000)
     def test_autofocus_sem(self):

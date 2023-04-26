@@ -19,7 +19,7 @@ PARTICULAR  PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-
+import os
 from collections.abc import Iterable
 from concurrent.futures import TimeoutError, CancelledError
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
@@ -28,6 +28,7 @@ import logging
 import numpy
 from odemis import model
 from odemis.acq.align import light
+from odemis.dataio import tiff
 from odemis.model import InstantaneousFuture
 from odemis.util import executeAsyncTask, almost_equal
 from odemis.util.img import Subtract
@@ -301,9 +302,11 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
 
         # adjust to rng_focus if provided
         rng = focus.axes["z"].range
+        # rng = (-0.0005 , 0.0005)
+
         if rng_focus:
             rng = (max(rng[0], rng_focus[0]), min(rng[1], rng_focus[1]))
-
+        logging.debug(f"the FOCUS range is {rng} and other is {rng_focus}")
         max_step = (rng[1] - rng[0]) / 2
         if max_step <= 0:
             raise ValueError("Unexpected focus range %s" % (rng,))
@@ -384,6 +387,14 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 fm_center = focus_levels[center]
             else:
                 image = AcquireNoBackground(detector, dfbkg, timeout)
+                #DEBUG
+                # path = "/home/mimas/Documents/karishma/20230418_overview"
+                # file_name=f"{step_cntr}.tiff"
+                # file_path = os.path.join(path, file_name)
+                # tiff.export(file_path, image)
+                #debug
+                exposure = detector.exposureTime.value
+                logging.debug(f"Exposure time at centre {exposure}s")
                 fm_center = Measure(image)
                 logging.debug("Focus level (center) at %.7g is %.7g", center, fm_center)
                 focus_levels[center] = fm_center
@@ -432,6 +443,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 best_fm = max(fm_range)
                 i_max = fm_range.index(best_fm)
                 best_pos = pos_range[i_max]
+                logging.debug(f"the best focus position is {best_pos}")
 
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
@@ -454,10 +466,11 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 if step_factor <= 8:
                     rough_search = False  # Force re-checking data
 
-            if last_pos != best_pos:
+            if last_pos != best_pos: #todo add tolerance
                 # Clip best_pos in case the hardware reports a position outside of the range.
                 best_pos = max(rng[0], min(best_pos, rng[1]))
                 focus.moveAbsSync({"z": best_pos})
+                logging.debug(f"The best focus measure is {i_max}")#Todo make it clear
             step_cntr += 1
 
         worst_fm = min(focus_levels.values())
@@ -1046,7 +1059,7 @@ def AutoFocus(detector, emt, focus, dfbkg=None, good_focus=None, rng_focus=None,
      order to do background subtraction. If None, no background subtraction is
      performed.
     good_focus (float): if provided, an already known good focus position to be
-      taken into consideration while autofocusing (in m)
+      taken into consideration while autofocusing
     rng_focus (tuple): if provided, the search of the best focus position is limited
       within this range
     method (MTD_*): focusing method, if BINARY we follow a dichotomic method while in
@@ -1339,4 +1352,3 @@ def _CancelAutoFocusSpectrometer(future):
         logging.debug("AutofocusSpectrometer cancellation requested.")
 
     return True
-
