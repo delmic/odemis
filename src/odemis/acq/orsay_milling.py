@@ -27,11 +27,16 @@ from typing import Tuple
 
 from odemis import model
 
-from ConsoleClient.Communication.Connection import Connection
-from MillingPattern.MillingObjects.Rectangle import Rectangle
-from MillingPattern.MillingObjects.Point import Point
-from MillingPattern.Layer import Layer
-from MillingPattern.Procedure import Procedure
+try:
+    from ConsoleClient.Communication.Connection import Connection
+    from MillingPattern.MillingObjects.Rectangle import Rectangle
+    from MillingPattern.MillingObjects.Point import Point
+    from MillingPattern.Layer import Layer
+    from MillingPattern.Procedure import Procedure
+    console_client_pkg = True
+except ImportError as err:
+    logging.warning(f"ConsoleClient and/or MillingPattern packages not found with error: {err}")
+    console_client_pkg = False
 
 
 # The executor is a single object, independent of how many times the module is loaded.
@@ -48,6 +53,8 @@ def _get_orsay_connection(scanner):
     Function to check if there is already a connection established and creates a new connection otherwise
     :param scanner: (HwComponent) To get the IP Address to create/check the connection
     """
+    if not console_client_pkg:
+        raise ModuleNotFoundError("Connection failed. Need ConsoleClient package to do milling")
     global _connection
     if _connection is None:
         _connection = Connection(scanner.parent.host)
@@ -124,6 +131,8 @@ class OrsayMilling:
         """
         Function that handles milling action
         """
+        if not console_client_pkg:
+            raise ModuleNotFoundError("Milling failed. Need ConsoleClient package to do milling")
         rect = self.rect
         iteration = self.iteration
         duration = self.duration
@@ -261,6 +270,8 @@ class OrsayMilling:
         """
         Cancels the active milling process
         """
+        if not console_client_pkg:
+            raise ModuleNotFoundError("Need ConsoleClient package to do milling")
         # Don't use self.miller so that even if there is an issue with the original connection, still possible to cancel
         server = _get_orsay_connection(self.scanner)
         miller = server.datamodel.HybridPatternCreator
@@ -288,6 +299,8 @@ class OrsayMilling:
         Starts the milling process when the procedure is loaded
         Automatically unsubscribes from the Parameter
         """
+        if not console_client_pkg:
+            raise ModuleNotFoundError("Need ConsoleClient package to do milling")
         if attr == 'Actual':
             logging.debug('New active procedure (%s) : %s', param.Actual, self.miller.ActiveProcedureName.Target)
             self.miller.MillingActivationState.Target = 1  # Start milling once the new procedure has been loaded
