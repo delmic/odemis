@@ -96,7 +96,7 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'on'},  # fully opened
                  'spectrograph': {'grating': 'mirror'},
                  # 'cl-det-selector': {'x': 'off'},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
@@ -113,7 +113,7 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_ACTIVE, 'on')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'on'},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # there is also the cl-filter, but that's just up to the user
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
@@ -164,7 +164,7 @@ SPARC2_MODES = {
                  # 'cl-det-selector': {'x': 'off'},
                  # TODO
                  # 'spec-det-selector': {'rx': math.radians(90)},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
@@ -183,7 +183,7 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'grating': 'mirror'},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
@@ -217,7 +217,7 @@ SPARC2_MODES = {
                  'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'grating': 'mirror'},
                  # Note: focus is store/restore when going to/from this mode
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'on'},
@@ -230,7 +230,7 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
@@ -241,7 +241,7 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # Grating "mirror" forces wavelength to zero order and saves the
                  # current values so we can restore them
                  'spectrograph-dedicated': {'slit-in': 500e-6, 'grating': 'mirror'},
@@ -264,7 +264,7 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'chamber-light': {'power': 'off'},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  }),

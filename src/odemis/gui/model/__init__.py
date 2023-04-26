@@ -1246,6 +1246,11 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         if main.spec_sel is None:
             amodes.remove("specswitch-align")
+        else:
+            # Check that the spec-selector has the right metadata
+            md = main.spec_sel.getMetadata()
+            if not {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()):
+                raise ValueError("spec-selector should have FAV_POS_ACTIVE and FAV_POS_DEACTIVE")
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 

@@ -31,7 +31,6 @@ from odemis.util import units
 import time
 import wx
 
-
 class VigilantAttributeConnector(object):
     """ This class connects a vigilant attribute with a wxPython control, making sure that the
     changes in one are automatically reflected in the other.

@@ -405,6 +405,9 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.txt_StreakCalibFilename = xrc.XRCCTRL(self, "txt_StreakCalibFilename")
         self.btn_open_streak_calib_file = xrc.XRCCTRL(self, "btn_open_streak_calib_file")
         self.btn_save_streak_calib_file = xrc.XRCCTRL(self, "btn_save_streak_calib_file")
+        self.pnl_specswitch = xrc.XRCCTRL(self, "pnl_specswitch")
+        self.btn_specswitch = xrc.XRCCTRL(self, "btn_specswitch")
+        self.gauge_specswitch = xrc.XRCCTRL(self, "gauge_specswitch")
         self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
         self.slider_fibaligner = xrc.XRCCTRL(self, "slider_fibaligner")
         self.lbl_pfy = xrc.XRCCTRL(self, "lbl_pfy")
@@ -4816,6 +4819,74 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <flag>wxALIGN_CENTRE</flag>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_specswitch">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Spectograph</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxBOTTOM|wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="ImageTextToggleButton" name="btn_specswitch">
+                          <height>24</height>
+                          <face_colour>def</face_colour>
+                          <active_colour>#106090</active_colour>
+                          <label>Internal</label>
+                          <tooltip>If active allows to manually focus the spectrometer for the selected grating and detector.</tooltip>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>5</border>
+                        <minsize>90,-1</minsize>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxGauge" name="gauge_specswitch">
+                          <size>0,10</size>
+                          <range>100</range>
+                          <value>0</value>
+                          <style>wxGA_SMOOTH</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>7</border>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <vgap>5</vgap>
+                      <hgap>5</hgap>
+                      <growablecols>1</growablecols>
+                      <growablerows/>
+                    </object>
+                    <flag>wxBOTTOM|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#444444</bg>
