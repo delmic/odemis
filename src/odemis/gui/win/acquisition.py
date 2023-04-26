@@ -79,7 +79,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # The name of the last file that got written to disk (used for auto viewing on close)
         self.last_saved_file = None
-        
+
         # True when acquisition occurs
         self.acquiring = False
 
@@ -183,13 +183,13 @@ class AcquisitionDialog(xrcfr_acq):
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
         self._hidden_view.stream_tree.flat.subscribe(self.on_streams_changed)
-        
+
     def start_listening_to_va(self):
         # Get all the VA's from the stream and subscribe to them for changes.
         for entry in self._orig_entries:
             if hasattr(entry, "vigilattr"):
                 entry.vigilattr.subscribe(self.on_setting_change)
-                
+
     def stop_listening_to_va(self):
         for entry in self._orig_entries:
             if hasattr(entry, "vigilattr"):
@@ -551,7 +551,7 @@ class AcquisitionDialog(xrcfr_acq):
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self._resume_settings()
-        
+
         self.acquiring = False
 
         # re-enable estimation time updates
@@ -904,7 +904,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     def _compute_area_size(self) -> Optional[Tuple[float,float]]:
         """
         Calculates the requested tiling area size, based on the tiles number
-        :return: the size (in m) in X and Y. If no area at all, returns None. 
+        :return: the size (in m) in X and Y. If no area at all, returns None.
         """
         # get smallest fov
         fovs = [self.get_fov(s) for s in self.get_acq_streams()]
@@ -935,7 +935,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         Convert sample positions to a grid layout
         :param sample_centers: the name -> position of each sample
-        returns: 2D grid layout containing the names of the samples (or None if 
+        returns: 2D grid layout containing the names of the samples (or None if
         no sample at that grid position)
         """
         # Find the number of rows and columns
@@ -1171,12 +1171,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     def _get_zstack_levels(self):
         """
         Calculate the zstack levels from the current focus position and zsteps value
-        :returns (list(float) or None) zstack levels for zstack acquisition.
-          return None if only one zstep is requested.
+        :returns
+            (list(float) or None) zstack levels for zstack acquisition. None if only one zstep is requested.
+            (float): Focus value on which z levels are referenced in m.
         """
         zsteps = self.zsteps.value
+        focus_value = self._main_data_model.focus.position.value['z']
         if zsteps == 1:
-            return None
+            return None, focus_value
 
         # Clip zsteps value to allowed range
         focus_value = self._main_data_model.focus.position.value['z']
@@ -1189,16 +1191,23 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             zmax = focus_range[1]
         if zmax > focus_range[1]:
             # Too high => shift down
-            zmax -= zmax - focus_range[1]
-            zmin -= zmax - focus_range[1]
+            # zmax -= zmax - focus_range[1]
+            # zmin -= zmax - focus_range[1]
+            shift_amount = zmax - focus_range[1]
+            zmin -= shift_amount
+            zmax -= shift_amount
+
         if zmin < focus_range[0]:
             # Too low => shift up
-            zmin += focus_range[0] - zmin
-            zmax += focus_range[0] - zmin
+            # zmin += focus_range[0] - zmin
+            # zmax += focus_range[0] - zmin
+            shift_amount = focus_range[0] - zmin
+            zmin += shift_amount
+            zmax += shift_amount
 
         # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
-        return zlevels
+        return zlevels, focus_value
 
     def _fit_view_to_area(self, area: Tuple[float,float]):
         center = ((area[0] + area[2]) / 2,
@@ -1235,7 +1244,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if self._main_data_model.opm:
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
-        zlevels = self._get_zstack_levels()
+        zlevels, focus_ref = self._get_zstack_levels()
         focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
 
         if self.filename_tiles:
@@ -1244,6 +1253,15 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         if self.autofocus_roi_ckbox.value:
             areas = self._get_areas()
+            # areas = [(-0.0035499999999999996, 0.0037979999999999996, -0.00225, 0.005098)]
+            # red_areas =[(-0.0035499999999999998, 0.0037979999999999997, -0.0030499999999999998, 0.004298)]
+            # red_areas = [tuple(i/10 for i in areas[0])]
+            # areas[0][2] -= 800e-06
+            # areas[0][3] -= 800e-06
+            # areas = red_600areas
+            # provide a rela
+            # calculate relative range of z levels
+            zlevels = [z_itr - focus_ref for z_itr in zlevels]
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
                                               areas,

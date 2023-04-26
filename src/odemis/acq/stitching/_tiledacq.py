@@ -571,7 +571,8 @@ class TiledAcquisitionTask(object):
             if self._future._task_state == CANCELLED:
                 raise CancelledError()
             logging.debug(f"Zstack compression for tile {ix}x{iy}, stream {stream.name} finished.")
-            return DataArray(fm_cube[i_max,:,:], copy.copy(zstack[0].metadata))
+            # return DataArray(fm_cube[i_max,:,:], copy.copy(zstack[0].metadata))
+            return DataArray(mip_image, copy.copy(zstack[0].metadata))
         else:
             # TODO: support stitched Z-stacks
             # For now, the init will raise NotImplementedError in such case
@@ -715,38 +716,42 @@ class TiledAcquisitionTask(object):
         # When initial z level is one or None, use the current focus value
         if len(self._init_zlevels) <= 1:
             return [focus_value, ]
-        # self._init_zlevels = [0]*len(self._init_zlevels)
 
         zlevels = self._init_zlevels + focus_value
 
         # Check which focus range is available
         if self._focus_range is not None:
-            # comp_range = self._focus_range
-            comp_range = (focus_value - 15e-06,
-                          focus_value + 15e-06)
-            rng = self._focus_range
-            rng = (max(rng[0], comp_range[0]), min(rng[1], comp_range[1]))
+            comp_range = self._focus_range
+            # comp_range = (focus_value - 15e-06,
+            #               focus_value + 15e-06)
+            # rng = self._focus_range
+            # rng = (max(rng[0], comp_range[0]), min(rng[1], comp_range[1]))
         else:
             comp_range = self._focus_stream.focuser.axes['z'].range
 
         # The number of zlevels will remain the same, but the range will be adjusted
-        zmin = rng[0]
-        zmax = rng[1]
-        # if (zmax - zmin) > (comp_range[1] - comp_range[0]):
-        #     # Corner case: it'd be larger than the entire range => limit to the entire range
-        #     zmin = comp_range[0]
-        #     zmax = comp_range[1]
-        # if zmax > comp_range[1]:
-        #     # Too high => shift down
-        #     zmax -= zmax - comp_range[1]
-        #     zmin -= zmax - comp_range[1]
-        # if zmin < comp_range[0]:
-        #     # Too low => shift up
-        #     # zmin += comp_range[0] - zmin
-        #     # zmax += comp_range[0] - zmin
-        #     shift_amount = comp_range[0] - zmin
-        #     zmin += shift_amount
-        #     zmax += shift_amount
+        # zmin = rng[0]
+        # zmax = rng[1]
+        zmin = min(zlevels)
+        zmax = max(zlevels)
+        if (zmax - zmin) > (comp_range[1] - comp_range[0]):
+            # Corner case: it'd be larger than the entire range => limit to the entire range
+            zmin = comp_range[0]
+            zmax = comp_range[1]
+        if zmax > comp_range[1]:
+            # Too high => shift down
+            # zmax -= zmax - comp_range[1]
+            # zmin -= zmax - comp_range[1]
+            shift_amount = zmax - comp_range[1]
+            zmin -= shift_amount
+            zmax -= shift_amount
+        if zmin < comp_range[0]:
+            # Too low => shift up
+            # zmin += comp_range[0] - zmin
+            # zmax += comp_range[0] - zmin
+            shift_amount = comp_range[0] - zmin
+            zmin += shift_amount
+            zmax += shift_amount
 
         # Create focus zlevels from the given zsteps number
         step = (zmax - zmin) / (len(zlevels) - 1)
