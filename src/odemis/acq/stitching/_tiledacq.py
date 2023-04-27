@@ -1047,6 +1047,13 @@ class AcquireOverviewTask(object):
         self._registrar = registrar
         self._weaver = weaver
 
+        # Given maximum area (Xmin,Ymin, Xmax, Ymax) distribute (x,y) points on given area (xmin,ymin, xmax, ymax)
+        # When given area is between (100%-75%) of maximum areas, find the coordinates of 9 (x,y) points
+        # When given area is between (75%-50%) of maximum areas, find the coordinates of 5 (x,y) points
+        # When given area is between (75%-10%) of maximum areas, find the coordinates of 4 (x,y) points
+        # When given area is less than and equal to (10%) of maximum areas, find the coordinates of 1 (x,y) points
+        # The given area can be either a square or a rectangle
+
     def cancel(self, future):
         """
         Canceler of acquisition task.
@@ -1114,7 +1121,7 @@ class AcquireOverviewTask(object):
                 with self._future._task_lock:
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
-
+                    self.streams[0].is_active.value = True
                     logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
                     # run autofocus for the selected roi
                     self._future.running_subf = autofocus_in_roi(roi,
@@ -1127,11 +1134,14 @@ class AcquireOverviewTask(object):
 
                 try:
                     t = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * 3 + 1
-                    focus_points = self._future.running_subf.result(t)
+
+                    focus_points = self._future.running_subf.result()
                 except TimeoutError:
+                    self.streams[0].is_active.value = False
                     logging.debug(f"Autofocus timed out for roi number {idx}, with bounding box: {roi} [m]")
                     raise
                 except Exception:
+                    self.streams[0].is_active.value = False
                     logging.debug(f"Autofocus failed for roi number {idx}, with bounding box: {roi} [m]")
                     raise
 

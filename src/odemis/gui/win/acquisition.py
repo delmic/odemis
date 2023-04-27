@@ -1053,7 +1053,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if not streams:
             acq_time = 0
         else:
-            zlevels = self._get_zstack_levels()
+            zlevels, focus_ref = self._get_zstack_levels()
             focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
 
             if self.autofocus_roi_ckbox.value:
@@ -1181,7 +1181,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             return None, focus_value
 
         # Clip zsteps value to allowed range
-        focus_value = self._main_data_model.focus.position.value['z']
         focus_range = self._main_data_model.focus.axes['z'].range
         zmin = focus_value - (zsteps / 2 * self.zstep_size.value)
         zmax = focus_value + (zsteps / 2 * self.zstep_size.value)
@@ -1209,12 +1208,16 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
         return zlevels, focus_value
 
-    def _fit_view_to_area(self, area: Tuple[float,float]):
-        center = ((area[0] + area[2]) / 2,
-                  (area[1] + area[3]) / 2)
+    def _fit_view_to_area(self):
+        if self.area is None:
+            logging.warning("Unknown area, cannot fit view")
+            return
+
+        center = ((self.area[0] + self.area[2]) / 2,
+                  (self.area[1] + self.area[3]) / 2)
         self._view.view_pos.value = center
 
-        fov = (area[2] - area[0], area[3] - area[1])
+        fov = (self.area[2] - self.area[0], self.area[3] - self.area[1])
         self.pnl_view_acq.set_mpp_from_fov(fov)
 
     def on_acquire(self, evt):
