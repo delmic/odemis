@@ -43,6 +43,7 @@ from odemis.acq.stream import Stream, EMStream, ARStream, \
 from odemis.model import DataArray
 from odemis.util import dataio as udataio, img, linalg
 from odemis.util.img import assembleZCube
+from odemis.util.linalg import find_focus_points
 from odemis.util.raster import point_in_polygon
 
 # TODO: Find a value that works fine with common cases
@@ -969,7 +970,8 @@ def estimateOverviewTime(*args, **kwargs):
 
 
 def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
-                    registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
+                    registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
+                    maximum_area = 1.69e-06):
     """
     Start autofocus and tiled acquisition tasks for each area in the list of area which is
     given by the input argument areas.
@@ -997,7 +999,7 @@ def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs
     future = model.ProgressiveFuture()
     task = AcquireOverviewTask(streams, stage, areas, focus, ccd, future, overlap, settings_obs,
                                log_path, zlevels,
-                               registrar, weaver, focusing_method)
+                               registrar, weaver, focusing_method, maximum_area)
     future.task_canceller = task.cancel  # let the future cancel the task
 
     future.set_progress(end=task.estimate_time() + time.time())
@@ -1014,7 +1016,8 @@ class AcquireOverviewTask(object):
 
     def __init__(self, streams, stage, areas, focus, ccd, future=None, overlap=0.2, settings_obs=None, log_path=None,
                  zlevels=None,
-                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
+                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
+                 maximum_area=1.69e-06):
         # site and feature means the same
         self._stage = stage
         self._future = future
@@ -1039,7 +1042,13 @@ class AcquireOverviewTask(object):
         self.focusing_method = focusing_method
         # The number of focus points are constant for now
         # TODO: make it variable according to the size of the ROI, is it useful?
-        self.n_focus_points = (3, 3)
+        self._focus_points = [] # list of focus points per each area in areas
+        self._total_nb_focus_points = 0
+        for area in areas:
+            focus_points = find_focus_points(maximum_area, area)
+            self._total_nb_focus_points += len(focus_points)
+            self._focus_points.append(focus_points)
+        # self.n_focus_points = (3, 3)
         self._overlap = overlap
         self._settings_obs = settings_obs
         self._log_path = log_path
@@ -1081,9 +1090,9 @@ class AcquireOverviewTask(object):
         if actual_time_per_roi:
             acquisition_time = actual_time_per_roi * remaining_rois
         else:
-            acquisition_time = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * remaining_rois
-            logging.debug(f"the estimated autofocus time for 1 area is {acquisition_time}")
-            acquisition_time = 60*self.n_focus_points[0]*self.n_focus_points[1] # roughly 1 minute per focus point
+            acquisition_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._ccd)
+            logging.debug(f"the estimated autofocus time for all areas is {acquisition_time}")
+            acquisition_time = 60 * self._total_nb_focus_points # roughly 1 minute per focus point
             for area in self.areas:
                 acquisition_time += estimateTiledAcquisitionTime(
                                         self.streams, self._stage, area,
@@ -1095,7 +1104,8 @@ class AcquireOverviewTask(object):
                                         registrar=self._registrar,
                                         weaver=self._weaver,
                                         focusing_method=self.focusing_method)
-                tiled_time = acquisition_time - 60*self.n_focus_points[0]*self.n_focus_points[1]
+                #TODO progress bar does not calculate proper time, it underestimates the time
+                tiled_time = acquisition_time - 60 * self._total_nb_focus_points
                 logging.debug(f"the estimated tiled acquisition time is {tiled_time}")
 
         return acquisition_time
@@ -1129,11 +1139,12 @@ class AcquireOverviewTask(object):
                                                                  self._ccd,
                                                                  self._focus,
                                                                  self.focus_rng,
-                                                                 self.n_focus_points,
+                                                                 self._focus_points[idx],
                                                                  self.conf_level)
 
                 try:
-                    t = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * 3 + 1
+                    focus_points_per_area = len(self._focus_points[idx])
+                    t = estimate_autofocus_in_roi_time(focus_points_per_area, self._ccd) * 3 + 1
 
                     focus_points = self._future.running_subf.result()
                 except TimeoutError:

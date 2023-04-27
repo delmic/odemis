@@ -24,7 +24,8 @@ import unittest
 import numpy
 from scipy.linalg.misc import LinAlgError
 
-from odemis.util.linalg import tri_inv, get_z_pos_on_plane, get_point_on_plane, are_collinear, fit_plane_lstsq
+from odemis.util.linalg import tri_inv, get_z_pos_on_plane, get_point_on_plane, are_collinear, fit_plane_lstsq, \
+    find_focus_points
 
 
 class TriInvBadInput(unittest.TestCase):
@@ -127,6 +128,35 @@ class PlaneFittingTestCase(unittest.TestCase):
         non_linear_points = numpy.array([[1, 2, 12], [-1, -2, -4], [3, 4, 22]])
         self.assertFalse(are_collinear(non_linear_points[0], non_linear_points[1], non_linear_points[2]))
 
+    def test_find_focus_points(self):
+        """
+        Test if tuple of 2 floats is the output and length of the focus points
+        """
+        maximum_area = 1300e-06 * 1300e-06
+
+        # given area coordinates of the maximum area i.e ~ 100 %
+        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996, -0.00225, 0.005098)
+        focus_points = find_focus_points(maximum_area, given_area_coords)
+        self.assertTrue(len(focus_points), 9)
+        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
+
+        # given area coordinates from less than 75 % maximum area
+        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996, -0.00225 -350e-06, 0.005098 - 350e-6)
+        focus_points = find_focus_points(maximum_area, given_area_coords)
+        self.assertTrue(len(focus_points), 5)
+        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
+
+        # given area coordinates from less than 50 % maximum area
+        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996, -0.00225 - 675e-06, 0.005098 - 675e-6)
+        focus_points = find_focus_points(maximum_area, given_area_coords)
+        self.assertTrue(len(focus_points), 4)
+        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
+
+        # given area coordinates from less than 75 % maximum area
+        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996, -0.00225 - 1300e-06, 0.005098 - 1300e-6)
+        focus_points = find_focus_points(maximum_area, given_area_coords)
+        self.assertTrue(len(focus_points), 1)
+        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
 
 if __name__ == "__main__":
     unittest.main()

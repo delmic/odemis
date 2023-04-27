@@ -1252,22 +1252,24 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         if self.filename_tiles:
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
-            os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
+            os.makedirs(os.path.dirname(self.filename_tiles))
 
         if self.autofocus_roi_ckbox.value:
             areas = self._get_areas()
+            max_area = self.get_grid_area()
             # areas = [(-0.0035499999999999996, 0.0037979999999999996, -0.00225, 0.005098)]
-            # red_areas =[(-0.0035499999999999998, 0.0037979999999999997, -0.0030499999999999998, 0.004298)]
+            grid = areas[0]
+            red = 1300e-06
+            red_areas =[(grid[0], grid[1], grid[2] -red, grid[3] -red)]
             # red_areas = [tuple(i/10 for i in areas[0])]
-            # areas[0][2] -= 800e-06
-            # areas[0][3] -= 800e-06
             # areas = red_600areas
-            # provide a rela
+
             # calculate relative range of z levels
+            #TODO add the below line at a better location
             zlevels = [z_itr - focus_ref for z_itr in zlevels]
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
-                                              areas,
+                                              red_areas,
                                               self._main_data_model.focus,
                                               self._main_data_model.ccd,
                                               overlap=self.overlap,
@@ -1276,7 +1278,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                                               weaver=WEAVER_MEAN,
                                               registrar=REGISTER_IDENTITY,
                                               zlevels=zlevels,
-                                              focusing_method=focus_mtd)
+                                              focusing_method=focus_mtd,
+                                              maximum_area=max_area)
 
         else:
             # If there are several areas, the autofocus should be automatically selected
@@ -1442,6 +1445,7 @@ def ShowAcquisitionFileDialog(parent, filename):
     conf.last_extension = ext
 
     return os.path.join(path, fn)
+
 
 def ShowChamberFileDialog(parent, projectname):
     """

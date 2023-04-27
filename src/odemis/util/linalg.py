@@ -230,3 +230,60 @@ def are_collinear(p1: Iterable[float], p2: Iterable[float], p3: Iterable[float])
     return abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) < 1e-12 and \
         abs((x2 - x1) * (z3 - z1) - (x3 - x1) * (z2 - z1)) < 1e-12 and \
         abs((y2 - y1) * (z3 - z1) - (y3 - y1) * (z2 - z1)) < 1e-12
+
+
+def find_focus_points(maximum_area: float, given_area_coords: Iterable[float]) -> Iterable[tuple]:
+# def find_focus_points(maximum_area, given_area_coords):
+    """
+    Finds (x,y) positions on the given area. The number of positions is dependent on the ratio of given area by
+    maximum area. The points are evenly distributed from each other in the given area.
+    :param maximum_area: the total area that can be used for imaging/milling in square meters.
+    :param given_area_coords: [xmin, ymin, xmax, ymax] the top right and bottom left (x,y) coordinates in meters.
+    :return: List of (x,y) coordinates in the given area.
+    """
+    # TODO Calculate points distribution for rectangular region where one side >> second side
+    # in the above case, points along the shorter side will be closer to each other and
+    # will not be evenly distributed throughout the given area
+    xmin, ymin, xmax, ymax = given_area_coords
+
+    # Calculate the area of the given area
+    area = (xmax - xmin) * (ymax - ymin)
+
+    # Calculate the percentage of the given area with respect to the maximum area
+    percentage = area / maximum_area * 100
+
+    # Avoid points exactly on the border of the given area, find points delta distance
+    # away from the border of the given area
+    delta_x = (3 / 20) * (xmax - xmin)
+    delta_y = (3 / 20) * (ymax - ymin)
+    xmin = xmin + delta_x
+    xmax = xmax - delta_x
+    ymin = ymin + delta_y
+    ymax = ymax - delta_y
+    # Determine the number of points to distribute based on the percentage of the given area
+    if percentage >= 75:
+        num_points = 9
+        x_arr = numpy.linspace(xmin, xmax, 3)
+        y_arr = numpy.linspace(ymin, ymax, 3)
+        matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
+        x_points = matrix[:, 0]
+        y_points = matrix[:, 1]
+    elif percentage >= 50:
+        num_points = 5
+        x_points = [xmin, xmax, xmin, xmax, (xmax - xmin)/2]
+        y_points = [ymin, ymin, ymax, ymax, (ymax - ymin)/2]
+    elif percentage >= 10:
+        num_points = 4
+        x_points = [xmin, xmax, xmin, xmax]
+        y_points = [ymin, ymin, ymax, ymax]
+    else:
+        num_points = 1
+        x_points = [(xmin + xmax) / 2]
+        y_points = [(ymin + ymax) / 2]
+
+    # Distribute the points
+    points = []
+    for i in range(num_points):
+        points.append((x_points[i], y_points[i]))
+
+    return points
