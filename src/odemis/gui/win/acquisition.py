@@ -1190,16 +1190,12 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             zmax = focus_range[1]
         if zmax > focus_range[1]:
             # Too high => shift down
-            # zmax -= zmax - focus_range[1]
-            # zmin -= zmax - focus_range[1]
             shift_amount = zmax - focus_range[1]
             zmin -= shift_amount
             zmax -= shift_amount
 
         if zmin < focus_range[0]:
             # Too low => shift up
-            # zmin += focus_range[0] - zmin
-            # zmax += focus_range[0] - zmin
             shift_amount = focus_range[0] - zmin
             zmin += shift_amount
             zmax += shift_amount
@@ -1257,20 +1253,13 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if self.autofocus_roi_ckbox.value:
             areas = self._get_areas()
             max_area = self.get_grid_area()
-            # areas = [(-0.0035499999999999996, 0.0037979999999999996, -0.00225, 0.005098)]
-            grid = areas[0]
-            red = 1300e-06
-            red_areas =[(grid[0], grid[1], grid[2] -red, grid[3] -red)]
-            # red_areas = [tuple(i/10 for i in areas[0])]
-            # areas = red_600areas
-
             # calculate relative range of z levels
             #TODO add the below line at a better location
             if zlevels is not None:
                 zlevels = [z_itr - focus_ref for z_itr in zlevels]
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
-                                              red_areas,
+                                              areas,
                                               self._main_data_model.focus,
                                               self._main_data_model.ccd,
                                               overlap=self.overlap,
@@ -1446,7 +1435,6 @@ def ShowAcquisitionFileDialog(parent, filename):
     conf.last_extension = ext
 
     return os.path.join(path, fn)
-
 
 def ShowChamberFileDialog(parent, projectname):
     """

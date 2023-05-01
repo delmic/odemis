@@ -61,12 +61,7 @@ def do_autofocus_in_roi(
     focus_positions = []
     try:
         init_pos = stage.position.value
-        # xmin, ymin, xmax, ymax = bbox
-        #
-        # delta_x = (3/20)*(xmax - xmin)
-        # delta_y = (3/20)*(ymax - ymin)
-        # for y in numpy.linspace(ymin + delta_y, ymax - delta_y, ny):
-        #     for x in numpy.linspace(xmin + delta_x, xmax - delta_x, nx):
+
         for points in focus_points:
             with f._autofocus_roi_lock:
                 if f._autofocus_roi_state == CANCELLED:

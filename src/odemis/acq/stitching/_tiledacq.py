@@ -543,17 +543,11 @@ class TiledAcquisitionTask(object):
         :return DataArray: Acquired da for the current tile stream
         """
         zstack = []
-        fm_stack = []
         for z in self._zlevels:
             logging.debug(f"Moving focus for tile {ix}x{iy} to {z}.")
             stream.focuser.moveAbsSync({'z': z})
             da = self._acquireStreamTile(i, ix, iy, stream)
-            fm = MeasureSpotsFocus(da)
             zstack.append(da)
-            fm_stack.append(fm)
-
-        best_fm = max(fm_stack)
-        i_max = fm_stack.index(best_fm)
 
         if self._future._task_state == CANCELLED:
             raise CancelledError()
@@ -567,12 +561,10 @@ class TiledAcquisitionTask(object):
 
         if self._focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION:
             # Compress the cube into a single image (using maximum intensity projection)
-
             mip_image = numpy.amax(fm_cube, axis=0)
             if self._future._task_state == CANCELLED:
                 raise CancelledError()
             logging.debug(f"Zstack compression for tile {ix}x{iy}, stream {stream.name} finished.")
-            # return DataArray(fm_cube[i_max,:,:], copy.copy(zstack[0].metadata))
             return DataArray(mip_image, copy.copy(zstack[0].metadata))
         else:
             # TODO: support stitched Z-stacks
@@ -723,16 +715,10 @@ class TiledAcquisitionTask(object):
         # Check which focus range is available
         if self._focus_range is not None:
             comp_range = self._focus_range
-            # comp_range = (focus_value - 15e-06,
-            #               focus_value + 15e-06)
-            # rng = self._focus_range
-            # rng = (max(rng[0], comp_range[0]), min(rng[1], comp_range[1]))
         else:
             comp_range = self._focus_stream.focuser.axes['z'].range
 
         # The number of zlevels will remain the same, but the range will be adjusted
-        # zmin = rng[0]
-        # zmax = rng[1]
         zmin = min(zlevels)
         zmax = max(zlevels)
         if (zmax - zmin) > (comp_range[1] - comp_range[0]):
@@ -741,15 +727,11 @@ class TiledAcquisitionTask(object):
             zmax = comp_range[1]
         if zmax > comp_range[1]:
             # Too high => shift down
-            # zmax -= zmax - comp_range[1]
-            # zmin -= zmax - comp_range[1]
             shift_amount = zmax - comp_range[1]
             zmin -= shift_amount
             zmax -= shift_amount
         if zmin < comp_range[0]:
             # Too low => shift up
-            # zmin += comp_range[0] - zmin
-            # zmax += comp_range[0] - zmin
             shift_amount = comp_range[0] - zmin
             zmin += shift_amount
             zmax += shift_amount
@@ -757,10 +739,9 @@ class TiledAcquisitionTask(object):
         # Create focus zlevels from the given zsteps number
         step = (zmax - zmin) / (len(zlevels) - 1)
         good_pos = int((focus_value - zmin) / step)
-
         zlevels = [zmin + i * step for i in range(len(zlevels))]
         zlevels[good_pos] = focus_value
-        # zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
+
         return zlevels
 
     def _adjustFocus(self, das, i, ix, iy):
@@ -1048,20 +1029,12 @@ class AcquireOverviewTask(object):
             focus_points = find_focus_points(maximum_area, area)
             self._total_nb_focus_points += len(focus_points)
             self._focus_points.append(focus_points)
-        # self.n_focus_points = (3, 3)
         self._overlap = overlap
         self._settings_obs = settings_obs
         self._log_path = log_path
         self._zlevels = zlevels
         self._registrar = registrar
         self._weaver = weaver
-
-        # Given maximum area (Xmin,Ymin, Xmax, Ymax) distribute (x,y) points on given area (xmin,ymin, xmax, ymax)
-        # When given area is between (100%-75%) of maximum areas, find the coordinates of 9 (x,y) points
-        # When given area is between (75%-50%) of maximum areas, find the coordinates of 5 (x,y) points
-        # When given area is between (75%-10%) of maximum areas, find the coordinates of 4 (x,y) points
-        # When given area is less than and equal to (10%) of maximum areas, find the coordinates of 1 (x,y) points
-        # The given area can be either a square or a rectangle
 
     def cancel(self, future):
         """
@@ -1166,30 +1139,6 @@ class AcquireOverviewTask(object):
 
                     # run tiled acquisition for the selected roi
                     logging.debug(f"Z-stack acquisition is running for roi number {idx} with {roi} values")
-                    # 400um x 400um
-                    # focus_points = [[-0.003474997991473775, 0.0038729836892383027, -4.151989527138905e-05],
-                    #                 [-0.0032999998255702754, 0.0038729764887629513, -3.259198781895677e-05],
-                    #                 [-0.003124996217113097, 0.0038729702280176034, -2.742352491093262e-05],
-                    #                 [-0.003474997390544723, 0.004047973840425304, -3.8702181339902794e-05],
-                    #                 [-0.003299994727150752, 0.004047973410299365, -3.165304562374773e-05],
-                    #                 [-0.0031249920916818393, 0.004047971957467013, -2.7424532466734685e-05],
-                    #                 [-0.003474994464852739, 0.004222973744298758, -3.8233444837291404e-05],
-                    #                 [-0.003299999155717328, 0.004222977328110646, -3.259529052225696e-05],
-                    #                 [-0.0031249896829518495, 0.004222978538849683, -2.836845762029405e-05],
-                    #                 ]
-                    # 1200um x 1200um
-                    # focus_points = [
-                    #     [-0.003354991617628666, 0.003992978125273461, -3.482086366696952e-05],
-                    #     [-0.0028999895376122216, 0.003992972863959739, -2.6832614891983518e-05],
-                    #     [-0.0024449908600147514, 0.003992978814541226, -1.9313997125819945e-05],
-                    #     [-0.0033549967408733083, 0.004447972568485414, -3.623083267302703e-05],
-                    #     [-0.002899990426852285, 0.004447971698443518, -3.38825034648726e-05],
-                    #     [-0.0024449948727203637, 0.004447977422260702, -3.247291910135221e-05],
-                    #     [-0.0033549979629871073, 0.004902976412665927, -3.4353279706957074e-05],
-                    #     [-0.0028999921215505965, 0.0049029761609138975, -3.5763735525004966e-05],
-                    #     [-0.00244499804308653, 0.0049029734038418225, -2.6367450135468687e-05],
-                    # ]
-                    # logging.debug(f"focus points {focus_points}")
                     self._future.running_subf = acquireTiledArea(self.streams, self._stage, roi,
                                                                  focus_range=self.focus_rng,
                                                                  overlap=self._overlap,
