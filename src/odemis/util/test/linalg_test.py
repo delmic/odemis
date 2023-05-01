@@ -130,32 +130,47 @@ class PlaneFittingTestCase(unittest.TestCase):
 
     def test_find_focus_points(self):
         """
-        Test if tuple of 2 floats is the output and length of the focus points
+        Test the number of focus points when given area changes.
         """
         maximum_area = 1300e-06 * 1300e-06
 
-        # given area coordinates of the maximum area i.e ~ 100 %
+        # given area is 100% of maximum area
         given_area_coords = (-0.0035499999999999996, 0.0037979999999999996, -0.00225, 0.005098)
+        focus_points = find_focus_points(maximum_area, given_area_coords)
+        self.assertTrue(len(focus_points), 16)
+        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
+
+        # given area coordinates is 75 % maximum area
+        red_length = 350e-06
+        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996,
+                             -0.00225 - red_length, 0.005098 - red_length)
         focus_points = find_focus_points(maximum_area, given_area_coords)
         self.assertTrue(len(focus_points), 9)
         self.assertTrue(len(focus_points[0]), 2)  # (x,y)
 
-        # given area coordinates from less than 75 % maximum area
-        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996, -0.00225 -350e-06, 0.005098 - 350e-6)
+        # given area is 50 % maximum area
+        red_length = 675e-06
+        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996,
+                             -0.00225 - red_length, 0.005098 - red_length)
+        focus_points = find_focus_points(maximum_area, given_area_coords)
+        self.assertTrue(len(focus_points), 7)
+        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
+
+        # given area is 50 % maximum area
+        red_length = 800e-06
+        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996,
+                             -0.00225 - red_length, 0.005098 - red_length)
         focus_points = find_focus_points(maximum_area, given_area_coords)
         self.assertTrue(len(focus_points), 5)
         self.assertTrue(len(focus_points[0]), 2)  # (x,y)
 
-        # given area coordinates from less than 50 % maximum area
-        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996, -0.00225 - 675e-06, 0.005098 - 675e-6)
+        # given area is 15 % maximum area
+        red_length = 1300e-06
+        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996,
+                             -0.00225 - red_length, 0.005098 - red_length)
         focus_points = find_focus_points(maximum_area, given_area_coords)
+        # minimum number of focus points cannot be lower than 3
         self.assertTrue(len(focus_points), 4)
-        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
-
-        # given area coordinates from less than 75 % maximum area
-        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996, -0.00225 - 1300e-06, 0.005098 - 1300e-6)
-        focus_points = find_focus_points(maximum_area, given_area_coords)
-        self.assertTrue(len(focus_points), 1)
         self.assertTrue(len(focus_points[0]), 2)  # (x,y)
 
 if __name__ == "__main__":

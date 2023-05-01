@@ -971,7 +971,7 @@ def estimateOverviewTime(*args, **kwargs):
 
 def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
                     registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                    maximum_area = 1.69e-06):
+                    maximum_area = 3.1329e-06):
     """
     Start autofocus and tiled acquisition tasks for each area in the list of area which is
     given by the input argument areas.
@@ -1017,7 +1017,7 @@ class AcquireOverviewTask(object):
     def __init__(self, streams, stage, areas, focus, ccd, future=None, overlap=0.2, settings_obs=None, log_path=None,
                  zlevels=None,
                  registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                 maximum_area=1.69e-06):
+                 maximum_area=3.1329e-06):
         # site and feature means the same
         self._stage = stage
         self._future = future
@@ -1086,15 +1086,18 @@ class AcquireOverviewTask(object):
         :return: (float) the estimated time for the rest of the acquisition
         """
         remaining_rois = (len(self.areas) - roi_idx)
-
+        # TODO progress bar does not calculate proper time, it underestimates the time
         if actual_time_per_roi:
             acquisition_time = actual_time_per_roi * remaining_rois
         else:
             acquisition_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._ccd)
             logging.debug(f"the estimated autofocus time for all areas is {acquisition_time}")
-            acquisition_time = 60 * self._total_nb_focus_points # roughly 1 minute per focus point
+            # based on time tracking
+            # roughly 1 minute per focus point
+            autofocus_time = 60 * self._total_nb_focus_points + 10
+            tiled_time = 0
             for area in self.areas:
-                acquisition_time += estimateTiledAcquisitionTime(
+                tiled_time += estimateTiledAcquisitionTime(
                                         self.streams, self._stage, area,
                                         focus_range=self.focus_rng,
                                         overlap=self._overlap,
@@ -1104,9 +1107,9 @@ class AcquireOverviewTask(object):
                                         registrar=self._registrar,
                                         weaver=self._weaver,
                                         focusing_method=self.focusing_method)
-                #TODO progress bar does not calculate proper time, it underestimates the time
-                tiled_time = acquisition_time - 60 * self._total_nb_focus_points
-                logging.debug(f"the estimated tiled acquisition time is {tiled_time}")
+
+            logging.debug(f"the estimated tiled acquisition time is {tiled_time}")
+            acquisition_time = autofocus_time + tiled_time
 
         return acquisition_time
 

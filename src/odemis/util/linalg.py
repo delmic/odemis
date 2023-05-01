@@ -252,34 +252,48 @@ def find_focus_points(maximum_area: float, given_area_coords: Iterable[float]) -
     # Calculate the percentage of the given area with respect to the maximum area
     percentage = area / maximum_area * 100
 
+
     # Avoid points exactly on the border of the given area, find points delta distance
     # away from the border of the given area
-    delta_x = (3 / 20) * (xmax - xmin)
-    delta_y = (3 / 20) * (ymax - ymin)
+    delta_x = (1 / 20) * (xmax - xmin)
+    delta_y = (1 / 20) * (ymax - ymin)
     xmin = xmin + delta_x
     xmax = xmax - delta_x
     ymin = ymin + delta_y
     ymax = ymax - delta_y
+
     # Determine the number of points to distribute based on the percentage of the given area
-    if percentage >= 75:
+    if percentage >= 80:
+        num_points = 16
+        x_arr = numpy.linspace(xmin, xmax, 4)
+        y_arr = numpy.linspace(ymin, ymax, 4)
+        matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
+        x_points = matrix[:, 0]
+        y_points = matrix[:, 1]
+    elif percentage >= 60:
         num_points = 9
         x_arr = numpy.linspace(xmin, xmax, 3)
         y_arr = numpy.linspace(ymin, ymax, 3)
         matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
         x_points = matrix[:, 0]
         y_points = matrix[:, 1]
-    elif percentage >= 50:
+    elif percentage >= 40:
+        num_points = 7
+        x_arr = numpy.linspace(xmin, xmax, 3)
+        y_arr = numpy.linspace(ymin, ymax, 2)
+        matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
+        x_points = matrix[:, 0]
+        y_points = matrix[:, 1]
+        x_points = numpy.append(x_points, (xmax + xmin) / 2)
+        y_points = numpy.append(y_points, (ymax + ymin) / 2)
+    elif percentage >= 20:
         num_points = 5
-        x_points = [xmin, xmax, xmin, xmax, (xmax - xmin)/2]
-        y_points = [ymin, ymin, ymax, ymax, (ymax - ymin)/2]
-    elif percentage >= 10:
+        x_points = [xmin, xmax, xmin, xmax, (xmax + xmin) / 2]
+        y_points = [ymin, ymin, ymax, ymax, (ymax + ymin) / 2]
+    else:
         num_points = 4
         x_points = [xmin, xmax, xmin, xmax]
         y_points = [ymin, ymin, ymax, ymax]
-    else:
-        num_points = 1
-        x_points = [(xmin + xmax) / 2]
-        y_points = [(ymin + ymax) / 2]
 
     # Distribute the points
     points = []

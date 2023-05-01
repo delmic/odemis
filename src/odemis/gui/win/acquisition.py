@@ -1266,7 +1266,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
             # calculate relative range of z levels
             #TODO add the below line at a better location
-            zlevels = [z_itr - focus_ref for z_itr in zlevels]
+            if zlevels is not None:
+                zlevels = [z_itr - focus_ref for z_itr in zlevels]
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
                                               red_areas,
