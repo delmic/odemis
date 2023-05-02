@@ -1383,7 +1383,7 @@ class TestGetColorBar(unittest.TestCase):
         the right tuple shape, within ranges of uint8 and with alpha channel included.
         """
         # input will be color_map (obj matplotlib) height (int), width (int) and alpha (bool)
-        input_cm = cm.get_cmap('cividis')
+        input_cm = cm.get_cmap('autumn')
         input_height = 16
         input_width = 72
 
