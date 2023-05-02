@@ -312,7 +312,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.assertEqual(len(data[0].shape), 2)
 
     def test_refocus(self):
-        """Test the refocus function which provides the z levels for the zstack."""
+        """Test the range in refocus function which provides the z levels for the zstack."""
         area = (-0.001, -0.001, 0.001, 0.001)
         overlap = 0.2
         focus_points = [[-0.0001989, -0.0001485, 2.519e-05],
@@ -326,7 +326,6 @@ class CRYOSECOMTestCase(unittest.TestCase):
                         [0.0001989, 0.0001485, 4.766e-06]]
         zlevels = [focus_points[0][2], focus_points[1][2], focus_points[2][2]]
         axis_range = self.focus.axes['z'].range
-        comp_range = self.focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE["z"], axis_range)
 
         tiled_acq_task = TiledAcquisitionTask(self.fm_streams, self.stage,
                                               area=area, overlap=overlap, future=model.InstantaneousFuture(),
@@ -334,8 +333,8 @@ class CRYOSECOMTestCase(unittest.TestCase):
                                               focusing_method=FocusingMethod.MAX_INTENSITY_PROJECTION)
         tiled_acq_task._refocus()
         # min with none values
-        zmin = min(comp_range)
-        zmax = max(comp_range)
+        zmin = min(axis_range)
+        zmax = max(axis_range)
         # Test the min and max range of the zstack
         self.assertGreaterEqual(tiled_acq_task._zlevels[0], zmin)
         self.assertLessEqual(tiled_acq_task._zlevels[-1], zmax)
