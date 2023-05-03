@@ -689,11 +689,13 @@ class xrcpnl_tab_fastem_overview(wx.Panel):
         self.vp_fastem_overview = xrc.XRCCTRL(self, "vp_fastem_overview")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
-        self.calib_pnl_fastem = xrc.XRCCTRL(self, "calib_pnl_fastem")
-        self.calib_btn = xrc.XRCCTRL(self, "calib_btn")
-        self.calib_gauge = xrc.XRCCTRL(self, "calib_gauge")
-        self.calib_label = xrc.XRCCTRL(self, "calib_label")
         self.pnl_fastem_overview_streams = xrc.XRCCTRL(self, "pnl_fastem_overview_streams")
+        self.lbl_sem_autofocus = xrc.XRCCTRL(self, "lbl_sem_autofocus")
+        self.btn_sem_autofocus_run = xrc.XRCCTRL(self, "btn_sem_autofocus_run")
+        self.lbl_autofocus = xrc.XRCCTRL(self, "lbl_autofocus")
+        self.btn_autofocus_run = xrc.XRCCTRL(self, "btn_autofocus_run")
+        self.lbl_autobrightness_contrast = xrc.XRCCTRL(self, "lbl_autobrightness_contrast")
+        self.btn_autobrigtness_contrast = xrc.XRCCTRL(self, "btn_autobrigtness_contrast")
         self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
@@ -7387,57 +7389,6 @@ def __init_resources():
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
-                        <object class="wxPanel" name="calib_pnl_fastem">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <object class="wxBoxSizer">
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="calib_btn">
-                                <height>24</height>
-                                <face_colour>def</face_colour>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxALL</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxGauge" name="calib_gauge">
-                                <size>160,10</size>
-                                <range>100</range>
-                                <value>0</value>
-                                <hidden>1</hidden>
-                                <style>wxGA_SMOOTH</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxFIXED_MINSIZE</flag>
-                              <border>18</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText" name="calib_label">
-                                <style>wxALIGN_RIGHT</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>1</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                              <border>14</border>
-                            </object>
-                            <orient>wxHORIZONTAL</orient>
-                          </object>
-                        </object>
-                        <label>CALIBRATION</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_fastem_overview_streams">
                           <size>300,-1</size>
                           <add_button>0</add_button>
@@ -7478,6 +7429,99 @@ def __init_resources():
               <object class="wxPanel">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="CaptionBar">
+                      <label>CALIBRATION</label>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <bg>#333333</bg>
+                      <size>400,-1</size>
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxGridBagSizer">
+                            <cols>2</cols>
+                            <rows>3</rows>
+                            <hgap>200</hgap>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_sem_autofocus">
+                                <label>SEM Autofocus</label>
+                                <font>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              </object>
+                              <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>0,0</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_sem_autofocus_run">
+                                <height>16</height>
+                                <face_colour>def</face_colour>
+                                <label>Run...</label>
+                                <style>wxALIGN_CENTRE</style>
+                              </object>
+                              <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
+                              <border>5</border>
+                              <span>1,1</span>
+                              <cellpos>0,1</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_autofocus">
+                                <label>Autofocus</label>
+                                <font>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              </object>
+                              <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>1,0</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_autofocus_run">
+                                <height>16</height>
+                                <face_colour>def</face_colour>
+                                <label>Run...</label>
+                                <style>wxALIGN_CENTRE</style>
+                              </object>
+                              <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
+                              <border>5</border>
+                              <span>1,1</span>
+                              <cellpos>1,1</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_autobrightness_contrast">
+                                <label>Auto-brigtness/contrast</label>
+                                <font>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              </object>
+                              <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>2,0</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_autobrigtness_contrast">
+                                <height>16</height>
+                                <face_colour>def</face_colour>
+                                <label>Run...</label>
+                                <style>wxALIGN_CENTRE</style>
+                              </object>
+                              <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
+                              <border>5</border>
+                              <span>1,1</span>
+                              <cellpos>2,1</cellpos>
+                            </object>
+                          </object>
+                        </object>
+                      </object>
+                    </object>
+                  </object>
                   <object class="sizeritem">
                     <object class="CaptionBar">
                       <label>OVERVIEW ACQUISITION</label>
