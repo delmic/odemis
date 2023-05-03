@@ -51,6 +51,7 @@ from odemis.util.filename import guess_pattern, create_projectname
 
 from odemis import dataio
 from odemis import model
+from odemis.acq.align import fastem
 import odemis.acq.stream as acqstream
 import odemis.gui
 import odemis.gui.cont.acquisition as acqcont
@@ -1932,9 +1933,9 @@ class FastEMOverviewTab(Tab):
         # Acquisition Controller
         #   Takes care of the acquisition and acquisition selection buttons.
 
-        tab_data = guimod.FastEMOverviewGUIData(main_data)
+        self.tab_data = guimod.FastEMOverviewGUIData(main_data)
 
-        super(FastEMOverviewTab, self).__init__(name, button, panel, main_frame, tab_data)
+        super(FastEMOverviewTab, self).__init__(name, button, panel, main_frame, self.tab_data)
         self.set_label("OVERVIEW")
 
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
@@ -1952,7 +1953,7 @@ class FastEMOverviewTab(Tab):
               "stream_classes": EMStream,
               }),
         ])
-        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
+        self.view_controller = viewcont.ViewPortController(self.tab_data, panel, vpv)
 
         # Single-beam SEM stream
         vanames = ("resolution", "scale", "dwellTime", "horizontalFoV")
@@ -1968,28 +1969,34 @@ class FastEMOverviewTab(Tab):
             focuser=main_data.ebeam_focus,
             hwemtvas=hwemtvas,
         )
-        tab_data.streams.value.append(sem_stream)  # it should also be saved
-        tab_data.semStream = sem_stream
+        self.tab_data.streams.value.append(sem_stream)  # it should also be saved
+        self.tab_data.semStream = sem_stream
         self._stream_controller = streamcont.FastEMStreamsController(
-            tab_data,
+            self.tab_data,
             panel.pnl_fastem_overview_streams,
             ignore_view=True,  # Show all stream panels, independent of any selected viewport
             view_ctrl=self.view_controller,
         )
-        sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
-        sem_stream_cont.stream_panel.show_remove_btn(False)
+        self.sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
+        self.sem_stream_cont.stream_panel.show_remove_btn(False)
 
-        # Controller for calibration panel
-        self._calib_controller = fastem_acq.FastEMCalibrationController(
-            tab_data,
-            panel,
-            calib_prefix="calib",
-            calibrations=[Calibrations.OPTICAL_AUTOFOCUS]
-        )
+        # Buttons of the calibration panel
+        self.btn_sem_autofocus = panel.btn_sem_autofocus_run
+        self.btn_autofocus = panel.btn_autofocus_run
+        self.btn_autobc = panel.btn_autobrigtness_contrast
+
+        self.btn_sem_autofocus.Bind(wx.EVT_BUTTON, self._on_sem_btn_autofocus)
+        self.btn_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_autofocus)
+        self.btn_autobc.Bind(wx.EVT_BUTTON, self._on_btn_autobc)
+        # self.btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
+
+        # For SEM Autofocus calibration
+        self._future_connector = None  # attribute to store the ProgressiveFutureConnector
+        self.gauge = wx.Gauge()
 
         # Acquisition controller
         self._acquisition_controller = fastem_acq.FastEMOverviewAcquiController(
-            tab_data,
+            self.tab_data,
             panel,
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
@@ -1999,6 +2006,84 @@ class FastEMOverviewTab(Tab):
         # Add fit view to content to toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
         # TODO: add tool to zoom out (ie, all the scintillators, calling canvas.zoom_out())
+
+    def _on_sem_btn_autofocus(self, _):
+        """
+        Start or cancel the calibration when the button is triggered.
+        :param evt: (GenButtonEvent) Button triggered.
+        """
+        # from odemis.gui.comp.buttons import ImageTextButton
+        # a = ImageTextButton()
+        # a.SetLabelText
+        label_text = self.btn_sem_autofocus.GetLabelText()
+        if label_text == "Run...":
+            logging.debug("Starting SEM Autofocus calibration")
+            # Start alignment
+            f = fastem.align(self.tab_data.main.ebeam, self.tab_data.main.multibeam,
+                                   self.tab_data.main.descanner, self.tab_data.main.mppc,
+                                   self.tab_data.main.stage, self.tab_data.main.ccd,
+                                   self.tab_data.main.beamshift, self.tab_data.main.det_rotator,
+                                   calibrations=[Calibrations.OPTICAL_AUTOFOCUS])
+
+            f.add_done_callback(self._on_calibration_done)  # also handles cancelling and exceptions
+            # connect the future to the progress bar and its label
+            self._future_connector = ProgressiveFutureConnector(f, self.gauge, full=False)
+            self.btn_sem_autofocus.SetLabelText("Cancel")
+        elif label_text == "Cancel":
+            logging.debug("Cancelling SEM Autofocus calibration")
+            if self._future_connector:
+                self._future_connector._future.cancel()
+
+    @call_in_wx_main
+    def _on_calibration_done(self, future, _=None):
+        """
+        Called when the calibration is finished (either successfully, cancelled or failed).
+        :param future: (ProgressiveFuture) Calibration future object, which can be cancelled.
+        """
+
+        self.tab_data.is_calibrating.value = False
+        self._future_connector = None  # reset connection to the progress bar
+        self.btn_sem_autofocus.SetLabelText("Run...")
+
+        try:
+            future.result()  # wait until the calibration is done
+            logging.debug("Finished SEM Autofocus calibration successfully")
+        except CancelledError:
+            logging.debug("SEM Autofocus calibration cancelled")
+        except Exception as ex:
+            logging.exception("SEM Autofocus calibration failed with exception: %s.", ex)
+
+    @call_in_wx_main
+    def _on_btn_autofocus(self, _):
+        self.sem_stream_cont.stream_panel.Enable(False)
+        self.sem_stream_cont.pause()
+        self.sem_stream_cont.pauseStream()
+        f = self.sem_stream_cont.stream.focuser.applyAutofocus(self.sem_stream_cont.stream.detector)
+        f.add_done_callback(self._on_autofunction_done)
+
+    @call_in_wx_main
+    def _on_btn_autobc(self, _):
+        self.sem_stream_cont.stream_panel.Enable(False)
+        self.sem_stream_cont.pause()
+        self.sem_stream_cont.pauseStream()
+        f = self.sem_stream_cont.stream.detector.applyAutoContrastBrightness()
+        f.add_done_callback(self._on_autofunction_done)
+
+    @call_in_wx_main
+    def _on_btn_autostigmation(self, _):
+        self.sem_stream_cont.stream_panel.Enable(False)
+        self.sem_stream_cont.pause()
+        self.sem_stream_cont.pauseStream()
+        f = self.sem_stream_cont.stream.emitter.applyAutoStigmator(self.sem_stream_cont.stream.detector)
+        f.add_done_callback(self._on_autofunction_done)
+
+    @call_in_wx_main
+    def _on_autofunction_done(self, f):
+        self.sem_stream_cont.stream_panel.Enable(True)
+        self.sem_stream_cont.resume()
+        # Don't automatically resume stream, autofunctions can take a long time.
+        # The user might not be at the system after the functions complete, so the stream
+        # would play idly.
 
     def on_acquisition(self, is_acquiring):
         # Don't allow changes to acquisition/calibration ROIs during acquisition
