@@ -215,10 +215,6 @@ class StreamController(object):
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
 
-        if tab_data_model.main.role == "mbsem" and isinstance(stream, acqstream.SEMStream):  # don't show for CCD stream
-            # It's a FastEM
-            self._add_fastem_ctrls()
-
         # Set the visibility button on the stream panel
         if view:
             vis = stream in view.stream_tree
@@ -1368,50 +1364,6 @@ class StreamController(object):
 
         # Make sure the current value is selected
         self._rep_ctrl.SetSelection(choices.index(rep))
-
-    def _add_fastem_ctrls(self):
-        self.stream_panel.add_divider()
-
-        # FIXME uncomment autostigmation, when the functionality is working correctly.
-        _, btn_autofocus = self.stream_panel.add_run_btn("Autofocus")
-        _, btn_autobc = self.stream_panel.add_run_btn("Auto-brightness/contrast")
-        # _, btn_autostigmation = self.stream_panel.add_run_btn("Autostigmation")
-
-        btn_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_autofocus)
-        btn_autobc.Bind(wx.EVT_BUTTON, self._on_btn_autobc)
-        # btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
-
-    @call_in_wx_main
-    def _on_btn_autofocus(self, _):
-        self.stream_panel.Enable(False)
-        self.pause()
-        self.pauseStream()
-        f = self.stream.focuser.applyAutofocus(self.stream.detector)
-        f.add_done_callback(self._on_autofunction_done)
-
-    @call_in_wx_main
-    def _on_btn_autobc(self, _):
-        self.stream_panel.Enable(False)
-        self.pause()
-        self.pauseStream()
-        f = self.stream.detector.applyAutoContrastBrightness()
-        f.add_done_callback(self._on_autofunction_done)
-
-    @call_in_wx_main
-    def _on_btn_autostigmation(self, _):
-        self.stream_panel.Enable(False)
-        self.pause()
-        self.pauseStream()
-        f = self.stream.emitter.applyAutoStigmator(self.stream.detector)
-        f.add_done_callback(self._on_autofunction_done)
-
-    @call_in_wx_main
-    def _on_autofunction_done(self, f):
-        self.stream_panel.Enable(True)
-        self.resume()
-        # Don't automatically resume stream, autofunctions can take a long time.
-        # The user might not be at the system after the functions complete, so the stream
-        # would play idly.
 
 
 class StreamBarController(object):
