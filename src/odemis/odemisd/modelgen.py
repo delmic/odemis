@@ -120,6 +120,14 @@ class SafeLoader(yaml.SafeLoader):
                     with open(filename, 'r') as f:
                         try:
                             node_extension = SafeLoader(f).get_single_node()  # Get the data from the external file.
+
+                            # if the node is the only component in the file raise a ParseError
+                            # if the component name is absent or incorrect
+                            if node_extension.value[0][0].value in {"class", "role", "creator"}:
+                                error = f"wrong or missing component name in file {filename}"
+                                raise ParseError(
+                                    "Parsing of file '%s' using the '!extend' key failed with the error:\n%s"
+                                    % (key_node.value, error))
                         except yaml.parser.ParserError as error:
                             raise ParseError("Parsing of file '%s' using the '!extend' key failed with the error:\n%s"
                                              % (key_node.value, error))
