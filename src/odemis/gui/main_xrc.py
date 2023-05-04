@@ -690,10 +690,10 @@ class xrcpnl_tab_fastem_overview(wx.Panel):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_fastem_overview_streams = xrc.XRCCTRL(self, "pnl_fastem_overview_streams")
+        self.lbl_optical_autofocus = xrc.XRCCTRL(self, "lbl_optical_autofocus")
+        self.btn_optical_autofocus_run = xrc.XRCCTRL(self, "btn_optical_autofocus_run")
         self.lbl_sem_autofocus = xrc.XRCCTRL(self, "lbl_sem_autofocus")
         self.btn_sem_autofocus_run = xrc.XRCCTRL(self, "btn_sem_autofocus_run")
-        self.lbl_autofocus = xrc.XRCCTRL(self, "lbl_autofocus")
-        self.btn_autofocus_run = xrc.XRCCTRL(self, "btn_autofocus_run")
         self.lbl_autobrightness_contrast = xrc.XRCCTRL(self, "lbl_autobrightness_contrast")
         self.btn_autobrigtness_contrast = xrc.XRCCTRL(self, "btn_autobrigtness_contrast")
         self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
@@ -7449,8 +7449,8 @@ def __init_resources():
                             <rows>3</rows>
                             <hgap>200</hgap>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_sem_autofocus">
-                                <label>SEM Autofocus</label>
+                              <object class="wxStaticText" name="lbl_optical_autofocus">
+                                <label>Optical Autofocus</label>
                                 <font>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                 </font>
@@ -7460,7 +7460,7 @@ def __init_resources():
                               <cellpos>0,0</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_sem_autofocus_run">
+                              <object class="ImageTextButton" name="btn_optical_autofocus_run">
                                 <height>16</height>
                                 <face_colour>def</face_colour>
                                 <label>Run...</label>
@@ -7472,8 +7472,8 @@ def __init_resources():
                               <cellpos>0,1</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_autofocus">
-                                <label>Autofocus</label>
+                              <object class="wxStaticText" name="lbl_sem_autofocus">
+                                <label>SEM Autofocus</label>
                                 <font>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                 </font>
@@ -7483,7 +7483,7 @@ def __init_resources():
                               <cellpos>1,0</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_autofocus_run">
+                              <object class="ImageTextButton" name="btn_sem_autofocus_run">
                                 <height>16</height>
                                 <face_colour>def</face_colour>
                                 <label>Run...</label>

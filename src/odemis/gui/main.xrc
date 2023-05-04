@@ -6397,8 +6397,8 @@
                             <rows>3</rows>
                             <hgap>200</hgap>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_sem_autofocus">
-                                <label>SEM Autofocus</label>
+                              <object class="wxStaticText" name="lbl_optical_autofocus">
+                                <label>Optical Autofocus</label>
                                 <font>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                 </font>
@@ -6408,7 +6408,7 @@
                               <cellpos>0,0</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_sem_autofocus_run">
+                              <object class="ImageTextButton" name="btn_optical_autofocus_run">
                                 <height>16</height>
                                 <face_colour>def</face_colour>
                                 <label>Run...</label>
@@ -6420,8 +6420,8 @@
                               <cellpos>0,1</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_autofocus">
-                                <label>Autofocus</label>
+                              <object class="wxStaticText" name="lbl_sem_autofocus">
+                                <label>SEM Autofocus</label>
                                 <font>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                                 </font>
@@ -6431,7 +6431,7 @@
                               <cellpos>1,0</cellpos>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_autofocus_run">
+                              <object class="ImageTextButton" name="btn_sem_autofocus_run">
                                 <height>16</height>
                                 <face_colour>def</face_colour>
                                 <label>Run...</label>
