@@ -88,6 +88,23 @@ class TestMilling(unittest.TestCase):
 
         self.assertTrue(f.done())
 
+    def test_milling_points_exceeding_limit(self):
+        """
+        Test milling with a very small probe size that creates so many milling points that
+        exceeds the maximum milling points allowed
+        """
+        # mill the whole fov for 20 seconds
+        f = mill_rectangle(rect=[0, 0, 1, 1],
+                           scanner=self.scanner,
+                           iteration=1,
+                           duration=20,  # s
+                           probe_size=5e-11,  # m
+                           overlap=[0, 0])
+
+        time.sleep(3)
+        with self.assertRaises(ValueError):
+            f.result()
+
     def test_milling_multiple_iterations(self):
         """
         Test milling half of the field of view for three iterations and 10 seconds each
