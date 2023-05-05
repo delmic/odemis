@@ -7463,7 +7463,7 @@ def __init_resources():
                               <object class="ImageTextButton" name="btn_optical_autofocus_run">
                                 <height>16</height>
                                 <face_colour>def</face_colour>
-                                <label>Run...</label>
+                                <label>Run</label>
                                 <style>wxALIGN_CENTRE</style>
                               </object>
                               <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
@@ -7486,7 +7486,7 @@ def __init_resources():
                               <object class="ImageTextButton" name="btn_sem_autofocus_run">
                                 <height>16</height>
                                 <face_colour>def</face_colour>
-                                <label>Run...</label>
+                                <label>Run</label>
                                 <style>wxALIGN_CENTRE</style>
                               </object>
                               <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
@@ -7509,7 +7509,7 @@ def __init_resources():
                               <object class="ImageTextButton" name="btn_autobrigtness_contrast">
                                 <height>16</height>
                                 <face_colour>def</face_colour>
-                                <label>Run...</label>
+                                <label>Run</label>
                                 <style>wxALIGN_CENTRE</style>
                               </object>
                               <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
