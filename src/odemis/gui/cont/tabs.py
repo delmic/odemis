@@ -1980,6 +1980,8 @@ class FastEMOverviewTab(Tab):
         self.sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         self.sem_stream_cont.stream_panel.show_remove_btn(False)
 
+        # Labels of the calibration panel
+        self.lbl_optical_autofocus = panel.lbl_optical_autofocus
         # Buttons of the calibration panel
         self.btn_optical_autofocus = panel.btn_optical_autofocus_run
         self.btn_sem_autofocus = panel.btn_sem_autofocus_run
@@ -1990,9 +1992,8 @@ class FastEMOverviewTab(Tab):
         self.btn_autobc.Bind(wx.EVT_BUTTON, self._on_btn_autobc)
         # self.btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
 
-        # For SEM Autofocus calibration
+        # For Optical Autofocus calibration
         self._future_connector = None  # attribute to store the ProgressiveFutureConnector
-        self.gauge = wx.Gauge()
 
         # Acquisition controller
         self._acquisition_controller = fastem_acq.FastEMOverviewAcquiController(
@@ -2011,11 +2012,8 @@ class FastEMOverviewTab(Tab):
         """
         Start or cancel the calibration when the button is triggered.
         """
-        # from odemis.gui.comp.buttons import ImageTextButton
-        # a = ImageTextButton()
-        # a.SetLabelText
         label_text = self.btn_optical_autofocus.GetLabelText()
-        if label_text == "Run...":
+        if label_text == "Run":
             logging.debug("Starting SEM Autofocus calibration")
             # Start alignment
             f = fastem.align(self.tab_data.main.ebeam, self.tab_data.main.multibeam,
@@ -2026,7 +2024,8 @@ class FastEMOverviewTab(Tab):
 
             f.add_done_callback(self._on_calibration_done)  # also handles cancelling and exceptions
             # connect the future to the progress bar and its label
-            self._future_connector = ProgressiveFutureConnector(f, self.gauge, full=False)
+            self._future_connector = ProgressiveFutureConnector(f, wx.Gauge(), full=False)
+            self.lbl_optical_autofocus.SetLabelText("Optical Autofocus: running")
             self.btn_optical_autofocus.SetLabelText("Cancel")
         elif label_text == "Cancel":
             logging.debug("Cancelling SEM Autofocus calibration")
@@ -2042,14 +2041,17 @@ class FastEMOverviewTab(Tab):
 
         self.tab_data.is_calibrating.value = False
         self._future_connector = None  # reset connection to the progress bar
-        self.btn_optical_autofocus.SetLabelText("Run...")
+        self.btn_optical_autofocus.SetLabelText("Run")
 
         try:
             future.result()  # wait until the calibration is done
+            self.lbl_optical_autofocus.SetLabelText("Optical Autofocus: successful")
             logging.debug("Finished SEM Autofocus calibration successfully")
         except CancelledError:
+            self.lbl_optical_autofocus.SetLabelText("Optical Autofocus: cancelled")
             logging.debug("SEM Autofocus calibration cancelled")
         except Exception as ex:
+            self.lbl_optical_autofocus.SetLabelText("Optical Autofocus: failed")
             logging.exception("SEM Autofocus calibration failed with exception: %s.", ex)
 
     @call_in_wx_main
