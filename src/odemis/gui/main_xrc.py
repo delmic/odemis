@@ -7461,6 +7461,7 @@ def __init_resources():
                             </object>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_optical_autofocus_run">
+                                <size>45,-1</size>
                                 <height>16</height>
                                 <face_colour>def</face_colour>
                                 <label>Run</label>
@@ -7484,6 +7485,7 @@ def __init_resources():
                             </object>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_sem_autofocus_run">
+                                <size>45,-1</size>
                                 <height>16</height>
                                 <face_colour>def</face_colour>
                                 <label>Run</label>
@@ -7507,6 +7509,7 @@ def __init_resources():
                             </object>
                             <object class="sizeritem">
                               <object class="ImageTextButton" name="btn_autobrigtness_contrast">
+                                <size>45,-1</size>
                                 <height>16</height>
                                 <face_colour>def</face_colour>
                                 <label>Run</label>
