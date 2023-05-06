@@ -1994,6 +1994,8 @@ class FastEMOverviewTab(Tab):
 
         # For Optical Autofocus calibration
         self._future_connector = None  # attribute to store the ProgressiveFutureConnector
+        self.tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button if acquiring
+        self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)  # enable/disable button if calibrating
 
         # Acquisition controller
         self._acquisition_controller = fastem_acq.FastEMOverviewAcquiController(
@@ -2012,25 +2014,38 @@ class FastEMOverviewTab(Tab):
         """
         Start or cancel the calibration when the button is triggered.
         """
-        label_text = self.btn_optical_autofocus.GetLabelText()
-        if label_text == "Run":
-            logging.debug("Starting SEM Autofocus calibration")
-            # Start alignment
-            f = fastem.align(self.tab_data.main.ebeam, self.tab_data.main.multibeam,
-                                   self.tab_data.main.descanner, self.tab_data.main.mppc,
-                                   self.tab_data.main.stage, self.tab_data.main.ccd,
-                                   self.tab_data.main.beamshift, self.tab_data.main.det_rotator,
-                                   calibrations=[Calibrations.OPTICAL_AUTOFOCUS])
+        # check if cancelled
+        if self.tab_data.is_calibrating.value:
+            fastem._executor.cancel()
+            return
 
-            f.add_done_callback(self._on_calibration_done)  # also handles cancelling and exceptions
-            # connect the future to the progress bar and its label
-            self._future_connector = ProgressiveFutureConnector(f, wx.Gauge(), full=False)
-            self.lbl_optical_autofocus.SetLabelText("Optical Autofocus: running")
-            self.btn_optical_autofocus.SetLabelText("Cancel")
-        elif label_text == "Cancel":
-            logging.debug("Cancelling SEM Autofocus calibration")
-            if self._future_connector:
-                self._future_connector._future.cancel()
+        # calibrate
+        self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        # Don't catch this event (is_calibrating = True) - this would disable the button,
+        # but it should be still enabled in order to be able to cancel the calibration
+        self.tab_data.is_calibrating.value = True  # make sure the acquire/tab buttons are disabled
+        self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
+        logging.debug("Starting Optical Autofocus calibration")
+        # Start alignment
+        f = fastem.align(self.tab_data.main.ebeam, self.tab_data.main.multibeam,
+                               self.tab_data.main.descanner, self.tab_data.main.mppc,
+                               self.tab_data.main.stage, self.tab_data.main.ccd,
+                               self.tab_data.main.beamshift, self.tab_data.main.det_rotator,
+                               calibrations=[Calibrations.OPTICAL_AUTOFOCUS])
+        f.add_done_callback(self._on_calibration_done)  # also handles cancelling and exceptions
+        # connect the future to the progress bar and its label
+        self._future_connector = ProgressiveFutureConnector(f, wx.Gauge(), full=False)
+        self._update_calibration_controls()
+        self.tab_data.is_calib_done.value = False  # don't enable ROA acquisition
+
+    @call_in_wx_main
+    def _on_is_acquiring(self, mode):
+        """
+        Enable or disable the button to start a calibration depending on whether
+        a calibration or acquisition is already ongoing or not.
+        :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
+        """
+        self.btn_optical_autofocus.Enable(not mode)
 
     @call_in_wx_main
     def _on_calibration_done(self, future, _=None):
@@ -2041,18 +2056,37 @@ class FastEMOverviewTab(Tab):
 
         self.tab_data.is_calibrating.value = False
         self._future_connector = None  # reset connection to the progress bar
-        self.btn_optical_autofocus.SetLabelText("Run")
 
         try:
             future.result()  # wait until the calibration is done
-            self.lbl_optical_autofocus.SetLabelText("Optical Autofocus: successful")
-            logging.debug("Finished SEM Autofocus calibration successfully")
+            self.tab_data.is_calib_done.value = True
+            logging.debug("Optical Autofocus calibration successful")
         except CancelledError:
-            self.lbl_optical_autofocus.SetLabelText("Optical Autofocus: cancelled")
-            logging.debug("SEM Autofocus calibration cancelled")
+            self.tab_data.is_calib_done.value = False  # don't enable ROA acquisition
+            logging.debug("Optical Autofocus calibration cancelled")
         except Exception as ex:
-            self.lbl_optical_autofocus.SetLabelText("Optical Autofocus: failed")
-            logging.exception("SEM Autofocus calibration failed with exception: %s.", ex)
+            self.tab_data.is_calib_done.value = False  # don't enable ROA acquisition
+            logging.exception("Optical Autofocus calibration failed with exception: %s.", ex)
+            self._acquisition_controller._set_status_message(
+                "Optical Autofocus calibration failed.", logging.WARN
+            )
+        finally:
+            self._update_calibration_controls()
+
+    @wxlimit_invocation(0.1)  # max 10Hz; called in main GUI thread
+    def _update_calibration_controls(self, button_state=True):
+        """
+        Update the calibration panel controls to be ready for the next calibration.
+        :param button_state: (bool) Enabled or disable button depending on state. Default is enabled.
+        """
+        self.btn_optical_autofocus.Enable(button_state)  # enable/disable button
+
+        if self.tab_data.is_calibrating.value:
+            self.btn_optical_autofocus.SetLabel("Cancel")  # indicate canceling is possible
+        else:
+            self.btn_optical_autofocus.SetLabel("Run")  # change button label back to ready for calibration
+
+        self.btn_optical_autofocus.Parent.Layout()
 
     @call_in_wx_main
     def _on_btn_sem_autofocus(self, _):
