@@ -1023,10 +1023,13 @@ class xrcfr_overview_acq(wx.Dialog):
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
         self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
         self.zstep_size_ctrl = xrc.XRCCTRL(self, "zstep_size_ctrl")
+        self.whole_grid_chkbox = xrc.XRCCTRL(self, "whole_grid_chkbox")
         self.tiles_number_x_lbl = xrc.XRCCTRL(self, "tiles_number_x_lbl")
         self.tiles_number_x = xrc.XRCCTRL(self, "tiles_number_x")
         self.tiles_number_y_lbl = xrc.XRCCTRL(self, "tiles_number_y_lbl")
         self.tiles_number_y = xrc.XRCCTRL(self, "tiles_number_y")
+        self.selected_grid_lbl = xrc.XRCCTRL(self, "selected_grid_lbl")
+        self.selected_grid_pnl_holder = xrc.XRCCTRL(self, "selected_grid_pnl_holder")
         self.area_size_txt = xrc.XRCCTRL(self, "area_size_txt")
         self.autofocus_chkbox = xrc.XRCCTRL(self, "autofocus_chkbox")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
@@ -10042,13 +10045,12 @@ def __init_resources():
                       <bg>#333333</bg>
                     </object>
                     <flag>wxEXPAND</flag>
-                  </object>
+                    </object>
                   <object class="sizeritem">
-                    <object class="wxFlexGridSizer">
-                      <cols>2</cols>
-                      <rows>6</rows>
+                    <object class="wxGridBagSizer">
                       <vgap>10</vgap>
                       <hgap>50</hgap>
+                      <growablecols>1</growablecols>
                       <object class="sizeritem">
                         <object class="wxStaticText">
                           <label>ZStack steps</label>
@@ -10060,9 +10062,9 @@ def __init_resources():
                             <size>9</size>
                           </font>
                         </object>
-                        <option>0</option>
-                        <flag>wxLEFT|wxTOP</flag>
-                        <border>10</border>
+                        <cellpos>0,0</cellpos>
+                        <flag>wxLEFT</flag>
+                        <border>13</border>
                       </object>
                       <object class="sizeritem">
                         <object class="UnitIntegerSlider" name="zstack_steps">
@@ -10076,8 +10078,8 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <option>1</option>
-                        <flag>wxLEFT|wxRIGHT|wxEXPAND|wxTOP</flag>
+                        <cellpos>0,1</cellpos>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
@@ -10091,9 +10093,9 @@ def __init_resources():
                             <size>9</size>
                           </font>
                         </object>
-                        <option>0</option>
+                        <cellpos>1,0</cellpos>
                         <flag>wxLEFT</flag>
-                        <border>10</border>
+                        <border>13</border>
                       </object>
                       <object class="sizeritem">
                         <object class="UnitFloatCtrl" name="zstep_size_ctrl">
@@ -10110,10 +10112,30 @@ def __init_resources():
                             <size>9</size>
                           </font>
                         </object>
-                        <option>0</option>
+                        <cellpos>1,1</cellpos>
                         <flag>wxLEFT</flag>
                         <border>10</border>
                       </object>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxCheckBox" name="whole_grid_chkbox">
+                      <label>Whole grid acquisition</label>
+                      <fg>#E5E5E5</fg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <vgap>10</vgap>
+                      <hgap>50</hgap>
+                      <growablecols>1</growablecols>
                       <object class="sizeritem">
                         <object class="wxStaticText" name="tiles_number_x_lbl">
                           <label>Tiles number x</label>
@@ -10123,12 +10145,12 @@ def __init_resources():
                             <sysfont> wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
                           <XRCED>
-                              <assign_var>1</assign_var>
+                            <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <option>0</option>
+                        <cellpos>0,0</cellpos>
                         <flag>wxLEFT</flag>
-                        <border>10</border>
+                        <border>13</border>
                       </object>
                       <object class="sizeritem">
                         <object class="UnitIntegerCtrl" name="tiles_number_x">
@@ -10141,15 +10163,15 @@ def __init_resources():
                           <scale>linear</scale>
                           <accuracy>4</accuracy>
                           <font>
-                              <size>9</size>
-                              <encoding>UTF-8</encoding>
+                            <size>9</size>
+                            <encoding>UTF-8</encoding>
                           </font>
                           <style>wxBORDER_NONE</style>
                           <XRCED>
-                              <assign_var>1</assign_var>
+                            <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <option>1</option>
+                        <cellpos>0,1</cellpos>
                         <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                         <border>10</border>
                       </object>
@@ -10161,12 +10183,12 @@ def __init_resources():
                             <size>9</size>
                           </font>
                           <XRCED>
-                              <assign_var>1</assign_var>
+                            <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <option>0</option>
+                        <cellpos>1,0</cellpos>
                         <flag>wxLEFT</flag>
-                        <border>10</border>
+                        <border>13</border>
                       </object>
                       <object class="sizeritem">
                         <object class="UnitIntegerCtrl" name="tiles_number_y">
@@ -10179,18 +10201,51 @@ def __init_resources():
                           <scale>linear</scale>
                           <accuracy>4</accuracy>
                           <font>
-                              <size>9</size>
-                              <encoding>UTF-8</encoding>
+                            <size>9</size>
+                            <encoding>UTF-8</encoding>
                           </font>
                           <style>wxBORDER_NONE</style>
                           <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
-                        <option>1</option>
+                        <cellpos>1,1</cellpos>
                         <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                         <border>10</border>
                       </object>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="selected_grid_lbl">
+                      <label>Selected grid areas</label>
+                      <fg>#DDDDDD</fg>
+                      <font>
+                        <size>9</size>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>13</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="selected_grid_pnl_holder">
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND|wxLEFT|wxRIGHT</flag>
+                    <border>13</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <vgap>10</vgap>
+                      <hgap>50</hgap>
+                      <growablecols>1</growablecols>
                       <object class="sizeritem">
                         <object class="wxStaticText">
                           <label>Tiled area size</label>
@@ -10202,9 +10257,9 @@ def __init_resources():
                             <size>9</size>
                           </font>
                         </object>
-                        <option>0</option>
+                        <cellpos>0,0</cellpos>
                         <flag>wxLEFT</flag>
-                        <border>10</border>
+                        <border>13</border>
                       </object>
                       <object class="sizeritem">
                         <object class="wxStaticText" name="area_size_txt">
@@ -10217,26 +10272,24 @@ def __init_resources():
                             <size>9</size>
                           </font>
                         </object>
-                        <option>0</option>
+                        <cellpos>0,1</cellpos>
                         <flag>wxLEFT</flag>
                         <border>10</border>
                       </object>
-                      <object class="sizeritem">
-                        <object class="wxCheckBox" name="autofocus_chkbox">
-                          <label>Run autofocus</label>
-                          <fg>#E5E5E5</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <option>0</option>
-                        <flag>wxTOP</flag>
-                        <border>10</border>
-                      </object>
-                      <growablecols>1</growablecols>
                     </object>
-                    <flag>wxALL|wxEXPAND</flag>
-                    <border>3</border>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxCheckBox" name="autofocus_chkbox">
+                      <label>Run autofocus</label>
+                      <fg>#E5E5E5</fg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>10</border>
                   </object>
                 </object>
                 <size>400,-1</size>
