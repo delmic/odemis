@@ -215,6 +215,10 @@ class StreamController(object):
         if hasattr(stream, "repetition"):
             self._add_repetition_ctrl()
 
+        if tab_data_model.main.role == "mbsem" and isinstance(stream, acqstream.SEMStream):  # don't show for CCD stream
+            # It's a FastEM
+            self._add_fastem_ctrls()
+
         # Set the visibility button on the stream panel
         if view:
             vis = stream in view.stream_tree
@@ -1364,6 +1368,16 @@ class StreamController(object):
 
         # Make sure the current value is selected
         self._rep_ctrl.SetSelection(choices.index(rep))
+
+    def _add_fastem_ctrls(self):
+        self.stream_panel.add_divider()
+        # Create the immersion mode button
+        btn_immersion_mode = self.stream_panel.add_immersion_mode_button()
+
+        # Store a setting entry for the immersion mode button
+        se = SettingEntry(name="immersion_mode", va=self.stream.emitter.immersion,
+                          stream=self.stream, value_ctrl=btn_immersion_mode, events=wx.EVT_BUTTON)
+        self.entries.append(se)
 
 
 class StreamBarController(object):
