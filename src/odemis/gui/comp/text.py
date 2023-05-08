@@ -745,15 +745,15 @@ class _NumberTextCtrl(wx.TextCtrl):
         self.Enable(False)
 
     def Enable(self, enable=True):
+        if enable:
+            self.SetForegroundColour(FG_COLOUR_EDIT)
+        else:
+            self.SetForegroundColour(FG_COLOUR_DIS)
+
         # TODO: Find a better way to deal with this hack that was put in place because under
         # MS Windows the background colour cannot (at all?) be set when a control is disabled
         if os.name == 'nt':
             self.SetEditable(enable)
-
-            if enable:
-                self.SetForegroundColour(FG_COLOUR_EDIT)
-            else:
-                self.SetForegroundColour(FG_COLOUR_DIS)
         else:
             super(_NumberTextCtrl, self).Enable(enable)
 
