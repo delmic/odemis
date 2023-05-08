@@ -1955,11 +1955,16 @@ class FastEMOverviewTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Single-beam SEM stream
-        vanames = ("resolution", "scale", "dwellTime", "horizontalFoV")
+        emt_vanames = ("resolution", "scale", "dwellTime", "horizontalFoV")
+        det_vanames = ("brightness", "contrast")
         hwemtvas = set()
+        hwdetvas = set()
         for vaname in getVAs(main_data.ebeam):
-            if vaname in vanames:
+            if vaname in emt_vanames:
                 hwemtvas.add(vaname)
+        for vaname in getVAs(main_data.sed):
+            if vaname in det_vanames:
+                hwdetvas.add(vaname)
         sem_stream = acqstream.FastEMSEMStream(
             "Single Beam",
             main_data.sed,
@@ -1967,6 +1972,7 @@ class FastEMOverviewTab(Tab):
             main_data.ebeam,
             focuser=main_data.ebeam_focus,
             hwemtvas=hwemtvas,
+            hwdetvas=hwdetvas,
         )
         tab_data.streams.value.append(sem_stream)  # it should also be saved
         tab_data.semStream = sem_stream
