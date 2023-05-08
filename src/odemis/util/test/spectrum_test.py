@@ -17,12 +17,13 @@ You should have received a copy of the GNU General Public License along with Ode
 # Test cases for the spectrum functions
 
 import logging
+import math
+import time
+import unittest
+
 import numpy
 from odemis import model
 from odemis.util import spectrum
-import time
-import unittest
-from builtins import range
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -49,7 +50,82 @@ class TestGetWavelength(unittest.TestCase):
         wl = spectrum.get_wavelength_per_pixel(da)
         self.assertEqual(len(wl), shape[0])
         self.assertEqual(wl, wl_orig)
-        
+
+
+class TestGetAngle(unittest.TestCase):
+
+    def test_angle_per_pixel_simple(self):
+        """
+        Test get_angle_per_pixel when all metadata is good
+        """
+        shape = (512, 256, 1, 5, 4)
+        dtype = numpy.dtype("uint16")
+        wl_orig = (400e-9 + numpy.arange(shape[0]) * 10e-9).tolist()
+        thetal_orig = numpy.linspace(-1.5, 1.4, shape[1])  # rad
+        # Typically the top and bottom angles do no exists, they are replaced by NaN
+        thetal_orig[:12] = math.nan
+        thetal_orig[-10:] = math.nan
+        thetal_orig = thetal_orig.tolist()
+        metadata = {
+            model.MD_DIMS: "CAZYX",
+            model.MD_HW_NAME: "fake AR spec",
+            model.MD_DESCRIPTION: "test3d",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+            model.MD_WL_LIST: wl_orig,
+            model.MD_THETA_LIST: thetal_orig,
+            model.MD_POS: (1e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+        }
+        da = model.DataArray(numpy.zeros(shape, dtype), metadata)
+
+        thetal = spectrum.get_angle_per_pixel(da)
+        self.assertEqual(len(thetal), shape[1])
+        self.assertEqual(thetal, thetal_orig)
+
+        # get_wavelength_per_pixel should also work
+        wl = spectrum.get_wavelength_per_pixel(da)
+        self.assertEqual(len(wl), shape[0])
+        self.assertEqual(wl, wl_orig)
+
+    def test_angle_per_pixel_recreate(self):
+        """
+        get_angle_per_pixel() should recreate the THETA_LIST based on other metadata if it's not present
+        """
+        shape = (512, 256, 1, 5, 4)
+        dtype = numpy.dtype("uint16")
+        wl_orig = (400e-9 + numpy.arange(shape[0]) * 10e-9).tolist()
+        metadata = {
+            model.MD_DIMS: "CAZYX",
+            model.MD_HW_NAME: "fake AR spec",
+            model.MD_DESCRIPTION: "test3d",
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+            model.MD_POS: (1e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+            # All metadata needed for the Theta creation
+            model.MD_WL_LIST: wl_orig,
+            model.MD_AR_MIRROR_TOP: [220, 0],
+            model.MD_AR_MIRROR_BOTTOM: [30, 0],
+            model.MD_AR_FOCUS_DISTANCE: 0.5e-3,
+            model.MD_AR_XMAX: 3.8e-3,
+            model.MD_AR_PARABOLA_F: 0.8e-3,
+        }
+        da = model.DataArray(numpy.zeros(shape, dtype), metadata)
+
+        thetal = spectrum.get_angle_per_pixel(da)
+        self.assertEqual(len(thetal), shape[1])
+        self.assertTrue(all(-3.15 < t < 3.15 for t in thetal if math.isfinite(t)))
+
+        # get_wavelength_per_pixel should also work
+        wl = spectrum.get_wavelength_per_pixel(da)
+        self.assertEqual(len(wl), shape[0])
+        self.assertEqual(wl, wl_orig)
+
 
 class TestCoefToDA(unittest.TestCase):
     

@@ -26,10 +26,11 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Note that the spectrum is normally contained on the C dimension, which is
 # by convention the first of the 5 dimensions of a DataArray (CTZYX).
 
-from builtins import range
 import logging
 import math
+
 import numpy
+
 from odemis import model
 from odemis.util import angleres
 from odemis.model import MD_THETA_LIST
@@ -234,28 +235,52 @@ def get_angle_per_pixel(da):
     if not hasattr(da, 'metadata'):
         raise AttributeError("No metadata found in data array")
 
-    if model.MD_THETA_LIST in da.metadata:
-        thetal = da.metadata[model.MD_THETA_LIST]
-    else:
-        # Try to build the MD_THETA_LIST from the mirror information metadata
-        try:
-            thetal = angleres.ExtractThetaList(da)
-        except ValueError:
-            raise KeyError("No MD_THETA_LIST metadata available, nor enough mirror metadata to reconstruct it")
-
-        # Update the data array with the information
-        da.metadata[MD_THETA_LIST] = thetal
-
     # check available dimension of data
     dims = da.metadata.get(model.MD_DIMS, "CAZYX"[-da.ndim:])
 
     if len(dims) == 3 and dims == "YXC" and da.shape[2] in (3, 4):  # RGB data
+        # This is a hack that works the same way as in get_wavelength_per_pixel
         thetai = 0
     else:
         try:
             thetai = dims.index("A")  # get index of dimension A
         except ValueError:
             raise ValueError("Dimension 'A' not in dimensions, so skip computing theta list.")
+
+    thetal = None
+    if model.MD_THETA_LIST in da.metadata:
+        thetal = da.metadata[model.MD_THETA_LIST]
+        # Sanity check: it should contain at least *some* angles (if the computation went wrong, it may only return NaN's)
+        if not [v for v in thetal if math.isfinite(v)]:
+            logging.warning("Discarding MD_THETA_LIST as it doesn't contain any proper angle")
+            thetal = None
+
+    if thetal is None:
+        # Try to build the MD_THETA_LIST from the mirror information metadata
+        # ExtractThetaList() needs the shape as AC, so need to
+        # 1. remove extra dimension (by picking just one point)
+        # 2. reorder the dimensions
+        try:
+            ci = dims.index("C")  # get index of dimension C
+        except ValueError:
+            raise ValueError("Dimension 'C' not in dimensions, so skip computing theta list.")
+
+        subdata_idx = [0] * len(da.shape)
+        subdata_idx[thetai] = slice(None)
+        subdata_idx[ci] = slice(None)
+        subdata = da[tuple(subdata_idx)]  # just two dimensions: A & C (in whichever order)
+        subdata = numpy.moveaxis(subdata, thetai, 0)  # force C to be first dimension (and A will be the second one)
+
+        try:
+            thetal = angleres.ExtractThetaList(subdata)
+        except ValueError:
+            raise KeyError("No MD_THETA_LIST metadata available, nor enough mirror metadata to reconstruct it")
+
+        if not [v for v in thetal if math.isfinite(v)]:
+            raise ValueError("Discarding MD_THETA_LIST as it doesn't contain any proper angle")
+
+        # Update the data array with the information
+        da.metadata[MD_THETA_LIST] = thetal
 
     if len(thetal) != da.shape[thetai]:
         raise ValueError("Length of theta list does not match length of theta data.")
