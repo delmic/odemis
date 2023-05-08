@@ -1,0 +1,9 @@
+Optical: {
+    class: Microscope,
+    role: epifluorescent,
+}
+
+Light: {
+    class: simulated.Light,
+    # missing "role"
+}

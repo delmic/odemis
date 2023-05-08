@@ -1,0 +1,21 @@
+{
+
+Mic: {
+    class: Microscope,
+    role: epifluorescent,
+},
+
+First: {
+    class: simulated.Light,
+    role: light,
+},
+
+# Forgetting to put the name of the component is hard on normal files, but can easily happen for modular ones
+!extend syntax-error-extend-no-name.odm.yaml,
+
+Second: {
+    class: simulated.Light,
+    role: brightlight,
+},
+
+}

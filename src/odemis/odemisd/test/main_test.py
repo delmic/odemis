@@ -43,7 +43,8 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 # ODEMISD_CMD = "/usr/bin/python2 -m odemis.odemisd.main"
 ODEMISD_CMD = [sys.executable, os.path.dirname(odemis.__file__) + "/odemisd/main.py"]
-SIM_CONFIG = os.path.join(os.path.dirname(__file__), "optical-sim.odm.yaml")
+FILE_PATH = os.path.dirname(__file__)
+SIM_CONFIG = os.path.join(FILE_PATH, "optical-sim.odm.yaml")
 
 
 class TestCommandLine(unittest.TestCase):
@@ -61,13 +62,14 @@ class TestCommandLine(unittest.TestCase):
 
         i = 0
         for config in configs_pass:
-            setattr(cls, "test_pass_%d" % i, cls.create_test_validate_pass(config))
+            setattr(cls, "test_pass_%d" % i, cls.create_test_validate_pass(os.path.join(FILE_PATH, config)))
             i += 1
 
         configs_error = ["syntax-error-1.odm.yaml",
                          "syntax-error-2.odm.yaml",
                          # Skipped: for now, double key def is only a warning
                          # "syntax-error-3.odm.yaml",
+                         "syntax-error-4.odm.yaml",
                          "semantic-error-2.odm.yaml",
                          # This one can only be detected on a real instantiation
                          # "semantic-error-3.odm.yaml",
@@ -79,12 +81,13 @@ class TestCommandLine(unittest.TestCase):
                          "semantic-error-7.odm.yaml",
                          # test with multiple role
                          "semantic-error-8.odm.yaml",
+                         "semantic-error-9.odm.yaml",
                          "semantic-error-md.odm.yaml",
                          ]
 
         i = 0
         for config in configs_error:
-            setattr(cls, "test_error_%d" % i, cls.create_test_validate_error(config))
+            setattr(cls, "test_error_%d" % i, cls.create_test_validate_error(os.path.join(FILE_PATH, config)))
             i += 1
 
     @staticmethod
@@ -209,7 +212,7 @@ class TestCommandLine(unittest.TestCase):
     def test_error_instantiate(self):
         """Test config files which should fail on instantiation"""
         # Only for the config files that cannot fail on a standard validation
-        filename = "semantic-error-3.odm.yaml"
+        filename = os.path.join(FILE_PATH, "semantic-error-3.odm.yaml")
         cmdline = "odemisd --log-target=test.log %s" % filename
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -227,7 +230,7 @@ class TestCommandLine(unittest.TestCase):
     @timeout(20)
     def test_multiple_parents_old(self):
         """Test creating component with multiple parents"""
-        filename = "multiple-parents-old-style.odm.yaml"
+        filename = os.path.join(FILE_PATH, "multiple-parents-old-style.odm.yaml")
         cmdline = "--log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
         ret = subprocess.call(ODEMISD_CMD + cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s' gave status %d" % (cmdline, ret))
@@ -249,7 +252,7 @@ class TestCommandLine(unittest.TestCase):
     @timeout(20)
     def test_multiple_parents_new(self):
         """Test creating component with multiple parents"""
-        filename = "multiple-parents-new-style.odm.yaml"
+        filename = os.path.join(FILE_PATH, "multiple-parents-new-style.odm.yaml")
         cmdline = "--log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
         ret = subprocess.call(ODEMISD_CMD + cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s' gave status %d" % (cmdline, ret))
@@ -271,7 +274,7 @@ class TestCommandLine(unittest.TestCase):
     @timeout(20)
     def test_properties_set(self):
         """Test creating component with specific properties"""
-        filename = "example-secom.odm.yaml"
+        filename = os.path.join(FILE_PATH, "example-secom.odm.yaml")
         cmdline = "--log-level=2 --log-target=testdaemon.log --daemonize %s" % filename
         ret = subprocess.call(ODEMISD_CMD + cmdline.split())
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
@@ -302,7 +305,7 @@ class TestCommandLine(unittest.TestCase):
         """Test initialization with persistent data"""
 
         # Start backend with persistent data specified in yaml file
-        filename = "sim-persistent.odm.yaml"
+        filename = os.path.join(FILE_PATH, "sim-persistent.odm.yaml")
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
         if os.path.isfile("test-settings.yaml"):
             os.remove("test-settings.yaml")
@@ -405,7 +408,7 @@ class TestCommandLine(unittest.TestCase):
         # The broken data should be ignored and a warning should be issued.
 
         # Start backend with persistent data specified in yaml file
-        filename = "sim-persistent.odm.yaml"
+        filename = os.path.join(FILE_PATH, "sim-persistent.odm.yaml")
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 2, "Backend is said to be running")
@@ -482,7 +485,7 @@ class TestCommandLine(unittest.TestCase):
         # Start backend without any settings file defined. As it's not running
         # as root, it will run without persistent data stored.
         # => just show warnings in the log file, and runs fine.
-        filename = "sim-persistent.odm.yaml"
+        filename = os.path.join(FILE_PATH, "sim-persistent.odm.yaml")
         cmdline = "odemisd --log-level=2 --log-target=test.log --check"
         ret = main.main(cmdline.split())
         self.assertEqual(ret, 2, "Backend is said to be running")
