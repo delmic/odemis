@@ -1980,8 +1980,6 @@ class FastEMOverviewTab(Tab):
         self.sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         self.sem_stream_cont.stream_panel.show_remove_btn(False)
 
-        # Labels of the calibration panel
-        self.lbl_optical_autofocus = panel.lbl_optical_autofocus
         # Buttons of the calibration panel
         self.btn_optical_autofocus = panel.btn_optical_autofocus_run
         self.btn_sem_autofocus = panel.btn_sem_autofocus_run
@@ -2012,7 +2010,7 @@ class FastEMOverviewTab(Tab):
 
     def _on_btn_optical_autofocus(self, _):
         """
-        Start or cancel the calibration when the button is triggered.
+        Start or cancel the Optical Autofocus calibration when the button is triggered.
         """
         # check if cancelled
         if self.tab_data.is_calibrating.value:
@@ -2082,7 +2080,7 @@ class FastEMOverviewTab(Tab):
         self.btn_optical_autofocus.Enable(button_state)  # enable/disable button
 
         if self.tab_data.is_calibrating.value:
-            self.btn_optical_autofocus.SetLabel("Cancel")  # indicate canceling is possible
+            self.btn_optical_autofocus.SetLabel("Cancel")  # indicate cancelling is possible
         else:
             self.btn_optical_autofocus.SetLabel("Run")  # change button label back to ready for calibration
 
