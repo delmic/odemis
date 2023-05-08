@@ -346,7 +346,8 @@ class StreamController(object):
 
         # Process the hardware VAs first (emitter and detector hardware VAs are combined into one
         # attribute called 'hw_vas'
-        # sort the list of hardware VAs first in case it contains items that are not in the emitter and detector conf, they will be appended at the end
+        # sort the list of hardware VAs first in case it contains items that are not in the
+        # emitter and detector conf, they will be appended at the end
         vas_names = util.sorted_according_to(sorted(list(self.stream.hw_vas.keys())),
                                              list(emitter_conf.keys()) + list(detector_conf.keys()))
 
