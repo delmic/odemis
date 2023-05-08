@@ -259,7 +259,7 @@ def get_angle_per_pixel(da):
         # Try to build the MD_THETA_LIST from the mirror information metadata
         # ExtractThetaList() needs the shape as AC, so need to
         # 1. remove extra dimension (by picking just one point)
-        # 2, reorder the dimensions
+        # 2. reorder the dimensions
         try:
             ci = dims.index("C")  # get index of dimension C
         except ValueError:
