@@ -157,8 +157,7 @@ class Lakeshore(model.HwComponent):
             # It wouldn't make sense to have target temperature without reading
             # its temperature => detect such case
             if va_name not in sensor_input:
-                raise ValueError("output_channel defined for VA '%s' while it's not present in input_channel",
-                                 va_name)
+                raise ValueError(f"output_channel defined for VA '{va_name}' while it's not present in input_channel")
             # TODO: Actually, the device also stores the information about the
             # link between the input and output channels (see "OUTMODE?")
             # => use it to confirm the arguments match.
