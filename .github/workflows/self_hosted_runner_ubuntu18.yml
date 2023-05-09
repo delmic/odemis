@@ -1,7 +1,7 @@
 name: Self Hosted Runner Ubuntu 18 Unit Testing
 
 on:
-  [push, pull_request]
+  [push]
   # schedule:
   #   - cron: "0 22 * * *"  # everyday at 10 pm
 
