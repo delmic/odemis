@@ -543,7 +543,7 @@ class OrsayComponent(model.HwComponent):
                             if t.tag == tag:
                                 return t.text
 
-        raise LookupError("Preset doesn't contain %s.%s.%s", sub_comp, setting, tag)
+        raise LookupError(f"Preset doesn't contain {sub_comp}.{setting}.{tag}")
 
 
 class pneumaticSuspension(model.HwComponent):
