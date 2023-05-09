@@ -38,6 +38,9 @@ except ImportError as err:
     logging.warning(f"ConsoleClient and/or MillingPattern packages not found with error: {err}")
     console_client_pkg = False
 
+# The advised limit and maximum points to scan are limitations set by Orsay Physics
+ADVISED_MAX_POINTS_TO_SCAN = 1_000_000
+MAX_POINTS_TO_SCAN = 1024*1024*16
 
 # The executor is a single object, independent of how many times the module is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
@@ -150,8 +153,8 @@ class OrsayMilling:
             # scanner.CurrentSubList.Subscribe(self.param_logger)
             # scanner.CurrentMillingPoint.Subscribe(self.param_logger)  # Very verbose
 
-            # It is assumed that the self.scanner.shape is always square (eg 1024x1024)
-            # If not, the physical dimension of Y should be adjust proportionally.
+            # It is assumed that the self.scanner.shape is always square (e.g. 1024x1024)
+            # If not, the physical dimension of Y should be adjusted proportionally.
             fov = self.scanner.horizontalFoV.value
 
             # the Y axes in odemis and orsay are inverted, that is why centerOfMassY is always inverted
@@ -165,7 +168,7 @@ class OrsayMilling:
                 obj_to_mill = Rectangle()
                 obj_to_mill.primaryAxisOverlap = overlap[0]
                 obj_to_mill.secondaryAxisOverlap = overlap[1]
-                obj_to_mill.primaryAxisY = 0  # primaryAxisY is always 0 to keep the  rectangle straight
+                obj_to_mill.primaryAxisY = 0  # primaryAxisY is always 0 to keep the rectangle straight
                 if rect[0] == rect[2]:
                     logging.debug("Milling a vertical line. Orsay doesn't like rectangles with 0 "
                                   "height. Line height automatically set equal to the probe size to fit a single line.")
@@ -185,6 +188,18 @@ class OrsayMilling:
 
             obj_to_mill.centerOfMassX = ((rect[2] + rect[0]) / 2 - 0.5) * fov
             obj_to_mill.centerOfMassY = (0.5 - (rect[3] + rect[1]) / 2) * fov
+
+            step_distance = (probe_size * (1 - overlap[0]),
+                             probe_size * (1 - overlap[1]))
+            points_to_be_scanned = (obj_to_mill.primaryAxisX / step_distance[0] + 1) * \
+                                   (obj_to_mill.secondaryAxisLength / step_distance[1] + 1)
+
+            if points_to_be_scanned >= MAX_POINTS_TO_SCAN:
+                raise ValueError("Number of points to be scanned are exceeding the limit. Limit is: %d and "
+                                 "points to be scanned is: %d" % (MAX_POINTS_TO_SCAN, points_to_be_scanned))
+            elif points_to_be_scanned >= ADVISED_MAX_POINTS_TO_SCAN:
+                logging.warning(f"It is advised to keep objects under 1 million points."
+                                f"Currently points to be scanned: {points_to_be_scanned}")
 
             lay = Layer()
             lay.probeSize = probe_size
