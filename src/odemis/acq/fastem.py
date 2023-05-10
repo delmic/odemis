@@ -984,6 +984,10 @@ class OverviewAcquisition(object):
 
         :returns: (DataArray) The complete overview image.
         """
+        # Get the current immersion mode value before configuring the scanner.
+        # This value is set back after acquireTiledArea future's result.
+        current_immersion_mode = stream.emitter.immersion.value
+
         fastem_conf.configure_scanner(stream.emitter, fastem_conf.OVERVIEW_MODE)
 
         # The stage movement precision is quite good (just a few pixels). The stage's
@@ -1009,8 +1013,8 @@ class OverviewAcquisition(object):
         try:
             das = self._sub_future.result()
         finally:
-            # Switch immersion mode back on, so we can focus the SEM from the TFS GUI.
-            stream.emitter.immersion.value = True
+            # Set the immersion mode back to the current value which was stored before configuring the scanner.
+            stream.emitter.immersion.value = current_immersion_mode
 
             # FIXME auto blanking not working properly, so force beam blanking after image acquisition for now.
             stream.emitter.blanker.value = True
