@@ -1372,11 +1372,13 @@ class StreamController(object):
     def _add_fastem_ctrls(self):
         self.stream_panel.add_divider()
         # Create the immersion mode button
-        btn_immersion_mode = self.stream_panel.add_immersion_mode_button()
+        _, cbox_immersion_mode = self.stream_panel.add_checkbox_control(
+            label_text="Immersion Mode", value=self.stream.emitter.immersion.value
+        )
 
         # Store a setting entry for the immersion mode button
         se = SettingEntry(name="immersion_mode", va=self.stream.emitter.immersion,
-                          stream=self.stream, value_ctrl=btn_immersion_mode, events=wx.EVT_BUTTON)
+                          stream=self.stream, value_ctrl=cbox_immersion_mode, events=wx.EVT_CHECKBOX)
         self.entries.append(se)
 
 
