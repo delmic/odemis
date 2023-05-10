@@ -814,18 +814,6 @@ class StreamPanel(wx.Panel):
         return lbl_ctrl
 
     @control_bookkeeper
-    def add_immersion_mode_button(self):
-        """ Create and return immersion mode button."""
-
-        btn_immersion_mode = buttons.ImageTextToggleButton(self._panel, height=24, style=wx.ALIGN_CENTER,
-                                                           label="Immersion Mode",
-                                                           active_colour=FG_COLOUR_RADIO_ACTIVE)
-
-        self.gb_sizer.Add(btn_immersion_mode, (self.num_rows, 0), flag=wx.EXPAND | wx.ALL, border=5)
-
-        return btn_immersion_mode
-
-    @control_bookkeeper
     def add_autobc_ctrls(self):
         """ Create and return controls needed for (auto) brightness and contrast manipulation """
 
