@@ -59,7 +59,6 @@ SCANNER_CONFIG = {
         # work reliably for the XTTKDetector, therefore (contrary to Odemis convention) we need to unblank
         # the beam here.
         "blanker": False,
-        "immersion": True,
     },
     MEGAFIELD_MODE: {
         "multiBeamMode": True,
@@ -89,7 +88,10 @@ def configure_scanner(scanner, mode):
     scanner.blanker.value = conf["blanker"]
 
     # Immersion needs to be set before changing the horizontalFoV, as the range is updated
-    scanner.immersion.value = conf["immersion"]
+    if "immersion" in conf:
+        scanner.immersion.value = conf["immersion"]
+    else:
+        logging.debug("Didn't specify immersion, using %s", scanner.immersion.value)
 
     if scanner.immersion.value:
         # When the scanner is in immersion mode set the position correction to [0, 0]
