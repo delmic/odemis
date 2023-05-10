@@ -1991,7 +1991,6 @@ class FastEMOverviewTab(Tab):
         # self.btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
 
         # For Optical Autofocus calibration
-        self._future_connector = None  # attribute to store the ProgressiveFutureConnector
         self.tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button if acquiring
         self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)  # enable/disable button if calibrating
 
@@ -2031,8 +2030,6 @@ class FastEMOverviewTab(Tab):
                                self.tab_data.main.beamshift, self.tab_data.main.det_rotator,
                                calibrations=[Calibrations.OPTICAL_AUTOFOCUS])
         f.add_done_callback(self._on_calibration_done)  # also handles cancelling and exceptions
-        # connect the future to the progress bar and its label
-        self._future_connector = ProgressiveFutureConnector(f, wx.Gauge(), full=False)
         self._update_calibration_controls()
         self.tab_data.is_calib_done.value = False  # don't enable ROA acquisition
 
@@ -2053,7 +2050,6 @@ class FastEMOverviewTab(Tab):
         """
 
         self.tab_data.is_calibrating.value = False
-        self._future_connector = None  # reset connection to the progress bar
 
         try:
             future.result()  # wait until the calibration is done
