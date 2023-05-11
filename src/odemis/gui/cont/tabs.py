@@ -1988,6 +1988,7 @@ class FastEMOverviewTab(Tab):
         self.btn_optical_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_optical_autofocus)
         self.btn_sem_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_sem_autofocus)
         self.btn_autobc.Bind(wx.EVT_BUTTON, self._on_btn_autobc)
+        # TODO The below line should be uncommented once autostigmation is working
         # self.btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
 
         # For Optical Autofocus calibration
@@ -2024,12 +2025,18 @@ class FastEMOverviewTab(Tab):
         self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)
         logging.debug("Starting Optical Autofocus calibration")
         # Start alignment
-        f = fastem.align(self.tab_data.main.ebeam, self.tab_data.main.multibeam,
-                               self.tab_data.main.descanner, self.tab_data.main.mppc,
-                               self.tab_data.main.stage, self.tab_data.main.ccd,
-                               self.tab_data.main.beamshift, self.tab_data.main.det_rotator,
-                               calibrations=[Calibrations.OPTICAL_AUTOFOCUS])
-        f.add_done_callback(self._on_calibration_done)  # also handles cancelling and exceptions
+        f = fastem.align(
+            self.tab_data.main.ebeam,
+            self.tab_data.main.multibeam,
+            self.tab_data.main.descanner,
+            self.tab_data.main.mppc,
+            self.tab_data.main.stage,
+            self.tab_data.main.ccd,
+            self.tab_data.main.beamshift,
+            self.tab_data.main.det_rotator,
+            calibrations=[Calibrations.OPTICAL_AUTOFOCUS],
+        )
+        f.add_done_callback(self._on_optical_autofocus_done)  # also handles cancelling and exceptions
         self._update_calibration_controls()
         self.tab_data.is_calib_done.value = False  # don't enable ROA acquisition
 
@@ -2043,9 +2050,9 @@ class FastEMOverviewTab(Tab):
         self.btn_optical_autofocus.Enable(not mode)
 
     @call_in_wx_main
-    def _on_calibration_done(self, future, _=None):
+    def _on_optical_autofocus_done(self, future, _=None):
         """
-        Called when the calibration is finished (either successfully, cancelled or failed).
+        Called when the optical autofocus calibration is finished (either successfully, cancelled or failed).
         :param future: (ProgressiveFuture) Calibration future object, which can be cancelled.
         """
 
@@ -2065,12 +2072,12 @@ class FastEMOverviewTab(Tab):
                 "Optical Autofocus calibration failed.", logging.WARN
             )
         finally:
-            self._update_calibration_controls()
+            self._update_optical_autofocus_controls()
 
     @wxlimit_invocation(0.1)  # max 10Hz; called in main GUI thread
-    def _update_calibration_controls(self, button_state=True):
+    def _update_optical_autofocus_controls(self, button_state=True):
         """
-        Update the calibration panel controls to be ready for the next calibration.
+        Update the optical autofocus button controls to allow cancelling or a re-run.
         :param button_state: (bool) Enabled or disable button depending on state. Default is enabled.
         """
         self.btn_optical_autofocus.Enable(button_state)  # enable/disable button
