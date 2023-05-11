@@ -2026,14 +2026,15 @@ class Stage(model.Actuator):
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Stage position polling")
         self._pos_poll.start()
 
-    def _updatePosition(self, raw_pos=None):
+    def _updatePosition(self):
         """
         update the position VA
-        raw_pos (dict str -> float): the position (as received from the SEM). If None is passed the current position is
-            requested from the SEM.
         """
-        pos = raw_pos if raw_pos else self._getPosition()
+        old_pos = self.positon.value
+        pos = self._getPosition()
         self.position._set_value(self._applyInversion(pos), force_write=True)
+        if old_pos != self.position.value:
+            logging.debug("Updated position to %s", self.position.value)
 
     def _refreshPosition(self):
         """
@@ -2078,7 +2079,7 @@ class Stage(model.Actuator):
                 if "rz" in pos.keys():
                     pos["r"] = pos.pop("rz")
                 self.parent.move_stage(pos, rel=rel)
-                time.sleep(0.5)
+                time.sleep(0.1)  # It takes a little while before the stage is being reported as moving
 
                 # Wait until the move is over.
                 # Don't check for future._must_stop because anyway the stage will
@@ -2086,18 +2087,35 @@ class Stage(model.Actuator):
                 # not moving.
                 moving = True
                 tstart = time.time()
+                last_pos_update = 0
                 while moving:
-                    # Take the opportunity to update .position
-                    self._updatePosition()
+                    # Take the opportunity to update .position (every 100 ms)
+                    now = time.time()
+                    if now - last_pos_update > 0.1:
+                        self._updatePosition()
+                        last_pos_update = now
 
                     if time.time() > tstart + timeout:
                         self.parent.stop_stage_movement()
                         logging.error("Timeout after submitting stage move. Aborting move.")
                         break
 
-                    # Wait for 50ms so that we do not keep using the CPU all the time.
-                    time.sleep(50e-3)
+                    # Wait for a little while so that we do not keep using the CPU all the time.
+                    time.sleep(20e-3)
                     moving = self.parent.stage_is_moving()
+                    if not moving:
+                        # Be a little careful, because sometimes, half-way through a move
+                        # the stage is reported not moving for a short while (usually,
+                        # when one axis finished moving, and another is about to start).
+                        self._updatePosition()
+                        logging.debug("Confirming the stage really stopped")
+
+                        time.sleep(20e-3)
+                        moving = self.parent.stage_is_moving()
+                        if moving:
+                            logging.warning("Stage reported stopped but moving again, will wait longer")
+                else:
+                    logging.debug("Stage move completed")
 
                 # If it was cancelled, Abort() has stopped the stage before, and
                 # we still have waited until the stage stopped moving. Now let
