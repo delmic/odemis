@@ -17,6 +17,7 @@ jobs:
 
     - name: Stop Ubuntu 18 VM in case running
       run: VBoxManage controlvm "Odemis Testing 18" poweroff
+      continue-on-error: true
 
     - name: Start Ubuntu 18 VM
       run: |

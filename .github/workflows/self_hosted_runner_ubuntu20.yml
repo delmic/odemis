@@ -17,6 +17,7 @@ jobs:
 
     - name: Stop Ubuntu 20 VM in case running
       run: VBoxManage controlvm "Odemis Testing 20" poweroff
+      continue-on-error: true
 
     - name: Start Ubuntu 20 VM
       run: |
