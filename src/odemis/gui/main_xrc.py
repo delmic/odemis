@@ -9965,7 +9965,7 @@ def __init_resources():
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL|wxALIGN_RIGHT</flag>
+              <flag>wxALL</flag>
               <border>23</border>
             </object>
           </object>
@@ -10395,7 +10395,7 @@ def __init_resources():
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxALL|wxALIGN_RIGHT</flag>
+              <flag>wxALL</flag>
               <border>23</border>
             </object>
           </object>
