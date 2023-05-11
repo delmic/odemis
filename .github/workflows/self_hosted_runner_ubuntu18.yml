@@ -15,9 +15,12 @@ jobs:
     - name: List of running VMs
       run: VBoxManage list runningvms
 
+    - name: Stop Ubuntu 18 VM in case running
+      run: VBoxManage controlvm "Odemis Testing 18" poweroff
+
     - name: Start Ubuntu 18 VM
       run: |
-        VBoxManage startvm "Odemis Testing 18" --type headless
+        VBoxManage startvm "Odemis Testing 18"
         sleep 1m
 
     - name: Execute test-cases inside VM
@@ -30,5 +33,5 @@ jobs:
     - name: Unittest report
       run: VBoxManage --nologo guestcontrol "Odemis Testing 18" run --exe "/bin/bash" --username testing --password delmic --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
 
-    - name: Stop the VM
+    - name: Stop Ubuntu 18 VM
       run: VBoxManage controlvm "Odemis Testing 18" poweroff
