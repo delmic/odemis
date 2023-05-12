@@ -1,9 +1,8 @@
 name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
 
 on:
-  [push]
-  # schedule:
-  #   - cron: "0 19 * * 0-4"  # sunday to thursday at 7 pm UTC
+  schedule:
+    - cron: "0 19 * * 0-4"  # sunday to thursday at 7 pm UTC
 
 jobs:
   full_test:
