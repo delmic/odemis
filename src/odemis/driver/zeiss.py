@@ -71,13 +71,20 @@ class SEM(model.HwComponent):
     RemCon option active (might require an extra license).
     """
 
-    def __init__(self, name, role, children, port, daemon=None, **kwargs):
+    def __init__(self, name, role, children, port, eol=RS_EOL, daemon=None, **kwargs):
         """
         port (string): the path of the serial port (e.g., /dev/ttyUSB0) to which
           the RemCon interface is connected. Use "/dev/fake" for a simulator.
+        :param eol: the characters to end a line. Typically, this is CRLF ("\r\n"),
+        but some implementations (eg Point Electronic) use LF ("\r").
         """
 
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
+
+        # eol must be bytes (but we cannot expect that from the YAML file)
+        if isinstance(eol, str):
+            eol = eol.encode("latin1")
+        self._eol = eol
 
         # basic objects to access the device
         self._ser_access = threading.Lock()
@@ -212,7 +219,7 @@ class SEM(model.HwComponent):
         timeout (0<float): maximum time to wait for the response
         returns bytes if successful, otherwise raises error
         """
-        cmd = cmd + RS_EOL
+        cmd = cmd + self._eol
         with self._ser_access:
             logging.debug("Sending command %s", to_str_escape(cmd))
             self._serial.write(cmd)
@@ -220,7 +227,7 @@ class SEM(model.HwComponent):
             # Read the acknowledgement (should come back immediately)
             # eg: @\r\n
             ans = b""
-            while not ans.endswith(RS_EOL):
+            while not ans.endswith(self._eol):
                 char = self._serial.read()
                 if not char:
                     logging.error("Received answer %s, and then timed out", to_str_escape(ans))
@@ -247,7 +254,7 @@ class SEM(model.HwComponent):
                 # should come just after.
                 self._serial.timeout = timeout
                 ans = b""
-                while not ans.endswith(RS_EOL):
+                while not ans.endswith(self._eol):
                     char = self._serial.read()
                     if not char:
                         logging.error("Received answer %s, and then timed out", to_str_escape(ans))
@@ -262,7 +269,7 @@ class SEM(model.HwComponent):
 
             # Value
             status = ans[0:1]
-            value = ans[1:-len(RS_EOL)]
+            value = ans[1:-len(self._eol)]
             if status == RS_SUCCESS:
                 return value
             elif status == RS_FAIL:
@@ -805,8 +812,17 @@ class Scanner(model.Emitter):
                                               unit="rad",
                                               setter=self._setRotation)
 
-        self.blanker = model.VAEnumerated(self.parent.GetBlankBeam(), choices={True, False},
-                                          setter=self._setBlanker)
+        try:
+            self.blanker = model.VAEnumerated(self.parent.GetBlankBeam(), choices={True, False},
+                                              setter=self._setBlanker)
+        except RemconError as err:
+            # The Point Electronic "Leo" simulator doesn't simulate BBL? (only BBLK)
+            # The simplest is to not support the blanker in this case.
+            if err.errno == 0: # invalid command
+                logging.info("No blanker control available, will disable it")
+            else:
+                raise
+            
 
         self.external = model.VAEnumerated(self.parent.GetExternal(), choices={True, False},
                                           setter=self._setExternal)
@@ -815,7 +831,7 @@ class Scanner(model.Emitter):
         #                                          setter=self._setProbeCurrent)
 
         self.accelVoltage = model.FloatContinuous(0,
-                                range=(VOLTAGE_RANGE[0] * 1e3,VOLTAGE_RANGE[1] * 1e3),
+                                range=(VOLTAGE_RANGE[0] * 1e3, VOLTAGE_RANGE[1] * 1e3),
                                 unit="V",
                                 setter=self._setVoltage)
 
@@ -860,10 +876,11 @@ class Scanner(model.Emitter):
                 self.rotation._value = rot
                 self.blanker.notify(rot)
 
-            blanked = self.parent.GetBlankBeam()
-            if blanked != self.blanker.value:
-                self.blanker._value = blanked
-                self.blanker.notify(blanked)
+            if hasattr(self, "blanker"):
+                blanked = self.parent.GetBlankBeam()
+                if blanked != self.blanker.value:
+                    self.blanker._value = blanked
+                    self.blanker.notify(blanked)
             external = self.parent.GetExternal()
             if external != self.external.value:
                 self.external._value = external
