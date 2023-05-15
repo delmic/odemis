@@ -324,6 +324,10 @@ class MicroscopeViewport(ViewPort):
         if model.hasVA(tab_data, "zPos"):
             tab_data.zPos.subscribe(self._on_zPos_change, init=True)
 
+        # Listen to the stage position
+        self._stage_last_pos = {}
+        tab_data.main.stage.position.subscribe(self._on_stage_pos_change, init=True)
+
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
@@ -413,6 +417,16 @@ class MicroscopeViewport(ViewPort):
         if self.bottom_legend:
             self.bottom_legend.set_mag_label(label)
 
+    def UpdateStagePosLabel(self, pos):
+        if self.bottom_legend:
+            if self._stage_last_pos == pos:
+                return
+            x = units.round_significant(pos["x"], 3)
+            y = units.round_significant(pos["y"], 3)
+            label = u"Stage Position x: %s y: %s" % (units.readable_str(x), units.readable_str(y))
+            self.bottom_legend.set_stage_pos_label(label)
+            self._stage_last_pos.update(pos)
+
     ################################################
     #  VA handling
     ################################################
@@ -436,6 +450,10 @@ class MicroscopeViewport(ViewPort):
 
     def _on_zPos_change(self, val):
         self.UpdateZposLabel()
+
+    @call_in_wx_main
+    def _on_stage_pos_change(self, val):
+        self.UpdateStagePosLabel(val)
 
     def _checkMergeSliderDisplay(self):
         """
