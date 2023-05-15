@@ -2117,9 +2117,6 @@ class FastEMOverviewTab(Tab):
     def _on_autofunction_done(self, f):
         self.sem_stream_cont.stream_panel.Enable(True)
         self.sem_stream_cont.resume()
-        # Don't automatically resume stream, autofunctions can take a long time.
-        # The user might not be at the system after the functions complete, so the stream
-        # would play idly.
 
     def on_acquisition(self, is_acquiring):
         # Don't allow changes to acquisition/calibration ROIs during acquisition
