@@ -38,12 +38,12 @@ jobs:
       # The testing user should be automatically be logged in for the display (or the xserver) to be started
       run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --putenv "DISPLAY=:0" --username testing --password "$CI_VM_PASSWORD" --wait-stdout
 
-    - name: Pytest report
+    - name: Summary
       env:
         VM_NAME: ${{ matrix.vm_name }}
       run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password delmic --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/pytest-summary-*.log | tail -n 1)'
 
-    - name: Unittest report
+    - name: Full report
       env:
         VM_NAME: ${{ matrix.vm_name }}
       run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password delmic --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
