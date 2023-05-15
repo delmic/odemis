@@ -933,7 +933,7 @@ def estimateTiledAcquisitionTime(stream, stage, area, dwell_time=None):
         speed of axes into account for time estimation.
     :param area: (float, float, float, float) xmin, ymin, xmax, ymax coordinates of the overview region
         in the sample carrier coordinate system.
-    :param dwell_time: (float) A user set dwell time to be used instead of the stream emitter's dwell time
+    :param dwell_time: (float) A user input dwell time to be used instead of the stream emitter's dwell time
         for acquisition time calculation.
 
     :return: The estimated total acquisition time for the overview image in seconds.
