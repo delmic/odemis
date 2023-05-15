@@ -106,10 +106,10 @@ class Acquirer(object):
                      lim_main, rep, roi)
 
         pos = numpy.empty((rep[1], rep[0], 2), dtype=numpy.float)
-        posy = pos[:,:, 1].swapaxes(0, 1)  # just a view to have Y as last dim
-        posy[:,:] = numpy.linspace(lim_main[1], lim_main[3], rep[1])
+        posy = pos[:, :, 1].swapaxes(0, 1)  # just a view to have Y as last dim
+        posy[:, :] = numpy.linspace(lim_main[1], lim_main[3], rep[1])
         # fill the X dimension
-        pos[:,:, 0] = numpy.linspace(lim_main[0], lim_main[2], rep[0])
+        pos[:, :, 0] = numpy.linspace(lim_main[0], lim_main[2], rep[0])
 
         return pos
 
@@ -137,8 +137,8 @@ class Acquirer(object):
         """
         Computes the center and pixel size of the entire data based on the
         top-left data acquired.
-        datatl (DataArray): first data array acquired
-        return:
+        :param datatl (DataArray): first data array acquired
+        :return:
             center (tuple of floats): position in m of the whole data
             pxs (tuple of floats): pixel size in m of the sub-pixels
         """
@@ -169,7 +169,8 @@ class Acquirer(object):
         :param data: sorted with X fast, Y slow. Each DataArray should be of shape (1,1).
         :return: DataArray with the correct metadata and 5D shape (111YX)
         """
-        # get metadata, no need to ask directly to the component because the metadata is already embedded in the first dataset
+        # Get metadata: just use the one from the first DataArray acquired, and
+        # update the few differences with the complete array.
         logging.debug("Assembling SEM data")
         md = data[0].metadata.copy()
         center, pxs = self.get_center_pxs(data[0])
@@ -180,7 +181,6 @@ class Acquirer(object):
         # Make a big array, and specify that the order is YX
         full_data = model.DataArray(data, metadata=md)
         xres, yres = self.repetition
-        # full_data = numpy.reshape(full_data, [1, 1, 1, yres, xres]) # fails if data wasn't of shape 1,1
         full_data.shape = (1, 1, 1, yres, xres)  # fails if data wasn't of shape 1,1
         return full_data
 
@@ -216,7 +216,12 @@ class Acquirer(object):
 
         self.sed.data.subscribe(self.on_sem_data)
 
-    def on_sem_data(self, df, da):
+    def on_sem_data(self, df: model.DataFlow, da: DataArray) -> None:
+        """
+        Called for each new SEM data (typically, here, a 1x1 image)
+        :param df: the dataflow that generated the data
+        :param da: the data received
+        """
         self._last_sem_data.append(da)
 
         if self._sem_data_received.is_set():
