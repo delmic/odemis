@@ -22,16 +22,17 @@ import math
 import os
 import time
 import unittest
-from concurrent.futures._base import CancelledError
+from concurrent.futures import CancelledError
 from unittest.mock import patch
 
 import odemis
 from odemis import model
 from odemis.acq import orsay_milling, stream
 from odemis.acq.drift import AnchoredEstimator
-from odemis.acq.feature import CryoFeature, FEATURE_ROUGH_MILLED, FEATURE_ACTIVE
-from odemis.acq.millmng import (load_config, MillingRectangleTask, MillingSettings,
-                                mill_features)
+from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_ROUGH_MILLED,
+                                CryoFeature)
+from odemis.acq.millmng import (MillingRectangleTask, MillingSettings,
+                                load_config, mill_features)
 from odemis.acq.move import _isNearPosition
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.util import testing
@@ -39,36 +40,12 @@ from odemis.util import testing
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
 
-TEST_NOHW = os.environ.get("TEST_NOHW", "1")  # Default to hardware testing
-
-if TEST_NOHW == "0":
-    TEST_NOHW = False
-elif TEST_NOHW == "1":
-    TEST_NOHW = True
-else:
-    raise ValueError("Unknown value of environment variable TEST_NOHW=%s" % TEST_NOHW)
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
 
 MILLING_CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../src/odemis/acq/test/"
-
-
-def fake_do_milling(self):
-    """
-    Fake milling function used during simulation
-    """
-    logging.info("Fake Milling a rectangle")
-    time.sleep(5)
-
-
-def fake_do_cancelling(self, future):
-    """
-    Fake milling function used during simulation
-    """
-    logging.info("Cancel Fake Milling a rectangle")
-
-    return True
 
 
 class MillingManagerTestCase(unittest.TestCase):
@@ -77,11 +54,8 @@ class MillingManagerTestCase(unittest.TestCase):
     def setUpClass(cls):
         if TEST_NOHW:
             testing.start_backend(MIMAS_CONFIG)
-            cls.patch_obj = patch.object(orsay_milling.OrsayMilling, 'do_milling', fake_do_milling)
-            cls.patch_obj.start()
-            # mock hardware connections called during cancelling
-            cls.patch_cancel = patch.object(orsay_milling.OrsayMilling, 'cancel_milling', fake_do_cancelling)
-            cls.patch_cancel.start()
+            cls.patch_milling = patch.object(orsay_milling, 'OrsayMilling', orsay_milling.FakeOrsayMilling)
+            cls.patch_milling.start()
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
@@ -147,8 +121,7 @@ class MillingManagerTestCase(unittest.TestCase):
     def tearDownClass(cls):
         cls.stage.moveAbs(cls.target_position[0]).result()
         if TEST_NOHW:
-            cls.patch_obj.stop()
-            # testing.stop_backend()
+            cls.patch_milling.stop()
 
     def setUp(self):
         # reset to current stage position
@@ -241,14 +214,14 @@ class MillingManagerTestCase(unittest.TestCase):
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
-                                            duration=20,
-                                            dc_roi=UNDEFINED_ROI, dc_period=10, dc_dwell_time=10e-6, dc_current=self.probe_current)
+                                            duration=18,
+                                            dc_roi=UNDEFINED_ROI, dc_period=7, dc_dwell_time=10e-6, dc_current=self.probe_current)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
-                                            duration=20,
-                                            dc_roi=UNDEFINED_ROI, dc_period=10, dc_dwell_time=10e-6,
+                                            duration=18,
+                                            dc_roi=UNDEFINED_ROI, dc_period=5, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
 
         millings = [milling_setting_1, milling_setting_2]
@@ -275,15 +248,15 @@ class MillingManagerTestCase(unittest.TestCase):
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
-                                            duration=20,
-                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
+                                            duration=18,
+                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=7, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
 
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
-                                            duration=20,
-                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
+                                            duration=18,
+                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=5, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
 
         millings = [milling_setting_1, milling_setting_2]
@@ -319,16 +292,16 @@ class MillingManagerTestCase(unittest.TestCase):
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.5e-08, 1.5e-08), beam_angle=self.beam_angle,
-                                            duration=120,
-                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
+                                            duration=30,
+                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=5, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
 
         # Testing non-square pixel size, more dense in x direction
         milling_setting_2 = MillingSettings(name='rough_milling_2', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(1.5e-08, 3.5e-08), beam_angle=self.beam_angle,
-                                            duration=120,
-                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=10, dc_dwell_time=10e-6,
+                                            duration=30,
+                                            dc_roi=(0, 0.3, 0.4, 0.7), dc_period=7, dc_dwell_time=10e-6,
                                             dc_current=self.probe_current)
 
         millings = [milling_setting_1, milling_setting_2]
@@ -423,11 +396,6 @@ class MillingManagerTestCase(unittest.TestCase):
             self.assertIsInstance(milling.roi.value, tuple)
             self.assertIsInstance(milling.pixelSize.value, tuple)
 
-    def test_yaml_loader_attribute_types(self):
-        """
-        Test the amount of the milling settings/tasks
-        """
-        millings = load_config(MILLING_CONFIG_PATH + "/milling-series-test-working-config.mill.yaml")
         self.assertEqual(len(millings), 2)
 
     def test_milling_settings_from_yaml(self):
@@ -439,7 +407,7 @@ class MillingManagerTestCase(unittest.TestCase):
         f = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
                           self.sed, self.stage, self.aligner)
 
-        time.sleep(13)
+        time.sleep(13)  # Long enough to make sure it's started
         self.assertTrue(f.running())
         f.cancel()
         with self.assertRaises(CancelledError):

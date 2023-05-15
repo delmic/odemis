@@ -21,6 +21,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+import threading
 import time
 from concurrent import futures
 from typing import Tuple
@@ -316,13 +317,17 @@ class FakeOrsayMilling(OrsayMilling):
         """
         Fake milling function used during simulation
         """
-        logging.info("Fake Milling a rectangle")
-        time.sleep(5)
+        logging.info("Fake rectangle milling of %s s", self.duration)
+        self._fake_milling_stop = threading.Event()
+        if self._fake_milling_stop.wait(1 + self.duration):
+            raise futures.CancelledError()
 
     def cancel_milling(self, future):
         """
         Fake milling function used during simulation
         """
         logging.info("Cancel Fake Milling a rectangle")
+        if hasattr(self, "_fake_milling_stop"):
+            self._fake_milling_stop.set()
 
         return True
