@@ -2155,32 +2155,16 @@ class FastEMOverviewSelectionPanel(wx.Panel):
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
         self.buttons = {}  # int --> wx.Button
         # Dwell time slider variables
-        self._dwell_time_slider_conf = None
-        self._dwell_time_slider_ctrl = None
+        self.dwell_time_slider_conf = None
+        self.dwell_time_slider_ctrl = None
         self._dwell_time_grid_sz = wx.GridBagSizer()
         self._dwell_time_grid_sz.SetEmptyCellSize((0, 0))
 
         self._panel_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._panel_sizer)
 
-    @property
-    def dwell_time_slider_conf(self):
-        return self._dwell_time_slider_conf
-
-    @dwell_time_slider_conf.setter
-    def dwell_time_slider_conf(self, conf: dict):
-        self._dwell_time_slider_conf = conf
-
-    @property
-    def dwell_time_slider_ctrl(self):
-        return self._dwell_time_slider_ctrl
-
-    @dwell_time_slider_ctrl.setter
-    def dwell_time_slider_ctrl(self, ctrl):
-        self._dwell_time_slider_ctrl = ctrl
-
     def _add_dwell_time_slider(self, label_text: str = "Dwell time", value: float = None, conf: dict = None):
-        """ Add an float value slider to the overview acquistion panel
+        """ Add a dwell time float value slider to the overview acquisition panel
 
         :param label_text: (str) Label text to display
         :param value: (None or float) Value to display
@@ -2190,10 +2174,10 @@ class FastEMOverviewSelectionPanel(wx.Panel):
         # Create label
         lbl_ctrl = wx.StaticText(self, -1, str(label_text))
         self._dwell_time_grid_sz.Add(lbl_ctrl, (0, 0),
-                          flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+                                     flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         value_ctrl = UnitFloatSlider(self, value=value, **conf)
         self._dwell_time_grid_sz.Add(value_ctrl, (0, 1),
-                          flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+                                     flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
         return value_ctrl
 
     def create_controls(self, layout, add_dwell_time_slider: bool = False):
@@ -2211,7 +2195,7 @@ class FastEMOverviewSelectionPanel(wx.Panel):
             line_ctrl = wx.StaticLine(self, size=(-1, 1))
             line_ctrl.SetBackgroundColour(gui.BG_COLOUR_SEPARATOR)
             self._dwell_time_grid_sz.Add(line_ctrl, (1, 0), span=(1, 2),
-                          flag=wx.ALL | wx.EXPAND, border=5)
+                                         flag=wx.ALL | wx.EXPAND, border=5)
         nrows = len(layout)
         ncols = max(len(row) for row in layout)
         calgrid_sz = wx.GridBagSizer(nrows, ncols)

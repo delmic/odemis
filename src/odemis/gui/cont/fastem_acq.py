@@ -186,11 +186,10 @@ class FastEMOverviewAcquiController(object):
                 sz = self._tab_data_model.main.scintillator_size
                 coords = (center[0] - sz[0] / 2, center[1] - sz[1] / 2,
                           center[0] + sz[0] / 2, center[1] + sz[1] / 2)
-                dwell_time = (
-                    self.selection_panel.dwell_time_slider_ctrl.GetValue()
-                    if self.add_dwell_time_slider
-                    else None
-                )
+                if self.add_dwell_time_slider:
+                    dwell_time = self.selection_panel.dwell_time_slider_ctrl.GetValue()
+                else:
+                    dwell_time = None
                 acq_time += fastem.estimateTiledAcquisitionTime(
                     self._tab_data_model.streams.value[0],
                     self._main_data_model.stage,
