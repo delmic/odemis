@@ -1373,47 +1373,15 @@ class StreamController(object):
 
     def _add_fastem_ctrls(self):
         self.stream_panel.add_divider()
+        # Create the immersion mode button
+        _, cbox_immersion_mode = self.stream_panel.add_checkbox_control(
+            label_text="Immersion Mode", value=self.stream.emitter.immersion.value
+        )
 
-        # FIXME uncomment autostigmation, when the functionality is working correctly.
-        _, btn_autofocus = self.stream_panel.add_run_btn("Autofocus")
-        _, btn_autobc = self.stream_panel.add_run_btn("Auto-brightness/contrast")
-        # _, btn_autostigmation = self.stream_panel.add_run_btn("Autostigmation")
-
-        btn_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_autofocus)
-        btn_autobc.Bind(wx.EVT_BUTTON, self._on_btn_autobc)
-        # btn_autostigmation.Bind(wx.EVT_BUTTON, self._on_btn_autostigmation)
-
-    @call_in_wx_main
-    def _on_btn_autofocus(self, _):
-        self.stream_panel.Enable(False)
-        self.pause()
-        self.pauseStream()
-        f = self.stream.focuser.applyAutofocus(self.stream.detector)
-        f.add_done_callback(self._on_autofunction_done)
-
-    @call_in_wx_main
-    def _on_btn_autobc(self, _):
-        self.stream_panel.Enable(False)
-        self.pause()
-        self.pauseStream()
-        f = self.stream.detector.applyAutoContrastBrightness()
-        f.add_done_callback(self._on_autofunction_done)
-
-    @call_in_wx_main
-    def _on_btn_autostigmation(self, _):
-        self.stream_panel.Enable(False)
-        self.pause()
-        self.pauseStream()
-        f = self.stream.emitter.applyAutoStigmator(self.stream.detector)
-        f.add_done_callback(self._on_autofunction_done)
-
-    @call_in_wx_main
-    def _on_autofunction_done(self, f):
-        self.stream_panel.Enable(True)
-        self.resume()
-        # Don't automatically resume stream, autofunctions can take a long time.
-        # The user might not be at the system after the functions complete, so the stream
-        # would play idly.
+        # Store a setting entry for the immersion mode button
+        se = SettingEntry(name="immersion_mode", va=self.stream.emitter.immersion,
+                          stream=self.stream, value_ctrl=cbox_immersion_mode, events=wx.EVT_CHECKBOX)
+        self.entries.append(se)
 
 
 class StreamBarController(object):
