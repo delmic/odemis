@@ -2043,7 +2043,7 @@ class FastEMOverviewTab(Tab):
             calibrations=[Calibrations.OPTICAL_AUTOFOCUS],
         )
         f.add_done_callback(self._on_optical_autofocus_done)  # also handles cancelling and exceptions
-        self._update_calibration_controls()
+        self._update_optical_autofocus_controls()
         self.tab_data.is_calib_done.value = False  # don't enable ROA acquisition
 
     @call_in_wx_main
