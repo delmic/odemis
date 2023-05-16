@@ -130,6 +130,7 @@ class InfoLegend(wx.Panel):
         self.stage_pos_text.SetBackgroundColour(parent.GetBackgroundColour())
         self.stage_pos_text.SetForegroundColour(parent.GetForegroundColour())
         self.stage_pos_text.SetToolTip("Current Stage Position")
+        self.stage_pos_text.Hide()
 
         # Feature show/hide button
         self._feature_toggle_va = None
