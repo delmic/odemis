@@ -58,12 +58,10 @@ class FastEMOverviewAcquiController(object):
     Takes care of the overview image acquisition in the FastEM overview tab.
     """
 
-    def __init__(self, tab_data, tab_panel, add_dwell_time_slider=True):
+    def __init__(self, tab_data, tab_panel):
         """
         tab_data (FastEMGUIData): the representation of the microscope GUI
         tab_panel: (wx.Frame): the frame which contains the viewport
-        add_dwell_time_slider: (bool): flag to add dwell time slider to accept
-            user input dwell time for acquistion
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
@@ -81,27 +79,23 @@ class FastEMOverviewAcquiController(object):
         self.selection_panel = self._tab_panel.selection_panel
 
         # For dwell time slider
-        self.add_dwell_time_slider = add_dwell_time_slider
-        if self.add_dwell_time_slider:
-            self.current_dwell_time = self._main_data_model.ebeam.dwellTime.value
-            ebeam_conf = get_hw_config(tab_data.main.ebeam, tab_data.main.hw_settings_config).get(
-                "dwellTime"
-            )
-            min_val, max_val, _, unit = process_setting_metadata(
-                tab_data.main.ebeam, tab_data.main.ebeam.dwellTime, ebeam_conf
-            )
-            dwell_time_conf = {
-                'min_val': min_val,
-                'max_val': max_val,
-                'scale': ebeam_conf.get('scale', None),
-                'unit': unit,
-                'accuracy': ebeam_conf.get('accuracy', 4),
-            }
-            self.selection_panel.dwell_time_slider_conf = dwell_time_conf
+        ebeam_conf = get_hw_config(tab_data.main.ebeam, tab_data.main.hw_settings_config).get(
+            "dwellTime"
+        )
+        min_val, max_val, _, unit = process_setting_metadata(
+            tab_data.main.ebeam, tab_data.main.ebeam.dwellTime, ebeam_conf
+        )
+        dwell_time_conf = {
+            'min_val': min_val,
+            'max_val': max_val,
+            'scale': ebeam_conf.get('scale', None),
+            'unit': unit,
+            'accuracy': ebeam_conf.get('accuracy', 4),
+        }
 
         # Create grid of buttons for scintillator selection
         self.selection_panel.create_controls(
-            tab_data.main.scintillator_layout, add_dwell_time_slider=self.add_dwell_time_slider
+            tab_data.main.scintillator_layout, dwell_time_slider_conf=dwell_time_conf
         )
         for btn in self.selection_panel.buttons.values():
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_selection_button)
@@ -121,13 +115,9 @@ class FastEMOverviewAcquiController(object):
         self._tab_data_model.is_calib_done.subscribe(self._on_va_change, init=True)
 
         # Bind the dwell time slider control to update acquisition time
-        # Else update the estimated acquisition time based on scanner dwell time changes
-        if self.add_dwell_time_slider:
-            self.selection_panel.dwell_time_slider_ctrl.Bind(
-                wx.EVT_SLIDER, self.update_acquisition_time
-            )
-        else:
-            tab_data.main.ebeam.dwellTime.subscribe(self.update_acquisition_time)
+        self.selection_panel.dwell_time_slider_ctrl.Bind(
+            wx.EVT_SLIDER, self.update_acquisition_time
+        )
 
     def _on_va_change(self, _):
         self.check_acquire_button()
@@ -186,15 +176,11 @@ class FastEMOverviewAcquiController(object):
                 sz = self._tab_data_model.main.scintillator_size
                 coords = (center[0] - sz[0] / 2, center[1] - sz[1] / 2,
                           center[0] + sz[0] / 2, center[1] + sz[1] / 2)
-                if self.add_dwell_time_slider:
-                    dwell_time = self.selection_panel.dwell_time_slider_ctrl.GetValue()
-                else:
-                    dwell_time = None
                 acq_time += fastem.estimateTiledAcquisitionTime(
                     self._tab_data_model.streams.value[0],
                     self._main_data_model.stage,
                     coords,
-                    dwell_time=dwell_time
+                    dwell_time=self.selection_panel.dwell_time_slider_ctrl.GetValue()
                 )
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
@@ -239,10 +225,8 @@ class FastEMOverviewAcquiController(object):
         self.btn_cancel.Enable(True)
         self.btn_cancel.Show()
         self.gauge_acq.Show()
-        if self.add_dwell_time_slider:
-            self.selection_panel.dwell_time_slider_ctrl.Enable(False)
-            self.current_dwell_time = self._main_data_model.ebeam.dwellTime.value
-            self._main_data_model.ebeam.dwellTime.value = self.selection_panel.dwell_time_slider_ctrl.GetValue()
+        self.selection_panel.dwell_time_slider_ctrl.Enable(False)
+        self._main_data_model.ebeam.dwellTime.value = self.selection_panel.dwell_time_slider_ctrl.GetValue()
 
         self.gauge_acq.Range = len(self._tab_data_model.selected_scintillators.value)
         self.gauge_acq.Value = 0
@@ -316,9 +300,7 @@ class FastEMOverviewAcquiController(object):
         """
         self.gauge_acq.Hide()
         self._main_data_model.is_acquiring.value = False
-        if self.add_dwell_time_slider:
-            self._main_data_model.ebeam.dwellTime.value = self.current_dwell_time
-            self.selection_panel.dwell_time_slider_ctrl.Enable(True)
+        self.selection_panel.dwell_time_slider_ctrl.Enable(True)
         try:
             future.result()
             self._reset_acquisition_gui("Acquisition done.")
