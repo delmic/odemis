@@ -1071,6 +1071,13 @@ class ActuatorGUIData(MicroscopyGUIData):
                 "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", {"y"}),
             })
 
+        if main.spec_sel:
+            # SPARCv2 light aligner dichroic mirror
+            ss_def.update({
+                "light_aligner": (1e-6, [100e-9, 1e-4], "light_aligner", None),
+            })
+
+
         # str -> VA: name (as the name of the attribute) -> step size (m)
         self.stepsizes = {}
 

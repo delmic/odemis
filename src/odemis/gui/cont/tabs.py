@@ -100,7 +100,7 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter, VigilantAttributeConnector
-from odemis.util import units, spot, limit_invocation, almost_equal, fluo
+from odemis.util import units, spot, limit_invocation, almost_equal, fluo, executeAsyncTask
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.driver import ATOL_LINEAR_POS
 from odemis.util.units import readable_str
@@ -6325,17 +6325,22 @@ class Sparc2AlignTab(Tab):
 
         if "specswitch-align" not in tab_data.align_mode.choices:
             # TODO add applicable code for spec-selector settings.
-            # hide the button of spec-selector not a valid mode
+            # hide the applicable panels when specswitch-align is not in the list of modes
             # else bind the button click event
-            self.panel.pnl_specswitch.Destroy()
+            self.panel.pnl_specswitch.Show(False)
+            self.panel.pnl_light_aligner.Show(False)
         else:
             # disable the button for alignment of the parabolic mirror as well as the panel
             self.panel.btn_align_mirror.Enable(False)
             self.panel.pnl_mirror.Enable(False)
             self.panel.btn_specswitch.Bind(wx.EVT_BUTTON, self._on_specswitch_align)
+            # the current mode/spec-selector state always start on internal
             self.specswitch_internal = True  # Which mode is currently active
+            # future for moving the mirror to an absolute position
             self._specswitch_f = model.InstantaneousFuture()
-            self._pfc_specswitch = None  # For showing the autofocus progress
+            # future and progress connector for tracking the progress of the gauge when moving
+            self._gauge_f = None
+            self._pfc_specswitch = None
 
         # Switch between alignment modes
         # * lens-align: first auto-focus spectrograph, then align lens1
@@ -6714,7 +6719,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(True)
         elif mode == "specswitch-align":
-            # enable the two laser buttons to be able to switch between
+            # enable the toggle button to be able to switch between laser modes
             pass
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
@@ -7151,10 +7156,12 @@ class Sparc2AlignTab(Tab):
         if active:
             # TODO request the fake or real stream here
             main = self.tab_data_model.main
-            # ss = self._focus_streams
-            gauge = self.panel.gauge_specswitch
             # spec_sel = model.getComponent(role='spec-selector')
             spec_sel = main.spec_sel.getMetadata()
+
+            # show the gauge if it is hidden
+            if not self.panel.gauge_specswitch.IsShown():
+                self.panel.gauge_specswitch.Show()
 
             # disable the button while the mirror is moving
             self.panel.btn_specswitch.Enable(False)
@@ -7170,13 +7177,14 @@ class Sparc2AlignTab(Tab):
             if self.tab_data_model.main.spec_sel:
                 self.tab_data_model.main.spec_sel.position.subscribe(self._onSpecSwitchPos)
 
-            # Move to the right spectograph position
+            # Move the mirror to the right position
             self._specswitch_f = main.spec_sel.moveAbs(pos)
-            # self._specswitch_f = self.move_specswitch_mirror(pos)
             self._specswitch_f.add_done_callback(self._on_specswitch_align_done)
 
+            self._gauge_f = self.move_specswitch_mirror(pos)
+
             # Update GUI
-            # self._pfc_specswitch = ProgressiveFutureConnector(self._specswitch_f, gauge)
+            self._pfc_specswitch = ProgressiveFutureConnector(self._gauge_f, self.panel.gauge_specswitch)
         else:
             # Cancel task?? if we reached here via the GUI cancel button
             pass
@@ -7185,43 +7193,37 @@ class Sparc2AlignTab(Tab):
         main = self.tab_data_model.main
         est_start = time.time() + 0.1
 
-        # Rough approximation of the times of each action:
-        # * 5 s to turn on the light
-        # * 5 s to close the slit
-        # * af_time s for the AutoFocusSpectrometer procedure to be completed
-        # * 0.2 s to acquire one last image
-        # * 0.1 s to turn off the light
-        # if start_autofocus:
-        #     # calculate the time needed for the AutoFocusSpectrometer procedure to be completed
-        #     af_time = _totalAutoFocusTime(spgr, dets)
-        #     autofocus_loading_times = (5, 5, af_time, 0.2, 5)  # a list with the time that each action needs
-        # else:
-        #     autofocus_loading_times = (5, 5)
+        current_pos = main.spec_sel.position.value
+        current_speed = main.spec_sel.speed.value
+        mirror_move_time = abs((current_pos.pop('x') - pos.pop('x')) / current_speed.pop('x'))
 
-        f = model.ProgressiveFuture(start=est_start, end=est_start + sum(autofocus_loading_times))
-        f._autofocus_state = RUNNING
-        # Time for each action left
-        f._actions_time = list(autofocus_loading_times)
-        # f.task_canceller = _CancelSparc2AutoFocus
-        f._autofocus_lock = threading.Lock()
-        f._running_subf = model.InstantaneousFuture()
+        f = model.ProgressiveFuture(start=est_start, end=est_start + mirror_move_time)
+        f._running_subf = main.spec_sel.moveAbs(pos)
 
         # Run in separate thread
-        executeAsyncTask(f, main.spec_sel.moveAbs(pos),
-                         args=(f, streams, align_mode, opm, dets, spgr, selector, focuser, start_autofocus))
+        #executeAsyncTask(f, main.spec_sel.moveAbs(pos))
         return f
 
-    def _on_specswitch_align_done(self, future):
+    def _on_specswitch_align_done(self, _):
         btn = self.panel.btn_specswitch
+        btn.SetValue(False)
+        self._gauge_f.cancel()
+
+        if self.panel.gauge_specswitch.IsShown():
+            self.panel.gauge_specswitch.Hide()
 
         if btn.Label == "Internal":
             btn.SetLabel("External")
             self.specswitch_internal = False
             self.panel.btn_specswitch.Enable(True)
+            self.panel.pnl_light_aligner.Enable(False)
         else:
             btn.SetLabel("Internal")
             self.specswitch_internal = True
             self.panel.btn_specswitch.Enable(True)
+
+            # TODO where is the best spot to enable/disable this panel??
+            self.panel.pnl_light_aligner.Enable(True)
 
     def _onBkgAcquire(self, evt):
         """
@@ -7408,7 +7410,7 @@ class Sparc2AlignTab(Tab):
 
         # Save the axis position as the "calibrated" one
         # ss = self.tab_data_model.main.spec_sel
-        logging.debug("Updating the active spec-switch X position to %s", pos)
+        logging.debug("Updating the active spec-selector X position to %s", pos)
         # ss.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
 
     def _onFiberPos(self, pos):
