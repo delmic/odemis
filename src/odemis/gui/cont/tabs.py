@@ -650,6 +650,7 @@ class LocalizationTab(Tab):
             self.tab_data_model.autofocus_active.value = False
         wx.CallAfter(self.tb.enable_button, TOOL_AUTO_FOCUS, f_enable)
 
+    @call_in_wx_main
     def _on_acquired_streams(self, streams):
         """
         Filter out deleted acquired streams (features and overview) from their respective origin
@@ -1631,6 +1632,7 @@ class SparcAcquisitionTab(Tab):
             cur_stream.is_active.value = True
         self.panel.vp_sparc_tl.canvas.fit_view_to_next_image = True
 
+    @call_in_wx_main
     def on_acquisition(self, is_acquiring):
         # TODO: Make sure nothing can be modified during acquisition
 
@@ -2128,6 +2130,7 @@ class FastEMOverviewTab(Tab):
         # The user might not be at the system after the functions complete, so the stream
         # would play idly.
 
+    @call_in_wx_main
     def on_acquisition(self, is_acquiring):
         # Don't allow changes to acquisition/calibration ROIs during acquisition
         if is_acquiring:

@@ -19,6 +19,7 @@ from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.comp.combo import ComboBox
 import logging
 import wx
+from odemis.gui.util import call_in_wx_main
 
 
 # Known good key bindings
@@ -161,6 +162,7 @@ class ActuatorController(object):
 
         tab_data.main.is_acquiring.subscribe(self._on_acquisition)
 
+    @call_in_wx_main
     def _on_acquisition(self, acquiring):
         self._enable_buttons(not acquiring)
 
