@@ -1,0 +1,55 @@
+name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
+
+on:
+  schedule:
+    - cron: "0 19 * * 0-4"  # sunday to thursday at 7 pm UTC
+
+jobs:
+  full_test:
+    runs-on: [self-hosted, Linux]
+    timeout-minutes: 1200
+    strategy:
+      matrix:
+        vm_name: ["Odemis Testing 18", "Odemis Testing 20"]
+    steps:
+    - name: List of all VMs
+      run: VBoxManage list vms
+
+    - name: List of running VMs
+      run: VBoxManage list runningvms
+
+    - name: Stop VM in case its running
+      env:
+        VM_NAME: ${{ matrix.vm_name }}
+      run: VBoxManage controlvm "$VM_NAME" poweroff
+      continue-on-error: true
+
+    - name: Start VM
+      env:
+        VM_NAME: ${{ matrix.vm_name }}
+      run: |
+        VBoxManage startvm "$VM_NAME"
+        sleep 1m
+
+    - name: Execute test-cases inside VM
+      env:
+        # See in GitHub Settings/Security sidebar/Secrets and variables/Actions/Secrets tab/Repository secrets
+        CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
+        VM_NAME: ${{ matrix.vm_name }}
+      # The testing user should be automatically be logged in for the display (or the xserver) to be started
+      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --putenv "DISPLAY=:0" --username testing --password "$CI_VM_PASSWORD" --wait-stdout
+
+    - name: Summary
+      env:
+        VM_NAME: ${{ matrix.vm_name }}
+      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password delmic --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/pytest-summary-*.log | tail -n 1)'
+
+    - name: Full report
+      env:
+        VM_NAME: ${{ matrix.vm_name }}
+      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password delmic --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
+
+    - name: Stop VM
+      env:
+        VM_NAME: ${{ matrix.vm_name }}
+      run: VBoxManage controlvm "$VM_NAME" poweroff
