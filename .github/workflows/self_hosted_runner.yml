@@ -33,6 +33,7 @@ jobs:
 
     - name: Execute test-cases inside VM
       env:
+        # See in GitHub Settings/Security sidebar/Secrets and variables/Actions/Secrets tab/Repository secrets
         CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
       # The testing user should be automatically be logged in for the display (or the xserver) to be started
