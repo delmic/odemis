@@ -494,7 +494,6 @@ class TestMimasMove(unittest.TestCase):
 
         cls.stage_active = cls.stage.getMetadata()[model.MD_FAV_POS_ACTIVE]
         cls.stage_deactive = cls.stage.getMetadata()[model.MD_FAV_POS_DEACTIVE]
-        cls.stage_coating = cls.stage.getMetadata()[model.MD_FAV_POS_COATING]
         cls.align_deactive = cls.aligner.getMetadata()[model.MD_FAV_POS_DEACTIVE]
         cls.align_active = cls.aligner.getMetadata()[model.MD_FAV_POS_ACTIVE]
 
@@ -512,6 +511,8 @@ class TestMimasMove(unittest.TestCase):
         """
         stage = self.stage
         align = self.aligner
+        gis_choices = self.gis.axes["arm"].choices
+
         # Get the stage to loading position
         cryoSwitchSamplePosition(LOADING).result()
         testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
@@ -519,13 +520,14 @@ class TestMimasMove(unittest.TestCase):
         # Align should be parked
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
         # GIS should be parked
-        gis_choices = self.gis.axes["arm"].choices
         self.assertEqual(gis_choices[self.gis.position.value["arm"]], "parked")
 
-        # Get the stage to coating position
+        # Go to coating position: in MIMAS, that's the imaging position, with the GIS being engaged
         f = cryoSwitchSamplePosition(COATING)
         f.result()
-        testing.assert_pos_almost_equal(stage.position.value, self.stage_coating, atol=ATOL_LINEAR_POS)
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS)
+        # GIS engaged
+        self.assertEqual(gis_choices[self.gis.position.value["arm"]], "engaged")
         # Align should be parked
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
         pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
@@ -541,7 +543,7 @@ class TestMimasMove(unittest.TestCase):
         self.assertEqual(pos_label, FM_IMAGING)
 
         # Test the progress update
-        progress_fm = getMovementProgress(stage.position.value, self.stage_coating, self.stage_active)
+        progress_fm = getMovementProgress(stage.position.value, self.stage_deactive, self.stage_active)
         self.assertAlmostEqual(progress_fm, 1)
 
         # Move a little bit around => still in FM_IMAGING
@@ -553,14 +555,12 @@ class TestMimasMove(unittest.TestCase):
         # Get the stage to FIB
         f = cryoSwitchSamplePosition(MILLING)
         f.result()
-        testing.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS)
+        # The stage shouldn't have moved
+        testing.assert_pos_almost_equal(stage.position.value, current_pos)
         # Align should be parked
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
         pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
         self.assertEqual(pos_label, MILLING)
-
-        # The stage shouldn't have moved
-        testing.assert_pos_almost_equal(stage.position.value, current_pos)
 
         # Switch back to loading position
         cryoSwitchSamplePosition(LOADING).result()

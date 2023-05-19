@@ -178,9 +178,6 @@ MIMAS-Sim: {
 
         # Loading position (should NOT be within the POS_ACTIVE_RANGE)
         FAV_POS_DEACTIVE: {"x": 0, "y": 0, "z": -3.0e-3, 'rx': 0, "ry": 0, "rz": 0},
-        # Initial position when coating
-        # TODO: can it change a lot if coating is need for every grid? In such case, we might need a range
-        FAV_POS_COATING: {"x": -0.008, "y": -0.007, "z": -1.0e-3, "rx": 0, "ry": 0, "rz": 0},
         # Safe ranges for imaging (FM/FIB)
         # Note: for the Z, that's the "safe" range, and the "Stage Focus" should have a subset range used to limit the autofocus
         POS_ACTIVE_RANGE: {"x": [-9.0e-3, 9.0e-3], "y": [-6.0e-3, 6.0e-3], "z": [-0.5e-3, 4.0e-3],
