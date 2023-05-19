@@ -33,7 +33,7 @@ jobs:
         Xvfb "$DISPLAY" -screen 0 1920x1280x24 -ac &
         XVFB_PID=$!
         echo "Started Xvfb with PID $XVFB_PID"
-        echo "::set-env name=XVFB_PID::$XVFB_PID"
+        echo "XVFB_PID=$XVFB_PID" >> "$GITHUB_ENV"
         VBoxManage startvm "$VM_NAME" --putenv "DISPLAY=:1"
         sleep 1m
 
@@ -60,6 +60,7 @@ jobs:
     - name: Stop VM
       env:
         VM_NAME: ${{ matrix.vm_name }}
+        XVFB_PID: ${{ env.XVFB_PID }}
       run: |
         VBoxManage controlvm "$VM_NAME" poweroff
         echo "Killing Xvfb with PID $XVFB_PID"
