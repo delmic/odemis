@@ -1,8 +1,9 @@
 name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
 
 on:
-  schedule:
-    - cron: "0 19 * * 0-4"  # sunday to thursday at 7 pm UTC
+  [push]
+  # schedule:
+  #   - cron: "0 19 * * 0-4"  # sunday to thursday at 7 pm UTC
 
 jobs:
   full_test:
@@ -28,7 +29,10 @@ jobs:
       env:
         VM_NAME: ${{ matrix.vm_name }}
       run: |
-        VBoxManage startvm "$VM_NAME"
+        export DISPLAY=:1
+        Xvfb "$DISPLAY" -screen 0 1920x1280x24 -ac &
+        XVFB_PID=$!
+        VBoxManage startvm "$VM_NAME" --putenv "DISPLAY=:1"
         sleep 1m
 
     - name: Execute test-cases inside VM
@@ -41,15 +45,19 @@ jobs:
 
     - name: Summary
       env:
+        CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
-      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password delmic --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/pytest-summary-*.log | tail -n 1)'
+      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password "$CI_VM_PASSWORD" --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/pytest-summary-*.log | tail -n 1)'
 
     - name: Full report
       env:
+        CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
-      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password delmic --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
+      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password "$CI_VM_PASSWORD" --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
 
     - name: Stop VM
       env:
         VM_NAME: ${{ matrix.vm_name }}
-      run: VBoxManage controlvm "$VM_NAME" poweroff
+      run: |
+        VBoxManage controlvm "$VM_NAME" poweroff
+        kill -9 $XVFB_PID
