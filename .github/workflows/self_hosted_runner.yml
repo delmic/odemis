@@ -21,35 +21,45 @@ jobs:
     - name: Stop VM in case its running
       env:
         VM_NAME: ${{ matrix.vm_name }}
-      run: VBoxManage controlvm "$VM_NAME" poweroff
+      run: VBoxManage controlvm "$VM_NAME" acpipowerbutton
       continue-on-error: true
 
-    - name: Start VM
-      env:
-        VM_NAME: ${{ matrix.vm_name }}
-      run: |
-        VBoxManage startvm "$VM_NAME"
-        sleep 1m
-
-    - name: Execute test-cases inside VM
+    - name: Start VM and execute test-cases inside VM
       env:
         # See in GitHub Settings/Security sidebar/Secrets and variables/Actions/Secrets tab/Repository secrets
         CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
-      # The testing user should be automatically be logged in for the display (or the xserver) to be started
-      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --putenv "DISPLAY=:0" --username testing --password "$CI_VM_PASSWORD" --wait-stdout
+      # The testing user should automatically be logged in for the display (or the xserver) to be started
+      # Create a display server implementing the X11 display server protocol using Xvfb
+      # Pass the created DISPLAY to the Virtual Machine while starting it
+      run: |
+        export DISPLAY=:1
+        Xvfb "$DISPLAY" -screen 0 1920x1280x24 -ac &
+        XVFB_PID=$!
+        echo "Started Xvfb with PID $XVFB_PID"
+        echo "XVFB_PID=$XVFB_PID" >> "$GITHUB_ENV"
+        VBoxManage startvm "$VM_NAME" --putenv "DISPLAY=:1"
+        sleep 1m
+        VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --putenv "DISPLAY=:0" --username testing --password "$CI_VM_PASSWORD" --wait-stdout
 
     - name: Summary
       env:
+        CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
-      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password delmic --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/pytest-summary-*.log | tail -n 1)'
+      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password "$CI_VM_PASSWORD" --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/pytest-summary-*.log | tail -n 1)'
 
     - name: Full report
       env:
+        CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
-      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password delmic --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
+      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password "$CI_VM_PASSWORD" --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
 
     - name: Stop VM
       env:
         VM_NAME: ${{ matrix.vm_name }}
-      run: VBoxManage controlvm "$VM_NAME" poweroff
+        XVFB_PID: ${{ env.XVFB_PID }}
+      run: |
+        VBoxManage controlvm "$VM_NAME" acpipowerbutton
+        sleep 10s
+        echo "Killing Xvfb with PID $XVFB_PID"
+        kill -9 $XVFB_PID
