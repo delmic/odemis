@@ -31,6 +31,8 @@ jobs:
         CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
       # The testing user should automatically be logged in for the display (or the xserver) to be started
+      # Create a display server implementing the X11 display server protocol using Xvfb
+      # Pass the created DISPLAY to the Virtual Machine while starting it
       run: |
         export DISPLAY=:1
         Xvfb "$DISPLAY" -screen 0 1920x1280x24 -ac &
@@ -58,7 +60,7 @@ jobs:
         VM_NAME: ${{ matrix.vm_name }}
         XVFB_PID: ${{ env.XVFB_PID }}
       run: |
-        VBoxManage controlvm "$VM_NAME" poweroff
+        VBoxManage controlvm "$VM_NAME" acpipowerbutton
         sleep 10s
         echo "Killing Xvfb with PID $XVFB_PID"
         kill -9 $XVFB_PID
