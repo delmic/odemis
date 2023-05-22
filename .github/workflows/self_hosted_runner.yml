@@ -25,9 +25,12 @@ jobs:
       run: VBoxManage controlvm "$VM_NAME" poweroff
       continue-on-error: true
 
-    - name: Start VM
+    - name: Start VM and execute test-cases inside VM
       env:
+        # See in GitHub Settings/Security sidebar/Secrets and variables/Actions/Secrets tab/Repository secrets
+        CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
+      # The testing user should automatically be logged in for the display (or the xserver) to be started
       run: |
         export DISPLAY=:1
         Xvfb "$DISPLAY" -screen 0 1920x1280x24 -ac &
@@ -36,14 +39,7 @@ jobs:
         echo "XVFB_PID=$XVFB_PID" >> "$GITHUB_ENV"
         VBoxManage startvm "$VM_NAME" --putenv "DISPLAY=:1"
         sleep 1m
-
-    - name: Execute test-cases inside VM
-      env:
-        # See in GitHub Settings/Security sidebar/Secrets and variables/Actions/Secrets tab/Repository secrets
-        CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
-        VM_NAME: ${{ matrix.vm_name }}
-      # The testing user should be automatically be logged in for the display (or the xserver) to be started
-      run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --putenv "DISPLAY=:0" --username testing --password "$CI_VM_PASSWORD" --wait-stdout
+        VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --putenv "DISPLAY=:0" --username testing --password "$CI_VM_PASSWORD" --wait-stdout
 
     - name: Summary
       env:
@@ -63,5 +59,6 @@ jobs:
         XVFB_PID: ${{ env.XVFB_PID }}
       run: |
         VBoxManage controlvm "$VM_NAME" poweroff
+        sleep 10s
         echo "Killing Xvfb with PID $XVFB_PID"
         kill -9 $XVFB_PID
