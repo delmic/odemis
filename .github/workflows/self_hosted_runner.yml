@@ -1,9 +1,8 @@
 name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
 
 on:
-  [push]
-  # schedule:
-  #   - cron: "0 19 * * 0-4"  # sunday to thursday at 7 pm UTC
+  schedule:
+    - cron: "0 19 * * 0-4"  # sunday to thursday at 7 pm UTC
 
 jobs:
   full_test:
@@ -22,7 +21,7 @@ jobs:
     - name: Stop VM in case its running
       env:
         VM_NAME: ${{ matrix.vm_name }}
-      run: VBoxManage controlvm "$VM_NAME" poweroff
+      run: VBoxManage controlvm "$VM_NAME" acpipowerbutton
       continue-on-error: true
 
     - name: Start VM and execute test-cases inside VM
