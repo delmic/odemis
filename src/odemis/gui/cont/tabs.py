@@ -488,10 +488,13 @@ class LocalizationTab(Tab):
 
         main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
 
-        self._serial_milling_controller = milling.MillingButtonController(
-            tab_data,
-            panel
-        )
+        # For now, only possible to mill on the MIMAS. Eventually, this could be
+        # dependent on the availability of the ion-beam component.
+        if self.main_data.role == "mimas":
+            self._serial_milling_controller = milling.MillingButtonController(
+                tab_data,
+                panel
+            )
 
     @property
     def settingsbar_controller(self):
