@@ -2142,23 +2142,70 @@ class FastEMCalibrationPanel(wx.Panel):
 
 class FastEMOverviewSelectionPanel(wx.Panel):
     """
-    Panel for the calibration buttons.
+    Panel containing scintillator toggle buttons based on the layout of scintillator grid.
     """
 
     def __init__(self, parent,
                  wid=wx.ID_ANY, pos=wx.DefaultPosition, size=wx.DefaultSize,
-                 style=wx.CP_DEFAULT_STYLE, name="CalibrationPanel"):
+                 style=wx.CP_DEFAULT_STYLE, name="OverviewSelectionPanel"):
         """
         layout (list of lists of int): layout of scintillator grid, given as 2D list of scintillator positions,
         e.g. [[6, 5, 4], [3, 2, 1]]
         """
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
         self.buttons = {}  # int --> wx.Button
+        # Dwell time slider variables
+        self.dwell_time_slider_ctrl = None
+        self._dwell_time_grid_sz = wx.GridBagSizer()
+        self._dwell_time_grid_sz.SetEmptyCellSize((0, 0))
 
         self._panel_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._panel_sizer)
 
-    def create_controls(self, layout):
+    def _add_dwell_time_slider(self, label_text: str = "Dwell time", value: float = None, conf: dict = None):
+        """ Add a dwell time float value slider to the overview acquisition panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        # Create label
+        lbl_ctrl = wx.StaticText(self, -1, str(label_text))
+        self._dwell_time_grid_sz.Add(lbl_ctrl, (0, 0),
+                                     flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
+        # Create float slider
+        value_ctrl = UnitFloatSlider(self, value=value, **conf)
+        self._dwell_time_grid_sz.Add(value_ctrl, (0, 1),
+                                     flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, border=5)
+        return value_ctrl
+
+    def create_controls(self, layout, dwell_time_slider_conf: dict = None):
+        """
+        Create overview selection panel controls.
+
+        :param layout: (list of lists of int) Layout of scintillator grid, given as 2D list
+            of scintillator positions, e.g. [[6, 5, 4], [3, 2, 1]]
+        :param dwell_time_slider_conf: (dict) Dictionary containing parameters for the dwell
+            time slider control.
+
+        """
+        if dwell_time_slider_conf is not None:
+            # Add dwell time slider
+            self._panel_sizer.Add(
+                self._dwell_time_grid_sz, proportion=1, flag=wx.ALL | wx.EXPAND, border=5
+            )
+            self.dwell_time_slider_ctrl = self._add_dwell_time_slider(
+                value=dwell_time_slider_conf["min_val"], conf=dwell_time_slider_conf
+            )
+            self._dwell_time_grid_sz.AddGrowableCol(1)
+            # Add divider
+            line_ctrl = wx.StaticLine(self, size=(-1, 1))
+            line_ctrl.SetBackgroundColour(gui.BG_COLOUR_SEPARATOR)
+            self._dwell_time_grid_sz.Add(line_ctrl, (1, 0), span=(1, 2),
+                                         flag=wx.ALL | wx.EXPAND, border=5)
+        # Create a GridBagSizer to add scintillator toggle buttons based on
+        # the layout of scintillator grid
         nrows = len(layout)
         ncols = max(len(row) for row in layout)
         calgrid_sz = wx.GridBagSizer(nrows, ncols)
