@@ -236,9 +236,16 @@ class InfoLegend(wx.Panel):
         self.Layout()
 
     def set_stage_pos_label(self, label):
-        approx_width = len(label) * 7
-        self.stage_pos_text.SetMinSize((approx_width, -1))
-        self.stage_pos_text.SetValue(label)
+        """
+        label (unicode or None): if None, stage position is hidden, otherwise show the value
+        """
+        if label is None:
+            self.stage_pos_text.Hide()
+        else:
+            self.stage_pos_text.Show()
+            approx_width = len(label) * 7
+            self.stage_pos_text.SetMinSize((approx_width, -1))
+            self.stage_pos_text.SetValue(label)
         self.Layout()
 
     def set_zPos_label(self, label):
