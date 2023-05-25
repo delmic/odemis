@@ -260,6 +260,7 @@ class Instantiator(object):
         self.create_sub_containers = create_sub_containers # flag for creating sub-containers
         self.dry_run = dry_run # flag for instantiating mock version of the components
 
+        self._check_structure()
         self._preparate_microscope()
 
         # update/fill up the model with implicit information
@@ -276,6 +277,30 @@ class Instantiator(object):
         # TODO: check here that each class is loadable.
 
         # TODO: check there is no cyclic dependencies on the parents/children
+
+    def _check_structure(self):
+        """
+        The AST should be a dict[str, dict[str, ...]]: name of component -> definition
+        Each component definition must have at least the "role" key
+        """
+        if not isinstance(self.ast, dict):
+            raise ParseError(f"Microscope file must be a dictionary of component names -> definition, "
+                             f"but got a {type(self.ast).__name__}")
+
+        for n, a in self.ast.items():
+            if not isinstance(n, str):
+                raise ParseError(f"Component name should be string but got: {n}")
+            if not isinstance(a, dict):
+                raise ParseError(f"Definition of component \"{n}\" should be a dict, "
+                                 f"but got a {type(a).__name__}")
+
+            # Check inside the component definition
+            for arg in a.keys():
+                if not isinstance(arg, str):
+                    raise ParseError(f"Definition of component \"{n}\" should only have keys of type str, "
+                                     f"but got a {type(arg).__name__}")
+            if "role" not in a:
+                raise SemanticError(f"Definition of component \"{n}\" is missing the mandatory key 'role'.")
 
     def _preparate_microscope(self):
         """
@@ -334,7 +359,7 @@ class Instantiator(object):
 
         # For each component which is created by delegation (= no class):
         # * if no creator specified, use its parent (and error if multiple parents)
-        # * if creator specified, check it's one of the parents
+        # * if creator specified, check it's one of the parents (deprecated, since the use of dependencies)
         for name, comp in self.ast.items():
             if "class" in comp:
                 continue

@@ -1,0 +1,6 @@
+{ # Missing component name
+    class: simulated.Light,
+    role: null,
+    children: {c: "Stupid2",
+    }
+}
