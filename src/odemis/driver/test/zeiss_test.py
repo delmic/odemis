@@ -53,9 +53,10 @@ CONFIG_STAGE6 = {"name": "stage", "role": "stage",
                  }
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
 CONFIG_SEM3 = {"name": "sem", "role": "sem", "port": "/dev/ttyUSB*",  # "/dev/fake*"
-              "children": {"scanner": CONFIG_SCANNER,
-                           "focus": CONFIG_FOCUS,
-                           "stage": CONFIG_STAGE3, }
+               "eol": "\r\n", # Standard, but to check that the conversion to bytes work
+               "children": {"scanner": CONFIG_SCANNER,
+                            "focus": CONFIG_FOCUS,
+                            "stage": CONFIG_STAGE3, }
                }
 CONFIG_SEM6 = copy.deepcopy(CONFIG_SEM3)
 CONFIG_SEM6["children"]["stage"] = CONFIG_STAGE6
