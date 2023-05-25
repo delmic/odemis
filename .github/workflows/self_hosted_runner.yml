@@ -2,7 +2,7 @@ name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
 
 on:
   schedule:
-    - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, converts to 7 pm Amsterdam time
+    - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, for Amsterdam it is +1 UTC during winter and +2 UTC during summer
 
 jobs:
   full_test:
