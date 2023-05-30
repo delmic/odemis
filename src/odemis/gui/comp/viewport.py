@@ -865,8 +865,8 @@ class FastEMAcquisitionViewport(MicroscopeViewport):
         cpol.active.value = True
         self.canvas.add_world_overlay(cpol)
 
-        # Show current stage postiion
-        self.bottom_legend.stage_pos_text.Show()
+        # Listen to the stage position and update the label in the callback
+        view.stage_pos.subscribe(self._on_stage_pos_change, init=True)
 
 
 class FastEMOverviewViewport(LiveViewport):
