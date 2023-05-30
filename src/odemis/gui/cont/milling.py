@@ -61,11 +61,9 @@ class MillingButtonController:
         self._panel = tab_panel
         self._tab_data = tab_data
 
-        # hide/show some widgets at initialization
-        self._panel.gauge_milling_series.Hide()
-        self._panel.txt_milling_series_left_time.Hide()
+        # By default, all widgets are hidden => show button + estimated time at initialization
         self._panel.txt_milling_est_time.Show()
-        self._panel.btn_milling_cancel.Hide()
+        self._panel.btn_mill_active_features.Show()
         self._panel.Layout()
 
         self._tab_data.main.features.subscribe(self._on_features, init=True)

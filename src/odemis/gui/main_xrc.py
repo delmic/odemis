@@ -9611,6 +9611,7 @@ def __init_resources():
                         <object class="wxFlexGridSizer">
                             <object class="sizeritem">
                                 <object class="ImageTextButton" name="btn_mill_active_features">
+                                    <hidden>1</hidden>
                                     <icon>img_icon_ico_sem_png</icon>
                                     <height>48</height>
                                     <face_colour>blue</face_colour>
@@ -9632,6 +9633,7 @@ def __init_resources():
                                 <object class="wxBoxSizer">
                                     <object class="sizeritem">
                                         <object class="wxStaticText" name="txt_milling_est_time">
+                                            <hidden>1</hidden>
                                             <label>Estimated time ...</label>
                                             <fg>#E5E5E5</fg>
                                             <hidden>0</hidden>
@@ -9650,6 +9652,7 @@ def __init_resources():
                                         <object class="wxBoxSizer">
                                             <object class="sizeritem">
                                                 <object class="wxGauge" name="gauge_milling_series">
+                                                    <hidden>1</hidden>
                                                     <size>-1,10</size>
                                                     <range>100</range>
                                                     <value>0</value>
@@ -9664,6 +9667,7 @@ def __init_resources():
                                             </object>
                                             <object class="sizeritem">
                                                 <object class="wxStaticText" name="txt_milling_series_left_time">
+                                                    <hidden>1</hidden>
                                                     <label/>
                                                     <fg>#E5E5E5</fg>
                                                     <hidden>0</hidden>
@@ -9679,6 +9683,7 @@ def __init_resources():
                                     </object>
                                     <object class="sizeritem">
                                         <object class="ImageTextButton" name="btn_milling_cancel">
+                                            <hidden>1</hidden>
                                             <height>24</height>
                                             <face_colour>def</face_colour>
                                             <label>cancel</label>
