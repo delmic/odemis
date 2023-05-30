@@ -324,11 +324,6 @@ class MicroscopeViewport(ViewPort):
         if model.hasVA(tab_data, "zPos"):
             tab_data.zPos.subscribe(self._on_zPos_change, init=True)
 
-        # Listen to the stage position, if the view has the stage and the stage position TextCtrl
-        # has been set to be shown (by default it is hidden)
-        if hasattr(view, "stage_pos") and self.bottom_legend.stage_pos_text.IsShown():
-            view.stage_pos.subscribe(self._on_stage_pos_change, init=True)
-
         # canvas handles also directly some of the view properties
         self.canvas.setView(view, tab_data)
 
@@ -888,9 +883,6 @@ class FastEMOverviewViewport(LiveViewport):
         # Cannot move stage by dragging (only by double clicking)
         self.canvas.abilities.discard(CAN_MOVE_STAGE)
 
-        # Show current stage position by listening to the stage position VA
-        self.bottom_legend.stage_pos_text.Show()
-
     def setView(self, view, tab_data):
         super().setView(view, tab_data)
         self.canvas.add_background_overlay(self._tab_data_model.main.background)
@@ -904,6 +896,9 @@ class FastEMOverviewViewport(LiveViewport):
         slol = StagePointSelectOverlay(self.canvas)
         slol.active.value = True
         self.canvas.add_world_overlay(slol)
+
+        # Listen to the stage position and update the label in the callback
+        view.stage_pos.subscribe(self._on_stage_pos_change, init=True)
 
 
 class ARLiveViewport(LiveViewport):
