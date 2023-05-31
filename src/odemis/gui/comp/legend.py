@@ -125,6 +125,13 @@ class InfoLegend(wx.Panel):
         self.zPos_text.SetToolTip("Z Position")
         self.zPos_text.Hide()
 
+        # Stage position
+        self.stage_pos_text = wx.TextCtrl(self, style=wx.NO_BORDER | wx.CB_READONLY)
+        self.stage_pos_text.SetBackgroundColour(parent.GetBackgroundColour())
+        self.stage_pos_text.SetForegroundColour(parent.GetForegroundColour())
+        self.stage_pos_text.SetToolTip("Current Stage Position")
+        self.stage_pos_text.Hide()
+
         # Feature show/hide button
         self._feature_toggle_va = None
         bmp = img.getBitmap("menu/btn_feature_toggle_off.png")
@@ -172,6 +179,8 @@ class InfoLegend(wx.Panel):
         control_sizer.Add(self.scale_win, 3, border=10,
                           flag=wx.RIGHT | wx.EXPAND)
         control_sizer.Add(self.zPos_text, 2, border=10,
+                          flag=wx.RIGHT | wx.EXPAND)
+        control_sizer.Add(self.stage_pos_text, 2, border=10,
                           flag=wx.RIGHT | wx.EXPAND)
         control_sizer.Add(slider_sizer, 0, border=10, flag=wx.ALIGN_CENTER | wx.RIGHT)
         # border_sizer is needed to add a border around the legend
@@ -224,6 +233,19 @@ class InfoLegend(wx.Panel):
         approx_width = len(label) * 7
         self.magnification_text.SetMinSize((approx_width, -1))
         self.magnification_text.SetValue(label)
+        self.Layout()
+
+    def set_stage_pos_label(self, label):
+        """
+        label (unicode or None): if None, stage position is hidden, otherwise show the value
+        """
+        if label is None:
+            self.stage_pos_text.Hide()
+        else:
+            self.stage_pos_text.Show()
+            approx_width = len(label) * 7
+            self.stage_pos_text.SetMinSize((approx_width, -1))
+            self.stage_pos_text.SetValue(label)
         self.Layout()
 
     def set_zPos_label(self, label):
