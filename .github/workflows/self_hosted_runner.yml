@@ -1,9 +1,8 @@
 name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
 
 on:
-  [push]
-  # schedule:
-    # - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, for Amsterdam it is +1 UTC during winter and +2 UTC during summer
+  schedule:
+    - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, for Amsterdam it is +1 UTC during winter and +2 UTC during summer
 
 jobs:
   full_test:
@@ -37,7 +36,9 @@ jobs:
         VM_NAME: ${{ matrix.vm_name }}
       # The testing user should automatically be logged in for the display (or the xserver) to be started
       # Create a display server implementing the X11 display server protocol using Xvfb
+      # Sleep for 5s to give Xvfb some time to start
       # Pass the created DISPLAY to the Virtual Machine while starting it
+      # Sleep for 1.5m to give the Virtual Machine time to start and automatically login
       # Set runpytest_wrapper.sh execution timeout of 8 hours, i.e. 8 * 60 * 60 * 1000 = 28800000 milliseconds
       run: |
         export DISPLAY=:1
@@ -45,7 +46,7 @@ jobs:
         XVFB_PID=$!
         echo "Started Xvfb with PID $XVFB_PID"
         echo "XVFB_PID=$XVFB_PID" >> "$GITHUB_ENV"
-        sleep 3s
+        sleep 5s
         VBoxManage startvm "$VM_NAME" --putenv "DISPLAY=:1"
         sleep 1.5m
         VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --putenv "DISPLAY=:0" --username testing --password "$CI_VM_PASSWORD" --wait-stdout --timeout 28800000
