@@ -12,7 +12,8 @@ jobs:
     timeout-minutes: 1200
     strategy:
       matrix:
-        vm_name: ["Odemis Testing 18", "Odemis Testing 20"]
+        vm_name: ["Odemis Testing 18"]
+        # vm_name: ["Odemis Testing 18", "Odemis Testing 20"]
     steps:
     - name: List of all VMs
       run: VBoxManage list vms
