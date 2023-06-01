@@ -30,6 +30,7 @@ from numpy.linalg import LinAlgError
 
 from odemis.util.random import check_random_state
 from odemis.util.registration import unit_gridpoints
+from odemis.util.test.transform_known_values import transform_known_values
 from odemis.util.transform import (
     AffineTransform,
     RigidTransform,
@@ -44,8 +45,6 @@ from odemis.util.transform import (
     to_pixel_index,
     to_pixel_index_transform,
 )
-
-from transform_known_values import transform_known_values
 
 
 def _angle_diff(x, y):

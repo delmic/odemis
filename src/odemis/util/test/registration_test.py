@@ -28,6 +28,7 @@ import unittest
 
 import numpy
 import scipy
+
 from odemis.util import pairwise, synthetic
 from odemis.util.graph import WeightedGraph
 from odemis.util.random import check_random_state
@@ -39,9 +40,8 @@ from odemis.util.registration import (
     nearest_neighbor_graph,
     unit_gridpoints,
 )
+from odemis.util.test.transform_test import random_transform
 from odemis.util.transform import AffineTransform
-
-from transform_test import random_transform
 
 
 class BijectiveMatchingTest(unittest.TestCase):
