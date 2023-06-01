@@ -16,12 +16,12 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
     """
     Test the json encoder and decoder of the CryoFeature class
     """
-    test_str = '{"feature_list": [{"name": "Feature-1", "pos": [0, 0, 0], "milling_angle": 10.0, "status": "Active"}, '+ \
-               '{"name": "Feature-2", "pos": [0.001, 0.001, 0.002], "milling_angle": 20.0, "status": "Active"}]}'
+    test_str = '{"feature_list": [{"name": "Feature-1", "pos": [0, 0, 0], "status": "Active"}, '+ \
+               '{"name": "Feature-2", "pos": [0.001, 0.001, 0.002], "status": "Active"}]}'
 
     def test_feature_encoder(self):
-        feature1 = CryoFeature("Feature-1", 0, 0, 0, 10)
-        feature2 = CryoFeature("Feature-2", 1e-3, 1e-3, 2e-3, 20)
+        feature1 = CryoFeature("Feature-1", 0, 0, 0)
+        feature2 = CryoFeature("Feature-2", 1e-3, 1e-3, 2e-3)
 
         features = [feature1, feature2]
         json_str = json.dumps(get_features_dict(features))
@@ -33,11 +33,10 @@ class TestFeatureEncoderDecoder(unittest.TestCase):
         self.assertTrue(features[0].name.value, "Feature-1")
         self.assertTrue(features[0].status.value, "Active")
         self.assertTrue(features[1].pos.value, (1e-3, 1e-3, 2e-3))
-        self.assertTrue(features[1].milling_angle.value, 20.0)
 
     def test_save_read_features(self):
-        feature1 = CryoFeature("Feature-1", 0, 0, 0, 10)
-        feature2 = CryoFeature("Feature-2", 1e-3, 1e-3, 2e-3, 20)
+        feature1 = CryoFeature("Feature-1", 0, 0, 0)
+        feature2 = CryoFeature("Feature-2", 1e-3, 1e-3, 2e-3)
 
         features = [feature1, feature2]
         save_features("", features)
