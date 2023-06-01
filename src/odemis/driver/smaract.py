@@ -1593,6 +1593,8 @@ class MC_5DOF(model.Actuator):
         self._swVersion = self.GetProperty_s(MC_5DOF_DLL.SA_MC_PKEY_VERSION_STRING, handle=MC_5DOF_DLL.SA_MC_GLOBAL_HANDLE)
         logging.debug("Using MC_5DOF library version %s to connect to %s.", self._swVersion, self._hwVersion)
 
+        self._target_pos : SA_MC_Pose = None  # To hold reference to the target position during a move
+
         self.position = model.VigilantAttribute({}, readonly=True)
         self._metadata[model.MD_PIVOT_POS] = self.GetPivot()
 
@@ -1753,13 +1755,28 @@ class MC_5DOF(model.Actuator):
         # convert into a pose, using the current position for non-moving axes
         newPose = self.GetPose()
         newPose.update(pos)
+        logging.debug("Requesting a move to: %s", newPose)
+
         self.core.SA_MC_Move(self._id, byref(newPose))
 
-    def GetPose(self):
+        # HACK WARNING: the call to SA_MC_Move() finished, but if it's not blocking,
+        # which is the standard case, the move will just start. It seems the C
+        # library still needs the pose information. However, as the Pose object
+        # was instantiated in this function, Python will automatically free that
+        # memory. So there could be a risk of writing other data on top of the
+        # target position, and the stage would move to a totally different position.
+        # To avoid this, we keep a reference to the object. It's not expected
+        # to be able to call this function while a move is on going, so it's fine
+        # to only keep the latest reference only.
+        self._target_pos = newPose
+
+    def GetPose(self) -> SA_MC_Pose:
         """
         Get the current pose of the SA_MC
 
-        returns: (dict str -> float): axis name -> position
+        returns: the pose object, with all 5 axes set to the latest known position.
+        raises: SA_MCError on error. In particular, if the axes haven't been
+        referenced, it will fail.
         """
         pose = SA_MC_Pose()
         self.core.SA_MC_GetPose(self._id, byref(pose))
