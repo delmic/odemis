@@ -2894,7 +2894,7 @@ class Scanner(model.Emitter):
             # If the connection is done using the default "Python" user, the
             # access level is too low, and this fails because it has no rights
             # to delete/change presets and masks. In this case, we get an error 500.
-            logging.error("Failed CreatePresetMask(), check the connection login has sufficient access level (>= Standard)")
+            logging.error("Failed CreatePresetMask(), check if the connection login has sufficient access level (>= Standard)")
             raise
 
         # List of available probe current: based on presets name
