@@ -45,8 +45,8 @@ import os
 import time
 import wx
 
-# Set to "True" to show a "Save" button
-ALLOW_SAVE = False
+# Set to "True" to show a "Save" button. Set to "False" to hide it.
+ALLOW_SAVE = True
 
 
 class ContentAcquisitionDialog(AcquisitionDialog):
@@ -134,7 +134,9 @@ class LiveCLStream(SEMStream):
         data = numpy.clip(data, irange[0], irange[1])
         # Actually map data to 0 -> (e^N)-1, and compute log(x+1)
         data -= irange[0]
-        data = data * ((math.exp(LOG_MAX) - 1) / (float(irange[1]) - float(irange[0])))
+        iwidth = float(irange[1]) - float(irange[0])
+        if iwidth != 0:
+            data = data * (math.exp(LOG_MAX) - 1) / iwidth
         data = numpy.log1p(data)
 
         rgbim = util.img.DataArray2RGB(data, (0, LOG_MAX), tint)
@@ -451,7 +453,15 @@ class QuickCLPlugin(Plugin):
             dlg.addButton("Save", self.save, face_colour='blue')
         dlg.addButton("Export", self.export, face_colour='blue')
 
-        dlg.Maximize()
+        # We cannot use Maximize(), because normally dialogs cannot be maximized
+        # but it still sort of work... but the minimize and maximize buttons are shown
+        # (in Gnome 3). So the user could minimize the window, and end-up with a
+        # confusing Odemis window which is not responding.
+        # So workaround it by trying to open to a "large size". Normally,
+        # Gnome automatically clips to the screen, but for safety, we also do that.
+        max_size = (1920, 1200)  # px, standard screen size
+        max_size = [min(mx, r) for mx, r in zip(max_size, wx.DisplaySize())]
+        dlg.Size = max_size
         dlg.ShowModal()
 
         # Window is closed
