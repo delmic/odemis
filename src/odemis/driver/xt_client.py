@@ -21,24 +21,26 @@ http://www.gnu.org/licenses/.
 """
 import logging
 import math
-import notify2
 import os
 import queue
 import re
 import threading
 import time
-from typing import Optional
 import zipfile
 from concurrent.futures import CancelledError
+from typing import Optional
 
-import Pyro5.api
 import msgpack_numpy
+import notify2
 import numpy
+import Pyro5.api
+from Pyro5.errors import CommunicationError
 
 from odemis import model
 from odemis import util
-from odemis.model import CancellableThreadPoolExecutor, HwError, isasync, CancellableFuture, ProgressiveFuture, \
-    DataArray, StringEnumerated
+from odemis.model import (CancellableFuture, CancellableThreadPoolExecutor,
+                          DataArray, HwError, ProgressiveFuture,
+                          StringEnumerated, isasync)
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -231,10 +233,12 @@ class SEM(model.HwComponent):
             logging.debug(
                 f"Successfully connected to xtadapter with software version {self._swVersion} and hardware"
                 f"version {self._hwVersion}")
-        except Exception as err:
+        except CommunicationError as err:
             raise HwError("Failed to connect to XT server '%s'. Check that the "
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
+        except OSError:
+            raise HwError("XT server reported error: %s." % (err,))
 
         # Transfer latest xtadapter package if available
         # The transferred package will be a zip file in the form of bytes
