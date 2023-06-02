@@ -1,0 +1,61 @@
+SEM: {
+    class: Microscope,
+    role: sem,
+    children: ["EBeam Scanner", "EBeam Focus", "EBeam Stage",
+               "EBeam Detector", "Chamber Cam", "Chamber Light"],
+}
+
+# Connects to Tescan SEM via SharkSEM
+"Tescan SEM": {
+    class: tescan.SEM,
+    role: null,
+    init: {host: "192.168.40.2"},
+    # more detectors can be added, if necessary
+    children: {scanner: "EBeam Scanner",
+               detector0: "EBeam Detector",
+               stage: "Sample Stage",
+               focus: "EBeam Focus",
+               camera: "Chamber Cam", # comment out if using the simulator
+               light: "Chamber Light"
+    }
+}
+
+"EBeam Scanner": {
+    # Internal child of Tescan, so no class
+    role: e-beam,
+    init: {
+        fov_range: [196.e-9, 25586.e-6]
+    },
+}
+
+"EBeam Detector": {
+    role: se-detector,
+    init: {
+        channel: 0,
+        detector: 0,
+    },
+}
+
+"EBeam Focus": {
+    role: ebeam-focus,
+    init: {axes: [z]},
+    affects: ["EBeam Scanner"]
+}
+
+"Sample Stage": {
+    role: stage,
+    init: {},
+    affects: ["EBeam Scanner"]
+}
+
+"Chamber Cam": {
+    role: chamber-ccd,
+    init: {}
+}
+
+# (IR) light for the SEM chamber
+"Chamber Light": {
+    role: chamber-light,
+    init: {},
+    affects: ["Chamber Cam"],
+}
