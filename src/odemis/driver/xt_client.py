@@ -26,14 +26,16 @@ import threading
 import time
 from concurrent.futures import CancelledError
 
-import Pyro5.api
 import msgpack_numpy
 import numpy
+import Pyro5.api
+from Pyro5.errors import CommunicationError
 
 from odemis import model
 from odemis import util
-from odemis.model import CancellableThreadPoolExecutor, HwError, isasync, CancellableFuture, ProgressiveFuture, \
-    DataArray, StringEnumerated
+from odemis.model import (CancellableFuture, CancellableThreadPoolExecutor,
+                          DataArray, HwError, ProgressiveFuture,
+                          StringEnumerated, isasync)
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -98,10 +100,15 @@ class SEM(model.HwComponent):
             self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
-        except Exception as err:
+            logging.debug(
+                f"Successfully connected to xtadapter with software version {self._swVersion} and hardware"
+                f"version {self._hwVersion}")
+        except CommunicationError as err:
             raise HwError("Failed to connect to XT server '%s'. Check that the "
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
+        except OSError:
+            raise HwError("XT server reported error: %s." % (err,))
 
         # Create the scanner type child(ren)
         # Check if at least one of the required scanner types is instantiated
