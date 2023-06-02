@@ -1090,6 +1090,13 @@ class FakeSmarPodDLL(object):
             self.referenced = False
             raise SmarPodError(SmarPodDLL.STOPPED_ERROR)
         else:
+            # Put some arbitrary values representing the new position
+            self.pose.positionX = 0.001231
+            self.pose.positionY = 0.001232
+            self.pose.positionZ = 0.001233
+            self.pose.rotationX = 1.234
+            self.pose.rotationY = 1.235
+            self.pose.rotationZ = 1.236
             self.referenced = True
 
     def Smarpod_IsPoseReachable(self, id, p_pos, p_reachable):
