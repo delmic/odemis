@@ -46,20 +46,20 @@ TESCAN_PXL_LIMIT = 100
 
 
 class SEM(model.HwComponent):
-    '''
+    """
     This is an extension of the model.HwComponent class. It instantiates the scanner
     and se-detector children components and provides an update function for its
     metadata.
-    '''
+    """
 
     def __init__(self, name, role, children, host, daemon=None, **kwargs):
-        '''
+        """
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner", "detector", "stage", "focus", "camera"
             and "pressure". They will be provided back in the .children VA
         host (string): ip address of the SEM server 
         Raise an exception if the device cannot be opened
-        '''
+        """
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
@@ -1052,7 +1052,7 @@ class Stage(model.Actuator):
 
         # Demand calibrated stage
         if parent._device.StgIsCalibrated() != 1:
-            logging.warning("Stage is not calibrated. Moves will not succeed until it has been calibratred.")
+            logging.warning("Stage is not calibrated. Moves will not succeed until it has been calibrated.")
             # TODO: support doing it from Odemis, via reference()
             # parent._device.StgCalibrate()
 

@@ -60,16 +60,18 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            "focus": CONFIG_FOCUS,
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
-              "host": "192.168.1.175"
+              # "host": "192.168.1.175"
+              "host": "192.168.56.11"
               }
 
 # This one works with the Mira Simulator
-CONFIG_SEM_NO_DET = {"name": "sem", "role": "sem",
+CONFIG_SEM_NO_DET = {"name": "Mira", "role": "sem",
               "children": {"scanner": CONFIG_SCANNER,
                            "stage": CONFIG_STG,
                            "focus": CONFIG_FOCUS,
                            "light": CONFIG_LIGHT},
-              "host": "192.168.1.175"
+              # "host": "192.168.1.175"
+              "host": "192.168.56.11"
               }
 
 
@@ -133,6 +135,7 @@ class TestSEMStatic(unittest.TestCase):
         sem.terminate()
         daemon.shutdown()
 
+
 class BaseSEMTest(object):
 
     @classmethod
@@ -189,6 +192,7 @@ class BaseSEMTest(object):
         time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_probe_current, ebeam.probeCurrent.value)
 
+    # @skip
     def test_acceleration_voltage(self):
         ebeam = self.scanner
 
