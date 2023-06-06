@@ -11,24 +11,34 @@ to write and maintain).
 Plugin loading
 ==============
 
-A plugin is defined by a class present in a python file (called "module"), which
-must be installed in a specific directory.
-On Linux, plugins are searched in these three places:
+The graphical user interface can be extended with plugins and scripts. A plugin is provided as a python
+ﬁle (``*``.py). The oﬃcial plugins (developed by Delmic) are available on the microscope computer in
+the folder ``/usr/share/odemis/plugins``. They are also available at this location: https://github.com/delmic/odemis/tree/master/plugins . To activate the plugin, the ﬁle must be copied into the following
+directory:
 
- * ``/usr/share/odemis/plugins/``
+ * Linux:
+        ``$HOME/.local/share/odemis/plugins/``
 
- * ``/usr/local/share/odemis/plugins/``
- 
- * ``~/.local/share/odemis/plugins/``
+        ``/usr/lib/odemis/plugins``
 
-On Windows, plugins are searched in these two places:
+        ``/usr/local/lib/odemis/plugins``
 
- * ``plugins\`` of the Odemis program directory (ex: ``C:\Program Files (x86)\OdemisViewer\plugins``)
+ * Windows:
+        ``\.config\odemis\plugins\`` in the user folder (ex: ``C:\Users\John\.config\odemis\plugins``)
 
- * ``.config\odemis\plugins\`` for the user directory (ex: ``C:\Users\Bob\.config\odemis\plugins``)
+Note that if the directory doesn’t exist, it should ﬁrst be created. On Linux, for the official plugins to
+automatically update, it is preferable to install them using a so-called "soft-link". So for instance, to install
+the tile acquisition plugin, you can type in a terminal:
 
-Each ``.py`` file in these directories is loaded at GUI start as a python module
+.. code-block:: console
+
+    mkdir -p ~/.local/share/odemis/plugins/
+    ln -s /usr/share/odemis/plugins/tileacq.py ~/.local/share/odemis/plugins/
+
+Each ``.py`` file in the specified directory is loaded at GUI start as a python module
 and for each subclass of :py:class:`Plugin` present in the module, an instance is created.
+If the plugin has been successfully loaded, it should be listed in
+"Help/About/Credits".
 
 
 Plugin class
