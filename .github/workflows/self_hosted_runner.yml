@@ -1,8 +1,9 @@
 name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
 
 on:
-  schedule:
-    - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, for Amsterdam it is +1 UTC during winter and +2 UTC during summer
+  [push]
+  # schedule:
+    # - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, for Amsterdam it is +1 UTC during winter and +2 UTC during summer
 
 jobs:
   full_test:
@@ -13,6 +14,15 @@ jobs:
       matrix:
         vm_name: ["Odemis Testing 18", "Odemis Testing 20"]
     steps:
+    - name: Start VirtualBox Manager in case its not running
+      run: |
+        if pidof VirtualBox >/dev/null; then
+          echo "VirtualBox Manager is running"
+        else
+          echo "VirtualBox Manager is not running, starting it"
+          VirtualBox &
+        fi
+
     - name: List of all VMs
       run: VBoxManage list vms
 
@@ -63,7 +73,7 @@ jobs:
         VM_NAME: ${{ matrix.vm_name }}
       run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password "$CI_VM_PASSWORD" --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
 
-    - name: Stop VM
+    - name: Stop VM and VirtualBox Manager
       env:
         VM_NAME: ${{ matrix.vm_name }}
         XVFB_PID: ${{ env.XVFB_PID }}
@@ -72,3 +82,5 @@ jobs:
         sleep 10s
         echo "Killing Xvfb with PID $XVFB_PID"
         kill -9 $XVFB_PID
+        echo "Killing VirtualBox Manager"
+        kill -9 $(pidof VirtualBox)
