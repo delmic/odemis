@@ -11,6 +11,8 @@ jobs:
     # strategy.matrix total timeout of 20 hours
     timeout-minutes: 1200
     strategy:
+      # Don't cancel all in-progress and queued jobs in the matrix if any job in the matrix fails
+      fail-fast: false
       matrix:
         vm_name: ["Odemis Testing 18", "Odemis Testing 20"]
     steps:
@@ -53,6 +55,7 @@ jobs:
         else
           echo "VirtualBox Manager is not running, starting it"
           VirtualBox &
+          sleep 5s
         fi
         VBoxManage startvm "$VM_NAME" --putenv "DISPLAY=:1"
         sleep 1.5m
