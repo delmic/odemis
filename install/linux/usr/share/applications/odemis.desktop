@@ -18,14 +18,11 @@ Actions=Stop;HwStatus;Bug;
 [Desktop Action Stop]
 Name=Full stop
 Exec=sudo /usr/bin/odemis-stop
-OnlyShowIn=Unity;
 
 [Desktop Action HwStatus]
 Name=Show hardware status
 Exec=odemis-hw-status
-OnlyShowIn=Unity;
 
 [Desktop Action Bug]
 Name=Report a problem
 Exec=odemis-bug-report
-OnlyShowIn=Unity;
