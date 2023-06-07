@@ -45,10 +45,7 @@ jobs:
       # Set runpytest_wrapper.sh execution timeout of 8 hours, i.e. 8 * 60 * 60 * 1000 = 28800000 milliseconds
       run: |
         export DISPLAY=:1
-        Xvfb "$DISPLAY" -screen 0 1920x1280x24 > /dev/null 2>&1 &
-        XVFB_PID=$!
-        echo "Started Xvfb with PID $XVFB_PID"
-        echo "XVFB_PID=$XVFB_PID" >> "$GITHUB_ENV"
+        Xvfb "$DISPLAY" -screen 0 1920x1280x24 -ac -noreset > /dev/null 2>&1 &
         sleep 5s
         if pidof VirtualBox >/dev/null; then
           echo "VirtualBox Manager is running"
@@ -77,11 +74,10 @@ jobs:
     - name: Stop VM and VirtualBox Manager
       env:
         VM_NAME: ${{ matrix.vm_name }}
-        XVFB_PID: ${{ env.XVFB_PID }}
       run: |
         VBoxManage controlvm "$VM_NAME" acpipowerbutton
         sleep 10s
         echo "Killing Xvfb with PID $XVFB_PID"
-        kill -9 $XVFB_PID
+        killall Xvfb
         echo "Killing VirtualBox Manager"
-        kill -9 $(pidof VirtualBox)
+        killall VirtualBox
