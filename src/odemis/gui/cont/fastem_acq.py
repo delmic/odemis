@@ -161,7 +161,7 @@ class FastEMOverviewAcquiController(object):
         lvl = None  # icon status shown
         if not self._tab_data_model.is_calib_done.value:
             lvl = logging.WARN
-            txt = "System is not calibrated."
+            txt = "System is not calibrated, please run Optical Autofocus."
         elif not self._main_data_model.active_scintillators.value:
             lvl = logging.WARN
             txt = "No scintillator loaded (go to Chamber tab)."
