@@ -3496,7 +3496,7 @@ class MCS2(model.Actuator):
 
         logging.debug("Absolute move successfully completed")
 
-    def _waitEndMove(self, future, axes, end=0):
+    def _waitEndMove(self, future, axes, end):
         """
         Wait until all the given axes are finished moving, or a request to
         stop has been received.
@@ -3514,13 +3514,12 @@ class MCS2(model.Actuator):
         max_dur = dur * 2 + 1
         logging.debug("Expecting a move of %g s, will wait up to %g s", dur, max_dur)
         timeout = last_upd + max_dur
-        last_axes = moving_axes.copy()
         try:
             while not future._must_stop.is_set():
-                for channel in moving_axes.copy():  # need copy to remove during iteration
-                    if not self._is_channel_moving(channel):
-                        moving_axes.discard(channel)
-                        self._check_channel_error(channel)
+                for a in moving_axes.copy():  # need copy to remove during iteration
+                    if not self._is_channel_moving(a):
+                        moving_axes.discard(a)
+                        self._check_channel_error(a)
 
                 if not moving_axes:
                     # no more axes to wait for
@@ -3529,18 +3528,17 @@ class MCS2(model.Actuator):
                 now = time.time()
                 if now > timeout:
                     logging.warning("Stopping move due to timeout after %g s.", max_dur)
-                    for i in moving_axes:
-                        self.Stop(i)
+                    # Note: stopping actually happens just after in the exception handler
+                    for a in moving_axes:
+                        logging.debug("Channel %s state 0x%x", a, self._get_channel_state(a))
                     raise TimeoutError("Move is not over after %g s, while "
                                        "expected it takes only %g s" %
                                        (max_dur, dur))
 
                 # Update the position from time to time (10 Hz)
-                if now - last_upd > 0.1 or last_axes != moving_axes:
-                    last_names = set(n for n, i in self._axis_map.items() if i in last_axes)
+                if now - last_upd > 0.1:
                     self._updatePosition()
                     last_upd = time.time()
-                    last_axes = moving_axes.copy()
 
                 # Wait half of the time left (maximum 0.1 s)
                 left = end - time.time()
@@ -3548,13 +3546,14 @@ class MCS2(model.Actuator):
                 future._must_stop.wait(sleept)
             else:
                 logging.debug("Move of axes %s cancelled before the end", axes)
-                # stop all axes still moving them
-                for i in moving_axes:
-                    self.Stop(i)
                 future._was_stopped = True
                 raise CancelledError()
+        except Exception:
+            # stop all axes still moving, either because it was cancelled or just for safety
+            for a in moving_axes:
+                self.Stop(a)
+            raise
         finally:
-            # TODO: check if the move succeded ? (= Not failed due to stallguard/limit switch)
             self._updatePosition()  # update (all axes) with final position
 
     def _cancelCurrentMove(self, future):
