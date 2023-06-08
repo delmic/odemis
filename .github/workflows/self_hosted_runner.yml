@@ -44,7 +44,7 @@ jobs:
       # Sleep for 1.5m to give the Virtual Machine time to start and automatically login
       # Set runpytest_wrapper.sh execution timeout of 8 hours, i.e. 8 * 60 * 60 * 1000 = 28800000 milliseconds
       run: |
-        export DISPLAY=:1
+        export DISPLAY=:0
         Xvfb "$DISPLAY" -screen 0 1920x1280x24 -ac -noreset > /dev/null 2>&1 &
         sleep 5s
         if pidof VirtualBox >/dev/null; then
@@ -54,7 +54,7 @@ jobs:
           VirtualBox &
           sleep 5s
         fi
-        VBoxManage startvm "$VM_NAME" --putenv "DISPLAY=:1"
+        VBoxManage startvm "$VM_NAME" --putenv "DISPLAY=:0"
         sleep 1.5m
         VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --putenv "DISPLAY=:0" --username testing --password "$CI_VM_PASSWORD" --wait-stdout --timeout 28800000
       continue-on-error: true
