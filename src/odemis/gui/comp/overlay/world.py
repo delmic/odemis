@@ -877,7 +877,7 @@ class RepetitionSelectOverlay(WorldSelectOverlay):
 
                 logging.debug("Rendering %sx%s points", buf_rep_x, buf_rep_y)
 
-                point = img.getBitmap("dot.png")
+                point = guiimg.getBitmap("dot.png")
                 point_dc = wx.MemoryDC()
                 point_dc.SelectObject(point)
                 point.SetMaskColour(wx.BLACK)
