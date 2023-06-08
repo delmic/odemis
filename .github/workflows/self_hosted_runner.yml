@@ -21,13 +21,15 @@ jobs:
     - name: List of running VMs
       run: VBoxManage list runningvms
 
-    - name: Stop VM in case its running
+    - name: Stop VM, VirtualBox Manager and Xvfb in case its running
       env:
         VM_NAME: ${{ matrix.vm_name }}
       run: |
         VBoxManage controlvm "$VM_NAME" acpipowerbutton
         exit_status=$?
         if [ $exit_status -eq 0 ]; then sleep 10s; fi
+        if [ $(pidof VirtualBox) >/dev/null ]; then killall VirtualBox; fi
+        if [ $(pidof Xvfb) >/dev/null ]; then killall Xvfb; fi
       continue-on-error: true
 
     - name: Start VM and execute test-cases inside VM
