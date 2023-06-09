@@ -160,10 +160,10 @@ class TiledAcquisitionTask(object):
             if self._focus_stream is None:
                 logging.warning("No focuser found in any of the streams, only one acquisition will be performed.")
             self._zlevels = zlevels
-            self._init_zlevels = zlevels  # zlevels can be relative, therefore keep track of the initial zlevels
+            self._init_zlevels:numpy.ndarray = numpy.asarray(zlevels)  # zlevels can be relative, therefore keep track of the initial zlevels
         else:
-            self._zlevels = []
-            self._init_zlevels = []  # zlevels can be relative, therefore keep track of the initial zlevels
+            self._zlevels = numpy.empty(0)
+            self._init_zlevels = numpy.empty(0) # zlevels can be relative, therefore keep track of the initial zlevels
 
         if len(self._zlevels) > 1 and focusing_method != FocusingMethod.MAX_INTENSITY_PROJECTION:
             raise NotImplementedError(
@@ -492,11 +492,14 @@ class TiledAcquisitionTask(object):
 
         acq_time = 0
         for stream in self._streams:
-            acq_stream_time = acqmng.estimateTime([stream])
+            # add 1 to account for stage/objective movement time in z direction
+            acq_stream_time = acqmng.estimateTime([stream]) + 1
             if stream.focuser is not None and len(self._zlevels) > 1:
                 # Acquisition time for each stream will be multiplied by the number of zstack levels
-                acq_stream_time *= len(self._zlevels)
-            acq_time += acq_stream_time
+                zlevels = [item for item in self._zlevels if item is not None]
+                acq_stream_time *= len(zlevels)
+            # add 2 seconds to account for switching from one tile to next tile
+            acq_time += acq_stream_time + 2
 
         # Estimate stitching time based on number of pixels in the overlapping part
         max_pxs = 0
@@ -710,7 +713,7 @@ class TiledAcquisitionTask(object):
         if len(self._init_zlevels) <= 1:
             return [focus_value, ]
 
-        zlevels = self._init_zlevels + focus_value
+        zlevels = [i + focus_value for i in self._init_zlevels]
 
         # Check which focus range is available
         if self._focus_range is not None:
@@ -727,20 +730,18 @@ class TiledAcquisitionTask(object):
             zmax = comp_range[1]
         if zmax > comp_range[1]:
             # Too high => shift down
-            shift_amount = zmax - comp_range[1]
-            zmin -= shift_amount
-            zmax -= shift_amount
+            shift = zmax - comp_range[1]
+            zmin -= shift
+            zmax -= shift
         if zmin < comp_range[0]:
             # Too low => shift up
-            shift_amount = comp_range[0] - zmin
-            zmin += shift_amount
-            zmax += shift_amount
+            shift = comp_range[0] - zmin
+            zmin += shift
+            zmax += shift
 
         # Create focus zlevels from the given zsteps number
         step = (zmax - zmin) / (len(zlevels) - 1)
-        good_pos = int((focus_value - zmin) / step)
         zlevels = [zmin + i * step for i in range(len(zlevels))]
-        zlevels[good_pos] = focus_value
 
         return zlevels
 
@@ -951,8 +952,7 @@ def estimateOverviewTime(*args, **kwargs):
 
 
 def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
-                    registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                    maximum_area = 3.1329e-06):
+                    registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
     """
     Start autofocus and tiled acquisition tasks for each area in the list of area which is
     given by the input argument areas.
@@ -980,7 +980,7 @@ def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs
     future = model.ProgressiveFuture()
     task = AcquireOverviewTask(streams, stage, areas, focus, ccd, future, overlap, settings_obs,
                                log_path, zlevels,
-                               registrar, weaver, focusing_method, maximum_area)
+                               registrar, weaver, focusing_method)
     future.task_canceller = task.cancel  # let the future cancel the task
 
     future.set_progress(end=task.estimate_time() + time.time())
@@ -997,8 +997,7 @@ class AcquireOverviewTask(object):
 
     def __init__(self, streams, stage, areas, focus, ccd, future=None, overlap=0.2, settings_obs=None, log_path=None,
                  zlevels=None,
-                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE,
-                 maximum_area=3.1329e-06):
+                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
         # site and feature means the same
         self._stage = stage
         self._future = future
@@ -1021,12 +1020,11 @@ class AcquireOverviewTask(object):
 
         self.conf_level = 0.8
         self.focusing_method = focusing_method
-        # The number of focus points are constant for now
-        # TODO: make it variable according to the size of the ROI, is it useful?
         self._focus_points = [] # list of focus points per each area in areas
         self._total_nb_focus_points = 0
         for area in areas:
-            focus_points = find_focus_points(maximum_area, area)
+            maximum_distance = 450e-06  # in m
+            focus_points = find_focus_points(maximum_distance, area)
             self._total_nb_focus_points += len(focus_points)
             self._focus_points.append(focus_points)
         self._overlap = overlap
@@ -1059,16 +1057,13 @@ class AcquireOverviewTask(object):
         :return: (float) the estimated time for the rest of the acquisition
         """
         remaining_rois = (len(self.areas) - roi_idx)
-        # TODO progress bar does not calculate proper time, it underestimates the time
         if actual_time_per_roi:
             acquisition_time = actual_time_per_roi * remaining_rois
         else:
-            acquisition_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._ccd)
-            logging.debug(f"the estimated autofocus time for all areas is {acquisition_time}")
-            # based on time tracking
-            # roughly 1 minute per focus point
-            autofocus_time = 60 * self._total_nb_focus_points + 10
+            autofocus_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._ccd)
+            logging.debug(f"the estimated autofocus time for all areas is {autofocus_time}")
             tiled_time = 0
+
             for area in self.areas:
                 tiled_time += estimateTiledAcquisitionTime(
                                         self.streams, self._stage, area,
@@ -1107,6 +1102,7 @@ class AcquireOverviewTask(object):
                 with self._future._task_lock:
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
+                    # is_active set to True will keep the acquisition going on
                     self.streams[0].is_active.value = True
                     logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
                     # run autofocus for the selected roi

@@ -53,7 +53,7 @@ def do_autofocus_in_roi(
     :param ccd: ccd component
     :param focus: focus component
     :param focus_range: focus range, tuple of (zmin, zmax) in meters
-    :param focus_points : (x,y) stage positions in the given bbox
+    :param focus_points : (x,y) positions in the given bbox where autofocus will be run
     :param conf_level: (0<=float<=1) :param conf_level: (float) cut-off value for confidence level of the focus metric,
         only focus points with a confidence above the cut-off will be saved. Default 0 saves all values.
     :return: (list) list of focus positions in x, y, z
@@ -109,8 +109,8 @@ def estimate_autofocus_in_roi_time(n_focus_points, detector):
     :param detector: component of the detector
     :return:
     """
-    # add 0.5 second for stage movement
-    return n_focus_points * (estimateAutoFocusTime(detector, None) + 0.5)
+    # add 60 seconds for stage/objective lens movement
+    return n_focus_points * (estimateAutoFocusTime(detector, None) + 60)
 
 
 def _cancel_autofocus_bbox(future):
@@ -147,7 +147,7 @@ def autofocus_in_roi(
     :param ccd: ccd component
     :param focus: focus component
     :param focus_range: focus range, tuple of (zmin, zmax) in meters
-    :param focus_points : (x,y) stage positions in the given bbox
+    :param focus_points : (x,y) positions in the given bbox where autofocus will be run
     :param conf_level: :param conf_level: (0<float<1) cut-off value for confidence level of the focus metric, only focus
         points with a confidence above the cut-off will be saved. Default 0 saves all values.
     """

@@ -25,7 +25,7 @@ import numpy
 from scipy.linalg.misc import LinAlgError
 
 from odemis.util.linalg import tri_inv, get_z_pos_on_plane, get_point_on_plane, are_collinear, fit_plane_lstsq, \
-    find_focus_points
+    generate_triangulation_points
 
 
 class TriInvBadInput(unittest.TestCase):
@@ -128,50 +128,36 @@ class PlaneFittingTestCase(unittest.TestCase):
         non_linear_points = numpy.array([[1, 2, 12], [-1, -2, -4], [3, 4, 22]])
         self.assertFalse(are_collinear(non_linear_points[0], non_linear_points[1], non_linear_points[2]))
 
-    def test_find_focus_points(self):
+    def test_generate_triangulation_points(self):
         """
         Test the number of focus points when given area changes.
         """
-        maximum_area = 1300e-06 * 1300e-06
+        max_dis = 450e-06
+        length_1_start = 0
+        length_1_end = 1.77e-03
+        length_2_start = 0
+        length_2_end = 1.77e-03
 
-        # given area is 100% of maximum area
-        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996, -0.00225, 0.005098)
-        focus_points = find_focus_points(maximum_area, given_area_coords)
-        self.assertTrue(len(focus_points), 16)
-        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
+        # given area is 100% of maximum area (1.77mm x 1.77mm)
+        given_area_coords = (length_1_start, length_2_start, length_1_end, length_2_end)
+        focus_points = generate_triangulation_points(max_dis, given_area_coords)
+        self.assertEqual(len(focus_points), 16)
+        self.assertEqual(len(focus_points[0]), 2)  # (x,y)
 
-        # given area coordinates is 75 % maximum area
-        red_length = 350e-06
-        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996,
-                             -0.00225 - red_length, 0.005098 - red_length)
-        focus_points = find_focus_points(maximum_area, given_area_coords)
-        self.assertTrue(len(focus_points), 9)
-        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
-
-        # given area is 50 % maximum area
-        red_length = 675e-06
-        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996,
-                             -0.00225 - red_length, 0.005098 - red_length)
-        focus_points = find_focus_points(maximum_area, given_area_coords)
-        self.assertTrue(len(focus_points), 7)
-        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
-
-        # given area is 50 % maximum area
-        red_length = 800e-06
-        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996,
-                             -0.00225 - red_length, 0.005098 - red_length)
-        focus_points = find_focus_points(maximum_area, given_area_coords)
-        self.assertTrue(len(focus_points), 5)
-        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
+        # given area is 90 % maximum area
+        red_length = 1.77e-03*numpy.sqrt(0.9)
+        given_area_coords = (length_1_start, length_2_start, red_length, red_length)
+        focus_points = generate_triangulation_points(max_dis, given_area_coords)
+        self.assertEqual(len(focus_points), 16)
+        self.assertEqual(len(focus_points[0]), 2)  # (x,y)
 
         # given area is 15 % maximum area
-        red_length = 1300e-06
-        given_area_coords = (-0.0035499999999999996, 0.0037979999999999996,
-                             -0.00225 - red_length, 0.005098 - red_length)
-        focus_points = find_focus_points(maximum_area, given_area_coords)
+        red_length = 1.77e-03*numpy.sqrt(0.15)
+        given_area_coords = (length_1_start, length_2_start, red_length, red_length)
+        focus_points = generate_triangulation_points(max_dis, given_area_coords)
         # minimum number of focus points cannot be lower than 3
-        self.assertTrue(len(focus_points), 4)
-        self.assertTrue(len(focus_points[0]), 2)  # (x,y)
+        self.assertEqual(len(focus_points), 4)
+        self.assertEqual(len(focus_points[0]), 2)  # (x,y)
 
 if __name__ == "__main__":
     unittest.main()

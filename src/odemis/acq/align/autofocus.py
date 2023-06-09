@@ -348,7 +348,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             good_focus = focus.position.value["z"]
             image = AcquireNoBackground(detector, dfbkg, timeout)
             fm_good = Measure(image)
-            logging.debug("Focus level at %.7g is %.7g, good focus known", good_focus, fm_good)
+            logging.debug("Good Focus level known at %.7g is %.7g", good_focus, fm_good)
             focus_levels[good_focus] = fm_good
             last_pos = good_focus
 
@@ -432,7 +432,6 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 best_fm = max(fm_range)
                 i_max = fm_range.index(best_fm)
                 best_pos = pos_range[i_max]
-                logging.debug(f"the best focus position is {best_pos}")
 
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
@@ -458,8 +457,9 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             if last_pos != best_pos:
                 # Clip best_pos in case the hardware reports a position outside of the range.
                 best_pos = max(rng[0], min(best_pos, rng[1]))
+                measure_range = ("left", "center", "right")
+                logging.debug(f"The best focus measure is found at {measure_range[i_max]}")
                 focus.moveAbsSync({"z": best_pos})
-                logging.debug(f"The best focus measure is found at index {i_max}")
             step_cntr += 1
 
         worst_fm = min(focus_levels.values())
@@ -557,8 +557,8 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             rng = (max(rng[0], rng_focus[0]), min(rng[1], rng_focus[1]))
 
         if good_focus:
-            focus.moveAbsSync({"z": good_focus})
             logging.debug(f"moving to good focus level at z:{good_focus}")
+            focus.moveAbsSync({"z": good_focus})
 
         focus_levels = []  # list with focus levels measured so far
         best_pos = orig_pos = focus.position.value['z']

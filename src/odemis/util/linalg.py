@@ -232,12 +232,15 @@ def are_collinear(p1: Iterable[float], p2: Iterable[float], p3: Iterable[float])
         abs((y2 - y1) * (z3 - z1) - (y3 - y1) * (z2 - z1)) < 1e-12
 
 
-def find_focus_points(maximum_area: float, given_area_coords: Iterable[float]) -> Iterable[tuple]:
-# def find_focus_points(maximum_area, given_area_coords):
+def generate_triangulation_points(max_dist: float, given_area_coords: Iterable[float]) -> Iterable[tuple]:
     """
-    Finds (x,y) positions on the given area. The number of positions is dependent on the ratio of given area by
-    maximum area. The points are evenly distributed from each other in the given area.
-    :param maximum_area: the total area that can be used for imaging/milling in square meters.
+    Finds (x,y) positions on the given area. The points are evenly distributed from each other in the given area.
+    The distance between points is decided by maximum distance.
+
+    If the distance between points is more than the given maximum distance, the overview acquisition image might
+    result in blurry spots in the final acquisition image.
+
+    :param max_dist: the maximum distance allowed between two (x,y) positions.
     :param given_area_coords: [xmin, ymin, xmax, ymax] the top right and bottom left (x,y) coordinates in meters.
     :return: List of (x,y) coordinates in the given area.
     """
@@ -245,13 +248,6 @@ def find_focus_points(maximum_area: float, given_area_coords: Iterable[float]) -
     # in the above case, points along the shorter side will be closer to each other and
     # will not be evenly distributed throughout the given area
     xmin, ymin, xmax, ymax = given_area_coords
-
-    # Calculate the area of the given area
-    area = (xmax - xmin) * (ymax - ymin)
-
-    # Calculate the percentage of the given area with respect to the maximum area
-    percentage = area / maximum_area * 100
-
 
     # Avoid points exactly on the border of the given area, find points delta distance
     # away from the border of the given area
@@ -262,42 +258,28 @@ def find_focus_points(maximum_area: float, given_area_coords: Iterable[float]) -
     ymin = ymin + delta_y
     ymax = ymax - delta_y
 
-    # Determine the number of points to distribute based on the percentage of the given area
-    if percentage >= 80:
-        num_points = 16
-        x_arr = numpy.linspace(xmin, xmax, 4)
-        y_arr = numpy.linspace(ymin, ymax, 4)
-        matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
-        x_points = matrix[:, 0]
-        y_points = matrix[:, 1]
-    elif percentage >= 60:
-        num_points = 9
-        x_arr = numpy.linspace(xmin, xmax, 3)
-        y_arr = numpy.linspace(ymin, ymax, 3)
-        matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
-        x_points = matrix[:, 0]
-        y_points = matrix[:, 1]
-    elif percentage >= 40:
-        num_points = 7
-        x_arr = numpy.linspace(xmin, xmax, 3)
-        y_arr = numpy.linspace(ymin, ymax, 2)
-        matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
-        x_points = matrix[:, 0]
-        y_points = matrix[:, 1]
-        x_points = numpy.append(x_points, (xmax + xmin) / 2)
-        y_points = numpy.append(y_points, (ymax + ymin) / 2)
-    elif percentage >= 20:
-        num_points = 5
-        x_points = [xmin, xmax, xmin, xmax, (xmax + xmin) / 2]
-        y_points = [ymin, ymin, ymax, ymax, (ymax + ymin) / 2]
-    else:
-        num_points = 4
+    length_x = abs(xmax - xmin)
+    length_y = abs(ymax - ymin)
+    points_x = numpy.floor(length_x/max_dist) + 1
+    points_y = numpy.floor(length_y/max_dist) + 1
+    total_points = int(points_x * points_y)
+
+    # Minimum number of points for triangulation is three
+    # Create minimum number of points when total number of points is <= 3
+    if total_points <= 3:
+        total_points = 4
         x_points = [xmin, xmax, xmin, xmax]
         y_points = [ymin, ymin, ymax, ymax]
+    else:
+        x_arr = numpy.linspace(xmin, xmax, points_x)
+        y_arr = numpy.linspace(ymin, ymax, points_y)
+        matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
+        x_points = matrix[:, 0]
+        y_points = matrix[:, 1]
 
     # Distribute the points
     points = []
-    for i in range(num_points):
+    for i in range(total_points):
         points.append((x_points[i], y_points[i]))
 
     return points

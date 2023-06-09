@@ -775,6 +775,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
         # Set parameters for tiled acq
+        # High overlap percentage is not required as the stitching is based only on stage position,
+        # independent of the image content. It just needs to be big enough to make sure that even with some stage
+        # imprecision, all the tiles will overlap or at worse be next to each other (i.e. , no space between tiles)
         self.overlap = 0.05
         try:
             # Use the stage range, which can be overridden by the MD_POS_ACTIVE_RANGE.
@@ -1001,8 +1004,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # Some settings can affect the FoV. Also, adding/removing the stream with
         # the smallest FoV would also affect the area.
-        self.update_area_size()
-
         areas = self._get_areas()
 
         # Disable acquisition button if no area
@@ -1190,15 +1191,15 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             zmax = focus_range[1]
         if zmax > focus_range[1]:
             # Too high => shift down
-            shift_amount = zmax - focus_range[1]
-            zmin -= shift_amount
-            zmax -= shift_amount
+            shift = zmax - focus_range[1]
+            zmin -= shift
+            zmax -= shift
 
         if zmin < focus_range[0]:
             # Too low => shift up
-            shift_amount = focus_range[0] - zmin
-            zmin += shift_amount
-            zmax += shift_amount
+            shift = focus_range[0] - zmin
+            zmin += shift
+            zmax += shift
 
         # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
@@ -1248,11 +1249,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         if self.filename_tiles:
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
-            os.makedirs(os.path.dirname(self.filename_tiles))
+            os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
         if self.autofocus_roi_ckbox.value:
             areas = self._get_areas()
-            max_area = self.get_grid_area()
             # calculate relative range of z levels
             #TODO add the below line at a better location
             if zlevels is not None:
@@ -1268,8 +1268,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                                               weaver=WEAVER_MEAN,
                                               registrar=REGISTER_IDENTITY,
                                               zlevels=zlevels,
-                                              focusing_method=focus_mtd,
-                                              maximum_area=max_area)
+                                              focusing_method=focus_mtd)
 
         else:
             # If there are several areas, the autofocus should be automatically selected
