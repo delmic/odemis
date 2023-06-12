@@ -1,0 +1,155 @@
+# This workflow will install Python dependencies, and run a selection of tests from the Odemis repository.
+# The selection is picked such that they do not require a back-end and are known to pass with this github workflow.
+# Test cases that will pass with this workflow can be added to this document.
+# It uses the python 3 system interpreter to run test cases.
+
+name: Unit testing
+
+on:
+  [push, pull_request]
+jobs:
+  build:
+
+    runs-on: ubuntu-20.04
+
+    steps:
+    - uses: actions/checkout@v2
+    - name: Install Odemis dependencies
+      run: |
+        sudo add-apt-repository ppa:delmic-soft/odemis
+        sudo apt-get -y update
+
+        sudo apt-get -y install python3-pil python3-yaml python3-serial python3-zmq \
+        python3-scipy python3-decorator \
+        python3-libtiff python3-comedilib python3-h5py libtiff5-dev python3-future \
+        python3-pkg-resources python3-netifaces python3-cairo python3-numpy python3-scipy \
+        python3-decorator python3-xdg python3-suds python3-matplotlib python3-opencv \
+        python3-wxgtk4.0 python3-serial python3-evdev python3-notify2 python3-psutil \
+        graphicsmagick cgroup-tools authbind python3-setuptools cython python3-pyro4-delmic
+
+        sudo mkdir /var/run/odemisd
+        sudo chmod a+rw /var/run/odemisd
+
+    - name: Run tests from odemis.dataio
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest discover -s src/odemis/dataio/test -p "*_test.py" --verbose
+
+    - name: Run tests from odemis.acq.drift
+      # Run this step if the previous step passed or failed, but not if it was canceled.
+      # continue-on-error prevents the pipeline from failing, with this `if` the pipeline
+      # still reports a fail, and the next steps are also executed.
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest discover -s src/odemis/acq/drift/test -p "*_test.py" --verbose
+
+    - name: Run tests from odemis.util.conversion
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/conversion_test.py --verbose
+
+    - name: Run tests from odemis.util.dataio
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/dataio_test.py --verbose
+
+    - name: Run tests from odemis.util.filename
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/filename_test.py --verbose
+
+    - name: Run tests from odemis.util.fluo
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/fluo_test.py --verbose
+
+    - name: Run tests from odemis.util.graph
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/graph_test.py --verbose
+
+    - name: Run tests from odemis.util.img
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/img_test.py --verbose
+
+    - name: Run tests from odemis.util.linalg
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/linalg_test.py --verbose
+
+    - name: Run tests from odemis.util.peak_local_max
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/peak_local_max_test.py --verbose
+
+    - name: Run tests from odemis.util.peak_local_max
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/peak_local_max_test.py --verbose
+
+    - name: Run tests from odemis.util.peak
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/peak_test.py --verbose
+
+    - name: Run tests from odemis.util.registration
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/registration_test.py --verbose
+
+    - name: Run tests from odemis.util.spectrum
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/spectrum_test.py --verbose
+
+    - name: Run tests from odemis.util.transform
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/transform_test.py --verbose
+
+    - name: Run tests from odemis.util.units
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/units_test.py --verbose
+
+    - name: Run tests from odemis.util.__init__.py
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/util/test/util_test.py --verbose
+
+    - name: Run tests from odemis.acq.stitching except tiled_acq
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/acq/stitching/test/registrar_test.py --verbose
+        python3 -m unittest src/odemis/acq/stitching/test/stitching_test.py --verbose
+        python3 -m unittest src/odemis/acq/stitching/test/weaver_test.py --verbose
+
+    - name: Run tests from odemis.acq.calibration
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/acq/test/calibration_test.py --verbose
+
+    - name: Run tests from odemis.acq.feature
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/acq/test/feature_test.py --verbose

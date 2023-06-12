@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 26 Jul 2017
 
 @author: Éric Piel, Philip Winkler
@@ -18,23 +18,23 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
-import logging
-from odemis import model
-import numpy
-import unittest
-import random
 import copy
-import os
 import itertools
+import logging
+import os
+import random
+import unittest
 
+import numpy
+
+import odemis
+from odemis import model
 from odemis.acq.stitching import IdentityRegistrar, ShiftRegistrar, GlobalShiftRegistrar
+from odemis.acq.stitching.test.stitching_test import decompose_image
 from odemis.dataio import find_fittest_converter
 from odemis.util.img import ensure2DImage
-import odemis
-
-from stitching_test import decompose_image
 
 logging.getLogger().setLevel(logging.DEBUG)
 

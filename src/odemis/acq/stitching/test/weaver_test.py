@@ -33,9 +33,9 @@ import odemis
 from odemis import model
 from odemis.acq.stitching import CollageWeaver, MeanWeaver, CollageWeaverReverse, WEAVER_MEAN, WEAVER_COLLAGE_REVERSE, \
     WEAVER_COLLAGE
+from odemis.acq.stitching.test.stitching_test import decompose_image
 from odemis.dataio import find_fittest_converter
-from odemis.util.img import ensure2DImage, rotate_img_metadata
-from stitching_test import decompose_image
+from odemis.util.img import ensure2DImage
 
 logging.getLogger().setLevel(logging.DEBUG)
 
