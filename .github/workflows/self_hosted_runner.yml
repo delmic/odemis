@@ -1,9 +1,8 @@
 name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
 
 on:
-  [push]
-  # schedule:
-    # - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, for Amsterdam it is +1 UTC during winter and +2 UTC during summer
+  schedule:
+    - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, for Amsterdam it is +1 UTC during winter and +2 UTC during summer
 
 jobs:
   full_test:
@@ -37,9 +36,14 @@ jobs:
         # See in GitHub Settings/Security sidebar/Secrets and variables/Actions/Secrets tab/Repository secrets
         CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
-      # The testing user should automatically be logged in for the display (or the xserver) to be started
+      # The ci user of the CI server should automatically be logged in
+      # The autologin starts up the gdm-session-worker -> gdm-x-session -> Xorg
+      # The Xorg process is /usr/lib/xorg/Xorg vt2 -displayfd 3 -auth /run/user/1000/gdm/Xauthority -background none -noreset -keeptty -verbose 3
+      # When Xorg starts on the virtual terminal specified by vt2, it becomes the X server running on :0
+      # This allows applications to connect and display their graphical output on that display
       # Start the VirtualBox Manager
       # Sleep for 5s to give VirtualBox Manager some time to start
+      # The testing user of the Virtual Machine should automatically be logged in for the display (or the xserver) to be started
       # Pass the DISPLAY to the Virtual Machine while starting it
       # Sleep for 1.5m to give the Virtual Machine time to start and automatically login
       # Set runpytest_wrapper.sh execution timeout of 8 hours, i.e. 8 * 60 * 60 * 1000 = 28800000 milliseconds
