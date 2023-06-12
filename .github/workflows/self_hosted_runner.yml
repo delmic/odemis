@@ -1,8 +1,9 @@
 name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
 
 on:
-  schedule:
-    - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, for Amsterdam it is +1 UTC during winter and +2 UTC during summer
+  [push]
+  # schedule:
+    # - cron: "0 17 * * 0-4"  # sunday to thursday at 5 pm UTC, for Amsterdam it is +1 UTC during winter and +2 UTC during summer
 
 jobs:
   full_test:
@@ -21,7 +22,7 @@ jobs:
     - name: List of running VMs
       run: VBoxManage list runningvms
 
-    - name: Stop VM, VirtualBox Manager and Xvfb in case its running
+    - name: Stop VM and VirtualBox Manager in case its running
       env:
         VM_NAME: ${{ matrix.vm_name }}
       run: |
@@ -29,7 +30,6 @@ jobs:
         exit_status=$?
         if [ $exit_status -eq 0 ]; then sleep 10s; fi
         if [ $(pidof VirtualBox) >/dev/null ]; then killall VirtualBox; fi
-        if [ $(pidof Xvfb) >/dev/null ]; then killall Xvfb; fi
       continue-on-error: true
 
     - name: Start VM and execute test-cases inside VM
@@ -38,18 +38,13 @@ jobs:
         CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
       # The testing user should automatically be logged in for the display (or the xserver) to be started
-      # Create a display server implementing the X11 display server protocol using Xvfb
-      # Sleep for 5s to give Xvfb some time to start
       # Start the VirtualBox Manager
       # Sleep for 5s to give VirtualBox Manager some time to start
-      # Pass the created DISPLAY to the Virtual Machine while starting it
+      # Pass the DISPLAY to the Virtual Machine while starting it
       # Sleep for 1.5m to give the Virtual Machine time to start and automatically login
       # Set runpytest_wrapper.sh execution timeout of 8 hours, i.e. 8 * 60 * 60 * 1000 = 28800000 milliseconds
       run: |
         export DISPLAY=:0
-        Xvfb "$DISPLAY" -screen 0 1920x1280x24 -ac -noreset > /dev/null 2>&1 &
-        sleep 5s
-        echo "Started Xvfb with PID $(pidof Xvfb)"
         VirtualBox &
         sleep 5s
         echo "Started VirtualBox with PID $(pidof VirtualBox)"
@@ -70,7 +65,7 @@ jobs:
         VM_NAME: ${{ matrix.vm_name }}
       run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password "$CI_VM_PASSWORD" --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
 
-    - name: Stop VM, VirtualBox Manager and Xvfb
+    - name: Stop VM, VirtualBox Manager
       env:
         VM_NAME: ${{ matrix.vm_name }}
       run: |
@@ -78,5 +73,3 @@ jobs:
         sleep 10s
         echo "Killing VirtualBox Manager"
         killall VirtualBox
-        echo "Killing Xvfb"
-        killall Xvfb
