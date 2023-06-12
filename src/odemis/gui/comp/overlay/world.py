@@ -186,17 +186,25 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                 self._mode = MODE_SHOW_FEATURES
 
     def _on_current_feature_va(self, _):
-        # refresh the canvas on _on_current_feature_va change & when status is changed
-        self.cnvs.update_drawing()
-        if self.tab_data.main.currentFeature.value:
-            self.tab_data.main.currentFeature.value.status.subscribe(self._on_status_change)
+        # Redraw when the current feature is changed, as it's displayed differently
+        wx.CallAfter(self.cnvs.request_drawing_update)
 
     def _on_status_change(self, _):
-        self.cnvs.update_drawing()
+        # Redraw whenever any feature status changes, as it's reflected in the icon
+        wx.CallAfter(self.cnvs.request_drawing_update)
 
-    def _on_features_changes(self, _):
-        # refresh the canvas on _features_va list change
-        self.cnvs.update_drawing()
+    def _on_features_changes(self, features):
+        # Redraw if a feature is added/removed
+        wx.CallAfter(self.cnvs.request_drawing_update)
+
+        # In case there is new feature, also listen to its status.
+        # To keep things simple, we always subscribe to all the features. It
+        # will be a no-op for the features we've already subscribed to. If a
+        # feature is removed, most likely its status will not change, and even
+        # if it changes, that just causes an extra redraw request, which is not
+        # a big deal.
+        for f in features:
+            f.status.subscribe(self._on_status_change)
 
     def on_dbl_click(self, evt):
         """
