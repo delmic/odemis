@@ -21,7 +21,7 @@ jobs:
     - name: List of running VMs
       run: VBoxManage list runningvms
 
-    - name: Stop VM, VirtualBox Manager and Xvfb in case its running
+    - name: Stop VM and VirtualBox Manager in case its running
       env:
         VM_NAME: ${{ matrix.vm_name }}
       run: |
@@ -29,7 +29,6 @@ jobs:
         exit_status=$?
         if [ $exit_status -eq 0 ]; then sleep 10s; fi
         if [ $(pidof VirtualBox) >/dev/null ]; then killall VirtualBox; fi
-        if [ $(pidof Xvfb) >/dev/null ]; then killall Xvfb; fi
       continue-on-error: true
 
     - name: Start VM and execute test-cases inside VM
@@ -37,19 +36,19 @@ jobs:
         # See in GitHub Settings/Security sidebar/Secrets and variables/Actions/Secrets tab/Repository secrets
         CI_VM_PASSWORD: ${{ secrets.CI_VM_PASSWORD }}
         VM_NAME: ${{ matrix.vm_name }}
-      # The testing user should automatically be logged in for the display (or the xserver) to be started
-      # Create a display server implementing the X11 display server protocol using Xvfb
-      # Sleep for 5s to give Xvfb some time to start
+      # The ci user of the CI server should automatically be logged in
+      # The autologin starts up the gdm-session-worker -> gdm-x-session -> Xorg
+      # The Xorg process is /usr/lib/xorg/Xorg vt2 -displayfd 3 -auth /run/user/1000/gdm/Xauthority -background none -noreset -keeptty -verbose 3
+      # When Xorg starts on the virtual terminal specified by vt2, it becomes the X server running on :0
+      # This allows applications to connect and display their graphical output on that display
       # Start the VirtualBox Manager
       # Sleep for 5s to give VirtualBox Manager some time to start
-      # Pass the created DISPLAY to the Virtual Machine while starting it
+      # The testing user of the Virtual Machine should automatically be logged in for the display (or the xserver) to be started
+      # Pass the DISPLAY to the Virtual Machine while starting it
       # Sleep for 1.5m to give the Virtual Machine time to start and automatically login
       # Set runpytest_wrapper.sh execution timeout of 8 hours, i.e. 8 * 60 * 60 * 1000 = 28800000 milliseconds
       run: |
         export DISPLAY=:0
-        Xvfb "$DISPLAY" -screen 0 1920x1280x24 -ac -noreset > /dev/null 2>&1 &
-        sleep 5s
-        echo "Started Xvfb with PID $(pidof Xvfb)"
         VirtualBox &
         sleep 5s
         echo "Started VirtualBox with PID $(pidof VirtualBox)"
@@ -70,7 +69,7 @@ jobs:
         VM_NAME: ${{ matrix.vm_name }}
       run: VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/bin/bash" --username testing --password "$CI_VM_PASSWORD" --wait-stdout -- bash -c 'cat $(ls -Art /home/testing/development/odemis-testing/unittest-full-*.log | tail -n 1)'
 
-    - name: Stop VM, VirtualBox Manager and Xvfb
+    - name: Stop VM, VirtualBox Manager
       env:
         VM_NAME: ${{ matrix.vm_name }}
       run: |
@@ -78,5 +77,3 @@ jobs:
         sleep 10s
         echo "Killing VirtualBox Manager"
         killall VirtualBox
-        echo "Killing Xvfb"
-        killall Xvfb
