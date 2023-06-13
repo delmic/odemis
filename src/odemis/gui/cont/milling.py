@@ -53,13 +53,15 @@ class MillingButtonController:
     """
     Takes care of the mill button and initiates the serial milling job.
     """
-    def __init__(self, tab_data, tab_panel):
+    def __init__(self, tab_data, tab_panel, tab):
         """
         tab_data (MicroscopyGUIData): the representation of the microscope GUI
         tab_panel: (wx.Frame): the frame which contains the 4 viewports
+        tab: (Tab): the tab object which controls the panel
         """
-        self._panel = tab_panel
         self._tab_data = tab_data
+        self._panel = tab_panel
+        self._tab = tab
 
         # By default, all widgets are hidden => show button + estimated time at initialization
         self._panel.txt_milling_est_time.Show()
@@ -87,6 +89,9 @@ class MillingButtonController:
         except Exception:
             logging.exception("Failed to load milling settings from %s", MILLING_SETTINGS_PATH)
             return
+
+        # Make sure all the streams are paused
+        self._tab.streambar_controller.pauseStreams()
 
         # hide/show/disable some widgets
         self._panel.txt_milling_est_time.Hide()

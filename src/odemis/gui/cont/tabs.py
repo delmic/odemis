@@ -493,7 +493,8 @@ class LocalizationTab(Tab):
         if self.main_data.role == "mimas":
             self._serial_milling_controller = milling.MillingButtonController(
                 tab_data,
-                panel
+                panel,
+                self
             )
 
     @property
