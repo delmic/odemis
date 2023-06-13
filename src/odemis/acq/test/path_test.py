@@ -23,13 +23,11 @@ import logging
 import os
 import time
 import unittest
-from unittest.case import skip
 
 import odemis
 from odemis import model
 from odemis.acq import path, stream
-from odemis.acq.move import (FM_IMAGING, LOADING, cryoSwitchSamplePosition,
-                             getCurrentPositionLabel)
+from odemis.acq.move import (FM_IMAGING, LOADING, MicroscopePostureManager)
 from odemis.acq.path import ACQ_QUALITY_BEST, ACQ_QUALITY_FAST
 from odemis.util import testing
 
@@ -1363,6 +1361,8 @@ class MimasPathTestCase(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         testing.start_backend(MIMAS_CONFIG)
+        cls.microscope = model.getMicroscope()
+        cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
 
         # Microscope component
         cls.microscope = model.getComponent(role="mimas")
@@ -1379,9 +1379,9 @@ class MimasPathTestCase(unittest.TestCase):
         cls.ibeam = model.getComponent(role="ion-beam")
 
         # Move to LOADING (will reference if needed)
-        cryoSwitchSamplePosition(LOADING).result()
+        cls.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         # Then move to FM_IMAGING, so that switching between optical path is allowed
-        cryoSwitchSamplePosition(FM_IMAGING).result()
+        cls.posture_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
 
     def assert_pos_align(self, expected_pos_name: str):
         """
@@ -1418,14 +1418,14 @@ class MimasPathTestCase(unittest.TestCase):
         self.assert_pos_align(model.MD_FAV_POS_DEACTIVE)
 
         # check that when in LOADING position, the optical path doesn't change
-        cryoSwitchSamplePosition(LOADING).result()
+        self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         f = self.optmngr.setPath("optical")
         f.result()
-        pos_name = getCurrentPositionLabel(self.stage.position.value, self.stage, self.align)
+        pos_name = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
         self.assertEqual(pos_name, LOADING)
 
         # Move it back to FM_IMAGING
-        cryoSwitchSamplePosition(FM_IMAGING).result()
+        self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING).result()
 
     def test_set_path_stream(self):
         """

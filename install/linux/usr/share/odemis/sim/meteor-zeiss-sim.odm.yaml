@@ -1,0 +1,227 @@
+# For now, this is esssentially just a FM microscope,
+# as the FIB part is handled separately by the SEM
+
+Zeiss-METEOR: {
+    class: Microscope,
+    role: meteor,
+    children: [
+        "AntiBacklash Stage",
+        "Meteor Stage",
+        "Optical Objective",
+        "Optical Focus",
+        "Light Source",
+        "Filter Wheel",
+        "Camera",
+        "EBeam",
+    ],
+}
+
+"SEM": {
+    class: zeiss.SEM,
+    role: null,
+    init: {
+        port: "/dev/fake",  # simulator
+        # port: "/dev/ttyUSB*",
+    },
+    children: {
+        scanner: "EBeam",
+        stage: "Stage",
+    }
+}
+
+"EBeam": {
+    role: null,
+    init: {
+        hfw_nomag: 0.114,  # m, theoretical HFW if mag == 1x, TODO: depends on the voltages
+    },
+}
+
+
+"Stage": {
+    role: null,
+    init: {
+        rng: {
+            # For Zeiss XB550
+            "x": [0, 102.5e-3],
+            "y": [0, 100.e-3],
+            "z": [0, 50.e-3],
+            "rx": [-0.06981317007977318, 0.7853981633974],  # rad (-4° -> 45°) # T tilt , -4° is the minimum
+            "rm": [0.0, 6.283185307179586], # rad (0° -> 360°) # R , rz, rotation
+            "m": [0.0, 13.e-3],
+        },
+        # increase the X position => see at the center something which was on the right
+        # increase the Y position => see at the center something which was at the top
+        # inverted: ["x", "y"],  # TODO: check
+    },
+}
+
+"AntiBacklash Stage": {
+    class: actuator.AntiBacklashActuator,
+    role: stage-bare,
+    init: {
+        # Force a move on the m axis to always finish by +10µm to workaround the backlash.
+        backlash: {},  # Other axes have no anti-backlash
+    },
+    dependencies: {"slave": "Stage"},
+    metadata: {
+        # Loading position:
+        FAV_POS_DEACTIVE: { 'rx': 0.0, 'rm': 0.7417649320975901, 'x': 54.976e-3, 'y': 56.806e-3, 'z': 0.0, 'm': 7.060e-3 }, # To be filled in based on integration data, rm is 42.5°
+        # XYZM ranges for SEM & METEOR
+        SEM_IMAGING_RANGE: {"x": [40.e-3, 60.e-3], "y": [30.e-3, 60.e-3], "z": [0.e-3, 20.e-3], "m": [0.e-3, 13.e-3]},
+        FM_IMAGING_RANGE: {"x": [90.e-3, 102.5e-3], "y": [30.e-3, 60.e-3], "z": [0.e-3, 20.e-3], "m": [0.e-3, 13.e-3]},
+        # Grid centers in SEM range
+        SAMPLE_CENTERS: {"GRID 1": {'x': 50.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}, "GRID 2": {'x': 46.e-3, 'y': 48.88321e-3, 'm': 3.35044e-3, 'z': 10.e-3}},
+        # Calibrated values used for the SEM/FM switching behaviour
+        CALIB: {"x": 50.e-3  , "y":  50.e-3  , "m":  3.3309e-3  , "z":  10.e-3  , "z_ct":  42.e-3  , "dx":  47.e-3  , "dy":  -0.1952e-3, "version":"zeiss_1"},
+        # Active tilting (rx) & rotation (rm) angles positions when switching between SEM & FM, in radians.
+        # Note: these values are calibrated during installation.
+        FAV_FM_POS_ACTIVE: {"rx": 0.4607669225265  , "rm":  1.7453292519943295}, # 26.4° & 100°, respectively
+        FAV_SEM_POS_ACTIVE: {"rx": 0.0349065850399, "rm": 4.886921905584122},   # 2° & 280° Note that the default milling angle (rx_sem) can be chosen by the customer, and that rm_sem should always be 180 degrees different from rm_fm
+    },
+}
+
+"Linked YM": {
+    class: actuator.ConvertStage,
+    role: null,
+    dependencies: {
+        "under": "AntiBacklash Stage"
+    },
+    init: {
+      axes: [ "y", "m" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
+      rotation: 0.4537856055185, # rad , 26° 
+    },
+}
+# not sure if all z will be changed to m below, for now m is used
+"Meteor Stage": {
+    class: actuator.MultiplexActuator,
+    role: stage,
+    dependencies: { "x": "AntiBacklash Stage", "y": "Linked YM", "z": "Linked YM", },
+    init: {
+        axes_map: { "x": "x", "y": "x", "z": "y",},
+        # inverted: ["x", "y"],  # TODO: check
+    },
+    affects: ["Camera", "EBeam"],
+    metadata: {
+        POS_ACTIVE_RANGE: {"x":[90.e-3, 102.5e-3], "y": [30.e-3, 70.e-3]}
+    },
+}
+
+"Light Source": {
+    class: omicronxx.HubxX,
+    role: light,
+    init: {
+        port: "/dev/fakehub", # Simulator
+        # port: "/dev/ttyFTDI*",
+    },
+    affects: ["Camera"],
+}
+
+"Optical Objective": {
+    class: static.OpticalLens,
+    role: lens,
+    init: {
+        # TODO check magnification
+        mag: 84.0, # ratio, (actually of the complete light path)
+        na: 0.5, # ratio, numerical aperture
+        ri: 1.0, # ratio, refractive index
+    },
+    affects: ["Camera"]
+}
+
+
+# Camera simulator
+"Camera": {
+    class: simcam.Camera,
+    role: ccd,
+    init: {
+        image: "andorcam2-fake-clara.tiff",
+    },
+}
+
+# Controller for the filter-wheel
+# TMCM-6110: DIP must be configured with address 7 (= 1110000)
+# TMCM-1211: Must be pre-initiliazed with address 17
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    init: {
+        port: "/dev/fake", # Simulator
+        address: null, # Simulator
+        # param_file: "/usr/share/odemis/meteor-tmcm1211-filterwheel.tmcm.tsv",
+        axes: ["fw"],
+        ustepsize: [1.227184e-6], # [rad/µstep]
+        rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
+        unit: ["rad"],
+        refproc: "Standard",
+        refswitch: {"fw": 0}, #digital output used to switch on/off sensor
+        inverted: ["fw"], # for the filter wheel, the direction doesn't matter, as long as the positions are correct
+    },
+}
+
+"AntiBacklash for Filter Wheel": {
+    class: actuator.AntiBacklashActuator,
+    role: null,
+    init: {
+        backlash: {
+            # Force every move to always finish in the same direction
+            "fw": 50.e-3,  # rad
+        },
+    },
+    children: {"slave": "Optical Actuators"},
+}
+
+"Filter Wheel": {
+    class: actuator.FixedPositionsActuator,
+    role: filter,
+    dependencies: {"band": "AntiBacklash for Filter Wheel"},
+    init: {
+        axis_name: "fw",
+        # This filter-wheel is made so that the light goes through two "holes":
+        # the filter, and the opposite hole (left empty). So although it has 8
+        # holes, it only supports 4 filters (from 0° to 135°), and there is no
+        # "fast-path" between the last filter and the first one.
+        positions: {
+             # pos (rad) -> m,m
+             0.08: [414.e-9, 450.e-9], # FF01-432/36
+             0.865398: [500.e-9, 530.e-9], # FF01-515/30
+             1.650796: [579.5e-9, 610.5e-9], # FF01-595/31
+             2.4361944: [663.e-9, 733.e-9], # FF02-698/70
+        },
+        cycle: 6.283185, # position of ref switch (0) after a full turn
+    },
+    affects: ["Camera"],
+}
+
+# CLS3252dsc-1
+"Optical Focus": {
+    class: smaract.MCS2,
+    role: focus,
+    init: {
+        # TODO: check serial number
+        # locator: "network:sn:MCS2-00008609",
+        locator: "fake",  # For simulator
+        ref_on_init: True,
+        speed: 0.003,  # m/s
+        accel: 0.003,  # m/s²
+        #hold_time: 5 # s, default = infinite
+        # TODO: check the ranges
+        axes: {
+            'z': {
+                # 0 is safely parked (FAV_POS_DEACTIVE)
+                # 17mm is typically in focus (FAV_POS_ACTIVE)
+                range: [-15.e-3, 20.e-3],
+                unit: 'm',
+                channel: 0
+            },
+        },
+    },
+
+    metadata: {
+        # TODO: calibrate the value
+        # Loading position to retract lense
+        FAV_POS_DEACTIVE: {'z': -10.0e-3},
+        # Initial active position (a bit away from the focus position for safety)
+        FAV_POS_ACTIVE: {'z': -1.0e-3}
+    },
+    affects: ["Camera"],
+}

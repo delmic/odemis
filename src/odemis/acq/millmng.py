@@ -22,7 +22,7 @@ from odemis.acq import move
 from odemis.acq.acqmng import acquire
 from odemis.acq.drift import AnchoredEstimator
 from odemis.acq.feature import CryoFeature
-from odemis.acq.move import MILLING
+from odemis.acq.move import MILLING, MicroscopePostureManager
 from odemis.acq.orsay_milling import mill_rectangle
 from odemis.acq.stitching._tiledacq import MOVE_SPEED_DEFAULT
 from odemis.acq.stream import UNDEFINED_ROI
@@ -468,6 +468,8 @@ class MillingRectangleTask(object):
             actual_time_per_site = None
             self._scanner.shift.value = (0, 0)  # reset drift correction to have more margin
 
+            microscope = model.getMicroscope()
+            posture_manager = MicroscopePostureManager(microscope)
             for site_idx, site in enumerate(self.sites):
                 # Update progress on the milling sites left
                 start_time = time.time()
@@ -478,7 +480,7 @@ class MillingRectangleTask(object):
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
                     logging.debug(f"Retracting the objective to set the imaging in FIB mode")
-                    self._future.running_subf = move.cryoSwitchSamplePosition(MILLING)
+                    self._future.running_subf = posture_manager.cryoSwitchSamplePosition(MILLING)
 
                 self._future.running_subf.result()
 

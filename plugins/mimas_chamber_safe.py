@@ -30,6 +30,7 @@ from odemis import model
 from odemis.acq import move
 from odemis.gui.plugin import Plugin
 from odemis.util import limit_invocation
+from odemis.util.driver import isNearPosition
 
 # The IP address has to be adjusted to the load-lock IP.
 # On the MIMAS, normally that's always the same.
@@ -86,8 +87,8 @@ class MimasChamberSignalPlugin(Plugin):
         aligner_parked = aligner_md[model.MD_FAV_POS_DEACTIVE]
         align_pos = self._aligner.position.value
 
-        return (move._isNearPosition(stage_pos, stage_deactive, self._stage.axes) and
-                move._isNearPosition(align_pos, aligner_parked, self._aligner.axes))
+        return (isNearPosition(stage_pos, stage_deactive, self._stage.axes) and
+                isNearPosition(align_pos, aligner_parked, self._aligner.axes))
 
     def send_chamber_signal(self, safe: bool):
         """
