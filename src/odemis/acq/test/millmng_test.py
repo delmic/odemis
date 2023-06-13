@@ -110,7 +110,7 @@ class MillingManagerTestCase(unittest.TestCase):
         cls.sites = []
         for i in range(0, len(cls.target_position)):
             feature = CryoFeature('object_' + str(i), cls.target_position[i]['x'], cls.target_position[i]['y'],
-                                  cls.target_position[i]['z'], milling_angle=0)
+                                  cls.target_position[i]['z'])
             cls.sites.append(feature)
 
         cls.feature_post_status = FEATURE_ROUGH_MILLED
