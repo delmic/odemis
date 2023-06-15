@@ -1798,10 +1798,10 @@ class FastEMAcquisitionTab(Tab):
                             Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:  # it is a real microscope
             calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                            Calibrations.IMAGE_ROTATION_PREALIGN,
                             Calibrations.SCAN_ROTATION_PREALIGN,
                             Calibrations.DESCAN_GAIN_STATIC,
                             Calibrations.SCAN_AMPLITUDE_PREALIGN,
-                            Calibrations.IMAGE_ROTATION_PREALIGN,
                             Calibrations.IMAGE_TRANSLATION_PREALIGN,
                             Calibrations.IMAGE_ROTATION_FINAL,
                             Calibrations.IMAGE_TRANSLATION_FINAL]
