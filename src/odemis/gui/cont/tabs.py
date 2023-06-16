@@ -2034,6 +2034,9 @@ class FastEMOverviewTab(Tab):
             fastem._executor.cancel()
             return
 
+        # Disable other calibration buttons
+        self.btn_sem_autofocus.Enable(False)
+        self.btn_autobc.Enable(False)
         # calibrate
         self.tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
         # Don't catch this event (is_calibrating = True) - this would disable the button,
@@ -2064,7 +2067,10 @@ class FastEMOverviewTab(Tab):
         a calibration or acquisition is already ongoing or not.
         :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
+        # TODO also include btn_autostigmation once autostigmation is working
         self.btn_optical_autofocus.Enable(not mode)
+        self.btn_sem_autofocus.Enable(not mode)
+        self.btn_autobc.Enable(not mode)
 
     @call_in_wx_main
     def _on_optical_autofocus_done(self, future, _=None):
@@ -2108,6 +2114,10 @@ class FastEMOverviewTab(Tab):
 
     @call_in_wx_main
     def _on_btn_sem_autofocus(self, _):
+        # Disable other calibration buttons
+        # TODO also disable btn_autostigmation once autostigmation is working
+        self.btn_optical_autofocus.Enable(False)
+        self.btn_autobc.Enable(False)
         self.sem_stream_cont.stream_panel.Enable(False)
         self.sem_stream_cont.pause()
         self.sem_stream_cont.pauseStream()
@@ -2116,6 +2126,10 @@ class FastEMOverviewTab(Tab):
 
     @call_in_wx_main
     def _on_btn_autobc(self, _):
+        # Disable other calibration buttons
+        # TODO also disable btn_autostigmation once autostigmation is working
+        self.btn_optical_autofocus.Enable(False)
+        self.btn_sem_autofocus.Enable(False)
         self.sem_stream_cont.stream_panel.Enable(False)
         self.sem_stream_cont.pause()
         self.sem_stream_cont.pauseStream()
@@ -2124,6 +2138,10 @@ class FastEMOverviewTab(Tab):
 
     @call_in_wx_main
     def _on_btn_autostigmation(self, _):
+        # Disable other calibration buttons
+        self.btn_optical_autofocus.Enable(False)
+        self.btn_sem_autofocus.Enable(False)
+        self.btn_autobc.Enable(False)
         self.sem_stream_cont.stream_panel.Enable(False)
         self.sem_stream_cont.pause()
         self.sem_stream_cont.pauseStream()
@@ -2132,6 +2150,10 @@ class FastEMOverviewTab(Tab):
 
     @call_in_wx_main
     def _on_autofunction_done(self, f):
+        # Enable all calibration buttons
+        self.btn_optical_autofocus.Enable(True)
+        self.btn_sem_autofocus.Enable(True)
+        self.btn_autobc.Enable(True)
         self.sem_stream_cont.stream_panel.Enable(True)
         # Resume SettingEntry related control updates of the stream
         self.sem_stream_cont.resume()

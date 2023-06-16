@@ -533,6 +533,16 @@ HW_SETTINGS_CONFIG = {
                            u"Use only if the frequency is very high (see hardware documentation).",
             }),
         )),
+    "se-detector":
+        # Keep the same `contrast` and `brigtness` slider order as in the TFS UI
+        OrderedDict((
+            ("contrast", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+            }),
+            ("brightness", {
+                "control_type": odemis.gui.CONTROL_SLIDER,
+            }),
+        )),
 }
 
 # Allows to override some values based on the microscope role
