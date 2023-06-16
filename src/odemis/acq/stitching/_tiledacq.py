@@ -43,7 +43,7 @@ from odemis.acq.stream import Stream, EMStream, ARStream, \
 from odemis.model import DataArray
 from odemis.util import dataio as udataio, img, linalg
 from odemis.util.img import assembleZCube
-from odemis.util.linalg import find_focus_points
+from odemis.util.linalg import generate_triangulation_points
 from odemis.util.raster import point_in_polygon
 
 # TODO: Find a value that works fine with common cases
@@ -57,7 +57,9 @@ SKIP_TILES = 3
 MOVE_SPEED_DEFAULT = 100e-6  # m/s
 # Default range for the optical focus adjustment
 SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
-
+# Maximum distance allowed between two focus points in overview acquisition using autofocus
+# Increasing this distance may result in out of focus overview acquisition image
+MAX_DISTANCE_FOCUS_POINTS = 450e-06  # in m
 
 class FocusingMethod(Enum):
     NONE = 0  # Never auto-focus
@@ -148,7 +150,10 @@ class TiledAcquisitionTask(object):
             # used in re-focusing method
             self._focus_points = numpy.array(focus_points) if focus_points else None
             # triangulate focus points
-            self._tri_focus_points = Delaunay(self._focus_points[:, :2]) if focus_points else None
+            if focus_points is not None and len(focus_points) > 2:
+                self._tri_focus_points = Delaunay(self._focus_points[:, :2])
+            else:
+                self._tri_focus_points = None
 
         if focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION and not zlevels:
             raise ValueError("MAX_INTENSITY_PROJECTION requires zlevels, but none passed")
@@ -159,11 +164,11 @@ class TiledAcquisitionTask(object):
         if zlevels:
             if self._focus_stream is None:
                 logging.warning("No focuser found in any of the streams, only one acquisition will be performed.")
-            self._zlevels = zlevels
-            self._init_zlevels:numpy.ndarray = numpy.asarray(zlevels)  # zlevels can be relative, therefore keep track of the initial zlevels
+            self._zlevels = numpy.asarray(zlevels)
+            self._init_zlevels = numpy.asarray(zlevels)  # zlevels can be relative, therefore keep track of the initial zlevels
         else:
             self._zlevels = numpy.empty(0)
-            self._init_zlevels = numpy.empty(0) # zlevels can be relative, therefore keep track of the initial zlevels
+            self._init_zlevels = numpy.empty(0)
 
         if len(self._zlevels) > 1 and focusing_method != FocusingMethod.MAX_INTENSITY_PROJECTION:
             raise NotImplementedError(
@@ -699,7 +704,10 @@ class TiledAcquisitionTask(object):
     def _refocus(self):
         """Update the z-levels to fit the found focus positions"""
         current_pos = self._stage.position.value
-        z = self._get_triangulated_focus_point(current_pos["x"], current_pos["y"])
+        if self._tri_focus_points:
+            z = self._get_triangulated_focus_point(current_pos["x"], current_pos["y"])
+        else:
+            z = self._focus_points[0][2]
         logging.info(f"Found z focus: {z}")
         self._zlevels = self._get_zstack_levels(z)
 
@@ -713,7 +721,7 @@ class TiledAcquisitionTask(object):
         if len(self._init_zlevels) <= 1:
             return [focus_value, ]
 
-        zlevels = [i + focus_value for i in self._init_zlevels]
+        zlevels = self._init_zlevels + focus_value
 
         # Check which focus range is available
         if self._focus_range is not None:
@@ -740,8 +748,7 @@ class TiledAcquisitionTask(object):
             zmax += shift
 
         # Create focus zlevels from the given zsteps number
-        step = (zmax - zmin) / (len(zlevels) - 1)
-        zlevels = [zmin + i * step for i in range(len(zlevels))]
+        zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
 
         return zlevels
 
@@ -1023,8 +1030,7 @@ class AcquireOverviewTask(object):
         self._focus_points = [] # list of focus points per each area in areas
         self._total_nb_focus_points = 0
         for area in areas:
-            maximum_distance = 450e-06  # in m
-            focus_points = find_focus_points(maximum_distance, area)
+            focus_points = generate_triangulation_points(MAX_DISTANCE_FOCUS_POINTS, area)
             self._total_nb_focus_points += len(focus_points)
             self._focus_points.append(focus_points)
         self._overlap = overlap
@@ -1116,9 +1122,8 @@ class AcquireOverviewTask(object):
 
                 try:
                     focus_points_per_area = len(self._focus_points[idx])
-                    t = estimate_autofocus_in_roi_time(focus_points_per_area, self._ccd) * 3 + 1
-
-                    focus_points = self._future.running_subf.result()
+                    max_wait_t = estimate_autofocus_in_roi_time(focus_points_per_area, self._ccd) * 3 + 1
+                    focus_points = self._future.running_subf.result(max_wait_t)
                 except TimeoutError:
                     self.streams[0].is_active.value = False
                     logging.debug(f"Autofocus timed out for roi number {idx}, with bounding box: {roi} [m]")

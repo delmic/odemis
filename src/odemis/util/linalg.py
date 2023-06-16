@@ -43,7 +43,7 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 """
-from typing import Iterable
+from typing import Iterable, Tuple
 
 import numpy
 from scipy.linalg.lapack import get_lapack_funcs
@@ -232,13 +232,10 @@ def are_collinear(p1: Iterable[float], p2: Iterable[float], p3: Iterable[float])
         abs((y2 - y1) * (z3 - z1) - (y3 - y1) * (z2 - z1)) < 1e-12
 
 
-def generate_triangulation_points(max_dist: float, given_area_coords: Iterable[float]) -> Iterable[tuple]:
+def generate_triangulation_points(max_dist: float, given_area_coords: Iterable[float]) -> Iterable[Tuple[float]]:
     """
     Finds (x,y) positions on the given area. The points are evenly distributed from each other in the given area.
     The distance between points is decided by maximum distance.
-
-    If the distance between points is more than the given maximum distance, the overview acquisition image might
-    result in blurry spots in the final acquisition image.
 
     :param max_dist: the maximum distance allowed between two (x,y) positions.
     :param given_area_coords: [xmin, ymin, xmax, ymax] the top right and bottom left (x,y) coordinates in meters.
@@ -251,35 +248,23 @@ def generate_triangulation_points(max_dist: float, given_area_coords: Iterable[f
 
     # Avoid points exactly on the border of the given area, find points delta distance
     # away from the border of the given area
-    delta_x = (1 / 20) * (xmax - xmin)
-    delta_y = (1 / 20) * (ymax - ymin)
-    xmin = xmin + delta_x
-    xmax = xmax - delta_x
-    ymin = ymin + delta_y
-    ymax = ymax - delta_y
-
     length_x = abs(xmax - xmin)
     length_y = abs(ymax - ymin)
     points_x = numpy.floor(length_x/max_dist) + 1
     points_y = numpy.floor(length_y/max_dist) + 1
+    xmin = xmin + max_dist / 2
+    xmax = xmax - max_dist / 2
+    ymin = ymin + max_dist / 2
+    ymax = ymax - max_dist / 2
     total_points = int(points_x * points_y)
 
-    # Minimum number of points for triangulation is three
-    # Create minimum number of points when total number of points is <= 3
+    # Create a centre point when total number of points is <= 3
     if total_points <= 3:
-        total_points = 4
-        x_points = [xmin, xmax, xmin, xmax]
-        y_points = [ymin, ymin, ymax, ymax]
+        points = [((xmax + xmin)/2, (ymax + ymin)/2)]
     else:
         x_arr = numpy.linspace(xmin, xmax, points_x)
         y_arr = numpy.linspace(ymin, ymax, points_y)
         matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
-        x_points = matrix[:, 0]
-        y_points = matrix[:, 1]
-
-    # Distribute the points
-    points = []
-    for i in range(total_points):
-        points.append((x_points[i], y_points[i]))
+        points = matrix.tolist()
 
     return points

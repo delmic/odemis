@@ -24,7 +24,7 @@ from odemis.acq.align.roi_autofocus import autofocus_in_roi, estimate_autofocus_
 from odemis.acq.move import cryoSwitchSamplePosition, FM_IMAGING, SEM_IMAGING
 from odemis.driver import simsem
 from odemis.util import testing
-from odemis.util.linalg import find_focus_points
+from odemis.util.linalg import generate_triangulation_points
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -79,8 +79,8 @@ class RoiAutofocusTestCase(unittest.TestCase):
         ymax = init_pos[1] + (1 - overlap) * n_focus_points[1] / 2 * px_size[1] * height
 
         bbox = (xmin, ymin, xmax, ymax)
-        max_area = (xmax - xmin) * (ymax - ymin)
-        focus_points = find_focus_points(max_area, bbox)
+        max_distance = 100e-06  # in m
+        focus_points = generate_triangulation_points(max_distance, bbox)
 
         f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, focus_points,
                              confidence_level)
@@ -116,8 +116,8 @@ class RoiAutofocusTestCase(unittest.TestCase):
         ymax = init_pos[1] + (1 - overlap) * n_focus_points[1] / 2 * px_size[1] * height
 
         bbox = (xmin, ymin, xmax, ymax)
-        max_area = (xmax - xmin) * (ymax - ymin)
-        focus_points = find_focus_points(max_area, bbox)
+        max_distance = 100e-06  # in m
+        focus_points = generate_triangulation_points(max_distance, bbox)
 
         f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, focus_points,
                              confidence_level)

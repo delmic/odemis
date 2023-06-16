@@ -68,8 +68,8 @@ def do_autofocus_in_roi(
                     raise CancelledError()
                 x = points[0]
                 y = points[1]
-                stage.moveAbsSync({"x": x, "y": y})
                 logging.debug(f"Moving the stage to autofocus at position: {x, y}")
+                stage.moveAbsSync({"x": x, "y": y})
                 # run autofocus
                 f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
 
@@ -109,8 +109,8 @@ def estimate_autofocus_in_roi_time(n_focus_points, detector):
     :param detector: component of the detector
     :return:
     """
-    # add 60 seconds for stage/objective lens movement
-    return n_focus_points * (estimateAutoFocusTime(detector, None) + 60)
+    # add 10 seconds to account for stage movement between focus points
+    return n_focus_points * (estimateAutoFocusTime(detector, None) + 10)
 
 
 def _cancel_autofocus_bbox(future):

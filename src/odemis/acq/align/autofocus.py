@@ -457,8 +457,6 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             if last_pos != best_pos:
                 # Clip best_pos in case the hardware reports a position outside of the range.
                 best_pos = max(rng[0], min(best_pos, rng[1]))
-                measure_range = ("left", "center", "right")
-                logging.debug(f"The best focus measure is found at {measure_range[i_max]}")
                 focus.moveAbsSync({"z": best_pos})
             step_cntr += 1
 
@@ -672,7 +670,8 @@ def estimateAutoFocusTime(detector, scanner=None, steps=MAX_STEPS_NUMBER):
     scanner (None or model.Emitter): In case of a SED this is the scanner used
     Estimates overlay procedure duration
     """
-    return steps * estimateAcquisitionTime(detector, scanner)
+    # multiply by a factor of 0.5 to account for stage/objective movement
+    return steps*0.5 * estimateAcquisitionTime(detector, scanner)
 
 
 def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
