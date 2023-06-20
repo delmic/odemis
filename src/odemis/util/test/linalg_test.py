@@ -133,27 +133,23 @@ class PlaneFittingTestCase(unittest.TestCase):
         Test the number of focus points when given area changes.
         """
         max_dis = 450e-06
-        length_1_start = 0
-        length_1_end = 1.77e-03
-        length_2_start = 0
-        length_2_end = 1.77e-03
 
         # given area is 100% of maximum area (1.77mm x 1.77mm)
-        given_area_coords = (length_1_start, length_2_start, length_1_end, length_2_end)
+        given_area_coords = (0,  1.77e-03, 0,  1.77e-03)
         focus_points = generate_triangulation_points(max_dis, given_area_coords)
         self.assertEqual(len(focus_points), 16)
         self.assertEqual(len(focus_points[0]), 2)  # (x,y)
 
         # given area is 90 % maximum area
         red_length = 1.77e-03*numpy.sqrt(0.9)
-        given_area_coords = (length_1_start, length_2_start, red_length, red_length)
+        given_area_coords = (0,  1.77e-03, red_length, red_length)
         focus_points = generate_triangulation_points(max_dis, given_area_coords)
         self.assertEqual(len(focus_points), 16)
         self.assertEqual(len(focus_points[0]), 2)  # (x,y)
 
         # given area is 15 % maximum area
         red_length = 1.77e-03*numpy.sqrt(0.15)
-        given_area_coords = (length_1_start, length_2_start, red_length, red_length)
+        given_area_coords = (0,  1.77e-03, red_length, red_length)
         focus_points = generate_triangulation_points(max_dis, given_area_coords)
         # minimum number of focus points cannot be lower than 3
         self.assertEqual(len(focus_points), 4)

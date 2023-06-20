@@ -232,19 +232,16 @@ def are_collinear(p1: Iterable[float], p2: Iterable[float], p3: Iterable[float])
         abs((y2 - y1) * (z3 - z1) - (y3 - y1) * (z2 - z1)) < 1e-12
 
 
-def generate_triangulation_points(max_dist: float, given_area_coords: Iterable[float]) -> Iterable[Tuple[float]]:
+def generate_triangulation_points(max_dist: float, area_coords: Iterable[float]) -> Iterable[Tuple[float]]:
     """
     Finds (x,y) positions on the given area. The points are evenly distributed from each other in the given area.
     The distance between points is decided by maximum distance.
 
     :param max_dist: the maximum distance allowed between two (x,y) positions.
-    :param given_area_coords: [xmin, ymin, xmax, ymax] the top right and bottom left (x,y) coordinates in meters.
+    :param area_coords: [xmin, ymin, xmax, ymax] the top right and bottom left (x,y) coordinates in meters.
     :return: List of (x,y) coordinates in the given area.
     """
-    # TODO Calculate points distribution for rectangular region where one side >> second side
-    # in the above case, points along the shorter side will be closer to each other and
-    # will not be evenly distributed throughout the given area
-    xmin, ymin, xmax, ymax = given_area_coords
+    xmin, ymin, xmax, ymax = area_coords
 
     # Avoid points exactly on the border of the given area, find points delta distance
     # away from the border of the given area
@@ -260,7 +257,7 @@ def generate_triangulation_points(max_dist: float, given_area_coords: Iterable[f
 
     # Create a centre point when total number of points is <= 3
     if total_points <= 3:
-        points = [((xmax + xmin)/2, (ymax + ymin)/2)]
+        points = [((xmax + xmin) / 2, (ymax + ymin) / 2)]
     else:
         x_arr = numpy.linspace(xmin, xmax, points_x)
         y_arr = numpy.linspace(ymin, ymax, points_y)

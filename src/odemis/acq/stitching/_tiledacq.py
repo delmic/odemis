@@ -153,6 +153,9 @@ class TiledAcquisitionTask(object):
             if focus_points is not None and len(focus_points) > 2:
                 self._tri_focus_points = Delaunay(self._focus_points[:, :2])
             else:
+                # Triangulation needs minimum three points to define a plane
+                # When the number of focus points is less than three
+                # The focus is set constant and based on a single focus point
                 self._tri_focus_points = None
 
         if focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION and not zlevels:
@@ -497,7 +500,7 @@ class TiledAcquisitionTask(object):
 
         acq_time = 0
         for stream in self._streams:
-            # add 1 to account for stage/objective movement time in z direction
+            # add 1s to account for stage/objective movement time in z direction
             acq_stream_time = acqmng.estimateTime([stream]) + 1
             if stream.focuser is not None and len(self._zlevels) > 1:
                 # Acquisition time for each stream will be multiplied by the number of zstack levels
@@ -1027,7 +1030,7 @@ class AcquireOverviewTask(object):
 
         self.conf_level = 0.8
         self.focusing_method = focusing_method
-        self._focus_points = [] # list of focus points per each area in areas
+        self._focus_points = []  # list of focus points per each area in areas
         self._total_nb_focus_points = 0
         for area in areas:
             focus_points = generate_triangulation_points(MAX_DISTANCE_FOCUS_POINTS, area)
@@ -1067,9 +1070,7 @@ class AcquireOverviewTask(object):
             acquisition_time = actual_time_per_roi * remaining_rois
         else:
             autofocus_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._ccd)
-            logging.debug(f"the estimated autofocus time for all areas is {autofocus_time}")
             tiled_time = 0
-
             for area in self.areas:
                 tiled_time += estimateTiledAcquisitionTime(
                                         self.streams, self._stage, area,
@@ -1082,7 +1083,7 @@ class AcquireOverviewTask(object):
                                         weaver=self._weaver,
                                         focusing_method=self.focusing_method)
 
-            logging.debug(f"the estimated tiled acquisition time is {tiled_time}")
+            logging.debug(f"The estimated autofocus time is {autofocus_time} and tiled acquisition time is {tiled_time}")
             acquisition_time = autofocus_time + tiled_time
 
         return acquisition_time

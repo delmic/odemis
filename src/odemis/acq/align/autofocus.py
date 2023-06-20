@@ -670,8 +670,8 @@ def estimateAutoFocusTime(detector, scanner=None, steps=MAX_STEPS_NUMBER):
     scanner (None or model.Emitter): In case of a SED this is the scanner used
     Estimates overlay procedure duration
     """
-    # multiply by a factor of 0.5 to account for stage/objective movement
-    return steps*0.5 * estimateAcquisitionTime(detector, scanner)
+    # Add 0.5s per step to account for the focus movement (very roughly approximated)
+    return steps * estimateAcquisitionTime(detector, scanner) + steps * 0.5
 
 
 def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):

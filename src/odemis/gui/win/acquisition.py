@@ -1054,7 +1054,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if not streams:
             acq_time = 0
         else:
-            zlevels, focus_ref = self._get_zstack_levels()
+            zlevels = self._get_zstack_levels()
             focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
 
             if self.autofocus_roi_ckbox.value:
@@ -1169,17 +1169,18 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # Enable/disable the grid and tile numbers based on the "whole grid" checkbox
         self._on_whole_grid_chkbox()
 
-    def _get_zstack_levels(self):
+    def _get_zstack_levels(self, abs: bool = True):
         """
         Calculate the zstack levels from the current focus position and zsteps value
-        :returns
+        :param abs: If this is True (default), then z stack levels are in absolute values. If abs is set to False then
+         the z stack levels are calculated relative to each other.
+        :returns:
             (list(float) or None) zstack levels for zstack acquisition. None if only one zstep is requested.
-            (float): Focus value on which z levels are referenced in m.
         """
         zsteps = self.zsteps.value
         focus_value = self._main_data_model.focus.position.value['z']
         if zsteps == 1:
-            return None, focus_value
+            return None
 
         # Clip zsteps value to allowed range
         focus_range = self._main_data_model.focus.axes['z'].range
@@ -1203,18 +1204,19 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
-        return zlevels, focus_value
 
-    def _fit_view_to_area(self):
-        if self.area is None:
-            logging.warning("Unknown area, cannot fit view")
-            return
+        if not abs:
+            # zlevels are relative to each other
+            zlevels = [z_itr - focus_value for z_itr in zlevels]
 
-        center = ((self.area[0] + self.area[2]) / 2,
-                  (self.area[1] + self.area[3]) / 2)
+        return zlevels
+
+    def _fit_view_to_area(self, area: Tuple[float,float]):
+        center = ((area[0] + area[2]) / 2,
+                  (area[1] + area[3]) / 2)
         self._view.view_pos.value = center
 
-        fov = (self.area[2] - self.area[0], self.area[3] - self.area[1])
+        fov = (area[2] - area[0], area[3] - area[1])
         self.pnl_view_acq.set_mpp_from_fov(fov)
 
     def on_acquire(self, evt):
@@ -1244,7 +1246,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if self._main_data_model.opm:
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
-        zlevels, focus_ref = self._get_zstack_levels()
+        zlevels = self._get_zstack_levels()
         focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
 
         if self.filename_tiles:
@@ -1252,11 +1254,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
         if self.autofocus_roi_ckbox.value:
-            areas = self._get_areas()
-            # calculate relative range of z levels
-            #TODO add the below line at a better location
-            if zlevels is not None:
-                zlevels = [z_itr - focus_ref for z_itr in zlevels]
+            # As absolute zlevels value is based on the estimated good focus value
+            # Now we calculate relative range of zlevels to use it later to find absolute range
+            zlevels = self._get_zstack_levels(abs=False)
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
                                               areas,
