@@ -380,7 +380,7 @@ def main(args):
         ctrl = tmcm.TMCLController("TMCL controller", "config",
                                    port=port, address=options.add,
                                    axes=["a"], ustepsize=[1e-9],
-                                   minpower=0.1)  # No need for external power supply
+                                   minpower=0)  # No need for external power supply
         logging.info("Connected to %s", ctrl.hwVersion)
 
         if options.reset:  # Allow to do it before writing
@@ -392,7 +392,7 @@ def main(args):
             ctrl = tmcm.TMCLController("TMCL controller", "config",
                                    port=port, address=options.add,
                                    axes=["a"], ustepsize=[1e-9],
-                                   minpower=0.1)  # No need for external power supply
+                                   minpower=0)  # No need for external power supply
             logging.info("Connected to %s", ctrl.hwVersion)
 
         if options.read:
