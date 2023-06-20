@@ -180,7 +180,7 @@ class PlaneFittingTestCase(unittest.TestCase):
 
     def test_focus_values_generate_triangulation_points(self):
         """
-        Test that values of focus points is within the given area
+        Test that values of focus points are within the given area and check boundary conditions
         """
         # 4x4 focus points when given area is a square
         max_dis = 1e-06
@@ -194,29 +194,14 @@ class PlaneFittingTestCase(unittest.TestCase):
         ymax = max(y_points)
 
         # The min and maximum of focus points should be within the given area coordinates
-        self.assertTrue(xmin > area_coords[0])
-        self.assertTrue(ymin > area_coords[1])
-        self.assertTrue(xmax < area_coords[2])
-        self.assertTrue(ymax < area_coords[3])
+        self.assertTrue(area_coords[0] <= xmin <= xmax <= area_coords[2])
+        self.assertTrue(area_coords[1] <= ymin <= ymax <= area_coords[3])
 
-    def test_points_generate_triangulation_points(self):
-        """
-        Test that the distance between the nearest focus point and a selected point within the given area is
-        less than the maximum distance (max_dis)
-        """
-        # 4x4 focus points when given area is a square
-        max_dis = 1e-06
-        area_coords = (0,  0, 3.9e-06,  3.9e-06)
-        focus_points = generate_triangulation_points(max_dis, area_coords)
-
-        p = (0.5e-06, 0.5e-06)
-        distance = []
-        for f in focus_points:
-            distance.append(math.hypot(f[0]-p[0], f[1]-p[1]))
-
-        # The minimum distance between a selected point and focus point
-        # should be less than the distance between maximum distance between two adjacent focus points
-        self.assertTrue(min(distance) < max_dis)
+        # Test that the distance between the nearest focus point and a selected point within the given area is
+        # less than the maximum distance (max_dis)
+        for p in [(0, 0), (0.5e-06, 0.5e-06), (2e-06, 2e-06)]:
+            shortest_dist = min(math.hypot(f[0] - p[0], f[1] - p[1]) for f in focus_points)
+            self.assertLessEqual(shortest_dist, max_dis)
 
 
 if __name__ == "__main__":
