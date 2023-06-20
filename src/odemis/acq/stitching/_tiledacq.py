@@ -150,13 +150,17 @@ class TiledAcquisitionTask(object):
             # used in re-focusing method
             self._focus_points = numpy.array(focus_points) if focus_points else None
             # triangulate focus points
-            if focus_points is not None and len(focus_points) > 2:
-                self._tri_focus_points = Delaunay(self._focus_points[:, :2])
-            else:
-                # Triangulation needs minimum three points to define a plane
-                # When the number of focus points is less than three
-                # The focus is set constant and based on a single focus point
-                self._tri_focus_points = None
+            self._tri_focus_points = None
+            if focus_points is not None:
+                if len(focus_points) >= 3:
+                    self._tri_focus_points = Delaunay(self._focus_points[:, :2])
+                elif len(focus_points) == 1:
+                    # Triangulation needs minimum three points to define a plane
+                    # When the number of focus points is less than three
+                    # The focus is set constant and based on a single focus point
+                    pass
+                else:
+                    raise ValueError(f"focus_points length {len(focus_points)} is not supported")
 
         if focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION and not zlevels:
             raise ValueError("MAX_INTENSITY_PROJECTION requires zlevels, but none passed")
@@ -977,7 +981,8 @@ def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs
     :param overlap: (0<float<1) the overlap between tiles (in percentage)
     :param settings_obs: (dict) the settings for the acquisition
     :param log_path: (str) path to the log file
-    :param zlevels: (list of floats) the initial zlevels to use for the stitching
+    :param zlevels: (list of floats) the zlevels to use for the stitching, in meters and as relative positions (from the
+        focus points
     :param registrar: (str) the type of registration to use
     :param weaver: (str) the type of weaver to use
     :param focusing_method: (str) the focusing method to use
@@ -1083,7 +1088,7 @@ class AcquireOverviewTask(object):
                                         weaver=self._weaver,
                                         focusing_method=self.focusing_method)
 
-            logging.debug(f"The estimated autofocus time is {autofocus_time} and tiled acquisition time is {tiled_time}")
+            logging.debug(f"Estimated autofocus time: {autofocus_time} s, Tiled acquisition time: {tiled_time} s")
             acquisition_time = autofocus_time + tiled_time
 
         return acquisition_time

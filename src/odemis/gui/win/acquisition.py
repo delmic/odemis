@@ -1169,45 +1169,49 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # Enable/disable the grid and tile numbers based on the "whole grid" checkbox
         self._on_whole_grid_chkbox()
 
-    def _get_zstack_levels(self, abs: bool = True):
+    def _get_zstack_levels(self, rel: bool = False):
         """
         Calculate the zstack levels from the current focus position and zsteps value
-        :param abs: If this is True (default), then z stack levels are in absolute values. If abs is set to False then
+        :param rel: If this is False (default), then z stack levels are in absolute values. If abs is set to True then
          the z stack levels are calculated relative to each other.
         :returns:
             (list(float) or None) zstack levels for zstack acquisition. None if only one zstep is requested.
         """
         zsteps = self.zsteps.value
-        focus_value = self._main_data_model.focus.position.value['z']
         if zsteps == 1:
             return None
 
-        # Clip zsteps value to allowed range
-        focus_range = self._main_data_model.focus.axes['z'].range
-        zmin = focus_value - (zsteps / 2 * self.zstep_size.value)
-        zmax = focus_value + (zsteps / 2 * self.zstep_size.value)
-        if (zmax - zmin) > (focus_range[1] - focus_range[0]):
-            # Corner case: it'd be larger than the entire range => limit to the entire range
-            zmin = focus_range[0]
-            zmax = focus_range[1]
-        if zmax > focus_range[1]:
-            # Too high => shift down
-            shift = zmax - focus_range[1]
-            zmin -= shift
-            zmax -= shift
+        if rel:
+            zmin = - (zsteps / 2 * self.zstep_size.value)
+            zmax = + (zsteps / 2 * self.zstep_size.value)
+        else:
+            # Clip zsteps value to allowed range
+            focus_value = self._main_data_model.focus.position.value['z']
+            focus_range = self._main_data_model.focus.axes['z'].range
+            zmin = focus_value - (zsteps / 2 * self.zstep_size.value)
+            zmax = focus_value + (zsteps / 2 * self.zstep_size.value)
+            if (zmax - zmin) > (focus_range[1] - focus_range[0]):
+                # Corner case: it'd be larger than the entire range => limit to the entire range
+                zmin = focus_range[0]
+                zmax = focus_range[1]
+            if zmax > focus_range[1]:
+                # Too high => shift down
+                shift = zmax - focus_range[1]
+                zmin -= shift
+                zmax -= shift
 
-        if zmin < focus_range[0]:
-            # Too low => shift up
-            shift = focus_range[0] - zmin
-            zmin += shift
-            zmax += shift
+            if zmin < focus_range[0]:
+                # Too low => shift up
+                shift = focus_range[0] - zmin
+                zmin += shift
+                zmax += shift
+
+        # TODO: if there is an even number of zsteps, the current focus position will not be part of the zlevels.
+        # As the current focus position can often be the "best" position, we could change the algorithm in such case to
+        # shift exactly symmetrical, but instead use the current position as one of the zlevels.
 
         # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
-
-        if not abs:
-            # zlevels are relative to each other
-            zlevels = [z_itr - focus_value for z_itr in zlevels]
 
         return zlevels
 
@@ -1246,17 +1250,15 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if self._main_data_model.opm:
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
-        zlevels = self._get_zstack_levels()
-        focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
+        focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if self.zsteps.value > 1 else FocusingMethod.NONE
 
         if self.filename_tiles:
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
             os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
         if self.autofocus_roi_ckbox.value:
-            # As absolute zlevels value is based on the estimated good focus value
-            # Now we calculate relative range of zlevels to use it later to find absolute range
-            zlevels = self._get_zstack_levels(abs=False)
+            # acquireOverview() needs relative zlevels, as they will be used relative to the focus points found
+            zlevels = self._get_zstack_levels(rel=True)
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
                                               areas,
@@ -1273,6 +1275,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         else:
             # If there are several areas, the autofocus should be automatically selected
             # => no autofocus only works with a single area
+            zlevels = self._get_zstack_levels(rel=False)
             self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=areas[0],
                                                          overlap=self.overlap,
                                                          settings_obs=self._main_data_model.settings_obs,

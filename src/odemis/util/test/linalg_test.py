@@ -18,7 +18,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-
+import math
 import unittest
 
 import numpy
@@ -128,32 +128,96 @@ class PlaneFittingTestCase(unittest.TestCase):
         non_linear_points = numpy.array([[1, 2, 12], [-1, -2, -4], [3, 4, 22]])
         self.assertFalse(are_collinear(non_linear_points[0], non_linear_points[1], non_linear_points[2]))
 
-    def test_generate_triangulation_points(self):
+    def test_max_dist_generate_triangulation_points(self):
         """
-        Test the number of focus points when given area changes.
+        Test the number of focus points when the maximum distance between focus points changes
         """
-        max_dis = 450e-06
-
-        # given area is 100% of maximum area (1.77mm x 1.77mm)
-        given_area_coords = (0,  1.77e-03, 0,  1.77e-03)
+        # 4x4 focus points
+        max_dis = 1e-06
+        given_area_coords = (0,  0, 3.9e-06,  3.9e-06)
         focus_points = generate_triangulation_points(max_dis, given_area_coords)
         self.assertEqual(len(focus_points), 16)
         self.assertEqual(len(focus_points[0]), 2)  # (x,y)
 
-        # given area is 90 % maximum area
-        red_length = 1.77e-03*numpy.sqrt(0.9)
-        given_area_coords = (0,  1.77e-03, red_length, red_length)
+        # 3x3 focus points
+        max_dis = 1.5e-06  #
+        given_area_coords = (0,  0, 3.9e-06,  3.9e-06)
         focus_points = generate_triangulation_points(max_dis, given_area_coords)
-        self.assertEqual(len(focus_points), 16)
+        self.assertEqual(len(focus_points), 9)
         self.assertEqual(len(focus_points[0]), 2)  # (x,y)
 
-        # given area is 15 % maximum area
-        red_length = 1.77e-03*numpy.sqrt(0.15)
-        given_area_coords = (0,  1.77e-03, red_length, red_length)
+        # 2x2 focus points
+        max_dis = 2e-06  #
+        given_area_coords = (0,  0, 3.9e-06,  3.9e-06)
         focus_points = generate_triangulation_points(max_dis, given_area_coords)
-        # minimum number of focus points cannot be lower than 3
         self.assertEqual(len(focus_points), 4)
         self.assertEqual(len(focus_points[0]), 2)  # (x,y)
+
+        # 1 focus point
+        max_dis = 4e-06  #
+        given_area_coords = (0,  0, 3.9e-06,  3.9e-06)
+        focus_points = generate_triangulation_points(max_dis, given_area_coords)
+        self.assertEqual(len(focus_points), 1)
+        self.assertEqual(len(focus_points[0]), 2)  # (x,y)
+
+    def test_area_generate_triangulation_points(self):
+        """
+        Test the number of focus points when the given area changes
+        """
+        # 4x4 focus points when given area is a square
+        max_dis = 1e-06
+        area_coords = (0,  0, 3.9e-06,  3.9e-06)
+        focus_points = generate_triangulation_points(max_dis, area_coords)
+        self.assertEqual(len(focus_points), 16)
+        self.assertEqual(len(focus_points[0]), 2)  # (x,y)
+
+        # 4x3 focus points when the given area is a rectangle
+        max_dis = 1e-06  #
+        area_coords = (0,  0, 3.9e-06,  2.9e-06)
+        focus_points = generate_triangulation_points(max_dis, area_coords)
+        self.assertEqual(len(focus_points), 12)
+        self.assertEqual(len(focus_points[0]), 2)  # (x,y)
+
+    def test_focus_values_generate_triangulation_points(self):
+        """
+        Test that values of focus points is within the given area
+        """
+        # 4x4 focus points when given area is a square
+        max_dis = 1e-06
+        area_coords = (0,  0, 3.9e-06,  3.9e-06)
+        focus_points = generate_triangulation_points(max_dis, area_coords)
+        x_points = [i[0] for i in focus_points]
+        y_points = [i[1] for i in focus_points]
+        xmin = min(x_points)
+        ymin = min(y_points)
+        xmax = max(x_points)
+        ymax = max(y_points)
+
+        # The min and maximum of focus points should be within the given area coordinates
+        self.assertTrue(xmin > area_coords[0])
+        self.assertTrue(ymin > area_coords[1])
+        self.assertTrue(xmax < area_coords[2])
+        self.assertTrue(ymax < area_coords[3])
+
+    def test_points_generate_triangulation_points(self):
+        """
+        Test that the distance between the nearest focus point and a selected point within the given area is
+        less than the maximum distance (max_dis)
+        """
+        # 4x4 focus points when given area is a square
+        max_dis = 1e-06
+        area_coords = (0,  0, 3.9e-06,  3.9e-06)
+        focus_points = generate_triangulation_points(max_dis, area_coords)
+
+        p = (0.5e-06, 0.5e-06)
+        distance = []
+        for f in focus_points:
+            distance.append(math.hypot(f[0]-p[0], f[1]-p[1]))
+
+        # The minimum distance between a selected point and focus point
+        # should be less than the distance between maximum distance between two adjacent focus points
+        self.assertTrue(min(distance) < max_dis)
+
 
 if __name__ == "__main__":
     unittest.main()
