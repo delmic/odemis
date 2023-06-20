@@ -128,6 +128,8 @@ class PlaneFittingTestCase(unittest.TestCase):
         non_linear_points = numpy.array([[1, 2, 12], [-1, -2, -4], [3, 4, 22]])
         self.assertFalse(are_collinear(non_linear_points[0], non_linear_points[1], non_linear_points[2]))
 
+
+class GenerateTriangulationTestCase(unittest.TestCase):
     def test_max_dist_generate_triangulation_points(self):
         """
         Test the number of focus points when the maximum distance between focus points changes
