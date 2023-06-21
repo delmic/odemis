@@ -1034,25 +1034,36 @@ class SEMDataFlow(model.DataFlow):
 class Stage(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
-    moving the Tescan stage and updating the position. 
+    moving the SEM stage with the Tescan Essence software.
     """
     def __init__(self, name, role, parent, **kwargs):
-        """
-        axes (set of string): names of the axes
-        """
-        axes_def = {}
         self._position = {}
+        axes_def = {}
+        axes_rng = parent._device.StgGetLimits(1)  # using the soft limits parameter here
+        axes_motorized = parent._device.StgGetMotorized()
 
-        rng = [-0.5, 0.5]
-        # TODO: use StgGetLimits and StgGetMotorized
-        axes_def["x"] = model.Axis(unit="m", range=rng)
-        axes_def["y"] = model.Axis(unit="m", range=rng)
-        axes_def["z"] = model.Axis(unit="m", range=rng)
-        # TODO: support all the 5 axes (also rz and rx)
+        for num, ax in enumerate(["x", "y", "z", "rz", "rx"]):
+            # axes ranges are always returned in pairs of 2 values (min, max)
+            if len(axes_rng) >= 2:
+                # if an axis is not motorized do not add it to the axes definition
+                if axes_motorized[num]:
+                    # make a distinction between linear axes and rotational ones
+                    # rotational axes will need their range converted to radians
+                    if ax.startswith("r"):
+                        axes_def[ax] = model.Axis(unit="rad",
+                                                  range=(self._degrees_to_rad(axes_rng[0]),
+                                                         self._degrees_to_rad(axes_rng[1])))
+                    else:
+                        axes_def[ax] = model.Axis(unit="m", range=(axes_rng[0], axes_rng[1]))
+                # slice the axes_rng list for the next iteration
+                axes_rng = axes_rng[2::]
+            else:
+                # if there are fewer axes present than 5, stop updating the axes definition
+                break
 
         # Demand calibrated stage
         if parent._device.StgIsCalibrated() != 1:
-            logging.warning("Stage is not calibrated. Moves will not succeed until it has been calibrated.")
+            logging.warning("Stage is not calibrated. Move commands will be ignored until it has been calibrated.")
             # TODO: support doing it from Odemis, via reference()
             # parent._device.StgCalibrate()
 
@@ -1086,38 +1097,68 @@ class Stage(model.Actuator):
         """
         update the position VA
         """
-        x, y, z, rot, tilt = self.parent._device.StgGetPosition()
+        x, y, z, rz, rx = self.parent._device.StgGetPosition()
         self._position["x"] = -x * 1e-3
         self._position["y"] = -y * 1e-3
         self._position["z"] = -z * 1e-3
+
+        if set(self.axes.keys()).intersection({"rz", "rx"}):
+            self._position["rz"] = self._degrees_to_rad(rz)
+            self._position["rx"] = self._degrees_to_rad(rx)
 
         # it's read-only, so we change it via _value
         pos = self._applyInversion(self._position)
         self.position._set_value(pos, force_write=True)
         logging.debug("Updated stage position to %s", pos)
 
-    def _doMoveAbs(self, pos):
+    def _degrees_to_rad(self, val: float) -> float:
         """
-        move to the position
+        change the value of val from degrees to radians
+        :param val: float value in degrees to convert
+        :return: float value in radians
+        """
+        return math.radians(val)
+
+    def _rad_to_degrees(self, val: float) -> float:
+        """
+        change the value of val from radians to degrees
+        :param val: float value in radians to convert
+        :return: float value in degrees
+        """
+        return math.degrees(val)
+
+    def _doMoveAbs(self, pos: dict):
+        """
+        move to the requested (absolute) position
+        :param pos: positions of linear axes in mm or rotational axes in radians
         """
         # TODO: support cancelling (= call StgStop)
         with self.parent._acq_progress_lock:
-            # Perform move through Tescan API
             logging.debug("Requesting stage move to %s", pos)
 
             # If not all axes requested, fill up the rest with the current position
-            if pos.keys() < {"x", "y", "z"}:
+            if pos.keys() < {"x", "y", "z", "rz", "rx"}:
                 self._updatePosition()
                 current_pos = self._position.copy()
                 current_pos.update(pos)
                 pos = current_pos
 
-            # Position from m to mm and inverted
-            self.parent._device.StgMoveTo(-pos["x"] * 1e3,
-                                          -pos["y"] * 1e3,
-                                          -pos["z"] * 1e3)
+            # Position from m to mm and inverted for the linear axes, from degree to radians for the rotational axes
+            # if any rotational axis movement is requested send a 5 param move command otherwise a 3 param command.
+            if set(self.axes.keys()).intersection({"rz", "rx"}):
+                self.parent._device.StgMoveTo(-pos["x"] * 1e3,
+                                              -pos["y"] * 1e3,
+                                              -pos["z"] * 1e3,
+                                              self._rad_to_degrees(pos["rz"]),
+                                              self._rad_to_degrees(pos["rx"]),
+                                              )
+            else:
+                self.parent._device.StgMoveTo(-pos["x"] * 1e3,
+                                              -pos["y"] * 1e3,
+                                              -pos["z"] * 1e3,
+                                              )
 
-            # TODO: does it need a bit of time before checking it's busy?
+            # a small delay before checking if the stage is busy
             time.sleep(0.1)
 
             # Wait until move is completed
@@ -1127,12 +1168,21 @@ class Stage(model.Actuator):
             logging.debug("Stage move to %s completed", pos)
             self._updatePosition()
 
-    def _doMoveRel(self, shift):
-        # Compute the position in absolute coordinates
+    def _doMoveRel(self, shift: dict):
+        """
+        Request the position in absolute coordinates and create new positions after applying shift values
+        :param shift: shift of linear axes in mm or rotational axes in radians
+        """
         self._updatePosition()
         pos = self._position.copy()
+
+        # add the requested change to the current position except
+        # for the Rz axis as it can fully turn back and forth
         for axis, change in shift.items():
-            pos[axis] += change
+            if axis not in {"rz"}:
+                pos[axis] += change
+            else:
+                pos[axis] = (pos[axis] + change) % math.radians(360)
 
         self._checkMoveAbs(self._applyInversion(pos))
         self._doMoveAbs(pos)
