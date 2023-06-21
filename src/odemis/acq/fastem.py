@@ -384,7 +384,7 @@ class FastEMROC(object):
                                                  range=((-1, -1, -1, -1), (1, 1, 1, 1)),
                                                  cls=(int, float),
                                                  unit='m')
-        self.parameters = None  # calibration object with all relevant parameters
+        self.parameters = {}  # dictionary used for storing the values of the calibrated parameters
 
 
 def estimate_acquisition_time(roa, pre_calibrations=None):
@@ -502,7 +502,8 @@ class AcquisitionTask(object):
         self._beamshift = beamshift
         self._lens = lens
         self._roa = roa  # region of acquisition object
-        self._rocs = [roa.roc_2.value, roa.roc_3.value]  # list of region of calibration objects
+        self._roc2 = roa.roc_2.value  # object for region of calibration 2
+        self._roc3 = roa.roc_3.value  # object for region of calibration 3
         self._path = path  # sub-directories on external storage
         self._future = future
         self._pre_calibrations = pre_calibrations
@@ -585,7 +586,7 @@ class AcquisitionTask(object):
             logging.debug("Configure hardware for acquisition.")
             # configure the HW settings
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
-            fastem_conf.configure_detector(self._detector, self._rocs)
+            fastem_conf.configure_detector(self._detector, self._roc2, self._roc3)
 
             dataflow.subscribe(self.image_received)
 

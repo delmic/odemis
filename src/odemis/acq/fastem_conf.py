@@ -147,29 +147,32 @@ def configure_scanner(scanner, mode):
         raise ValueError("Invalid mode %s." % mode)
 
 
-def configure_detector(detector, rocs):
+def configure_detector(detector, roc2, roc3):
     """
     Configure the detector by setting the calibrated parameters as stored for
     the provided region of calibration (ROC). If calibrated parameters are not
     available, the current settings on the detector will stay as is.
     :param detector: (technolution.MPPC) The detector to be configured.
-    :param rocs: (list of FastEMROC) The region of calibration as selected on the scintillator,
+    :param roc2: (FastEMROC) The calibration 2 object corresponding to the selected scintillator,
+                 which stores the calibrated settings if calibration was performed.
+    :param roc3: (FastEMROC) The calibration 3 object corresponding to the selected scintillator,
                  which stores the calibrated settings if calibration was performed.
     """
+    dark_offset = roc2.parameters.get("cellDarkOffset")
+    digital_gain = roc2.parameters.get("cellDigitalGain")
+    cell_translation = roc3.parameters.get("cellTranslation")
 
-    # check all parameters are available
-    if not any(roc.parameters and "cellDarkOffset" in roc.parameters for roc in rocs):
+    if not dark_offset:
         logging.warning("Region of calibration doesn't have dark offset parameters.")
-    if not any(roc.parameters and "cellDigitalGain" in roc.parameters for roc in rocs):
+    else:
+        detector.cellDarkOffset.value = dark_offset
+
+    if not digital_gain:
         logging.warning("Region of calibration doesn't have digital gain parameters.")
-    if not any(roc.parameters and "cellTranslation" in roc.parameters for roc in rocs):
+    else:
+        detector.cellDigitalGain.value = digital_gain
+
+    if not cell_translation:
         logging.warning("Region of calibration doesn't have cell translation parameters.")
-
-    for roc in rocs:
-        if roc.parameters and "cellDarkOffset" in roc.parameters:
-            detector.cellDarkOffset.value = roc.parameters["cellDarkOffset"]
-        if roc.parameters and "cellDigitalGain" in roc.parameters:
-            detector.cellDigitalGain.value = roc.parameters["cellDigitalGain"]
-        if roc.parameters and "cellTranslation" in roc.parameters:
-            detector.cellTranslation.value = roc.parameters["cellTranslation"]
-
+    else:
+        detector.cellTranslation.value = cell_translation
