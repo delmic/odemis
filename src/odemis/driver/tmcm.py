@@ -2354,7 +2354,7 @@ class TMCMSimulator(object):
     def write(self, data):
         # We accept both a string/bytes and numpy array
         if isinstance(data, numpy.ndarray):
-            data = data.tostring()
+            data = data.tobytes()
         self._input_buf += data
 
         # each message is 9 bytes => take the first 9 and process them
@@ -2389,7 +2389,7 @@ class TMCMSimulator(object):
         # compute the checksum (just the sum of all the bytes)
         msg[-1] = numpy.sum(msg[:-1], dtype=numpy.uint8)
 
-        self._output_buf += msg.tostring()
+        self._output_buf += msg.tobytes()
 
     def _parseMessage(self, msg):
         """
