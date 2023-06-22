@@ -335,8 +335,12 @@ def _add_image_info(group, dataset, image):
             _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
 
             # Attach the scales to each dimensions (referenced by their label)
-            dataset.dims.create_scale(group["DimensionScaleX"], "X")
-            dataset.dims.create_scale(group["DimensionScaleY"], "Y")
+            if hasattr(dataset, "make_scale"):
+                dataset.make_scale(group["DimensionScaleX"], "X")
+                dataset.make_scale(group["DimensionScaleY"], "Y")
+            else:
+                dataset.dims.create_scale(group["DimensionScaleX"], "X")
+                dataset.dims.create_scale(group["DimensionScaleY"], "Y")
             dataset.dims[xpos].attach_scale(group["DimensionScaleX"])
             dataset.dims[ypos].attach_scale(group["DimensionScaleY"])
 
@@ -351,7 +355,10 @@ def _add_image_info(group, dataset, image):
                     _h5svi_set_state(group["DimensionScaleZ"], ST_DEFAULT)
 
                 group["DimensionScaleZ"].attrs["UNIT"] = "m"
-                dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
+                if hasattr(dataset, "make_scale"):
+                    dataset.make_scale(group["DimensionScaleZ"], "Z")
+                else:
+                    dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
                 dataset.dims[zpos].attach_scale(group["DimensionScaleZ"])
 
         # Unknown data, but SVI needs them to take the scales into consideration
@@ -370,7 +377,10 @@ def _add_image_info(group, dataset, image):
                 # A list of values in seconds, for each pixel in the T dim
                 group["DimensionScaleT"] = image.metadata[model.MD_TIME_LIST]
                 group["DimensionScaleT"].attrs["UNIT"] = "s"
-                dataset.dims.create_scale(group["DimensionScaleT"], "T")
+                if hasattr(dataset, "make_scale"):
+                    dataset.make_scale(group["DimensionScaleT"], "T")
+                else:
+                    dataset.dims.create_scale(group["DimensionScaleT"], "T")
                 # pass state as a numpy.uint, to force it being a single value (instead of a list)
                 _h5svi_set_state(group["DimensionScaleT"], numpy.uint(ST_REPORTED))
                 dataset.dims[tpos].attach_scale(group["DimensionScaleT"])
@@ -388,7 +398,10 @@ def _add_image_info(group, dataset, image):
                 # A list of values in radians, for each pixel in the A dim
                 group["DimensionScaleA"] = image.metadata[model.MD_THETA_LIST]
                 group["DimensionScaleA"].attrs["UNIT"] = "rad"
-                dataset.dims.create_scale(group["DimensionScaleA"], "A")
+                if hasattr(dataset, "make_scale"):
+                    dataset.make_scale(group["DimensionScaleA"], "A")
+                else:
+                    dataset.dims.create_scale(group["DimensionScaleA"], "A")
                 # pass state as a numpy.uint, to force it being a single value (instead of a list)
                 _h5svi_set_state(group["DimensionScaleA"], numpy.uint(ST_REPORTED))
                 dataset.dims[apos].attach_scale(group["DimensionScaleA"])
@@ -406,7 +419,10 @@ def _add_image_info(group, dataset, image):
                 group["DimensionScaleC"] = wll  # m
 
                 group["DimensionScaleC"].attrs["UNIT"] = "m"
-                dataset.dims.create_scale(group["DimensionScaleC"], "C")
+                if hasattr(dataset, "make_scale"):
+                    dataset.make_scale(group["DimensionScaleC"], "C")
+                else:
+                    dataset.dims.create_scale(group["DimensionScaleC"], "C")
                 # pass state as a numpy.uint, to force it being a single value (instead of a list)
                 _h5svi_set_state(group["DimensionScaleC"], numpy.uint(ST_REPORTED))
                 cpos = dims.index("C")
