@@ -286,6 +286,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         cont2.terminate()
         time.sleep(0.1)  # give it some time to terminate
 
+    @unittest.skip("Test unreliable as it depends on automatic memory clean-up")
     @timeout(20)
     def test_dataflow_unsub(self):
         """
@@ -311,6 +312,11 @@ class ProxyOfProxyTest(unittest.TestCase):
         count_arrays = comp2.get_data_count()
         logging.info("received %d arrays", count_arrays)
         nlisteners = comp.data._count_listeners()
+        
+        # WARNING: This relies on comp2 being unreferenced immediately, and cleaned-up.
+        # This works fine when running the test cases using unittest, however
+        # when running with pytest, it doesn't behave the same, and the object is
+        # kept in memory, which prevents the automatic unsubscribe from working.
         logging.info("orig has %d listeners", nlisteners)
         comp2.terminate()
         cont2.terminate()
