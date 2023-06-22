@@ -336,8 +336,8 @@ def _add_image_info(group, dataset, image):
 
             # Attach the scales to each dimensions (referenced by their label)
             if hasattr(dataset, "make_scale"):
-                dataset.make_scale(group["DimensionScaleX"], "X")
-                dataset.make_scale(group["DimensionScaleY"], "Y")
+                group["DimensionScaleX"].make_scale("X")
+                group["DimensionScaleY"].make_scale("Y")
             else:
                 dataset.dims.create_scale(group["DimensionScaleX"], "X")
                 dataset.dims.create_scale(group["DimensionScaleY"], "Y")
@@ -356,7 +356,7 @@ def _add_image_info(group, dataset, image):
 
                 group["DimensionScaleZ"].attrs["UNIT"] = "m"
                 if hasattr(dataset, "make_scale"):
-                    dataset.make_scale(group["DimensionScaleZ"], "Z")
+                    group["DimensionScaleZ"].make_scale("Z")
                 else:
                     dataset.dims.create_scale(group["DimensionScaleZ"], "Z")
                 dataset.dims[zpos].attach_scale(group["DimensionScaleZ"])
@@ -378,7 +378,7 @@ def _add_image_info(group, dataset, image):
                 group["DimensionScaleT"] = image.metadata[model.MD_TIME_LIST]
                 group["DimensionScaleT"].attrs["UNIT"] = "s"
                 if hasattr(dataset, "make_scale"):
-                    dataset.make_scale(group["DimensionScaleT"], "T")
+                    group["DimensionScaleT"].make_scale("T")
                 else:
                     dataset.dims.create_scale(group["DimensionScaleT"], "T")
                 # pass state as a numpy.uint, to force it being a single value (instead of a list)
@@ -399,7 +399,7 @@ def _add_image_info(group, dataset, image):
                 group["DimensionScaleA"] = image.metadata[model.MD_THETA_LIST]
                 group["DimensionScaleA"].attrs["UNIT"] = "rad"
                 if hasattr(dataset, "make_scale"):
-                    dataset.make_scale(group["DimensionScaleA"], "A")
+                    group["DimensionScaleA"].make_scale("A")
                 else:
                     dataset.dims.create_scale(group["DimensionScaleA"], "A")
                 # pass state as a numpy.uint, to force it being a single value (instead of a list)
@@ -420,7 +420,7 @@ def _add_image_info(group, dataset, image):
 
                 group["DimensionScaleC"].attrs["UNIT"] = "m"
                 if hasattr(dataset, "make_scale"):
-                    dataset.make_scale(group["DimensionScaleC"], "C")
+                    group["DimensionScaleC"].make_scale("C")
                 else:
                     dataset.dims.create_scale(group["DimensionScaleC"], "C")
                 # pass state as a numpy.uint, to force it being a single value (instead of a list)
