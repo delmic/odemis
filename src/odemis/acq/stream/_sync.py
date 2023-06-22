@@ -830,7 +830,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
                        MD_DESCRIPTION: self._streams[n].name.value})
             da = model.DataArray(numpy.zeros(shape=rep[::-1] * numpy.array(tile_shape), dtype=raw_data.dtype), md)
             self._live_data[n].append(da)
-            self._acq_mask = numpy.zeros(shape=rep[::-1] * numpy.array(tile_shape), dtype=numpy.bool)
+            self._acq_mask = numpy.zeros(shape=rep[::-1] * numpy.array(tile_shape), dtype=bool)
 
         self._acq_mask[px_idx[0] * tile_shape[0]:(px_idx[0] + 1) * tile_shape[0],
                        px_idx[1] * tile_shape[1]:(px_idx[1] + 1) * tile_shape[1]] = True
@@ -867,7 +867,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
                        MD_DESCRIPTION: self._streams[n].name.value})
             da = model.DataArray(numpy.zeros(shape=rep[::-1], dtype=raw_data.dtype), md)
             self._live_data[n].append(da)
-            self._acq_mask = numpy.zeros(rep[::-1], dtype=numpy.bool)
+            self._acq_mask = numpy.zeros(rep[::-1], dtype=bool)
 
         self._acq_mask[px_idx[0]: px_idx[0] + tile_shape[0],
                        px_idx[1]: px_idx[1] + tile_shape[1]] = True
