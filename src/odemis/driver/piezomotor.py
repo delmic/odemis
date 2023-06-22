@@ -1051,13 +1051,13 @@ class PMDSimulator(object):
                     steps = int(args[0]) - self.target_pos[axis]
                     self.target_pos[axis] = int(args[0])
                     steps = int(steps * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
-                    self.move(steps)
+                    self.move(steps, self.target_pos)
                 elif len(args) == 2:
                     steps = int(args[0]) - self.target_pos[axis]
                     self.target_pos[axis] = int(args[0])
                     self.speed = int(args[1])
                     steps = int(steps * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
-                    self.move(steps)
+                    self.move(steps, self.target_pos)
                 else:
                     raise ValueError()
             elif cmd == "S":  # stop axis
@@ -1071,12 +1071,12 @@ class PMDSimulator(object):
                 elif len(args) == 1:
                     self.target_pos[axis] += int(args[0])
                     steps = int(int(args[0]) * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
-                    self.move(steps)
+                    self.move(steps, self.target_pos)
                 elif len(args) == 2:
                     self.target_pos[axis] += int(args[0])
                     self.speed = int(args[1])
                     steps = int(int(args[0]) * DEFAULT_ENCODER_RESOLUTION / DEFAULT_MOTORSTEP_RESOLUTION)
-                    self.move(steps)
+                    self.move(steps, self.target_pos)
                 else:
                     raise ValueError()
             elif cmd == "E":
@@ -1135,9 +1135,9 @@ class PMDSimulator(object):
 
         self._output_buf += sEOL
 
-    def move(self, steps):
+    def move(self, steps, target_pos):
         # simple move, same duration for every length, don't care about speed
-        self.executor.submit(self._do_move, steps)
+        self.executor.submit(self._do_move, steps, target_pos)
 
     def find_index(self):
         t = Thread(target=self._do_indexing)
@@ -1148,7 +1148,7 @@ class PMDSimulator(object):
         time.sleep(1)
         self.indexing = False
 
-    def _do_move(self, steps):
+    def _do_move(self, steps, target_pos):
         self.is_moving = True
         startt = time.time()
         dur = abs(steps / self.speed)
@@ -1159,5 +1159,5 @@ class PMDSimulator(object):
                 return
             else:
                 time.sleep(0.1)
-        self.current_pos = copy.deepcopy(self.target_pos)
+        self.current_pos = target_pos
         self.is_moving = False
