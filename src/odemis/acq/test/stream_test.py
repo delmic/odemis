@@ -4653,7 +4653,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         bckg = calibration.get_spectrum_data([obckg])
 
         # create spectrum efficiency correction
-        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
@@ -4773,7 +4773,7 @@ class StaticStreamsTestCase(unittest.TestCase):
                                                 })  # background data is 2D
 
         # create spectrum efficiency compensation file (C, 1, 1, 1, 1)
-        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
@@ -4820,7 +4820,7 @@ class StaticStreamsTestCase(unittest.TestCase):
                                                 })  # background data is 2D
 
         # create spectrum efficiency compensation file (C, 1, 1, 1, 1)
-        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
@@ -4938,7 +4938,7 @@ class StaticStreamsTestCase(unittest.TestCase):
         bckg = model.DataArray(dbckg, metadata={model.MD_TIME_LIST: time_bckg})  # background data is 1D
 
         # create spectrum efficiency compensation file (C, 1, 1, 1, 1)
-        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=numpy.float)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 1.3, 6, 9.1], dtype=float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.array(range(dcalib.shape[0])) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})

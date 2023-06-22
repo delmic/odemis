@@ -845,7 +845,7 @@ class TestRescaleHQ(unittest.TestCase):
         # X=1024, Y=512
         size = (512, 1024, 14)
         background = 58
-        img_in = numpy.zeros(size, dtype=numpy.float) + background
+        img_in = numpy.zeros(size, dtype=float) + background
         # watermark
         img_in[246:266, 502:522, 0] = 50
         img_in[246:266, 502:522, 1] = 100
@@ -1344,7 +1344,7 @@ class TestGuessDRange(unittest.TestCase):
              }
 
         # check for dtype float (=wrong type)
-        arr = numpy.arange(size[0] * size[1], dtype=numpy.float)
+        arr = numpy.arange(size[0] * size[1], dtype=float)
         data = model.DataArray(arr, metadata=md)
 
         with self.assertRaises(TypeError):

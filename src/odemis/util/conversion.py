@@ -332,7 +332,7 @@ def get_tile_md_pos(i, tile_size, tileda, origda):
 
     dims = md.get(model.MD_DIMS, "CTZYX"[-origda.ndim::])
     img_shape = [origda.shape[dims.index('X')], origda.shape[dims.index('Y')]]
-    img_shape = numpy.array(img_shape, numpy.float)
+    img_shape = numpy.array(img_shape, float)
     # center of the image in pixels
     img_center = img_shape / 2
 

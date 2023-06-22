@@ -257,7 +257,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         Tests for input of DataArray with float ndarray.
         """
         data = self.data
-        data[0] = data[0].astype(numpy.float)
+        data[0] = data[0].astype(float)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         result = angleres.AngleResolved2Polar(data[0], 201)
@@ -407,7 +407,7 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         Tests for input of DataArray with float ndarray.
         """
         data = self.data
-        data[0] = data[0].astype(numpy.float)
+        data[0] = data[0].astype(float)
         C, T, Z, Y, X = data[0].shape
         data[0].shape = Y, X
         clean_data = angleres.ARBackgroundSubtract(data[0])

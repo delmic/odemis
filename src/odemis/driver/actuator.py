@@ -675,11 +675,11 @@ class ConvertStage(model.Actuator):
         self._Mfromdep = self._get_rot_matrix(invert=True) / scale
 
         # Offset between origins of the coordinate systems
-        self._O = numpy.array(translation, dtype=numpy.float)
+        self._O = numpy.array(translation, dtype=float)
 
     def _convertPosFromdep(self, pos_dep, absolute=True):
         # Object lens position vector
-        Q = numpy.array(pos_dep, dtype=numpy.float)
+        Q = numpy.array(pos_dep, dtype=float)
         # Transform to coordinates in the reference frame of the sample stage
         p = self._Mfromdep.dot(Q)
         if absolute:
@@ -688,7 +688,7 @@ class ConvertStage(model.Actuator):
 
     def _convertPosTodep(self, pos, absolute=True):
         # Sample stage position vector
-        P = numpy.array(pos, dtype=numpy.float)
+        P = numpy.array(pos, dtype=float)
         if absolute:
             P += self._O
         # Transform to coordinates in the reference frame of the objective stage

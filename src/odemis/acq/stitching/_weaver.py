@@ -182,7 +182,7 @@ class Weaver(metaclass=ABCMeta):
         # To avoid overflows, we need to clip the results to the dtype range.
         if numpy.issubdtype(tile.dtype, numpy.integer):
             maxval = numpy.iinfo(tile.dtype).max
-        elif numpy.issubdtype(tile.dtype, numpy.float):
+        elif numpy.issubdtype(tile.dtype, float):
             maxval = numpy.finfo(tile.dtype).max
         else:
             maxval = numpy.inf

@@ -373,7 +373,7 @@ class Ammeter(model.Detector):
             logging.warning("Measurement status is 0x%x", stat)
         # [d] makes an array of shape (1), "d" would make an array of shape (),
         # but as it's a scalar, that confuses some code.
-        nd = numpy.array([d], dtype=numpy.float)
+        nd = numpy.array([d], dtype=float)
         img = model.DataArray(nd, metadata)
 
         # Send the data to anyone intersted

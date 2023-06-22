@@ -452,7 +452,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         logging.debug("Generating points in the SEM area %s, from rep %s and roi %s",
                       lim_main, rep, roi)
 
-        pos = numpy.empty((rep[1], rep[0], 2), dtype=numpy.float)
+        pos = numpy.empty((rep[1], rep[0], 2), dtype=float)
         posy = pos[:, :, 1].swapaxes(0, 1)  # just a view to have Y as last dim
         posy[:, :] = numpy.linspace(lim_main[1], lim_main[3], rep[1])
         # fill the X dimension
@@ -504,7 +504,7 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
             raise ValueError("ROI goes outside the scan stage range (%s > %s)" %
                              (lim_main, spos_rng))
 
-        pos = numpy.empty(repetition + (2,), dtype=numpy.float)
+        pos = numpy.empty(repetition + (2,), dtype=float)
         posx = pos[:, :, 0].swapaxes(0, 1)  # just a view to have X as last dim
         posx[:, :] = numpy.linspace(lim_main[0], lim_main[2], repetition[0])
         # fill the X dimension

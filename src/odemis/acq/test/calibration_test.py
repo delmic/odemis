@@ -215,7 +215,6 @@ class TestSpectrum(unittest.TestCase):
     Test the Spectrum related functions
     """
 
-
     def test_load_background(self):
         # Background data
         dcalib = numpy.array([1, 2, 2, 3, 4, 5, 4, 6, 9], dtype=numpy.uint16)
@@ -252,7 +251,7 @@ class TestSpectrum(unittest.TestCase):
 
     def test_load_compensation(self):
         # Compensation data
-        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
@@ -284,7 +283,7 @@ class TestSpectrum(unittest.TestCase):
         # Give one DA, the correct one, so expect to get it back
 
         # Compensation data
-        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
@@ -341,7 +340,7 @@ class TestSpectrum(unittest.TestCase):
         bckg = calibration.get_spectrum_data([obckg])
 
         # Compensation data
-        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})
@@ -372,7 +371,7 @@ class TestSpectrum(unittest.TestCase):
         spec = model.DataArray(data, metadata={model.MD_WL_LIST: wld})
 
         # Only from 400 nm => need to use the border (=1) for everything below
-        dcalib = numpy.array([1, 1, 2, 3, 4, 5, 1, 6, 9], dtype=numpy.float)
+        dcalib = numpy.array([1, 1, 2, 3, 4, 5, 1, 6, 9], dtype=float)
         dcalib.shape = (dcalib.shape[0], 1, 1, 1, 1)
         wl_calib = 400e-9 + numpy.arange(dcalib.shape[0]) * 10e-9
         calib = model.DataArray(dcalib, metadata={model.MD_WL_LIST: wl_calib})

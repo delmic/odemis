@@ -60,7 +60,7 @@ except ImportError:
 #    ret = numpy.empty((w, h, 3), dtype=numpy.uint8)
 #    assert irange[0] < irange[1]
 #    irange = numpy.array(irange, dtype=data.dtype) # ensure it's the same type
-#    tintr = numpy.array([t / 255 for t in tint], dtype=numpy.float)
+#    tintr = numpy.array([t / 255 for t in tint], dtype=float)
 #
 #    # TODO: special code when tint == white (should be 2x faster)
 #    code = """
