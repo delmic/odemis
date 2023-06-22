@@ -14,15 +14,27 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis import dataio
-from odemis.dataio import get_available_formats, get_converter, \
-    find_fittest_converter
 import os
+import re
 import unittest
+import warnings
 from unittest.case import skip
+
+from odemis import dataio
+from odemis.dataio import (find_fittest_converter, get_available_formats,
+                           get_converter)
 
 
 class TestDataIO(unittest.TestCase):
+
+    def setUp(self) -> None:
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
 
     def test_get_available_formats(self):
         for mode in [os.O_RDONLY, os.O_WRONLY, os.O_RDWR]:

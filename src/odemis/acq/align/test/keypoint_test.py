@@ -20,20 +20,23 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import cairo
 import logging
 import math
+import os
+import re
+import unittest
+import warnings
+
+import cairo
+import cv2
 import numpy
 from numpy.linalg import inv
+
 from odemis import model
 from odemis.acq.align import keypoint
+from odemis.acq.align.keypoint import preprocess
 from odemis.util.conversion import get_img_transformation_md
 from odemis.util.dataio import open_acquisition
-import os
-import unittest
-import cv2
-from odemis.acq.align.keypoint import preprocess
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -41,6 +44,15 @@ IMG_PATH = os.path.join(os.path.dirname(__file__), "images")
 
 
 class TestKeypoint(unittest.TestCase):
+
+    def setUp(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
 
     @unittest.expectedFailure
     def test_image_pair(self):

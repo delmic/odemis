@@ -17,16 +17,19 @@ You should have received a copy of the GNU General Public License along with Ode
 """
 
 import logging
+import re
+import time
+import unittest
+import warnings
+from unittest.case import skip
+
+import numpy
+
 from odemis import model
 from odemis.acq.align.shift import MeasureShift
 from odemis.dataio import tiff
 from odemis.driver import simcam, simulated
-from odemis.util import timeout, testing
-import time
-import unittest
-from unittest.case import skip
-
-import numpy
+from odemis.util import testing, timeout
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -49,6 +52,13 @@ class TestSimCam(unittest.TestCase):
         cls.camera.terminate()
 
     def setUp(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
         size = self.camera.shape[:-1]
         self.is_rgb = (len(size) >= 3 and size[-1] in {3, 4})
         # image shape is inverted order of size

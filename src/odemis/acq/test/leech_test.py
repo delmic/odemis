@@ -15,15 +15,18 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
+import re
+import time
+import unittest
+import warnings
+
 import numpy
+
 from odemis import model
 from odemis.acq import stream
 from odemis.acq.drift import AnchoredEstimator
-from odemis.acq.leech import ProbeCurrentAcquirer, AnchorDriftCorrector
+from odemis.acq.leech import AnchorDriftCorrector, ProbeCurrentAcquirer
 from odemis.driver import simsem
-import time
-import unittest
-
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -56,6 +59,15 @@ CONFIG_SEM = {"name": "sem", "role": "sem", "image": "simsem-fake-output.h5",
 
 
 class ADCTestCase(unittest.TestCase):
+
+    def setUp(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
 
     @classmethod
     def setUpClass(cls):

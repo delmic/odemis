@@ -20,18 +20,22 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from PIL import Image
 import logging
-import numpy
-from odemis import model, dataio
-from odemis.dataio import stiff, tiff
-from odemis.util import img
 import os
+import re
 import time
 import unittest
+import warnings
 from unittest.case import skip
+
 import libtiff
 import libtiff.libtiff_ctypes as T  # for the constant names
+import numpy
+from PIL import Image
+
+from odemis import dataio, model
+from odemis.dataio import stiff, tiff
+from odemis.util import img
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -40,6 +44,13 @@ class TestTiffIO(unittest.TestCase):
 
     @classmethod
     def setUpClass(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
         self.no_of_images = 0
 
     def tearDown(self):

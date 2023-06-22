@@ -21,28 +21,16 @@
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from builtins import range
 import copy
 import logging
 import math
-import numpy
-from odemis import model
-from odemis.acq.stream import UNDEFINED_ROI
-from odemis.driver import simsem
-from odemis.driver.tmcm import TMCLController
-from odemis.gui.comp.overlay import view as vol
-from odemis.gui.comp.overlay import world as wol
-from odemis.gui.comp.overlay.view import HORIZONTAL_LINE, VERTICAL_LINE, CROSSHAIR
-from odemis.gui.comp.overlay.world import EKOverlay
-from odemis.gui.comp.viewport import ARLiveViewport, MicroscopeViewport
-from odemis.gui.model import TOOL_POINT, TOOL_LINE, TOOL_RULER, TOOL_LABEL, FeatureOverviewView
-from odemis.gui.util.img import wxImage2NDImage
-from odemis.util import mock
-from odemis.util.comp import compute_scanner_fov, get_fov_rect
-from odemis.util.conversion import hex_to_frgb
-from odemis.util.testing import assert_array_not_equal, assert_pos_not_almost_equal
+import re
 import time
 import unittest
+import warnings
+from builtins import range
+
+import numpy
 import wx
 
 import odemis.gui as gui
@@ -50,6 +38,24 @@ import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.model as guimodel
 import odemis.gui.test as test
+from odemis import model
+from odemis.acq.stream import UNDEFINED_ROI
+from odemis.driver import simsem
+from odemis.driver.tmcm import TMCLController
+from odemis.gui.comp.overlay import view as vol
+from odemis.gui.comp.overlay import world as wol
+from odemis.gui.comp.overlay.view import (CROSSHAIR, HORIZONTAL_LINE,
+                                          VERTICAL_LINE)
+from odemis.gui.comp.overlay.world import EKOverlay
+from odemis.gui.comp.viewport import ARLiveViewport, MicroscopeViewport
+from odemis.gui.model import (TOOL_LABEL, TOOL_LINE, TOOL_POINT, TOOL_RULER,
+                              FeatureOverviewView)
+from odemis.gui.util.img import wxImage2NDImage
+from odemis.util import mock
+from odemis.util.comp import compute_scanner_fov, get_fov_rect
+from odemis.util.conversion import hex_to_frgb
+from odemis.util.testing import (assert_array_not_equal,
+                                 assert_pos_not_almost_equal)
 
 test.goto_manual()
 logging.getLogger().setLevel(logging.DEBUG)
@@ -66,6 +72,15 @@ CONFIG_SEM = {"name": "sem_int",
 class OverlayTestCase(test.GuiTestCase):
 
     frame_class = test.test_gui.xrccanvas_frame
+
+    def setUp(self) -> None:
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
 
     # View overlay test cases
 
