@@ -33,7 +33,7 @@ from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_ROUGH_MILLED,
                                 CryoFeature)
 from odemis.acq.millmng import (MillingRectangleTask, MillingSettings,
                                 load_config, mill_features)
-from odemis.acq.move import _isNearPosition
+from odemis.acq.move import _isNearPosition, cryoSwitchSamplePosition, LOADING
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.util import testing
 
@@ -288,6 +288,10 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         Test if the stage moved for all the requested sites and the milling procedure is executed correctly.
         """
+        # Milling does not start from an unknown stage position
+        # Set the stage to loading position
+        cryoSwitchSamplePosition(LOADING).result()
+
         # Testing non-square pixel size, more dense in y direction
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
@@ -360,7 +364,6 @@ class MillingManagerTestCase(unittest.TestCase):
 
         future.add_update_callback(self.on_progress_update)
         future.add_done_callback(self.on_done)
-        time.sleep(13)  # make sure it's started
         self.assertTrue(future.running())
         future.cancel()
         with self.assertRaises(CancelledError):
@@ -407,7 +410,6 @@ class MillingManagerTestCase(unittest.TestCase):
         f = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
                           self.sed, self.stage, self.aligner)
 
-        time.sleep(13)  # Long enough to make sure it's started
         self.assertTrue(f.running())
         f.cancel()
         with self.assertRaises(CancelledError):
