@@ -1035,7 +1035,7 @@ class PopupImageButton(ImageTextButton):
 
         """
 
-        menu_id = wx.NewId()
+        menu_id = wx.Window.NewControlId()
         menu_item = wx.MenuItem(self.menu, menu_id, label)
         self.menu.Bind(wx.EVT_MENU, self.on_action_select, id=menu_id)
         self.choices[label] = (menu_item, callback, check_enabled)
