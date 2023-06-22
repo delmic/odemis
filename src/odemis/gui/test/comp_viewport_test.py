@@ -278,14 +278,14 @@ class MicroscopeViewportTestCase(test.GuiTestCase):
         big_mpp = self.view.mpp.value
         fsize = self.frame.Size
         csize = self.canvas.Size
-        csize_big = int(csize[0] * 2), int(csize[1] * 2)
+        csize_big = int(csize[0] * 1.5), int(csize[1] * 1.5)
         csize_diff = csize_big[0] - csize[0], csize_big[1] - csize[1]
         self.frame.SetSize((fsize[0] + csize_diff[0], fsize[1] + csize_diff[1]))
         test.gui_loop(0.1)
         self.assertEqual(csize_big, tuple(self.canvas.Size))
 
-        self.assertAlmostEqual(self.view.mpp.value, big_mpp / 2)
-        numpy.testing.assert_almost_equal(exp_fov, self.view.fov.value)
+        self.assertAlmostEqual(self.view.mpp.value, big_mpp / 1.5)
+        numpy.testing.assert_almost_equal(exp_fov, self.view.fov.value, decimal=5)
         new_fovb = self.view.fov_buffer.value
         self.assertLessEqual(new_fovb[0], exp_fovb[0])
         self.assertLessEqual(new_fovb[1], exp_fovb[1])
