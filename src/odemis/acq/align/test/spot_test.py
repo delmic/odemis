@@ -22,8 +22,10 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import math
 import os
+import re
 import time
 import unittest
+import warnings
 
 import numpy
 from numpy import fft
@@ -322,6 +324,9 @@ class TestFindGridSpots(unittest.TestCase):
 
     def test_wrong_method(self):
         """Test that an error is raised when a wrong method is passed."""
+        warnings.filterwarnings(
+            "ignore", message=re.escape("FindGridSpots is deprecate")
+        )
         image = numpy.zeros((256, 256))
         # set a grid of 8 by 8 points to 1
         image[54:150:12, 54:150:12] = 1
