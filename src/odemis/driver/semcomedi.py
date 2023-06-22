@@ -793,8 +793,6 @@ class SEMComedi(model.HwComponent):
          period: a value slightly smaller, or larger than the period (in s)
          osr: a ratio indicating how many times faster runs the input clock
          dpr: how many times the acquisition should be duplicated
-        raises:
-            ValueError if no compatible dwell time can be found
         """
         # We have to find a write period as close as possible from the requested
         # period, and multiple of a read period as small as possible.
@@ -3180,7 +3178,7 @@ class Scanner(model.Emitter):
         # settle_time is proportional to the size of the ROI (and =0 if only 1 px)
         st = self._settle_time * scale[0] * (resolution[0] - 1) / (self._shape[0] - 1)
         # Round-up if settle time represents more than 1% of the dwell time.
-        # Below 1% the improvment would be marginal, and that allows to have
+        # Below 1% the improvement would be marginal, and that allows to have
         # tiny areas (eg, 4x4) scanned without the first pixel of each line
         # being exposed twice more than the others.
         margin = int(math.ceil(st / dwell_time - 0.01))
@@ -3273,6 +3271,7 @@ class Scanner(model.Emitter):
             scan_raw = self._generate_scan_array(shape, limits.T, margin)
             self._scan_array = scan_raw
         else:
+            # TODO: delete, as it's never used, and seems to contain bugs
             limits = numpy.array(roi_limits, dtype=numpy.double)
             scan_phys = self._generate_scan_array(shape, limits, margin)
 
@@ -3296,7 +3295,7 @@ class Scanner(model.Emitter):
         interpolation between the limits. It's basically a saw-tooth curve on
         the W dimension and a linear increase on the H dimension.
         shape (list of 2 int): H/W of the scanning area (slow, fast axis)
-        limits (2x2 ndarray): the min/max limits of W/H
+        limits (2x2 ndarray): the min/max limits of H/W
         margin (0<=int): number of additional pixels to add at the begginning of
             each scanned line
         returns (3D ndarray of shape[0] x (shape[1] + margin) x 2): the H/W
@@ -3312,10 +3311,10 @@ class Scanner(model.Emitter):
         # Force the conversion to full number (e.g., instead of uint16), which
         # avoids linspace() to go crazy when limits are going down.
         pylimits = limits.tolist()
-        # fill the X dimension
+        # fill the slow axis data
         scanx = scan[:, :, 0].swapaxes(0, 1) # just a view to have X as last dim
         scanx[:, :] = numpy.linspace(pylimits[0][0], pylimits[0][1], shape[0])
-        # fill the Y dimension
+        # fill the fast axis data
         scan[:, margin:, 1] = numpy.linspace(pylimits[1][0], pylimits[1][1], shape[1])
 
         # fill the margin with the first pixel (X dimension is already filled)
