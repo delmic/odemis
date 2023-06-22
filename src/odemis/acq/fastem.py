@@ -343,7 +343,7 @@ class FastEMROA(object):
         # numpy array to represent the megafield with True values for fields that need to be acquired
         _, _, rmax, cmax = util.get_polygon_bbox(indices)
         megafield_grid_shape = (rmax + 1, cmax + 1)
-        megafield_grid_rep = numpy.zeros(megafield_grid_shape, dtype=numpy.bool)
+        megafield_grid_rep = numpy.zeros(megafield_grid_shape, dtype=bool)
         megafield_grid_rep[[r[0] for r in indices], [c[1] for c in indices]] = True
 
         # Pad the array with zeros so the flood fill will always surround the entire shape

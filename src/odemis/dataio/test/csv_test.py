@@ -47,7 +47,7 @@ class TestCSVIO(unittest.TestCase):
     def testExportAR(self):
         """Try simple AR export"""
         size = (90, 360)
-        dtype = numpy.float
+        dtype = float
         metadata = {model.MD_DESCRIPTION: "Angle-resolved",
                     model.MD_ACQ_TYPE: model.MD_AT_AR}
         data = model.DataArray(numpy.zeros(size, dtype), metadata)
@@ -198,7 +198,7 @@ class TestCSVIO(unittest.TestCase):
     def testExportSpectrumLine(self):
         """Try simple spectrum-line export"""
         size = (1340, 6)
-        dtype = numpy.float
+        dtype = float
         md = {model.MD_WL_LIST: numpy.linspace(536e-9, 650e-9, size[1]).tolist(),
               model.MD_PIXEL_SIZE: (None, 4.2e-06),
               model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
@@ -221,7 +221,7 @@ class TestCSVIO(unittest.TestCase):
     def testExportSpectrumLineNoWL(self):
         """Try simple spectrum-line export"""
         size = (1340, 6)
-        dtype = numpy.float
+        dtype = float
         md = {model.MD_PIXEL_SIZE: (None, 4.2e-06),
               model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
               model.MD_DIMS: "XC"}
@@ -278,7 +278,7 @@ class TestCSVIO(unittest.TestCase):
     def testExportEK(self):
         """Try simple angular spectrum export"""
         size = (340, 1024)
-        dtype = numpy.float
+        dtype = float
         md = {model.MD_WL_LIST: [500e-9 + i * 1e-9 for i in range(size[-1])],
               model.MD_THETA_LIST: numpy.linspace(-1.5, 1.4, size[-2]),
               model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
@@ -301,7 +301,7 @@ class TestCSVIO(unittest.TestCase):
     def testExportEKNoMD(self):
         """Try simple angular spectrum export missing WL_LIST and THETA_LIST"""
         size = (340, 1024)
-        dtype = numpy.float
+        dtype = float
         md = {model.MD_ACQ_TYPE: model.MD_AT_SPECTRUM,
               model.MD_DIMS: "AC"}
         data = model.DataArray(numpy.zeros(size, dtype), md)

@@ -130,7 +130,7 @@ class TestGetAngle(unittest.TestCase):
 class TestCoefToDA(unittest.TestCase):
     
     def test_simple(self):
-        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=numpy.float)
+        dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=float)
         wl_calib = (400 + numpy.arange(len(dcalib)))
         coef = numpy.vstack([wl_calib, dcalib]).T
         self.assertEqual(coef.shape[1], 2)

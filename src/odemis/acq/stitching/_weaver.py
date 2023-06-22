@@ -182,7 +182,7 @@ class Weaver(metaclass=ABCMeta):
         # To avoid overflows, we need to clip the results to the dtype range.
         if numpy.issubdtype(tile.dtype, numpy.integer):
             maxval = numpy.iinfo(tile.dtype).max
-        elif numpy.issubdtype(tile.dtype, numpy.float):
+        elif numpy.issubdtype(tile.dtype, float):
             maxval = numpy.finfo(tile.dtype).max
         else:
             maxval = numpy.inf
@@ -243,7 +243,7 @@ class CollageWeaverReverse(Weaver):
         im = numpy.ones((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=self.tiles[0].dtype) * numpy.amin(self.tiles)
 
         # The mask is multiplied with the tile, thereby creating a tile with a gradient
-        mask = numpy.zeros((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=numpy.bool)
+        mask = numpy.zeros((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=bool)
 
         for b, t in zip(self.tbbx_px, self.tiles):
             # Part of image overlapping with tile
@@ -296,7 +296,7 @@ class MeanWeaver(Weaver):
         im = numpy.ones((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=self.tiles[0].dtype) * numpy.amin(self.tiles)
 
         # The mask is multiplied with the tile, thereby creating a tile with a gradient
-        mask = numpy.zeros((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=numpy.bool)
+        mask = numpy.zeros((self.gbbx_px[-1], self.gbbx_px[-2]), dtype=bool)
 
         for b, t in zip(self.tbbx_px, self.tiles):
             # Part of image overlapping with tile

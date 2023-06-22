@@ -2207,7 +2207,7 @@ class RawDetector(model.Detector):
 
         # Read data and make it a DataArray
         d = self.parent.GetCountRate(self._channel)
-        nd = numpy.array([d], dtype=numpy.int)
+        nd = numpy.array([d], dtype=int)
         img = model.DataArray(nd, metadata)
 
         # send the new image (if anyone is interested)
@@ -2239,7 +2239,7 @@ class HH400RawDetector(RawDetector):
             d = self.parent.GetSyncRate()
         else:
             d = self.parent.GetCountRate(self._channel - 1)
-        nd = numpy.array([d], dtype=numpy.int)
+        nd = numpy.array([d], dtype=int)
         img = model.DataArray(nd, metadata)
 
         # send the new image (if anyone is interested)
