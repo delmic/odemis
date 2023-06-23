@@ -145,10 +145,11 @@ class PITuner(object):
 
             # Read the recorded data from the move
             data = self.cont.GetRecordedData()
+            logging.debug("Got data: %s", data)
 
             # plot data using matplotlib
             idx = numpy.linspace(0, (len(data) - 1) * self._cycledur * rrate, len(data))
-            cp, ap = numpy.array(zip(*data)) * self._upm * 1e6  # -> µm
+            cp, ap = numpy.array(data).T * (self._upm * 1e6)  # -> µm
             ep = ap - cp
             nb_plots = 2
             if show_vel:
@@ -239,6 +240,10 @@ def main(args):
                         help="Port name (ex: /dev/ttyUSB0, autoip, or 192.168.95.5)")
     parser.add_argument('--controller', dest="addr", type=int,
                         help="Controller address (if controller needs it)")
+    parser.add_argument('--master', dest="master", type=int,
+                    help="The address of the 'master' controller when connecting over "
+                         "TCP/IP to multiple controllers. It is unused when connecting over serial port."
+                         "Default is 254 if applicable.")
     parser.add_argument("--velocity", "-s", dest="vel", action="store_true", default=False,
                         help="Also shows velocity based on the measured position.")
 
@@ -257,9 +262,11 @@ def main(args):
         if options.addr is None:
             # If no address, there is also no master (for IP)
             kwargs["master"] = None
+        elif options.addr and options.master:
+            kwargs["master"] = options.master
 
         if options.port == "/dev/fake":
-            kwargs["_addresses"] = {options.addr: True}
+            kwargs["_addresses"] = {options.addr: True}  # Simulate one controller, as closed-loop
             acc = pigcs.FakeBus._openPort(options.port, **kwargs)
         else:
             acc = pigcs.Bus._openPort(options.port, **kwargs)
