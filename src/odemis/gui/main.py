@@ -35,7 +35,6 @@ import sys
 import threading
 import traceback
 import wx
-from wx.lib.pubsub import pub
 import warnings
 
 import odemis.gui.cont.tabs as tabs
@@ -381,7 +380,6 @@ class OdemisGUIApp(wx.App):
             self.dev_powermate.terminate()
 
         try:
-            pub.unsubAll()
             # let all the tabs know we are stopping
             self.tab_controller.terminate()
         except Exception:

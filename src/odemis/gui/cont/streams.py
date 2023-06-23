@@ -21,8 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from collections import OrderedDict
-from collections.abc import Iterable
 import functools
 import gc
 import locale
@@ -30,31 +28,34 @@ import logging
 import threading
 import time
 from builtins import str
+from collections import OrderedDict
+from collections.abc import Iterable
+from past.builtins import basestring, long
 
 import numpy
-import wx
-from past.builtins import basestring, long
-from wx.lib.pubsub import pub
-
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
+import wx
 from odemis import model, util
-from odemis.acq.stream import MeanSpectrumProjection, FastEMOverviewStream, \
-    StaticStream
-from odemis.gui import FG_COLOUR_DIS, FG_COLOUR_WARNING, FG_COLOUR_ERROR, \
-    CONTROL_COMBO, CONTROL_FLT
+from odemis.acq.stream import (FastEMOverviewStream, MeanSpectrumProjection,
+                               StaticStream)
+from odemis.gui import (CONTROL_COMBO, CONTROL_FLT, FG_COLOUR_DIS,
+                        FG_COLOUR_ERROR, FG_COLOUR_WARNING)
 from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
-from odemis.gui.comp.stream import StreamPanel, EVT_STREAM_VISIBLE, EVT_STREAM_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW, \
-    OPT_BTN_UPDATE, OPT_BTN_TINT, \
-    OPT_NAME_EDIT, OPT_BTN_PEAK, OPT_FIT_RGB, OPT_NO_COLORMAPS
+from odemis.gui.comp.stream import (EVT_STREAM_PEAK, EVT_STREAM_VISIBLE,
+                                    OPT_BTN_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW,
+                                    OPT_BTN_TINT, OPT_BTN_UPDATE, OPT_FIT_RGB,
+                                    OPT_NAME_EDIT, OPT_NO_COLORMAPS,
+                                    StreamPanel)
 from odemis.gui.conf import data
-from odemis.gui.conf.data import get_local_vas, get_hw_config
-from odemis.gui.conf.util import create_setting_entry, create_axis_entry, SettingEntry
-from odemis.gui.model import dye, TOOL_SPOT, TOOL_NONE
+from odemis.gui.conf.data import get_hw_config, get_local_vas
+from odemis.gui.conf.util import (SettingEntry, create_axis_entry,
+                                  create_setting_entry)
+from odemis.gui.model import TOOL_NONE, TOOL_SPOT, dye
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.util import fluo
 from odemis.util.conversion import wavelength2rgb
-from odemis.util.fluo import to_readable_band, get_one_center
+from odemis.util.fluo import get_one_center, to_readable_band
 from odemis.util.units import readable_str
 
 # There are two kinds of controllers:
@@ -113,11 +114,6 @@ class StreamController(object):
             options |= OPT_BTN_PEAK
 
         self.stream_panel = StreamPanel(stream_bar, stream, options)
-        # Detect when the panel is destroyed (but _not_ any of the children)
-        # Make sure to Unbind ALL event bound to the stream panel!!
-        self.stream_panel.Bind(wx.EVT_WINDOW_DESTROY, self._on_stream_panel_destroy,
-                               source=self.stream_panel)
-
         self.tab_data_model = tab_data_model
 
         # To update the local resolution without hardware feedback
@@ -232,16 +228,16 @@ class StreamController(object):
             self.stream_panel.set_peak(PEAK_METHOD_TO_STATE[stream.peak_method.value])
             self.stream_panel.Bind(EVT_STREAM_PEAK, self._on_stream_peak)
 
-        stream_bar.add_stream_panel(self.stream_panel, show_panel)
+        stream_bar.add_stream_panel(self.stream_panel, show_panel,
+                                    on_destroy=self._on_stream_panel_destroy)
 
-    def _on_stream_panel_destroy(self, _):
+    def _on_stream_panel_destroy(self):
         """ Remove all references to setting entries and the possible VAs they might contain
         """
         logging.debug("Stream panel %s destroyed", self.stream.name.value)
 
         # Destroy references to this controller in even handlers
         # (More references are present, see getrefcount
-        self.stream_panel.Unbind(wx.EVT_WINDOW_DESTROY)
         self.stream_panel.header_change_callback = None
         self.stream_panel.Unbind(EVT_STREAM_VISIBLE)
         self.stream_panel.Unbind(EVT_STREAM_PEAK)
@@ -257,6 +253,9 @@ class StreamController(object):
             entry.disconnect()
 
         self.entries = []
+
+        if self._sb_ctrl:
+            self._sb_ctrl.removeStream(self.stream)
 
         gc.collect()
 
@@ -1457,9 +1456,6 @@ class StreamBarController(object):
         self._prev_view = None
 
         self._tab_data_model.focussedView.subscribe(self._onView, init=True)
-        # FIXME: don't use pubsub events, but either wxEVT or VAs. For now every
-        # stream controller is going to try to remove the stream.
-        pub.subscribe(self.removeStream, 'stream.remove')
 
         # Stream preparation future
         self.preparation_future = model.InstantaneousFuture()
@@ -2190,7 +2186,7 @@ class StreamBarController(object):
         It's ok to call if the stream has already been removed.
 
         """
-
+        logging.debug("Stream %s removal requested", stream.name.value)
         # don't schedule any more
         self._unscheduleStream(stream)
         self._disconnectROI(stream)
