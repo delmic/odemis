@@ -2049,17 +2049,6 @@ class HH400(model.Detector):
                 # Open protection shutters
                 self._toggle_shutters(self._shutters.keys(), True)
 
-                # The demo code prints these out
-                syncrate = self.GetSyncRate()
-                # logging.debug("Sync rate: %d cnt/s", syncrate)
-                for i in range(0, self._numinput):
-                    count = self.GetCountRate(i)
-                    # logging.debug("Count rate for input %d: %d cnt/s", i, count)
-                # Check for warnings after getting count rates
-                warnings = self.GetWarnings()
-                if warnings != 0:
-                    logging.warning(self.GetWarningsText(warnings))
-
                 # Stop measurement if any bin fills up
                 self.SetStopOverflow(True, HH_STOPCNTMAX)
                 # Odemis waits a while to keep acquiring even after overflow
