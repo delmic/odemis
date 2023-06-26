@@ -542,9 +542,6 @@ class TestMimasMove(unittest.TestCase):
         pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
         self.assertEqual(pos_label, FM_IMAGING)
 
-        # Test the progress update
-        progress_fm = getMovementProgress(stage.position.value, self.stage_deactive, self.stage_active)
-        self.assertAlmostEqual(progress_fm, 1)
 
         # Move a little bit around => still in FM_IMAGING
         stage.moveRelSync({"x": 100e-6, "y": -100e-6, "z": 1e-6})
@@ -562,9 +559,27 @@ class TestMimasMove(unittest.TestCase):
         pos_label = getCurrentPositionLabel(stage.position.value, stage, self.aligner)
         self.assertEqual(pos_label, MILLING)
 
+
+        # Test the progress update
+        # Note: it hasn't started yet, but it can be already more than 0%, as by moving
+        # around the stage in imaging mode, it might have gotten closer to the DEACTIVE
+        # position
+        progress_before = getMovementProgress(stage.position.value, self.stage_active, self.stage_deactive)
+        self.assertLess(progress_before, 0.2)
+
         # Switch back to loading position
-        cryoSwitchSamplePosition(LOADING).result()
+        f = cryoSwitchSamplePosition(LOADING)
+
+        # Progress should be just a little bit more than before
+        progress_start = getMovementProgress(stage.position.value, self.stage_active, self.stage_deactive)
+        self.assertTrue(0 <= progress_before <= progress_start < 0.5)
+
+        f.result()
         testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive, atol=ATOL_LINEAR_POS)
+
+        # Progress should now be arrived => 100%
+        progress_end = getMovementProgress(stage.position.value, self.stage_active, self.stage_deactive)
+        self.assertAlmostEqual(progress_end, 1)
 
     def test_cancel_loading(self):
         """
