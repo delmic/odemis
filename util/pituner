@@ -241,9 +241,9 @@ def main(args):
     parser.add_argument('--controller', dest="addr", type=int,
                         help="Controller address (if controller needs it)")
     parser.add_argument('--master', dest="master", type=int,
-                    help="The address of the 'master' controller when connecting over "
-                         "TCP/IP to multiple controllers. It is unused when connecting over serial port."
-                         "Default is 254 if applicable.")
+                        help="The address of the 'master' controller when connecting over "
+                             "TCP/IP to multiple controllers. It is unused when connecting over serial port."
+                             "Default is 254 if applicable.")
     parser.add_argument("--velocity", "-s", dest="vel", action="store_true", default=False,
                         help="Also shows velocity based on the measured position.")
 
