@@ -19,22 +19,23 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from concurrent.futures import CancelledError
 import copy
 import glob
 import logging
+import os
+import re
+import threading
+import time
+from concurrent.futures import CancelledError
+from threading import Thread
+
+import serial
+import serial.tools.list_ports
+
 from odemis import model
 from odemis.model import Actuator, CancellableThreadPoolExecutor, CancellableFuture, isasync, HwError
 from odemis.util import to_str_escape
 from odemis.util.driver import getSerialDriver
-import os
-import re
-import serial
-from threading import Thread
-import threading
-import time
-
-import serial.tools.list_ports
 
 BAUDRATE = 115200
 DEFAULT_AXIS_SPEED = 0.001  # m / s
@@ -1159,5 +1160,5 @@ class PMDSimulator(object):
                 return
             else:
                 time.sleep(0.1)
-        self.current_pos = target_pos
+        self.current_pos = copy.deepcopy(target_pos)
         self.is_moving = False
