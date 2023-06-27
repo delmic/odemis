@@ -171,7 +171,7 @@ def fit_plane_lstsq(coords: list):
     B = coords[:, 2]
     # Using least-squares fitting minimize ||Ax - B||^2 with x in R3,
     # to find the equation for a plane: z = αx + βy + γ
-    (a, b, gamma), *_ = numpy.linalg.lstsq(A, B)
+    (a, b, gamma), *_ = numpy.linalg.lstsq(A, B, rcond=-1)  # TODO: use rcond=None when supporting numpy 1.14+
     normal = (a, b, -1)
     return gamma, normal
 

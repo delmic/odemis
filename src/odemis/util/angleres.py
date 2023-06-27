@@ -566,7 +566,7 @@ def Rectangular2Polar(data, output_size, colormap=None):
     # plot the data
     fig = plt.figure(figsize=sizefig, dpi=dpi)
 
-    plt.pcolormesh(x_data_polar, y_data_polar, data_masked, cmap=colormap, vmin=lim1, vmax=lim2)
+    plt.pcolormesh(x_data_polar, y_data_polar, data_masked, cmap=colormap, vmin=lim1, vmax=lim2, shading='auto')
     plt.axis("square")
 
     # get the data from the figure canvas as numpy array
