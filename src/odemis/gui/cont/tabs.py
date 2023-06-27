@@ -1422,9 +1422,9 @@ class SparcAcquisitionTab(Tab):
                 "stream_classes": AngularSpectrumStream,
             }
             viewport_br = panel.vp_sparc_as
-        if main_data.monochromator or len(vpv) < 4:
+        if main_data.monochromator or main_data.time_correlator or len(vpv) < 4:
             vpv[viewports[4]] = {
-                "name": "Monochromator",
+                "name": "Temporal Intensity",
                 "stream_classes": (MonochromatorSettingsStream, ScannedTemporalSettingsStream),
             }
             viewport_br = panel.vp_sparc_br
