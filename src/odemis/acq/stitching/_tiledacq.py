@@ -57,7 +57,7 @@ SKIP_TILES = 3
 MOVE_SPEED_DEFAULT = 100e-6  # m/s
 # Default range for the optical focus adjustment
 SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
-# Maximum distance allowed between two focus points in overview acquisition using autofocus
+# Maximum distance is used to separate two focus points in overview acquisition using autofocus
 # Increasing this distance may result in out of focus overview acquisition image
 MAX_DISTANCE_FOCUS_POINTS = 450e-06  # in m
 

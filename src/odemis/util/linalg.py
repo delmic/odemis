@@ -234,8 +234,13 @@ def are_collinear(p1: Iterable[float], p2: Iterable[float], p3: Iterable[float])
 
 def generate_triangulation_points(max_dist: float, area_coords: Iterable[float]) -> Iterable[Tuple[float]]:
     """
-    Finds (x,y) positions on the given area. The points are evenly distributed from each other in the given area.
-    The distance between points is decided by maximum distance.
+    This function generates a set of (x,y) positions within a given area based on the maximum distance between points.
+    The area is defined by the coordinates (xmin, ymin, xmax, ymax).
+
+    It calculates the lengths of the area in the x and y directions and determines the number of points in each direction
+    based on the maximum distance. It then adjusts the area coordinates to avoid points exactly on the border
+     of the given area by creating a margin of half the maximum distance
+    from the border.
 
     :param max_dist: the maximum distance allowed between two (x,y) positions.
     :param area_coords: [xmin, ymin, xmax, ymax] the top right and bottom left (x,y) coordinates in meters.
