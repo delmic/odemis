@@ -1054,7 +1054,9 @@ class Stage(model.Actuator):
                                                   range=(self._degrees_to_rad(axes_rng[0]),
                                                          self._degrees_to_rad(axes_rng[1])))
                     else:
-                        axes_def[ax] = model.Axis(unit="m", range=(axes_rng[0], axes_rng[1]))
+                        # convert the axis min and max range to meters
+                        axis_m = (axes_rng[0] * 1e-3, axes_rng[1] * 1e-3)
+                        axes_def[ax] = model.Axis(unit="m", range=(-axis_m[1], -axis_m[0]))
                 # slice the axes_rng list for the next iteration
                 axes_rng = axes_rng[2::]
             else:
