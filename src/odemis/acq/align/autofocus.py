@@ -662,7 +662,6 @@ def estimateAcquisitionTime(detector, scanner=None):
     return et
 
 
-# TODO: drop steps, which is unused, or use it
 def estimateAutoFocusTime(detector, scanner=None, steps=MAX_STEPS_NUMBER):
     """
     detector (model.DigitalCamera or model.Detector): Detector on which to

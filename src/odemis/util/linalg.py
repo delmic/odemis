@@ -247,8 +247,8 @@ def generate_triangulation_points(max_dist: float, area_coords: Iterable[float])
     # away from the border of the given area
     length_x = abs(xmax - xmin)
     length_y = abs(ymax - ymin)
-    points_x = numpy.floor(length_x/max_dist) + 1
-    points_y = numpy.floor(length_y/max_dist) + 1
+    points_x = numpy.floor(length_x / max_dist) + 1
+    points_y = numpy.floor(length_y / max_dist) + 1
     xmin = xmin + max_dist / 2
     xmax = xmax - max_dist / 2
     ymin = ymin + max_dist / 2

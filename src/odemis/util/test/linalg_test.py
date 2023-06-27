@@ -188,12 +188,8 @@ class GenerateTriangulationTestCase(unittest.TestCase):
         max_dis = 1e-06
         area_coords = (0,  0, 3.9e-06,  3.9e-06)
         focus_points = generate_triangulation_points(max_dis, area_coords)
-        x_points = [i[0] for i in focus_points]
-        y_points = [i[1] for i in focus_points]
-        xmin = min(x_points)
-        ymin = min(y_points)
-        xmax = max(x_points)
-        ymax = max(y_points)
+        xmin, ymin = numpy.min(focus_points, axis=0)
+        xmax, ymax = numpy.max(focus_points, axis=0)
 
         # The min and maximum of focus points should be within the given area coordinates
         self.assertTrue(area_coords[0] <= xmin <= xmax <= area_coords[2])
