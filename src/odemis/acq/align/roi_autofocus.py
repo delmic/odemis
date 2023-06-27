@@ -136,7 +136,6 @@ def autofocus_in_roi(
         focus_range: tuple,
         focus_points: Iterable[tuple],
         conf_level: float = 0
-
 ):
     """
     Wrapper for do_autofocus_in_roi. It provides the ability to check the progress of autofocus
