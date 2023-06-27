@@ -62,12 +62,11 @@ def do_autofocus_in_roi(
     try:
         init_pos = stage.position.value
 
-        for points in focus_points:
+        for (x, y) in focus_points:
             with f._autofocus_roi_lock:
                 if f._autofocus_roi_state == CANCELLED:
                     raise CancelledError()
-                x = points[0]
-                y = points[1]
+
                 logging.debug(f"Moving the stage to autofocus at position: {x, y}")
                 stage.moveAbsSync({"x": x, "y": y})
                 # run autofocus

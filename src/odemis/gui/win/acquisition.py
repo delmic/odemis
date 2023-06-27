@@ -1172,7 +1172,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     def _get_zstack_levels(self, rel: bool = False):
         """
         Calculate the zstack levels from the current focus position and zsteps value
-        :param rel: If this is False (default), then z stack levels are in absolute values. If abs is set to True then
+        :param rel: If this is False (default), then z stack levels are in absolute values. If rel is set to True then
          the z stack levels are calculated relative to each other.
         :returns:
             (list(float) or None) zstack levels for zstack acquisition. None if only one zstep is requested.
