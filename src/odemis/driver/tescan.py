@@ -1158,7 +1158,7 @@ class Stage(model.Actuator):
                                               -pos["z"] * 1e3,
                                               )
 
-            # a small delay before checking if the stage is busy
+            # a very small delay before checking if the stage is busy
             time.sleep(0.1)
 
             # Wait until move is completed
@@ -1176,12 +1176,13 @@ class Stage(model.Actuator):
         self._updatePosition()
         pos = self._position.copy()
 
-        # add the requested change to the current position except
-        # for the Rz axis as it can fully turn back and forth
+        # add the requested change to the current position
         for axis, change in shift.items():
             if axis not in {"rz"}:
                 pos[axis] += change
+            # different approach for the Rz axis as it can fully turn back and forth
             else:
+                # match against full rotation value to cover over- and underflow
                 pos[axis] = (pos[axis] + change) % math.radians(360)
 
         self._checkMoveAbs(self._applyInversion(pos))

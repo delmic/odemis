@@ -80,8 +80,7 @@ CONFIG_SEM_NO_DET = {"name": "Mira", "role": "sem",
 CONFIG_SEM_AMBER = {"name": "Amber", "role": "sem",
                     "children": {"scanner": CONFIG_SCANNER,
                                  "stage": CONFIG_STG,
-                                 "focus": CONFIG_FOCUS,
-                                 "light": CONFIG_LIGHT},
+                                 "focus": CONFIG_FOCUS},
                     "host": "192.168.56.11"
                     }
 
@@ -164,13 +163,6 @@ class TestSEMRotateStage(unittest.TestCase):
                 cls.stage = child
             elif child.name == CONFIG_FOCUS["name"]:
                 cls.focus = child
-            # Doesn't seem to work with the simulator
-            elif child.name == CONFIG_CM["name"]:
-                cls.camera = child
-            elif child.name == CONFIG_PRESSURE["name"]:
-                cls.pressure = child
-            elif child.name == CONFIG_LIGHT["name"]:
-                cls.light = child
 
     @classmethod
     def tearDownClass(cls):
@@ -190,7 +182,7 @@ class TestSEMRotateStage(unittest.TestCase):
     def test_move_abs(self):
         """
         Test if it's possible to move the stage in absolute coordinates
-        In addition test the edge of the range of the rz axis
+        In addition also test the edge of the range of the rz axis
         """
         start_pos = self.stage.position.value.copy()
         new_pos = {"x": start_pos["x"] + 5e-4, "y": start_pos["y"] + 10e-4, "z": start_pos["z"] + 12e-5,
@@ -212,7 +204,7 @@ class TestSEMRotateStage(unittest.TestCase):
 
     def test_move_rel(self):
         """
-        Test if it's possible to move the stage with relative moves
+        Test if it's possible to move the stage with relative moves with regular move requests
         """
         start_pos = self.stage.position.value.copy()
 
@@ -251,7 +243,7 @@ class TestSEMRotateStage(unittest.TestCase):
     def test_small_relative_movements(self):
         """
         Test to see if very small relative movements are picked up fast enough.
-        In addition test if shifting a couple of times back and forth will end at the same starting location.
+        In addition, test if shifting a couple of times back and forth will end up at the same starting location.
         """
         start_pos = self.stage.position.value.copy()
 
@@ -291,7 +283,7 @@ class TestSEMRotateStage(unittest.TestCase):
     def test_overflow_and_underflow(self):
         """
         With a relative move starting from the absolute zero point move a bit under the range
-        and afterward move a bit over the range. This is applicable for the full rotational axis Rz only.
+        and afterward move a bit over the range. This is tested for the full rotational axis Rz only.
         """
         # start with going to the absolute zero position
         self.stage.moveAbsSync({"rz": 0.0})
@@ -301,7 +293,6 @@ class TestSEMRotateStage(unittest.TestCase):
         f = self.stage.moveRel({"rz": -math.radians(3)})
         f.result()
         self.assertLess(start_pos["rz"], self.stage.position.value["rz"])
-        # self.assertNotEqual(self.stage.position.value, start_pos)
 
         # test if overflow of the range is picked up
         f = self.stage.moveRel({"rz": math.radians(6)})
@@ -323,6 +314,7 @@ class TestSEMRotateStage(unittest.TestCase):
         self.stage.stop()
 
         self.assertNotEqual(self.stage.position.value, start_pos)
+
 
 class BaseSEMTest(object):
 
