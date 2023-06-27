@@ -335,6 +335,8 @@ def _add_image_info(group, dataset, image):
             _h5svi_set_state(group["DimensionScaleY"], ST_REPORTED)
 
             # Attach the scales to each dimensions (referenced by their label)
+            # TODO remove the else statement when the installed python3-h5py (>= 2.1)
+            # https://docs.h5py.org/en/stable/whatsnew/2.1.html#dimension-scales
             if hasattr(dataset, "make_scale"):
                 group["DimensionScaleX"].make_scale("X")
                 group["DimensionScaleY"].make_scale("Y")
