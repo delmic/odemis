@@ -24,9 +24,11 @@ import gc
 import logging
 import math
 import os
+import re
 import threading
 import time
 import unittest
+import warnings
 import weakref
 from concurrent.futures import CancelledError
 
@@ -94,6 +96,15 @@ class FakeDetector(model.Detector):
 
 # @skip("simple")
 class StreamTestCase(unittest.TestCase):
+
+    def setUp(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
 
     def _check_square_pixel(self, st):
         rep = st.repetition.value

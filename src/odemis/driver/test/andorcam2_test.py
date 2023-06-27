@@ -22,14 +22,18 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
-from odemis import model
-from odemis.driver import andorcam2
 import os
+import re
 import time
 import unittest
+import warnings
 from unittest.case import skip
 
-from cam_test_abs import VirtualTestCam, VirtualStaticTestCam, VirtualTestSynchronized
+from cam_test_abs import (VirtualStaticTestCam, VirtualTestCam,
+                          VirtualTestSynchronized)
+
+from odemis import model
+from odemis.driver import andorcam2
 
 logging.basicConfig(level=logging.DEBUG,
                     format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s",
@@ -73,6 +77,15 @@ class TestFake(VirtualTestCam, unittest.TestCase):
     """
     camera_type = CLASS_SIM
     camera_kwargs = KWARGS_SIM
+
+    def setUp(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
 
 
 #@skip("simple")

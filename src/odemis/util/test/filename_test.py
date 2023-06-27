@@ -21,11 +21,15 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from odemis.gui.util import get_home_folder
-from odemis.util.filename import create_filename, guess_pattern, update_counter, make_unique_name
 import os
+import re
 import time
 import unittest
+import warnings
+
+from odemis.gui.util import get_home_folder
+from odemis.util.filename import (create_filename, guess_pattern,
+                                  make_unique_name, update_counter)
 
 date = time.strftime("%Y%m%d")
 daterev = time.strftime("%d%m%Y")
@@ -52,6 +56,15 @@ class TestFilenameSuggestions(unittest.TestCase):
     """
     Tests the util-acquisition functions for filename suggestions. 
     """
+
+    def setUp(self) -> None:
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
 
     def test_guess_pattern(self):
         fn_ptns = {

@@ -19,9 +19,13 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from odemis.driver import static, simcam
-from odemis.util import timeout
+import re
 import unittest
+import warnings
+
+from odemis.driver import simcam, static
+from odemis.util import timeout
+
 
 # Simple test cases, for the very simple static components
 class TestLightFilter(unittest.TestCase):
@@ -118,6 +122,16 @@ class TestOpticalLens(unittest.TestCase):
 
 
 class TestSpectrograph(unittest.TestCase):
+
+    def setUp(self) -> None:
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
+
     @timeout(3)
     def test_fake(self):
         """

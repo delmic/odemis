@@ -21,16 +21,17 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
-from odemis import model
-import odemis
-from odemis.acq import stream
-from odemis.dataio.tiff import read_data
-from odemis.util import testing, comp
 import os
+import re
 import unittest
+import warnings
 
+import odemis
+from odemis import model
+from odemis.acq import stream
 from odemis.acq.align.z_localization import determine_z_position, measure_z
-
+from odemis.dataio.tiff import read_data
+from odemis.util import comp, testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -55,9 +56,9 @@ class TestDetermineZPosition(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         try:
-            from skimage import io, exposure
-            from scipy.optimize import fmin_cg
             import psf_extractor
+            from scipy.optimize import fmin_cg
+            from skimage import exposure, io
 
         except ImportError as err:
             raise unittest.SkipTest(f"Skipping the z localization tests, correct libraries to perform the tests are not available.\n"
@@ -136,6 +137,16 @@ class TestMeasureZ(unittest.TestCase):
     """
     Test measure_z
     """
+
+    def setUp(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
+
     @classmethod
     def setUpClass(cls):
         testing.start_backend(ENZEL_CONFIG)

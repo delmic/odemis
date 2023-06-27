@@ -25,7 +25,9 @@ import itertools
 import logging
 import os
 import random
+import re
 import unittest
+import warnings
 
 import numpy
 
@@ -49,6 +51,13 @@ IMGS = [IMG_PATH + "/driver/songbird-sim-sem.h5",
 class TestIdentityRegistrar(unittest.TestCase):
 
     def setUp(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
         random.seed(1)
 
     def test_synthetic_images(self):

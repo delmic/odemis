@@ -21,21 +21,23 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from PIL import Image
-from io import BytesIO
 import logging
-from odemis import model
-import odemis
-from odemis.cli import main
-from odemis.util import testing
 import os
 import re
 import subprocess
 import sys
 import time
 import unittest
+import warnings
+from io import BytesIO
 from unittest.case import skip
 
+from PIL import Image
+
+import odemis
+from odemis import model
+from odemis.cli import main
+from odemis.util import testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -126,6 +128,13 @@ class TestWithBackend(unittest.TestCase):
 
 
     def setUp(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
         if self.backend_was_running:
             self.skipTest("Running backend found")
 

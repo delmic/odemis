@@ -19,28 +19,33 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from builtins import range
-import cairo
 import logging
-import numpy
-from odemis import model, dataio
-from odemis.acq import stream
-from odemis.acq.stream import SinglePointSpectrumProjection, \
-    RGBSpatialProjection, LineSpectrumProjection, \
-    SinglePointTemporalProjection, POL_POSITIONS, POL_POSITIONS_RESULTS
-from odemis.dataio import tiff
-from odemis.gui.comp.overlay import world as wol
-from odemis.gui.model import TOOL_RULER, TOOL_LABEL
-from odemis.gui.util import img
-from odemis.gui.util.img import wxImage2NDImage, format_rgba_darray, insert_tile_to_image, merge_screen, \
-    calculate_ticks
 import os
+import re
 import time
 import unittest
+import warnings
+from builtins import range
+
+import cairo
+import numpy
 import wx
 
 import odemis.gui.comp.miccanvas as miccanvas
 import odemis.gui.test as test
+from odemis import dataio, model
+from odemis.acq import stream
+from odemis.acq.stream import (POL_POSITIONS, POL_POSITIONS_RESULTS,
+                               LineSpectrumProjection, RGBSpatialProjection,
+                               SinglePointSpectrumProjection,
+                               SinglePointTemporalProjection)
+from odemis.dataio import tiff
+from odemis.gui.comp.overlay import world as wol
+from odemis.gui.model import TOOL_LABEL, TOOL_RULER
+from odemis.gui.util import img
+from odemis.gui.util.img import (calculate_ticks, format_rgba_darray,
+                                 insert_tile_to_image, merge_screen,
+                                 wxImage2NDImage)
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -240,6 +245,15 @@ class TestARExport(unittest.TestCase):
     FILENAME_CSV = "test-ar.csv"
     FILENAME_PNG = "test-ar.png"
     FILENAME_TIFF = "test-ar.tiff"
+
+    def setUp(self) -> None:
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
 
     @classmethod
     def setUpClass(cls):

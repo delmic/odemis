@@ -21,15 +21,20 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 import copy
-import numpy
-from odemis import model
-import odemis
-from odemis.acq.stitching import register, weave, REGISTER_IDENTITY, REGISTER_SHIFT, WEAVER_COLLAGE, WEAVER_MEAN
-from odemis.dataio import find_fittest_converter
-from odemis.util.img import ensure2DImage
 import os
 import random
+import re
 import unittest
+import warnings
+
+import numpy
+
+import odemis
+from odemis import model
+from odemis.acq.stitching import (REGISTER_IDENTITY, REGISTER_SHIFT,
+                                  WEAVER_COLLAGE, WEAVER_MEAN, register, weave)
+from odemis.dataio import find_fittest_converter
+from odemis.util.img import ensure2DImage
 
 # Find path for test images
 IMG_PATH = os.path.dirname(odemis.__file__)
@@ -38,6 +43,15 @@ IMGS = [IMG_PATH + "/driver/songbird-sim-sem.h5",
 
 
 class TestRegister(unittest.TestCase):
+
+    def setUp(self):
+        # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
+        # Expected 80 from C header, got 88 from PyObject
+        # This warning is not caused by the code explicitly changing the array size but rather
+        # by an inconsistency between different versions of NumPy.
+        warnings.filterwarnings(
+            "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
+        )
 
     # @unittest.skip("skip")
     def test_real_images_shift(self):
