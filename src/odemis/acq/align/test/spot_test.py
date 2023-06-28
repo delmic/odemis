@@ -325,7 +325,7 @@ class TestFindGridSpots(unittest.TestCase):
     def test_wrong_method(self):
         """Test that an error is raised when a wrong method is passed."""
         warnings.filterwarnings(
-            "ignore", message=re.escape("FindGridSpots is deprecate")
+            "ignore", message=re.escape("FindGridSpots is deprecated")
         )
         image = numpy.zeros((256, 256))
         # set a grid of 8 by 8 points to 1
