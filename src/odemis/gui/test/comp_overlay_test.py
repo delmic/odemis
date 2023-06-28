@@ -490,7 +490,8 @@ class OverlayTestCase(test.GuiTestCase):
         # Add features to the tab's features list
         tab_mod.add_new_feature(0, 0)
         tab_mod.add_new_feature(0.001, 0.001)
-
+        # Execute the gui loop, so that the buffer contains the features
+        test.gui_loop(0.1)
         cnvs._dc_buffer.SelectObject(wx.NullBitmap)  # Flush the buffer
         cnvs._dc_buffer.SelectObject(cnvs._bmp_buffer)
         img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
