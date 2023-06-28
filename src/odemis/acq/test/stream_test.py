@@ -2248,19 +2248,9 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
     Tests to be run with a (simulated) SPARCv2 equipped with a streak camera
     for temporal spectral measurements.
     """
-    backend_was_running = False
-
     @classmethod
     def setUpClass(cls):
-        try:
-            testing.start_backend(SPARC2STREAK_CONFIG)
-        except LookupError:
-            logging.info("A running backend is already found, skipping tests")
-            cls.backend_was_running = True
-            return
-        except IOError as exp:
-            logging.error(str(exp))
-            raise
+        testing.start_backend(SPARC2STREAK_CONFIG)
 
         # Find CCD & SEM components
         cls.streak_ccd = model.getComponent(role="streak-ccd")
@@ -2271,16 +2261,6 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         cls.sed = model.getComponent(role="se-detector")
         cls.cl = model.getComponent(role="cl-detector")
         cls.spgp = model.getComponent(role="spectrograph")
-
-    @classmethod
-    def tearDownClass(cls):
-        if cls.backend_was_running:
-            return
-        testing.stop_backend()
-
-    def setUp(self):
-        if self.backend_was_running:
-            self.skipTest("Running backend found")
 
     def _roiToPhys(self, repst):
         """
@@ -2625,15 +2605,14 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         streaks.detStreakMode.value = True
 
         streaks.detExposureTime.value = 0.01  # 10ms
-        # # TODO use fixed repetition value -> set ROI?
-        streaks.repetition.value = (10, 5)
-        num_ts = numpy.prod(streaks.repetition.value)  # number of expected temporal spectrum images
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(streaks)
+        streaks.roi.value = (0.1, 0.1, 0.8, 0.8)
+        streaks.repetition.value = (10, 12)
 
         # Start acquisition
         # estimated acquisition time should be accurate with less than 50% margin
-        timeout = 1.5 * stss.estimateAcquisitionTime()
-        start = time.time()
+        acq_time = stss.estimateAcquisitionTime()
+        timeout = 1.5 * acq_time
+        logging.debug("Expecting an acquisition of %s s", acq_time)
         f = stss.acquire()  # calls acquire method in MultiDetectorStream in sync.py
 
         # stss.raw: array containing as first entry the sem scan image for the scanning positions,
@@ -2641,9 +2620,13 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         # data: array should contain same images as stss.raw
 
         # Check if there is a live update in the setting stream.
+        # (also works in the simulator, thanks to the noise in the simulated image)
         time.sleep(1.0)
         im1 = streaks.image.value
-        time.sleep(2.0)
+        self.assertFalse(f.done())
+
+        time.sleep(2.5)  # Live update happens every 2s
+        self.assertFalse(f.done()) # It should still be live, so that it keeps updating
         im2 = streaks.image.value
 
         # wait until it's over
