@@ -62,7 +62,7 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            "focus": CONFIG_FOCUS,
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
-              # "host": "192.168.1.175"
+              # change host ip address according to network settings
               "host": "192.168.56.11"
               }
 
@@ -72,7 +72,7 @@ CONFIG_SEM_NO_DET = {"name": "Mira", "role": "sem",
                                   "stage": CONFIG_STG,
                                   "focus": CONFIG_FOCUS,
                                   "light": CONFIG_LIGHT},
-                     # "host": "192.168.1.175"
+                     # change host ip address according to network settings
                      "host": "192.168.56.11"
                      }
 
@@ -81,6 +81,7 @@ CONFIG_SEM_AMBER = {"name": "Amber", "role": "sem",
                     "children": {"scanner": CONFIG_SCANNER,
                                  "stage": CONFIG_STG,
                                  "focus": CONFIG_FOCUS},
+                    # change host ip address according to network settings
                     "host": "192.168.56.11"
                     }
 
@@ -197,6 +198,7 @@ class TestSEMRotateStage(unittest.TestCase):
         f = self.stage.moveAbs(new_pos)
         f.result()
         new_pos["rz"] = 0.0
+        # software will return 0 on abs position of 360°
         testing.assert_pos_almost_equal(self.stage.position.value, new_pos)
 
         # go back to the original starting point
@@ -228,12 +230,12 @@ class TestSEMRotateStage(unittest.TestCase):
         """
         start_pos = self.stage.position.value.copy()
 
-        # Try a relative move outside the range (less than min)
+        # test a relative move outside the range (more than max)
         axes = self.stage.axes
         with self.assertRaises(ValueError):
             self.stage.moveRel({"x": axes["x"].range[1] - axes["x"].range[0] + 10e-6})
 
-        # test a move out of the minimal moving range
+        # test an absolute move outside the range (less than min)
         with self.assertRaises(ValueError):
             self.stage.moveAbsSync({"rx": math.radians(-90)})
 
@@ -309,7 +311,7 @@ class TestSEMRotateStage(unittest.TestCase):
         f = self.stage.moveRel({"rz": math.radians(180)})
         f.result()
 
-        # wait for 1 second and stop the movement
+        # wait just a tiny bit and stop the movement
         time.sleep(0.2)
         self.stage.stop()
 
@@ -372,7 +374,6 @@ class BaseSEMTest(object):
         time.sleep(6)  # Wait for value refresh
         self.assertAlmostEqual(orig_probe_current, ebeam.probeCurrent.value)
 
-    # @skip
     def test_acceleration_voltage(self):
         ebeam = self.scanner
 
@@ -483,12 +484,12 @@ class BaseSEMTest(object):
         time.sleep(6)
         testing.assert_pos_almost_equal(self.stage.position.value, p)
 
-    @skip  # not working with the newer simulator Tescan Essence v1.2.2
+    # @skip("not working with the newer simulator Tescan Essence v1.2.2")
     def test_stop(self):
         """
         Check it's possible to stop the stage while it's moving.
         """
-        # TODO: make this method work again with Tescan Essence v1.2.2.
+        # TODO: make this method work again with Tescan Essence v1.2.2. will be addressed in separate PR
         pos = self.stage.position.value.copy()
         logging.info("Initial pos = %s", pos)
         f = self.stage.moveRel({"y":-50e-3})
