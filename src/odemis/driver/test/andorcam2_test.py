@@ -76,7 +76,9 @@ class TestFake(VirtualTestCam, unittest.TestCase):
     camera_type = CLASS_SIM
     camera_kwargs = KWARGS_SIM
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        super().setUpClass()
         # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
         # Expected 80 from C header, got 88 from PyObject
         # This warning is not caused by the code explicitly changing the array size but rather

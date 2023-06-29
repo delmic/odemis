@@ -58,7 +58,10 @@ class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
     camera_type = CLASS_STREAKCAM
     camera_kwargs = KWARGS_STREAKCAM
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        super(TestSimStreakCamGenericCam, cls).setUpClass()
+
         # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
         # Expected 80 from C header, got 88 from PyObject
         # This warning is not caused by the code explicitly changing the array size but rather
@@ -66,11 +69,6 @@ class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
         )
-
-    @classmethod
-    def setUpClass(cls):
-
-        super(TestSimStreakCamGenericCam, cls).setUpClass()
 
         cls.streakcam = cls.camera
 
