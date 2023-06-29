@@ -79,7 +79,7 @@ class AcquisitionDialog(xrcfr_acq):
 
         # The name of the last file that got written to disk (used for auto viewing on close)
         self.last_saved_file = None
-        
+
         # True when acquisition occurs
         self.acquiring = False
 
@@ -183,13 +183,13 @@ class AcquisitionDialog(xrcfr_acq):
         # To update the estimated time when streams are removed/added
         self._view.stream_tree.flat.subscribe(self.on_streams_changed)
         self._hidden_view.stream_tree.flat.subscribe(self.on_streams_changed)
-        
+
     def start_listening_to_va(self):
         # Get all the VA's from the stream and subscribe to them for changes.
         for entry in self._orig_entries:
             if hasattr(entry, "vigilattr"):
                 entry.vigilattr.subscribe(self.on_setting_change)
-                
+
     def stop_listening_to_va(self):
         for entry in self._orig_entries:
             if hasattr(entry, "vigilattr"):
@@ -551,7 +551,7 @@ class AcquisitionDialog(xrcfr_acq):
         # bind button back to direct closure
         self.btn_cancel.Bind(wx.EVT_BUTTON, self.on_close)
         self._resume_settings()
-        
+
         self.acquiring = False
 
         # re-enable estimation time updates
@@ -775,7 +775,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
         # Set parameters for tiled acq
-        self.overlap = 0.2
+        # High overlap percentage is not required as the stitching is based only on stage position,
+        # independent of the image content. It just needs to be big enough to make sure that even with some stage
+        # imprecision, all the tiles will overlap or at worse be next to each other (i.e. , no space between tiles)
+        self.overlap = 0.05
         try:
             # Use the stage range, which can be overridden by the MD_POS_ACTIVE_RANGE.
             # Note: this last one might be temporary, until we have a RoA tool provided in the GUI.
@@ -904,7 +907,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
     def _compute_area_size(self) -> Optional[Tuple[float,float]]:
         """
         Calculates the requested tiling area size, based on the tiles number
-        :return: the size (in m) in X and Y. If no area at all, returns None. 
+        :return: the size (in m) in X and Y. If no area at all, returns None.
         """
         # get smallest fov
         fovs = [self.get_fov(s) for s in self.get_acq_streams()]
@@ -935,7 +938,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         Convert sample positions to a grid layout
         :param sample_centers: the name -> position of each sample
-        returns: 2D grid layout containing the names of the samples (or None if 
+        returns: 2D grid layout containing the names of the samples (or None if
         no sample at that grid position)
         """
         # Find the number of rows and columns
@@ -1166,36 +1169,50 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # Enable/disable the grid and tile numbers based on the "whole grid" checkbox
         self._on_whole_grid_chkbox()
 
-    def _get_zstack_levels(self):
+    def _get_zstack_levels(self, rel: bool = False):
         """
         Calculate the zstack levels from the current focus position and zsteps value
-        :returns (list(float) or None) zstack levels for zstack acquisition.
-          return None if only one zstep is requested.
+        :param rel: If this is False (default), then z stack levels are in absolute values. If rel is set to True then
+         the z stack levels are calculated relative to each other.
+        :returns:
+            (list(float) or None) zstack levels for zstack acquisition. None if only one zstep is requested.
         """
         zsteps = self.zsteps.value
         if zsteps == 1:
             return None
 
-        # Clip zsteps value to allowed range
-        focus_value = self._main_data_model.focus.position.value['z']
-        focus_range = self._main_data_model.focus.axes['z'].range
-        zmin = focus_value - (zsteps / 2 * self.zstep_size.value)
-        zmax = focus_value + (zsteps / 2 * self.zstep_size.value)
-        if (zmax - zmin) > (focus_range[1] - focus_range[0]):
-            # Corner case: it'd be larger than the entire range => limit to the entire range
-            zmin = focus_range[0]
-            zmax = focus_range[1]
-        if zmax > focus_range[1]:
-            # Too high => shift down
-            zmax -= zmax - focus_range[1]
-            zmin -= zmax - focus_range[1]
-        if zmin < focus_range[0]:
-            # Too low => shift up
-            zmin += focus_range[0] - zmin
-            zmax += focus_range[0] - zmin
+        if rel:
+            zmin = - (zsteps / 2 * self.zstep_size.value)
+            zmax = + (zsteps / 2 * self.zstep_size.value)
+        else:
+            # Clip zsteps value to allowed range
+            focus_value = self._main_data_model.focus.position.value['z']
+            focus_range = self._main_data_model.focus.axes['z'].range
+            zmin = focus_value - (zsteps / 2 * self.zstep_size.value)
+            zmax = focus_value + (zsteps / 2 * self.zstep_size.value)
+            if (zmax - zmin) > (focus_range[1] - focus_range[0]):
+                # Corner case: it'd be larger than the entire range => limit to the entire range
+                zmin = focus_range[0]
+                zmax = focus_range[1]
+            if zmax > focus_range[1]:
+                # Too high => shift down
+                shift = zmax - focus_range[1]
+                zmin -= shift
+                zmax -= shift
+
+            if zmin < focus_range[0]:
+                # Too low => shift up
+                shift = focus_range[0] - zmin
+                zmin += shift
+                zmax += shift
+
+        # TODO: if there is an even number of zsteps, the current focus position will not be part of the zlevels.
+        # As the current focus position can often be the "best" position, we could change the algorithm in such case to
+        # shift exactly symmetrical, but instead use the current position as one of the zlevels.
 
         # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
+
         return zlevels
 
     def _fit_view_to_area(self, area: Tuple[float,float]):
@@ -1233,14 +1250,15 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         if self._main_data_model.opm:
             self._main_data_model.opm.setAcqQuality(path.ACQ_QUALITY_BEST)
 
-        zlevels = self._get_zstack_levels()
-        focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
+        focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if self.zsteps.value > 1 else FocusingMethod.NONE
 
         if self.filename_tiles:
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
             os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
         if self.autofocus_roi_ckbox.value:
+            # acquireOverview() needs relative zlevels, as they will be used relative to the focus points found
+            zlevels = self._get_zstack_levels(rel=True)
             self.acq_future = acquireOverview(acq_streams,
                                               self._main_data_model.stage,
                                               areas,
@@ -1257,6 +1275,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         else:
             # If there are several areas, the autofocus should be automatically selected
             # => no autofocus only works with a single area
+            zlevels = self._get_zstack_levels(rel=False)
             self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=areas[0],
                                                          overlap=self.overlap,
                                                          settings_obs=self._main_data_model.settings_obs,

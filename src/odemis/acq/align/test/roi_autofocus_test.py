@@ -24,6 +24,7 @@ from odemis.acq.align.roi_autofocus import autofocus_in_roi, estimate_autofocus_
 from odemis.acq.move import cryoSwitchSamplePosition, FM_IMAGING, SEM_IMAGING
 from odemis.driver import simsem
 from odemis.util import testing
+from odemis.util.linalg import generate_triangulation_points
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -78,8 +79,10 @@ class RoiAutofocusTestCase(unittest.TestCase):
         ymax = init_pos[1] + (1 - overlap) * n_focus_points[1] / 2 * px_size[1] * height
 
         bbox = (xmin, ymin, xmax, ymax)
+        max_distance = 100e-06  # in m
+        focus_points = generate_triangulation_points(max_distance, bbox)
 
-        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_focus_points,
+        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, focus_points,
                              confidence_level)
 
         # Test if the autofocus in roi is running
@@ -113,8 +116,10 @@ class RoiAutofocusTestCase(unittest.TestCase):
         ymax = init_pos[1] + (1 - overlap) * n_focus_points[1] / 2 * px_size[1] * height
 
         bbox = (xmin, ymin, xmax, ymax)
+        max_distance = 100e-06  # in m
+        focus_points = generate_triangulation_points(max_distance, bbox)
 
-        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, n_focus_points,
+        f = autofocus_in_roi(bbox, self.stage, self.ccd, self.focus, self.focus_range, focus_points,
                              confidence_level)
 
         # Test cancelling of autofocus in roi
@@ -135,7 +140,7 @@ class RoiAutofocusTestCase(unittest.TestCase):
         """
         Tests time estimation of autofocus in roi
         """
-        n_focus_points = (3, 3)
-        min_time = n_focus_points[0] * n_focus_points[1] * estimateAutoFocusTime(self.ccd, None)
+        n_focus_points = 9
+        min_time = n_focus_points * estimateAutoFocusTime(self.ccd, None)
         estimated_time = estimate_autofocus_in_roi_time(n_focus_points, self.ccd)
         self.assertGreaterEqual(estimated_time, min_time)

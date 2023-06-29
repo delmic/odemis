@@ -43,7 +43,7 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 """
-from typing import Iterable
+from typing import Iterable, Tuple
 
 import numpy
 from scipy.linalg.lapack import get_lapack_funcs
@@ -230,3 +230,43 @@ def are_collinear(p1: Iterable[float], p2: Iterable[float], p3: Iterable[float])
     return abs((x2 - x1) * (y3 - y1) - (x3 - x1) * (y2 - y1)) < 1e-12 and \
         abs((x2 - x1) * (z3 - z1) - (x3 - x1) * (z2 - z1)) < 1e-12 and \
         abs((y2 - y1) * (z3 - z1) - (y3 - y1) * (z2 - z1)) < 1e-12
+
+
+def generate_triangulation_points(max_dist: float, area_coords: Iterable[float]) -> Iterable[Tuple[float]]:
+    """
+    This function generates a set of (x,y) positions within a given area based on the maximum distance between points.
+    The area is defined by the coordinates (xmin, ymin, xmax, ymax).
+
+    It calculates the lengths of the area in the x and y directions and determines the number of points in each direction
+    based on the maximum distance. It then adjusts the area coordinates to avoid points exactly on the border
+     of the given area by creating a margin of half the maximum distance
+    from the border.
+
+    :param max_dist: the maximum distance allowed between two (x,y) positions.
+    :param area_coords: [xmin, ymin, xmax, ymax] the top right and bottom left (x,y) coordinates in meters.
+    :return: List of (x,y) coordinates in the given area.
+    """
+    xmin, ymin, xmax, ymax = area_coords
+
+    # Avoid points exactly on the border of the given area, find points delta distance
+    # away from the border of the given area
+    length_x = abs(xmax - xmin)
+    length_y = abs(ymax - ymin)
+    points_x = numpy.floor(length_x / max_dist) + 1
+    points_y = numpy.floor(length_y / max_dist) + 1
+    xmin = xmin + max_dist / 2
+    xmax = xmax - max_dist / 2
+    ymin = ymin + max_dist / 2
+    ymax = ymax - max_dist / 2
+    total_points = int(points_x * points_y)
+
+    # Create a centre point when total number of points is <= 3
+    if total_points <= 3:
+        points = [((xmax + xmin) / 2, (ymax + ymin) / 2)]
+    else:
+        x_arr = numpy.linspace(xmin, xmax, points_x)
+        y_arr = numpy.linspace(ymin, ymax, points_y)
+        matrix = numpy.array(numpy.meshgrid(x_arr, y_arr)).T.reshape(-1, 2)
+        points = matrix.tolist()
+
+    return points

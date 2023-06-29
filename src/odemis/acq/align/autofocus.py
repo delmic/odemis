@@ -330,8 +330,8 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 logging.debug("Using 1d method to estimate focus")
                 Measure = Measure1d
             else:
-                logging.debug("Using Optical method to estimate focus")
-                Measure = MeasureOpticalFocus
+                logging.debug("Using Spot method to estimate focus")
+                Measure = MeasureSpotsFocus
         else:
             logging.debug("Using SEM method to estimate focus")
             Measure = MeasureSEMFocus
@@ -348,7 +348,7 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             good_focus = focus.position.value["z"]
             image = AcquireNoBackground(detector, dfbkg, timeout)
             fm_good = Measure(image)
-            logging.debug("Focus level at %.7g is %.7g", good_focus, fm_good)
+            logging.debug("Good Focus level known at %.7g is %.7g", good_focus, fm_good)
             focus_levels[good_focus] = fm_good
             last_pos = good_focus
 
@@ -543,8 +543,8 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
                 logging.debug("Using 1d method to estimate focus")
                 Measure = Measure1d
             else:
-                logging.debug("Using Optical method to estimate focus")
-                Measure = MeasureOpticalFocus
+                logging.debug("Using Spot method to estimate focus")
+                Measure = MeasureSpotsFocus
         else:
             logging.debug("Using SEM method to estimate focus")
             Measure = MeasureSEMFocus
@@ -555,6 +555,7 @@ def _DoExhaustiveFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focu
             rng = (max(rng[0], rng_focus[0]), min(rng[1], rng_focus[1]))
 
         if good_focus:
+            logging.debug(f"moving to good focus level at z:{good_focus}")
             focus.moveAbsSync({"z": good_focus})
 
         focus_levels = []  # list with focus levels measured so far
@@ -661,7 +662,6 @@ def estimateAcquisitionTime(detector, scanner=None):
     return et
 
 
-# TODO: drop steps, which is unused, or use it
 def estimateAutoFocusTime(detector, scanner=None, steps=MAX_STEPS_NUMBER):
     """
     detector (model.DigitalCamera or model.Detector): Detector on which to
@@ -669,7 +669,8 @@ def estimateAutoFocusTime(detector, scanner=None, steps=MAX_STEPS_NUMBER):
     scanner (None or model.Emitter): In case of a SED this is the scanner used
     Estimates overlay procedure duration
     """
-    return steps * estimateAcquisitionTime(detector, scanner)
+    # Add 0.5s per step to account for the focus movement (very roughly approximated)
+    return steps * estimateAcquisitionTime(detector, scanner) + steps * 0.5
 
 
 def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
@@ -1336,4 +1337,3 @@ def _CancelAutoFocusSpectrometer(future):
         logging.debug("AutofocusSpectrometer cancellation requested.")
 
     return True
-

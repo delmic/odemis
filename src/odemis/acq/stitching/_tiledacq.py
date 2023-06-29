@@ -33,7 +33,7 @@ from scipy.spatial import Delaunay
 
 from odemis import model, dataio
 from odemis.acq import acqmng
-from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MTD_EXHAUSTIVE
+from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MeasureSpotsFocus, MTD_EXHAUSTIVE
 from odemis.acq.align.roi_autofocus import autofocus_in_roi, estimate_autofocus_in_roi_time
 from odemis.acq.stitching._constants import WEAVER_MEAN, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
 from odemis.acq.stitching._simple import register, weave
@@ -43,6 +43,7 @@ from odemis.acq.stream import Stream, EMStream, ARStream, \
 from odemis.model import DataArray
 from odemis.util import dataio as udataio, img, linalg
 from odemis.util.img import assembleZCube
+from odemis.util.linalg import generate_triangulation_points
 from odemis.util.raster import point_in_polygon
 
 # TODO: Find a value that works fine with common cases
@@ -56,7 +57,9 @@ SKIP_TILES = 3
 MOVE_SPEED_DEFAULT = 100e-6  # m/s
 # Default range for the optical focus adjustment
 SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
-
+# Maximum distance is used to separate two focus points in overview acquisition using autofocus
+# Increasing this distance may result in out of focus overview acquisition image
+MAX_DISTANCE_FOCUS_POINTS = 450e-06  # in m
 
 class FocusingMethod(Enum):
     NONE = 0  # Never auto-focus
@@ -147,7 +150,17 @@ class TiledAcquisitionTask(object):
             # used in re-focusing method
             self._focus_points = numpy.array(focus_points) if focus_points else None
             # triangulate focus points
-            self._tri_focus_points = Delaunay(self._focus_points[:, :2]) if focus_points else None
+            self._tri_focus_points = None
+            if focus_points is not None:
+                if len(focus_points) >= 3:
+                    self._tri_focus_points = Delaunay(self._focus_points[:, :2])
+                elif len(focus_points) == 1:
+                    # Triangulation needs minimum three points to define a plane
+                    # When the number of focus points is less than three
+                    # The focus is set constant and based on a single focus point
+                    pass
+                else:
+                    raise ValueError(f"focus_points length {len(focus_points)} is not supported")
 
         if focusing_method == FocusingMethod.MAX_INTENSITY_PROJECTION and not zlevels:
             raise ValueError("MAX_INTENSITY_PROJECTION requires zlevels, but none passed")
@@ -158,11 +171,11 @@ class TiledAcquisitionTask(object):
         if zlevels:
             if self._focus_stream is None:
                 logging.warning("No focuser found in any of the streams, only one acquisition will be performed.")
-            self._zlevels = zlevels
-            self._init_zlevels = zlevels  # zlevels can be relative, therefore keep track of the initial zlevels
+            self._zlevels = numpy.asarray(zlevels)
+            self._init_zlevels = numpy.asarray(zlevels)  # zlevels can be relative, therefore keep track of the initial zlevels
         else:
-            self._zlevels = []
-            self._init_zlevels = []  # zlevels can be relative, therefore keep track of the initial zlevels
+            self._zlevels = numpy.empty(0)
+            self._init_zlevels = numpy.empty(0)
 
         if len(self._zlevels) > 1 and focusing_method != FocusingMethod.MAX_INTENSITY_PROJECTION:
             raise NotImplementedError(
@@ -491,11 +504,14 @@ class TiledAcquisitionTask(object):
 
         acq_time = 0
         for stream in self._streams:
-            acq_stream_time = acqmng.estimateTime([stream])
+            # add 1s to account for stage/objective movement time in z direction
+            acq_stream_time = acqmng.estimateTime([stream]) + 1
             if stream.focuser is not None and len(self._zlevels) > 1:
                 # Acquisition time for each stream will be multiplied by the number of zstack levels
-                acq_stream_time *= len(self._zlevels)
-            acq_time += acq_stream_time
+                zlevels = [item for item in self._zlevels if item is not None]
+                acq_stream_time *= len(zlevels)
+            # add 2 seconds to account for switching from one tile to next tile
+            acq_time += acq_stream_time + 2
 
         # Estimate stitching time based on number of pixels in the overlapping part
         max_pxs = 0
@@ -695,7 +711,10 @@ class TiledAcquisitionTask(object):
     def _refocus(self):
         """Update the z-levels to fit the found focus positions"""
         current_pos = self._stage.position.value
-        z = self._get_triangulated_focus_point(current_pos["x"], current_pos["y"])
+        if self._tri_focus_points:
+            z = self._get_triangulated_focus_point(current_pos["x"], current_pos["y"])
+        else:
+            z = self._focus_points[0][2]
         logging.info(f"Found z focus: {z}")
         self._zlevels = self._get_zstack_levels(z)
 
@@ -726,15 +745,18 @@ class TiledAcquisitionTask(object):
             zmax = comp_range[1]
         if zmax > comp_range[1]:
             # Too high => shift down
-            zmax -= zmax - comp_range[1]
-            zmin -= zmax - comp_range[1]
+            shift = zmax - comp_range[1]
+            zmin -= shift
+            zmax -= shift
         if zmin < comp_range[0]:
             # Too low => shift up
-            zmin += comp_range[0] - zmin
-            zmax += comp_range[0] - zmin
+            shift = comp_range[0] - zmin
+            zmin += shift
+            zmax += shift
 
         # Create focus zlevels from the given zsteps number
         zlevels = numpy.linspace(zmin, zmax, len(zlevels)).tolist()
+
         return zlevels
 
     def _adjustFocus(self, das, i, ix, iy):
@@ -959,7 +981,8 @@ def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs
     :param overlap: (0<float<1) the overlap between tiles (in percentage)
     :param settings_obs: (dict) the settings for the acquisition
     :param log_path: (str) path to the log file
-    :param zlevels: (list of floats) the initial zlevels to use for the stitching
+    :param zlevels: (list of floats) the zlevels to use for the stitching, in meters and as relative positions (from the
+        focus points
     :param registrar: (str) the type of registration to use
     :param weaver: (str) the type of weaver to use
     :param focusing_method: (str) the focusing method to use
@@ -1012,9 +1035,12 @@ class AcquireOverviewTask(object):
 
         self.conf_level = 0.8
         self.focusing_method = focusing_method
-        # The number of focus points are constant for now
-        # TODO: make it variable according to the size of the ROI, is it useful?
-        self.n_focus_points = (3, 3)
+        self._focus_points = []  # list of focus points per each area in areas
+        self._total_nb_focus_points = 0
+        for area in areas:
+            focus_points = generate_triangulation_points(MAX_DISTANCE_FOCUS_POINTS, area)
+            self._total_nb_focus_points += len(focus_points)
+            self._focus_points.append(focus_points)
         self._overlap = overlap
         self._settings_obs = settings_obs
         self._log_path = log_path
@@ -1045,13 +1071,13 @@ class AcquireOverviewTask(object):
         :return: (float) the estimated time for the rest of the acquisition
         """
         remaining_rois = (len(self.areas) - roi_idx)
-
         if actual_time_per_roi:
             acquisition_time = actual_time_per_roi * remaining_rois
         else:
-            acquisition_time = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * remaining_rois
+            autofocus_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._ccd)
+            tiled_time = 0
             for area in self.areas:
-                acquisition_time += estimateTiledAcquisitionTime(
+                tiled_time += estimateTiledAcquisitionTime(
                                         self.streams, self._stage, area,
                                         focus_range=self.focus_rng,
                                         overlap=self._overlap,
@@ -1061,6 +1087,9 @@ class AcquireOverviewTask(object):
                                         registrar=self._registrar,
                                         weaver=self._weaver,
                                         focusing_method=self.focusing_method)
+
+            logging.debug(f"Estimated autofocus time: {autofocus_time} s, Tiled acquisition time: {tiled_time} s")
+            acquisition_time = autofocus_time + tiled_time
 
         return acquisition_time
 
@@ -1085,7 +1114,8 @@ class AcquireOverviewTask(object):
                 with self._future._task_lock:
                     if self._future._task_state == CANCELLED:
                         raise CancelledError()
-
+                    # is_active set to True will keep the acquisition going on
+                    self.streams[0].is_active.value = True
                     logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
                     # run autofocus for the selected roi
                     self._future.running_subf = autofocus_in_roi(roi,
@@ -1093,16 +1123,19 @@ class AcquireOverviewTask(object):
                                                                  self._ccd,
                                                                  self._focus,
                                                                  self.focus_rng,
-                                                                 self.n_focus_points,
+                                                                 self._focus_points[idx],
                                                                  self.conf_level)
 
                 try:
-                    t = estimate_autofocus_in_roi_time(self.n_focus_points, self._ccd) * 3 + 1
-                    focus_points = self._future.running_subf.result(t)
+                    focus_points_per_area = len(self._focus_points[idx])
+                    max_wait_t = estimate_autofocus_in_roi_time(focus_points_per_area, self._ccd) * 3 + 1
+                    focus_points = self._future.running_subf.result(max_wait_t)
                 except TimeoutError:
+                    self.streams[0].is_active.value = False
                     logging.debug(f"Autofocus timed out for roi number {idx}, with bounding box: {roi} [m]")
                     raise
                 except Exception:
+                    self.streams[0].is_active.value = False
                     logging.debug(f"Autofocus failed for roi number {idx}, with bounding box: {roi} [m]")
                     raise
 

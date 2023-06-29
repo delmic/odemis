@@ -24,6 +24,7 @@ import logging
 import threading
 import time
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
+from typing import Iterable
 
 import numpy
 
@@ -40,8 +41,7 @@ def do_autofocus_in_roi(
         ccd: model.Component,
         focus: model.Component,
         focus_range: tuple,
-        nx: int = 3,
-        ny: int = 3,
+        focus_points: Iterable[tuple],
         conf_level: float = 0
 ) -> list:
     """
@@ -53,8 +53,7 @@ def do_autofocus_in_roi(
     :param ccd: ccd component
     :param focus: focus component
     :param focus_range: focus range, tuple of (zmin, zmax) in meters
-    :param nx: (int) the number of positions in x where to focus
-    :param ny: (int) the number of positions in y where to focus
+    :param focus_points : (x,y) positions in the given bbox where autofocus will be run
     :param conf_level: (0<=float<=1) :param conf_level: (float) cut-off value for confidence level of the focus metric,
         only focus points with a confidence above the cut-off will be saved. Default 0 saves all values.
     :return: (list) list of focus positions in x, y, z
@@ -62,25 +61,25 @@ def do_autofocus_in_roi(
     focus_positions = []
     try:
         init_pos = stage.position.value
-        xmin, ymin, xmax, ymax = bbox
 
-        for y in numpy.linspace(ymin, ymax, ny):
-            for x in numpy.linspace(xmin, xmax, nx):
-                with f._autofocus_roi_lock:
-                    if f._autofocus_roi_state == CANCELLED:
-                        raise CancelledError()
-                    stage.moveAbsSync({"x": x, "y": y})
-                    # run autofocus
-                    f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
+        for (x, y) in focus_points:
+            with f._autofocus_roi_lock:
+                if f._autofocus_roi_state == CANCELLED:
+                    raise CancelledError()
 
-                foc_pos, foc_lev, conf = f._running_subf.result(timeout=900)
-                if conf >= conf_level:
-                    focus_positions.append([stage.position.value["x"],
-                                            stage.position.value["y"],
-                                            focus.position.value["z"]])
-                    logging.debug(f"Added focus with confidence of {conf} at position: {focus_positions[-1]}")
-                else:
-                    logging.debug(f"Focus level is not added due to low confidence of {conf} at position: {x, y}.")
+                logging.debug(f"Moving the stage to autofocus at position: {x, y}")
+                stage.moveAbsSync({"x": x, "y": y})
+                # run autofocus
+                f._running_subf = align.AutoFocus(ccd, None, focus, rng_focus=focus_range)
+
+            foc_pos, foc_lev, conf = f._running_subf.result(timeout=900)
+            if conf >= conf_level:
+                focus_positions.append([stage.position.value["x"],
+                                        stage.position.value["y"],
+                                        focus.position.value["z"]])
+                logging.debug(f"Added focus with confidence of {conf} at position: {focus_positions[-1]}")
+            else:
+                logging.debug(f"Focus level is not added due to low confidence of {conf} at position: {x, y}.")
 
     except TimeoutError:
         logging.debug(f"Timed out during autofocus at position {x, y} .")
@@ -109,8 +108,8 @@ def estimate_autofocus_in_roi_time(n_focus_points, detector):
     :param detector: component of the detector
     :return:
     """
-    # add 0.5 second for stage movement
-    return n_focus_points[0] * n_focus_points[1] * (estimateAutoFocusTime(detector, None) + 0.5)
+    # add 10 seconds to account for stage movement between focus points
+    return n_focus_points * (estimateAutoFocusTime(detector, None) + 10)
 
 
 def _cancel_autofocus_bbox(future):
@@ -135,7 +134,7 @@ def autofocus_in_roi(
         ccd: model.Component,
         focus: model.Component,
         focus_range: tuple,
-        n_focus_points: tuple = (3, 3),
+        focus_points: Iterable[tuple],
         conf_level: float = 0
 ):
     """
@@ -146,12 +145,13 @@ def autofocus_in_roi(
     :param ccd: ccd component
     :param focus: focus component
     :param focus_range: focus range, tuple of (zmin, zmax) in meters
-    :param n_focus_points: (tuple) number of focus points in x and y direction
+    :param focus_points : (x,y) positions in the given bbox where autofocus will be run
     :param conf_level: :param conf_level: (0<float<1) cut-off value for confidence level of the focus metric, only focus
         points with a confidence above the cut-off will be saved. Default 0 saves all values.
     """
     # Create ProgressiveFuture and update its state to RUNNING
     est_start = time.time() + 0.1
+    n_focus_points = len(focus_points)
     f = model.ProgressiveFuture(start=est_start,
                                 end=est_start + estimate_autofocus_in_roi_time(n_focus_points,
                                                                                ccd))
@@ -160,5 +160,5 @@ def autofocus_in_roi(
     f.task_canceller = _cancel_autofocus_bbox
 
     executeAsyncTask(f, do_autofocus_in_roi,
-                     args=(f, bbox, stage, ccd, focus, focus_range, n_focus_points[0], n_focus_points[1], conf_level))
+                     args=(f, bbox, stage, ccd, focus, focus_range, focus_points, conf_level))
     return f
