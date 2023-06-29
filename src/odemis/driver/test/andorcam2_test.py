@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 12 Mar 2012
 
 @author: Éric Piel
@@ -20,18 +20,16 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 import logging
 import os
 import re
 import time
 import unittest
 import warnings
-from unittest.case import skip
 
 from cam_test_abs import (VirtualStaticTestCam, VirtualTestCam,
                           VirtualTestSynchronized)
-
 from odemis import model
 from odemis.driver import andorcam2
 
@@ -62,7 +60,7 @@ if TEST_NOHW:
     KWARGS = KWARGS_SIM
 
 
-#@skip("simple")
+# @skip("simple")
 class StaticTestFake(VirtualStaticTestCam, unittest.TestCase):
     """
     Ensure we always test the fake version at least a bit
@@ -88,14 +86,14 @@ class TestFake(VirtualTestCam, unittest.TestCase):
         )
 
 
-#@skip("simple")
+# @skip("simple")
 class StaticTestAndorCam2(VirtualStaticTestCam, unittest.TestCase):
     camera_type = CLASS
     camera_kwargs = KWARGS
 
 
 # Inheritance order is important for setUp, tearDown
-#@skip("simple")
+# @skip("simple")
 class TestAndorCam2(VirtualTestCam, unittest.TestCase):
     """
     Test directly the AndorCam2 class.
@@ -279,7 +277,7 @@ class TestAndorCam2HwTrigger(unittest.TestCase):
         self.camera.data.synchronizedOn(None)
 
 
-#@skip("simple")
+# @skip("simple")
 class TestSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface.
