@@ -1,3 +1,21 @@
+odemis (3.2.3-1) bionic; urgency=medium
+
+  * New version: 3.2.3
+  * Main bug fixes:
+    - GUI: handle better EK acquisition with incorrect metadata (SPARC)
+    - GUI: handle live display when both EK and time-correlator are available (SPARC)
+    - Plugin QuickCL: don't resize to fullscreen, to avoid odd window buttons (SPARC)
+    - SmarAct 5DOF: prevent rare move to unexpected position (ENZEL)
+    - xt_client: detect better that the stage move is really finished (SPARC, METEOR)
+    - tmcmconfig: allow to run without power (SPARC)
+    - pituner: support for new C885 controller (SECOM)
+    - zeiss: support for Point Electronic refurbished SEMs (SECOM, SPARC)
+    - andorshrk: improve logging in case of error
+    - xt_client: improve logging when error at connection
+    - back-end: improve logging if microscope file has an error
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 30 Jun 2023 09:16:25 +0200
+
 odemis (3.2.2-1) bionic; urgency=medium
 
   * New version: 3.2.2
