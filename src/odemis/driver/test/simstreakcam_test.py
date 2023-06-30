@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 29 Oct 2018
 
 @author: Sabrina Rossberger, Delmic
@@ -14,7 +14,7 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
 import logging
 import re
@@ -23,12 +23,10 @@ import unittest
 import warnings
 
 from cam_test_abs import VirtualTestCam, VirtualTestSynchronized
-
 from odemis import model, util
 from odemis.driver import andorshrk, simstreakcam
 
 logging.getLogger().setLevel(logging.DEBUG)
-
 
 # streak camera class
 CLASS_STREAKCAM = simstreakcam.StreakCamera
@@ -46,12 +44,12 @@ KWARGS_STREAKCAM = dict(name="streak cam", role="ccd", children=STREAK_CHILDREN)
 # test with spectrograph
 CLASS_SPECTROGRAPH = andorshrk.Shamrock
 KWARGS_SPECTROGRAPH = dict(name="sr193", role="spectrograph", device="fake",
-                       slits={1: "slit-in", 3: "slit-monochromator"},
-                       bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"})
+                           slits={1: "slit-in", 3: "slit-monochromator"},
+                           bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"})
 
 
 # Inheritance order is important for setUp, tearDown
-#@skip("simple")
+# @skip("simple")
 class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
     """
     Test directly the streak camera class with simulated streak camera HW.
@@ -60,7 +58,10 @@ class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
     camera_type = CLASS_STREAKCAM
     camera_kwargs = KWARGS_STREAKCAM
 
-    def setUp(self):
+    @classmethod
+    def setUpClass(cls):
+        super(TestSimStreakCamGenericCam, cls).setUpClass()
+
         # Ignore RuntimeWarning: numpy.ndarray size changed, may indicate binary incompatibility.
         # Expected 80 from C header, got 88 from PyObject
         # This warning is not caused by the code explicitly changing the array size but rather
@@ -68,11 +69,6 @@ class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
         )
-
-    @classmethod
-    def setUpClass(cls):
-
-        super(TestSimStreakCamGenericCam, cls).setUpClass()
 
         cls.streakcam = cls.camera
 
@@ -86,7 +82,7 @@ class TestSimStreakCamGenericCam(VirtualTestCam, unittest.TestCase):
         cls.streakcam.terminate()
 
 
-#@skip("simple")
+# @skip("simple")
 class TestSimStreakCamGenericCamSynchronized(VirtualTestSynchronized, unittest.TestCase):
     """
     Test the synchronizedOn(Event) interface with a simulated streak camera, using the fake SEM.
@@ -429,7 +425,7 @@ class TestSimStreakCamWithSpectrograph(unittest.TestCase):
         cls.spectrograph = CLASS_SPECTROGRAPH(**KWARGS_SPECTROGRAPH)
 
         STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
-                    "delaybox": CONFIG_DELAYBOX}
+                           "delaybox": CONFIG_DELAYBOX}
 
         cls.streakcam = CLASS_STREAKCAM("streak cam", "streakcam", children=STREAK_CHILDREN,
                                         dependencies={"spectrograph": cls.spectrograph})
@@ -524,7 +520,7 @@ class TestSimStreakCamWithSpectrograph(unittest.TestCase):
         img2 = self.readoutcam.data.get()
         wl_list_bin2 = img2.metadata[model.MD_WL_LIST]
 
-        self.assertEqual(len(wl_list_bin1)/2, len(wl_list_bin2))
+        self.assertEqual(len(wl_list_bin1) / 2, len(wl_list_bin2))
 
         with self.assertRaises(AssertionError):
             self.assertListEqual(wl_list_bin1, wl_list_bin2)  # there is not assertListNotEqual...
