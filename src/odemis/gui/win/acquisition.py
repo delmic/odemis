@@ -688,8 +688,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._autofocus_roi_vac = VigilantAttributeConnector(
             self.autofocus_roi_ckbox, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
 
-
-
         # Slightly change the interface if multiple grids available (sample centers).
         # For now this only works on the MIMAS. So in total we have this whole display:
         # * zstack steps
@@ -737,6 +735,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.whole_grid_chkbox.Value = False
             self.selected_grid_lbl.Hide()
             self.selected_grid_pnl_holder.Hide()
+            self._grids = None
 
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
@@ -963,6 +962,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         """
         Called when a grid selection button is pressed
         """
+        if self._grids is None:
+            raise ValueError("Grid button is pressed while there are no grids.")
         # Updates the selected grids based on the button states
         selected_grids = set()
         for name, btn in self._grids.buttons.items():
@@ -979,6 +980,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         Called when the "whole grid acquisition" checkbox is clicked
         => Switch between number of tiles and grid numbers
         """
+        if self._grids is None:
+            raise ValueError("Whole grid acquisition checkbox is clicked while there are no grids.")
         whole_grid = self.whole_grid_chkbox.Value
         # Enable the grid selection
         self._grids.Enable(whole_grid)
@@ -1154,7 +1157,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.tiles_number_x.Enable(False)
         self.tiles_number_y.Enable(False)
         self.autofocus_chkbox.Enable(False)
-        self._grids.Enable(False)
+        if self._grids:
+            self._grids.Enable(False)
 
     def _resume_settings(self):
         """ Resume the settings of the GUI and save the values for restoring them later """
@@ -1166,8 +1170,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         self.whole_grid_chkbox.Enable(True)
         self.autofocus_chkbox.Enable(True)
-        # Enable/disable the grid and tile numbers based on the "whole grid" checkbox
-        self._on_whole_grid_chkbox()
+        if self._grids:
+            # Enable/disable the grid and tile numbers based on the "whole grid" checkbox
+            self._on_whole_grid_chkbox()
 
     def _get_zstack_levels(self, rel: bool = False):
         """
