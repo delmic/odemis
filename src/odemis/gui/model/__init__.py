@@ -1074,9 +1074,10 @@ class ActuatorGUIData(MicroscopyGUIData):
             })
 
         if main.spec_switch:
-            # SPARCv2 light aligner dichroic mirror
+            # SPARCv2 light aligner dichroic mirror and spec switch foldable mirror
             ss_def.update({
                 "light_aligner": (1e-6, [100e-9, 1e-4], "light_aligner", None),
+                "spec_switch": (1e-6, [100e-9, 1e-4], "spec_switch", None),
             })
 
 

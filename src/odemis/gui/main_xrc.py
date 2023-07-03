@@ -411,8 +411,14 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.txt_StreakCalibFilename = xrc.XRCCTRL(self, "txt_StreakCalibFilename")
         self.btn_open_streak_calib_file = xrc.XRCCTRL(self, "btn_open_streak_calib_file")
         self.btn_save_streak_calib_file = xrc.XRCCTRL(self, "btn_save_streak_calib_file")
-        self.pnl_specswitch = xrc.XRCCTRL(self, "pnl_specswitch")
-        self.btn_specswitch = xrc.XRCCTRL(self, "btn_specswitch")
+        self.pnl_switch_mirror = xrc.XRCCTRL(self, "pnl_switch_mirror")
+        self.slider_spec_switch = xrc.XRCCTRL(self, "slider_spec_switch")
+        self.lbl_p_spec_switch = xrc.XRCCTRL(self, "lbl_p_spec_switch")
+        self.lbl_m_spec_switch = xrc.XRCCTRL(self, "lbl_m_spec_switch")
+        self.btn_m_spec_switch_x = xrc.XRCCTRL(self, "btn_m_spec_switch_x")
+        self.btn_p_spec_switch_x = xrc.XRCCTRL(self, "btn_p_spec_switch_x")
+        self.btn_spec_switch_retract = xrc.XRCCTRL(self, "btn_spec_switch_retract")
+        self.btn_spec_switch_engage = xrc.XRCCTRL(self, "btn_spec_switch_engage")
         self.gauge_specswitch = xrc.XRCCTRL(self, "gauge_specswitch")
         self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
         self.slider_fibaligner = xrc.XRCCTRL(self, "slider_fibaligner")
@@ -4968,12 +4974,12 @@ def __init_resources():
               <border>5</border>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_specswitch">
+              <object class="wxPanel" name="pnl_switch_mirror">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Spectograph</label>
+                      <label>Switch Mirror</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -4984,13 +4990,118 @@ def __init_resources():
                     <border>5</border>
                   </object>
                   <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Step size</label>
+                        </object>
+                        <flag>wxRIGHT</flag>
+                        <border>5</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatSlider" name="slider_spec_switch">
+                          <size>-1,20</size>
+                          <value>0.000001</value>
+                          <min>0.0000001</min>
+                          <max>0.001</max>
+                          <unit>m</unit>
+                          <scale>log</scale>
+                          <accuracy>2</accuracy>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <option>1</option>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxHORIZONTAL</orient>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="ImageTextToggleButton" name="btn_specswitch">
+                        <object class="wxStaticText" name="lbl_p_spec_switch">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>0,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_m_spec_switch">
+                          <label>-X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>0,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_spec_switch_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>←</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_p_spec_switch_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>→</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,3</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>10</border>
+                  </object>
+				  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_spec_switch_retract">
                           <height>24</height>
                           <face_colour>def</face_colour>
-                          <active_colour>#106090</active_colour>
-                          <label>Internal</label>
+                          <label>Retract</label>
                           <tooltip>If active allows to manually focus the spectrometer for the selected grating and detector.</tooltip>
                           <style>wxALIGN_CENTRE</style>
                           <XRCED>
@@ -5003,8 +5114,24 @@ def __init_resources():
                         <cellpos>0,0</cellpos>
                       </object>
                       <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_spec_switch_engage">
+                          <height>24</height>
+                          <face_colour>def</face_colour>
+                          <label>Engage</label>
+                          <tooltip>If active allows to manually focus the spectrometer for the selected grating and detector.</tooltip>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT</flag>
+                        <border>5</border>
+                        <minsize>90,-1</minsize>
+                        <cellpos>0,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
                         <object class="wxGauge" name="gauge_specswitch">
-                          <size>0,10</size>
+                          <size>-1,10</size>
                           <range>100</range>
                           <value>0</value>
                           <style>wxGA_SMOOTH</style>
@@ -5015,7 +5142,7 @@ def __init_resources():
                         <option>1</option>
                         <flag>wxALL|wxEXPAND</flag>
                         <border>7</border>
-                        <cellpos>0,1</cellpos>
+                        <cellpos>0,3</cellpos>
                       </object>
                       <vgap>5</vgap>
                       <hgap>5</hgap>

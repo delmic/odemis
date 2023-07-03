@@ -264,7 +264,7 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'chamber-light': {'power': 'off'},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  }),
