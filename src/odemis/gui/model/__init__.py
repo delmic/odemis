@@ -172,6 +172,7 @@ class MainGUIData(object):
         "lens-mover": "lens_mover",  # lens1 of SPARCv2
         "lens-switch": "lens_switch",  # lens2 of SPARCv2. Supports EK if has FAV_POS_ACTIVE
         "spec-selector": "spec_sel",
+        "spec-switch": "spec_switch",
         "pcd-selector": "pcd_sel",
         "chamber": "chamber",
         "light": "light",
@@ -257,6 +258,7 @@ class MainGUIData(object):
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
         self.lens_switch = None  # actuator to align the lens2 (SPARCv2)
         self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)
+        self.spec_switch = None  # actuator to activate the path to an external spectrometer (SPARCv2)
         self.pcd_sel = None  # actuator to activate the path to the probe current
         self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
         self.chamber_ccd = None  # view of inside the chamber
@@ -1071,7 +1073,7 @@ class ActuatorGUIData(MicroscopyGUIData):
                 "mirror_y": (10e-6, [100e-9, 1e-3], "mirror", {"y"}),
             })
 
-        if main.spec_sel:
+        if main.spec_switch:
             # SPARCv2 light aligner dichroic mirror
             ss_def.update({
                 "light_aligner": (1e-6, [100e-9, 1e-4], "light_aligner", None),
@@ -1251,13 +1253,14 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         if main.streak_ccd is None:
             amodes.remove("streak-align")
 
-        if main.spec_sel is None:
+        if main.spec_switch is None:
             amodes.remove("specswitch-align")
         else:
-            # Check that the spec-selector has the right metadata
-            md = main.spec_sel.getMetadata()
-            if not {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()):
-                raise ValueError("spec-selector should have FAV_POS_ACTIVE and FAV_POS_DEACTIVE")
+            if main.spec_sel:
+                # Check that the spec-selector has the right metadata
+                md = main.spec_sel.getMetadata()
+                if not {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()):
+                    raise ValueError("spec-selector should have FAV_POS_ACTIVE and FAV_POS_DEACTIVE")
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 

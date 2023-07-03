@@ -6579,9 +6579,9 @@ class Sparc2AlignTab(Tab):
             if main.lens_switch:
                 main.lens_switch.position.unsubscribe(self._onLensSwitchPos)
         if mode != "specswitch-align":
-            if main.spec_sel:
+            if main.spec_switch:
                 # unsubscribe to position regarding mirror?
-                main.spec_sel.position.unsubscribe(self._onSpecSelPos)
+                main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
             # disable the specswitch panel in other modes
             self.panel.btn_specswitch.Enable(False)
         else:
@@ -7151,79 +7151,65 @@ class Sparc2AlignTab(Tab):
     def _on_specswitch_align(self, active):
         """
         Called when the spectograph switch button is pressed.
-        It will start spec-select mirror procedure... or stop it (if it's currently active)
+        It will start spec-switch mirror movement from internal to external.
         """
-        if active:
-            # TODO request the fake or real stream here
-            main = self.tab_data_model.main
-            # spec_sel = model.getComponent(role='spec-selector')
-            spec_sel = main.spec_sel.getMetadata()
+        # TODO request the fake or real stream here
+        main = self.tab_data_model.main
+        spec_switch = main.spec_switch.getMetadata()
 
-            # show the gauge if it is hidden
-            if not self.panel.gauge_specswitch.IsShown():
-                self.panel.gauge_specswitch.Show()
+        # show the gauge if it is hidden
+        if not self.panel.gauge_specswitch.IsShown():
+            self.panel.gauge_specswitch.Show()
 
-            # disable the button while the mirror is moving
-            self.panel.btn_specswitch.Enable(False)
-            # GUI stream bar controller pauses the stream
-            self._stream_controller.pauseStreams()
+        # disable the button while the mirror is moving
+        self.panel.btn_specswitch.Enable(False)
+        # GUI stream bar controller pauses the stream
+        self._stream_controller.pauseStreams()
 
-            if self.specswitch_internal:
-                pos = spec_sel[model.MD_FAV_POS_ACTIVE]
-            else:
-                pos = spec_sel[model.MD_FAV_POS_DEACTIVE]
-
-            # Subscribe to the position change event to update the gauge
-            if self.tab_data_model.main.spec_sel:
-                self.tab_data_model.main.spec_sel.position.subscribe(self._onSpecSwitchPos)
-
-            # Move the mirror to the right position
-            self._specswitch_f = main.spec_sel.moveAbs(pos)
-            self._specswitch_f.add_done_callback(self._on_specswitch_align_done)
-
-            self._gauge_f = self.move_specswitch_mirror(pos)
-
-            # Update GUI
-            self._pfc_specswitch = ProgressiveFutureConnector(self._gauge_f, self.panel.gauge_specswitch)
+        if self.specswitch_internal:
+            pos = spec_switch[model.MD_FAV_POS_ACTIVE]
         else:
-            # Cancel task?? if we reached here via the GUI cancel button
-            pass
+            pos = spec_switch[model.MD_FAV_POS_DEACTIVE]
+
+        # Subscribe to the position change event to update the gauge
+        if self.tab_data_model.main.spec_switch:
+            self.tab_data_model.main.spec_switch.position.subscribe(self._onSpecSwitchPos)
+
+        # Move the mirror to the right position
+        self._specswitch_f = main.spec_switch.moveAbs(pos)
+        self._specswitch_f.add_done_callback(self._on_specswitch_align_done)
+
+        self._gauge_f = self.move_specswitch_mirror(pos)
+
+        # Update GUI
+        self._pfc_specswitch = ProgressiveFutureConnector(self._gauge_f, self.panel.gauge_specswitch)
 
     def move_specswitch_mirror(self, pos):
         main = self.tab_data_model.main
         est_start = time.time() + 0.1
 
-        current_pos = main.spec_sel.position.value
-        current_speed = main.spec_sel.speed.value
+        current_pos = main.spec_switch.position.value
+        current_speed = main.spec_switch.speed.value
         mirror_move_time = abs((current_pos.pop('x') - pos.pop('x')) / current_speed.pop('x'))
 
         f = model.ProgressiveFuture(start=est_start, end=est_start + mirror_move_time)
-        f._running_subf = main.spec_sel.moveAbs(pos)
+        f._running_subf = main.spec_switch.moveAbs(pos)
 
         # Run in separate thread
-        #executeAsyncTask(f, main.spec_sel.moveAbs(pos))
+        #executeAsyncTask(f, main.spec_switch.moveAbs(pos))
         return f
 
+    @call_in_wx_main
     def _on_specswitch_align_done(self, _):
+        # this is called after the movement of spec-switch through the button
+        # will change/update a few GUI components therefore call_in_wx_main
         btn = self.panel.btn_specswitch
         btn.SetValue(False)
+        self.panel.btn_specswitch.Enable(True)
         self._gauge_f.cancel()
 
         if self.panel.gauge_specswitch.IsShown():
             self.panel.gauge_specswitch.Hide()
-
-        if btn.Label == "Internal":
-            btn.SetLabel("External")
-            self.specswitch_internal = False
-            self.panel.btn_specswitch.Enable(True)
-            self.panel.pnl_light_aligner.Enable(False)
-        else:
-            btn.SetLabel("Internal")
-            self.specswitch_internal = True
-            self.panel.btn_specswitch.Enable(True)
-
-            # TODO where is the best spot to enable/disable this panel??
-            self.panel.pnl_light_aligner.Enable(True)
 
     def _onBkgAcquire(self, evt):
         """
@@ -7400,18 +7386,28 @@ class Sparc2AlignTab(Tab):
 
     def _onSpecSwitchPos(self, pos):
         """
-        Called when the spec-selector (wrapper to the X axis of light-out-alignment)
+        Called when the spec-switch (wrapper to the X axis of light-out-alignment)
           is moved (and the fiber align mode is active)
         """
-        if not self.IsShown():
-            # Should never happen, but for safety, we double check
-            logging.warning("Received active fiber position while outside of alignment tab")
-            return
+        # if not self.IsShown():
+        #     # Should never happen, but for safety, we double check
+        #     logging.warning("Received active spec-selector position while outside of alignment tab")
+        #     return
 
-        # Save the axis position as the "calibrated" one
-        # ss = self.tab_data_model.main.spec_sel
-        logging.debug("Updating the active spec-selector X position to %s", pos)
-        # ss.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+        # check here if position is equal or near ACTIVE or DEACTIVE
+        spec_switch = self.tab_data_model.main.spec_switch.getMetadata()
+
+        if almost_equal(pos["x"], spec_switch[model.MD_FAV_POS_ACTIVE]["x"], atol=1e-5):
+            self.panel.btn_specswitch.SetLabel("External")
+            self.specswitch_internal = False
+            logging.info("Spectrometer is now switched to external")
+
+        if almost_equal(pos["x"], spec_switch[model.MD_FAV_POS_DEACTIVE]["x"], atol=1e-5):
+            self.panel.btn_specswitch.SetLabel("Internal")
+            self.specswitch_internal = True
+            logging.info("Spectrometer is now switched to internal")
+
+        # logging.debug("Updating the spec-switch position to %s", pos)
 
     def _onFiberPos(self, pos):
         """
@@ -7475,6 +7471,8 @@ class Sparc2AlignTab(Tab):
             main.mirror.position.unsubscribe(self._onMirrorPos)
             if main.spec_sel:
                 main.spec_sel.position.unsubscribe(self._onSpecSelPos)
+            if main.spec_switch:
+                main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
             if main.fibaligner:
                 main.fibaligner.position.unsubscribe(self._onFiberPos)
 
