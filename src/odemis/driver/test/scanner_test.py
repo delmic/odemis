@@ -249,6 +249,35 @@ class TestDetector(unittest.TestCase):
         self.detector.data.unsubscribe(self.receive_image)  # just in case it failed
         self.assertEqual(self.left, 0)
 
+    def test_synchronization(self):
+        """
+        Check the dataflow supports synchronization
+        """
+        dwell = self.scanner.dwellTime.range[0] * 2
+        self.scanner.dwellTime.value = dwell
+        self.scanner.resolution.value = self.scanner.resolution.range[1]  # test big image
+        self.size = self.scanner.resolution.value
+
+        number = 3
+        self.left = number
+        expected_duration = self.compute_expected_duration()
+
+        self.detector.data.synchronizedOn(self.detector.softwareTrigger)
+        self.detector.data.subscribe(self.receive_image)
+
+        # Make sure no data is acquired until we ask for it
+        time.sleep(2 + expected_duration * 1.1)
+        self.assertEqual(self.left, 3)
+        
+        # Send triggers
+        for i in range(3):
+            self.detector.softwareTrigger.notify()
+            time.sleep(expected_duration * 1.1)
+
+        self.detector.data.unsubscribe(self.receive_image)  # just in case it failed
+        self.assertEqual(self.left, 0)
+
+
     def receive_image(self, dataflow, image):
         """
         callback for df of test_acquire_flow()
