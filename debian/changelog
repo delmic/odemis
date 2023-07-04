@@ -1,3 +1,52 @@
+odemis (3.3.0-1) bionic; urgency=medium
+
+  * New version 3.3
+  * Main new changes and features:
+    - Add support for MIMAS
+    - Non-rectangular selection in the acquisition manager (FASTEM)
+    - Overview acquisition with autofocus (METEOR, MIMAS)
+    - Overview tab improved workflow (FASTEM)
+    - Support METEOR on Zeiss SEM
+  * Other improvements and bug fixes:
+    - Support for Orsay Physics FIB
+    - Support for Lakeshore 350 simulator and PID controller
+    - Automatically upload xtadapter updates to Support PC
+    - A fix for calibration regions popping up (FASTEM)
+  * Improvements and bug fixes already present in the v3.2 branch:
+    - GUI: handle better EK acquisition with incorrect metadata (SPARC)
+    - GUI: handle live display when both EK and time-correlator are available (SPARC)
+    - Plugin QuickCL: don't resize to fullscreen, to avoid odd window buttons (SPARC)
+    - SmarAct 5DOF: prevent rare move to unexpected position (ENZEL)
+    - xt_client: detect better that the stage move is really finished (SPARC, METEOR)
+    - tmcmconfig: allow to run without power (SPARC)
+    - pituner: support for new C885 controller (SECOM)
+    - zeiss: support for Point Electronic refurbished SEMs (SECOM, SPARC)
+    - andorshrk: improve logging in case of error
+    - xt_client: improve logging when error at connection
+    - back-end: improve logging if microscope file has an error
+    - bug reporter: fix upload of large logs to new support webserver
+    - bug reporter: always include all YAML files from the default directory
+    - andorcam2: only warn once about unsupported software trigger mode
+    - Bug reporter also report the installation site name for easier triage
+    - In case the bug reporter encounters an error, a summary is shown to the user
+    - SmarAct driver support for generic parameter configuration
+    - On 2D plots, nearest tick from the origin is now also shown
+    - Single image acquisition on xt_client would sometimes caused two scans
+    - Esc key in GUI would sometimes be interpreted as "OK"
+    - AntiBacklash on the filter wheel would sometimes cause a unnecessary move
+    - On ENZEL, large Rx rotations should be done near the LOADING position for safety
+    - New meteor_engage_warn plugin to show a extra warning when moving to FM position on the METEOR
+    - Don't show lens2 alignment panel if EK acquisition is not supported (SPARC)
+    - EK alignment tab always sets the grating and filters to mirror/pass-through
+    - Loading an incorrect background or coefficient file wasn't showing an error message any more (SPARC)
+    - Allow to disable power check on the power control unit (SPARC)
+    - TMCM CANopen version number was incorrectly read
+    - In tile plugin, only show fine alignment option on SECOM and DELPHI
+    - Optimized tile stitching
+    - Fix use of !extend in microscope files
+
+ -- Nandish Patel <patel@delmic.com>  Tue, 04 Jul 2023 10:41:51 +0200
+
 odemis (3.2.0-1) bionic; urgency=medium
 
   * New version: 3.2
