@@ -12,8 +12,8 @@ Plugin loading
 ==============
 
 The graphical user interface can be extended with plugins and scripts. A plugin is provided as a python
-ﬁle (``*``.py). The oﬃcial plugins (developed by Delmic) are available on the microscope computer in
-the folder ``/usr/share/odemis/plugins``. They are also available at this location: https://github.com/delmic/odemis/tree/master/plugins . To activate the plugin, the ﬁle must be copied into the following
+file (``*``.py). The official plugins (developed by Delmic) are available on the microscope computer in
+the folder ``/usr/share/odemis/plugins``. They are also available at this location: https://github.com/delmic/odemis/tree/master/plugins . To activate the plugin, the file must be copied into the following
 directory:
 
  * Linux:
@@ -26,7 +26,7 @@ directory:
  * Windows:
         ``\.config\odemis\plugins\`` in the user folder (ex: ``C:\Users\John\.config\odemis\plugins``)
 
-Note that if the directory doesn’t exist, it should ﬁrst be created. On Linux, for the official plugins to
+Note that if the directory doesn’t exist, it should first be created. On Linux, for the official plugins to
 automatically update, it is preferable to install them using a so-called "soft-link". So for instance, to install
 the tile acquisition plugin, you can type in a terminal:
 
