@@ -1,3 +1,9 @@
+odemis (3.3.0-2) bionic; urgency=medium
+
+  * Fix developer manual compilation
+
+ -- Nandish Patel <patel@delmic.com>  Tue, 04 Jul 2023 14:49:40 +0200
+
 odemis (3.3.0-1) bionic; urgency=medium
 
   * New version 3.3
