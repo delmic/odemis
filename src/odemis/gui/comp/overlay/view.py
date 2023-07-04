@@ -312,10 +312,11 @@ class PixelValueOverlay(ViewOverlay):
 
         # a rough estimation of the width and height margins in order to get the position of the pixel raw value display
         margin_w, margin_h = 5, 20
-        for stream in streams:
-            if self._v_pos:
-                self._p_pos = self.cnvs.view_to_phys(self._v_pos, self.cnvs.get_half_buffer_size())
 
+        if self._v_pos:
+            self._p_pos = self.cnvs.view_to_phys(self._v_pos, self.cnvs.get_half_buffer_size())
+            self._label.colour = self.colour
+            for stream in streams:
                 # For SparcARCanvas which supports .flip. Note that this is a
                 # kind-of crude version of flipping. The image is actually flipped
                 # on its center position, which is not the same as mirroring the
@@ -329,7 +330,6 @@ class PixelValueOverlay(ViewOverlay):
                     self._p_pos = -self._p_pos[0], self._p_pos[1]
 
                 view_pos = self.view_width - margin_w, self.view_height - margin_h
-                self._label.colour = self.colour
                 self._label.pos = Vec(view_pos[0], view_pos[1])
 
                 text = self._draw_legend(stream)
@@ -343,6 +343,14 @@ class PixelValueOverlay(ViewOverlay):
                     margin_r = 5
                     margin_h += (self._label.text_size[1] + margin_r)
 
+            # Display physical position at the top
+            pos = units.readable_str(self._p_pos, "m", sig=6)
+            text = f"Position: {pos}"
+            view_pos = self.view_width - margin_w, self.view_height - margin_h
+            self._label.pos = Vec(view_pos[0], view_pos[1])
+            self._label.text = text
+            self._label.align = wx.ALIGN_RIGHT
+            self._label.draw(ctx)
 
 class FocusOverlay(base.ViewOverlay):
     """ Display the focus modification indicator """
