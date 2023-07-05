@@ -291,3 +291,9 @@ class CompositedDataflow(model.DataFlow):
         Wrapper to only pass data to the notify of the base class.
         """
         super().notify(data)
+
+    def synchronizedOn(self, event):
+        """
+        Wrapper to pass synchronization requests to the external dataflow
+        """
+        self._external_dataflow.synchronizedOn(event)
