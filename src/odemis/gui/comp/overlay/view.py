@@ -316,6 +316,7 @@ class PixelValueOverlay(ViewOverlay):
         if self._v_pos:
             self._p_pos = self.cnvs.view_to_phys(self._v_pos, self.cnvs.get_half_buffer_size())
             self._label.colour = self.colour
+            self._label.align = wx.ALIGN_RIGHT
             for stream in streams:
                 # For SparcARCanvas which supports .flip. Note that this is a
                 # kind-of crude version of flipping. The image is actually flipped
@@ -335,7 +336,6 @@ class PixelValueOverlay(ViewOverlay):
                 text = self._draw_legend(stream)
                 if text is not None:
                     self._label.text = text
-                    self._label.align = wx.ALIGN_RIGHT
                     self._label.draw(ctx)
 
                     # the legend for the next projection is displayed above the last displayed legend
@@ -349,7 +349,6 @@ class PixelValueOverlay(ViewOverlay):
             view_pos = self.view_width - margin_w, self.view_height - margin_h
             self._label.pos = Vec(view_pos[0], view_pos[1])
             self._label.text = text
-            self._label.align = wx.ALIGN_RIGHT
             self._label.draw(ctx)
 
 class FocusOverlay(base.ViewOverlay):
