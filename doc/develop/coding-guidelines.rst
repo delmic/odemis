@@ -233,7 +233,7 @@ Naming Convention for Pull Requests, Branches and Commits
 |
 * A commit message must contain a title and body.
 
-	* Recommended naming convention:
+    * Recommended naming convention:
     * for the commit title: *[label] ~ 80 characters (in imperative mood, lowercase)*. Find the Note below.
     * for the commit body: *try to explain what and why, not how (motivation)*.
     * Please do leave a blank line between the title and body.
