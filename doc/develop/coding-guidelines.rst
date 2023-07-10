@@ -215,17 +215,17 @@ For e.g. 4.1 standard and internal imports
 Naming Convention for Pull Requests, Branches and Commits
 ==========================================================
 
-* The pull request title and the branch name should be the same.
+* The pull request title and the branch name must be the same.
 
-    * The words in a pull request title should be separated by spaces, for the branch name they should be separated by dashes.
+    * The words in a pull request title must be separated by spaces, for the branch name they must be separated by dashes.
     * Recommended naming convention: *[ticket] title*.
     * It is recommended to use the *[]* only for the pull request name.
 |
-* A pull request should contain a minimal description of the changes and what problem they solve.
+* A pull request must contain a minimal description of the changes and what problem they solve.
 
     * One can include images, links, and tables to help convey this information.
     * If a pull request contains a single commit it is recommended to use the commit message as the pull request description.
-    * Example template of a pull request description:
+    * A good to follow template for pull request description:
 
         .. code-block::
 
@@ -236,9 +236,10 @@ Naming Convention for Pull Requests, Branches and Commits
 * A commit message must contain a title and body.
 
     * Recommended convention:
-    * for the commit title: *[label] ~ 80 characters (in imperative mood, lowercase)*. See Note for suggested labels.
+    * for the commit title: *[label] title*. It must be lowercase and written in an imperative mood. See Note for suggested labels.
     * for the commit body: *try to explain what and why, not how (motivation)*.
     * Please do leave a blank line between the title and body.
+    * In case the commit is for a fix, please do add the error messages as such in the commit body.
 |
 .. note::
 	Possible *[label]*
