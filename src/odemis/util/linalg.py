@@ -43,6 +43,7 @@ CONTRACT, STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE)
 ARISING IN ANY WAY OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF
 THE POSSIBILITY OF SUCH DAMAGE.
 """
+import math
 from typing import Iterable, Tuple
 
 import numpy
@@ -252,13 +253,13 @@ def generate_triangulation_points(max_dist: float, area_coords: Iterable[float])
     # away from the border of the given area
     length_x = abs(xmax - xmin)
     length_y = abs(ymax - ymin)
-    points_x = int(numpy.floor(length_x / max_dist) + 1)
-    points_y = int(numpy.floor(length_y / max_dist) + 1)
+    points_x = int(math.floor(length_x / max_dist) + 1)
+    points_y = int(math.floor(length_y / max_dist) + 1)
     xmin = xmin + max_dist / 2
     xmax = xmax - max_dist / 2
     ymin = ymin + max_dist / 2
     ymax = ymax - max_dist / 2
-    total_points = int(points_x * points_y)
+    total_points = points_x * points_y
 
     # Create a centre point when total number of points is <= 3
     if total_points <= 3:
