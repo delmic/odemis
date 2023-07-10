@@ -340,6 +340,10 @@ class MillingManagerTestCase(unittest.TestCase):
         self.updates = 0
         self.done = False
 
+        # Milling does not start from an unknown stage position
+        # Set the stage to loading position
+        cryoSwitchSamplePosition(LOADING).result()
+
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
                                             pixel_size=(3.5e-08, 3.5e-08), beam_angle=self.beam_angle,
@@ -361,6 +365,7 @@ class MillingManagerTestCase(unittest.TestCase):
 
         future = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
                                self.sed, self.stage, self.aligner)
+        time.sleep(1)
 
         future.add_update_callback(self.on_progress_update)
         future.add_done_callback(self.on_done)
@@ -405,11 +410,15 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         Test mill features function using the milling settings from a YAML file
         """
+        # Milling does not start from an unknown stage position
+        # Set the stage to loading position
+        cryoSwitchSamplePosition(LOADING).result()
+
         millings = load_config(MILLING_CONFIG_PATH + "/milling-series-test-working-config.mill.yaml")
         logging.debug(millings)
         f = mill_features(millings, self.sites, self.feature_post_status, self.acq_streams, self.ion_beam,
                           self.sed, self.stage, self.aligner)
-
+        time.sleep(1)
         self.assertTrue(f.running())
         f.cancel()
         with self.assertRaises(CancelledError):
