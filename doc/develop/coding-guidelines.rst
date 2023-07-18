@@ -218,21 +218,23 @@ Naming Convention for Pull Requests, Branches and Commits
 * The pull request title and the branch name must be the same.
 
     * The words in a pull request title must be separated by spaces, for the branch name they must be separated by dashes.
-    * Recommended naming convention: *[ticket] title*.
+      The branch name should be all lower case.
+    * Recommended naming convention: *[Issue-ID] title*.
+      Where the *Issue-ID* is the Jira task short name, in upper-case, just as `PROJ-123`.
     * It is recommended to use the *[]* only for the pull request name.
-|
+
 * A pull request must contain a minimal description of the changes and what problem they solve.
 
     * One can include images, links, and tables to help convey this information.
     * If a pull request contains a single commit it is recommended to use the commit message as the pull request description.
     * A good to follow template for pull request description:
 
-        .. code-block::
+        .. code-block:: text
 
-			## Describe your changes
+            ## Describe your changes
 
-			## Ticket number and link
-|
+            ## Task number or link
+
 * A commit message must contain a title and body.
 
     * Recommended convention:
@@ -240,26 +242,26 @@ Naming Convention for Pull Requests, Branches and Commits
     * for the commit body: *try to explain what and why, not how (motivation)*.
     * Please do leave a blank line between the title and body.
     * In case the commit is for a fix, please do add the error messages as such in the commit body.
-|
+
 .. note::
-	Possible *[label]*
+    Possible *[label]*
 
-		**fix**: A bug fix. Correlates with PATCH in SemVer
+        **fix**: A bug fix. Correlates with PATCH in SemVer
 
-		**feat**: A new feature. Correlates with MINOR in SemVer
+        **feat**: A new feature. Correlates with MINOR in SemVer
 
-		**docs**: Documentation only changes
+        **docs**: Documentation only changes
 
-		**style**: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
+        **style**: Changes that do not affect the meaning of the code (white-space, formatting, missing semi-colons, etc)
 
-		**refactor**: A code change that neither fixes a bug nor adds a feature
+        **refactor**: A code change that neither fixes a bug nor adds a feature
 
-		**perf**: A code change that improves performance
+        **perf**: A code change that improves performance
 
-		**test**: Adding missing or correcting existing tests
+        **test**: Adding missing or correcting existing tests
 
-		**build**: Changes that affect the build system or external dependencies (example scopes: pip, docker, npm)
+        **build**: Changes that affect the build system or external dependencies (example scopes: pip, docker, npm)
 
-		**ci**: Changes to our CI configuration files and scripts (example scopes: GitHub CI)
+        **ci**: Changes to our CI configuration files and scripts (example scopes: GitHub CI)
 
-		**config**: Changes to simulator or microscope configuration files
+        **config**: Changes to simulator or microscope configuration files
