@@ -47,8 +47,6 @@ class MeteorEngageWarnPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super().__init__(microscope, main_app)
-        self.meteor_manager = MicroscopePostureManager(microscope)
-        self.main_frame = main_app.main_frame
 
         # It only makes sense if the METEOR chamber tab is present
         try:
@@ -77,7 +75,7 @@ class MeteorEngageWarnPlugin(Plugin):
         pos_str = "\n". join(pos_str)
 
         # Guess (back) which position the users wants to go to
-        target_pos = self.meteor_manager.getCurrentPostureLabel(end_pos)
+        target_pos = self.main_app.main_frame.getCurrentPostureLabel(end_pos)
         if target_pos == FM_IMAGING:
             warn_msg = FM_WARN_MSG
         elif target_pos == SEM_IMAGING:

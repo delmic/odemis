@@ -30,7 +30,8 @@ from odemis import util
 from odemis.acq.move import (FM_IMAGING, GRID_1, GRID_2,
                              LOADING, ALIGNMENT, COATING, MILLING, LOADING_PATH,
                              RTOL_PROGRESS, SEM_IMAGING, UNKNOWN,
-                             SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS, ROT_DIST_SCALING_FACTOR)
+                             SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS, ROT_DIST_SCALING_FACTOR,
+                             MimasPostureManager, MeteorPostureManager, EnzelPostureManager)
 from odemis.acq.move import MicroscopePostureManager
 from odemis.util import testing
 from odemis.util.driver import ATOL_LINEAR_POS
@@ -92,6 +93,8 @@ class TestEnzelMove(unittest.TestCase):
         """
         stage = self.stage
         align = self.aligner
+        # Check the instantiation of correct posture manager
+        self.assertIsInstance(self.posture_manager, EnzelPostureManager)
         # Get the stage to loading position
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
@@ -232,7 +235,7 @@ class TestEnzelMove(unittest.TestCase):
         stage = self.stage
         # Move to loading position
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, LOADING)
 
         # Move to imaging position and cancel the movement before reaching there
@@ -240,7 +243,7 @@ class TestEnzelMove(unittest.TestCase):
         # wait just long enough for the referencing to complete
         time.sleep(7)
         f.cancel()
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         # It's really hard to get the timing right, so also allow to be at loading
         # or three-beams
         self.assertIn(pos_label, (THREE_BEAMS, LOADING, LOADING_PATH))
@@ -248,7 +251,7 @@ class TestEnzelMove(unittest.TestCase):
         # Move to imaging position
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         self.posture_manager.cryoSwitchSamplePosition(THREE_BEAMS).result()
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, THREE_BEAMS)
 
         # Test disabled, because typically ALIGNEMENT is the same as
@@ -262,21 +265,21 @@ class TestEnzelMove(unittest.TestCase):
         # Move to SEM imaging
         f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, SEM_IMAGING)
 
         # Move to coating position
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         f = self.posture_manager.cryoSwitchSamplePosition(COATING)
         f.result()
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, COATING)
 
         # Return to loading and cancel before reaching
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
         time.sleep(4)
         f.cancel()
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, LOADING_PATH)
 
     def test_smaract_stage_fallback_movement(self):
@@ -314,13 +317,15 @@ class TestMeteorMove(unittest.TestCase):
         cls.stage_loading = stage_md[model.MD_FAV_POS_DEACTIVE]
 
     def test_moving_to_grid1_in_sem_imaging_area_after_loading_1st_method(self):
-        # move the stage to the loading position  
+        # Check the instantiation of correct posture manager
+        self.assertIsInstance(self.posture_manager, MeteorPostureManager)
+        # move the stage to the loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
         f.result()
         # move the stage to the sem imaging area, and grid1 will be chosen by default.
         f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-        position_label = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        position_label = self.posture_manager.getCurrentPostureLabel()
         grid_label = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(position_label, SEM_IMAGING)
         self.assertEqual(grid_label, GRID_1)
@@ -332,7 +337,7 @@ class TestMeteorMove(unittest.TestCase):
         # move the stage to grid1, and sem imaging area will be chosen by default. 
         f = self.posture_manager.cryoSwitchSamplePosition(GRID_1)
         f.result()
-        position_label = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        position_label = self.posture_manager.getCurrentPostureLabel()
         grid_label = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(position_label, SEM_IMAGING)
         self.assertEqual(grid_label, GRID_1)
@@ -344,7 +349,7 @@ class TestMeteorMove(unittest.TestCase):
         # move the stage to the fm imaging area, and grid1 will be chosen by default
         f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
-        position_label = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        position_label = self.posture_manager.getCurrentPostureLabel()
         grid_label = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(position_label, FM_IMAGING)
         self.assertEqual(grid_label, GRID_1)
@@ -356,7 +361,7 @@ class TestMeteorMove(unittest.TestCase):
         # move the stage to grid2
         f = self.posture_manager.cryoSwitchSamplePosition(GRID_2)
         f.result()
-        position_label = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        position_label = self.posture_manager.getCurrentPostureLabel()
         grid_label = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(position_label, SEM_IMAGING)
         self.assertEqual(grid_label, GRID_2)
@@ -368,7 +373,7 @@ class TestMeteorMove(unittest.TestCase):
         # move the stage to the sem imaging area
         f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
         # now the selected grid is already the grid1
         current_grid = self.posture_manager.getCurrentGridLabel()
@@ -379,7 +384,7 @@ class TestMeteorMove(unittest.TestCase):
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(GRID_2, current_grid)
         # make sure we are still in sem  imaging area 
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
 
     def test_moving_from_grid2_to_grid1_in_sem_imaging_area(self):
@@ -389,7 +394,7 @@ class TestMeteorMove(unittest.TestCase):
         # move the stage to the sem imaging area
         f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
         # move the stage to grid2 
         f = self.posture_manager.cryoSwitchSamplePosition(GRID_2)
@@ -402,7 +407,7 @@ class TestMeteorMove(unittest.TestCase):
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(GRID_1, current_grid)
         # make sure we are still in the sem imaging area
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
     
     def test_moving_from_sem_to_fm(self):
@@ -412,12 +417,12 @@ class TestMeteorMove(unittest.TestCase):
         # move the stage to the sem imaging area
         f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
         # move to the fm imaging area
         f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FM_IMAGING, current_imaging_mode)
 
     def test_moving_from_grid1_to_grid2_in_fm_imaging_Area(self):
@@ -426,7 +431,7 @@ class TestMeteorMove(unittest.TestCase):
         # move to the fm imaging area
         f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FM_IMAGING, current_imaging_mode)
         # now the grid is grid1 by default
         current_grid = self.posture_manager.getCurrentGridLabel()
@@ -437,7 +442,7 @@ class TestMeteorMove(unittest.TestCase):
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(GRID_2, current_grid)
         # make sure we are still in fm imaging area
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FM_IMAGING, current_imaging_mode)
 
     def test_moving_from_grid2_to_grid1_in_fm_imaging_Area(self):
@@ -446,7 +451,7 @@ class TestMeteorMove(unittest.TestCase):
         # move to the fm imaging area
         f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FM_IMAGING, current_imaging_mode)
         # move to the grid2
         f = self.posture_manager.cryoSwitchSamplePosition(GRID_2)
@@ -459,7 +464,7 @@ class TestMeteorMove(unittest.TestCase):
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(GRID_1, current_grid)
         # make sure we are still in fm imaging area
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FM_IMAGING, current_imaging_mode)
 
     def test_moving_to_sem_from_fm(self):
@@ -468,18 +473,18 @@ class TestMeteorMove(unittest.TestCase):
         # move to the fm imaging area
         f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
         f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FM_IMAGING, current_imaging_mode)
         # move to sem
         f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
 
     def test_unknown_label_at_initialization(self):
         arbitrary_position = {"x": 0.0, "y": 0.0, "z":-3.0e-3}
         self.stage.moveAbs(arbitrary_position).result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(UNKNOWN, current_imaging_mode)
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(current_grid, None)
@@ -523,6 +528,9 @@ class TestMimasMove(unittest.TestCase):
         align = self.aligner
         gis_choices = self.gis.axes["arm"].choices
 
+        # Check the instantiation of correct posture manager
+        self.assertIsInstance(self.posture_manager, MimasPostureManager)
+
         # Get the stage to loading position
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
@@ -540,7 +548,7 @@ class TestMimasMove(unittest.TestCase):
         self.assertEqual(gis_choices[self.gis.position.value["arm"]], "engaged")
         # Align should be parked
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, COATING)
 
         # Go to FLM
@@ -549,14 +557,14 @@ class TestMimasMove(unittest.TestCase):
         testing.assert_pos_almost_equal(stage.position.value, self.stage_active, atol=ATOL_LINEAR_POS, match_all=False)
         # Align should be engaged
         testing.assert_pos_almost_equal(align.position.value, self.align_active, atol=ATOL_LINEAR_POS)
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, FM_IMAGING)
 
 
         # Move a little bit around => still in FM_IMAGING
         stage.moveRelSync({"x": 100e-6, "y": -100e-6, "z": 1e-6})
         current_pos = self.stage.position.value
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, FM_IMAGING)
 
         # Get the stage to FIB
@@ -566,7 +574,7 @@ class TestMimasMove(unittest.TestCase):
         testing.assert_pos_almost_equal(stage.position.value, current_pos)
         # Align should be parked
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, MILLING)
 
 
@@ -610,7 +618,7 @@ class TestMimasMove(unittest.TestCase):
         # very crude and doesn't simulate cancellation and move duration properly.
         # testing.assert_pos_not_almost_equal(stage.position.value, self.stage_deactive,
         #                                     atol=ATOL_LINEAR_POS)
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertNotEqual(pos_label, LOADING)
         self.assertNotEqual(pos_label, FM_IMAGING)
         # Should report UNKNOWN if cancelled early, and IMAGING if cancelled later
@@ -620,7 +628,7 @@ class TestMimasMove(unittest.TestCase):
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
         f.result(30)
         self.assertTrue(f.done())
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, LOADING)
 
     def test_unknown(self):
@@ -634,7 +642,7 @@ class TestMimasMove(unittest.TestCase):
         # Move a little away to be "nowhere" known
         stage.moveRelSync({"x": 1e-3})
 
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, UNKNOWN)
 
         # Moving to FM_IMAGING should not be allowed from UNKNOWN
@@ -649,7 +657,7 @@ class TestMimasMove(unittest.TestCase):
         # Going to LOADING is fine
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
         f.result(30)
-        pos_label = self.posture_manager.getCurrentPostureLabel(stage.position.value)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, LOADING)
 
 

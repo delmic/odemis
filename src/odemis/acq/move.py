@@ -89,11 +89,12 @@ class MicroscopePostureManager:
         pass
 
     @abstractmethod
-    def getCurrentPostureLabel(self, pos: Dict[str, float]) -> int:
+    def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
         """
         Determine where lies the current stage position
-        pos (dict str->float): the stage position in which the label needs to be found
-        :return: (int) a value representing stage position from the constants LOADING, THREE_BEAMS, COATING, etc.
+        :param pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses the
+         current position of the stage.
+        :return (int): a value representing stage position from the constants LOADING, THREE_BEAMS, COATING, etc.
         """
         pass
 
@@ -132,7 +133,7 @@ class MicroscopePostureManager:
         :param current_pos: (dict str->float) Current position of the stage
         :param start_pos: (dict str->float) A position to start the movement from
         :param end_pos: (dict str->float) A position to end the movement to
-        :return:(0<=float<=1, or None) Ratio of the progress, None if it's too far away from of the path
+        :return: (0<=float<=1, or None) Ratio of the progress, None if it's too far away from of the path
         """
         # Get distance for current point in respect to start and end
         from_start = self._getDistance(start_pos, current_pos)
@@ -175,32 +176,18 @@ class MicroscopePostureManager:
 
         return lin_error + rot_error
 
-    def check_stage_metadata(self, required_keys: set, unique_keys: set = None, metadata_name: str = None):
+    def check_stage_metadata(self, required_keys: set):
         """
-        Check the required metadata along with the unique keys in the stage metadata based on given stage type in the
-        microscope file.
-        :param: required_keys: A set of keys that must be present in all the stage types.
-        :param unique_keys : A set of keys that is unique to the stage type and must be present in the metadata.
-        :param metadata_name: The name of the metadata in which the unique keys are present. If None, checks if the
-         unique keys are present in any of the stage metadata.
+        Checks the required metadata in the stage metadata.
+        :param required_keys: A set of keys that must be present in on the stage metadata. The keys begin with MD_*.
         :raises ValueError: if the metadata does not have all required keys.
         """
         stage_md = self.stage.getMetadata()
-
-        if unique_keys and not metadata_name:
-            required_keys.add(unique_keys)
 
         # Check for required keys
         if not required_keys.issubset(stage_md.keys()):
             missing_keys = required_keys - stage_md.keys()
             raise ValueError(f"Stage metadata is missing the following required keys: {missing_keys}.")
-
-        # Check for unique keys in the given metadata
-        if metadata_name:
-            calibrated_md = stage_md[metadata_name]
-            if not unique_keys.issubset(calibrated_md.keys()):
-                missing_keys = required_keys - calibrated_md.keys()
-                raise ValueError(f"Stage metadata {metadata_name} is missing the following required keys: {missing_keys}.")
 
     def _cancelCryoMoveSample(self, future):
         """
@@ -280,16 +267,19 @@ class MeteorPostureManager(MicroscopePostureManager):
             model.MD_FAV_POS_DEACTIVE, model.MD_FAV_SEM_POS_ACTIVE, model.MD_FAV_FM_POS_ACTIVE,
             model.MD_SAMPLE_CENTERS}
 
-    def getCurrentPostureLabel(self, pos: Dict[str, float]) -> int:
+    def getCurrentPostureLabel(self, pos: Dict[str, float] = None) -> int:
         """
         Detects the current stage position of meteor
-        pos (dict str->float): the stage position in which the label needs to be found
-        returns a label LOADING, SEM_IMAGING, FM_IMAGING or UNKNOWN
+        :param pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses the
+         current position of the stage.
+        :return: (int) a label LOADING, SEM_IMAGING, FM_IMAGING or UNKNOWN
         """
         stage_md = self.stage.getMetadata()
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_fm_imaging_rng = stage_md[model.MD_FM_IMAGING_RANGE]
         stage_sem_imaging_rng = stage_md[model.MD_SEM_IMAGING_RANGE]
+        if pos is None:
+            pos = self.stage.position.value
         # Check the stage is near the loading position
         if isNearPosition(pos, stage_deactive, self.stage.axes):
             return LOADING
@@ -300,19 +290,19 @@ class MeteorPostureManager(MicroscopePostureManager):
         # None of the above -> unknown position
         return UNKNOWN
 
-    def getTargetPosition(self, target_pos_lbl: int) -> dict:
+    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
         target_pos_lbl (int): a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
-        returns (dict->float): the end position of the stage
-        raise ValueError: if the target position is not supported
+        :return: (dict str->float) the target position of the stage
+        :raises ValueError: if the target position is not supported
         """
         pass
 
     def getCurrentGridLabel(self) -> int:
         """
         Detects which grid on the sample shuttle of meteor being viewed
-        return (GRID_1 or GRID_2): the guessed grid. If current position is not SEM
+        :return: (GRID_1 or GRID_2) the guessed grid. If current position is not SEM
             or FM, None would be returned.
         """
         pass
@@ -321,9 +311,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         Transforms the current stage position from the SEM imaging area to the
             meteor/FM imaging area.
-        pos (dict str->float): the current stage position. The position has to have linear and rotational axes,
-            otherwise error would be raised.
-        return (dict str->float): the transformed position. It returns the updated axes.
+        :param pos: (dict str->float) the current stage position. The position has to have linear and rotational axes,
+         otherwise error would be raised.
+        :return: (dict str->float) the transformed position. It returns the updated axes.
         """
         pass
 
@@ -331,9 +321,9 @@ class MeteorPostureManager(MicroscopePostureManager):
         """
         Transforms the current stage position from the meteor/FM imaging area
             to the SEM imaging area.
-        pos (dict str->float): the current stage position
-        stage (Actuator): the stage component
-        return (dict str->float): the transformed stage position.
+        :param pos: (dict str->float) the current stage position
+        :param stage: (Actuator) the stage component
+        :return: (dict str->float) the transformed stage position.
         """
         pass
 
@@ -342,18 +332,18 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
         super().__init__(microscope)
         # Check required metadata used during switching
-        unique_keys = model.MD_POS_COR
-        self.check_stage_metadata(self.required_keys, unique_keys)
+        self.required_keys.add(model.MD_POS_COR)
+        self.check_stage_metadata(required_keys=self.required_keys)
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
-        target_pos_lbl (int): a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
-        returns (dict str->float): the end position of the stage
-        raise ValueError: if the target position is not supported
+        :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
+        :return: (dict str->float) the end position of the stage
+        :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
-        current_position = self.getCurrentPostureLabel(self.stage.position.value)
+        current_position = self.getCurrentPostureLabel()
         end_pos = None
 
         if target_pos_lbl == LOADING:
@@ -397,11 +387,11 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
     def getCurrentGridLabel(self) -> int:
         """
         Detects which grid on the sample shuttle of meteor being viewed
-        return (GRID_1 or GRID_2): the guessed grid. If current position is not SEM
-            or FM, None would be returned.
+        :return: (GRID_1 or GRID_2) the guessed grid. If current position is not SEM
+         or FM, None would be returned.
         """
         current_pos = self.stage.position.value
-        current_pos_label = self.getCurrentPostureLabel(current_pos)
+        current_pos_label = self.getCurrentPostureLabel()
         stage_md = self.stage.getMetadata()
         grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
         grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
@@ -427,10 +417,10 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
     def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
-            meteor/FM imaging area.
-        pos (dict str->float): the initial stage position. The position has to have x, y, rz, and rx axes,
-            otherwise error would be raised.
-        return (dict str->float): the transformed position. It returns the updated axes x, y, rx, rz. The axis z is same as the input.
+        meteor/FM imaging area.
+        :param pos: (dict str->float) the initial stage position. The position has to have x, y, rz, and rx axes,
+         otherwise error would be raised.
+        :return: (dict str->float) the transformed position. It returns the updated axes x, y, rx, rz. The axis z is same as the input.
         """
         if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
@@ -452,9 +442,9 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
     def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area
-            to the SEM imaging area.
-        pos (dict str->float): the initial stage position
-        return (dict str->float): the transformed stage position.
+        to the SEM imaging area.
+        :param pos: (dict str->float) the initial stage position
+        :return: (dict str->float) the transformed stage position.
         """
         if not {"x", "y", "rx", "rz"}.issubset(self.stage.axes):
             raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
@@ -490,7 +480,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             sub_moves = []  # list of tuples (component, position)
 
             # get the current label
-            current_label = self.getCurrentPostureLabel(self.stage.position.value)
+            current_label = self.getCurrentPostureLabel()
             current_name = POSITION_NAMES[current_label]
 
             if current_label == target:
@@ -553,18 +543,34 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         super().__init__(microscope)
         # Check required metadata used during switching
         unique_keys = {'x', 'y', 'm', 'z', 'z_ct', 'dx', 'dy'}
-        self.check_stage_metadata(required_keys=self.required_keys, unique_keys=unique_keys,
-                                  metadata_name=model.MD_CALIB)
+        self.required_keys.add(model.MD_CALIB)
+        self.check_stage_metadata(self.required_keys)
+        self.check_calib_data(unique_keys)
+
+    def check_calib_data(self, unique_keys: set):
+        """
+        Checks the unique keys in the stage metadata based on given stage type in the
+        microscope file.
+        :param unique_keys : A set of keys that is unique to the stage type and must be present in the metadata.
+        :raises ValueError: if the metadata does not have all required keys.
+        """
+        # Check for unique keys in the given metadata
+        stage_md = self.stage.getMetadata()
+        calibrated_md = stage_md[model.MD_CALIB]
+        if not unique_keys.issubset(calibrated_md.keys()):
+            missing_keys = unique_keys - calibrated_md.keys()
+            raise ValueError(f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
+
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
-        target_pos_lbl (int): a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
-        returns (dict str->float): the end position of the stage
-        raise ValueError: if the target position is not supported
+        :param target_pos_lbl: (int) a label representing a position (SEM_IMAGING, FM_IMAGING, GRID_1 or GRID_2)
+        :return: (dict str->float) the end position of the stage
+        :raises ValueError: if the target position is not supported
         """
         stage_md = self.stage.getMetadata()
-        current_position = self.getCurrentPostureLabel(self.stage.position.value)
+        current_position = self.getCurrentPostureLabel()
         end_pos = None
 
         if target_pos_lbl == LOADING:
@@ -611,11 +617,11 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
     def getCurrentGridLabel(self) -> int:
         """
         Detects which grid on the sample shuttle of meteor being viewed
-        return (GRID_1 or GRID_2): the guessed grid. If current position is not SEM
-            or FM, None would be returned.
+        :return: (GRID_1 or GRID_2) the guessed grid. If current position is not SEM
+         or FM, None would be returned.
         """
         current_pos = self.stage.position.value
-        current_pos_label = self.getCurrentPostureLabel(current_pos)
+        current_pos_label = self.getCurrentPostureLabel()
         stage_md = self.stage.getMetadata()
 
         if current_pos_label == SEM_IMAGING:
@@ -646,10 +652,10 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
     def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the SEM imaging area to the
-            meteor/FM imaging area.
-        pos (dict str->float): the current stage position. The position has to have x, y, m, z, rx and rm axes,
-            otherwise error would be raised.
-        return (dict str->float): the transformed position. It returns the updated axes x, y, m, z, rx, rm. The axis z is same as the input.
+        meteor/FM imaging area.
+        :param pos: (dict str->float) the current stage position. The position has to have x, y, m, z, rx and rm axes,
+         otherwise error would be raised.
+        :return: (dict str->float) the transformed position. It returns the updated axes x, y, m, z, rx, rm. The axis z is same as the input.
         """
         if not {"x", "y", "m", "z", "rx", "rm"}.issubset(self.stage.axes):
             missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - self.stage.axes.keys()
@@ -702,9 +708,9 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
     def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
         """
         Transforms the current stage position from the meteor/FM imaging area
-            to the SEM imaging area.
-        pos (dict str->float): the current stage position
-        returns (dict str->float): the transformed stage position.
+        to the SEM imaging area.
+        :param pos: (dict str->float) the current stage position
+        :return: (dict str->float) the transformed stage position.
         """
         if not {"x", "y", "m", "z", "rx", "rm"}.issubset(self.stage.axes):
             missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - self.stage.axes.keys()
@@ -769,7 +775,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
             sub_moves = []  # list of tuples (component, position)
 
             # get the current label
-            current_label = self.getCurrentPostureLabel(stage.position.value)
+            current_label = self.getCurrentPostureLabel()
             current_name = POSITION_NAMES[current_label]
 
             if current_label == target:
@@ -869,15 +875,21 @@ class MimasPostureManager(MicroscopePostureManager):
         self.axes = self.stage.axes
         self.linear_axes = set(key for key in self.axes.keys() if key in {'x', 'y', 'z', 'm'})
         self.rotational_axes = set(key for key in self.axes.keys() if key in {'rx', 'ry', 'rz', 'rm'})
+        # required keys that must be present in the stage metadata
+        self.required_keys = {
+            model.MD_PIVOT_POS, model.MD_FAV_POS_DEACTIVE, model.MD_POS_ACTIVE_RANGE, model.MD_FAV_POS_ACTIVE,
+            model.MD_SAMPLE_CENTERS}
+        self.check_stage_metadata(self.required_keys)
 
-    def getCurrentPostureLabel(self, stage_pos: Dict[str, float]) -> int:
+    def getCurrentPostureLabel(self, stage_pos: Dict[str, float] = None) -> int:
         """
         Detects the current aligner position of mimas
-        stage_pos (dict str->float): the stage position in which the label needs to be found.
-        :returns: a label LOADING, FM_IMAGING, MILLING, IMAGING, COATING, or UNKNOWN.
-        IMAGING indicates that the stage is in a position compatible with FM_IMAGING and MILLING,
-        but the aligner is not in a known position.
-        UNKNKOWN is for all other unhandled positions.
+        :param stage_pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses
+         the current position of the stage.
+        :return: a label LOADING, FM_IMAGING, MILLING, IMAGING, COATING, or UNKNOWN.
+         IMAGING indicates that the stage is in a position compatible with FM_IMAGING and MILLING,
+         but the aligner is not in a known position.
+         UNKNKOWN is for all other unhandled positions.
         """
         # Firstly, both actuators should be referenced
         stage_referenced = all(self.stage.referenced.value.values())
@@ -889,6 +901,9 @@ class MimasPostureManager(MicroscopePostureManager):
         stage_md = self.stage.getMetadata()
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_imaging_rng = stage_md[model.MD_POS_ACTIVE_RANGE]
+
+        if stage_pos is None:
+            stage_pos = self.stage.position.value
 
         current_align_pos = self.align.position.value
         aligner_md = self.align.getMetadata()
@@ -929,7 +944,7 @@ class MimasPostureManager(MicroscopePostureManager):
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
         :param target: (int) target position either one of the constants: LOADING, IMAGING,
-           ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
+         ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
         """
         try:
             try:
@@ -969,7 +984,7 @@ class MimasPostureManager(MicroscopePostureManager):
                         required_axes))
 
             current_pos = self.stage.position.value
-            current_label = self.getCurrentPostureLabel(current_pos)
+            current_label = self.getCurrentPostureLabel()
             current_name = POSITION_NAMES[current_label]
 
             # If no move to do => skip all
@@ -1052,12 +1067,18 @@ class EnzelPostureManager(MicroscopePostureManager):
         self.axes = self.stage.axes
         self.linear_axes = set(key for key in self.axes.keys() if key in {'x', 'y', 'z', 'm'})
         self.rotational_axes = set(key for key in self.axes.keys() if key in {'rx', 'ry', 'rz', 'rm'})
+        # required keys that must be present in the stage metadata
+        self.required_keys = {
+            model.MD_POS_ACTIVE_RANGE, model.MD_FAV_POS_ALIGN, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_SEM_IMAGING,
+            model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_COATING, model.MD_ION_BEAM_TO_SAMPLE_ANGLE}
+        self.check_stage_metadata(self.required_keys)
 
-    def getCurrentPostureLabel(self, stage_pos: Dict[str, float]) -> int:
+    def getCurrentPostureLabel(self, stage_pos: Dict[str, float] = None) -> int:
         """
         Detects the current stage position of enzel.
-        stage_pos (dict str->float): the stage position in which the label needs to be found
-        returns a label UNKNOWN, COATING, IMAGING, MILLING, LOADING or LOADING_PATH
+        :param stage_pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses
+         the current position of the stage.
+        :return: a label UNKNOWN, COATING, IMAGING, MILLING, LOADING or LOADING_PATH
         """
         stage_md = self.stage.getMetadata()
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
@@ -1066,6 +1087,9 @@ class EnzelPostureManager(MicroscopePostureManager):
         stage_coating = stage_md[model.MD_FAV_POS_COATING]
         stage_alignment = stage_md[model.MD_FAV_POS_ALIGN]
         stage_sem_imaging = stage_md[model.MD_FAV_POS_SEM_IMAGING]
+
+        if stage_pos is None:
+            stage_pos = self.stage.position.value
         # If stage is not referenced, set position as unknown (to only allow loading position)
         if not all(self.stage.referenced.value.values()):
             return UNKNOWN
@@ -1114,7 +1138,7 @@ class EnzelPostureManager(MicroscopePostureManager):
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
         :param target: (int) target position either one of the constants: LOADING, IMAGING,
-           ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
+         ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
         """
         try:
             try:
@@ -1148,7 +1172,7 @@ class EnzelPostureManager(MicroscopePostureManager):
             # To hold the sub moves to run if normal ordering failed
             fallback_submoves = [{'x', 'y', 'z'}, {'rx', 'rz'}]
 
-            current_label = self.getCurrentPostureLabel(current_pos)
+            current_label = self.getCurrentPostureLabel()
             current_name = POSITION_NAMES[current_label]
 
             if target == LOADING:
@@ -1286,7 +1310,7 @@ class EnzelPostureManager(MicroscopePostureManager):
         Provide the ability to switch between loading, imaging and alignment position, without bumping into anything.
         :param target: (int) target position either one of the constants LOADING, IMAGING or ALIGNMENT
         :return (CancellableFuture -> None): cancellable future of the move to observe the progress, and control the raise
-        ValueError exception
+        :raises ValueError
         """
         f = model.CancellableFuture()
         f.task_canceller = self._cancelCryoMoveSample
@@ -1393,7 +1417,7 @@ class EnzelPostureManager(MicroscopePostureManager):
         # exactly at POS_ACTIVE.
         # TODO: should have a POS_ACTIVE_RANGE to define the whole region
         if (isNearPosition(current_pos, align_active, self.align.axes) or
-                isNearPosition(current_pos, align_alignment, self.align.axes) or
+            isNearPosition(current_pos, align_alignment, self.align.axes) or
                 isNearPosition(current_pos, three_beams, self.align.axes)):
             return THREE_BEAMS
 

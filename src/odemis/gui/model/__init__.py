@@ -212,9 +212,6 @@ class MainGUIData(object):
         self.microscope = microscope
         self.role = None
 
-        # Controls the stage movement based on the imaging mode
-        self.posture_manager = MicroscopePostureManager(self.microscope)
-
         # The following attributes are either HwComponents or None (if not available)
         self.ccd = None
         self.stage = None
@@ -519,6 +516,9 @@ class CryoMainGUIData(MainGUIData):
     def __init__(self, microscope):
         super().__init__(microscope)
         self.sample_centers : Dict[str, Tuple[float, float]] = {}  # sample name -> center position (x, y)
+
+        # Controls the stage movement based on the imaging mode
+        self.posture_manager = MicroscopePostureManager(self.microscope)
 
         # stage.MD_SAMPLE_CENTERS contains the date in almost the right format, but the
         # position is a dict instead of a tuple. => Convert it, while checking the data.

@@ -68,7 +68,7 @@ from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
-    IMAGING, FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS, SAFETY_MARGIN_5DOF, MicroscopePostureManager
+    IMAGING, FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS, SAFETY_MARGIN_5DOF
 from odemis.acq.stream import OpticalStream, SpectrumStream, TemporalSpectrumStream, \
     CLStream, EMStream, LiveStream, FIBStream, \
     ARStream, AngularSpectrumStream, CLSettingsStream, ARSettingsStream, MonochromatorSettingsStream, \
@@ -721,7 +721,6 @@ class LocalizationTab(Tab):
         """
         guiutil.enable_tab_on_stage_position(
             self.button,
-            pos,
             self.main_data.posture_manager,
             self._allowed_targets,
             tooltip=self.DISABLED_TAB_TOOLTIP.get(self.main_data.role)
@@ -2717,20 +2716,12 @@ class CryoChamberTab(Tab):
                                   ALIGNMENT: self.panel.btn_switch_align, COATING: self.panel.btn_switch_coating,
                                   SEM_IMAGING: self.panel.btn_switch_zero_tilt_imaging}
             self._grid_btns = ()
-
-            if not {model.MD_POS_ACTIVE_RANGE}.issubset(stage_metadata):
-                raise ValueError('The stage is missing POS_ACTIVE_RANGE.')
-            if not {'x', 'y', 'z'}.issubset(stage_metadata[model.MD_POS_ACTIVE_RANGE]):
-                raise ValueError('POS_ACTIVE_RANGE metadata should have values for x, y, z axes.')
             self.btn_aligner_axes = {self.panel.stage_align_btn_p_aligner_x: ("x", 1),
                                 self.panel.stage_align_btn_m_aligner_x: ("x", -1),
                                 self.panel.stage_align_btn_p_aligner_y: ("y", 1),
                                 self.panel.stage_align_btn_m_aligner_y: ("y", -1),
                                 self.panel.stage_align_btn_p_aligner_z: ("z", 1),
                                 self.panel.stage_align_btn_m_aligner_z: ("z", -1)}
-            # Check stage FAV positions in its metadata, and store them in respect to their movement
-            if not {model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_COATING}.issubset(stage_metadata):
-                raise ValueError('The stage is missing FAV_POS_DEACTIVE, FAV_POS_ACTIVE or FAV_POS_COATING metadata.')
             self.target_position_metadata = {LOADING: stage_metadata[model.MD_FAV_POS_DEACTIVE],
                                              ALIGNMENT: stage_metadata[model.MD_FAV_POS_ALIGN],
                                              SEM_IMAGING: stage_metadata[model.MD_FAV_POS_SEM_IMAGING],
@@ -2764,19 +2755,6 @@ class CryoChamberTab(Tab):
             # We use stage-bare, which is in the referential of the SEM chamber.
             # (While "stage" is in the FLM referential)
             self._stage = self.tab_data_model.main.stage_bare
-            stage_metadata = self._stage.getMetadata()
-
-            # check for the metadata of meteor stage positions
-            if not model.MD_SAMPLE_CENTERS in stage_metadata:
-                raise ValueError("The stage misses the 'SAMPLE_CENTERS' metadata.")
-            if not model.MD_FAV_POS_DEACTIVE in stage_metadata:
-                raise ValueError("The stage misses the 'FAV_POS_DEACTIVE' metadata.")
-            if not model.MD_SEM_IMAGING_RANGE in stage_metadata:
-                raise ValueError("The stage misses the 'SEM_IMAGING_RANGE' metadata.")
-            if not model.MD_FM_IMAGING_RANGE in stage_metadata:
-                raise ValueError("The stage misses the 'FM_IMAGING_RANGE' metadata.")
-            if not any(key in stage_metadata for key in {model.MD_POS_COR, model.MD_CALIB}):
-                raise ValueError("The stage misses either the 'POS_COR' or 'CALIB' metadata.")
 
             # Fail early when required axes are not found on the focuser positions metadata
             focuser = self.tab_data_model.main.focus
@@ -2793,7 +2771,6 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'mimas':
             self._stage = self.tab_data_model.main.stage
-            stage_metadata = self._stage.getMetadata()
 
             self.position_btns = {
                 LOADING: self.panel.btn_switch_loading_chamber_tab,
@@ -3017,7 +2994,7 @@ class CryoChamberTab(Tab):
 
     def _control_warning_msg(self):
         # show/hide the warning msg
-        current_pos_label = self.posture_manager.getCurrentPostureLabel(self._stage.position.value)
+        current_pos_label = self.posture_manager.getCurrentPostureLabel()
         if self._cancel:
             txt_msg = self._get_cancel_warning_msg()
             self._show_warning_msg(txt_msg)
@@ -3076,7 +3053,7 @@ class CryoChamberTab(Tab):
         Enable/disable chamber move controls (position and stage) based on current move
         """
         # Get current movement (including unknown and on the path)
-        self._current_position = self.posture_manager.getCurrentPostureLabel(self._stage.position.value)
+        self._current_position = self.posture_manager.getCurrentPostureLabel()
         self._enable_position_controls(self._current_position)
         if self._role == 'enzel':
             # Enable stage advanced controls on sem imaging
@@ -3310,7 +3287,7 @@ class CryoChamberTab(Tab):
 
         # define the start position
         self._start_pos = current_pos = self._stage.position.value
-        current_position = self.posture_manager.getCurrentPostureLabel(current_pos)
+        current_position = self.posture_manager.getCurrentPostureLabel()
 
         if self._role == 'enzel':
             # target_position metadata has the end positions for all movements
@@ -4962,7 +4939,6 @@ class EnzelAlignTab(Tab):
         # Disable the tab when the stage is not at the right position
         main_data.is_acquiring.subscribe(self._on_acquisition, init=True)
 
-
     def terminate(self):
         super().terminate()
         self._stage.position.unsubscribe(self._on_stage_pos)
@@ -5291,7 +5267,7 @@ class EnzelAlignTab(Tab):
         :param pos: (dict str->float or None) updated position of the stage
         """
         targets = (ALIGNMENT, THREE_BEAMS)
-        guiutil.enable_tab_on_stage_position(self.button, pos, self.posture_manager, targets,
+        guiutil.enable_tab_on_stage_position(self.button, self.posture_manager, targets,
                                              tooltip="Alignment can only be performed in the three beams mode")
 
     @classmethod
@@ -5424,7 +5400,7 @@ class MimasAlignTab(Tab):
         # starting the first move, add a "done_callback" to handle the moves in
         # the background.
 
-        current_pos_label = self.posture_manager.getCurrentPostureLabel(self._stage.position.value)
+        current_pos_label = self.posture_manager.getCurrentPostureLabel()
 
         if current_pos_label not in (FM_IMAGING, MILLING):
             logging.warning("Cannot reset Z alignment while current position is %s.",
@@ -5507,7 +5483,7 @@ class MimasAlignTab(Tab):
         self.tab_data_model.main.is_acquiring.value = False
 
         # Automatically activates the Optical stream at the end of a move
-        current_pos_label = self.posture_manager.getCurrentPostureLabel(self._stage.position.value)
+        current_pos_label = self.posture_manager.getCurrentPostureLabel()
         if current_pos_label == FM_IMAGING:
             self._opt_spe.stream.should_update.value = True
 
@@ -5547,7 +5523,7 @@ class MimasAlignTab(Tab):
         disabling other buttons.
         """
         # Check the status of objective/aligner
-        current_pos_label = self.posture_manager.getCurrentPostureLabel(self._stage.position.value)
+        current_pos_label = self.posture_manager.getCurrentPostureLabel()
 
         # turn green from orange icon when the position is reached
         # Keep the current button pressed and other buttons unpressed - toggle switch action
@@ -5587,7 +5563,6 @@ class MimasAlignTab(Tab):
         """
         targets = (MILLING, FM_IMAGING, IMAGING)
         guiutil.enable_tab_on_stage_position(self.button,
-                                             self._stage.position.value,
                                              self.posture_manager,
                                              target=targets,
                                              tooltip="Alignment can only be performed in optical or FIB position")

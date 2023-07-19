@@ -1039,7 +1039,6 @@ class _MimasOpticalPathManager(OpticalPathManager):
         self._executor = OneTaskExecutor()
 
         # Controls the stage movement based on the imaging mode
-        self.stage = self._getComponent("stage")
         self._posture_manager = MicroscopePostureManager(self.microscope)
 
     def _doSetPath(self, path, detector):
@@ -1069,7 +1068,7 @@ class _MimasOpticalPathManager(OpticalPathManager):
 
         # Only accept moving if the stage is already within the "IMAGING" area (which means FM_IMAGING & MILLING)
         # as this means the stage will not move, but only the optical lens.
-        current_pos = self._posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        current_pos = self._posture_manager.getCurrentPostureLabel()
         if current_pos not in (IMAGING, FM_IMAGING, MILLING):
             logging.warning("Optical path cannot be changed while in position %s", POSITION_NAMES[current_pos])
             return

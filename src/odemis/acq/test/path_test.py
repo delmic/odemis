@@ -1421,7 +1421,7 @@ class MimasPathTestCase(unittest.TestCase):
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         f = self.optmngr.setPath("optical")
         f.result()
-        pos_name = self.posture_manager.getCurrentPostureLabel(self.stage.position.value)
+        pos_name = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_name, LOADING)
 
         # Move it back to FM_IMAGING
