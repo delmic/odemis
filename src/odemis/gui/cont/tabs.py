@@ -6327,7 +6327,7 @@ class Sparc2AlignTab(Tab):
             # TODO add applicable code for spec-selector settings.
             # hide the applicable panels when specswitch-align is not in the list of modes
             # else bind the button click event
-            self.panel.pnl_specswitch.Show(False)
+            self.panel.pnl_switch_mirror.Show(False)
             self.panel.pnl_light_aligner.Show(False)
         else:
             # disable the button for alignment of the parabolic mirror as well as the panel
@@ -6722,6 +6722,10 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_switch_mirror.Enable(False)
             self.panel.pnl_light_aligner.Enable(False)
         elif mode == "specswitch-align":
+            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # TODO dedicated viewport
+            self._ccd_stream.should_update.value = True
+            if self._mirror_settings_controller:
+                self._mirror_settings_controller.enable(True)
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_lens_switch.Enable(False)
