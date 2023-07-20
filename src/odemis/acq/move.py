@@ -561,7 +561,6 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
             missing_keys = unique_keys - calibrated_md.keys()
             raise ValueError(f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
 
-
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
         Returns the position that the stage would go to.
@@ -1063,7 +1062,7 @@ class EnzelPostureManager(MicroscopePostureManager):
         # Load components
         self.stage = model.getComponent(role='stage')
         self.align = model.getComponent(role='align')
-        # set linear axes and rotational axes used
+        # Set linear axes and rotational axes used
         self.axes = self.stage.axes
         self.linear_axes = set(key for key in self.axes.keys() if key in {'x', 'y', 'z', 'm'})
         self.rotational_axes = set(key for key in self.axes.keys() if key in {'rx', 'ry', 'rz', 'rm'})
@@ -1072,6 +1071,10 @@ class EnzelPostureManager(MicroscopePostureManager):
             model.MD_POS_ACTIVE_RANGE, model.MD_FAV_POS_ALIGN, model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_SEM_IMAGING,
             model.MD_FAV_POS_DEACTIVE, model.MD_FAV_POS_COATING, model.MD_ION_BEAM_TO_SAMPLE_ANGLE}
         self.check_stage_metadata(self.required_keys)
+        # Check axes in range metadata
+        stage_metadata = self.stage.getMetadata()
+        if not {'x', 'y', 'z'}.issubset(stage_metadata[model.MD_POS_ACTIVE_RANGE]):
+            raise ValueError('POS_ACTIVE_RANGE metadata should have values for x, y, z axes.')
 
     def getCurrentPostureLabel(self, stage_pos: Dict[str, float] = None) -> int:
         """
