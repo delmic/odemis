@@ -81,13 +81,14 @@ class TestAR(unittest.TestCase):
              model.MD_LENS_MAG: 60,  # ratio
             }
         calib = model.DataArray(dcalib, md)
-        calib2 = model.DataArray(dcalib + 1, md)
+        calib2 = model.DataArray(dcalib + 10, md)
 
         # Give one DA, the correct one, so expect to get it back
         out = calibration.get_ar_data([calib, calib2])
         # The average (of calib=0 and calib2=1)
+        self.assertEqual(calib.dtype, out.dtype)
         numpy.testing.assert_equal(out.shape, calib.shape)
-        numpy.testing.assert_equal(out, 0.5)
+        numpy.testing.assert_equal(out, 5)
         self.assertIsInstance(out, model.DataArray)
         self.assertEqual(out.metadata[model.MD_AR_POLE], md[model.MD_AR_POLE])
 
@@ -97,8 +98,9 @@ class TestAR(unittest.TestCase):
         data2 = model.DataArray(17 * numpy.ones((1, 1), dtype=numpy.uint16),
                                 metadata={model.MD_POS: (1.2e-3, -30e-3)})
         out = calibration.get_ar_data([data1, calib2, data2, calib])
+        self.assertEqual(calib.dtype, out.dtype)
         numpy.testing.assert_equal(out.shape, calib.shape)
-        numpy.testing.assert_equal(out, 0.5)
+        numpy.testing.assert_equal(out, 5)
         self.assertIsInstance(out, model.DataArray)
 
     def test_load_full(self):
