@@ -49,19 +49,34 @@ RS_VALID = b"@"
 RS_INVALID = b"#"
 RS_SUCCESS = b">"
 RS_FAIL = b"*"
-RS_EOL = b"\r\n"
+RS_EOL = b"\r\n"  # The doc says \r is required, and \n optional
 
 
 class RemconError(Exception):
+    # Standard error codes, as found in the manual
+    ERROR_CODES = {
+        600: "Unknown command",
+        601: "Invalid number of parameters",
+        602: "Invalid parameter type",
+        603: "Parameter out of range",
+        604: "Command timeout",
+        605: "Catastrophic error - reboot system",
+        611: "Unexpected external control abort",
+        613: "Parameter Unattainable",
+        614: "Option Not Fitted",
+        615: "Cannot change that parameter",
+        616: "Cannot execute that command",
+        617: "Command exceeded the max length of chars",
+    }
 
     def __init__(self, errno, strerror, *args, **kwargs):
-        super(RemconError, self).__init__(errno, strerror, *args, **kwargs)
+        super().__init__(errno, strerror, *args, **kwargs)
         self.args = (errno, strerror)
         self.errno = errno
         self.strerror = strerror
 
     def __str__(self):
-        return self.args[1]
+        return self.strerror
 
 
 class SEM(model.HwComponent):
@@ -277,8 +292,13 @@ class SEM(model.HwComponent):
                     errno = int(value)
                 except ValueError:
                     raise IOError("Unexpected failure response %s" % to_str_escape(ans))
+
+                if errno in RemconError.ERROR_CODES:
+                    error_text = f" ({RemconError.ERROR_CODES[errno]})"
+                else:
+                    error_text = ""
                 raise RemconError(errno,
-                                  "Error %s after receiving command %s." % (errno, cmd))
+                                  "Error %s%s after receiving command %s." % (errno, error_text, cmd))
             else:
                 self._serial.flushInput()
                 raise IOError("Status byte expected, received '%s' instead." % to_str_escape(status))
@@ -1298,4 +1318,5 @@ class RemconSimulator(object):
             self._stage_stop.set()
             self._sendAck(RS_SUCCESS)
         else:
-            self._sendAck(RS_INVALID)
+            self._sendAck(RS_VALID)
+            self._sendAnswer(RS_FAIL, b"600") # Unknown command
