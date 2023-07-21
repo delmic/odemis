@@ -6364,7 +6364,7 @@ class Sparc2AlignTab(Tab):
             "ek-align": "ek-align",
             "fiber-align": "fiber-align",
             "streak-align": "streak-align",
-            "light-in-align": "light-in-alignment",
+            "light-in-align": "light-in-align",
         }
         # Note: ActuatorController hides the alignment panels which are needed.
         for btn, mode in list(self._alignbtn_to_mode.items()):
@@ -6713,7 +6713,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_spec_switch.Enable(False)
             self.panel.pnl_light_aligner.Enable(False)
         elif mode == "light-in-align":
-            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # TODO dedicated viewport
+            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # allows to see the focused slit line
             self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(True)
@@ -7294,12 +7294,12 @@ class Sparc2AlignTab(Tab):
             # enable the manual alignment buttons when the mirror is engaged
             self.panel.btn_m_spec_switch_x.Enable(True)
             self.panel.btn_p_spec_switch_x.Enable(True)
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engaged", "forestgreen")
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engaged", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
             self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retract", wx.BLACK)
         # when the mirror is in the DEACTIVE position disable manual alignment and update of FAV_POS
         elif almost_equal(self.tab_data_model.main.spec_switch.position.value["x"],
                           spec_sel_MD[model.MD_FAV_POS_DEACTIVE]["x"], atol=1e-5):
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retracted", "forestgreen")
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retracted", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
             self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)
         else:
             self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)

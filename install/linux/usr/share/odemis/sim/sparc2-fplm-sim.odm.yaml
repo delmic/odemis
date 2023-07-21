@@ -1,4 +1,4 @@
-# Configuration for a simulated SPARC v2 system with a "PL module" (light in-coupling)
+# Configuration for a simulated SPARC v2 system with a FPLM (Fiber-coupled PhotoLuminescence Module)
 SPARC2: {
     class: Microscope,
     role: sparc2,
@@ -161,7 +161,7 @@ SPARC2: {
             1: [320.e-9, 400.e-9], # pos -> m,m
             2: [500.e-9, 550.e-9],
             3: [400.e-9, 450.e-9],
-            4: "polariser",
+            4: [450.e-9, 500.e-9],
             6: "pass-through"
         },
         fstepsize: 10.9e-6, # m, size of one focus step
@@ -234,16 +234,16 @@ SPARC2: {
     init: {
         port: "/dev/fake6",
         address: null,
-        axes: ["l1", "l2", "plz", "plx", "slit"],
+        axes: ["l1", "l2", "inz", "inx", "slit"],
         # These values only need to be roughly correct
         ustepsize: [25.1e-9, 25.1e-9, 5.86e-9, 25.1e-9, 5.e-9], # m/µstep
         unit: ["m", "m", "m", "m", "m"],
-        rng: [[0, 100.e-3], [-1.e-3, 100.e-3], [-10.e-3, 2.e-3], [0, 18.e-3], [0, 2.e-3]],
+        rng: [[0, 100.e-3], [-100.e-3, 1.e-3], [-10.e-3, 2.e-3], [0, 18.e-3], [0, 2.e-3]],
         refproc: "Standard",
-        refswitch: {"l1": 0, "l2": 0, "plx": 4, "plz": 4},
-        inverted: ["l2", "plz"],
-        # +plx should move the same direction as +l1 and +l2: towards the back
-        # +plz should go further away from the light source
+        refswitch: {"l1": 0, "l2": 0, "inx": 4, "inz": 4},
+        inverted: ["l2", "inz"],
+        # +inx should move the same direction as +l1 and +l2: towards the back
+        # +inz should go further away from the light source
     },
 }
 
@@ -265,15 +265,19 @@ SPARC2: {
 
 # The second lens of Plate 1, either to working or parking position
 "Lens2 Switch": {
-    class: actuator.FixedPositionsActuator,
+    class: actuator.MultiplexActuator,
     role: "lens-switch",
     dependencies: {"x": "Optical Actuators"},
     init: {
-        axis_name: "l2",
-        positions: {
-            -4.e-3: "on",
-            -20.e-3: "off", # completely out of the path
-        },
+        axes_map: {"x": "l2"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Position away
+        FAV_POS_DEACTIVE: {"x": 0.02}, # m
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 4.0e-3}, # m
+        POS_ACTIVE_RANGE: {"x": [-1.e-3, 1.e-3]},  # relative min/max from the active position when doing EK-scanning
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
@@ -298,15 +302,14 @@ SPARC2: {
     role: "light-aligner",
     dependencies: {"x": "Optical Actuators", "z": "Optical Actuators"},
     init: {
-        axes_map: {"x": "plx", "z": "plz"},
+        axes_map: {"x": "inx", "z": "inz"},
         ref_on_init: ["x", "z"],
         },
     metadata: {
         # Default position of the mirror and the focus (can be improved by user)
-        # TODO: put better default values
-        FAV_POS_ACTIVE: {"x": 0.0, "z": 0.0 }, # m
+        FAV_POS_ACTIVE: {"x": 2.0e-3, "z": 1.0e-3}, # m
     },
-    affects: ["Lens1 Mover"],
+    affects: ["Mirror Actuators", "Spec CCD Flipper"],  # Affects the parabolic mirror, to indicate it's a PL module
 }
 
 # Controller for moving the 'Redux' stage

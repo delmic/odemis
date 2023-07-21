@@ -54,8 +54,8 @@ SPARC2_EXT_SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-ext-spec-sim.odm.yaml"
 SECOM_FLIM_CONFIG = CONFIG_PATH + "sim/secom-flim-sim.odm.yaml"
 SPARC2_POLARIZATIONANALYZER_CONFIG = CONFIG_PATH + "sim/sparc2-ek-polarizer-sim.odm.yaml"
 SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
+SPARC2_FPLM_CONFIG = CONFIG_PATH + "sim/sparc2-fplm-sim.odm.yaml"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
-
 
 def path_pos_to_phys_pos(pos, comp, axis):
     """
@@ -1182,6 +1182,54 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
         self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 0, places=2)
+
+
+class Sparc2LightInTestCase(unittest.TestCase):
+    """
+    Tests of a (simulated) SPARC2 with a light-aligner (FPLM)
+    (should work the same with ELIM and FSLM)
+    """
+    @classmethod
+    def setUpClass(cls):
+        testing.start_backend(SPARC2_FPLM_CONFIG)
+
+        # Microscope component
+        cls.microscope = model.getComponent(role="sparc2")
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd")
+        cls.specgraph = model.getComponent(role="spectrograph")
+        cls.lenswitch = model.getComponent(role="lens-switch")
+        cls.spec_det_sel = model.getComponent(role="spec-det-selector")
+        cls.slit = model.getComponent(role="slit-in-big")
+        cls.light_align = model.getComponent(role="light-aligner")
+        cls.optmngr = path.OpticalPathManager(cls.microscope)
+
+    @classmethod
+    def tearDownClass(cls):
+        del cls.optmngr  # To garbage collect it
+
+    # @skip("simple")
+    def test_set_path(self):
+        """
+        Test setting light-in-align
+        """
+        # Light aligner should always be in active position, for any mode
+
+        # setting ar (lens 2 is active)
+        self.optmngr.setPath("ar").result()
+        # Assert that actuator was moved according to mode given
+        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.light_align, "ar")
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
+
+        # setting light-align: lens 2 should be deactive
+        self.optmngr.setPath("light-in-align").result()
+        # Assert that actuator was moved according to mode given
+        assert_pos_as_in_mode(self, self.lenswitch, "light-in-align")
+        assert_pos_as_in_mode(self, self.slit, "light-in-align")
+        assert_pos_as_in_mode(self, self.light_align, "light-in-align")
 
 
 class SecomPathTestCase(unittest.TestCase):

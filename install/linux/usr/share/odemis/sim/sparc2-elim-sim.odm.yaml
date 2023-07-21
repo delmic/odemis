@@ -1,0 +1,291 @@
+# Configuration for a simulated SPARC v2 system with an ELIM
+# Note the ELIM is really special: it only allows to get the external light into
+# the spectrograph. So all the rest of the SPARC/SEM is always simulated, and kept
+# to the minimu.
+SPARC2-ELIM: {
+    class: Microscope,
+    role: sparc2,
+    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
+               "Optical Path Properties", "Spectrometer Vis-NIR",
+               "Camera", "Spectrometer IR",
+               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
+               "Slit",
+               "Lens1 Mover", "Lens2 Switch",
+               "In-Light Aligner",
+              ],
+}
+
+# Light (Fake)
+"Calibration Light": {
+    class: light.Light,
+    role: "brightlight",
+    power_supplier: "Power Control Unit",
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+}
+
+"Power Control Unit": {
+    class: powerctrl.PowerControlUnit,
+    role: "power-control",
+    init: {
+        port: "/dev/fake", # for simulator
+        pin_map: {
+            "Calibration Light": 0,
+            "Camera": 4,
+            "Spectral Camera": 5,
+            "Spectrograph": 6,
+            "Optical Actuators": 2
+        },
+        delay: { # Time it takes before a component is accessible
+            "Calibration Light": 0, # To turn on/off the light, it's immediate
+            "Camera": 1,
+            "Spectral Camera": 1,
+            "Spectrograph": 3,
+            "Optical Actuators": 1
+        },
+        init: { # Which component to power on from the very beginning (to save time)
+            "Camera": True,
+            "Spectral Camera": True,
+            "Spectrograph": True,
+            "Optical Actuators": True
+        },
+        termination: { # Which component to power off (or on) at the end
+            "Calibration Light": False, # make sure it's turned off
+            "Spectrograph": False,
+        },
+    }
+}
+
+# Fake SEM, as we don't need to control the E-beam
+"SEM Scan Interface": {
+    class: simsem.SimSEM,
+    role: null,
+    init: {},
+    # more detectors can be added, if necessary
+    children: {
+       scanner: "SEM E-beam",
+       detector0: "SEM Detector",
+    }
+}
+
+"SEM E-beam": {
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["SEM Detector"]
+}
+
+"SEM Detector": { # aka ETD
+    role: se-detector,
+    init: {},
+}
+
+# Depending exactly on the configuration, it might also be used for spectrometer
+"Camera": {
+    class: andorcam2.AndorCam2,
+    role: ccd,
+    power_supplier: "Power Control Unit",
+    init: {
+      device: "fake",
+      image: "sparc-ar.h5", # only for simulator
+      transp: [1, -2],
+    },
+}
+
+"Spectrometer Vis-NIR": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer-integrated,
+    dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
+    },
+}
+
+# On some configuration, there is a dedicated camera for the acquisition of the
+# spectra, otherwise 'Camera' is used.
+"Spectral Camera": {
+    class: andorcam2.AndorCam2,
+    role: sp-ccd,
+    power_supplier: "Power Control Unit",
+    init: {
+        device: "fake",
+        transp: [-1, 2], # if mirrored on X axis
+        image: "sparc-spec-sim.h5", # only for simulator
+    },
+    properties: {
+        targetTemperature: -60, # °C
+    },
+}
+
+"Spectrometer IR": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer,
+    dependencies: {detector: "Spectral Camera", spectrograph: "Spectrograph"},
+    properties: {
+        binning: [4, 100],
+    },
+}
+
+"Spectrograph": {
+    class: andorshrk.Shamrock,
+    role: spectrograph,
+    power_supplier: "Power Control Unit",
+    init: {
+        device: "fake",
+        slits: {1: "slit-in", # INPUT_SIDE
+        },
+        bands: { # The filters in the filter-wheel
+            1: [320.e-9, 400.e-9], # pos -> m,m
+            2: [500.e-9, 550.e-9],
+            3: [400.e-9, 450.e-9],
+            4: [450.e-9, 500.e-9],
+            6: "pass-through"
+        },
+        fstepsize: 10.9e-6, # m, size of one focus step
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+"Spectrograph focus": {
+    class: actuator.MultiplexActuator,
+    role: "focus",
+    dependencies: {"z": "Spectrograph"},
+    init: {
+        axes_map: {"z": "focus"},
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+# Provide the mirror (aka port selector) of the spectrograph as a separate component
+"Spec CCD Flipper": {
+    class: actuator.FixedPositionsActuator,
+    role: "spec-det-selector",
+    dependencies: {"rx": "Spectrograph"},
+    init: {
+        axis_name: "flip-out",
+        positions: {
+            0: ["Camera", "Spectrometer Vis-NIR"],
+            1.5707963267948966: ["Spectral Camera", "Spectrometer IR"],
+        },
+    },
+    affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+}
+
+# Provide the filter wheel of the spectrograph as a separate component
+"Spec Filter Wheel": {
+    class: actuator.MultiplexActuator,
+    role: filter,
+    dependencies: {"band": "Spectrograph"},
+    init: {
+        axes_map: {"band": "band"},
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+"Optical Path Properties": {
+    class: static.OpticalLens,
+    role: lens,
+    # Standard mirror config
+    init: {
+       mag: 0.31, # ratio
+       na: 0.2, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+       # No AR possible
+       # pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
+       x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
+       hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+       focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+       parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
+       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+# Controller for the motors moving the various parts of the optical box
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    power_supplier: "Power Control Unit",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["l1", "l2", "inz", "inx", "slit"],
+        # These values only need to be roughly correct
+        ustepsize: [25.1e-9, 25.1e-9, 5.86e-9, 25.1e-9, 5.e-9], # m/µstep
+        unit: ["m", "m", "m", "m", "m"],
+        rng: [[0, 100.e-3], [-100.e-3, 1.e-3], [-10.e-3, 2.e-3], [0, 18.e-3], [0, 2.e-3]],
+        refproc: "Standard",
+        refswitch: {"l1": 0, "l2": 0, "inx": 4, "inz": 4},
+        inverted: ["l2", "inz"],
+        # +inx should move the same direction as +l1 and +l2: towards the back
+        # +inz should go further away from the light source
+    },
+}
+
+# The first lens of Plate 1, able to move along the whole range
+"Lens1 Mover": {
+    class: actuator.MultiplexActuator,
+    role: "lens-mover",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "l1"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 0.0045} # m
+    },
+    affects: ["Lens2 Switch"],
+}
+
+# The second lens of Plate 1, either to working or parking position
+"Lens2 Switch": {
+    class: actuator.MultiplexActuator,
+    role: "lens-switch",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "l2"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Position away
+        FAV_POS_DEACTIVE: {"x": 0.02}, # m
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 4.0e-3}, # m
+        POS_ACTIVE_RANGE: {"x": [-1.e-3, 1.e-3]},  # relative min/max from the active position when doing EK-scanning
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+# Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
+"Slit": {
+    class: actuator.FixedPositionsActuator,
+    role: "slit-in-big",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axis_name: "slit",
+        positions: {
+            0: "on", # fully opened
+            0.0012: "off", # opening based on the small slit
+        },
+    },
+    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
+}
+
+"In-Light Aligner": {
+    class: actuator.MultiplexActuator,
+    role: "light-aligner",
+    dependencies: {"x": "Optical Actuators", "z": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "inx", "z": "inz"},
+        ref_on_init: ["x", "z"],
+        },
+    metadata: {
+        # Default position of the mirror and the focus (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 2.0e-3, "z": 1.0e-3}, # m
+    },
+    affects: ["Spec CCD Flipper"],
+}
+
+

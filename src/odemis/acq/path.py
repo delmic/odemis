@@ -276,12 +276,14 @@ SPARC2_MODES = {
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
-            'light-in-alignment': (r"ccd.*",
+            'light-in-align': (r"ccd.*",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': BAND_PASS_THROUGH},
+                 'slit-in-big': {'x': 'on'},  # fully opened
                  # 'spec-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'chamber-light': {'power': 'off'},
+                 'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                  }),
@@ -329,7 +331,8 @@ MIMAS_MODES = {
             }
 
 ALIGN_MODES = {'mirror-align', 'lens2-align', 'ek-align', 'chamber-view',
-               'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus', 'streak-focus'}
+               'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus',
+               'streak-focus', "light-in-align"}
 
 
 class OneTaskExecutor(ThreadPoolExecutor):
