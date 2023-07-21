@@ -176,7 +176,7 @@ class MainGUIData(object):
         "pcd-selector": "pcd_sel",
         "chamber": "chamber",
         "light": "light",
-        "light-aligner": "light_aligner",  # mirror of SPARCv2
+        "light-aligner": "light_aligner",  # for light in-coupler on SPARCv2
         "brightlight": "brightlight",
         "backlight": "backlight",
         "filter": "light_filter",

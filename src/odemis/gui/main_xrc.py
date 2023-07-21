@@ -370,7 +370,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_align_ek = xrc.XRCCTRL(self, "btn_align_ek")
         self.btn_align_streakcam = xrc.XRCCTRL(self, "btn_align_streakcam")
         self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
-        self.btn_align_spec_switch = xrc.XRCCTRL(self, "btn_align_spec_switch")
+        self.btn_align_light_in = xrc.XRCCTRL(self, "btn_align_light_in")
         self.pnl_focus = xrc.XRCCTRL(self, "pnl_focus")
         self.btn_autofocus = xrc.XRCCTRL(self, "btn_autofocus")
         self.gauge_autofocus = xrc.XRCCTRL(self, "gauge_autofocus")
@@ -403,10 +403,14 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_p_mirror_xy_x = xrc.XRCCTRL(self, "btn_p_mirror_xy_x")
         self.pnl_light_aligner = xrc.XRCCTRL(self, "pnl_light_aligner")
         self.slider_light_aligner = xrc.XRCCTRL(self, "slider_light_aligner")
-        self.lbl_p_light_aligner = xrc.XRCCTRL(self, "lbl_p_light_aligner")
-        self.lbl_m_light_aligner = xrc.XRCCTRL(self, "lbl_m_light_aligner")
+        self.lbl_p_light_aligner_z = xrc.XRCCTRL(self, "lbl_p_light_aligner_z")
+        self.btn_p_light_aligner_z = xrc.XRCCTRL(self, "btn_p_light_aligner_z")
+        self.lbl_m_light_aligner_x = xrc.XRCCTRL(self, "lbl_m_light_aligner_x")
         self.btn_m_light_aligner_x = xrc.XRCCTRL(self, "btn_m_light_aligner_x")
         self.btn_p_light_aligner_x = xrc.XRCCTRL(self, "btn_p_light_aligner_x")
+        self.lbl_p_light_aligner_x = xrc.XRCCTRL(self, "lbl_p_light_aligner_x")
+        self.btn_m_light_aligner_z = xrc.XRCCTRL(self, "btn_m_light_aligner_z")
+        self.lbl_m_light_aligner_z = xrc.XRCCTRL(self, "lbl_m_light_aligner_z")
         self.pnl_streak = xrc.XRCCTRL(self, "pnl_streak")
         self.txt_StreakCalibFilename = xrc.XRCCTRL(self, "txt_StreakCalibFilename")
         self.btn_open_streak_calib_file = xrc.XRCCTRL(self, "btn_open_streak_calib_file")
@@ -4114,7 +4118,7 @@ def __init_resources():
                         <cellpos>5,6</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="GraphicRadioButton" name="btn_align_spec_switch">
+                        <object class="GraphicRadioButton" name="btn_align_light_in">
                           <icon>img_icon_ico_fib_png</icon>
                           <icon_on>img_icon_ico_fib_green_png</icon_on>
                           <height>48</height>
@@ -4808,23 +4812,43 @@ def __init_resources():
                   </object>
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_p_light_aligner">
-                          <label>+X</label>
+                     <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_p_light_aligner_z">
+                          <label>+Z</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
                             <weight>bold</weight>
                             <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
-                          <style>wxALIGN_LEFT</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
                         <border>5</border>
-                        <cellpos>0,4</cellpos>
+                        <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_m_light_aligner">
+                        <object class="ImageTextButton" name="btn_p_light_aligner_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↑</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>1,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_m_light_aligner_x">
                           <label>-X</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -4835,7 +4859,7 @@ def __init_resources():
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
                         <border>5</border>
-                        <cellpos>0,0</cellpos>
+                        <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_m_light_aligner_x">
@@ -4853,7 +4877,7 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <cellpos>0,1</cellpos>
+                        <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_p_light_aligner_x">
@@ -4871,14 +4895,64 @@ def __init_resources():
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <cellpos>0,3</cellpos>
+                        <cellpos>2,3</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_p_light_aligner_x">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_light_aligner_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↓</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>3,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_m_light_aligner_z">
+                          <label>-Z</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,2</cellpos>
                       </object>
                       <vgap>0</vgap>
                       <hgap>5</hgap>
                       <growablecols/>
                       <growablerows/>
                     </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <flag>wxBOTTOM|wxALIGN_CENTRE</flag>
                     <border>10</border>
                   </object>
                 </object>
@@ -4979,7 +5053,7 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Switch Mirror</label>
+                      <label>Light Out</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>

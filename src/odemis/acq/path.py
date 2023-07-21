@@ -99,7 +99,8 @@ SPARC2_MODES = {
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'ek': (r"ccd.*",
                 {'lens-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},  # ek mode available only if MD_FAV_POS_ACTIVE
@@ -107,7 +108,8 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'off'},  # closed
                  # Typically the grating should be non-mirror but we leave it up to the user/GUI.
                  'chamber-light': {'power': 'off'},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'cli': ("cl-detector",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_ACTIVE, 'on')},
@@ -117,7 +119,8 @@ SPARC2_MODES = {
                  # there is also the cl-filter, but that's just up to the user
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'spectral': (r"spectrometer.*",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -128,7 +131,8 @@ SPARC2_MODES = {
                  # on the stream.
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'streak-align': ("streak-ccd",  # alignment tab
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -136,7 +140,8 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'on'},  # fully opened (independent of spg.slit-in)
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'streak-focus': ("streak-ccd",  # manual focus in alignment tab
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -146,7 +151,8 @@ SPARC2_MODES = {
                  'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'temporal-spectrum': ("streak-ccd",  # acquisition tab
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -155,7 +161,8 @@ SPARC2_MODES = {
                  'filter': {'band': BAND_PASS_THROUGH},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                  }),
             'monochromator': ("monochromator",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -168,14 +175,16 @@ SPARC2_MODES = {
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'time-correlator': ("time-correlator",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'mirror-align': (r"ccd.*",  # Also used for lens alignment
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -188,7 +197,8 @@ SPARC2_MODES = {
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'lens2-align': (r"ccd.*",  # Same as the mirror-align, but with the lens-switch active
                 {'lens-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
@@ -199,7 +209,8 @@ SPARC2_MODES = {
                  'spectrograph': {'grating': 'mirror'},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                  }),
             'ek-align': (r"ccd.*",  # Same as "ek", but with grating and filter explicitly set by default
                 {'lens-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},  # ek mode available only if MD_FAV_POS_ACTIVE
@@ -208,7 +219,8 @@ SPARC2_MODES = {
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'filter': {'band': BAND_PASS_THROUGH},
                  'chamber-light': {'power': 'off'},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'chamber-view': (r"ccd.*",  # Same as AR but SEM is disabled and a light may be used
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_ACTIVE, 'on')},
@@ -222,7 +234,8 @@ SPARC2_MODES = {
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'on'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'spec-focus': (r"ccd.*",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -235,7 +248,8 @@ SPARC2_MODES = {
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'fiber-align': ("fiber-aligner",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -247,7 +261,8 @@ SPARC2_MODES = {
                  'spectrograph-dedicated': {'slit-in': 500e-6, 'grating': 'mirror'},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'spec-fiber-focus': ("focus",  # if multiple focusers, the detector should be passed, to pick the right path
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -258,7 +273,8 @@ SPARC2_MODES = {
                  'spectrograph-dedicated': {'slit-in': 50e-6},  # small, to get a sharp line, but enought to get some light
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
             'light-in-alignment': (r"ccd.*",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -266,7 +282,8 @@ SPARC2_MODES = {
                  'filter': {'band': BAND_PASS_THROUGH},
                  # 'spec-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'chamber-light': {'power': 'off'},
-                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
+                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                  }),
          }
 

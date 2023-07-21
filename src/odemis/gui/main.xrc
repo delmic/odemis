@@ -3697,23 +3697,43 @@
                   </object>
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_p_light_aligner">
-                          <label>+X</label>
+                     <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_p_light_aligner_z">
+                          <label>+Z</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
                             <weight>bold</weight>
                             <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                           </font>
-                          <style>wxALIGN_LEFT</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
                         <border>5</border>
-                        <cellpos>0,4</cellpos>
+                        <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_m_light_aligner">
+                        <object class="ImageTextButton" name="btn_p_light_aligner_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↑</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>1,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_m_light_aligner_x">
                           <label>-X</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -3724,7 +3744,7 @@
                         </object>
                         <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
                         <border>5</border>
-                        <cellpos>0,0</cellpos>
+                        <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_m_light_aligner_x">
@@ -3742,7 +3762,7 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <cellpos>0,1</cellpos>
+                        <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_p_light_aligner_x">
@@ -3760,14 +3780,64 @@
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <cellpos>0,3</cellpos>
+                        <cellpos>2,3</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_p_light_aligner_x">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_m_light_aligner_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <face_colour>def</face_colour>
+                          <label>↓</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>3,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_m_light_aligner_z">
+                          <label>-Z</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,2</cellpos>
                       </object>
                       <vgap>0</vgap>
                       <hgap>5</hgap>
                       <growablecols/>
                       <growablerows/>
                     </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <flag>wxBOTTOM|wxALIGN_CENTRE</flag>
                     <border>10</border>
                   </object>
                 </object>
@@ -3868,7 +3938,7 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Switch Mirror</label>
+                      <label>Light Out</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>

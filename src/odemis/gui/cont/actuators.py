@@ -169,7 +169,15 @@ class ActuatorController(object):
         if hasattr(tab_panel, 'pnl_light_aligner'):
             show_la = any(an == "light_aligner" for an, a in tab_data.axes)
             tab_panel.pnl_light_aligner.Show(show_la)
-            # TODO: hide each axis separately (or at least Z)
+            if show_la:
+                # Some hardware only have the X axis (eg, FSLM), in this case,
+                # hide Z axis.
+                if not ("light_aligner", "z") in tab_data.axes:
+                    tab_panel.btn_p_light_aligner_z.Show(False)
+                    tab_panel.lbl_p_light_aligner_z.Show(False)
+                    tab_panel.btn_m_light_aligner_z.Show(False)
+                    tab_panel.lbl_m_light_aligner_z.Show(False)
+                    tab_panel.Layout()
 
         # On SPARC, show the spec switch controls only if present
         if hasattr(tab_panel, 'pnl_spec_switch'):
