@@ -3003,12 +3003,12 @@
                         <cellpos>5,6</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="GraphicRadioButton" name="btn_align_spec_switch">
+                        <object class="GraphicRadioButton" name="btn_align_light_in">
                           <icon>img/icon/ico_fib.png</icon>
                           <icon_on>img/icon/ico_fib_green.png</icon_on>
                           <height>48</height>
                           <face_colour>def</face_colour>
-                          <label>LASER</label>
+                          <label>LIGHT-IN</label>
                           <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
@@ -3863,7 +3863,7 @@
               <border>5</border>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_switch_mirror">
+              <object class="wxPanel" name="pnl_spec_switch">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">

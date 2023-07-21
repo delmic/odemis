@@ -149,16 +149,33 @@ class ActuatorController(object):
         if ("aligner", "a") in tab_data.axes:
             tab_panel.pnl_ab_align.Show()
 
-        # On SPARC, show the Yaw/Pitch only if available
+        # On SPARC, show the mirror control only if present
+        if hasattr(tab_panel, 'pnl_mirror'):
+            show_mirror = any(an in ("mirror", "mirror_xy") for an, a in tab_data.axes)
+            tab_panel.pnl_mirror.Show(show_mirror)
+
+        # On SPARC, show the Yaw/Pitch only if present
         if hasattr(tab_panel, 'pnl_sparc_rot'):
             showrot = (("mirror", "ry") in tab_data.axes or
                        ("mirror", "rz") in tab_data.axes)
             tab_panel.pnl_sparc_rot.Show(showrot)
 
-        # On SPARC, show the fiber aligner only if needed
+        # On SPARC, show the fiber aligner only if present
         if hasattr(tab_panel, 'pnl_fibaligner'):
             showfib = ("fibaligner", "x") in tab_data.axes
             tab_panel.pnl_fibaligner.Show(showfib)
+
+        # On SPARC, show the light aligner only if present
+        if hasattr(tab_panel, 'pnl_light_aligner'):
+            show_la = any(an == "light_aligner" for an, a in tab_data.axes)
+            tab_panel.pnl_light_aligner.Show(show_la)
+            # TODO: hide each axis separately (or at least Z)
+
+        # On SPARC, show the spec switch controls only if present
+        if hasattr(tab_panel, 'pnl_spec_switch'):
+            show_ss = ("spec_switch", "x") in tab_data.axes
+            tab_panel.pnl_spec_switch.Show(show_ss)
+
 
         tab_data.main.is_acquiring.subscribe(self._on_acquisition)
 

@@ -411,7 +411,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.txt_StreakCalibFilename = xrc.XRCCTRL(self, "txt_StreakCalibFilename")
         self.btn_open_streak_calib_file = xrc.XRCCTRL(self, "btn_open_streak_calib_file")
         self.btn_save_streak_calib_file = xrc.XRCCTRL(self, "btn_save_streak_calib_file")
-        self.pnl_switch_mirror = xrc.XRCCTRL(self, "pnl_switch_mirror")
+        self.pnl_spec_switch = xrc.XRCCTRL(self, "pnl_spec_switch")
         self.slider_spec_switch = xrc.XRCCTRL(self, "slider_spec_switch")
         self.lbl_p_spec_switch = xrc.XRCCTRL(self, "lbl_p_spec_switch")
         self.lbl_m_spec_switch = xrc.XRCCTRL(self, "lbl_m_spec_switch")
@@ -4119,7 +4119,7 @@ def __init_resources():
                           <icon_on>img_icon_ico_fib_green_png</icon_on>
                           <height>48</height>
                           <face_colour>def</face_colour>
-                          <label>LASER</label>
+                          <label>LIGHT-IN</label>
                           <fg>#1A1A1A</fg>
                           <font>
                             <size>11</size>
@@ -4974,7 +4974,7 @@ def __init_resources():
               <border>5</border>
             </object>
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_switch_mirror">
+              <object class="wxPanel" name="pnl_spec_switch">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">

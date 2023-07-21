@@ -6323,17 +6323,7 @@ class Sparc2AlignTab(Tab):
             else:
                 logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
-        if "specswitch-align" not in tab_data.align_mode.choices:
-            # TODO add applicable code for spec-selector settings.
-            # hide the applicable panels when specswitch-align is not in the list of modes
-            # else bind the button click event
-            self.panel.pnl_switch_mirror.Show(False)
-            self.panel.pnl_light_aligner.Show(False)
-        else:
-            # disable the button for alignment of the parabolic mirror as well as the panel
-            self.panel.btn_align_mirror.Enable(False)
-            self.panel.pnl_mirror.Enable(False)
-            # TODO also for engage button
+        if main_data.spec_switch:
             self.panel.btn_spec_switch_retract.Bind(wx.EVT_BUTTON, self._on_specswitch_align)
             self.panel.btn_spec_switch_engage.Bind(wx.EVT_BUTTON, self._on_specswitch_align)
             # future for moving the mirror to an absolute position
@@ -6352,7 +6342,7 @@ class Sparc2AlignTab(Tab):
         # * streak-align: vertical and horizontal alignment of the streak camera,
         #                 change of the mag due to changed input optics and
         #                 calibration of the trigger delays for temporal resolved acq
-        # * specswitch-align: engage or retract the folding mirror to switch to
+        # * light-in-align: engage or retract the folding mirror to switch to
         #                     internal or external spectrograph
         self._alignbtn_to_mode = collections.OrderedDict((
             (panel.btn_align_lens, "lens-align"),
@@ -6362,7 +6352,7 @@ class Sparc2AlignTab(Tab):
             (panel.btn_align_ek, "ek-align"),
             (panel.btn_align_fiber, "fiber-align"),
             (panel.btn_align_streakcam, "streak-align"),
-            (panel.btn_align_spec_switch, "specswitch-align"),
+            (panel.btn_align_light_in, "light-in-align"),
         ))
 
         # The GUI mode to the optical path mode (see acq.path.py)
@@ -6374,9 +6364,9 @@ class Sparc2AlignTab(Tab):
             "ek-align": "ek-align",
             "fiber-align": "fiber-align",
             "streak-align": "streak-align",
-            "specswitch-align": "light-out-alignment",
+            "light-in-align": "light-in-alignment",
         }
-        # Note: ActuatorController hides the fiber alignment panel if not needed.
+        # Note: ActuatorController hides the alignment panels which are needed.
         for btn, mode in list(self._alignbtn_to_mode.items()):
             if mode in tab_data.align_mode.choices:
                 btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
@@ -6578,10 +6568,11 @@ class Sparc2AlignTab(Tab):
         if mode != "lens2-align":
             if main.lens_switch:
                 main.lens_switch.position.unsubscribe(self._onLensSwitchPos)
-        if mode != "specswitch-align":
+        if mode != "light-in-align":
             if main.spec_switch:
                 main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
-                main.spec_switch.position.unsubscribe(self._onLightAlignPos)
+            if main.light_aligner:
+                main.light_aligner.position.unsubscribe(self._onLightAlignPos)
 
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
@@ -6609,7 +6600,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_switch_mirror.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
             self.panel.pnl_light_aligner.Enable(False)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
@@ -6630,7 +6621,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_switch_mirror.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
             self.panel.pnl_light_aligner.Enable(False)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
@@ -6648,7 +6639,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(True)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_switch_mirror.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
             self.panel.pnl_light_aligner.Enable(False)
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.view
@@ -6662,7 +6653,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_switch_mirror.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
             self.panel.pnl_light_aligner.Enable(False)
         elif mode == "ek-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_ek.view
@@ -6676,7 +6667,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_switch_mirror.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
             self.panel.pnl_light_aligner.Enable(False)
         elif mode == "fiber-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.view
@@ -6696,7 +6687,7 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_m_fibaligner_y.Enable(False)
             self.panel.btn_p_fibaligner_y.Enable(False)
             self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_switch_mirror.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
             self.panel.pnl_light_aligner.Enable(False)
             # Note: it's OK to leave autofocus enabled, as it will wait by itself
             # for the fiber-aligner to be in place
@@ -6719,9 +6710,9 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(True)
-            self.panel.pnl_switch_mirror.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
             self.panel.pnl_light_aligner.Enable(False)
-        elif mode == "specswitch-align":
+        elif mode == "light-in-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # TODO dedicated viewport
             self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
@@ -6736,9 +6727,9 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_switch_mirror.Enable(False)
-            self.panel.pnl_light_aligner.Enable(False)
-            f.add_done_callback(self._on_specswitch_align_done)
+            self.panel.pnl_light_aligner.Enable(True)
+            self.panel.pnl_spec_switch.Enable(False)  # Wait until the spec-switch is engaged
+            f.add_done_callback(self._on_light_in_align_done)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
 
@@ -6770,7 +6761,7 @@ class Sparc2AlignTab(Tab):
             # add documentation for streak cam
             doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_streakcam.html")
             self.panel.html_moi_doc.AppendToPage(doc_cnt)
-        elif mode == "specswitch-align":
+        elif mode == "light-in-align":
             # add documentation for switching to internal or external spectograph
             doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_spec_switch.html")
             self.panel.html_moi_doc.AppendToPage(doc_cnt)
@@ -6816,7 +6807,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_lens_switch.Enable(True)
 
     @call_in_wx_main
-    def _on_specswitch_align_done(self, f):
+    def _on_light_in_align_done(self, f):
         # Has no effect now, as OPM future are not cancellable (but it makes the
         # code more future-proof)
         if f.cancelled():
@@ -6825,12 +6816,11 @@ class Sparc2AlignTab(Tab):
         # updates the spec-switch ACTIVE position when the user moves it
         if self.tab_data_model.main.spec_switch:
             self._adjust_spec_switch_button_state()
-            self.panel.pnl_switch_mirror.Enable(True)
+            self.panel.pnl_spec_switch.Enable(True)
 
         # updates the light-aligner ACTIVE position when the user moves it
         if self.tab_data_model.main.light_aligner:
             self.tab_data_model.main.light_aligner.position.subscribe(self._onLightAlignPos)
-            self.panel.pnl_light_aligner.Enable(True)
 
     @call_in_wx_main
     def _on_fibalign_done(self, f):
@@ -7551,7 +7541,8 @@ class Sparc2AlignTab(Tab):
 
             mode = self.tab_data_model.align_mode.value
             self._onAlignMode(mode)
-            main.mirror.position.subscribe(self._onMirrorPos)
+            if main.mirror:
+                main.mirror.position.subscribe(self._onMirrorPos)
 
             # Reset the focus progress bar (as any focus action has been cancelled)
             wx.CallAfter(self.panel.gauge_autofocus.SetValue, 0)
@@ -7575,7 +7566,8 @@ class Sparc2AlignTab(Tab):
                 main.lens_mover.position.unsubscribe(self._onLensPos)
             if main.lens_switch:
                 main.lens_switch.position.unsubscribe(self._onLensSwitchPos)
-            main.mirror.position.unsubscribe(self._onMirrorPos)
+            if main.mirror:
+                main.mirror.position.unsubscribe(self._onMirrorPos)
             if main.spec_sel:
                 main.spec_sel.position.unsubscribe(self._onSpecSelPos)
             if main.spec_switch:
@@ -7583,6 +7575,9 @@ class Sparc2AlignTab(Tab):
                 main.spec_switch.position.unsubscribe(self._onLightAlignPos)
             if main.fibaligner:
                 main.fibaligner.position.unsubscribe(self._onFiberPos)
+            if main.light_aligner:
+                main.light_aligner.position.unsubscribe(self._onLightAlignPos)
+
 
             # Also fit to content now, so that next time the tab is displayed,
             # it's ready
@@ -7599,6 +7594,9 @@ class Sparc2AlignTab(Tab):
             mirror = main_data.mirror
             if mirror and set(mirror.axes.keys()) == {"l", "s"}:
                 return 5
+        # Special case for SPARCv2 with ELIM module: only light-aligner
+        if main_data.role == "sparc2" and main_data.light_aligner:
+            return 10
 
         return None
 

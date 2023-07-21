@@ -260,7 +260,7 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
-            'light-out-alignment': (r"ccd.*",
+            'light-in-alignment': (r"ccd.*",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': BAND_PASS_THROUGH},
