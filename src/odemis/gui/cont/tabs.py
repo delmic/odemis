@@ -6568,6 +6568,9 @@ class Sparc2AlignTab(Tab):
         if mode != "lens2-align":
             if main.lens_switch:
                 main.lens_switch.position.unsubscribe(self._onLensSwitchPos)
+        if mode != "center-align":
+            if main.light_aligner:
+                main.light_aligner.position.unsubscribe(self._onLightAlignPos)
         if mode != "light-in-align":
             if main.spec_switch:
                 main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
@@ -6654,7 +6657,11 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
             self.panel.pnl_spec_switch.Enable(False)
-            self.panel.pnl_light_aligner.Enable(False)
+            # If light-aligner available, allow to adjust it in this view too,
+            # as the lens 2 is active, which allows to further align the light input.
+            self.panel.pnl_light_aligner.Enable(True)
+            if main.light_aligner:
+                main.light_aligner.position.subscribe(self._onLightAlignPos)
         elif mode == "ek-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_ek.view
             self._as_stream.should_update.value = True
@@ -6734,39 +6741,41 @@ class Sparc2AlignTab(Tab):
             raise ValueError("Unknown alignment mode %s!" % mode)
 
         # clear documentation panel when different mode is requested
-        # only display doc for current mode selected
+        # only display doc for selected mode
         self.panel.html_moi_doc.LoadPage(self.doc_path)
+        pages = []
         if mode == "lens-align":
             if self._focus_streams:
-                doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_autofocus.html")
-                self.panel.html_moi_doc.AppendToPage(doc_cnt)
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_lens.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+                pages.append("doc/sparc2_autofocus.html")
+            pages.append("doc/sparc2_lens.html")
         elif mode == "mirror-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_mirror.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_mirror.html")
         elif mode == "lens2-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_lens_switch.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_lens_switch.html")
         elif mode == "center-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_centering.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_centering.html")
         elif mode == "ek-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_ek.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_ek.html")
         elif mode == "fiber-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_fiber.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_fiber.html")
         elif mode == "streak-align":
-            # add documentation for streak cam
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_streakcam.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_streakcam.html")
         elif mode == "light-in-align":
-            # add documentation for switching to internal or external spectograph
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_spec_switch.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            # It depends on exactly which optical module is in
+            main = self.tab_data_model.main
+            if main.spec_switch:  # only FSLM has spec-switch
+                # add documentation for switching to internal or external spectograph
+                pages.append("doc/sparc2_light_in_fslm.html")
+            elif main.mirror and main.mirror.name in main.light_aligner.affects.value:  # FPLM affects the mirror, not the ELIM
+                pages.append("doc/sparc2_light_in_fplm.html")
+            else:  # default to ELIM
+                pages.append("doc/sparc2_light_in_elim.html")
         else:
             logging.warning("Could not find alignment documentation for mode %s requested." % mode)
+
+        for p in pages:
+            doc_cnt = pkg_resources.resource_string("odemis.gui", p)
+            self.panel.html_moi_doc.AppendToPage(doc_cnt)
 
         # To adapt to the pnl_moi_settings showing on/off
         self.panel.html_moi_doc.Parent.Layout()
@@ -7172,7 +7181,6 @@ class Sparc2AlignTab(Tab):
         # Enable manual focus when done running autofocus
         self.panel.btn_manual_focus.Enable(True)
 
-    @call_in_wx_main
     def _on_specswitch_align(self, event):
         """
         Called when one of the retract and engage spec-switch mirror buttons are pressed.
@@ -7467,7 +7475,7 @@ class Sparc2AlignTab(Tab):
         Called when the spec-selector (wrapper to the X axis of fiber-aligner)
           is moved (and the fiber align mode is active)
         """
-        if not self.IsShown():
+        if self.tab_data_model.main.tab.value != self:
             # Should never happen, but for safety, we double check
             logging.warning("Received active fiber position while outside of alignment tab")
             return
@@ -7483,7 +7491,7 @@ class Sparc2AlignTab(Tab):
         Called when the spec-switch (wrapper to the X axis of Spectrometer Selector)
           is moved (and the light-out-alignment mode is active)
         """
-        if not self.IsShown():
+        if self.tab_data_model.main.tab.value != self:
             # Should never happen, but for safety, we double check
             logging.warning("Received active spec-switch position while outside of alignment tab")
             return
@@ -7497,7 +7505,7 @@ class Sparc2AlignTab(Tab):
         Called when the light-aligner (wrapper to the X axis of In-Light Aligner)
           is moved (and the light-out-alignment mode is active)
         """
-        if not self.IsShown():
+        if self.tab_data_model.main.tab.value != self:
             # Should never happen, but for safety, we double check
             logging.warning("Received active light-aligner position while outside of alignment tab")
             return
@@ -7511,7 +7519,7 @@ class Sparc2AlignTab(Tab):
         Called when the fiber-aligner is moved (and the fiber align mode is active),
           for updating the Y position. (X pos is handled by _onSpecSelPos())
         """
-        if not self.IsShown():
+        if self.tab_data_model.main.tab.value != self:
             # Should never happen, but for safety, we double check
             logging.warning("Received active fiber position while outside of alignment tab")
             return
