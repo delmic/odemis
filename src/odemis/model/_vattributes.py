@@ -1169,7 +1169,11 @@ class MultiSpeedVA(VigilantAttribute, Continuous):
 class ListContinuous(ListVA, Continuous):
     def __init__(self, value, range, unit="", cls=None, **kwargs):
         """
-        range (2 x tuple): minimum and maximum size for each dimension
+        value (list of len n)
+        range (2 tuples of len n):
+            The first tuple contains the minimum values corresponding to each element in `value`,
+            the second tuple contains the maximum values corresponding to each element in `value`.
+        unit (str): a SI unit in which the VA is expressed
         cls (class or list of classes): classes allowed for each element of the tuple
           default to the same class as the first element
         """
@@ -1185,6 +1189,7 @@ class ListContinuous(ListVA, Continuous):
             raise TypeError(msg % (value, self._cls))
         Continuous._check(self, value)
 
+
 class TupleContinuous(VigilantAttribute, Continuous):
     """
     VigilantAttribute which contains tuple of fixed length and has all the
@@ -1196,7 +1201,11 @@ class TupleContinuous(VigilantAttribute, Continuous):
 
     def __init__(self, value, range, unit="", cls=None, **kwargs):
         """
-        range (2 x tuple): minimum and maximum size for each dimension
+        value (tuple of len n)
+        range (2 tuples of len n):
+            The first tuple contains the minimum values corresponding to each element in `value`,
+            the second tuple contains the maximum values corresponding to each element in `value`.
+        unit (str): a SI unit in which the VA is expressed
         cls (class or list of classes): classes allowed for each element of the tuple
           default to the same class as the first element
         """
