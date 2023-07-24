@@ -1824,15 +1824,28 @@ class FastEMAcquisitionTab(Tab):
             calib_prefix="calib_2",
         )
 
+        if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
+            # Do not run digital gain in simulator mode. We get a random image from the simulator, which can mean that
+            # the light image used for digital gain is darker than the dark image used for the dark offset.
+            calibrations = [
+                Calibrations.OPTICAL_AUTOFOCUS,
+                Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                Calibrations.DARK_OFFSET,
+            ]
+        else:  # it is a real microscope
+            calibrations = [
+                Calibrations.OPTICAL_AUTOFOCUS,
+                Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                Calibrations.DARK_OFFSET,
+                Calibrations.DIGITAL_GAIN
+            ]
+
         # Controller for calibration panel 2
         self._calib_2_controller = fastem_acq.FastEMCalibration2Controller(
             tab_data,
             panel,
             calib_prefix="calib_2",
-            calibrations=[Calibrations.OPTICAL_AUTOFOCUS,
-                          Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                          Calibrations.DARK_OFFSET,
-                          Calibrations.DIGITAL_GAIN]
+            calibrations=calibrations,
         )
 
         # Check if we deal with a real or simulated microscope. If it is a simulator,

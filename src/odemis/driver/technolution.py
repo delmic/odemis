@@ -22,7 +22,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 # Driver/wrapper for the ASP API in Odemis which can connect Odemis to the ASM API made by Technolution for the
 # multi-beam project
-import base64
 import json
 import logging
 import math
@@ -31,6 +30,7 @@ import queue
 import re
 import threading
 import time
+from distutils.version import StrictVersion
 from io import BytesIO
 from urllib.parse import urlparse
 
@@ -39,6 +39,7 @@ from PIL import Image
 from requests import Session
 from scipy import signal
 
+import technolution_asm
 from odemis import model
 from odemis.model import HwError
 from odemis.util import almost_equal
@@ -46,6 +47,11 @@ from technolution_asm.models.calibration_loop_parameters import CalibrationLoopP
 from technolution_asm.models.cell_parameters import CellParameters
 from technolution_asm.models.field_meta_data import FieldMetaData
 from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
+
+supported_version = "3.0.0"
+if StrictVersion(technolution_asm.__version__) < StrictVersion(supported_version):
+    raise ImportError(f"Version {technolution_asm.__version__} for technolution_asm not supported,"
+                      f"version {supported_version} or higher is expected")
 
 VOLT_RANGE = (-10, 10)
 I16_SYM_RANGE = (-2 ** 15, 2 ** 15)  # Note: on HW range is not symmetrically (-2**15, 2**15 - 1)
@@ -317,32 +323,6 @@ class AcquisitionServer(model.HwComponent):
         except Exception:
             logging.exception("Performing system checks failed. Could not perform a successful call to %s ."
                               % item_name)
-
-    def checkMegaFieldExists(self, filename):
-        """
-        Checks if a megafield image already exists on the external storage for a given path and file name
-        (megafield id).
-        :param filename: (str) Sub-directories and name of the mega field (id).
-        :return: (bool) True if the mega field exists on external storage. False if it does not exist yet.
-        :raises: (ValueError) When the input arguments contain invalid characters.
-        """
-        path = os.path.dirname(filename)
-        file = os.path.basename(filename)
-
-        # dirname is equivalent to subdirectories on external storage
-        if not re.fullmatch(ASM_SUBDIR_CHARS, path):
-            raise ValueError("Path %s contains invalid characters. Only the following characters are allowed: "
-                             "'%s'." % (path, ASM_SUBDIR_CHARS[1:-2]))
-
-        # filename is megafield id
-        if not re.fullmatch(ASM_FILE_CHARS, file):
-            raise ValueError("Filename %s contains invalid characters. Only the following characters are allowed: "
-                             "'%s'." % (file, ASM_FILE_CHARS[1:-2]))
-
-        response = self.asmApiPostCall("/scan/check_mega_field?mega_field_id=%s&storage_directory=%s" %
-                                       (file, path), 200, raw_response=True)
-
-        return json.loads(response.content)["exists"]
 
     def getSamServiceVersion(self):
         """
@@ -1088,7 +1068,7 @@ class MPPC(model.Detector):
 
         self._shape = MPPC.SHAPE
         # subdirectory + filename (megafield id) - adjustable part of the path on the external storage
-        self.filename = model.StringVA("storage/images/date/project/megafield_id", setter=self._setFilename)
+        self.filename = model.StringVA("storage/images/project/megafield_id", setter=self._setFilename)
         self.dataContent = model.StringEnumerated('empty', DATA_CONTENT_TO_ASM.keys())
         # delay between the trigger signal to start the acquisition, and the start of the recording by the mppc detector
         # The acquisition delay depends on the scan delay (EbeamScanner.scanDelay). Scan delay must be increased first.
@@ -1167,50 +1147,56 @@ class MPPC(model.Detector):
                          int(self._scanner.resolution.value[1] / self._shape[1]))
 
         # Calculate and convert from seconds to ticks
-        scan_to_acq_delay = int((self.acqDelay.value - self._scanner.scanDelay.value[0]) /
-                                self.parent._ebeam_scanner.clockPeriod.value)
+        scan_to_acq_delay = int(
+            (self.acqDelay.value - self._scanner.scanDelay.value[0]) / self.parent._ebeam_scanner.clockPeriod.value
+        )
 
         X_descan_setpoints = self._descanner.getXAcqSetpoints()
         Y_descan_setpoints = self._descanner.getYAcqSetpoints()
 
-        custom_data = self.getMetadata().get(model.MD_EXTRA_SETTINGS, "")  # if no custom metadata, pass an empty string
+        md = self.getMetadata()
+        custom_data = md.get(model.MD_EXTRA_SETTINGS, "")  # if no custom metadata, pass an empty string
+        info = md.get(model.MD_USER_NOTE, None)  # if no user note, pass nothing. TODO support in GUI
+        z_position = md.get(model.MD_SLICE_IDX, 0)  # if slice number is not provided use 0. TODO support in GUI
+        eff_field_size = md.get(model.MD_FIELD_SIZE, (6016, 6016))  # if not provided use 6% overlap
 
-        megafield_metadata = \
-            MegaFieldMetaData(
-                mega_field_id=os.path.basename(self.filename.value),
-                storage_directory=os.path.dirname(self.filename.value),
-                custom_data=custom_data,
-                stage_position_x=float(stage_position[0]),
-                stage_position_y=float(stage_position[1]),
-                # Convert pixels size from meters to nanometers
-                pixel_size=int(self._scanner.pixelSize.value[0] * 1e9),
-                dwell_time=self._scanner.getTicksDwellTime(),
-                x_scan_to_acq_delay=scan_to_acq_delay,
-                x_scan_delay=self._scanner.getTicksScanDelay()[0],
-                x_cell_size=self.cellCompleteResolution.value[0],
-                x_eff_cell_size=eff_cell_size[0],
-                y_cell_size=self.cellCompleteResolution.value[1],
-                y_eff_cell_size=eff_cell_size[1],
-                # y_prescan_lines is not available on EA1
-                # y_prescan_lines=self._scanner.getTicksScanDelay()[1],
-                x_scan_gain=self._scanner.getGradientScanVolt()[0],
-                y_scan_gain=self._scanner.getGradientScanVolt()[1],
-                x_scan_offset=self._scanner.getCenterScanVolt()[0],
-                y_scan_offset=self._scanner.getCenterScanVolt()[1],
-                x_descan_setpoints=X_descan_setpoints,
-                y_descan_setpoints=Y_descan_setpoints,
-                # Descan offset is set to zero and is currently unused. The offset is implemented via the setpoints.
-                x_descan_offset=0,
-                y_descan_offset=0,
-                scan_rotation=self._scanner.rotation.value,
-                descan_rotation=self._descanner.rotation.value,
-                # Reshape cell parameters such that the order of the cells is from left to right, then top to
-                # bottom. So the cells in the upper line are numbered 0..7, the bottom line 56..63.
-                cell_parameters=[CellParameters(translation[0], translation[1], darkOffset, digitalGain)
-                                 for translation, darkOffset, digitalGain in
-                                 zip(cellTranslation, cellDarkOffset, cellDigitalGain)],
-                sensor_over_voltage=self.overVoltage.value
-            )
+        megafield_metadata = MegaFieldMetaData(
+            stack_id=os.path.basename(self.filename.value),
+            info=info,
+            storage_directory=os.path.dirname(self.filename.value),
+            custom_data=custom_data,
+            stage_position_x=float(stage_position[0]),
+            stage_position_y=float(stage_position[1]),
+            z_position=z_position,
+            # Convert pixels size from meters to nanometers
+            pixel_size=int(self._scanner.pixelSize.value[0] * 1e9),
+            dwell_time=self._scanner.getTicksDwellTime(),
+            x_scan_to_acq_delay=scan_to_acq_delay,
+            x_scan_delay=self._scanner.getTicksScanDelay()[0],
+            x_cell_size=self.cellCompleteResolution.value[0],
+            y_cell_size=self.cellCompleteResolution.value[1],
+            x_eff_cell_size=eff_cell_size[0],
+            y_eff_cell_size=eff_cell_size[1],
+            x_eff_field_size=eff_field_size[0],
+            y_eff_field_size=eff_field_size[1],
+            x_scan_gain=self._scanner.getGradientScanVolt()[0],
+            y_scan_gain=self._scanner.getGradientScanVolt()[1],
+            x_scan_offset=self._scanner.getCenterScanVolt()[0],
+            y_scan_offset=self._scanner.getCenterScanVolt()[1],
+            x_descan_setpoints=X_descan_setpoints,
+            y_descan_setpoints=Y_descan_setpoints,
+            # Descan offset is set to zero and is currently unused. The offset is implemented via the setpoints.
+            x_descan_offset=0,
+            y_descan_offset=0,
+            scan_rotation=self._scanner.rotation.value,
+            descan_rotation=self._descanner.rotation.value,
+            # Reshape cell parameters such that the order of the cells is from left to right, then top to
+            # bottom. So the cells in the upper line are numbered 0..7, the bottom line 56..63.
+            cell_parameters=[CellParameters(translation[0], translation[1], darkOffset, digitalGain)
+                             for translation, darkOffset, digitalGain in
+                             zip(cellTranslation, cellDarkOffset, cellDigitalGain)],
+            sensor_over_voltage=self.overVoltage.value
+        )
         return megafield_metadata
 
     def _acquire(self):
@@ -1287,7 +1273,7 @@ class MPPC(model.Detector):
                                  str(DATA_CONTENT_TO_ASM[dataContent]).lower()),
                                 200, raw_response=True, stream=True)
                             resp.raw.decode_content = True  # handle spurious Content-Encoding
-                            img = Image.open(BytesIO(base64.b64decode(resp.raw.data)))
+                            img = Image.open(BytesIO(resp.raw.data))
 
                             da = model.DataArray(img, metadata=self._metadata)
                     except Exception as ex:
@@ -1745,6 +1731,24 @@ class MPPC(model.Detector):
         """
         field_scan_time = self.getTotalFieldScanTime()
         self.frameDuration._set_value(field_scan_time, force_write=True)
+
+    def updateMetadata(self, md):
+        if model.MD_FIELD_SIZE in md:
+            # The ASM API only accepts an effective field size that is a multiple of 32
+            eff_field_size = md.get(model.MD_FIELD_SIZE)
+            if eff_field_size[0] % 32 != 0 or eff_field_size[1] % 32 != 0:
+                # Calculate the suggested overlap only based on the first axis,
+                # because the overlap is a single number and it is just a suggestion.
+                if eff_field_size[0] % 32 <= 16:
+                    sug_field_size = eff_field_size[0] - eff_field_size[0] % 32
+                else:
+                    sug_field_size = eff_field_size[0] + 32 - eff_field_size[0] % 32
+                suggested_overlap = 1 - sug_field_size / self._scanner.resolution.value[0]
+                raise ValueError(
+                    f"Overlap must result in the value of the effective field size being a multiple of 32. "
+                    f"Effective field size is: {eff_field_size}, suggested overlap: {suggested_overlap * 100}%"
+                )
+        model.HwComponent.updateMetadata(self, md)
 
 
 class ASMDataFlow(model.DataFlow):

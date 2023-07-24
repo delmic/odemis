@@ -542,6 +542,9 @@ class AcquisitionTask(object):
         :raise:
             Exception: If it failed before any single field images were acquired or if acquisition was cancelled.
         """
+        eff_field_size = (int((1 - self._roa.overlap) * self._multibeam.resolution.value[0]),
+                          int((1 - self._roa.overlap) * self._multibeam.resolution.value[1]))
+        self._detector.updateMetadata({model.MD_FIELD_SIZE: eff_field_size})
 
         # Get the estimated time for the roa.
         total_roa_time = estimate_acquisition_time(self._roa, self._pre_calibrations)
@@ -567,14 +570,16 @@ class AcquisitionTask(object):
             self.pre_calibrate(self._pre_calibrations)
             self._roa.overlap = overlap_init  # set back the overlap to the initial value
 
+        # set the sub-directories (<user>/<project-name>/<roa-name>)
+        # FIXME use username from GUI when that is implemented
+        username = self._detector.getMetadata().get(model.MD_USER, "fastem-user")
+        self._detector.filename.value = os.path.join(username, self._path, self._roa.name.value)
+
         # Move the stage to the first tile, to ensure the correct position is
         # stored in the megafield metadata yaml file.
         self.field_idx = (0, 0)
         self._scanner.blanker.value = True  # blank the beam during the move
         self.move_stage_to_next_tile()
-
-        # set the sub-directories (<acquisition date>/<project name>) and megafield id
-        self._detector.filename.value = os.path.join(self._path, self._roa.name.value)
 
         if self._settings_obs:
             self._create_acquisition_metadata()

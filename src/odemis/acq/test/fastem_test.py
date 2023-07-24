@@ -192,7 +192,7 @@ class TestFastEMROA(unittest.TestCase):
         coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
 
         for dwell_time in [400e-9, 1e-6, 10e-6]:
             self.multibeam.dwellTime.value = dwell_time
@@ -241,7 +241,7 @@ class TestFastEMROA(unittest.TestCase):
         coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m, don't change
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
         roa = fastem.FastEMROA(roa_name,
                                coordinates,
                                roc_2,
@@ -266,7 +266,7 @@ class TestFastEMROA(unittest.TestCase):
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
 
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
 
         field_size_x = res_x * px_size_x
         field_size_y = res_y * px_size_y
@@ -315,7 +315,7 @@ class TestFastEMROA(unittest.TestCase):
         px_size_x, px_size_y = self.multibeam.pixelSize.value
         overlap = 0.2
 
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
 
         field_size_x = res_x * px_size_x
         field_size_y = res_y * px_size_y
@@ -353,7 +353,7 @@ class TestFastEMROA(unittest.TestCase):
         polygon = [(0, 0), (ymax - px_size_y, 0), (0, xmax - px_size_x)]
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
         roa = fastem.FastEMROA(roa_name,
                                coordinates,
                                roc_2,
@@ -380,7 +380,7 @@ class TestFastEMROA(unittest.TestCase):
         res_x, res_y = self.multibeam.resolution.value  # single field size
         px_size_x, px_size_y = self.multibeam.pixelSize.value
 
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
 
         field_size_x = res_x * px_size_x
         field_size_y = res_y * px_size_y
@@ -408,7 +408,7 @@ class TestFastEMROA(unittest.TestCase):
 
             res_field_indices = roa.get_poly_field_indices(polygon)
 
-            max_extra_fields = int(1/(1-overlap))
+            max_extra_fields = int(1 / (1 - overlap))
 
             exp_x_min, exp_y_min, exp_x_max, exp_y_max = get_polygon_bbox(expected_indices)
             res_x_min, res_y_min, res_x_max, res_y_max = get_polygon_bbox(res_field_indices)
@@ -425,7 +425,7 @@ class TestFastEMROA(unittest.TestCase):
         px_size_x, px_size_y = self.multibeam.pixelSize.value
         overlap = 0.2
 
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
 
         field_size_x = res_x * px_size_x
         field_size_y = res_y * px_size_y
@@ -497,7 +497,7 @@ class TestFastEMAcquisition(unittest.TestCase):
                        left + res_y * px_size_y * y_fields)  # in m
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
         roa = fastem.FastEMROA(roa_name,
                                coordinates,
                                roc_2,
@@ -507,8 +507,9 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.descanner,
                                self.mppc)
 
-        path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_megafield")
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
+        path_storage = "test_project_megafield"
+        f = fastem.acquire(roa, path_storage,
+                           self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
                            self.ccd, self.beamshift, self.lens)
         data, e = f.result()
 
@@ -532,7 +533,7 @@ class TestFastEMAcquisition(unittest.TestCase):
                        res_y * px_size_y * y_fields + y_margin * px_size_y)  # in m
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
         roa = fastem.FastEMROA(roa_name,
                                coordinates,
                                roc_2,
@@ -542,9 +543,10 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.descanner,
                                self.mppc)
 
-        path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_field_indices")
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
-                           self.ccd, self.beamshift, self.lens)
+        path_storage = "test_project_field_indices"
+        f = fastem.acquire(roa, path_storage,
+                           self.scanner, self.multibeam, self.descanner, self.mppc,
+                           self.stage, self.ccd, self.beamshift, self.lens)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -562,7 +564,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
         roa = fastem.FastEMROA(roa_name,
                                coordinates,
                                roc_2,
@@ -572,12 +574,12 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.descanner,
                                self.mppc)
 
-        path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_progress")
-
         self.updates = 0  # updated in callback on_progress_update
 
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
-                           self.ccd, self.beamshift, self.lens)
+        path_storage = "test_project_progress"
+        f = fastem.acquire(roa, path_storage,
+                           self.scanner, self.multibeam, self.descanner, self.mppc,
+                           self.stage, self.ccd, self.beamshift, self.lens)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
@@ -597,7 +599,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
         roa = fastem.FastEMROA(roa_name,
                                coordinates,
                                roc_2,
@@ -607,14 +609,14 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.descanner,
                                self.mppc)
 
-        path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_cancel")
-
         self.end = None  # updated in callback on_progress_update
         self.updates = 0  # updated in callback on_progress_update
         self.done = False  # updated in callback on_done
 
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
-                           self.ccd, self.beamshift, self.lens)
+        path_storage = "test_project_cancel"
+        f = fastem.acquire(roa, path_storage,
+                           self.scanner, self.multibeam, self.descanner, self.mppc,
+                           self.stage, self.ccd, self.beamshift, self.lens)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
@@ -648,7 +650,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         coordinates = (xmin, ymin, xmax, ymax)  # in m
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
         roa = fastem.FastEMROA(roa_name,
                                coordinates,
                                roc_2,
@@ -658,10 +660,10 @@ class TestFastEMAcquisition(unittest.TestCase):
                                self.descanner,
                                self.mppc)
 
-        path_storage = os.path.join(datetime.today().strftime('%Y-%m-%d'), "test_project_stage_move")
-
-        f = fastem.acquire(roa, path_storage, self.scanner, self.multibeam, self.descanner, self.mppc, self.stage,
-                           self.ccd, self.beamshift, self.lens)
+        path_storage = "test_project_stage_move"
+        f = fastem.acquire(roa, path_storage,
+                           self.scanner, self.multibeam, self.descanner, self.mppc,
+                           self.stage, self.ccd, self.beamshift, self.lens)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -731,7 +733,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             coordinates = (xmin, ymin, xmax, ymax)  # in m
 
             # Create an ROA with the coordinates of the field.
-            roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+            roa_name = "test_megafield_id"
             roa = fastem.FastEMROA(roa_name, coordinates, None, None,
                                    self.asm, self.multibeam, self.descanner,
                                    self.mppc)
@@ -739,7 +741,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
+                                          roa, path=None, pre_calibrations=None, future=None,
+                                          settings_obs=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -805,7 +808,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             coordinates = (xmin, ymin, xmax, ymax)  # in m
 
             # Create an ROA with the coordinates of the field.
-            roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+            roa_name = "test_megafield_id"
             roa = fastem.FastEMROA(roa_name, coordinates, None, None,
                                    self.asm, self.multibeam, self.descanner,
                                    self.mppc, overlap)
@@ -813,7 +816,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
+                                          roa, path=None, pre_calibrations=None, future=None,
+                                          settings_obs=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -873,7 +877,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         coordinates = (xmin, ymin, xmax, ymax)  # in m
 
         # Create an ROA with the coordinates of the field.
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
         roa = fastem.FastEMROA(roa_name, coordinates, None, None,
                                self.asm, self.multibeam, self.descanner,
                                self.mppc)
@@ -918,7 +922,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         coordinates = (xmin, ymin, xmax, ymax)  # in m
 
         # Create an ROA with the coordinates of the field.
-        roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+        roa_name = "test_megafield_id"
         roa = fastem.FastEMROA(roa_name, coordinates, None, None,
                                self.asm, self.multibeam, self.descanner,
                                self.mppc)
@@ -963,7 +967,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             coordinates = (xmin, ymin, xmax, ymax)  # in m
 
             # Create an ROA with the coordinates of the field.
-            roa_name = time.strftime("test_megafield_id-%Y-%m-%d-%H-%M-%S")
+            roa_name = "test_megafield_id"
             roa = fastem.FastEMROA(roa_name, coordinates, None, None,
                                    self.asm, self.multibeam, self.descanner,
                                    self.mppc)
@@ -971,7 +975,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
+                                          roa, path=None, pre_calibrations=None, future=None,
+                                          settings_obs=None)
 
             pos_first_tile_actual = task.get_pos_first_tile()
 
