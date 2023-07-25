@@ -2722,13 +2722,6 @@ class CryoChamberTab(Tab):
                                 self.panel.stage_align_btn_m_aligner_y: ("y", -1),
                                 self.panel.stage_align_btn_p_aligner_z: ("z", 1),
                                 self.panel.stage_align_btn_m_aligner_z: ("z", -1)}
-            self.target_position_metadata = {LOADING: stage_metadata[model.MD_FAV_POS_DEACTIVE],
-                                             ALIGNMENT: stage_metadata[model.MD_FAV_POS_ALIGN],
-                                             SEM_IMAGING: stage_metadata[model.MD_FAV_POS_SEM_IMAGING],
-                                             COATING: stage_metadata[model.MD_FAV_POS_COATING],
-                                             THREE_BEAMS: self.posture_manager.get3beamsSafePos(
-                                                 stage_metadata[model.MD_FAV_POS_ACTIVE], SAFETY_MARGIN_5DOF)
-                                             }
 
             panel.btn_switch_advanced.Show()
             panel.pnl_advanced_align.Show()
@@ -3286,29 +3279,27 @@ class CryoChamberTab(Tab):
             return None
 
         # define the start position
-        self._start_pos = current_pos = self._stage.position.value
-        current_position = self.posture_manager.getCurrentPostureLabel()
+        self._start_pos = self._stage.position.value
+        current_posture = self.posture_manager.getCurrentPostureLabel()
+        # determine the end position for the gauge
+        end_pos = self.posture_manager.getTargetPosition(self._target_position)
 
         if self._role == 'enzel':
-            # target_position metadata has the end positions for all movements
-            if self._target_position in self.target_position_metadata.keys():
-                if (
-                    current_position is LOADING
-                    and not self._display_insertion_stick_warning_msg()
-                ):
-                    return None
-                self._end_pos = self.target_position_metadata[self._target_position]
-
-        elif self._role == 'meteor':
-            # determine the end position for the gauge
-            self._end_pos = self.posture_manager.getTargetPosition(self._target_position)
             if (
-                self._target_position in [FM_IMAGING, SEM_IMAGING]
-                and current_position in [LOADING, SEM_IMAGING, FM_IMAGING]
-                and not self._display_meteor_pos_warning_msg(self._end_pos)
-
+                current_posture is LOADING
+                and not self._display_insertion_stick_warning_msg()
             ):
                 return None
+
+        elif self._role == 'meteor':
+            if (
+                self._target_position in [FM_IMAGING, SEM_IMAGING]
+                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING]
+                and not self._display_meteor_pos_warning_msg(end_pos)
+            ):
+                return None
+
+        self._end_pos = end_pos
         return self.posture_manager.cryoSwitchSamplePosition(self._target_position)
 
     def _display_insertion_stick_warning_msg(self) -> bool:

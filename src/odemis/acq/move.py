@@ -549,9 +549,8 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
 
     def check_calib_data(self, required_keys: set):
         """
-        Checks the unique keys in the stage metadata based on given stage type in the
-        microscope file.
-        :param required_keys : A set of keys that must be present in the stage metadata.
+        Checks the keys in the stage metadata MD_CALIB.
+        :param required_keys : A set of keys that must be present in the MD_CALIB metadata.
         :raises ValueError: if the metadata does not have all required keys.
         """
         # Check for unique keys in the given metadata
@@ -871,6 +870,34 @@ class MimasPostureManager(MicroscopePostureManager):
             model.MD_SAMPLE_CENTERS}
         self.check_stage_metadata(self.required_keys)
 
+    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+        """
+        Returns the position that the stage would go to.
+        :param target_pos_lbl: (int) a label representing a position LOADING, MILLING, COATING, FM_IMAGING.
+        :return: (dict str->float) the end position of the stage
+        :raises ValueError: if the target position is not supported
+        """
+        stage_md = self.stage.getMetadata()
+        # There are actually only 2 positions for the stage: LOADING, and
+        # everything else happens at "IMAGING".
+        target_pos = {
+            LOADING: stage_md[model.MD_FAV_POS_DEACTIVE],
+            COATING: stage_md[model.MD_FAV_POS_ACTIVE],
+            FM_IMAGING: stage_md[model.MD_FAV_POS_ACTIVE],
+            MILLING: stage_md[model.MD_FAV_POS_ACTIVE],
+        }
+        # Fail early when required axes are not found on the positions metadata
+        required_axes = {'x', 'y', 'z', 'rx', 'rz'}  # ry is normally never used so it can be omitted
+        for stage_position in target_pos.values():
+            if not required_axes.issubset(stage_position.keys()):
+                raise ValueError("Stage %s metadata does not have all required axes %s." % (
+                    list(stage_md.keys())[list(stage_md.values()).index(stage_position)],
+                    required_axes))
+
+        if target_pos_lbl not in target_pos:
+            raise ValueError(f"{target_pos_lbl} not in {target_pos.keys()}")
+        return target_pos[target_pos_lbl]
+
     def getCurrentPostureLabel(self, stage_pos: Dict[str, float] = None) -> int:
         """
         Detects the current aligner position of mimas
@@ -933,8 +960,7 @@ class MimasPostureManager(MicroscopePostureManager):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
-        :param target: (int) target position either one of the constants: LOADING, IMAGING,
-         ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
+        :param target: (int) target position either one of the constants: LOADING, MILLING, COATING, FM_IMAGING.
         """
         try:
             try:
@@ -942,36 +968,14 @@ class MimasPostureManager(MicroscopePostureManager):
             except KeyError:
                 raise ValueError(f"Unknown target '{target}'")
 
-            # Create axis->pos dict from target position given smaller number of axes
-            filter_dict = lambda keys, d: {key: d[key] for key in keys}
             # get the stage and aligner objects
             stage_md = self.stage.getMetadata()
             align_md = self.align.getMetadata()
             stage_imaging_rng = stage_md[model.MD_POS_ACTIVE_RANGE]
-
-            # There are actually only 2 positions for the stage: LOADING, and
-            # everything else happens at "IMAGING".
-            stage_target_pos = {
-                LOADING: stage_md[model.MD_FAV_POS_DEACTIVE],
-                COATING: stage_md[model.MD_FAV_POS_ACTIVE],
-                FM_IMAGING: stage_md[model.MD_FAV_POS_ACTIVE],
-                MILLING: stage_md[model.MD_FAV_POS_ACTIVE],
-            }
-
-            if target not in stage_target_pos:
-                raise ValueError(f"Unsupported move to target {target_name}")
-
+            stage_target_pos = self.getTargetPosition(target)
             aligner_fib = align_md[model.MD_FAV_POS_DEACTIVE]
             aligner_optical = align_md[model.MD_FAV_POS_ACTIVE]
             stage_referenced = all(self.stage.referenced.value.values())
-
-            # Fail early when required axes are not found on the positions metadata
-            required_axes = {'x', 'y', 'z', 'rx', 'rz'}  # ry is normally never used so it can be omitted
-            for stage_position in stage_target_pos.values():
-                if not required_axes.issubset(stage_position.keys()):
-                    raise ValueError("Stage %s metadata does not have all required axes %s." % (
-                        list(stage_md.keys())[list(stage_md.values()).index(stage_position)],
-                        required_axes))
 
             current_pos = self.stage.position.value
             current_label = self.getCurrentPostureLabel()
@@ -1012,13 +1016,13 @@ class MimasPostureManager(MicroscopePostureManager):
                 if not stage_referenced:
                     self._run_reference(future, self.stage)
                 self._run_sub_move(future, self.align, aligner_fib)  # park the optical lens
-                self._run_sub_move(future, self.stage, stage_target_pos[target])
+                self._run_sub_move(future, self.stage, stage_target_pos)
             elif target in (MILLING, FM_IMAGING, COATING):
                 # If not in imaging mode yet, move the stage to the default imaging position
                 if not isInRange(current_pos, stage_imaging_rng, {'x', 'y', 'z', 'rx', 'ry', 'rz'}):
                     # move stage to imaging range (with the optical lens retracted)
                     self._run_sub_move(future, self.align, aligner_fib)
-                    self._run_sub_move(future, self.stage, stage_target_pos[target])
+                    self._run_sub_move(future, self.stage, stage_target_pos)
 
                 if target == MILLING:
                     # retract the optical lens
@@ -1067,12 +1071,39 @@ class EnzelPostureManager(MicroscopePostureManager):
         if not {'x', 'y', 'z'}.issubset(stage_metadata[model.MD_POS_ACTIVE_RANGE]):
             raise ValueError('POS_ACTIVE_RANGE metadata should have values for x, y, z axes.')
 
+    def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
+        """
+        Returns the position that the stage would go to.
+        :param target_pos_lbl: (int) a label representing a position COATING, SEM_IMAGING, THREE_BEAMS,
+         ALIGNMENT, LOADING
+        :return: (dict str->float) the end position of the stage
+        :raises ValueError: if the target position is not supported
+        """
+        stage_md = self.stage.getMetadata()
+        target_pos = {LOADING: stage_md[model.MD_FAV_POS_DEACTIVE],
+                      IMAGING: stage_md[model.MD_FAV_POS_ACTIVE],
+                      COATING: stage_md[model.MD_FAV_POS_COATING],
+                      ALIGNMENT: stage_md[model.MD_FAV_POS_ALIGN],
+                      SEM_IMAGING: stage_md[model.MD_FAV_POS_SEM_IMAGING],
+                      THREE_BEAMS: self.get3beamsSafePos(stage_md[model.MD_FAV_POS_ACTIVE], SAFETY_MARGIN_5DOF)
+                      }
+        # Fail early when required axes are not found on the positions metadata
+        required_axes = {'x', 'y', 'z', 'rx', 'rz'}
+        for stage_position in target_pos.values():
+            if not required_axes.issubset(stage_position.keys()):
+                raise ValueError("Stage %s metadata does not have all required axes %s." % (
+                    list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
+
+        if target_pos_lbl not in target_pos:
+            raise ValueError(f"{target_pos_lbl} not in {target_pos.keys()}")
+        return target_pos[target_pos_lbl]
+
     def getCurrentPostureLabel(self, stage_pos: Dict[str, float] = None) -> int:
         """
         Detects the current stage position of enzel.
         :param stage_pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses
          the current position of the stage.
-        :return: a label UNKNOWN, COATING, IMAGING, MILLING, LOADING or LOADING_PATH
+        :return: a label UNKNOWN, COATING, SEM_IMAGING, THREE_BEAMS, ALIGNMENT, LOADING or LOADING_PATH
         """
         stage_md = self.stage.getMetadata()
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
@@ -1145,21 +1176,9 @@ class EnzelPostureManager(MicroscopePostureManager):
             stage_md = self.stage.getMetadata()
             align_md = self.align.getMetadata()
 
-            target_pos = {LOADING: stage_md[model.MD_FAV_POS_DEACTIVE],
-                          IMAGING: stage_md[model.MD_FAV_POS_ACTIVE],
-                          COATING: stage_md[model.MD_FAV_POS_COATING],
-                          ALIGNMENT: stage_md[model.MD_FAV_POS_ALIGN],
-                          SEM_IMAGING: stage_md[model.MD_FAV_POS_SEM_IMAGING],
-                          THREE_BEAMS: self.get3beamsSafePos(stage_md[model.MD_FAV_POS_ACTIVE], SAFETY_MARGIN_5DOF)
-                          }
             align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
             stage_referenced = all(self.stage.referenced.value.values())
-            # Fail early when required axes are not found on the positions metadata
-            required_axes = {'x', 'y', 'z', 'rx', 'rz'}
-            for stage_position in target_pos.values():
-                if not required_axes.issubset(stage_position.keys()):
-                    raise ValueError("Stage %s metadata does not have all required axes %s." % (
-                        list(stage_md.keys())[list(stage_md.values()).index(stage_position)], required_axes))
+            target_position = self.getTargetPosition(target)
             current_pos = self.stage.position.value
             # To hold the sub moves to run if normal ordering failed
             fallback_submoves = [{'x', 'y', 'z'}, {'rx', 'rz'}]
@@ -1170,7 +1189,7 @@ class EnzelPostureManager(MicroscopePostureManager):
             if target == LOADING:
                 if current_label is UNKNOWN and stage_referenced:
                     logging.warning("Moving stage to loading while current position is unknown.")
-                if abs(target_pos[LOADING]['rx']) > ATOL_ROTATION_POS:
+                if abs(target_position['rx']) > ATOL_ROTATION_POS:
                     raise ValueError(
                         "Absolute value of rx for FAV_POS_DEACTIVE is greater than {}".format(ATOL_ROTATION_POS))
 
@@ -1242,18 +1261,19 @@ class EnzelPostureManager(MicroscopePostureManager):
                 # So if any large Rx rotation is needed, we do it far away from
                 # the pole-piece. The movement in X is independent of rx, so it
                 # should be always safe to go to the LOADING position in rx.
-                if abs(current_pos["rx"] - target_pos[target]["rx"]) > math.radians(2):
-                    sub_move_dict = filter_dict({"x"}, target_pos[LOADING])
+                if abs(current_pos["rx"] - target_position["rx"]) > math.radians(2):
+                    target_pos_loading = self.getTargetPosition(LOADING)
+                    sub_move_dict = filter_dict({"x"}, target_pos_loading)
                     logging.debug("Moving %s to a safe position in X axis, to %s.", self.stage.name, sub_move_dict)
                     self._run_sub_move(future, self.stage, sub_move_dict)
 
-                    sub_move_dict = filter_dict({"rx"}, target_pos[LOADING])
+                    sub_move_dict = filter_dict({"rx"}, target_pos_loading)
                     logging.debug("Moving %s to a safe rotation position in Rx axis, to %s.", self.stage.name,
                                   sub_move_dict)
                     self._run_sub_move(future, self.stage, sub_move_dict)
 
                 for sub_move in sub_moves:
-                    sub_move_dict = filter_dict(sub_move, target_pos[target])
+                    sub_move_dict = filter_dict(sub_move, target_position)
                     logging.debug("Moving %s to %s.", self.stage.name, sub_move_dict)
                     self._run_sub_move(future, self.stage, sub_move_dict)
                 if target in (IMAGING, ALIGNMENT, THREE_BEAMS):
@@ -1271,7 +1291,7 @@ class EnzelPostureManager(MicroscopePostureManager):
                 logging.debug("This move %s is unreachable, trying to move all axes at once...",
                               sub_move_dict)
                 for sub_move in fallback_submoves:
-                    sub_move_dict = filter_dict(sub_move, target_pos[target])
+                    sub_move_dict = filter_dict(sub_move, target_position)
                     logging.debug("Moving %s to %s.", self.stage.name, sub_move)
                     self._run_sub_move(future, self.stage, sub_move_dict)
 
