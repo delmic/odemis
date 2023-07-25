@@ -3302,8 +3302,6 @@ class CryoChamberTab(Tab):
         elif self._role == 'meteor':
             # determine the end position for the gauge
             self._end_pos = self.posture_manager.getTargetPosition(self._target_position)
-            if not self._end_pos:
-                return None
             if (
                 self._target_position in [FM_IMAGING, SEM_IMAGING]
                 and current_position in [LOADING, SEM_IMAGING, FM_IMAGING]

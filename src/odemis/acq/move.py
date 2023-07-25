@@ -334,6 +334,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         # Check required metadata used during switching
         self.required_keys.add(model.MD_POS_COR)
         self.check_stage_metadata(required_keys=self.required_keys)
+        if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
+            raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
         """
@@ -418,12 +420,9 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         """
         Transforms the current stage position from the SEM imaging area to the
         meteor/FM imaging area.
-        :param pos: (dict str->float) the initial stage position. The position has to have x, y, rz, and rx axes,
-         otherwise error would be raised.
-        :return: (dict str->float) the transformed position. It returns the updated axes x, y, rx, rz. The axis z is same as the input.
+        :param pos: (dict str->float) the initial stage position.
+        :return: (dict str->float) the transformed position.
         """
-        if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
-            raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
@@ -443,11 +442,9 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         """
         Transforms the current stage position from the meteor/FM imaging area
         to the SEM imaging area.
-        :param pos: (dict str->float) the initial stage position
+        :param pos: (dict str->float) the initial stage position.
         :return: (dict str->float) the transformed stage position.
         """
-        if not {"x", "y", "rx", "rz"}.issubset(self.stage.axes):
-            raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
@@ -542,23 +539,26 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
     def __init__(self, microscope):
         super().__init__(microscope)
         # Check required metadata used during switching
-        unique_keys = {'x', 'y', 'm', 'z', 'z_ct', 'dx', 'dy'}
+        required_keys_zeiss1 = {'x', 'y', 'm', 'z', 'z_ct', 'dx', 'dy'}
         self.required_keys.add(model.MD_CALIB)
         self.check_stage_metadata(self.required_keys)
-        self.check_calib_data(unique_keys)
+        self.check_calib_data(required_keys_zeiss1)
+        if not {"x", "y", "m", "z", "rx", "rm"}.issubset(self.stage.axes):
+            missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - self.stage.axes.keys()
+            raise KeyError("The stage misses %s axes" % missed_axes)
 
-    def check_calib_data(self, unique_keys: set):
+    def check_calib_data(self, required_keys: set):
         """
         Checks the unique keys in the stage metadata based on given stage type in the
         microscope file.
-        :param unique_keys : A set of keys that is unique to the stage type and must be present in the metadata.
+        :param required_keys : A set of keys that must be present in the stage metadata.
         :raises ValueError: if the metadata does not have all required keys.
         """
         # Check for unique keys in the given metadata
         stage_md = self.stage.getMetadata()
         calibrated_md = stage_md[model.MD_CALIB]
-        if not unique_keys.issubset(calibrated_md.keys()):
-            missing_keys = unique_keys - calibrated_md.keys()
+        if not required_keys.issubset(calibrated_md.keys()):
+            missing_keys = required_keys - calibrated_md.keys()
             raise ValueError(f"Stage metadata {model.MD_CALIB} is missing the following required keys: {missing_keys}.")
 
     def getTargetPosition(self, target_pos_lbl: int) -> Dict[str, float]:
@@ -652,14 +652,9 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         """
         Transforms the current stage position from the SEM imaging area to the
         meteor/FM imaging area.
-        :param pos: (dict str->float) the current stage position. The position has to have x, y, m, z, rx and rm axes,
-         otherwise error would be raised.
-        :return: (dict str->float) the transformed position. It returns the updated axes x, y, m, z, rx, rm. The axis z is same as the input.
+        :param pos: (dict str->float) the current stage position.
+        :return: (dict str->float) the transformed position.
         """
-        if not {"x", "y", "m", "z", "rx", "rm"}.issubset(self.stage.axes):
-            missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - self.stage.axes.keys()
-            raise KeyError("The stage misses %s axes" % missed_axes)
-
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
 
@@ -711,10 +706,6 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         :param pos: (dict str->float) the current stage position
         :return: (dict str->float) the transformed stage position.
         """
-        if not {"x", "y", "m", "z", "rx", "rm"}.issubset(self.stage.axes):
-            missed_axes = {'x', 'y', 'm', 'z', 'rx', 'rm'} - self.stage.axes.keys()
-            raise KeyError("The stage misses %s axes" % missed_axes)
-
         stage_md = self.stage.getMetadata()
         transformed_pos = pos.copy()
 
@@ -876,7 +867,7 @@ class MimasPostureManager(MicroscopePostureManager):
         self.rotational_axes = set(key for key in self.axes.keys() if key in {'rx', 'ry', 'rz', 'rm'})
         # required keys that must be present in the stage metadata
         self.required_keys = {
-            model.MD_PIVOT_POS, model.MD_FAV_POS_DEACTIVE, model.MD_POS_ACTIVE_RANGE, model.MD_FAV_POS_ACTIVE,
+            model.MD_FAV_POS_DEACTIVE, model.MD_POS_ACTIVE_RANGE, model.MD_FAV_POS_ACTIVE,
             model.MD_SAMPLE_CENTERS}
         self.check_stage_metadata(self.required_keys)
 
@@ -1101,9 +1092,7 @@ class EnzelPostureManager(MicroscopePostureManager):
         if isNearPosition(stage_pos, stage_coating, self.stage.axes):
             return COATING
         # Check the stage X,Y,Z are within the active range and on the tilted plane -> imaging position
-        if isInRange(
-                stage_pos, stage_active_range, {'x', 'y', 'z'}
-        ):
+        if isInRange(stage_pos, stage_active_range, {'x', 'y', 'z'}):
             if isNearPosition(stage_pos, {'rx': stage_active['rx']}, {'rx'}):
                 return THREE_BEAMS
             elif isNearPosition(stage_pos, {'rx': stage_sem_imaging['rx']}, {'rx'}):

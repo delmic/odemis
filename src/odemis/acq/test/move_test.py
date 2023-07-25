@@ -181,7 +181,7 @@ class TestEnzelMove(unittest.TestCase):
 
     def test_get_current_aligner_position(self):
         """
-        Test getCurrentPostureLabel function behaves as expected
+        Test _getCurrentAlignerPositionLabel() function behaves as expected
         """
         aligner = self.aligner
         # Move to loading position
