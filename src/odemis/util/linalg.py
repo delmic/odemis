@@ -239,26 +239,17 @@ def generate_triangulation_points(max_dist: float, area_coords: Iterable[float])
     The area is defined by the coordinates (xmin, ymin, xmax, ymax).
 
     It calculates the lengths of the area in the x and y directions and determines the number of points in each direction
-    based on the maximum distance. It then adjusts the area coordinates to avoid points exactly on the border
-     of the given area by creating a margin of half the maximum distance
-    from the border.
+    based on the maximum distance.
 
     :param max_dist: the maximum distance allowed between two (x,y) positions.
     :param area_coords: [xmin, ymin, xmax, ymax] the top right and bottom left (x,y) coordinates in meters.
     :return: List of (x,y) coordinates in the given area.
     """
     xmin, ymin, xmax, ymax = area_coords
-
-    # Avoid points exactly on the border of the given area, find points delta distance
-    # away from the border of the given area
     length_x = abs(xmax - xmin)
     length_y = abs(ymax - ymin)
     points_x = int(math.floor(length_x / max_dist) + 1)
     points_y = int(math.floor(length_y / max_dist) + 1)
-    xmin = xmin + max_dist / 2
-    xmax = xmax - max_dist / 2
-    ymin = ymin + max_dist / 2
-    ymax = ymax - max_dist / 2
     total_points = points_x * points_y
 
     # Create a centre point when total number of points is <= 3
