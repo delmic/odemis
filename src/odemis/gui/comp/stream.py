@@ -45,7 +45,6 @@ from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 import wx
 import wx.lib.newevent
-from wx.lib.pubsub import pub
 from odemis.gui.conf.data import COLORMAPS
 import matplotlib.colors as colors
 
@@ -1409,6 +1408,7 @@ class StreamBar(wx.Panel):
         wx.Panel.__init__(self, *args, **kwargs)
 
         self.stream_panels = []
+        self._on_destroy_callbacks = {}  # StreamPanel -> Callable()
 
         self._sz = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._sz)
@@ -1493,16 +1493,18 @@ class StreamBar(wx.Panel):
         """
         st = evt.spanel.stream
         logging.debug("User removed stream (panel) %s", st.name.value)
-        # delete stream panel
+        # delete stream panel (which will "Destroy" it, which will trigger on_streamp_destroy())
         self.remove_stream_panel(evt.spanel)
 
-        # Publish removal notification
-        pub.sendMessage("stream.remove", stream=st)
-
-    def on_streamp_destroy(self, evt):
+    def on_streamp_destroy(self, evt: wx.Event):
         """
         Called when a stream panel is completely removed
         """
+        spanel = evt.GetEventObject()
+        on_destroy = self._on_destroy_callbacks.pop(spanel, None)
+        if on_destroy:
+            on_destroy()
+
         self.fit_streams()
 
     # === API of the stream panel
@@ -1529,11 +1531,15 @@ class StreamBar(wx.Panel):
         """ Return the number of streams contained within the StreamBar """
         return len(self.stream_panels)
 
-    def add_stream_panel(self, spanel, show=True):
+    def add_stream_panel(self, spanel, show=True, on_destroy=None):
         """
         This method adds a stream panel to the stream bar. The appropriate
         position is automatically determined.
         spanel (StreamPanel): a stream panel
+        show (bool): if True, immediately shows the stream panel, otherwise it
+        will be hidden.
+        on_destroy (Callable or None): function to call back when the stream
+        panel is destroyed
         """
         # Insert the spanel in the order of STREAM_ORDER. If there are already
         # streams with the same type, insert after them.
@@ -1549,6 +1555,9 @@ class StreamBar(wx.Panel):
 
         self.stream_panels.insert(ins_pos, spanel)
 
+        if on_destroy:
+            self._on_destroy_callbacks[spanel] = on_destroy
+
         if self._sz is None:
             self._sz = wx.BoxSizer(wx.VERTICAL)
             self.SetSizer(self._sz)
@@ -1563,7 +1572,7 @@ class StreamBar(wx.Panel):
         spanel.Bind(wx.EVT_WINDOW_DESTROY, self.on_streamp_destroy, source=spanel)
         spanel.Layout()
 
-        # hide the stream if the current view is not compatible
+        # hide the stream if requested
         spanel.Show(show)
         self.fit_streams()
 
