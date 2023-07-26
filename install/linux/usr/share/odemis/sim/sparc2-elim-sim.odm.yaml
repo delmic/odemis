@@ -1,18 +1,12 @@
 # Configuration for a simulated SPARC v2 system with an ELIM
 # Note the ELIM is really special: it only allows to get the external light into
 # the spectrograph. So all the rest of the SPARC/SEM is always simulated, and kept
-# to the minimu.
+# to the minimum components necessary to convince Odemis it's a SPARC.
+# In particular, it doesn't have a parabolic mirror.
+
 SPARC2-ELIM: {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
-               "Optical Path Properties", "Spectrometer Vis-NIR",
-               "Camera", "Spectrometer IR",
-               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
-               "Slit",
-               "Lens1 Mover", "Lens2 Switch",
-               "In-Light Aligner",
-              ],
 }
 
 # Light (Fake)
@@ -186,18 +180,11 @@ SPARC2-ELIM: {
 "Optical Path Properties": {
     class: static.OpticalLens,
     role: lens,
-    # Standard mirror config
+    # No parabolic mirror. Still need a lens to make Odemis happy about the magnification
     init: {
        mag: 0.31, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
-       # No AR possible
-       # pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
-       x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
-       hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
-       focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
-       parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
-       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }

@@ -6366,7 +6366,7 @@ class Sparc2AlignTab(Tab):
             "streak-align": "streak-align",
             "light-in-align": "light-in-align",
         }
-        # Note: ActuatorController hides the alignment panels which are needed.
+        # Note: ActuatorController automatically hides the unnecessary alignment panels, based on the axes present.
         for btn, mode in list(self._alignbtn_to_mode.items()):
             if mode in tab_data.align_mode.choices:
                 btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
@@ -6723,14 +6723,11 @@ class Sparc2AlignTab(Tab):
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # allows to see the focused slit line
             self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
-                self._mirror_settings_controller.enable(True)
+                self._mirror_settings_controller.enable(False)
             self.panel.pnl_mirror.Enable(False)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_lens_switch.Enable(False)
-            self.panel.pnl_focus.Enable(True)
-            self.panel.btn_manual_focus.Enable(True)
-            self.panel.btn_autofocus.Enable(False)
-            self.panel.gauge_autofocus.Enable(False)
+            self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
@@ -6761,12 +6758,13 @@ class Sparc2AlignTab(Tab):
         elif mode == "streak-align":
             pages.append("doc/sparc2_streakcam.html")
         elif mode == "light-in-align":
-            # It depends on exactly which optical module is in
+            # Several modules have this mode, but require different alignment procedure.
+            # So we have to detect precisely which module is present (FSLM, FPLM, or ELIM).
             main = self.tab_data_model.main
             if main.spec_switch:  # only FSLM has spec-switch
-                # add documentation for switching to internal or external spectograph
                 pages.append("doc/sparc2_light_in_fslm.html")
-            elif main.mirror and main.mirror.name in main.light_aligner.affects.value:  # FPLM affects the mirror, not the ELIM
+            elif main.mirror and main.mirror.name in main.light_aligner.affects.value:
+                # FPLM affects the mirror, not the ELIM
                 pages.append("doc/sparc2_light_in_fplm.html")
             else:  # default to ELIM
                 pages.append("doc/sparc2_light_in_elim.html")

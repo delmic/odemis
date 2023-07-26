@@ -170,8 +170,8 @@ class ActuatorController(object):
             show_la = any(an == "light_aligner" for an, a in tab_data.axes)
             tab_panel.pnl_light_aligner.Show(show_la)
             if show_la:
-                # Some hardware only have the X axis (eg, FSLM), in this case,
-                # hide Z axis.
+                # Some hardware only have the X axis (eg, FSLM) and no Z axis,
+                # in this case, hide the Z axis.
                 if not ("light_aligner", "z") in tab_data.axes:
                     tab_panel.btn_p_light_aligner_z.Show(False)
                     tab_panel.lbl_p_light_aligner_z.Show(False)
@@ -183,7 +183,6 @@ class ActuatorController(object):
         if hasattr(tab_panel, 'pnl_spec_switch'):
             show_ss = ("spec_switch", "x") in tab_data.axes
             tab_panel.pnl_spec_switch.Show(show_ss)
-
 
         tab_data.main.is_acquiring.subscribe(self._on_acquisition)
 

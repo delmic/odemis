@@ -1,16 +1,7 @@
 # Configuration for a simulated SPARC v2 system with a FPLM (Fiber-coupled PhotoLuminescence Module)
-SPARC2: {
+SPARC2-FPLM: {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
-               "Optical Path Properties", "Spectrometer Vis-NIR",
-               "Camera", "Spectrometer IR",
-               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
-               "Mirror Actuators", "Mirror Actuators in XY referential",
-               "Slit",
-               "Lens1 Mover", "Lens2 Switch",
-               "In-Light Aligner",
-              ],
 }
 
 # Light (lamp with known spectrum)
@@ -218,7 +209,7 @@ SPARC2: {
        hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
        focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
        parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
-       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
+       rotation: 0, # rad, 0° rotation between optical axis and SEM Y axis
     },
     persistent: {
         properties: [polePosition],
@@ -344,6 +335,6 @@ SPARC2: {
     init: {
         axes: ["l", "s"], # mapped respectively to X, Y
         rotation: -1.0471975511965976, # rad (= 60°)
-        # Note: if you want to use absolute moves, add a "translation" too
     },
 }
+

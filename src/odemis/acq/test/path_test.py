@@ -57,6 +57,7 @@ SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
 SPARC2_FPLM_CONFIG = CONFIG_PATH + "sim/sparc2-fplm-sim.odm.yaml"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
 
+
 def path_pos_to_phys_pos(pos, comp, axis):
     """
     Convert a generic position definition into an actual position (as reported in comp.position)
@@ -1197,8 +1198,8 @@ class Sparc2LightInTestCase(unittest.TestCase):
         cls.microscope = model.getComponent(role="sparc2")
         # Find CCD & SEM components
         cls.ccd = model.getComponent(role="ccd")
-        cls.specgraph = model.getComponent(role="spectrograph")
-        cls.lenswitch = model.getComponent(role="lens-switch")
+        cls.spectrograph = model.getComponent(role="spectrograph")
+        cls.lens_switch = model.getComponent(role="lens-switch")
         cls.spec_det_sel = model.getComponent(role="spec-det-selector")
         cls.slit = model.getComponent(role="slit-in-big")
         cls.light_align = model.getComponent(role="light-aligner")
@@ -1208,26 +1209,25 @@ class Sparc2LightInTestCase(unittest.TestCase):
     def tearDownClass(cls):
         del cls.optmngr  # To garbage collect it
 
-    # @skip("simple")
     def test_set_path(self):
         """
         Test setting light-in-align
         """
         # Light aligner should always be in active position, for any mode
 
-        # setting ar (lens 2 is active)
+        # Start by going to a different mode: use ar (lens 2 is active)
         self.optmngr.setPath("ar").result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "ar")
+        assert_pos_as_in_mode(self, self.lens_switch, "ar")
         assert_pos_as_in_mode(self, self.slit, "ar")
-        assert_pos_as_in_mode(self, self.specgraph, "ar")
+        assert_pos_as_in_mode(self, self.spectrograph, "ar")
         assert_pos_as_in_mode(self, self.light_align, "ar")
         self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
 
         # setting light-align: lens 2 should be deactive
         self.optmngr.setPath("light-in-align").result()
         # Assert that actuator was moved according to mode given
-        assert_pos_as_in_mode(self, self.lenswitch, "light-in-align")
+        assert_pos_as_in_mode(self, self.lens_switch, "light-in-align")
         assert_pos_as_in_mode(self, self.slit, "light-in-align")
         assert_pos_as_in_mode(self, self.light_align, "light-in-align")
 
