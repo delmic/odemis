@@ -621,15 +621,16 @@ class StaticSpectrumStream(StaticStream):
             # cached list of angle or timestamps for each position in the second dimension
             if dims[1] == "A":
                 theta_list, unit_theta = spectrum.get_angle_range(image)
-                # TODO: handle case where theta list is only NAN
-                # Only keep valid values (ie, not the NaN)
-                # Note, the .calibrated data will have the same columns removed
-                self._thetal_px_values = numpy.array([theta for theta in theta_list if not math.isnan(theta)])
-                min_theta, max_theta = min(self._thetal_px_values), max(self._thetal_px_values)
+                # Only keep min/max (while discarding the NaNs)
+                # Note, the .calibrated data will have (almost) the same min/max
+                # but with values differently (regularly) distributed.
+                theta_list_np = numpy.array(theta_list)
+                min_theta, max_theta = numpy.nanmin(theta_list_np), numpy.nanmax(theta_list_np)
+                self._calibrated_theta_list = None  # To be filled when calibrated image is computed
 
                 # Allows to select the angle as any value within the range, and the
                 # setter will automatically "snap" it to the closest existing theta stamp
-                self.selected_angle = model.FloatContinuous(self._thetal_px_values[0],
+                self.selected_angle = model.FloatContinuous(min_theta,
                                                             range=(min_theta, max_theta),
                                                             unit=unit_theta,
                                                             setter=self._setAngle)
@@ -687,7 +688,7 @@ class StaticSpectrumStream(StaticStream):
         # the raw data after calibration
         self.calibrated = model.VigilantAttribute(None)
         # Immediately compute it, without any correction, as it can still be
-        # different from image if MD_THETA_LIST contains NaNs (which it typically does)
+        # different from image if it's an angular spectrum dataset.
         self._updateCalibratedData(image, bckg=None, coef=self.efficiencyCompensation.value)
 
         if "acq_type" not in kwargs:
@@ -755,7 +756,7 @@ class StaticSpectrumStream(StaticStream):
         return find_closest(value, self._tl_px_values)
 
     def _setAngle(self, value):
-        return find_closest(value, self._thetal_px_values)
+        return find_closest(value, self._calibrated_theta_list)
 
     def _setWavelength(self, value):
         return find_closest(value, self._wl_px_values)
@@ -837,8 +838,19 @@ class StaticSpectrumStream(StaticStream):
             self.calibrated.value = None
             return
 
-        # If MD_THETA_LIST, the length of the A dimension might be reduced
         calibrated = calibration.apply_spectrum_corrections(data, bckg, coef)
+
+        # If angular spectrum, the length of the A dimension might have changed
+        if hasattr(self, "selected_angle"):  # update the list of angles
+            theta_list, _ = spectrum.get_angle_range(calibrated)
+            # Update the range, as it might have slightly changed
+            self._calibrated_theta_list = numpy.asarray(theta_list)
+            self.selected_angle.clip_on_range = True
+            self.selected_angle.range = (self._calibrated_theta_list.min(),
+                                         self._calibrated_theta_list.max())
+            # Force a call to the setter to make sure it's rounded to a pixel
+            self.selected_angle.value = self.selected_angle.value
+
         self.calibrated.value = calibrated
 
     def _setBackground(self, bckg):
