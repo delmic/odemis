@@ -218,8 +218,15 @@ Actuators:
  * focus: Changes the distance between the sample and the optical detectors. It has one axis: z.
  * spec-det-selector: Mirror to switch between multiple detectors connected to a spectrograph.
    It has an axis: rx.
+   The rx axis has a set of positions, which as description have a list of strings representing the affects for each position.
  * fiber-aligner: Actuator to move the optical fiber input in order to optimise the amount of light going to the fiber.
    It typically has axes: x and y.
+ * spec-selector: Selector between the external (fiber) output and the internal spectrometer(s).
+   It typically has one axis "x", which can be the same axis as the fiber-aligner.
+   It has as metadata FAV_POS_ACTIVE, and FAV_POS_DEACTIVE corresponding to the positions when
+   "active" (light goes to the external output) and "deactive" (light goes to the internal spectrometers).
+   It also has as metadata FAV_POS_ACTIVE_DEST, FAV_POS_DEACTIVE_DEST which represents the affects
+   when respectively in active and deactive positions.
  * ar-spec-selector: Selector between AR/Spectrometer for the SPARCv1.
    It changes the optical path between AR detector (ccd) and spectrometer.
    It has an axis: rx.
