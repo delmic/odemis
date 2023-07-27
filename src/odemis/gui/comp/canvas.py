@@ -1876,7 +1876,7 @@ class PlotCanvas(BufferedCanvas):
         BufferedCanvas.clear(self)
 
     def has_data(self):
-        return self._data is not None and len(self._data) > 2
+        return self._data is not None and len(self._data) >= 2
 
     # Value calculation methods
 

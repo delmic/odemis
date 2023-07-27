@@ -1421,6 +1421,7 @@ class NavigableBarPlotCanvas(BarPlotCanvas):
         # Therefore just display a single bar that fills the the panel
         else:
             xs = [(hi + lo) / 2]
+            lox = hix = min(max(0, lox), len(yst) - 1)
             ys = [yst[lox]]
 
         # Add a few points onto the beginning and end of the array

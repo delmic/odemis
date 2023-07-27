@@ -1682,9 +1682,13 @@ class NavigablePlotViewport(PlotViewport):
         lo = centre - prop * new_span
         hi = lo + new_span
 
-        # Clamp the ranges to the data range
-        lo = max(self.canvas.data_xrange[0], lo)
-        hi = min(hi, self.canvas.data_xrange[1])
+        # Clamp the ranges to the data range (can happen if the data range changed)
+        if lo < self.canvas.data_xrange[0]:
+            lo = self.canvas.data_xrange[0]
+            hi = lo + new_span
+        if hi > self.canvas.data_xrange[1]:
+            hi = self.canvas.data_xrange[1]
+            lo = max(hi - new_span, self.canvas.data_xrange[0])
 
         self.hrange.value = (lo, hi)
         self.hrange_lock.value = True  # disable autoscaling when the user zooms in
@@ -1717,8 +1721,14 @@ class NavigablePlotViewport(PlotViewport):
         # Clamp the ranges to the data range. We allow seeing a little bit higher
         # than the maximum data as sometimes it's nicer to see a plot if the max
         # value doesn't exactly touch the top of the plot.
-        lo = max(self.canvas.data_yrange[0], lo)
-        hi = min(hi, self.canvas.data_yrange[1] + (self.canvas.data_yrange[1] - self.canvas.data_yrange[0]) * self._vmargin)
+        mn = self.canvas.data_yrange[0]
+        mx = self.canvas.data_yrange[1] + (self.canvas.data_yrange[1] - self.canvas.data_yrange[0]) * self._vmargin
+        if lo < mn:
+            lo = mn
+            hi = lo + new_span
+        if hi > mx:
+            hi = mx
+            lo = max(hi - new_span, mn)
 
         self.vrange.value = (lo, hi)
         self.vrange_lock.value = True  # disable autoscaling when the user zooms in
