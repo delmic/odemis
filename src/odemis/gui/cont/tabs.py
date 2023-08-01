@@ -100,7 +100,7 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter, VigilantAttributeConnector
-from odemis.util import units, spot, limit_invocation, almost_equal, fluo, executeAsyncTask
+from odemis.util import units, spot, limit_invocation, almost_equal, fluo, driver, executeAsyncTask
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.driver import ATOL_LINEAR_POS
 from odemis.util.units import readable_str
@@ -5871,10 +5871,6 @@ class Sparc2AlignTab(Tab):
             self.streak_unit.timeRange.value = self.streak_unit.timeRange.value
 
         # Create stream & view
-        # ====== For DEBUGGING purpose ======
-        # if "FSLM" in main_data.microscope.name.upper():
-        #     wx.MessageBox("Actual SPARC module is FSLM", caption="Notice")
-
         self._stream_controller = streamcont.StreamBarController(
             tab_data,
             panel.pnl_streams,
@@ -6324,13 +6320,25 @@ class Sparc2AlignTab(Tab):
                 logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
         if main_data.spec_switch:
-            self.panel.btn_spec_switch_retract.Bind(wx.EVT_BUTTON, self._on_specswitch_align)
-            self.panel.btn_spec_switch_engage.Bind(wx.EVT_BUTTON, self._on_specswitch_align)
-            # future for moving the mirror to an absolute position
-            self._specswitch_f = model.InstantaneousFuture()
+            self.panel.btn_spec_switch_retract.Bind(wx.EVT_BUTTON, self._on_spec_switch_btn)
+            self.panel.btn_spec_switch_engage.Bind(wx.EVT_BUTTON, self._on_spec_switch_btn)
+
+            # move the spec_switch mirror to the default (retracted) position
+            main = self.tab_data_model.main
+            spec_switch_data = main.spec_switch.getMetadata()
+
+            # if the spec_switch mirror is not positioned either on ACTIVE or
+            # DEACTIVE position move it to the default (DEACTIVE) position
+            if not almost_equal(main.spec_switch.position.value["x"],
+                                spec_switch_data[model.MD_FAV_POS_DEACTIVE]["x"]):
+                if not almost_equal(main.spec_switch.position.value["x"],
+                                    spec_switch_data[model.MD_FAV_POS_ACTIVE]["x"]):
+                    self._spec_switch_f = main.spec_switch.moveAbs(spec_switch_data[model.MD_FAV_POS_DEACTIVE])
+                    self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
+
             # future and progress connector for tracking the progress of the gauge when moving
-            self._gauge_f = None
-            self._pfc_specswitch = None
+            # self._gauge_f = None
+            self._pfc_spec_switch = None
 
         # Switch between alignment modes
         # * lens-align: first auto-focus spectrograph, then align lens1
@@ -7179,7 +7187,8 @@ class Sparc2AlignTab(Tab):
         # Enable manual focus when done running autofocus
         self.panel.btn_manual_focus.Enable(True)
 
-    def _on_specswitch_align(self, event):
+    @call_in_wx_main
+    def _on_spec_switch_btn(self, event):
         """
         Called when one of the retract and engage spec-switch mirror buttons are pressed.
         It will start movement for the spec-switch mirror (retract/engage).
@@ -7190,25 +7199,23 @@ class Sparc2AlignTab(Tab):
         # assign the button which got the click event
         btn = event.GetEventObject()
 
-        # GUI stream bar controller pauses the stream
-        self._stream_controller.pauseStreams()
-
         if btn.GetLabel() in {"Engage", "Engaged"}:
             # set the requested position to ACTIVE and change the appearance of the retract and engage buttons
             pos = spec_switch[model.MD_FAV_POS_ACTIVE]
-            btn.SetLabel("Cancel")
-            self.panel.btn_spec_switch_retract.SetForegroundColour(wx.BLACK)
-            self.panel.btn_spec_switch_retract.SetLabel("Retract")
+            self._change_spec_switch_btn_lbl(btn, "Cancel", wx.BLACK)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retract", wx.BLACK)
+            # pause the stream when engaging the mirror
+            self._ccd_stream.should_update.value = False
         elif btn.GetLabel() in {"Retract", "Retracted"}:
             # set the requested position to DEACTIVE and change the appearance of the retract and engage buttons
             pos = spec_switch[model.MD_FAV_POS_DEACTIVE]
-            btn.SetLabel("Cancel")
-            self.panel.btn_spec_switch_engage.SetForegroundColour(wx.BLACK)
-            self.panel.btn_spec_switch_engage.SetLabel("Engage")
+            self._change_spec_switch_btn_lbl(btn, "Cancel", wx.BLACK)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)
+            # continue the stream when retracting the mirror
+            self._ccd_stream.should_update.value = True
         elif btn.GetLabel() == "Cancel":
-            # stop the current movement of the actuator and force the button_done callback
-            main.spec_switch.stop()
-            self._on_specswitch_button_done(event)
+            self._spec_switch_f.cancel()
+            self._adjust_spec_switch_button_state()
             return
 
         # disable the alignment buttons when moving the mirror
@@ -7223,31 +7230,11 @@ class Sparc2AlignTab(Tab):
         if self.tab_data_model.main.spec_switch:
             self.tab_data_model.main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
 
-        # move the mirror to the right position
-        self._specswitch_f = main.spec_switch.moveAbs(pos)
-        self._specswitch_f.add_done_callback(self._on_specswitch_button_done)
+        # move the mirror to the right position using a progressive future
+        self._spec_switch_f = driver.ProgressiveMove(main.spec_switch, pos)
+        self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
         # take care of a moving gauge while moving the mirror
-        self._gauge_f = self.move_specswitch_mirror(pos)
-        self._pfc_specswitch = ProgressiveFutureConnector(self._gauge_f, self.panel.gauge_specswitch)
-
-    def move_specswitch_mirror(self, pos: dict) -> model.ProgressiveFuture:
-        """
-        Handles progression updates of the gauge in a  future which is
-        calculated from the start of the move until the end of the move.
-        :param pos: the requested position of the spec-switch mirror.
-        :return: progressive future controlling the gauge update
-        """
-        spec_switch = self.tab_data_model.main.spec_switch
-        est_start = time.time() + 0.1
-
-        # calculate the time the mirror needs to move from the current position to the requested position
-        current_pos = spec_switch.position.value
-        current_speed = spec_switch.speed.value
-        mirror_move_time = abs((current_pos.pop('x') - pos.pop('x')) / current_speed.pop('x'))
-
-        f = model.ProgressiveFuture(start=est_start, end=est_start + mirror_move_time)
-        f._running_subf = spec_switch.moveAbs(pos)
-        return f
+        self._pfc_spec_switch = ProgressiveFutureConnector(self._spec_switch_f, self.panel.gauge_specswitch)
 
     @call_in_wx_main
     def _on_specswitch_button_done(self, _):
@@ -7261,8 +7248,7 @@ class Sparc2AlignTab(Tab):
 
         # check if the state of the buttons need adjustments
         self._adjust_spec_switch_button_state()
-        # cancel the progressive future to update the gauge
-        self._gauge_f.cancel()
+        self._pfc_spec_switch = None
 
         # hide the gauge as there is no convenient way to reset it
         if self.panel.gauge_specswitch.IsShown():
@@ -7290,26 +7276,32 @@ class Sparc2AlignTab(Tab):
         self.panel.btn_p_spec_switch_x.Enable(False)
 
         # request the metadata to be able to compare with FAV_POS
-        spec_sel_MD = self.tab_data_model.main.spec_switch.getMetadata()
+        spec_switch_md = self.tab_data_model.main.spec_switch.getMetadata()
 
         # when the mirror is in the ACTIVE position enable the
         # option to align it manually and to update the FAV_POS
         if almost_equal(self.tab_data_model.main.spec_switch.position.value["x"],
-                        spec_sel_MD[model.MD_FAV_POS_ACTIVE]["x"], atol=1e-5):
+                        spec_switch_md[model.MD_FAV_POS_ACTIVE]["x"], atol=1e-5):
             self.tab_data_model.main.spec_switch.position.subscribe(self._onSpecSwitchPos)
             # enable the manual alignment buttons when the mirror is engaged
             self.panel.btn_m_spec_switch_x.Enable(True)
             self.panel.btn_p_spec_switch_x.Enable(True)
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engaged", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retract", wx.BLACK)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage,
+                                             "Engaged", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract,
+                                             "Retract", wx.BLACK)
         # when the mirror is in the DEACTIVE position disable manual alignment and update of FAV_POS
         elif almost_equal(self.tab_data_model.main.spec_switch.position.value["x"],
-                          spec_sel_MD[model.MD_FAV_POS_DEACTIVE]["x"], atol=1e-5):
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retracted", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)
+                          spec_switch_md[model.MD_FAV_POS_DEACTIVE]["x"], atol=1e-5):
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract,
+                                             "Retracted", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage,
+                                             "Engage", wx.BLACK)
         else:
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)
-            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retract", wx.BLACK)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage,
+                                             "Engage", odemis.gui.FG_COLOUR_ERROR)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract,
+                                             "Retract", odemis.gui.FG_COLOUR_ERROR)
 
     def _onBkgAcquire(self, evt):
         """
@@ -7486,8 +7478,7 @@ class Sparc2AlignTab(Tab):
 
     def _onSpecSwitchPos(self, pos):
         """
-        Called when the spec-switch (wrapper to the X axis of Spectrometer Selector)
-          is moved (and the light-out-alignment mode is active)
+        Called when the light-aligner is moved (and the light-out-alignment mode is active)
         """
         if self.tab_data_model.main.tab.value != self:
             # Should never happen, but for safety, we double check
@@ -7500,8 +7491,7 @@ class Sparc2AlignTab(Tab):
 
     def _onLightAlignPos(self, pos):
         """
-        Called when the light-aligner (wrapper to the X axis of In-Light Aligner)
-          is moved (and the light-out-alignment mode is active)
+        Called when the light-aligner is moved (and the light-out-alignment mode is active)
         """
         if self.tab_data_model.main.tab.value != self:
             # Should never happen, but for safety, we double check

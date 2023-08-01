@@ -25,7 +25,9 @@ import os
 import re
 import sys
 import threading
+import time
 from collections.abc import Iterable
+from concurrent.futures import CancelledError
 
 from Pyro4.errors import CommunicationError
 
@@ -241,8 +243,50 @@ def guessActuatorMoveDuration(actuator, axis, distance, accel=DEFAULT_ACCELERATI
     speed = DEFAULT_SPEED
     if model.hasVA(actuator, "speed"):
         speed = actuator.speed.value.get(axis, DEFAULT_SPEED)
-
     return estimateMoveDuration(distance, speed, accel)
+
+
+class ProgressiveMove(model.ProgressiveFuture):
+    def __init__(self, comp, pos):
+        self.name = comp.name
+        est_start = time.time() + 0.1
+
+        # calculate the time the mirror needs to move from the current position to the requested position
+        current_pos = comp.position.value
+        current_speed = comp.speed.value
+        axes_total_move_time = 0.0
+
+        for ax in pos.keys():
+            if ax in current_speed.keys():
+                axes_total_move_time += abs((current_pos[ax] - pos[ax]) / current_speed[ax])
+            else:
+                # use a safe speed default value (0.1 m/s) for this axis instead
+                axes_total_move_time += abs((current_pos[ax] - pos[ax]) / 0.1)
+
+        super().__init__(est_start, est_start + axes_total_move_time)
+
+        self._running_subf = comp.moveAbs(pos)
+        self.set_running_or_notify_cancel()
+        self.task_canceller = self._cancel
+        self._running_subf.add_done_callback(self._on_future_done)  # called when a sub-future is done
+
+    def _cancel(self, _) -> bool:
+        return self._running_subf.cancel()
+
+    def _on_future_done(self, f):
+        # Set exception if future failed and cancel all other sub-futures
+        try:
+            f.result()
+        except CancelledError as ex:  # raises CancelledError if cancelled
+            logging.info(f"Move for {self.name} was cancelled")
+            self.set_exception(ex)
+            return
+        except Exception as ex:
+            logging.exception(f"Move for {self.name} failed")
+            self.set_exception(ex)
+            return
+
+        self.set_result(f.result())
 
 
 def checkLightBand(band):

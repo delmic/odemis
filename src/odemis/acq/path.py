@@ -96,11 +96,11 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'on'},  # fully opened
                  'spectrograph': {'grating': 'mirror'},
                  # 'cl-det-selector': {'x': 'off'},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector' will depend on the affects
                 }),
             'ek': (r"ccd.*",
                 {'lens-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},  # ek mode available only if MD_FAV_POS_ACTIVE
@@ -115,12 +115,12 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_ACTIVE, 'on')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'on'},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # there is also the cl-filter, but that's just up to the user
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector' will depend on the affects
                 }),
             'spectral': (r"spectrometer.*",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -171,12 +171,12 @@ SPARC2_MODES = {
                  # 'cl-det-selector': {'x': 'off'},
                  # TODO
                  # 'spec-det-selector': {'rx': math.radians(90)},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'spectrograph': {'grating': GRATING_NOT_MIRROR},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector' will depend on the affects
                 }),
             'time-correlator': ("time-correlator",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -192,13 +192,13 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'grating': 'mirror'},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector' will depend on the affects
                 }),
             'lens2-align': (r"ccd.*",  # Same as the mirror-align, but with the lens-switch active
                 {'lens-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
@@ -228,14 +228,13 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'grating': 'mirror'},
-                 # Note: focus is store/restore when going to/from this mode
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'on'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector' will depend on the affects
                 }),
             'spec-focus': (r"ccd.*",  # TODO: only use "focus" as target?
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -243,19 +242,18 @@ SPARC2_MODES = {
                  'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': BAND_PASS_THROUGH},
                  'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector' will depend on the affects
                 }),
             'fiber-align': ("fiber-aligner",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # Grating "mirror" forces wavelength to zero order and saves the
                  # current values so we can restore them
                  'spectrograph-dedicated': {'slit-in': 500e-6, 'grating': 'mirror'},
@@ -263,6 +261,7 @@ SPARC2_MODES = {
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-selector' will depend on the affects
                 }),
             'spec-fiber-focus': ("focus",  # if multiple focusers, the detector should be passed, to pick the right path
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
@@ -281,11 +280,12 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': BAND_PASS_THROUGH},
                  'slit-in-big': {'x': 'on'},  # fully opened
-                 # 'spec-switch': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # 'spec-switch': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
-                                   'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                                   #'z': "MD:" + model.MD_FAV_POS_ACTIVE
+                                   },
                  }),
          }
 
@@ -648,7 +648,7 @@ class OpticalPathManager():
                     else:
                         logging.warning("Failed to find any correct position for component %s in %s", comp.name, pos)
                 if isinstance(pos, str) and pos.startswith("MD:"):
-                    pos = self.mdToValue(comp, pos[3:])[axis]
+                    pos = self.mdToValue(comp, pos[3:])[axis] if axis in comp.axes else None
                 if axis in comp.axes:
                     if axis == "band":
                         # Handle the filter wheel in a special way. Search
@@ -731,7 +731,8 @@ class OpticalPathManager():
                                 pos = key
                                 break
                     # write actuator axis and position in dict
-                    mv[axis] = pos
+                    if pos:
+                        mv[axis] = pos
                 else:
                     logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
 

@@ -219,6 +219,9 @@ Actuators:
  * spec-det-selector: Mirror to switch between multiple detectors connected to a spectrograph.
    It has an axis: rx.
    The rx axis has a set of positions, which as description have a list of strings representing the affects for each position.
+ * spec-switch: Actuator to engage or retract the mirror responsible for redirecting direct laser light out or keep
+   inside of a module. This will force the light onto an internal or external spectrometer.
+   It typically only has one axis: x.
  * fiber-aligner: Actuator to move the optical fiber input in order to optimise the amount of light going to the fiber.
    It typically has axes: x and y.
  * spec-selector: Selector between the external (fiber) output and the internal spectrometer(s).
