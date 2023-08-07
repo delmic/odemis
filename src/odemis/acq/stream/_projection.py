@@ -1231,8 +1231,7 @@ class RGBSpatialSpectrumProjection(RGBSpatialProjection):
         # pick only the data inside the bandwidth
         spec_range = self.stream._get_bandwidth_in_pixel()
 
-        # TODO: update the condition with self.stream.tint.value != "fittorgb"
-        if not hasattr(self.stream, "fitToRGB") or not self.stream.fitToRGB.value:
+        if self.stream.tint.value != TINT_FIT_TO_RGB:
             # Use .tolist() to force scalar (instead of array of 0 dims)
             av_data = numpy.mean(data[spec_range[0]:spec_range[1] + 1]).tolist()
             return av_data
@@ -1488,7 +1487,11 @@ class LineSpectrumProjection(RGBProjection):
                 irange = sorted(self.stream.intensityRange.value)
 
             # Scale and convert to RGB image
-            rgbim = img.DataArray2RGB(spec1d, irange, self.stream.tint.value)
+            tint = self.stream.tint.value
+            if tint == TINT_FIT_TO_RGB:
+                # Not supported for this view => fallback to greyscale
+                tint = (255, 255, 255)
+            rgbim = img.DataArray2RGB(spec1d, irange, tint)
             rgbim.flags.writeable = False
             md = self._find_metadata(spec1d.metadata)
             md[model.MD_DIMS] = "YXC"  # RGB format
