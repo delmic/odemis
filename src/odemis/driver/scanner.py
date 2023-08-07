@@ -37,6 +37,8 @@ class CompositedScanner(model.Emitter):
         '''
         dependencies (dict string->model.HwComponent): the dependencies
             There must be exactly two dependencies "external" and "internal".
+        children (dict str->dict): An optional "detector" which will create a
+            CompositedDetector
         Raise:
           ValueError: if the dependencies are not compatible
         '''
@@ -222,9 +224,9 @@ class CompositedScanner(model.Emitter):
 
 class CompositedDetector(model.Detector):
     '''
-    A generic Detector which takes 2 dependencies to create a one detector. It's
-    essentially a wrapper to an Detector to generate data using the "external"
-    detector while manipulating the "internal" detector.
+    A wrapper Detector which can be used in addition to the CompositedScanner.
+    It's used to automatically control the external and/or blanker when an
+    acquisition starts and stops.
     '''
     def __init__(self, name, role, parent, dependencies, **kwargs):
         '''
