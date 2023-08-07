@@ -19,13 +19,10 @@ You should have received a copy of the GNU General Public License along with Ode
 
 import csv
 import logging
-import math
-from odemis import model
-from odemis.model import MD_THETA_LIST
-from odemis.util import spectrum, img, find_closest, almost_equal
-from typing import Tuple
 
 import numpy
+from odemis import model
+from odemis.util import almost_equal, angleres, find_closest, img, spectrum
 
 
 # AR calibration data is a background image. The file format expected is a
@@ -337,17 +334,11 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
 
             data = img.Subtract(data, bckg)
 
-    # Remove NaN values from the theta list, if exists, and update the calibrated data to have the same length
     if model.MD_THETA_LIST in data.metadata:
         try:
-            # Explicitly call get_angle_per_pixel(), instead of get_angle_range(),
-            # to only accept correct metadata, without fallback to pixels
-            angle_range = spectrum.get_angle_per_pixel(data)
-            angles, data = filter_nan_from_data(angle_range, data)
-            data = model.DataArray(data, data.metadata.copy())
-            data.metadata[MD_THETA_LIST] = angles
+            data = project_angular_spectrum_to_grid_5d(data)
         except (ValueError, KeyError) as ex:
-            logging.debug("MD_THETA_LIST incorrect, will not use it: %s", ex)
+            logging.warning("Failed to correct chromatic aberration on angular spectrum data: %s", ex)
 
     if coef is not None:
         # Check if we have any wavelength information in data.
@@ -377,20 +368,47 @@ def apply_spectrum_corrections(data, bckg=None, coef=None):
     return data
 
 
-def filter_nan_from_data(l: list, data: model.DataArray) -> Tuple[list, model.DataArray]:
+def project_angular_spectrum_to_grid_5d(data: model.DataArray) -> model.DataArray:
     """
-    Filters out NaN values from the list, and filters out the same indices in the data.
-    l (list of floats of length N): typically the MD_THETA_LIST
-    data (DataArray of floats with shape .N...): Typically the whole angular spectrum data of shape CAZYX
-    return l, data, without the NaNs in l, and the corresponding indices in data removed
+    Compensate the chromatic aberration of an angular spectrum 5D data and
+    project it on a axis A regularly distributed. It relies on
+    angleres.project_angular_spectrum_to_grid() which only handle a single
+    spatial point. See that function documentation for details.
+    :param data: 5D DataArray of shape CAZYX
+    :return: 5D DataArray of shape CA'ZYX. A' is a different length than A.
     """
-    if len(l) != data.shape[1]:
-        raise ValueError(f"l has length {len(l)} != data second dimension {data.shape}.")
+    dims = data.metadata.get(model.MD_DIMS, "CAZYX"[-data.ndim:])
+    if dims != "CAZYX":
+        raise ValueError(f"Expected an array CAZYX, but got {dims}")
 
-    l = numpy.array(l)
-    not_nan_mask = ~numpy.isnan(l)
-    # data is expected to be CAZYX => so filter second dimension
-    return l[not_nan_mask], data[:, not_nan_mask]
+    zyx_shape = data.shape[2:]
+    data_low_ac = numpy.moveaxis(data, [0, 1], [4, 3])
+    data_proj = None  # Wait until we know the shape to instantiate the final array
+    data_proj_low_ac = None
+    for i in numpy.ndindex(zyx_shape):
+        # Compute the projection for 1 value in XYZ, wtih the two axes left in
+        # the order AC, as expected by project_angular_spectrum_to_grid().
+        # data_ac = numpy.swapaxes(data[(...,) + i], 0, 1)
+        proj_ac = angleres.project_angular_spectrum_to_grid(data_low_ac[i])
+
+        if data_proj is None:
+            # First element, need to create array based on proj shape and dtype
+            shape = (proj_ac.shape[1], proj_ac.shape[0]) + zyx_shape
+            data_proj = model.DataArray(numpy.empty(shape, proj_ac.dtype))
+            data_proj.metadata = proj_ac.metadata.copy()
+            data_proj.metadata[model.MD_DIMS] = "CAZYX"
+            # Copy metadata related to spatial part directly from the original data
+            for k in (model.MD_PIXEL_SIZE, model.MD_POS):
+                if k in data.metadata:
+                    data_proj.metadata[k] = data.metadata[k]
+
+            # Projection so that we can easily copy the AC data (as last two dims)
+            data_proj_low_ac = numpy.moveaxis(data_proj, [0, 1], [4, 3])
+
+        # Add it to the rest of final array
+        data_proj_low_ac[i] = proj_ac
+
+    return data_proj
 
 
 def write_trigger_delay_csv(filename, trig_delays):

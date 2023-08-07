@@ -1381,7 +1381,7 @@ class LineSpectrumProjection(RGBProjection):
         if model.hasVA(self.stream, "selected_time"):
             t = numpy.searchsorted(self.stream._tl_px_values, self.stream.selected_time.value)
         elif model.hasVA(self.stream, "selected_angle"):
-            t = numpy.searchsorted(self.stream._thetal_px_values, self.stream.selected_angle.value)
+            t = numpy.searchsorted(self.stream._calibrated_theta_list, self.stream.selected_angle.value)
         else:
             t = 0
 
@@ -1623,7 +1623,7 @@ class PixelAngularSpectrumProjection(RGBProjection):
         x, y = self.stream.selected_pixel.value
 
         # Shape is CA1YX
-        spec2d = self.stream.calibrated.value[:, :, 0, :, :]  # same data but remove useless dims
+        spec2d = data[:, :, 0, :, :]  # same data but remove useless dims
         md = dict(data.metadata)
         md[model.MD_DIMS] = "AC"
 
@@ -1633,13 +1633,14 @@ class PixelAngularSpectrumProjection(RGBProjection):
         if width == 1:  # short-cut for simple case
             data = spec2d[:, :, y, x]
             data = numpy.swapaxes(data, 0, 1)
-            return model.DataArray(data, md)
+            da = model.DataArray(data, md)
+        else:
+            radius = width / 2
+            mean = img.mean_within_circle(spec2d, (x, y), radius)
+            mean = numpy.swapaxes(mean, 0, 1)
+            da = model.DataArray(mean.astype(spec2d.dtype), md)
 
-        radius = width / 2
-        mean = img.mean_within_circle(spec2d, (x, y), radius)
-
-        mean = numpy.swapaxes(mean, 0, 1)
-        return model.DataArray(mean.astype(spec2d.dtype), md)
+        return da
 
     def projectAsRaw(self):
         """
@@ -1745,7 +1746,7 @@ class SinglePointSpectrumProjection(DataProjection):
         if model.hasVA(self.stream, "selected_time"):
             t = numpy.searchsorted(self.stream._tl_px_values, self.stream.selected_time.value)
         elif model.hasVA(self.stream, "selected_angle"):
-            t = numpy.searchsorted(self.stream._thetal_px_values, self.stream.selected_angle.value)
+            t = numpy.searchsorted(self.stream._calibrated_theta_list, self.stream.selected_angle.value)
         else:
             t = 0
         spec2d = self.stream.calibrated.value[:, t, 0, :, :]  # same data but remove useless dims

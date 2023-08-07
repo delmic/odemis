@@ -19,19 +19,18 @@ You should have received a copy of the GNU General Public License along with Ode
 If not, see http://www.gnu.org/licenses/.
 """
 
-import numpy
-
-from odemis.model import MD_POL_MODE, MD_POL_S1
-
-from odemis.util.img import ensure2DImage
-
-from odemis import model
-from odemis.dataio import hdf5
-from odemis.util import angleres
+import logging
+import math
 import unittest
 
-from odemis.util.img import RGB2Greyscale
+import numpy
+from odemis import model
+from odemis.dataio import hdf5
+from odemis.model import MD_POL_MODE, MD_POL_S1
+from odemis.util import angleres
+from odemis.util.img import RGB2Greyscale, ensure2DImage
 
+logging.getLogger().setLevel(logging.DEBUG)
 
 class TestAngleResolvedDataConversion(unittest.TestCase):
     """
@@ -441,10 +440,85 @@ class TestAngleResolvedDataConversion(unittest.TestCase):
         self.assertEqual(result_polar_2.shape, result_polar_1.shape)
 
 
+class TestExtractThetaList(unittest.TestCase):
+
+    def test_simple(self):
+        """
+        Test ExtractThetaList when all metadata is good
+        """
+        shape = (512, 1024)  # Angle, Wavelength
+        wl_orig = (400e-9 + numpy.arange(shape[1]) * 10e-9).tolist()
+        metadata = {
+            model.MD_DIMS: "AC",
+            model.MD_HW_NAME: "fake AR spec",
+            model.MD_DESCRIPTION: "test3d",
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+            model.MD_WL_LIST: wl_orig,
+            model.MD_AR_MIRROR_TOP: [220, 0],
+            model.MD_AR_MIRROR_BOTTOM: [30, 0],
+            model.MD_POS: (1e-3, -30e-3),  # m
+        }
+        da = model.DataArray(numpy.zeros(shape, numpy.uint16), metadata)
+
+        thetal = angleres.ExtractThetaList(da)
+        self.assertEqual(len(thetal), shape[0])
+        # Should be liken NaN.... - rads ...  + rads ... NaN
+        self.assertTrue(math.isnan(thetal[0]))
+        self.assertTrue(math.isnan(thetal[-1]))
+
+        # Check angles increase
+        thetal_np = numpy.asarray(thetal)
+        diff = thetal_np[1:] - thetal_np[:-1]
+        for d in diff:
+            self.assertTrue(math.isnan(d) or d >= 0, f"{d} < 0")
+
+
+class TestAngularSpetrumLinear(unittest.TestCase):
+
+    def test_simple(self):
+        """
+        Test ExtractThetaList when all metadata is good
+        """
+        shape = (1080, 512)  # Angle, Wavelength
+        wl_orig = (400e-9 + numpy.arange(shape[1]) * 10e-9).tolist()
+        metadata = {
+            model.MD_DIMS: "AC",
+            model.MD_HW_NAME: "fake AR spec",
+            model.MD_DESCRIPTION: "test",
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+            model.MD_WL_LIST: wl_orig,
+            model.MD_AR_MIRROR_TOP: [640, -10000000],
+            model.MD_AR_MIRROR_BOTTOM: [330, -20000000],
+            model.MD_POS: (1e-3, -30e-3),  # m
+        }
+        da = model.DataArray(numpy.zeros(shape, numpy.uint16), metadata)
+
+        da_lin = angleres.project_angular_spectrum_to_grid(da)
+        lin_shape = da_lin.shape
+        self.assertEqual(lin_shape[1], shape[1])  # C should be the same
+        self.assertGreater(lin_shape[0], 100)  # A, typically, should be ~1000 px
+
+        thetal = da_lin.metadata[model.MD_THETA_LIST]
+        # Should be like - rads ...  + rads (no NaN)
+        self.assertFalse(any(numpy.isnan(thetal)))
+
+        # Check angles increase
+        thetal_np = numpy.asarray(thetal)
+        diff = thetal_np[1:] - thetal_np[:-1]
+        for d in diff:
+            self.assertTrue(d >= 0, f"{d} < 0")
+
+        # If all the data was 0, the interpolated data should still be 0
+        numpy.testing.assert_array_almost_equal(da_lin, 0)
+
+
 if __name__ == "__main__":
     # for debug:
     # import sys;sys.argv = ['', 'TestPolarConversionOutput.test_2000x2000']
     unittest.main()
     # suite = unittest.TestLoader().loadTestsFromTestCase(TestPolarConversionOutput)
     # unittest.TextTestRunner(verbosity=2).run(suite)
-

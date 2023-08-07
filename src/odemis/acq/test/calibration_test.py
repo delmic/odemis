@@ -399,20 +399,28 @@ class TestSpectrum(unittest.TestCase):
             if wl <= wl_calib[0]:
                 self.assertEqual(vo * dcalib[0], vc)
 
-    def test_theta_list_nan(self):
-        """Check that all the NaNs of MD_THETA_LIST are removed"""
+    def test_angular_spec_compensation(self):
+        """Check that the angular spec data is readjusted based on chromatic aberration info"""
         # AR Spectrum (aka EK1) data
-        data = numpy.ones((256, 128, 1, 2, 3), dtype="uint16")
+        data = numpy.ones((512, 1080, 1, 2, 3), dtype=numpy.uint16)
         wld = numpy.linspace(333e-9, 511e-9, data.shape[0])
         angles = numpy.linspace(-1.1, 1.5, data.shape[1])
-        # set a few angles as NaN, and mark them in the data with a different value
+        
+        # set a few angles as NaN
         for i in [0, 1, -1]:
             angles[i] = math.nan
             data[:, i,:,:,:] = 2
 
-        md = {model.MD_WL_LIST: wld.tolist(),
-              model.MD_THETA_LIST: angles.tolist(),
-              model.MD_DIMS: "CAZYX",
+        md = {
+            model.MD_WL_LIST: wld.tolist(),
+            model.MD_THETA_LIST: angles.tolist(),  # will be discarded
+            model.MD_DIMS: "CAZYX",
+            model.MD_AR_MIRROR_TOP: [640, -10000000],
+            model.MD_AR_MIRROR_BOTTOM: [330, -20000000],
+            model.MD_BPP: 12,
+            model.MD_BINNING: (1, 1),  # px, px
+            model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
+            model.MD_POS: (1e-3, -30e-3),  # m
         }
         arspec = model.DataArray(data, md)
         orig_arspec = data.copy()
@@ -420,11 +428,10 @@ class TestSpectrum(unittest.TestCase):
 
         calibrated = calibration.apply_spectrum_corrections(arspec)
 
-        # NaNs should be gone
+        # MD_THETA_LIST should have no NaNs
         angles_cal = calibrated.metadata[model.MD_THETA_LIST]
-        self.assertEqual(len(angles_cal), len(angles) - 3)
         self.assertFalse(any(math.isnan(x) for x in angles_cal))
-        self.assertEqual(calibrated.shape, (256, 128 - 3 , 1, 2, 3))
+        self.assertEqual(calibrated.shape, (512, len(angles_cal) , 1, 2, 3))
         numpy.testing.assert_array_equal(calibrated, 1)
         
         # The original data shouldn't have been changed
