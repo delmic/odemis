@@ -19,15 +19,17 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from Pyro4.errors import CommunicationError
-from collections.abc import Iterable
 import logging
 import math
-from odemis import model
 import os
 import re
 import sys
 import threading
+from collections.abc import Iterable
+
+from Pyro4.errors import CommunicationError
+
+from odemis import model, util
 
 
 def getSerialDriver(name):
@@ -62,6 +64,7 @@ def get_linux_version():
 
 # From http://code.activestate.com/recipes/286222/
 _SCALE = {'KB': 2 ** 10, 'MB': 2 ** 20}
+
 
 def _VmB(VmKey):
     """
@@ -111,6 +114,10 @@ def readMemoryUsage():
         return _VmB('VmRSS')
 
 
+ATOL_LINEAR_POS = 100e-6  # m
+ATOL_ROTATION_POS = 1e-3  # rad (~0.5°)
+
+
 def estimateMoveDuration(distance, speed, accel):
     """
     Compute the theoretical duration of a move given the maximum speed and
@@ -141,8 +148,59 @@ def estimateMoveDuration(distance, speed, accel):
         return t1 + t2
 
 
-DEFAULT_SPEED = 10e-6 # m/s
-DEFAULT_ACCELERATION = 0.01 # m/s²
+def isNearPosition(current_pos, target_position, axes):
+    """
+    Check whether given axis is near stage target position
+    :param current_pos: (dict) current position dict (axis -> value)
+    :param target_position: (dict) target position dict (axis -> value)
+    :param axes: (set) axes to compare values
+    :return: True if the axis is near position, False otherwise
+    :raises ValueError if axis is unknown
+    """
+    if not axes:
+        logging.warning("Empty axes given.")
+        return False
+
+    rot_axes = {axis for axis in axes if axis[0] == 'r'}
+    linear_axes = {axis for axis in axes if axis not in rot_axes}
+    for axis in axes:
+        current_value = current_pos[axis]
+        target_value = target_position[axis]
+        if axis in linear_axes:
+            is_near = abs(target_value - current_value) < ATOL_LINEAR_POS
+        elif axis in rot_axes:
+            is_near = util.rot_almost_equal(current_value, target_value, atol=ATOL_ROTATION_POS)
+        else:
+            raise ValueError("Unknown axis value %s." % axis)
+        if not is_near:
+            return False
+    return True
+
+
+def isInRange(current_pos: dict, active_range: dict, axes: set):
+    """
+    Check if current position is within active range
+    :param current_pos: (dict str->float) current position dict (axis -> value)
+    :param active_range: (dict) imaging  active range (axis name → (min,max))
+    :param axes: (set) axes to check values
+    :return: True if position in active range, False otherwise
+    """
+    if not axes:
+        logging.warning("Empty axes given.")
+        return False
+    for axis in axes:
+        pos = current_pos[axis]
+        axis_active_range = [r for r in active_range[axis]]
+        # Add 1% margin for hardware slight errors
+        margin = (axis_active_range[1] - axis_active_range[0]) * 0.01
+        if not ((axis_active_range[0] - margin) <= pos <= (axis_active_range[1] + margin)):
+            return False
+    return True
+
+
+DEFAULT_SPEED = 10e-6  # m/s
+DEFAULT_ACCELERATION = 0.01  # m/s²
+
 
 def guessActuatorMoveDuration(actuator, axis, distance, accel=DEFAULT_ACCELERATION):
     """
@@ -153,14 +211,14 @@ def guessActuatorMoveDuration(actuator, axis, distance, accel=DEFAULT_ACCELERATI
     """
     speed = None
     if not (hasattr(actuator, "axes") and isinstance(actuator.axes, dict)):
-        raise ValueError("The component %s should be an actuator, but it is not." % actuator)  
+        raise ValueError("The component %s should be an actuator, but it is not." % actuator)
     if not axis in actuator.axes:
         raise KeyError("The actuator component %s is expected to have %s axis, but it does not." % (actuator, axis))
     if model.hasVA(actuator, "speed"):
         speed = actuator.speed.value.get("z", None)
     if speed is None:
-        speed = DEFAULT_SPEED  
-    return estimateMoveDuration(distance, speed, accel) 
+        speed = DEFAULT_SPEED
+    return estimateMoveDuration(distance, speed, accel)
 
 
 def checkLightBand(band):
@@ -198,6 +256,7 @@ def checkLightBand(band):
 
     # no error found
 
+
 # Special trick functions for speeding up Pyro start-up
 def _speedUpPyroVAConnect(comp):
     """
@@ -214,17 +273,19 @@ def _speedUpPyroVAConnect(comp):
         t.daemon = True
         t.start()
 
+
 def speedUpPyroConnect(comp):
     """
     Ensures that all the children of the component will be quick to access.
     It does nothing but speed up later access.
     comp (Component)
     """
+
     # each connection is pretty fast (~10ms) but when listing all the VAs of
     # all the components, it can easily add up to 1s if done sequentially.
 
     def bind_obj(obj):
-#        logging.debug("binding comp %s", obj.name)
+        #        logging.debug("binding comp %s", obj.name)
         obj._pyroBind()
         speedUpPyroConnect(obj)
 
@@ -239,6 +300,8 @@ BACKEND_RUNNING = "RUNNING"
 BACKEND_STARTING = "STARTING"
 BACKEND_DEAD = "DEAD"
 BACKEND_STOPPED = "STOPPED"
+
+
 # TODO: support TERMINATING status?
 def get_backend_status():
     try:

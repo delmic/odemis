@@ -28,6 +28,7 @@ import logging
 import math
 
 from odemis.acq.feature import CryoFeature
+from odemis.acq.move import MicroscopePostureManager
 from odemis.gui import conf
 from odemis.util.filename import create_filename, make_unique_name
 from odemis import model
@@ -516,10 +517,16 @@ class CryoMainGUIData(MainGUIData):
         super().__init__(microscope)
         self.sample_centers : Dict[str, Tuple[float, float]] = {}  # sample name -> center position (x, y)
 
+        # Controls the stage movement based on the imaging mode
+        self.posture_manager = MicroscopePostureManager(self.microscope)
+
         # stage.MD_SAMPLE_CENTERS contains the date in almost the right format, but the
         # position is a dict instead of a tuple. => Convert it, while checking the data.
         # Ex: {"grid 1": {"x": 0.1, "y": -0.2}} -> {"grid 1": (0.1, -0.2)}
         sample_centers_raw = self.stage.getMetadata().get(model.MD_SAMPLE_CENTERS)
+
+        # Controls the stage position according to the imaging mode
+        self.posture_manager = MicroscopePostureManager(microscope)
 
         # TODO: on the METEOR, the MD_SAMPLE_CENTERS is on the stage-bare, in
         # the stage-bare coordinates (SEM). To display them, we'd need to

@@ -21,7 +21,7 @@ see http://www.gnu.org/licenses/.
 
 import logging
 import math
-from odemis.acq.move import FM_IMAGING, SEM_IMAGING, getCurrentPositionLabel
+from odemis.acq.move import FM_IMAGING, SEM_IMAGING, MicroscopePostureManager
 from odemis.gui.plugin import Plugin
 from odemis.util.units import readable_str
 from typing import Dict
@@ -47,8 +47,6 @@ class MeteorEngageWarnPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super().__init__(microscope, main_app)
-
-        self.main_frame = main_app.main_frame
 
         # It only makes sense if the METEOR chamber tab is present
         try:
@@ -77,7 +75,7 @@ class MeteorEngageWarnPlugin(Plugin):
         pos_str = "\n". join(pos_str)
 
         # Guess (back) which position the users wants to go to
-        target_pos = getCurrentPositionLabel(end_pos, self._chamber_tab._stage)
+        target_pos = self.main_app.main_frame.getCurrentPostureLabel(end_pos)
         if target_pos == FM_IMAGING:
             warn_msg = FM_WARN_MSG
         elif target_pos == SEM_IMAGING:

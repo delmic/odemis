@@ -25,7 +25,7 @@ from decorator import decorator
 from functools import wraps
 import inspect
 import logging
-from odemis import util
+from odemis import util, model
 import os.path
 import subprocess
 import sys
@@ -37,7 +37,7 @@ import wx
 # Decorators & Wrappers
 # They are almost the same but the decorators assume that they are decorating
 # a method of a wx.Object (ie, it has a "self" argument)
-from odemis.acq.move import getCurrentPositionLabel
+from odemis.acq.move import MicroscopePostureManager
 
 @decorator
 def call_in_wx_main(f, self, *args, **kwargs):
@@ -283,16 +283,15 @@ class AttrDict(dict):
 
 
 @call_in_wx_main
-def enable_tab_on_stage_position(button, stage, pos, target, aligner=None, tooltip=None):
+def enable_tab_on_stage_position(button, posture_manager, target, tooltip=None):
     """
     Enable the given tab button if the stage is in target position, disable it otherwise
     :param button: (Button) the Tab button to enable/disable
-    :param pos: (dict str->float) current position to check its label
+    :param posture_manager: (Class) controls the stage movement based on the imaging mode
     :param target: (list) target position labels for which the tab button is enabled [IMAGING, FM_IMAGING]
-    :param aligner: (Actuator) the align component
     :param tooltip: (str or None) Tooltip message to show when disabled
     """
-    within_target = getCurrentPositionLabel(pos, stage, aligner) in target
+    within_target = posture_manager.getCurrentPostureLabel() in target
     button.Enable(within_target)
 
     if tooltip is not None:

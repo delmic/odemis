@@ -31,7 +31,7 @@ from typing import Dict, Tuple
 
 from odemis import model, util
 from odemis.acq import move, stream
-from odemis.acq.move import FM_IMAGING, IMAGING, MILLING, POSITION_NAMES
+from odemis.acq.move import FM_IMAGING, IMAGING, MILLING, POSITION_NAMES, MicroscopePostureManager
 from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
 from odemis.util import TimeoutError
 
@@ -1038,6 +1038,9 @@ class _MimasOpticalPathManager(OpticalPathManager):
         # will take care of executing setPath asynchronously
         self._executor = OneTaskExecutor()
 
+        # Controls the stage movement based on the imaging mode
+        self._posture_manager = MicroscopePostureManager(self.microscope)
+
     def _doSetPath(self, path, detector):
 
         if isinstance(path, stream.Stream):
@@ -1065,13 +1068,11 @@ class _MimasOpticalPathManager(OpticalPathManager):
 
         # Only accept moving if the stage is already within the "IMAGING" area (which means FM_IMAGING & MILLING)
         # as this means the stage will not move, but only the optical lens.
-        stage = self._getComponent("stage")
-        aligner = self._getComponent("align")
-        current_pos = move.getCurrentPositionLabel(stage.position.value, stage, aligner)
+        current_pos = self._posture_manager.getCurrentPostureLabel()
         if current_pos not in (IMAGING, FM_IMAGING, MILLING):
             logging.warning("Optical path cannot be changed while in position %s", POSITION_NAMES[current_pos])
             return
 
-        f = move.cryoSwitchSamplePosition(mode_position)
+        f = self._posture_manager.cryoSwitchSamplePosition(mode_position)
         f.result()
         logging.debug("Move to position %s completed", mode_position)

@@ -33,9 +33,10 @@ from odemis.acq.feature import (FEATURE_ACTIVE, FEATURE_ROUGH_MILLED,
                                 CryoFeature)
 from odemis.acq.millmng import (MillingRectangleTask, MillingSettings,
                                 load_config, mill_features)
-from odemis.acq.move import _isNearPosition, cryoSwitchSamplePosition, LOADING
+from odemis.acq.move import LOADING, MicroscopePostureManager
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.util import testing
+from odemis.util.driver import isNearPosition
 
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s")
 logging.getLogger().setLevel(logging.DEBUG)
@@ -59,6 +60,7 @@ class MillingManagerTestCase(unittest.TestCase):
 
         # create some streams connected to the backend
         cls.microscope = model.getMicroscope()
+        cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
         cls.ccd = model.getComponent(role="ccd")
         cls.ion_beam = model.getComponent(role="ion-beam")
         cls.sed = model.getComponent(role="se-detector")
@@ -290,7 +292,7 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         # Milling does not start from an unknown stage position
         # Set the stage to loading position
-        cryoSwitchSamplePosition(LOADING).result()
+        self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
 
         # Testing non-square pixel size, more dense in y direction
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
@@ -325,7 +327,7 @@ class MillingManagerTestCase(unittest.TestCase):
         current_align_pos = self.aligner.position.value
         aligner_md = self.aligner.getMetadata()
         aligner_fib = aligner_md[model.MD_FAV_POS_DEACTIVE]
-        self.assertTrue(_isNearPosition(current_align_pos, aligner_fib, self.aligner.axes),
+        self.assertTrue(isNearPosition(current_align_pos, aligner_fib, self.aligner.axes),
                         "Lens is not retracted for FIB imaging")
 
         # listen to the stage position
