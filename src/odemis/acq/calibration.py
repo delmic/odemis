@@ -64,9 +64,11 @@ def get_ar_data(das):
             # Just a check that all AR is the same shape (and if not, just pick
             # the ones which are the same as the first found).
             ar_same_shape = [da for da in ldas if da.shape == ldas[0].shape]
-            logging.warning("AR calibration file contained %d AR data, "
-                            "will use the average of %d", len(ldas), len(ar_same_shape))
-            ar_mean = numpy.mean(ar_same_shape, axis=0)
+            logging.info("AR calibration file contained %d AR data, "
+                         "will use the average of %d", len(ldas), len(ar_same_shape))
+            # mean() always generates float64, but we need the same dtype as
+            # original data, otherwise subtraction will not work.
+            ar_mean = numpy.mean(ar_same_shape, axis=0).astype(ar_same_shape[0].dtype)
             ar_data[polmode] = [model.DataArray(ar_mean, ar_same_shape[0].metadata)]
 
     # Merge all the data together as a single
