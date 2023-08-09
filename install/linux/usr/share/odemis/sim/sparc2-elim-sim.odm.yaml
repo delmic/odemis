@@ -201,7 +201,7 @@ SPARC2-ELIM: {
         # These values only need to be roughly correct
         ustepsize: [25.1e-9, 25.1e-9, 5.86e-9, 25.1e-9, 5.e-9], # m/µstep
         unit: ["m", "m", "m", "m", "m"],
-        rng: [[0, 100.e-3], [-100.e-3, 1.e-3], [-10.e-3, 2.e-3], [0, 18.e-3], [0, 2.e-3]],
+        rng: [[0, 100.e-3], [-1.e-3, 100.e-3], [-10.e-3, 2.e-3], [0, 18.e-3], [0, 2.e-3]],
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "inx": 4, "inz": 4},
         inverted: ["l2", "inz"],
@@ -237,9 +237,9 @@ SPARC2-ELIM: {
     },
     metadata: {
         # Position away
-        FAV_POS_DEACTIVE: {"x": 0.02}, # m
+        FAV_POS_DEACTIVE: {"x": -0.02}, # m
         # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": 4.0e-3}, # m
+        FAV_POS_ACTIVE: {"x": -4.0e-3}, # m
         POS_ACTIVE_RANGE: {"x": [-1.e-3, 1.e-3]},  # relative min/max from the active position when doing EK-scanning
     },
     affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
