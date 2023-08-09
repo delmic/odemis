@@ -1795,13 +1795,22 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         # Only get the corresponding data for this file
         ldata = sorted_x[file_index][1]
 
+    # Extract ImageJ compatible Image description
+    num_channels = len(ldata)
+    try:
+        _, _, num_slices, height, width = ldata[0].shape
+    except:
+        num_slices = 1
+    imagej_description = (f"ImageJ=1.11a\nimages={num_slices * num_channels}\nchannels={num_channels}\nslices="
+                          f"{num_slices}\nunit=um\nhyperstack=true\n")
+
     # TODO: to keep the code simple, we should just first convert the DAs into
     # 2D or 3D DAs and put it in an dict original DA -> DAs
     for data in ldata:
         # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
         tags = _convertToTiffTag(data.metadata)
-        if ometxt: # save OME tags if not yet done
-            f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
+        if ometxt:  # save OME tags if not yet done
+            f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, imagej_description.encode('ascii') + ometxt)
             ometxt = None
 
         # if metadata indicates YXC format just handle it as RGB
@@ -2359,9 +2368,14 @@ class AcquisitionDataTIFF(AcquisitionData):
         tfile.SetDirectory(0)
         desc = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
 
-        if (desc and ((desc.startswith(b"<?xml") and b"<ome " in desc.lower()) or
-                      desc[:4].lower() == b'<ome')):
+        if (desc and ((b"<?xml" in desc) and b"<ome " in desc.lower() or
+                desc[:4].lower() == b'<ome')):
             try:
+                pattern = b'<?xml version="1.0" encoding="UTF-8"?>'
+                start_index = desc.find(pattern)
+                # Extract the content after the pattern
+                if start_index != -1:
+                    desc = desc[start_index:]
                 desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
                               b"", desc, count=1)
                 desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
