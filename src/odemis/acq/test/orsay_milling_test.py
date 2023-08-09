@@ -21,17 +21,20 @@ import time
 import unittest
 from concurrent import futures
 
-from ConsoleClient.Communication.Connection import Connection
+try:
+    from ConsoleClient.Communication.Connection import Connection
+    console_client_available = True
+except ImportError as err:
+    logging.info(f"Orsay ConsoleClient package not found with error: {err}")
+    console_client_available = False
+else:
+    from odemis.acq.orsay_milling import mill_rectangle
 
-import odemis
-from odemis.acq.orsay_milling import mill_rectangle
-from odemis.driver import orsay
-from odemis import model, util
-from odemis.util import testing
+from odemis import model
 from odemis.util import timeout
 
 # The tests rely on an already running backend that uses Orsay Server.
-# If a microscopy file containing Orsay Server backend is not running, the tests will fail.
+# If a microscope file containing Orsay Server backend is not running, the tests will fail.
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -48,6 +51,8 @@ class TestMilling(unittest.TestCase):
     def setUpClass(cls):
         if TEST_NOHW is True:
             raise unittest.SkipTest("No hardware available.")
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.scanner = model.getComponent(role="ion-beam")
         cls.scanner.horizontalFoV.value = 100e-6  # m

@@ -21,21 +21,27 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import collections.abc
-import copy
 import logging
 import math
 import os
-import socket
 import threading
 import time
 import unittest
 import itertools
 import numpy
-
 from math import pi
 from time import sleep
 
-from odemis.driver import orsay
+try:
+    # We don't directly need ConsoleClient, but we need to know if it's available
+    import ConsoleClient
+    console_client_available = True
+except ImportError as err:
+    logging.info(f"Orsay ConsoleClient package not found with error: {err}")
+    console_client_available = False
+else:
+    from odemis.driver import orsay
+
 from odemis.model import HwError
 from odemis import model
 from odemis.util import find_closest, testing, timeout
@@ -97,6 +103,10 @@ class TestOrsayStatic(unittest.TestCase):
     """
     Tests which don't need an Orsay component ready
     """
+    @classmethod
+    def setUpClass(cls):
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
     def test_creation(self):
         """
@@ -104,6 +114,7 @@ class TestOrsayStatic(unittest.TestCase):
         """
         if TEST_NOHW == True:
             self.skipTest(NO_SERVER_MSG)
+
         try:
             oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         except Exception as e:
@@ -134,6 +145,9 @@ class TestOrsay(unittest.TestCase):
         """
         if TEST_NOHW != "sim":
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
+
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
 
@@ -259,6 +273,9 @@ class TestPneumaticSuspension(unittest.TestCase):
         """
         if TEST_NOHW != "sim":
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
+
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
 
@@ -380,6 +397,9 @@ class TestVacuumChamber(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
+
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
 
@@ -455,6 +475,10 @@ class TestPumpingSystem(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
+
+
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
 
@@ -615,6 +639,9 @@ class TestUPS(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
+
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
 
@@ -652,6 +679,9 @@ class TestGIS(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
+
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
 
@@ -848,6 +878,8 @@ class TestGISReservoir(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -1060,6 +1092,8 @@ class TestOrsayParameterConnector(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -1178,6 +1212,8 @@ class TestFIBVacuum(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -1346,6 +1382,8 @@ class TestFIBSource(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -1466,6 +1504,8 @@ class TestFIBBeam(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -1867,6 +1907,8 @@ class TestLight(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -1902,6 +1944,8 @@ class TestScanner(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -2185,6 +2229,8 @@ class TestDetector(unittest.TestCase):
         """
         if TEST_NOHW == 1:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         for child in cls.oserver.children.value:
@@ -2545,6 +2591,8 @@ class TestFocus(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
@@ -2665,6 +2713,8 @@ class TestFIBAperture(unittest.TestCase):
         """
         if TEST_NOHW == True:
             raise unittest.SkipTest(NO_SERVER_MSG)
+        if not console_client_available:
+            raise unittest.SkipTest("ConsoleClient package not available.")
 
         cls.oserver = orsay.OrsayComponent(**CONFIG_ORSAY)
         cls.datamodel = cls.oserver.datamodel
