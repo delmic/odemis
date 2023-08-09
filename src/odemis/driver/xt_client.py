@@ -2030,7 +2030,7 @@ class Stage(model.Actuator):
         """
         update the position VA
         """
-        old_pos = self.positon.value
+        old_pos = self.position.value
         pos = self._getPosition()
         self.position._set_value(self._applyInversion(pos), force_write=True)
         if old_pos != self.position.value:
