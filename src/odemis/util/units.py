@@ -400,10 +400,10 @@ def value_to_str(value, unit=None, accuracy=None, pretty_time=False):
     unit (str or None): if value is a number or a sequence of numbers, it will be
       shown after the value
     accuracy (0<=int or None): The number of significant figures, if the value
-      is a number of a sequence of numbers.
+      is a number or a sequence of numbers.
     pretty_time (bool): If True, values associated with the "s" unit will be
       converted to a full time display (as in "day, hour, min...")
-    return (unicode string): user friendly string of the value
+    return (string): user friendly string of the value
     """
 
     try:
