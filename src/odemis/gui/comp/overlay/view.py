@@ -24,11 +24,9 @@ This file is part of Odemis.
 import cairo
 import logging
 import math
-import numbers
 import numpy
 from odemis import util
 from odemis.gui.comp.overlay.base import Label, Vec, ViewOverlay
-from odemis.gui.util import img
 from odemis.gui.util.conversion import change_brightness
 from odemis.util import peak
 import wx
@@ -609,10 +607,12 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
                 h_draw = True
                 v_draw = True
 
-            self.x_label = units.readable_str(val[0], self.cnvs.unit_x,
-                                              img.guess_sig_num_rng(self.cnvs.range_x, val[0]))
-            self.y_label = units.readable_str(val[1], self.cnvs.unit_y,
-                                              img.guess_sig_num_rng(self.cnvs.range_y, val[1]))
+            # If it's a big number: use at least all the characters needed to show the number (IOW, round to an int).
+            # If it's a small number: show 4 significant digits.
+            sig_x = max(4, math.ceil(math.log10(abs(val[0]))))
+            sig_y = max(4, math.ceil(math.log10(abs(val[1]))))
+            self.x_label = units.readable_str(val[0], self.cnvs.unit_x, sig_x)
+            self.y_label = units.readable_str(val[1], self.cnvs.unit_y, sig_y)
 
             ctx.set_line_width(self.line_width)
             ctx.set_dash([3])
