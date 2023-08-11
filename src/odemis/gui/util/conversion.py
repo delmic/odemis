@@ -18,10 +18,13 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
-from past.builtins import basestring
-from odemis.util.conversion import hex_to_rgb, frgb_to_rgb, hex_to_frgb, \
-    rgb_to_frgb
+from typing import Dict, List, Optional, Tuple
+
 import wx
+from past.builtins import basestring
+
+from odemis.util.conversion import (frgb_to_rgb, hex_to_frgb, hex_to_rgb,
+                                    rgb_to_frgb)
 
 
 def wxcol_to_rgb(wxcol):
@@ -127,3 +130,29 @@ def change_brightness(colour, weight):
     new_fcol = tuple(f(c * (1 - weight) + lim * weight, lim) for c in _col[:3])
 
     return new_fcol + (_alpha,) if _alpha is not None else new_fcol
+
+
+def sample_positions_to_layout(sample_centers: Dict[str, Tuple[float, float]]) -> List[List[Optional[str]]]:
+    """
+    Convert sample positions to a grid layout
+    :param sample_centers: the name -> position of each sample
+    returns: 2D grid layout containing the names of the samples (or None if
+    no sample at that grid position)
+    """
+    # Find the number of rows and columns
+    xpositions = sorted({p[0] for p in sample_centers.values()})
+    ypositions = sorted({p[1] for p in sample_centers.values()}, reverse=True)  # Y goes up
+
+    # TODO merge values which are very similar (but not identical due to floating point error)
+
+    nx, ny = len(xpositions), len(ypositions)
+
+    layout = [[None for i in range(nx)] for j in range(ny)]
+
+    # Fill up the layout based on the content of sample_centers
+    for name, pos in sample_centers.items():
+        i = xpositions.index(pos[0])
+        j = ypositions.index(pos[1])
+        layout[j][i] = name
+
+    return layout
