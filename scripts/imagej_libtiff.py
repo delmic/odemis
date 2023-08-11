@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 """
-Created on 2 Jun 2014
+Created on August 10, 2023
 
 @author: Karishma Kumar
 
@@ -50,7 +50,7 @@ def write_tiff(filename, image_data):
     tif.SetField('PlanarConfig', 1)  # Contiguous planar configuration
     tif.SetField('Photometric', 1)  # MinIsBlack
 
-    # Extract pixel size from the metadat
+    # Extract pixel size from the metadata
     metadata_all = image_data[0].metadata
     pixel_size_x = metadata_all['Pixel size'][0] / 1e-06
     pixel_size_y = metadata_all['Pixel size'][1] / 1e-06
@@ -60,8 +60,8 @@ def write_tiff(filename, image_data):
     # Add ome data in image description
     ometxt = _convertToOMEMD(image_data)
     description = (f"ImageJ=1.11a\nimages={num_slices * num_channels}\nchannels={num_channels}\nslices={num_slices}\nunit=um\n"
-                   f"hyperstack=true\n")#mode=composite\n")
-    tif.SetField('ImageDescription', description.encode('ascii')+ometxt)
+                   f"hyperstack=true\n")  # mode=composite\n")
+    tif.SetField('ImageDescription', description.encode('ascii') + ometxt)
 
     # Rearrange the dimensions of image_data[0] [1, T=1, Z, Y, X] -> [Z, C, Y, X]
     for i in range(len(image_data)):
@@ -105,6 +105,5 @@ if __name__ == "__main__":
     image_data = read_data(ometiff_filename)
     # Output file path to save ImageJ compatible file
     file_path = args.outputpath
-
     # Call the function to save the TIFF file
     write_tiff(file_path, image_data)
