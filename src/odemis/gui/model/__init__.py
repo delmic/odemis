@@ -40,11 +40,11 @@ from odemis.gui.conf.data import get_hw_settings_config
 from odemis.model import (FloatContinuous, VigilantAttribute, IntEnumerated, StringVA, BooleanVA,
                           MD_POS, InstantaneousFuture, hasVA, StringEnumerated, MD_CALIB)
 from odemis.gui.log import observe_comp_state
+from odemis.gui.util.conversion import sample_positions_to_layout
 import os
 import threading
 import time
 from typing import Dict, Tuple
-
 
 # The different states of a microscope
 STATE_OFF = 0
@@ -1388,37 +1388,6 @@ class FastEMMainGUIData(MainGUIData):
     """
     Data common to all FastEM tabs.
     """
-    # Parameters of the scintillators according to the technical drawing of the sample carrier
-    # (positions are given relative to top left of sample carrier)
-    # Scintillator arrangement on the sample carrier:
-    # 3 6 9
-    # 2 5 8
-    # 1 4 7
-    # The format looks like YAML, because eventually it should be possible to pass it in the microscope (YAML) file.
-    SAMPLE_CARRIER_3x3 = {
-        "dims": (120e-3, 120e-3),  # m
-        "layout": [[3, 6, 9],
-                   [2, 5, 8],
-                   [1, 4, 7]],  # grid positions of scintillators
-        "scintillator_offsets": {
-            # center position of the scintillators relative to the most bottom-left position with a sample
-            1: (7e-3, 7e-3), 4: (25e-3, 7e-3), 7: (43e-3, 7e-3),
-            2: (7e-3, 25e-3), 5: (25e-3, 25e-3), 8: (43e-3, 25e-3),
-            3: (7e-3, 43e-3), 6: (25e-3, 43e-3), 9: (43e-3, 43e-3),
-        },
-        "scintillator_size": (14e-3, 14e-3),
-        "background": [
-            # minx, miny, maxx, maxy positions of rectangles for background, from bottom-left position with a sample
-            (-35e-3, -35e-3, 0, 85e-3),
-            (14e-3, -35e-3, 18e-3, 85e-3),
-            (32e-3, -35e-3, 36e-3, 85e-3),
-            (50e-3, -35e-3, 85e-3, 85e-3),
-            (-35e-3, -35e-3, 85e-3, 0e-3),
-            (-35e-3, 14e-3, 85e-3, 18e-3),
-            (-35e-3, 32e-3, 85e-3, 36e-3),
-            (-35e-3, 50e-3, 85e-3, 85e-3),
-        ]
-    }
 
     def __init__(self, microscope):
         super(FastEMMainGUIData, self).__init__(microscope)
@@ -1433,24 +1402,47 @@ class FastEMMainGUIData(MainGUIData):
         # POS_ACTIVE_RANGE contains the bounding-box of the positions with a sample
         carrier_range = md[model.MD_POS_ACTIVE_RANGE]
         minx, miny = carrier_range["x"][0], carrier_range["y"][0]  # bottom-left of carrier 1 in m
-
-        # TODO: in the future, there could be an additional argument in the configuration file to specify
-        #  the parameters of the sample carrier. For now, only one design is supported and hardcoded.
-        carrier_params = self.SAMPLE_CARRIER_3x3
+        # SAMPLE_CENTERS contains the center position of the scintillators from bottom-left
+        # position with a sample
+        if model.MD_SAMPLE_CENTERS not in md:
+            raise KeyError("Stage has no MD_SAMPLE_CENTERS metadata.")
+        centers = md[model.MD_SAMPLE_CENTERS]
+        layout = sample_positions_to_layout(centers)
+        for row_idx, row in enumerate(layout):
+            for column_idx, name in enumerate(row):
+                scintillator_number = int(name.split()[-1])
+                layout[row_idx][column_idx] = scintillator_number
+        # SAMPLE_SIZES contains the sizes of the scintillators
+        if model.MD_SAMPLE_SIZES not in md:
+            raise KeyError("Stage has no MD_SAMPLE_SIZES metadata.")
+        sample_sizes = md[model.MD_SAMPLE_SIZES]
+        sizes = {}
+        for name, size in sample_sizes.items():
+            scintillator_number = int(name.split()[-1])
+            sizes[scintillator_number] = size
+        # SAMPLE_BACKGROUND contains the minx, miny, maxx, maxy positions of rectangles for
+        # background from bottom-left position with a sample
+        if model.MD_SAMPLE_BACKGROUND not in md:
+            raise KeyError("Stage has no MD_SAMPLE_BACKGROUND metadata.")
+        background = md[model.MD_SAMPLE_BACKGROUND]
+        if set(centers.keys()) != set(sample_sizes.keys()):
+            raise KeyError("MD_SAMPLE_CENTERS and MD_SAMPLE_SIZES metadata should have "
+                "the same keys.")
 
         # Initialize attributes related to the sample carrier
-        #  * .scintillator_size (float, float): size of one scintillator in m
-        #  * .scintillator_positions (dict: 1 <= int <= 9 --> (float, float)): positions in stage coordinates
+        #  * .scintillator_sizes (dict: int --> (float, float)): size of scintillators in m
+        #  * .scintillator_positions (dict: int --> (float, float)): positions in stage coordinates
         #  * .scintillator_layout (list of list of int): 2D layout of scintillator grid
         #  * .background (list of ltrb tuples): coordinates for background overlay,
         #    rectangles can be displayed in world overlay as grey bars, e.g. for simulating a sample carrier
-        self.scintillator_size = carrier_params["scintillator_size"]
-        self.scintillator_positions = {}  # dict: 1 <= int <= 9 --> (float, float)
-        for num, offset in carrier_params["scintillator_offsets"].items():
-            self.scintillator_positions[num] = (minx + offset[0], miny + offset[1])
-        self.scintillator_layout = carrier_params["layout"]
+        self.scintillator_sizes = sizes
+        self.scintillator_positions = {}
+        for name, center in centers.items():
+            scintillator_number = int(name.split()[-1])
+            self.scintillator_positions[scintillator_number] = (minx + center[0], miny + center[1])
+        self.scintillator_layout = layout
         self.background = []
-        for rect in carrier_params["background"]:
+        for rect in background:
             self.background.append((minx + rect[0], miny + rect[1], minx + rect[2], miny + rect[3]))
 
         # Overview streams

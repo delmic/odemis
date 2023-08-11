@@ -173,7 +173,7 @@ class FastEMOverviewAcquiController(object):
             # Add up the acquisition time of all the selected scintillators
             for num in self._tab_data_model.selected_scintillators.value:
                 center = self._tab_data_model.main.scintillator_positions[num]
-                sz = self._tab_data_model.main.scintillator_size
+                sz = self._tab_data_model.main.scintillator_sizes[num]
                 coords = (center[0] - sz[0] / 2, center[1] - sz[1] / 2,
                           center[0] + sz[0] / 2, center[1] + sz[1] / 2)
                 acq_time += fastem.estimateTiledAcquisitionTime(
@@ -235,7 +235,7 @@ class FastEMOverviewAcquiController(object):
         acq_futures = {}
         for num in self._tab_data_model.selected_scintillators.value:
             center = self._tab_data_model.main.scintillator_positions[num]
-            sz = self._tab_data_model.main.scintillator_size
+            sz = self._tab_data_model.main.scintillator_sizes[num]
             coords = (center[0] - sz[0] / 2, center[1] - sz[1] / 2,
                       center[0] + sz[0] / 2, center[1] + sz[1] / 2)
             try:
