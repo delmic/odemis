@@ -1798,7 +1798,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
     # Extract ImageJ compatible Image description
     num_channels = len(ldata)
     try:
-        _, _, num_slices, height, width = ldata[0].shape
+        num_slices = ldata[0].shape[-3]
     except:
         num_slices = 1
     imagej_description = (f"ImageJ=1.11a\nimages={num_slices * num_channels}\nchannels={num_channels}\nslices="

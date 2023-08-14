@@ -638,8 +638,8 @@ class CryoAcquiController(object):
         # save the data
         executor = futures.ThreadPoolExecutor(max_workers=2)
         st = stream.StreamTree(streams=list(self._acquiStreams.value))
-        thumb_nail = acqmng.computeThumbnail(st, future)
-        scheduled_future = executor.submit(self._export_data, data, thumb_nail)
+        # thumb_nail = acqmng.computeThumbnail(st, future) # ImageJ does not work with the thumbnail in the tiff files
+        scheduled_future = executor.submit(self._export_data, data, None)
         scheduled_future.add_done_callback(self._on_export_data_done)
 
     def _reset_acquisition_gui(self, text=None, state=None):

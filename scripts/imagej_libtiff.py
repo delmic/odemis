@@ -37,7 +37,7 @@ def write_tiff(filename, image_data):
     num_channels = len(image_data)
 
     try:
-        _, _, num_slices, height, width = image_data[0].shape
+        num_slices= image_data[0].shape[-3]
     except:
         height, width = image_data[0].shape
         num_slices = 1
