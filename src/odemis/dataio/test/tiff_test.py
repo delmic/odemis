@@ -461,12 +461,12 @@ class TestTiffIO(unittest.TestCase):
         omemd = imo.GetField("ImageDescription").decode('utf-8')
         self.assertTrue(("<?xml" in omemd) or (omemd[:4].lower() == '<ome'))
 
-        # remove "xmlns" which is the default namespace and is appended everywhere
-        pattern = '<?xml version="1.0" encoding="UTF-8"?>'
+        pattern = '<?xml'
         start_index = omemd.find(pattern)
         # Extract the content after the pattern
         if start_index != -1:
             omemd = omemd[start_index:]
+        # remove "xmlns" which is the default namespace and is appended everywhere
         omemd = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
                        "", omemd, count=1)
         root = ET.fromstring(omemd)

@@ -1796,13 +1796,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         ldata = sorted_x[file_index][1]
 
     # Extract ImageJ compatible Image description
-    num_channels = len(ldata)
-    try:
-        num_slices = ldata[0].shape[-3]
-    except:
-        num_slices = 1
-    imagej_description = (f"ImageJ=1.11a\nimages={num_slices * num_channels}\nchannels={num_channels}\nslices="
-                          f"{num_slices}\nunit=um\nhyperstack=true\n")
+    imagej_description = extract_imagej_metadata(ldata)
 
     # TODO: to keep the code simple, we should just first convert the DAs into
     # 2D or 3D DAs and put it in an dict original DA -> DAs
@@ -1841,6 +1835,28 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
                 c = compression
             write_image(f, data[i], write_rgb=write_rgb, compression=c, pyramid=pyramid)
 
+
+def extract_imagej_metadata(ldata) -> str:
+    """
+    Create ImageJ compatible metadata that is added to the ImageDescription identifier for the tiff files.
+    :param ldata: (list of DataArray) list of 2D data of int or float. Should have at least one array
+    :return (str): metadata compatible with ImageJ
+    """
+    num_channels = len(ldata)
+    try:
+        num_slices = ldata[0].shape[-3]
+    except:
+        num_slices = 1
+    md = {
+        "ImageJ": "1.11a",
+        "images": num_slices * num_channels,
+        "channels": num_channels,
+        "slices": num_slices,
+        "unit": "um",
+        "hyperstack": "true"
+    }
+    imagej_description = "\n".join(f"{k}={md[k]}" for k in md.keys()) + "\n"
+    return imagej_description
 
 def _genResizedShapes(data):
     """
@@ -2367,11 +2383,10 @@ class AcquisitionDataTIFF(AcquisitionData):
         # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
         tfile.SetDirectory(0)
         desc = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
-
-        if (desc and ((b"<?xml" in desc) and b"<ome " in desc.lower() or
+        if (desc and ((b"<?xml" and b"<ome " in desc.lower() and not desc.lower().startswith(b"<ome ")) or
                 desc[:4].lower() == b'<ome')):
             try:
-                pattern = b'<?xml version="1.0" encoding="UTF-8"?>'
+                pattern = b'<?xml'
                 start_index = desc.find(pattern)
                 # Extract the content after the pattern
                 if start_index != -1:
