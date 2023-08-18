@@ -47,8 +47,6 @@ class CompositedScanner(model.Emitter):
 
         if children is None:
             children = {}
-        elif set(children.keys()) - {"detector"}:
-            raise ValueError("Only a detector child is supported")
 
         # we will fill the set of dependencies with Components later in ._dependencies
         model.Emitter.__init__(self, name, role, dependencies=dependencies, daemon=daemon, **kwargs)
@@ -103,10 +101,12 @@ class CompositedScanner(model.Emitter):
         self._va_external_ctrl = None
         self._va_blanker_ctrl = None
 
-        if "detector" in children:
-            ckwargs = children["detector"]
-            self._detector = CompositedDetector(parent=self, daemon=daemon, **ckwargs)
-            self.children.value.add(self._detector)
+        for cname, ckwargs in children.items():
+            if not cname.startswith("detector"):
+                raise ValueError(f"Only children detector* are supported, but got '{cname}'")
+
+            detector = CompositedDetector(parent=self, daemon=daemon, **ckwargs)
+            self.children.value.add(detector)
 
             # Setting up the automatic blanker on the composited scanner
             if model.hasVA(self._external_scanner, "blanker") and None in self._external_scanner.blanker.choices:
@@ -132,7 +132,7 @@ class CompositedScanner(model.Emitter):
             else:
                 logging.debug("No external VA supported for the Composited Scanner.")
 
-        else:
+        if not self.children.value:  # If no automatic blanker/external, just duplicate the original ones
             va_names += ["blanker", "external"]
 
         for vaname in va_names:
@@ -143,7 +143,7 @@ class CompositedScanner(model.Emitter):
                 va = getattr(self._external_scanner, vaname)
                 setattr(self, vaname, va)
 
-        self._beamIsUsed = False
+        self._beamUsers = set()  # contains any object
 
     def _createAutoBlanker(self, blanker_ctrl):
         """
@@ -152,6 +152,9 @@ class CompositedScanner(model.Emitter):
         blanker_ctrl (Scanner): component with a blanker VA to set the actual
           blanker state on/off
         """
+        if self._va_blanker_ctrl is not None:
+            return
+
         self._va_blanker_ctrl = blanker_ctrl
         self.blanker = model.VAEnumerated(
             None,
@@ -165,6 +168,9 @@ class CompositedScanner(model.Emitter):
         external_ctrl (Scanner): component with a external VA to set the actual
           blanker state on/off
         """
+        if self._va_external_ctrl is not None:
+            return
+
         self._va_external_ctrl = external_ctrl
         self.external = model.VAEnumerated(
             None,
@@ -175,7 +181,7 @@ class CompositedScanner(model.Emitter):
         if blank is not None:
             self._va_blanker_ctrl.blanker.value = blank
         else:
-            self._va_blanker_ctrl.blanker.value = not self._beamIsUsed
+            self._va_blanker_ctrl.blanker.value = not bool(self._beamUsers)
 
         return blank
 
@@ -183,7 +189,7 @@ class CompositedScanner(model.Emitter):
         if mode is not None:
             self._va_external_ctrl.external.value = mode
         else:
-            self._va_external_ctrl.external.value = self._beamIsUsed
+            self._va_external_ctrl.external.value = bool(self._beamUsers)
 
         return mode
 
@@ -203,23 +209,29 @@ class CompositedScanner(model.Emitter):
     def getMetadata(self):
         return self._external_scanner.getMetadata()
 
-    def claimBeam(self, claim):
+    def claimBeam(self, claim: bool, user: object):
         """
         Used to indicate the start and end of beam usage. It takes care of
           updating the blanker and external control, if present and set to None
           (ie, automatic control).
         :param claim (boolean): True for when starting to use the beam. False when
           not using the beam any more.
+        :param user: the object that is claiming (or not) the beam
         """
-        self._beamIsUsed = claim
+        if claim:
+            self._beamUsers.add(user)
+        else:
+            self._beamUsers.discard(user)
+
+        in_use = bool(self._beamUsers)
 
         if self._va_blanker_ctrl and self.blanker.value is None:
             # Disable the blanker when using the beam
-            self._va_blanker_ctrl.blanker.value = not claim
+            self._va_blanker_ctrl.blanker.value = not in_use
 
         if self._va_external_ctrl and self.external.value is None:
             # Activate the external mode when using the beam
-            self._va_external_ctrl.external.value = claim
+            self._va_external_ctrl.external.value = in_use
 
 
 class CompositedDetector(model.Detector):
@@ -278,7 +290,7 @@ class CompositedDataflow(model.DataFlow):
         Sets the scan mode to "external" and subscribes self.notify to the external dataflow
         :return:
         """
-        self._composited_scanner.claimBeam(True)
+        self._composited_scanner.claimBeam(True, self)
         self._external_dataflow.subscribe(self._on_data)
 
     def stop_generate(self):
@@ -286,7 +298,7 @@ class CompositedDataflow(model.DataFlow):
         Unsubscribes self.notify of the external dataflow and updates the external and blanker VA's
         """
         self._external_dataflow.unsubscribe(self._on_data)
-        self._composited_scanner.claimBeam(False)
+        self._composited_scanner.claimBeam(False, self)
 
     def _on_data(self, dataflow, data):
         """
