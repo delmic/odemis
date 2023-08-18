@@ -363,7 +363,7 @@ class Instantiator(object):
         for name, comp in self.ast.items():
             if "class" in comp:
                 continue
-            parents = comp["parents"]
+            parents = comp.get("parents", [])  # If empty, will raise an error just later
             if "creator" in comp:
                 creator_name = comp["creator"]
                 if creator_name not in parents:
@@ -376,14 +376,13 @@ class Instantiator(object):
                 parents = [p for p in parents if self.ast[p].get("class") != "Microscope"]
 
                 if len(parents) == 0:
-                    raise SemanticError("Error in microscope file: component %s "
-                            "has no class specified and is not created by any "
-                            "component." % name)
+                    raise SemanticError("Error in microscope file: component \"%s\" "
+                            "has no class specified and is not child of any component." % name)
                 else:
                     creator = None
                     for p in parents:
                         if name in self.ast[p].get("children", {}).values() and creator:
-                            raise SemanticError("Error in microscope file: component %s "
+                            raise SemanticError("Error in microscope file: component \"%s\" "
                                     "has to be created by one of its parents %s, but no "
                                     "creator is designated." % (name, tuple(parents)))
                         elif name in self.ast[p].get("children", {}).values() and not creator:
