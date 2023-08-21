@@ -18,6 +18,8 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+import math
+
 import Pyro4
 from concurrent.futures import CancelledError
 import copy
@@ -25,7 +27,7 @@ import logging
 from odemis import model
 from odemis.dataio import hdf5
 from odemis.driver import tescan
-from odemis.util import testing
+from odemis.util import testing, output_window
 import os
 import pickle
 import threading
@@ -60,17 +62,28 @@ CONFIG_SEM = {"name": "sem", "role": "sem",
                            "focus": CONFIG_FOCUS,
                            # "camera": CONFIG_CM,
                            "pressure": CONFIG_PRESSURE},
-              "host": "192.168.1.175"
+              # change host ip address according to network settings
+              "host": "192.168.56.11"
               }
 
 # This one works with the Mira Simulator
-CONFIG_SEM_NO_DET = {"name": "sem", "role": "sem",
-              "children": {"scanner": CONFIG_SCANNER,
-                           "stage": CONFIG_STG,
-                           "focus": CONFIG_FOCUS,
-                           "light": CONFIG_LIGHT},
-              "host": "192.168.1.175"
-              }
+CONFIG_SEM_NO_DET = {"name": "Mira", "role": "sem",
+                     "children": {"scanner": CONFIG_SCANNER,
+                                  "stage": CONFIG_STG,
+                                  "focus": CONFIG_FOCUS,
+                                  "light": CONFIG_LIGHT},
+                     # change host ip address according to network settings
+                     "host": "192.168.56.11"
+                     }
+
+# This one works with the Amber Simulator
+CONFIG_SEM_AMBER = {"name": "Amber", "role": "sem",
+                    "children": {"scanner": CONFIG_SCANNER,
+                                 "stage": CONFIG_STG,
+                                 "focus": CONFIG_FOCUS},
+                    # change host ip address according to network settings
+                    "host": "192.168.56.11"
+                    }
 
 
 # @skip("skip")
@@ -132,6 +145,178 @@ class TestSEMStatic(unittest.TestCase):
         self.assertEqual(sem_unpickled.name, sem.name)
         sem.terminate()
         daemon.shutdown()
+
+
+class TestSEMRotateStage(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        if TEST_NOHW:
+            return
+        cls.sem = tescan.SEM(**CONFIG_SEM_AMBER)
+
+        for child in cls.sem.children.value:
+            if child.name == CONFIG_SED["name"]:
+                cls.sed = child
+            elif child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+            elif child.name == CONFIG_STG["name"]:
+                cls.stage = child
+            elif child.name == CONFIG_FOCUS["name"]:
+                cls.focus = child
+
+    @classmethod
+    def tearDownClass(cls):
+        if TEST_NOHW:
+            return
+
+        cls.sem.terminate()
+        time.sleep(3)
+
+    def setUp(self):
+        if TEST_NOHW:
+            self.skipTest("No hardware present")
+
+    def tearDown(self):
+        pass
+
+    def test_move_abs(self):
+        """
+        Test if it's possible to move the stage in absolute coordinates
+        In addition also test the edge of the range of the rz axis
+        """
+        start_pos = self.stage.position.value.copy()
+        new_pos = {"x": start_pos["x"] + 5e-4, "y": start_pos["y"] + 10e-4, "z": start_pos["z"] + 12e-5,
+                   "rx": start_pos["rx"] - math.radians(2.5), "rz": start_pos["rz"] + math.radians(3.5)}
+
+        f = self.stage.moveAbs(new_pos)
+        f.result()
+        testing.assert_pos_almost_equal(self.stage.position.value, new_pos)
+
+        # move exactly on the edge of the max range of the rz axis
+        new_pos["rz"] = math.radians(360)
+        f = self.stage.moveAbs(new_pos)
+        f.result()
+        new_pos["rz"] = 0.0
+        # software will return 0 on abs position of 360°
+        testing.assert_pos_almost_equal(self.stage.position.value, new_pos)
+
+        # go back to the original starting point
+        self.stage.moveAbsSync(start_pos)
+
+    def test_move_rel(self):
+        """
+        Test if it's possible to move the stage with relative moves with regular move requests
+        """
+        start_pos = self.stage.position.value.copy()
+
+        # test some of the linear axes and especially the newly added rotational axes
+        f = self.stage.moveRel({"x": 2e-6, "y": 3e-6, "rx": math.radians(1), "rz": -math.radians(15)})
+        f.result()
+
+        self.assertNotEqual(self.stage.position.value, start_pos)
+
+        f = self.stage.moveRel({"x": -2e-6, "y": -3e-6, "rx": -math.radians(1), "rz": math.radians(15)})
+        f.result()
+        testing.assert_pos_almost_equal(self.stage.position.value, start_pos, atol=0.1e-6)
+
+        # go back to the original starting point
+        self.stage.moveAbsSync(start_pos)
+        self.assertEqual(self.stage.position.value, start_pos)
+
+    def test_move_out_of_range(self):
+        """
+        test if a relative move and an absolute move out of the range generate ValueErrors
+        """
+        start_pos = self.stage.position.value.copy()
+
+        # test a relative move outside the range (more than max)
+        axes = self.stage.axes
+        with self.assertRaises(ValueError):
+            self.stage.moveRel({"x": axes["x"].range[1] - axes["x"].range[0] + 10e-6})
+
+        # test an absolute move outside the range (less than min)
+        with self.assertRaises(ValueError):
+            self.stage.moveAbsSync({"rx": math.radians(-90)})
+
+        # go back to the original starting point
+        self.stage.moveAbsSync(start_pos)
+
+    def test_small_relative_movements(self):
+        """
+        Test to see if very small relative movements are picked up fast enough.
+        In addition, test if shifting a couple of times back and forth will end up at the same starting location.
+        """
+        start_pos = self.stage.position.value.copy()
+
+        # test some of the linear axes and especially the newly added rotational axes
+        f = self.stage.moveRel({"z": 1e-6, "rx": math.radians(0.1), "rz": math.radians(0.1)})
+        f.result()
+        testing.assert_pos_not_almost_equal(self.stage.position.value, start_pos, atol=0.1e-6)
+
+        new_pos = self.stage.position.value.copy()
+        f = self.stage.moveRel({"z": 1e-6, "rx": math.radians(0.1), "rz": math.radians(0.1)})
+        f.result()
+        testing.assert_pos_not_almost_equal(self.stage.position.value, new_pos, atol=0.1e-6)
+
+        new_pos = self.stage.position.value.copy()
+        f = self.stage.moveRel({"z": 1e-6, "rx": math.radians(0.1), "rz": math.radians(0.1)})
+        f.result()
+        testing.assert_pos_not_almost_equal(self.stage.position.value, new_pos, atol=0.1e-6)
+
+        # go back the same amount of movements and axes values
+        new_pos = self.stage.position.value.copy()
+        f = self.stage.moveRel({"z": -1e-6, "rx": -math.radians(0.1), "rz": -math.radians(0.1)})
+        f.result()
+        testing.assert_pos_not_almost_equal(self.stage.position.value, new_pos, atol=0.1e-6)
+
+        new_pos = self.stage.position.value.copy()
+        f = self.stage.moveRel({"z": -1e-6, "rx": -math.radians(0.1), "rz": -math.radians(0.1)})
+        f.result()
+        testing.assert_pos_not_almost_equal(self.stage.position.value, new_pos, atol=0.1e-6)
+
+        new_pos = self.stage.position.value.copy()
+        f = self.stage.moveRel({"z": -1e-6, "rx": -math.radians(0.1), "rz": -math.radians(0.1)})
+        f.result()
+        testing.assert_pos_not_almost_equal(self.stage.position.value, new_pos, atol=0.1e-6)
+        # test if after the last movement, the position is the same as the starting position
+        testing.assert_pos_almost_equal(self.stage.position.value, start_pos, atol=0.1e-6)
+
+    def test_overflow_and_underflow(self):
+        """
+        With a relative move starting from the absolute zero point move a bit under the range
+        and afterward move a bit over the range. This is tested for the full rotational axis Rz only.
+        """
+        # start with going to the absolute zero position
+        self.stage.moveAbsSync({"rz": 0.0})
+        start_pos = self.stage.position.value.copy()
+
+        # test if underflow of the range is picked up
+        f = self.stage.moveRel({"rz": -math.radians(3)})
+        f.result()
+        self.assertLess(start_pos["rz"], self.stage.position.value["rz"])
+
+        # test if overflow of the range is picked up
+        f = self.stage.moveRel({"rz": math.radians(6)})
+        f.result()
+        self.assertGreater(self.stage.position.value["rz"], start_pos["rz"])
+
+    def test_stop_big_move(self):
+        """
+        Test if it's possible to stop the stage while it's moving by using a big move.
+        """
+        start_pos = self.stage.position.value.copy()
+
+        # check a big move and stop it
+        f = self.stage.moveRel({"rz": math.radians(180)})
+        f.result()
+
+        # wait just a tiny bit and stop the movement
+        time.sleep(0.2)
+        self.stage.stop()
+
+        self.assertNotEqual(self.stage.position.value, start_pos)
+
 
 class BaseSEMTest(object):
 
@@ -299,10 +484,12 @@ class BaseSEMTest(object):
         time.sleep(6)
         testing.assert_pos_almost_equal(self.stage.position.value, p)
 
+    # @skip("not working with the newer simulator Tescan Essence v1.2.2")
     def test_stop(self):
         """
         Check it's possible to stop the stage while it's moving.
         """
+        # TODO: make this method work again with Tescan Essence v1.2.2. will be addressed in separate PR
         pos = self.stage.position.value.copy()
         logging.info("Initial pos = %s", pos)
         f = self.stage.moveRel({"y":-50e-3})
