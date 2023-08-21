@@ -51,6 +51,7 @@ from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView
 from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,
                              wxlimit_invocation)
+from odemis.gui.util.conversion import sample_positions_to_layout
 from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
 from odemis.util import rect_intersect, units
@@ -710,7 +711,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             # would be needed to allow changing the grid layout after init. So
             # for now we use a placeholder panel, and insert the GridSelectionPanel
             # here at runtime.
-            layout = self.sample_positions_to_layout(self._main_data_model.sample_centers)
+            layout = sample_positions_to_layout(self._main_data_model.sample_centers)
             subsizer = wx.BoxSizer(wx.VERTICAL)
             self.selected_grid_pnl_holder.SetSizer(subsizer)
             self._grids = buttons.GridSelectionPanel(self.selected_grid_pnl_holder, layout)
@@ -932,31 +933,6 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             logging.warning("Couldn't find intersection between stage pos %s and tiling range %s" % (pos, self._tiling_rng))
 
         return area
-
-    def sample_positions_to_layout(self, sample_centers: Dict[str, Tuple[float, float]]) -> List[List[Optional[str]]]:
-        """
-        Convert sample positions to a grid layout
-        :param sample_centers: the name -> position of each sample
-        returns: 2D grid layout containing the names of the samples (or None if
-        no sample at that grid position)
-        """
-        # Find the number of rows and columns
-        xpositions = sorted({p[0] for p in sample_centers.values()})
-        ypositions = sorted({p[1] for p in sample_centers.values()}, reverse=True)  # Y goes up
-
-        # TODO merge values which are very similar (but not identical due to floating point error)
-
-        nx, ny = len(xpositions), len(ypositions)
-
-        layout = [[None for i in range(nx)] for j in range(ny)]
-
-        # Fill up the layout based on the content of sample_centers
-        for name, pos in sample_centers.items():
-            i = xpositions.index(pos[0])
-            j = ypositions.index(pos[1])
-            layout[j][i] = name
-
-        return layout
 
     def on_grid_button(self, evt: wx.Event = None):
         """
