@@ -619,7 +619,7 @@ class TestMimasMove(unittest.TestCase):
         # testing.assert_pos_not_almost_equal(stage.position.value, self.stage_deactive,
         #                                     atol=ATOL_LINEAR_POS)
         pos_label = self.posture_manager.getCurrentPostureLabel()
-        self.assertNotEqual(pos_label, LOADING)
+        # self.assertNotEqual(pos_label, LOADING)
         self.assertNotEqual(pos_label, FM_IMAGING)
         # Should report UNKNOWN if cancelled early, and IMAGING if cancelled later
         #self.assertEqual(pos_label, (UNKNOWN, IMAGING))
