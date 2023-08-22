@@ -24,6 +24,7 @@ from past.builtins import basestring, long
 import queue
 from abc import ABCMeta
 from collections.abc import Mapping
+from itertools import chain
 import logging
 import math
 
@@ -1407,27 +1408,44 @@ class FastEMMainGUIData(MainGUIData):
         if model.MD_SAMPLE_CENTERS not in md:
             raise KeyError("Stage has no MD_SAMPLE_CENTERS metadata.")
         centers = md[model.MD_SAMPLE_CENTERS]
-        layout = sample_positions_to_layout(centers)
-        for row_idx, row in enumerate(layout):
-            for column_idx, name in enumerate(row):
-                scintillator_number = int(name.split()[-1])
-                layout[row_idx][column_idx] = scintillator_number
         # SAMPLE_SIZES contains the sizes of the scintillators
         if model.MD_SAMPLE_SIZES not in md:
             raise KeyError("Stage has no MD_SAMPLE_SIZES metadata.")
         sample_sizes = md[model.MD_SAMPLE_SIZES]
+        # Handle error cases for sample centers and sizes
+        if centers.keys() != sample_sizes.keys():
+            raise KeyError("MD_SAMPLE_CENTERS and MD_SAMPLE_SIZES metadata should have "
+                "the same keys.")
+        if not all(isinstance(i, float) for i in chain.from_iterable(centers.values())):
+            raise TypeError("The sample centers must be of the type float.")
+        if not all(isinstance(i, float) for i in chain.from_iterable(sample_sizes.values())):
+            raise TypeError("The sample sizes must be of the type float.")
+        layout = sample_positions_to_layout(centers)
+        if None in chain.from_iterable(layout):
+            raise TypeError(
+                "Layout could not be determined from stage's MD_SAMPLE_CENTERS metadata,"
+                "check if the sample centers values are correct.")
+        for row_idx, row in enumerate(layout):
+            for column_idx, name in enumerate(row):
+                try:
+                    scintillator_number = int(name.split()[-1])
+                except Exception:
+                    raise ValueError(
+                        "Name of the sample must have a number in second place, e.g. 'SAMPLE 1'")
+                layout[row_idx][column_idx] = scintillator_number
         sizes = {}
         for name, size in sample_sizes.items():
-            scintillator_number = int(name.split()[-1])
+            try:
+                scintillator_number = int(name.split()[-1])
+            except Exception:
+                raise ValueError(
+                    "Name of the sample must have a number in second place, e.g. 'SAMPLE 1'")
             sizes[scintillator_number] = size
         # SAMPLE_BACKGROUND contains the minx, miny, maxx, maxy positions of rectangles for
         # background from bottom-left position with a sample
         if model.MD_SAMPLE_BACKGROUND not in md:
             raise KeyError("Stage has no MD_SAMPLE_BACKGROUND metadata.")
         background = md[model.MD_SAMPLE_BACKGROUND]
-        if set(centers.keys()) != set(sample_sizes.keys()):
-            raise KeyError("MD_SAMPLE_CENTERS and MD_SAMPLE_SIZES metadata should have "
-                "the same keys.")
 
         # Initialize attributes related to the sample carrier
         #  * .scintillator_sizes (dict: int --> (float, float)): size of scintillators in m
@@ -1438,11 +1456,22 @@ class FastEMMainGUIData(MainGUIData):
         self.scintillator_sizes = sizes
         self.scintillator_positions = {}
         for name, center in centers.items():
-            scintillator_number = int(name.split()[-1])
+            try:
+                scintillator_number = int(name.split()[-1])
+            except Exception:
+                raise ValueError(
+                    "Name of the sample must have a number in second place, e.g. 'SAMPLE 1'")
             self.scintillator_positions[scintillator_number] = (minx + center[0], miny + center[1])
         self.scintillator_layout = layout
         self.background = []
         for rect in background:
+            if len(rect) != 4:
+                raise ValueError(
+                    "The positions of rectangles for background must contain 4 elements,"
+                    "i.e. minx, miny, maxx, maxy [m].")
+            if not all(isinstance(i, float) for i in rect):
+                raise TypeError(
+                    "The positions of rectangles for background must be of the type float.")
             self.background.append((minx + rect[0], miny + rect[1], minx + rect[2], miny + rect[3]))
 
         # Overview streams
