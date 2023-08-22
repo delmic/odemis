@@ -1,3 +1,14 @@
+odemis (3.2.4-1) bionic; urgency=medium
+
+  * New version: 3.2.4
+  * Main bug fixes:
+    - xt_client: fix typo preventing the start of the microscope (SPARC, METEOR)
+    - properly show spectrum line-cut when "Fit-to-RGB" tint is selected (SPARC)
+    - fix background subtraction when background file countains multiple acquisitions (SPARC)
+    - scanner: support for software trigger on detector wrapper (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Tue, 22 Aug 2023 15:49:59 +0200
+
 odemis (3.2.3-1) bionic; urgency=medium
 
   * New version: 3.2.3
