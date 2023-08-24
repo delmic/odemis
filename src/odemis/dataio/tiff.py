@@ -1804,6 +1804,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
         tags = _convertToTiffTag(data.metadata)
         if ometxt:  # save OME tags if not yet done
+            # If thumbnail is present, the tiff file is not compatible with ImageJ
             f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, imagej_description.encode('ascii') + ometxt)
             ometxt = None
 
@@ -1842,18 +1843,52 @@ def extract_imagej_metadata(ldata) -> str:
     :param ldata: (list of DataArray) list of 2D data of int or float. Should have at least one array
     :return (str): metadata compatible with ImageJ
     """
-    num_channels = len(ldata)
-    try:
-        num_slices = ldata[0].shape[-3]
-    except:
+    num_channels = 0
+    num_frames = 0  # Time frames
+    num_slices = 0  # zlevels
+
+    # Check the ZYX dimension of the first DataArray,
+    Y, X = ldata[0].shape[-2:]
+    if len(ldata[0].shape) >= 3:
+        Z = ldata[0].shape[-3]
+    else:
+        Z = 1
+
+    # Add to "channels" and "frames" the other DataArray which have the same ZYX dimension.
+    for n in range(len(ldata)):
+        if ldata[n].shape[-2:] != (Y, X):
+            # Tiff data is not compatible with ImageJ
+            break
+
+        if len(ldata[n].shape) >= 3:
+            if ldata[n].shape[-3] == Z:
+                num_slices = ldata[n].shape[-3]
+            else:
+                # Tiff data is not compatible with ImageJ
+                break
+
+        if len(ldata[n].shape) >= 4:
+            num_frames += ldata[n].shape[-4]
+
+        if len(ldata[n].shape) == 5:
+            num_channels += ldata[n].shape[-5]
+        else:
+            num_channels += 1
+    # Default "slices" and/or "frames" to 1, if these dimensions
+    # are not supported in the DataArray shape
+    if num_slices == 0:
         num_slices = 1
+    if num_frames == 0:
+        num_frames = 1
+    # Define relevant ImageJ identifiers
     md = {
         "ImageJ": "1.11a",
-        "images": num_slices * num_channels,
+        "images": num_channels * num_frames * num_slices,
         "channels": num_channels,
         "slices": num_slices,
-        "unit": "um",
-        "hyperstack": "true"
+        "frames": num_frames,
+        "hyperstack": "true",
+        "unit": 'm'
     }
     imagej_description = "\n".join(f"{k}={md[k]}" for k in md.keys()) + "\n"
     return imagej_description
@@ -2383,19 +2418,23 @@ class AcquisitionDataTIFF(AcquisitionData):
         # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
         tfile.SetDirectory(0)
         desc = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
-        if (desc and ((b"<?xml" and b"<ome " in desc.lower() and not desc.lower().startswith(b"<ome ")) or
-                desc[:4].lower() == b'<ome')):
+        if desc:
+            desc_lower = desc.lower()
+
+        if (desc and ((b"<?xml" in desc_lower and b"<ome " in desc_lower and not desc_lower.startswith(b"<ome ")) or
+                desc_lower[:4] == b'<ome')):
             try:
-                pattern = b'<?xml'
-                start_index = desc.find(pattern)
-                # Extract the content after the pattern
-                if start_index != -1:
-                    desc = desc[start_index:]
-                desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                              b"", desc, count=1)
-                desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
-                              b"", desc)
-                root = ET.fromstring(desc)
+                pattern = rb'<OME.*?>(.*?)</OME>'
+                match = re.search(pattern, desc, re.DOTALL)
+
+                if match:
+                    desc_extract = match.group()
+                    desc_extract = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                                  b"", desc_extract, count=1)
+                    desc_extract = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
+                                  b"", desc_extract)
+                root = ET.fromstring(desc_extract)
+
                 if root.tag.lower() == "ome":
                     return root
                 raise LookupError("XML data is not OME: %s" % (desc,))
