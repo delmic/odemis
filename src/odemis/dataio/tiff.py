@@ -1847,7 +1847,7 @@ def extract_imagej_metadata(ldata) -> str:
     num_frames = 0  # Time frames
     num_slices = 0  # zlevels
 
-    # Check the ZYX dimension of the first DataArray,
+    # Check the ZYX dimensions of the first DataArray
     Y, X = ldata[0].shape[-2:]
     if len(ldata[0].shape) >= 3:
         Z = ldata[0].shape[-3]

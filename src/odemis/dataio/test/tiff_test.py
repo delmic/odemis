@@ -461,6 +461,14 @@ class TestTiffIO(unittest.TestCase):
         omemd = imo.GetField("ImageDescription").decode('utf-8')
         self.assertTrue(("<?xml" in omemd) or (omemd[:4].lower() == '<ome'))
 
+        # check ImageJ metadata
+        # Eg: description = "ImageJ=1.11a\nimages={num_slices * num_channels}\nchannels={num_channels}
+        #                    f\nslices={num_slices}\nframes=num_frames\nhyperstack=true\nunit=m\n"
+        pattern = r'=\s*([^=\s]+)'
+        matches = re.findall(pattern, omemd)
+        self.assertTrue(("ImageJ" in omemd[:7]))
+        self.assertEqual(matches[:7], ['1.11a', '1', '1', '1', '1', 'true', 'm'])
+
         pattern = r'<OME.*?>(.*?)</OME>'
         match = re.search(pattern, omemd, re.DOTALL)
 
