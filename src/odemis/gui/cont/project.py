@@ -379,6 +379,16 @@ class FastEMROCController(object):
         self._viewport = viewport
         self._tab_data = tab_data
         self.calib_prefix = calib_prefix
+        scintillator_position = self._tab_data.main.scintillator_positions[number]
+        scintillator_size = self._tab_data.main.scintillator_size
+        self._sample_bbox = (
+            scintillator_position[0] - scintillator_size[0] / 2,
+            scintillator_position[1] - scintillator_size[1] / 2,
+            scintillator_position[0] + scintillator_size[0] / 2,
+            scintillator_position[1] + scintillator_size[1] / 2,
+        )  # (minx, miny, maxx, maxy) [m]
+        self._roc_size = (self._tab_data.main.multibeam.resolution.value[0] * self._tab_data.main.multibeam.pixelSize.value[0],
+                          self._tab_data.main.multibeam.resolution.value[1] * self._tab_data.main.multibeam.pixelSize.value[1])
 
         # Get ROC model (exists already in tab data) and change coordinates
         calibration_regions = getattr(tab_data, "regions_" + calib_prefix)
@@ -397,11 +407,9 @@ class FastEMROCController(object):
         logging.debug("Zooming in on calibration region %s.", self.calib_model.name.value)
         cnvs = self._viewport.canvas
         xmin, ymin, xmax, ymax = self.calib_model.coordinates.value
-        size = (self._tab_data.main.multibeam.resolution.value[0] * self._tab_data.main.multibeam.pixelSize.value[0],
-                self._tab_data.main.multibeam.resolution.value[1] * self._tab_data.main.multibeam.pixelSize.value[1])
         # zoom in on ROC; add some space around ROC (factor 5 defines zoom level)
         # wx.callAfter: then don't need decorator to run it in main GUI thread
-        wx.CallAfter(cnvs.fit_to_bbox, [xmin - 5 * size[0], ymin - 5 * size[1], xmax + 5 * size[0], ymax + 5 * size[1]])
+        wx.CallAfter(cnvs.fit_to_bbox, [xmin - 5 * self._roc_size[0], ymin - 5 * self._roc_size[1], xmax + 5 * self._roc_size[0], ymax + 5 * self._roc_size[1]])
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_coordinates(self, coordinates):
@@ -424,10 +432,15 @@ class FastEMROCController(object):
                     self.overlay = self._viewport.canvas.\
                         add_calibration_overlay(self.calib_model.coordinates,
                                                 self.calib_model.name.value,
+                                                self._sample_bbox,
+                                                self._roc_size,
                                                 colour="#00ff00")  # green
                 else:  # use default color (orange)
                     self.overlay = self._viewport.\
-                        canvas.add_calibration_overlay(self.calib_model.coordinates, self.calib_model.name.value)
+                        canvas.add_calibration_overlay(self.calib_model.coordinates,
+                                                       self.calib_model.name.value,
+                                                       self._sample_bbox,
+                                                       self._roc_size)
 
 
 class FastEMCalibrationRegionsController(object):
