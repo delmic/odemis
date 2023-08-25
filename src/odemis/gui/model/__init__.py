@@ -1207,6 +1207,8 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         if not main.mirror:
             amodes.remove("mirror-align")
+            if "lens-align" in amodes:
+                amodes.remove("lens-align")
 
         if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)

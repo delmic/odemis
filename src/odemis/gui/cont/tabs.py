@@ -6065,7 +6065,7 @@ class Sparc2AlignTab(Tab):
                 # Subscribe to stream's should_update VA in order to view/hide it
                 focus_stream.should_update.subscribe(self._ensureOneFocusStream)
 
-            # Bind spectograph available gratings to the focus panel gratings combobox
+            # Bind spectrograph available gratings to the focus panel gratings combobox
             create_axis_entry(self, 'grating', main_data.spectrograph)
 
             if self._focus_streams:
@@ -6225,18 +6225,6 @@ class Sparc2AlignTab(Tab):
             # The mirror dimensions as set via _onMirrorDimensions()
             self.panel.vp_align_ek.show_ek_overlay()
 
-        if "lens2-align" not in tab_data.align_mode.choices:
-            self.panel.pnl_lens_switch.Show(False)
-        else:
-            self.panel.btn_manual_focus.Bind(wx.EVT_BUTTON, self._onManualFocus)
-
-        if "lens-align" not in tab_data.align_mode.choices:
-            self.panel.pnl_lens_mover.Show(False)
-            # In such case, there is no focus affecting the ccd, so the
-            # pnl_focus will also be hidden later on, by the ccd_focuser code
-        else:
-            self.panel.btn_manual_focus.Bind(wx.EVT_BUTTON, self._onManualFocus)
-
         if "center-align" in tab_data.align_mode.choices:
             # The center align view share the same CCD stream (and settings)
             self.panel.vp_align_center.view.addStream(ccd_stream)
@@ -6253,10 +6241,6 @@ class Sparc2AlignTab(Tab):
             # CPU load, without reason. Ideally, the view controller/canvas
             # should be clever enough to detect this and not actually cause a
             # redraw.
-
-        # steak camera
-        if "streak-align" not in tab_data.align_mode.choices:
-            self.panel.pnl_streak.Show(False)
 
         # chronograph of spectrometer if "fiber-align" mode is present
         self._speccnt_stream = None
@@ -6319,14 +6303,20 @@ class Sparc2AlignTab(Tab):
             else:
                 logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
+        if main_data.light_aligner and not ("light_aligner", "z") in tab_data.axes:
+            self.panel.btn_p_light_aligner_z.Show(False)
+            self.panel.lbl_p_light_aligner_z.Show(False)
+            self.panel.btn_m_light_aligner_z.Show(False)
+            self.panel.lbl_m_light_aligner_z.Show(False)
+            self.panel.Layout()
+
         if main_data.spec_switch:
             self.panel.btn_spec_switch_retract.Bind(wx.EVT_BUTTON, self._on_spec_switch_btn)
             self.panel.btn_spec_switch_engage.Bind(wx.EVT_BUTTON, self._on_spec_switch_btn)
 
             # move the spec_switch mirror to the default (retracted) position
-            main = self.tab_data_model.main
-            spec_switch_data = main.spec_switch.getMetadata()
-            spec_switch_xpos = main.spec_switch.position.value["x"]
+            spec_switch_data = main_data.spec_switch.getMetadata()
+            spec_switch_xpos = main_data.spec_switch.position.value["x"]
             spec_switch_xmd_deactive = spec_switch_data[model.MD_FAV_POS_DEACTIVE]["x"]
             spec_switch_xmd_active = spec_switch_data[model.MD_FAV_POS_ACTIVE]["x"]
 
@@ -6336,7 +6326,7 @@ class Sparc2AlignTab(Tab):
                     (not almost_equal(spec_switch_xpos, spec_switch_xmd_active))):
                 # execute a move without tracking using a progress bar so
                 # no update to the GUI when the alignment tab is hidden
-                self._spec_switch_f = main.spec_switch.moveAbs({"x": spec_switch_xmd_deactive})
+                self._spec_switch_f = main_data.spec_switch.moveAbs({"x": spec_switch_xmd_deactive})
 
             # future and progress connector for tracking the progress of the gauge when moving
             self._pfc_spec_switch = None
@@ -6385,6 +6375,8 @@ class Sparc2AlignTab(Tab):
 
         self._layoutModeButtons()
         tab_data.align_mode.subscribe(self._onAlignMode)
+
+        self.panel.btn_manual_focus.Bind(wx.EVT_BUTTON, self._onManualFocus)
 
         if main_data.brightlight:
             # Make sure the calibration light is off
@@ -6604,40 +6596,42 @@ class Sparc2AlignTab(Tab):
             self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_lens_switch.Enable(False)
-            self.panel.pnl_focus.Enable(True)
+            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_lens_mover.Show(True)
+            self.panel.pnl_lens_mover.Enable(False)  # Will be enabled once the lens is at the correct place
+            self.panel.pnl_lens_switch.Show(False)
+            self.panel.pnl_focus.Show(True)
             self.panel.gauge_autofocus.Enable(True)
-            self.panel.btn_manual_focus.Enable(True)
+            self.panel.btn_autofocus.Enable(True)
+            self.panel.pnl_fibaligner.Show(False)
+            self.panel.pnl_streak.Show(False)
+            self.panel.pnl_spec_switch.Show(False)
+            self.panel.pnl_light_aligner.Show(False)
+
             self.panel.pnl_moi_settings.Show(False)
-            self.panel.pnl_fibaligner.Enable(False)
-            self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_spec_switch.Enable(False)
-            self.panel.pnl_light_aligner.Enable(False)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
             f.add_done_callback(self._on_lens_align_done)
         elif mode == "lens2-align":
-            # TODO: use vp_align_lens and p
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view
             self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_lens_switch.Enable(False)
-            self.panel.pnl_focus.Enable(False)
-            self.panel.btn_autofocus.Enable(False)
+            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_lens_mover.Show(False)
+            self.panel.pnl_lens_switch.Show(True)
+            self.panel.pnl_lens_switch.Enable(False)  # Will be enabled once the lens is at the correct place
+            self.panel.pnl_focus.Show(True)
             self.panel.gauge_autofocus.Enable(True)
-            self.panel.btn_manual_focus.Enable(True)
+            self.panel.btn_autofocus.Enable(True)
+            self.panel.pnl_fibaligner.Show(False)
+            self.panel.pnl_streak.Show(False)
+            self.panel.pnl_spec_switch.Show(False)
+            self.panel.pnl_light_aligner.Show(False)
+
             self.panel.pnl_moi_settings.Show(False)
-            self.panel.pnl_fibaligner.Enable(False)
-            self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_spec_switch.Enable(False)
-            self.panel.pnl_light_aligner.Enable(False)
-            # TODO: in this mode, if focus change, update the focus image once
-            # (by going to spec-focus mode, turning the light, and acquiring an
-            # AR image). Problem is that it takes about 10s.
+            # TODO: same as lens-align after focus change
             f.add_done_callback(self._on_lens_switch_align_done)
         elif mode == "mirror-align":
             self.tab_data_model.focussedView.value = self.panel.vp_moi.view
@@ -6645,68 +6639,74 @@ class Sparc2AlignTab(Tab):
                 self._moi_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_lens_switch.Enable(False)
-            self.panel.pnl_focus.Enable(False)
+            self.panel.pnl_mirror.Show(True)
+            self.panel.pnl_lens_mover.Show(False)
+            self.panel.pnl_lens_switch.Show(False)
+            self.panel.pnl_focus.Show(False)
+            self.panel.pnl_fibaligner.Show(False)
+            self.panel.pnl_streak.Show(False)
+            self.panel.pnl_spec_switch.Show(False)
+            self.panel.pnl_light_aligner.Show(False)
+
             self.panel.pnl_moi_settings.Show(True)
-            self.panel.pnl_fibaligner.Enable(False)
-            self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_spec_switch.Enable(False)
-            self.panel.pnl_light_aligner.Enable(False)
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.view
             self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(True)
-            self.panel.pnl_mirror.Enable(False)
-            self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_lens_switch.Enable(False)
-            self.panel.pnl_focus.Enable(False)
-            self.panel.pnl_moi_settings.Show(False)
-            self.panel.pnl_fibaligner.Enable(False)
-            self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_spec_switch.Enable(False)
+            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_lens_mover.Show(False)
+            self.panel.pnl_lens_switch.Show(False)
+            self.panel.pnl_focus.Show(False)
+            self.panel.pnl_fibaligner.Show(False)
+            self.panel.pnl_streak.Show(False)
+            self.panel.pnl_spec_switch.Show(False)
             # If light-aligner available, allow to adjust it in this view too,
             # as the lens 2 is active, which allows to further align the light input.
-            self.panel.pnl_light_aligner.Enable(True)
             if main.light_aligner:
+                self.panel.pnl_light_aligner.Show(True)
                 main.light_aligner.position.subscribe(self._onLightAlignPos)
+            else:
+                self.panel.pnl_light_aligner.Show(False)
+
+            self.panel.pnl_moi_settings.Show(False)
         elif mode == "ek-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_ek.view
             self._as_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_mirror.Enable(False)
-            self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_lens_switch.Enable(False)
-            self.panel.pnl_focus.Enable(False)
+            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_lens_mover.Show(False)
+            self.panel.pnl_lens_switch.Show(False)
+            self.panel.pnl_focus.Show(False)
+            self.panel.pnl_fibaligner.Show(False)
+            self.panel.pnl_streak.Show(False)
+            self.panel.pnl_spec_switch.Show(False)
+            self.panel.pnl_light_aligner.Show(False)
+
             self.panel.pnl_moi_settings.Show(False)
-            self.panel.pnl_fibaligner.Enable(False)
-            self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_spec_switch.Enable(False)
-            self.panel.pnl_light_aligner.Enable(False)
         elif mode == "fiber-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.view
             if self._speccnt_stream:
                 self._speccnt_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_mirror.Enable(False)
-            self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_lens_switch.Enable(False)
-            self.panel.pnl_focus.Enable(False)
-            self.panel.pnl_moi_settings.Show(False)
-            self.panel.pnl_fibaligner.Enable(True)
+            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_lens_mover.Show(False)
+            self.panel.pnl_lens_switch.Show(False)
+            self.panel.pnl_focus.Show(False)
+            self.panel.pnl_fibaligner.Show(True)
             # Disable the buttons until the fiber box is ready
             self.panel.btn_m_fibaligner_x.Enable(False)
             self.panel.btn_p_fibaligner_x.Enable(False)
             self.panel.btn_m_fibaligner_y.Enable(False)
             self.panel.btn_p_fibaligner_y.Enable(False)
-            self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_spec_switch.Enable(False)
-            self.panel.pnl_light_aligner.Enable(False)
-            # Note: it's OK to leave autofocus enabled, as it will wait by itself
-            # for the fiber-aligner to be in place
+            self.panel.pnl_spec_switch.Show(False)
+            self.panel.pnl_light_aligner.Show(False)
+            self.panel.pnl_streak.Show(False)
+
+            self.panel.pnl_moi_settings.Show(False)
+
             f.add_done_callback(self._on_fibalign_done)
         elif mode == "streak-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_streak.view
@@ -6716,32 +6716,43 @@ class Sparc2AlignTab(Tab):
                 self._ts_stream.intensityRange.value = self._ts_stream.intensityRange.clip((100, 1000))  # default range
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_mirror.Enable(False)
-            self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_lens_switch.Enable(False)
-            self.panel.pnl_focus.Enable(True)
-            self.panel.btn_manual_focus.Enable(True)
+            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_lens_mover.Show(False)
+            self.panel.pnl_lens_switch.Show(False)
+            self.panel.pnl_focus.Show(True)
             self.panel.btn_autofocus.Enable(False)
             self.panel.gauge_autofocus.Enable(False)
+            self.panel.pnl_fibaligner.Show(False)
+            self.panel.pnl_streak.Show(True)
+            self.panel.pnl_spec_switch.Show(False)
+            self.panel.pnl_light_aligner.Show(False)
+
             self.panel.pnl_moi_settings.Show(False)
-            self.panel.pnl_fibaligner.Enable(False)
-            self.panel.pnl_streak.Enable(True)
-            self.panel.pnl_spec_switch.Enable(False)
-            self.panel.pnl_light_aligner.Enable(False)
         elif mode == "light-in-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # allows to see the focused slit line
             self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_mirror.Enable(False)
-            self.panel.pnl_lens_mover.Enable(False)
-            self.panel.pnl_lens_switch.Enable(False)
-            self.panel.pnl_focus.Enable(False)
+            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_lens_mover.Show(False)
+            self.panel.pnl_lens_switch.Show(False)
+            if main.mirror:
+                self.panel.pnl_focus.Show(False)
+            else:
+                # If no mirror => ELIM => allow to focus, but only manually
+                self.panel.pnl_focus.Show(True)
+                self.panel.btn_autofocus.Enable(False)
+                self.panel.gauge_autofocus.Enable(False)
+            self.panel.pnl_fibaligner.Show(False)
+            self.panel.pnl_streak.Show(False)
+            self.panel.pnl_light_aligner.Show(True)
+            if main.spec_switch:
+                self.panel.pnl_spec_switch.Show(True)
+                self.panel.pnl_spec_switch.Enable(False)  # Wait until the spec-switch is engaged
+            else:
+                self.panel.pnl_spec_switch.Show(False)
+
             self.panel.pnl_moi_settings.Show(False)
-            self.panel.pnl_fibaligner.Enable(False)
-            self.panel.pnl_streak.Enable(False)
-            self.panel.pnl_light_aligner.Enable(True)
-            self.panel.pnl_spec_switch.Enable(False)  # Wait until the spec-switch is engaged
             f.add_done_callback(self._on_light_in_align_done)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
@@ -6784,8 +6795,9 @@ class Sparc2AlignTab(Tab):
             doc_cnt = pkg_resources.resource_string("odemis.gui", p)
             self.panel.html_moi_doc.AppendToPage(doc_cnt)
 
-        # To adapt to the pnl_moi_settings showing on/off
-        self.panel.html_moi_doc.Parent.Layout()
+        # Reposition and adjust the size of the various widgets, as they have changed
+        fix_static_text_clipping(self.panel)  # for the widgets shown for the first time
+        self.panel.Layout()
 
     def _on_align_mode_done(self, f):
         """Not essential but good for logging and debugging."""
@@ -7062,9 +7074,7 @@ class Sparc2AlignTab(Tab):
             # Set the optical path according to the align mode
             if align_mode == "streak-align":
                 opath = "streak-focus"
-            elif align_mode == "lens-align":
-                opath = "spec-focus"
-            elif align_mode == "lens2-align":
+            elif align_mode in ("lens-align", "lens2-align", "light-in-align"):
                 opath = "spec-focus"
             else:
                 self._stream_controller.pauseStreams()
@@ -7082,7 +7092,7 @@ class Sparc2AlignTab(Tab):
                 # Do no enable detector selection, as only the streak-ccd is available
                 # TODO: update the combobox to indicate the current detector is the streak-ccd
             else:
-                if align_mode == "lens-align" or align_mode == "lens2-align":
+                if align_mode in ("lens-align", "lens2-align", "light-in-align"):
                     self._enableFocusComponents(manual=True, ccd_stream=False)
                 self._stream_controller.pauseStreams()
 
@@ -7130,7 +7140,7 @@ class Sparc2AlignTab(Tab):
         if active:
             main = self.tab_data_model.main
             align_mode = self.tab_data_model.align_mode.value
-            if align_mode == "lens-align" or align_mode == "lens2-align":
+            if align_mode in ("lens-align", "lens2-align", "light-in-align"):
                 focus_mode = "spec-focus"
                 ss = self._focus_streams
                 btn = self.panel.btn_autofocus
@@ -7170,6 +7180,7 @@ class Sparc2AlignTab(Tab):
                 return
             btn.SetLabel("Auto focus")
 
+    @call_in_wx_main
     def _on_autofocus_done(self, future):
         try:
             future.result()
