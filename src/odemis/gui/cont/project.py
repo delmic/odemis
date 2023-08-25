@@ -380,7 +380,7 @@ class FastEMROCController(object):
         self._tab_data = tab_data
         self.calib_prefix = calib_prefix
         scintillator_position = self._tab_data.main.scintillator_positions[number]
-        scintillator_size = self._tab_data.main.scintillator_size
+        scintillator_size = self._tab_data.main.scintillator_sizes[number]
         self._sample_bbox = (
             scintillator_position[0] - scintillator_size[0] / 2,
             scintillator_position[1] - scintillator_size[1] / 2,
