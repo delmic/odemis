@@ -1835,11 +1835,17 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         """
         logging.debug("Zooming out to show all scintillators.")
         if self._tab_data_model:
-            sz = self._tab_data_model.main.scintillator_size
-            l = min(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[0])[0] - sz[0]
-            t = max(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[1])[1] + sz[1]
-            r = max(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[0])[0] + sz[0]
-            b = min(list(self._tab_data_model.main.scintillator_positions.values()), key=lambda item: item[1])[1] - sz[1]
+            sizes = self._tab_data_model.main.scintillator_sizes
+            keys = list(self._tab_data_model.main.scintillator_positions.keys())
+            values = list(self._tab_data_model.main.scintillator_positions.values())
+            l_value = min(values, key=lambda item: item[0])
+            t_value = max(values, key=lambda item: item[1])
+            r_value = max(values, key=lambda item: item[0])
+            b_value = min(values, key=lambda item: item[1])
+            l = l_value[0] - sizes[keys[values.index(l_value)]][0]
+            t = t_value[1] + sizes[keys[values.index(t_value)]][1]
+            r = r_value[0] + sizes[keys[values.index(r_value)]][0]
+            b = b_value[1] - sizes[keys[values.index(b_value)]][1]
             self.fit_to_bbox((l, t, r, b))
         else:
             raise ValueError("Tab data model not initialized yet.")
