@@ -30,8 +30,8 @@ def fix_static_text_clipping(panel):
     # This following forces resizing of all static text found on the panel and its children
     _force_resize_static_text(panel)
     # Eventually, update the size of the parent, based on everything inside it
-    wx.CallLater(100, _update_layout_big_text, panel)  # Quickly
-    wx.CallLater(500, _update_layout_big_text, panel)  # Later, in case the first time was too early
+    wx.CallLater(500, _update_layout_big_text, panel)  # Quickly
+    wx.CallLater(1000, _update_layout_big_text, panel)  # Later, in case the first time was too early
 
 def _update_layout_big_text(panel):
     _force_resize_static_text(panel)
