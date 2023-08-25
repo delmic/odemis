@@ -19,7 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from past.builtins import basestring
 import queue
 from concurrent.futures import CancelledError
 import glob
@@ -645,7 +644,7 @@ class Controller(object):
         returns (str): the string representing this parameter
         """
         # SPA? (Get Volatile Memory Parameters)
-        assert(isinstance(axis, basestring) and 1 <= len(axis) <= 8)
+        assert(isinstance(axis, str) and 1 <= len(axis) <= 8)
         assert 0 <= param
         if hasattr(self, "_avail_params") and param not in self._avail_params:
             raise ValueError("Parameter %s %d not available" % (axis, param))
@@ -686,7 +685,7 @@ class Controller(object):
         Raises ValueError if hardware complains
         """
         # SPA (Set Volatile Memory Parameters)
-        assert(isinstance(axis, basestring) and 1 <= len(axis) <= 8)
+        assert(isinstance(axis, str) and 1 <= len(axis) <= 8)
         assert(0 <= param)
         self._sendOrderCommand("SPA %s 0x%X %s\n" % (axis, param, val))
         if check:
@@ -703,7 +702,7 @@ class Controller(object):
         returns (str): the string representing this parameter
         """
         # SEP? (Get Non-Volatile Memory Parameters)
-        assert(isinstance(axis, basestring) and 1 <= len(axis) <= 8)
+        assert(isinstance(axis, str) and 1 <= len(axis) <= 8)
         assert 0 <= param
         if hasattr(self, "_avail_params") and param not in self._avail_params:
             raise ValueError("Parameter %s %d not available" % (axis, param))
@@ -1314,7 +1313,7 @@ class Controller(object):
         opt (0<=int): type of signal to be recorded. See documentation for values.
         """
         assert(table > 0)
-        assert(isinstance(source, basestring))
+        assert(isinstance(source, str))
         assert(opt >= 0)
         self._sendOrderCommand("DRC %d %s %d\n" % (table, source, opt))
 
@@ -3603,7 +3602,7 @@ class SerialBusAccesser(object):
         """
         assert(addr is None or 1 <= addr <= 16 or addr == 254)
 
-        if isinstance(com, basestring):
+        if isinstance(com, str):
             com = [com]
             multicom = False
         else:
@@ -3761,7 +3760,7 @@ class IPBusAccesser(object):
         """
         assert(addr is None or 1 <= addr <= 16 or addr == 254)
 
-        if isinstance(com, basestring):
+        if isinstance(com, str):
             com = [com]
             multicom = False
         else:

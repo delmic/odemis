@@ -27,7 +27,7 @@ from collections.abc import Iterable
 import cv2
 import numpy
 import yaml
-from past.builtins import basestring, long
+from past.builtins import long
 from yaml.emitter import Emitter
 from yaml.representer import SafeRepresenter
 from yaml.resolver import Resolver
@@ -221,7 +221,7 @@ def reproduce_typed_value(typed_value, str_val):
         return int(str_val)
     elif isinstance(typed_value, float):
         return float(str_val)
-    elif isinstance(typed_value, basestring):
+    elif isinstance(typed_value, str):
         return str_val
     # Process dictionaries before matching against Iterables
     elif isinstance(typed_value, dict):
@@ -281,7 +281,7 @@ def ensure_tuple(v):
       otherwise it will be returned as is
     return (tuple or object): same a v, but a tuple if v was iterable
     """
-    if isinstance(v, Iterable) and not isinstance(v, basestring):
+    if isinstance(v, Iterable) and not isinstance(v, str):
         # convert to a tuple, with each object contained also converted
         return tuple(ensure_tuple(i) for i in v)
     else:

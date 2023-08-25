@@ -19,10 +19,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-# Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
-from past.builtins import basestring
-from builtins import range
-
 import calendar
 from datetime import datetime
 import json
@@ -1394,7 +1390,7 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
 
             if model.MD_OUT_WL in da.metadata:
                 owl = da.metadata[model.MD_OUT_WL]
-                if isinstance(owl, basestring):
+                if isinstance(owl, str):
                     filter = ET.SubElement(chan, "Filter", attrib={
                                     "ID": "Filter:%d:%d" % (idnum, subid)})
                     filter.attrib["Type"] = owl

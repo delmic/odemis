@@ -36,7 +36,6 @@ from odemis.model import DataArrayShadow
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 from odemis.util import intersect, fluo, img, units
 from odemis.util import spectrum
-from past.builtins import basestring
 import threading
 import time
 from typing import Tuple, Optional
@@ -2185,7 +2184,7 @@ def _get_stream_legend_text(md):
                 captions.append(u"Z Position: %s" % units.readable_str(pos[2], "m", sig=3))
         if model.MD_OUT_WL in md:
             out_wl = md[model.MD_OUT_WL]
-            if isinstance(out_wl, basestring):
+            if isinstance(out_wl, str):
                 captions.append(u"Emission: %s" % (out_wl,))
             else:
                 captions.append(u"Emission: %s" % units.readable_str(numpy.average(out_wl), "m", sig=3))

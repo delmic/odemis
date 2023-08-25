@@ -25,7 +25,7 @@ This module contains functions that help in the generation of dynamic configurat
 """
 
 from builtins import str
-from past.builtins import basestring, long
+from past.builtins import long
 from collections import OrderedDict
 from collections.abc import Iterable, Mapping
 import logging
@@ -591,7 +591,7 @@ def format_axis_choices(name, axis_def):
 
 def choice_to_str(choice):
     """ Return a list of choices, where iterable choices are joined by an `x` """
-    if isinstance(choice, basestring) or not isinstance(choice, Iterable):
+    if isinstance(choice, str) or not isinstance(choice, Iterable):
         return str(choice)
     return u" x ".join(str(c) for c in choice)
 

@@ -28,7 +28,6 @@ from urllib.parse import quote
 
 import Pyro4
 from Pyro4.core import oneway
-from past.builtins import basestring
 
 from odemis.util import inspect_getmembers
 
@@ -377,7 +376,7 @@ class Container(Pyro4.core.Daemon):
          container.
         component (Component)
         """
-        assert isinstance(component._pyroId, basestring)
+        assert isinstance(component._pyroId, str)
         self.rootId = component._pyroId
 
 

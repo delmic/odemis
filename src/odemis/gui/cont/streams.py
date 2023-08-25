@@ -30,7 +30,7 @@ import time
 from builtins import str
 from collections import OrderedDict
 from collections.abc import Iterable
-from past.builtins import basestring, long
+from past.builtins import long
 
 import numpy
 import odemis.acq.stream as acqstream
@@ -960,7 +960,7 @@ class StreamController(object):
         readonly = self.stream.emission.readonly or len(self.stream.emission.choices) <= 1
 
         if center_wl_color is None:
-            if isinstance(em, basestring):
+            if isinstance(em, str):
                 # Unknown colour or non-meaningful
                 center_wl_color = None
             else:
@@ -970,7 +970,7 @@ class StreamController(object):
         r = self.stream_panel.add_dye_emission_ctrl(band, readonly, center_wl_color)
         lbl_ctrl, value_ctrl, self._lbl_em_peak, self._btn_emission = r
 
-        if isinstance(em, basestring) and em != model.BAND_PASS_THROUGH:
+        if isinstance(em, str) and em != model.BAND_PASS_THROUGH:
             if not readonly:
                 logging.error("Emission band is a string (%s), but not readonly", em)
             return

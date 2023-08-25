@@ -26,7 +26,6 @@ from abc import abstractmethod, ABCMeta
 
 import Pyro4
 from future.moves.urllib.parse import quote
-from past.builtins import basestring
 from Pyro4.core import isasync
 
 import odemis
@@ -717,7 +716,7 @@ class Axis(object):
         # TODO: add a way to store some "favorite" positions (at least possible
         # to define at init, and maybe also update online?)
 
-        assert isinstance(unit, (type(None), basestring))
+        assert isinstance(unit, (type(None), str))
         self.unit = unit  # always defined, just sometimes is None
 
         if choices is None and range is None:

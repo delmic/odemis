@@ -23,8 +23,6 @@ data streams coming from the microscope.
 
 """
 
-from builtins import str
-from past.builtins import basestring
 from decorator import decorator
 import logging
 from collections import OrderedDict
@@ -1071,11 +1069,9 @@ class StreamPanel(wx.Panel):
 
         lbl_ctrl = self._add_side_label(label_text)
 
-        # Convert value object to str (unicode) iif necessary.
-        # unicode() (which is str() from Python3) fails in Python2 if argument
-        # is bytes with non-ascii characters.
-        # => If value is already bytes or unicode, just pass it as-is to wx.TextCtrl.
-        if not isinstance(value, basestring):
+        # Convert value object to str, only if necessary.
+        # => If value is already bytes or str, just pass it as-is to wx.TextCtrl.
+        if not isinstance(value, (str, bytes)):
             value = str(value)
 
         if value is not None:

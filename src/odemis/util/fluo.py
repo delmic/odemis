@@ -19,7 +19,6 @@ You should have received a copy of the GNU General Public License along with Ode
 
 from collections.abc import Iterable
 from odemis.model import BAND_PASS_THROUGH
-from past.builtins import basestring  # For Python 2 & 3
 
 # constants to indicate how well a emission/excitation setting fits a dye
 # emission/excitation (peak)
@@ -38,7 +37,7 @@ def get_center(band):
     if band == BAND_PASS_THROUGH:
         return 5000e-9  # Something large, so that if it's sorted, it's after every other band
 
-    if isinstance(band, basestring):
+    if isinstance(band, str):
         raise TypeError("Band must be a list or a tuple")
 
     if isinstance(next(iter(band)), Iterable):
@@ -246,7 +245,7 @@ def to_readable_band(band):
     #   ex: 453/19 nm
     # if multi-band => center, center... nm
     #   ex: 453, 568, 968 nm
-    if isinstance(band, basestring):
+    if isinstance(band, str):
         return band
     if not isinstance(band[0], Iterable):
         b = band

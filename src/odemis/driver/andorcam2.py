@@ -30,7 +30,6 @@ from odemis import model, util, dataio
 from odemis.model import HwError, oneway
 from odemis.util import img
 import os
-from past.builtins import basestring
 import queue
 import random
 import sys
@@ -539,7 +538,7 @@ class AndorCam2(model.DigitalCamera):
 
         self._initpath = None # Will be updated by Initialize()
 
-        if isinstance(device, basestring):
+        if isinstance(device, str):
             self._device, self.handle = self._findDevice(device)
         else:
             # It's a common error to enter the serial number as a number... and

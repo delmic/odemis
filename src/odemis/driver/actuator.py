@@ -32,7 +32,6 @@ from concurrent import futures
 from typing import Dict, Union, Set
 
 import numpy
-from past.builtins import basestring
 
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
@@ -901,7 +900,7 @@ class AntiBacklashActuator(model.Actuator):
             raise ValueError("AntiBacklashActuator needs 1 dependency")
 
         for a, v in backlash.items():
-            if not isinstance(a, basestring):
+            if not isinstance(a, str):
                 raise ValueError("Backlash key must be a string but got '%s'" % (a,))
             if not isinstance(v, numbers.Real):
                 raise ValueError("Backlash value of %s must be a number but got '%s'" % (a, v))

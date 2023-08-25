@@ -20,7 +20,6 @@ This file is part of Odemis.
 
 """
 
-from past.builtins import basestring
 import logging
 import odemis.gui.conf.file as conffile
 import odemis.gui as gui
@@ -134,8 +133,8 @@ class AcquisitionConfigTest(ConfigTest, unittest.TestCase):
 
     def test_simple(self):
         conf = gui.conf.get_acqui_conf()
-        self.assertIsInstance(conf.last_path, basestring)
-        self.assertIsInstance(conf.last_format, basestring)
+        self.assertIsInstance(conf.last_path, str)
+        self.assertIsInstance(conf.last_format, str)
         self.assertLess(len(conf.last_extension), 12)
 
     def test_save(self):
