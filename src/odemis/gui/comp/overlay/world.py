@@ -3414,7 +3414,6 @@ class FastEMSelectOverlay(WorldSelectOverlay):
         """
         if coordinates != UNDEFINED_ROI:
             self.set_physical_sel(coordinates)
-            wx.CallAfter(self.cnvs.request_drawing_update)
 
 
 class FastEMROAOverlay(FastEMSelectOverlay):
