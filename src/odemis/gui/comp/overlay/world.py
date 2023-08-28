@@ -3557,10 +3557,10 @@ class FastEMROCOverlay(FastEMSelectOverlay):
         # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
         # the rectangle if the selection is near (based on mpp value, so independent of scale).
         margin = self.cnvs.view.mpp.value * 20
-        self.active.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin))
+        self.active.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or self._roc_fitting_in_sample_bbox
 
         # Get new ROC coordinates
-        if self.active.value or self._roc_fitting_in_sample_bbox:
+        if self.active.value:
             self._coordinates.value = rect
 
         # Stop dragging
@@ -3619,7 +3619,7 @@ class FastEMROCOverlay(FastEMSelectOverlay):
         """
         Draw with adaptive line width (depending on whether or not the overlay is active) and add label.
         """
-        line_width = 5 if (self.active.value or self._roc_fitting_in_sample_bbox) else 2
+        line_width = 5 if self.active.value else 2
         super(FastEMROCOverlay, self).draw(ctx, shift, scale, line_width, dash=False)
 
         # Draw the label of the ROC on the bottom left of the rectangle
