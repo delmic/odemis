@@ -561,3 +561,6 @@ class FastEMCalibrationRegionsController(object):
         :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
         self._calibration_panel.Enable(not mode)
+        for num in self.panel.buttons.values():
+            if self.roc_ctrls[num].overlay:
+                self.roc_ctrls[num].overlay.enable = not mode
