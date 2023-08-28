@@ -2220,7 +2220,7 @@ class FastEMChamberTab(Tab):
         self.set_label("CHAMBER")
 
         self.panel.selection_panel.create_controls(tab_data.main.scintillator_layout)
-        for btn in self.panel.selection_panel.buttons.values():
+        for btn in self.panel.selection_panel.buttons.keys():
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_selection_button)
 
         # Create stream & view
@@ -2271,7 +2271,7 @@ class FastEMChamberTab(Tab):
     def _on_selection_button(self, evt):
         # update main_data.active_scintillators and toggle colour for better visibility
         btn = evt.GetEventObject()
-        num = [num for num, b in self.panel.selection_panel.buttons.items() if b == btn][0]
+        num = self.panel.selection_panel.buttons.get(btn)
         if btn.GetValue():
             btn.SetBackgroundColour(wx.GREEN)
             if num not in self.main_data.active_scintillators.value:

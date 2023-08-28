@@ -97,7 +97,7 @@ class FastEMOverviewAcquiController(object):
         self.selection_panel.create_controls(
             tab_data.main.scintillator_layout, dwell_time_slider_conf=dwell_time_conf
         )
-        for btn in self.selection_panel.buttons.values():
+        for btn in self.selection_panel.buttons.keys():
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_selection_button)
             btn.Enable(False)  # disabled by default, need to select scintillator in chamber tab first
 
@@ -127,7 +127,7 @@ class FastEMOverviewAcquiController(object):
     def _on_selection_button(self, evt):
         # add/remove scintillator number to/from selected_scintillators set and toggle button colour
         btn = evt.GetEventObject()
-        num = [num for num, b in self.selection_panel.buttons.items() if b == btn][0]
+        num = self.selection_panel.buttons.get(btn)
         if btn.GetValue():
             if num not in self._tab_data_model.selected_scintillators.value:
                 self._tab_data_model.selected_scintillators.value.append(num)
@@ -141,7 +141,7 @@ class FastEMOverviewAcquiController(object):
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_active_scintillators(self, _):
-        for num, b in self.selection_panel.buttons.items():
+        for b, num in self.selection_panel.buttons.items():
             if num in self._main_data_model.active_scintillators.value:
                 b.Enable(True)
             else:
