@@ -391,10 +391,8 @@ class FastEMROCController(object):
         # Get ROC model (exists already in tab data) and change coordinates
         calibration_regions = getattr(tab_data, "regions_" + calib_prefix)
         self.calib_model = calibration_regions.value[number]
-        self.calib_model.coordinates.subscribe(self._on_coordinates)
 
         self.overlay = None
-        self.is_selected = False
 
     def fit_view_to_bbox(self):
         """
@@ -411,34 +409,30 @@ class FastEMROCController(object):
         # wx.callAfter: then don't need decorator to run it in main GUI thread
         wx.CallAfter(cnvs.fit_to_bbox, [xmin - 5 * size[0], ymin - 5 * size[1], xmax + 5 * size[0], ymax + 5 * size[1]])
 
-    @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def _on_coordinates(self, coordinates):
+    def create_calibration_overlay(self):
         """
-        Called when the coordinates of a region of calibration (ROC) object are changed.
-        This can be by either adding, removing or dragging a ROC.
-        :param coordinates: (UNDEFINED_ROI or tuple of 4 floats) Coordinates of the region of calibration (l, t, r, b).
+        Create the calibration region (ROC) overlay.
         """
-        logging.debug("ROC '%s' coordinates changed to %s.", self.calib_model.name.value, coordinates)
-        if coordinates == acqstream.UNDEFINED_ROI:
-            # remove the ROC overlay in the viewport
-            if self.overlay is not None:
-                self._viewport.canvas.remove_overlay(self.overlay)
-                self.overlay = None  # needed so it can be added again to viewport
-        else:
-            # add ROC overlay if not there yet and only if the selection button label is OK
-            # (e.g. do not add when just moving the overlay)
-            if self.overlay is None and self.is_selected:
-                if self.calib_prefix == "calib_3":
-                    self.overlay = self._viewport.canvas.\
-                        add_calibration_overlay(self.calib_model.coordinates,
-                                                self.calib_model.name.value,
-                                                self._sample_bbox,
-                                                colour="#00ff00")  # green
-                else:  # use default color (orange)
-                    self.overlay = self._viewport.\
-                        canvas.add_calibration_overlay(self.calib_model.coordinates,
-                                                       self.calib_model.name.value,
-                                                       self._sample_bbox)
+        if self.overlay is None:
+            if self.calib_prefix == "calib_3":
+                self.overlay = self._viewport.canvas.\
+                    add_calibration_overlay(self.calib_model.coordinates,
+                                            self.calib_model.name.value,
+                                            self._sample_bbox,
+                                            colour="#00ff00")  # green
+            else:  # use default color (orange)
+                self.overlay = self._viewport.\
+                    canvas.add_calibration_overlay(self.calib_model.coordinates,
+                                                   self.calib_model.name.value,
+                                                   self._sample_bbox)
+
+    def remove_calibration_overlay(self):
+        """
+        Remove the calibration region (ROC) overlay.
+        """
+        if self.overlay:
+            self._viewport.canvas.remove_overlay(self.overlay)
+            self.overlay = None
 
 
 class FastEMCalibrationRegionsController(object):
@@ -456,7 +450,6 @@ class FastEMCalibrationRegionsController(object):
         """
         self._tab_data = tab_data
         self._data_model = tab_data.main
-        self.calibration_regions = getattr(tab_data, "regions_" + calib_prefix)
         self._calibration_panel = calibration_panel
         self._viewport = viewport
         self._calib_prefix = calib_prefix
@@ -464,15 +457,12 @@ class FastEMCalibrationRegionsController(object):
         self.panel = FastEMCalibrationPanel(calibration_panel, tab_data.main.scintillator_layout)
         calibration_panel.add_calibration_panel(self.panel)
 
-        for btn in self.panel.buttons.values():
+        self.roc_ctrls = {}
+        # Bind toggle button and create calibration controller for each scintillator
+        for btn, num in self.panel.buttons.items():
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_button)
             btn.Enable(False)  # disabled by default, need to select scintillator in chamber tab first
-
-        # create calibration controller for each scintillator
-        self.roc_ctrls = {}
-        for roc_num, roc in self.calibration_regions.value.items():
-            self.roc_ctrls[roc_num] = FastEMROCController(roc_num, tab_data, viewport, calib_prefix)
-            roc.coordinates.subscribe(self._on_coordinates)
+            self.roc_ctrls[num] = FastEMROCController(num, tab_data, viewport, calib_prefix)
 
         # Only enable buttons for scintillators which have been selected in the chamber tab
         tab_data.main.active_scintillators.subscribe(self._on_active_scintillators)
@@ -491,10 +481,10 @@ class FastEMCalibrationRegionsController(object):
         """
 
         btn = evt.GetEventObject()
-        num = [num for num, b in self.panel.buttons.items() if b == btn][0]
+        num = self.panel.buttons.get(btn)
+        roc_ctrl = self.roc_ctrls[num]
 
         if btn.GetValue():
-            self.roc_ctrls[num].is_selected = True  # indicate that the button has been selected
             # update the coordinates
             # By default, the calibration region is in the center of the scintillator.
             # It is a single field image and thus its size is defined by the
@@ -508,26 +498,31 @@ class FastEMCalibrationRegionsController(object):
             xmax = pos[0] + 0.5 * sz[0]
             ymax = pos[1] - 0.5 * sz[1]
 
-            self.roc_ctrls[num].calib_model.coordinates.value = (xmin, ymin, xmax, ymax)
-            self.roc_ctrls[num].fit_view_to_bbox()  # Zoom to calibration region
+            roc_ctrl.calib_model.coordinates.value = (xmin, ymin, xmax, ymax)
+            roc_ctrl.fit_view_to_bbox()  # Zoom to calibration region
+            roc_ctrl.create_calibration_overlay()
         else:
-            self.roc_ctrls[num].is_selected = False  # indicate that the button has been de-selected
-            # reset coordinates for ROC to undefined
-            self.roc_ctrls[num].calib_model.coordinates.value = acqstream.UNDEFINED_ROI
+            # reset coordinates for ROC to undefined and remove overlay
+            roc_ctrl.calib_model.coordinates.value = acqstream.UNDEFINED_ROI
+            roc_ctrl.remove_calibration_overlay()
+        # update ROC buttons
+        self._update_buttons()
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def _on_coordinates(self, _=None):
+    def _update_buttons(self, active_scintillators=None):
         """
         Checks that the region of calibration (ROC) buttons are up-to-date (synchronize model with GUI).
         Whenever the list of active scintillators changes and or a ROC is selected/deselected, the
         buttons are updated/enabled/disabled accordingly.
+        :param active_scintillators: (list of int) A list of active (loaded) scintillators as indicated in the chamber tab.
         """
-        active_scintillators = self._tab_data.main.active_scintillators.value
+        if active_scintillators is None:
+            active_scintillators = self._tab_data.main.active_scintillators.value
 
-        for num, b in self.panel.buttons.items():
+        for b, num in self.panel.buttons.items():
             if num in active_scintillators:
                 b.Enable(True)  # always enable the button when the scintillator is active
-                if self.roc_ctrls[num].is_selected:
+                if self.roc_ctrls[num].overlay:
                     b.SetLabel("OK")
                     if self._calib_prefix == "calib_2":
                         b.SetForegroundColour(FG_COLOUR_WARNING)
@@ -548,14 +543,15 @@ class FastEMCalibrationRegionsController(object):
         panel containing the ROC buttons are updated.
         :param scintillators: (list of int) A list of active (loaded) scintillators as indicated in the chamber tab.
         """
-        for num, b in self.panel.buttons.items():
+        for num in self.panel.buttons.values():
             if num not in scintillators:
-                # reset coordinates for ROC to undefined
-                self.roc_ctrls[num].calib_model.coordinates.value = acqstream.UNDEFINED_ROI
-                self.roc_ctrls[num].is_selected = False
+                # reset coordinates for ROC to undefined and remove overlay
+                roc_ctrl = self.roc_ctrls[num]
+                roc_ctrl.calib_model.coordinates.value = acqstream.UNDEFINED_ROI
+                roc_ctrl.remove_calibration_overlay()
 
         # update ROC buttons
-        self._on_coordinates()
+        self._update_buttons(scintillators)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_calibrating(self, mode):
