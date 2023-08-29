@@ -3557,8 +3557,9 @@ class FastEMROCOverlay(FastEMSelectOverlay):
             margin = self.cnvs.view.mpp.value * 20
             self.active.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or (self.selection_mode == SEL_MODE_DRAG)
 
-            # Get new ROC coordinates
+            # Set new ROC coordinates
             if self.active.value:
+                logging.debug("Setting ROC '%s' coordinates to %s.", self.label, rect)
                 self._coordinates.value = rect
 
             # Stop dragging
