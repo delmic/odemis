@@ -40,7 +40,8 @@ from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.overlay.base import (EDIT_MODE_BOX, EDIT_MODE_POINT,
                                           SEL_MODE_CREATE, SEL_MODE_EDIT,
-                                          SEL_MODE_NONE, DragMixin, Label,
+                                          SEL_MODE_NONE, SEL_MODE_DRAG,
+                                          DragMixin, Label,
                                           PixelDataMixin, SelectionMixin,
                                           SpotModeBase, Vec, WorldOverlay)
 from odemis.gui.comp.overlay.view import CenteredLineOverlay
@@ -3512,20 +3513,17 @@ class FastEMROAOverlay(FastEMSelectOverlay):
 class FastEMROCOverlay(FastEMSelectOverlay):
     """ Overlay representing one region of calibration (ROC) on the FastEM. """
 
-    def __init__(self, cnvs, coordinates, label, sample_bbox, roc_size, colour=gui.SELECTION_COLOUR):
+    def __init__(self, cnvs, coordinates, label, sample_bbox, colour=gui.SELECTION_COLOUR):
         """
         cnvs (FastEMAcquisitionCanvas): canvas for the overlay
         coordinates (TupleContinuousVA): VA representing region of calibration coordinates
         label (str or int): label to be displayed next to rectangle
         sample_bbox (tuple): bounding box coordinates of the sample holder (minx, miny, maxx, maxy) [m]
-        roc_size (tuple): the region of calibration size (x, y) [m]
         colour (str): hex colour code for ROC display in viewport
         """
         super(FastEMROCOverlay, self).__init__(cnvs, coordinates, colour)
         self.label = label
         self._sample_bbox = sample_bbox
-        self._roc_size = roc_size
-        self._roc_fitting_in_sample_bbox = False
 
     def on_left_down(self, evt):
         """
@@ -3544,7 +3542,6 @@ class FastEMROCOverlay(FastEMSelectOverlay):
 
             self._view_to_phys()
             self.cnvs.update_drawing()
-            self._roc_fitting_in_sample_bbox = False
         else:
             WorldOverlay.on_left_down(self, evt)
 
@@ -3557,7 +3554,7 @@ class FastEMROCOverlay(FastEMSelectOverlay):
         # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
         # the rectangle if the selection is near (based on mpp value, so independent of scale).
         margin = self.cnvs.view.mpp.value * 20
-        self.active.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or self._roc_fitting_in_sample_bbox
+        self.active.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or (self.selection_mode == SEL_MODE_DRAG)
 
         # Get new ROC coordinates
         if self.active.value:
@@ -3589,28 +3586,23 @@ class FastEMROCOverlay(FastEMSelectOverlay):
                     self.cnvs.reset_dynamic_cursor()
             else:
                 self._view_to_phys()
-                pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-                # Check if the event position is not in the sample bounding box
-                if not util.is_point_in_rect(pos, self._sample_bbox):
-                    # Find the closest point on the sample bounding box from the event position
-                    closest_x = max(self._sample_bbox[0], min(pos[0], self._sample_bbox[2]))
-                    closest_y = max(self._sample_bbox[1], min(pos[1], self._sample_bbox[3]))
-                    # Checks to make sure the ROC stays within the sample bounding box
-                    if closest_x == self._sample_bbox[2]:
-                        l = closest_x - self._roc_size[0]
-                        r = closest_x
-                    else:
-                        l = closest_x
-                        r = l + self._roc_size[0]
-                    if closest_y == self._sample_bbox[3]:
-                        b = closest_y - self._roc_size[1]
-                        t = closest_y
-                    else:
-                        b = closest_y
-                        t = b + self._roc_size[1]
-                    # Set the ROC at the closest point
-                    self.set_physical_sel((l, t, r, b))
-                    self._roc_fitting_in_sample_bbox = True
+                minx, miny, maxx, maxy = self.get_physical_sel()
+                # Clip the ROC so that it stays within the sample bounding box
+                rect = self._coordinates.value
+                roc_size = (rect[2] - rect[0], rect[3] - rect[1])
+                if minx < self._sample_bbox[0]:
+                    minx = self._sample_bbox[0]
+                    maxx = minx + roc_size[0]
+                elif maxx > self._sample_bbox[2]:
+                    maxx = self._sample_bbox[2]
+                    minx = maxx - roc_size[0]
+                if miny < self._sample_bbox[1]:
+                    miny = self._sample_bbox[1]
+                    maxy = miny + roc_size[1]
+                elif maxy > self._sample_bbox[3]:
+                    maxy = self._sample_bbox[3]
+                    miny = maxy - roc_size[0]
+                self.set_physical_sel((minx, miny, maxx, maxy))
             self.cnvs.request_drawing_update()
         else:
             WorldOverlay.on_motion(self, evt)
