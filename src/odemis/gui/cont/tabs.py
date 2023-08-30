@@ -1841,7 +1841,7 @@ class FastEMAcquisitionTab(Tab):
             ]
 
         # Controller for calibration panel 2
-        self._calib_2_controller = fastem_acq.FastEMCalibration2Controller(
+        self._calib_2_controller = fastem_acq.FastEMScintillatorCalibrationController(
             tab_data,
             panel,
             calib_prefix="calib_2",
@@ -1873,7 +1873,7 @@ class FastEMAcquisitionTab(Tab):
         )
 
         # Controller for calibration panel 3
-        self._calib_3_controller = fastem_acq.FastEMCalibration3Controller(
+        self._calib_3_controller = fastem_acq.FastEMScintillatorCalibrationController(
             tab_data,
             panel,
             calib_prefix="calib_3",

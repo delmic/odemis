@@ -867,11 +867,13 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
             else:
                 self._update_calibration_controls("No calibration region selected.", False)
 
-    def save_calibrated_settings(self, _):
+    def save_calibrated_settings(self, roc_num, config):
         """
         Save the calibrated settings on the region of calibration (ROC) object.
+        :param roc_num: (int) The number of the region of calibration.
+        :param config: (nested dict) Dictionary containing various calibrated settings.
         """
-        pass
+        self.calibration_regions.value[roc_num].parameters.update(config)
 
     def estimate_calibration_time(self):
         """
@@ -886,63 +888,3 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         # TODO take dwell time into account during calibration?
 
         return nroc * align.fastem.estimate_calibration_time(self.calibrations)
-
-
-class FastEMCalibration2Controller(FastEMScintillatorCalibrationController):
-    """
-    Controller for calibration step 2 (dark offset, digital gain calibration).
-    Controls the selection panel for the individual scintillators, the calibration button to start the
-    calibration and the process in the calibration panel in the FastEM acquisition tab.
-    """
-    def __init__(self, tab_data, tab_panel, calib_prefix, calibrations):
-        """
-        :param tab_data: (FastEMAcquisitionGUIData) The representation of the microscope GUI.
-        :param tab_panel: (wx.Frame) The calibration panel, which contains the selection buttons
-                          for the individual scintillators, the calibration button to start the
-                          calibration, and the gauge and the label of the gauge to indicate the progress.
-        :param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
-        :param calibrations: (list[Calibrations]) List of calibrations that should be run.
-        """
-        super().__init__(tab_data, tab_panel, calib_prefix, calibrations)
-
-    def save_calibrated_settings(self, roc_num, config):
-        """
-        Save the calibrated settings on the region of calibration (ROC) object.
-        :param roc_num: (int) The number of the region of calibration.
-        :param config: (nested dict) Dictionary containing various calibrated settings.
-        """
-        # FIXME this now happens outside of future, so it could be that next calibration is already running
-        #  -> still save to do? Or pass the self._tab_data.calibration_regions to the calibration manager?
-        dark_offset = config["mppc"]["cellDarkOffset"]
-        digital_gain = config["mppc"]["cellDigitalGain"]
-        self.calibration_regions.value[roc_num].parameters = {"cellDarkOffset": dark_offset,
-                                                              "cellDigitalGain": digital_gain}
-
-
-class FastEMCalibration3Controller(FastEMScintillatorCalibrationController):
-    """
-    Controller for calibration step 3 (field corrections).
-    Controls the selection panel for the individual scintillators, the calibration button to start the
-    calibration and the process in the calibration panel in the FastEM acquisition tab.
-    """
-    def __init__(self, tab_data, tab_panel, calib_prefix, calibrations):
-        """
-        :param tab_data: (FastEMAcquisitionGUIData) The representation of the microscope GUI.
-        :param tab_panel: (wx.Frame) The calibration panel, which contains the selection buttons
-                          for the individual scintillators, the calibration button to start the
-                          calibration, and the gauge and the label of the gauge to indicate the progress.
-        :param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
-        :param calibrations: (list[Calibrations]) List of calibrations that should be run.
-        """
-        super().__init__(tab_data, tab_panel, calib_prefix, calibrations)
-
-    def save_calibrated_settings(self, roc_num, config):
-        """
-        Save the calibrated settings on the region of calibration (ROC) object.
-        :param roc_num: (int) The number of the region of calibration.
-        :param config: (nested dict) Dictionary containing various calibrated settings.
-        """
-        # FIXME this now happens outside of future, so it could be that next calibration is already running
-        #  -> still save to do? Or pass the self._tab_data.calibration_regions to the calibration manager?
-        translation = config["mppc"]["cellTranslation"]
-        self.calibration_regions.value[roc_num].parameters = {"cellTranslation": translation}
