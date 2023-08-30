@@ -48,10 +48,10 @@ from technolution_asm.models.cell_parameters import CellParameters
 from technolution_asm.models.field_meta_data import FieldMetaData
 from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
 
-supported_version = "3.0.0"
-if StrictVersion(technolution_asm.__version__) < StrictVersion(supported_version):
+SUPPORTED_VERSION = "3.0.0"
+if StrictVersion(technolution_asm.__version__) < StrictVersion(SUPPORTED_VERSION):
     raise ImportError(f"Version {technolution_asm.__version__} for technolution_asm not supported,"
-                      f"version {supported_version} or higher is expected")
+                      f"version {SUPPORTED_VERSION} or higher is expected")
 
 VOLT_RANGE = (-10, 10)
 I16_SYM_RANGE = (-2 ** 15, 2 ** 15)  # Note: on HW range is not symmetrically (-2**15, 2**15 - 1)
@@ -1156,9 +1156,10 @@ class MPPC(model.Detector):
 
         md = self.getMetadata()
         custom_data = md.get(model.MD_EXTRA_SETTINGS, "")  # if no custom metadata, pass an empty string
-        info = md.get(model.MD_USER_NOTE, None)  # if no user note, pass nothing. TODO support in GUI
+        # TODO support USER_NOTE in GUI
+        info = md.get(model.MD_USER_NOTE, None)  # if no user note pass None, so it is not added to the metadata.yaml
         z_position = md.get(model.MD_SLICE_IDX, 0)  # if slice number is not provided use 0. TODO support in GUI
-        eff_field_size = md.get(model.MD_FIELD_SIZE, (6016, 6016))  # if not provided use 6% overlap
+        eff_field_size = md.get(model.MD_FIELD_SIZE, self._scanner.resolution.value)
 
         megafield_metadata = MegaFieldMetaData(
             stack_id=os.path.basename(self.filename.value),
@@ -1273,7 +1274,7 @@ class MPPC(model.Detector):
                                  str(DATA_CONTENT_TO_ASM[dataContent]).lower()),
                                 200, raw_response=True, stream=True)
                             resp.raw.decode_content = True  # handle spurious Content-Encoding
-                            img = Image.open(BytesIO(resp.raw.data))
+                            img = Image.open(BytesIO(resp.raw.data))  # the data is expected to be a TIFF
 
                             da = model.DataArray(img, metadata=self._metadata)
                     except Exception as ex:
@@ -1748,7 +1749,7 @@ class MPPC(model.Detector):
                     f"Overlap must result in the value of the effective field size being a multiple of 32. "
                     f"Effective field size is: {eff_field_size}, suggested overlap: {suggested_overlap * 100}%"
                 )
-        model.HwComponent.updateMetadata(self, md)
+        super().updateMetadata(md)
 
 
 class ASMDataFlow(model.DataFlow):

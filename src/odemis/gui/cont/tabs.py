@@ -1793,7 +1793,7 @@ class FastEMAcquisitionTab(Tab):
         # we cannot run all calibrations yet.
         # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
         # need to know that it's simulated otherwise we can never simulate an acquisition.
-        if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
+        if main_data.microscope.name.lower().endswith("sim"):  # it's a simulator
             calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
                             Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:  # it is a real microscope
@@ -1824,7 +1824,7 @@ class FastEMAcquisitionTab(Tab):
             calib_prefix="calib_2",
         )
 
-        if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
+        if main_data.microscope.name.lower().endswith("sim"):  # it's a simulator
             # Do not run digital gain in simulator mode. We get a random image from the simulator, which can mean that
             # the light image used for digital gain is darker than the dark image used for the dark offset.
             calibrations = [
@@ -1852,7 +1852,7 @@ class FastEMAcquisitionTab(Tab):
         # we cannot run all calibrations yet.
         # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
         # need to know that it's simulated otherwise we can never simulate an acquisition.
-        if model.getMicroscope().name.lower().endswith("sim"):  # it's a simulator
+        if main_data.microscope.name.lower().endswith("sim"):  # it's a simulator
             calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
                             Calibrations.IMAGE_TRANSLATION_PREALIGN]
         else:  # it is a real microscope

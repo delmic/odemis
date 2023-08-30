@@ -288,6 +288,9 @@ FASTEM-sim: {
     persistent: {
         properties: [cellDarkOffset, cellDigitalGain, cellTranslation],
     },
+    metadata: {
+        USER: "fastem-user-1",
+    },
 }
 
 # rotates the IADOM (in-air detector optics module) and thus the mppc
