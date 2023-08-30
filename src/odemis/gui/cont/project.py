@@ -563,4 +563,4 @@ class FastEMCalibrationRegionsController(object):
         self._calibration_panel.Enable(not mode)
         for num in self.panel.buttons.values():
             if self.roc_ctrls[num].overlay:
-                self.roc_ctrls[num].overlay.enable = not mode
+                self.roc_ctrls[num].overlay.active.value = not mode
