@@ -289,6 +289,10 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Generates the fake output image based on the resolution.
         """
+        timer = self._generator  # might be replaced by None afterwards, so keep a copy
+        if timer is None:
+            return
+
         gen_img = self._getNewImage()
 
         # Processes the fake image based on resolution and binning.
@@ -297,7 +301,6 @@ class ReadoutCamera(model.DigitalCamera):
         gen_img = gen_img.reshape((res[1], binning[0], res[0],
                                    binning[1])).mean(axis=3).mean(axis=1).astype(gen_img.dtype)
 
-        timer = self._generator  # might be replaced by None afterwards, so keep a copy
         self._waitSync()
         if self._sync_event:
             # If sync event, we need to simulate period after event (not efficient, but works)
@@ -517,12 +520,6 @@ class StreakCamera(model.HwComponent):
         # terminate children
         for child in self.children.value:
             child.terminate()
-
-    def StartAcquisition(self):
-        """
-        Start an acquisition.
-        """
-        self._readoutcam._generate()
 
 
 class SimpleStreakCameraDataFlow(model.DataFlow):
