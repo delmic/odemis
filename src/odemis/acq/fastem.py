@@ -84,6 +84,9 @@ SETTINGS_SELECTION = {
                      'referenced',
                      'speed']
 }
+CALIBRATION_1 = "calib_1"
+CALIBRATION_2 = "calib_2"
+CALIBRATION_3 = "calib_3"
 
 
 class FastEMROA(object):
@@ -362,6 +365,29 @@ class FastEMROA(object):
         return indice_array
 
 
+class FastEMCalibration(object):
+    """
+    A class containing FastEM calibration related attributes.
+    """
+
+    def __init__(self, name: str, parent_panel) -> None:
+        """
+        :param name: (str) Name of the calibration.
+        :param parent_panel: The parent panel containing the calibration's button, gauge, label and panel object.
+        """
+        self.name = model.StringVA(name)
+        self.regions = model.VigilantAttribute({})  # dict, int --> FastEMROC
+        self.is_done = model.BooleanVA(False)  # states if the calibration was done successfully or not
+        self.is_calibrating = model.BooleanVA(False)  # states if the calibration is running or not
+        self.calibrations = model.ListVA([])  # list of calibrations that need to be run sequencially
+        self.button = getattr(parent_panel, self.name.value + "_btn")
+        self.gauge = getattr(parent_panel, self.name.value + "_gauge")
+        self.label = getattr(parent_panel, self.name.value + "_label")
+        self.panel = getattr(parent_panel, self.name.value + "_pnl")
+        self.controller = None  # the calibration controller
+        self.regions_controller = None  # the region of calibration controller if it has regions
+
+
 class FastEMROC(object):
     """
     Representation of a FastEM ROC (region of calibration).
@@ -371,13 +397,14 @@ class FastEMROC(object):
     scintillator is acquired and assigned with all ROAs on the respective scintillator.
     """
 
-    def __init__(self, name, coordinates):
+    def __init__(self, name, coordinates, colour):
         """
         :param name: (str) Name of the region of calibration (ROC). It is the name of the megafield (id) as stored on
                      the external storage.
         :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
                             ROC in [m]. The coordinates are in the sample carrier coordinate system, which
                             corresponds to the component with role='stage'.
+        :param colour: The colour of the region of calibration (ROC).
         """
         self.name = model.StringVA(name)
         self.coordinates = model.TupleContinuous(coordinates,
@@ -385,6 +412,7 @@ class FastEMROC(object):
                                                  cls=(int, float),
                                                  unit='m')
         self.parameters = {}  # dictionary used for storing the values of the calibrated parameters
+        self.colour = colour
 
 
 def estimate_acquisition_time(roa, pre_calibrations=None):
