@@ -30,11 +30,11 @@ import queue
 import re
 import threading
 import time
-from distutils.version import StrictVersion
 from io import BytesIO
 from urllib.parse import urlparse
 
 import numpy
+import pkg_resources
 from PIL import Image
 from requests import Session
 from scipy import signal
@@ -49,7 +49,7 @@ from technolution_asm.models.field_meta_data import FieldMetaData
 from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
 
 SUPPORTED_VERSION = "3.0.0"
-if StrictVersion(technolution_asm.__version__) < StrictVersion(SUPPORTED_VERSION):
+if pkg_resources.parse_version(technolution_asm.__version__) < pkg_resources.parse_version(SUPPORTED_VERSION):
     raise ImportError(f"Version {technolution_asm.__version__} for technolution_asm not supported,"
                       f"version {SUPPORTED_VERSION} or higher is expected")
 
