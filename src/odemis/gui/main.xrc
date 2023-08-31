@@ -5874,7 +5874,7 @@
                             <bg>#555555</bg>
                         </object>
                       <object class="FoldPanelItem">
-                        <object class="wxPanel" name="calib_1_pnl_fastem">
+                        <object class="wxPanel" name="calib_1_pnl">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <object class="wxBoxSizer">
@@ -5973,7 +5973,7 @@
                             <orient>wxHORIZONTAL</orient>
                           </object>
                         </object>
-                        <object class="FastEMCalibrationPanelHeader" name="calib_2_pnl_regions">
+                        <object class="FastEMCalibrationPanelHeader" name="calib_2_pnl">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -6034,7 +6034,7 @@
                             <orient>wxHORIZONTAL</orient>
                           </object>
                         </object>
-                        <object class="FastEMCalibrationPanelHeader" name="calib_3_pnl_regions">
+                        <object class="FastEMCalibrationPanelHeader" name="calib_3_pnl">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
