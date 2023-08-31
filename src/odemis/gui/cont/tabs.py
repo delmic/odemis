@@ -52,6 +52,7 @@ from odemis.util.filename import guess_pattern, create_projectname
 from odemis import dataio
 from odemis import model
 from odemis.acq.align import fastem
+from odemis.acq.fastem import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3
 import odemis.acq.stream as acqstream
 import odemis.gui
 import odemis.gui.cont.acquisition as acqcont
@@ -1761,7 +1762,7 @@ class FastEMAcquisitionTab(Tab):
           calls functions of the acquisition manager.
         """
 
-        tab_data = guimod.FastEMAcquisitionGUIData(main_data)
+        tab_data = guimod.FastEMAcquisitionGUIData(main_data, panel)
         super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
         self.set_label("ACQUISITION")
 
@@ -1789,96 +1790,17 @@ class FastEMAcquisitionTab(Tab):
                                                                       view_ctrl=self.view_controller,
                                                                       )
 
-        # Check if we deal with a real or simulated microscope. If it is a simulator,
-        # we cannot run all calibrations yet.
-        # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
-        # need to know that it's simulated otherwise we can never simulate an acquisition.
-        if main_data.microscope.name.lower().endswith("sim"):  # it's a simulator
-            calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                            Calibrations.IMAGE_TRANSLATION_PREALIGN]
-        else:  # it is a real microscope
-            calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                            Calibrations.IMAGE_ROTATION_PREALIGN,
-                            Calibrations.SCAN_ROTATION_PREALIGN,
-                            Calibrations.DESCAN_GAIN_STATIC,
-                            Calibrations.SCAN_AMPLITUDE_PREALIGN,
-                            Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                            Calibrations.IMAGE_ROTATION_FINAL,
-                            Calibrations.IMAGE_TRANSLATION_FINAL]
-
-        # Controller for calibration panel 1
-        self._calib_1_controller = fastem_acq.FastEMCalibrationController(
-            tab_data,
-            panel,
-            calib_prefix="calib_1",
-            calibrations=calibrations
-        )
-
-        # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController and
-        #  not here as a separate controller -> will reduce it here to only one calibration 2 controller
-        # Controller for regions of calibration 2
-        self._calib_2_region_controller = project.FastEMCalibrationRegionsController(
-            tab_data,
-            panel.calib_2_pnl_regions,
-            viewport=vp,
-            calib_prefix="calib_2",
-        )
-
-        if main_data.microscope.name.lower().endswith("sim"):  # it's a simulator
-            # Do not run digital gain in simulator mode. We get a random image from the simulator, which can mean that
-            # the light image used for digital gain is darker than the dark image used for the dark offset.
-            calibrations = [
-                Calibrations.OPTICAL_AUTOFOCUS,
-                Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                Calibrations.DARK_OFFSET,
-            ]
-        else:  # it is a real microscope
-            calibrations = [
-                Calibrations.OPTICAL_AUTOFOCUS,
-                Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                Calibrations.DARK_OFFSET,
-                Calibrations.DIGITAL_GAIN
-            ]
-
-        # Controller for calibration panel 2
-        self._calib_2_controller = fastem_acq.FastEMScintillatorCalibrationController(
-            tab_data,
-            panel,
-            calib_prefix="calib_2",
-            calibrations=calibrations,
-        )
-
-        # Check if we deal with a real or simulated microscope. If it is a simulator,
-        # we cannot run all calibrations yet.
-        # HACK warning: we don't have an official way to detect a component is simulated, but here, we really
-        # need to know that it's simulated otherwise we can never simulate an acquisition.
-        if main_data.microscope.name.lower().endswith("sim"):  # it's a simulator
-            calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                            Calibrations.IMAGE_TRANSLATION_PREALIGN]
-        else:  # it is a real microscope
-            calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
-                            Calibrations.IMAGE_TRANSLATION_PREALIGN,
-                            Calibrations.SCAN_ROTATION_FINAL,
-                            Calibrations.SCAN_AMPLITUDE_FINAL,
-                            Calibrations.CELL_TRANSLATION]
-
-        # FIXME instantiate FastEMCalibrationRegionsController in FastEMScintillatorCalibrationController and
-        #  not here as a separate controller -> will reduce it here to only one calibration 3 controller
-        # Controller for regions of calibration 3
-        self._calib_3_region_controller = project.FastEMCalibrationRegionsController(
-            tab_data,
-            panel.calib_3_pnl_regions,
-            viewport=vp,
-            calib_prefix="calib_3",
-        )
-
-        # Controller for calibration panel 3
-        self._calib_3_controller = fastem_acq.FastEMScintillatorCalibrationController(
-            tab_data,
-            panel,
-            calib_prefix="calib_3",
-            calibrations=calibrations
-        )
+        for name, calibration in self.tab_data_model.calibrations.items():
+            if name == CALIBRATION_1:
+                calibration.controller = fastem_acq.FastEMCalibrationController(
+                                            self.tab_data_model,
+                                            calibration
+                                            )
+            elif name in (CALIBRATION_2, CALIBRATION_3):
+                calibration.regions_controller = project \
+                    .FastEMCalibrationRegionsController(self.tab_data_model, vp, calibration)
+                calibration.controller = fastem_acq \
+                    .FastEMScintillatorCalibrationController(self.tab_data_model, calibration)
 
         # Controller for acquisition settings panel
         self._acq_settings_controller = settings.SettingsController(
@@ -1900,24 +1822,7 @@ class FastEMAcquisitionTab(Tab):
         self._acquisition_controller = fastem_acq.FastEMAcquiController(
             tab_data,
             panel,
-            calib_prefixes=["calib_2", "calib_3"]
         )
-
-        # FIXME where to put this code?
-        # set tooltips on the header of the respective panels
-        panel.calib_1_pnl_fastem.GetParent().GetParent() \
-            .SetToolTip("Optical path and pattern calibrations: Calibrating and focusing the optical path and the "
-                        "multiprobe pattern. Calibrating the scanning orientation and distance.")
-        panel.calib_2_pnl_regions.GetParent().GetParent() \
-            .SetToolTip("Dark offset and digital gain calibration (orange square): Correcting between cell images "
-                        "for differences in background noise and homogenizing across amplification differences.")
-        panel.calib_3_pnl_regions.GetParent().GetParent() \
-            .SetToolTip("Cell image calibration (green square): Fine-tuning the cell image size and the cell image "
-                        "orientation in respect to the scanning direction. Stitching of cell images into a single "
-                        "field image.")
-        # set tooltips on the buttons
-        panel.calib_2_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on empty scintillator.")
-        panel.calib_3_pnl_regions.SetToolTip("Select to place region of calibration (ROC) on tissue.")
 
     def Show(self, show=True):
         super(FastEMAcquisitionTab, self).Show(show)
