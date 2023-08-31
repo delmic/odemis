@@ -453,13 +453,10 @@ class FastEMCalibrationRegionsController(object):
         self.roc_ctrls = {}
         for roc_num, roc in self.calibration.regions.value.items():
             self.roc_ctrls[roc_num] = FastEMROCController(self._main_data_model, viewport, roc)
-            roc.coordinates.subscribe(self._update_buttons)
 
         # Only enable buttons for scintillators which have been selected in the chamber tab
         self._main_data_model.active_scintillators.subscribe(self._on_active_scintillators)
 
-        self._main_data_model.is_acquiring.subscribe(self._on_is_calibrating)  # enable/disable calib button during acquisition
-        self.calibration.is_calibrating.subscribe(self._on_is_calibrating)  # enable/disable calib button during calibration
 
     # already running in main GUI thread as it receives event from GUI
     def _on_button(self, evt):
@@ -541,14 +538,3 @@ class FastEMCalibrationRegionsController(object):
         # update ROC buttons
         self._update_buttons()
 
-    @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def _on_is_calibrating(self, mode):
-        """
-        Enable or disable the calibration panel depending on whether
-        a calibration or acquisition is already ongoing or not.
-        :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
-        """
-        self.calibration.panel.Enable(not mode)
-        for num in self.panel.buttons.values():
-            if self.roc_ctrls[num].overlay:
-                self.roc_ctrls[num].overlay.active.value = not mode

@@ -41,7 +41,7 @@ from odemis import dataio, model
 from odemis.acq import align, fastem, stream
 from odemis.acq.align import fastem as align_fastem
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import CALIBRATION_2, CALIBRATION_3, estimate_acquisition_time
+from odemis.acq.fastem import estimate_acquisition_time
 from odemis.acq.stream import FastEMOverviewStream
 from odemis.gui import FG_COLOUR_BUTTON
 from odemis.gui.conf.data import get_hw_config
@@ -573,8 +573,10 @@ class FastEMCalibrationController:
         self._main_data_model = tab_data.main
         self.calibration = calibration
 
-        self._main_data_model.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button if acquiring
-        self.calibration.is_calibrating.subscribe(self._on_is_acquiring)  # enable/disable button if calibrating
+        # enable/disable calibration button, panel, overlay if acquiring
+        self._main_data_model.is_acquiring.subscribe(self._on_is_acquiring)
+        # enable/disable calibration button, panel, overlay if calibrating
+        self.calibration.is_calibrating.subscribe(self._on_is_acquiring)
 
         self.calibration.button.Bind(wx.EVT_BUTTON, self.on_calibrate)
 
@@ -682,14 +684,17 @@ class FastEMCalibrationController:
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_acquiring(self, mode):
         """
-        Enable or disable the button to start a calibration depending on whether
+        Enable or disable the calibration button, panel and overlay depending on whether
         a calibration or acquisition is already ongoing or not.
         :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
-        for name, calibration in self._tab_data.calibrations.items():
+        for calibration in self._tab_data.calibrations.values():
             calibration.button.Enable(not mode)
-            if name in (CALIBRATION_2, CALIBRATION_3):
+            if calibration.regions_controller:
                 calibration.panel.Enable(not mode)
+                for roc_ctrl in calibration.regions_controller.roc_ctrls.values():
+                    if roc_ctrl.overlay:
+                        roc_ctrl.overlay.active.value = not mode
 
 
 class FastEMScintillatorCalibrationController(FastEMCalibrationController):
