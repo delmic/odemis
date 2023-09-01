@@ -6337,7 +6337,6 @@ class Sparc2AlignTab(Tab):
                     self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
 
             # future and progress connector for tracking the progress of the gauge when moving
-            # self._gauge_f = None
             self._pfc_spec_switch = None
 
         # Switch between alignment modes
@@ -7251,8 +7250,7 @@ class Sparc2AlignTab(Tab):
         self._pfc_spec_switch = None
 
         # hide the gauge as there is no convenient way to reset it
-        if self.panel.gauge_specswitch.IsShown():
-            self.panel.gauge_specswitch.Hide()
+        self.panel.gauge_specswitch.Hide()
 
     def _change_spec_switch_btn_lbl(self, button: wx.Button, label: str, fg_color: str):
         """

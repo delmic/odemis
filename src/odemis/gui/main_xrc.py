@@ -5170,7 +5170,7 @@ def __init_resources():
                     <border>10</border>
                   </object>
 				  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
+                    <object class="wxBoxSizer">
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_spec_switch_retract">
                           <height>24</height>
@@ -5185,7 +5185,7 @@ def __init_resources():
                         <flag>wxLEFT</flag>
                         <border>5</border>
                         <minsize>90,-1</minsize>
-                        <cellpos>0,0</cellpos>
+                        <proportion>1</proportion>
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_spec_switch_engage">
@@ -5201,11 +5201,11 @@ def __init_resources():
                         <flag>wxLEFT</flag>
                         <border>5</border>
                         <minsize>90,-1</minsize>
-                        <cellpos>0,1</cellpos>
+                        <proportion>1</proportion>
                       </object>
                       <object class="sizeritem">
                         <object class="wxGauge" name="gauge_specswitch">
-                          <size>-1,10</size>
+                          <size>-1,1</size>
                           <range>100</range>
                           <value>0</value>
                           <style>wxGA_SMOOTH</style>
@@ -5214,14 +5214,12 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <option>1</option>
-                        <flag>wxALL|wxEXPAND</flag>
+                        <flag>wxLEFT|wxALIGN_CENTRE</flag>
                         <border>7</border>
-                        <cellpos>0,3</cellpos>
+                        <proportion>2</proportion>
+                        <minsize>-1,10</minsize>
                       </object>
-                      <vgap>5</vgap>
-                      <hgap>5</hgap>
-                      <growablecols>1</growablecols>
-                      <growablerows/>
+                      <orient>wxHORIZONTAL</orient>
                     </object>
                     <flag>wxBOTTOM|wxEXPAND</flag>
                     <border>10</border>

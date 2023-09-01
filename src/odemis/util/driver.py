@@ -253,15 +253,12 @@ class ProgressiveMove(model.ProgressiveFuture):
 
         # calculate the time the mirror needs to move from the current position to the requested position
         current_pos = comp.position.value
-        current_speed = comp.speed.value
         axes_total_move_time = 0.0
 
         for ax in pos.keys():
-            if ax in current_speed.keys():
-                axes_total_move_time += abs((current_pos[ax] - pos[ax]) / current_speed[ax])
-            else:
-                # use a safe speed default value (0.1 m/s) for this axis instead
-                axes_total_move_time += abs((current_pos[ax] - pos[ax]) / 0.1)
+            # guess the move time per axis and assign the highest move time to the total move time variable
+            move_time = guessActuatorMoveDuration(comp, ax, abs(current_pos[ax] - pos[ax]))
+            axes_total_move_time = move_time if move_time > axes_total_move_time else axes_total_move_time
 
         super().__init__(est_start, est_start + axes_total_move_time)
 
