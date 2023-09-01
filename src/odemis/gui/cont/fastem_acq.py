@@ -329,10 +329,6 @@ class FastEMAcquiController(object):
         self._main_data_model = tab_data.main
         self._tab_panel = tab_panel
 
-        # Path to the acquisition
-        self.path = datetime.today().strftime('%Y-%m-%d')
-        self._tab_panel.txt_destination.SetValue(self.path)
-
         # ROA count
         self.roa_count = 0
         self._tab_panel.txt_num_rois.SetValue("0")
@@ -418,9 +414,6 @@ class FastEMAcquiController(object):
 
     @wxlimit_invocation(1)  # max 1/s; called in main GUI thread
     def update_acquisition_time(self):
-        # Update path (in case it's already the next day)
-        self.path = datetime.today().strftime('%Y-%m-%d')
-        self._tab_panel.txt_destination.SetValue(self.path)
 
         lvl = None  # icon status shown
         if not self._tab_data_model.is_calib_1_done.value \
@@ -531,14 +524,12 @@ class FastEMAcquiController(object):
         fs = {}
         pre_calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         for p in self._tab_data_model.projects.value:
-            ppath = os.path.join(self.path, p.name.value)  # <acquisition date>/<project name>
             for roa in p.roas.value:
-                f = fastem.acquire(roa, ppath, self._main_data_model.ebeam, self._main_data_model.multibeam,
-                                   self._main_data_model.descanner, self._main_data_model.mppc,
-                                   self._main_data_model.stage, self._main_data_model.ccd,
+                f = fastem.acquire(roa, p.name.value, self._main_data_model.ebeam,
+                                   self._main_data_model.multibeam, self._main_data_model.descanner,
+                                   self._main_data_model.mppc, self._main_data_model.stage, self._main_data_model.ccd,
                                    self._main_data_model.beamshift, self._main_data_model.lens,
-                                   pre_calibrations=pre_calibrations,
-                                   settings_obs=self._main_data_model.settings_obs)
+                                   pre_calibrations=pre_calibrations, settings_obs=self._main_data_model.settings_obs)
                 t = estimate_acquisition_time(roa, pre_calibrations)
                 fs[f] = t
 

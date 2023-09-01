@@ -159,6 +159,7 @@ MD_DT_INTEGRATING = "Detector integrating"  # The detector level is proportional
 MD_DESCRIPTION = "Description"  # (string) User-friendly name that describes what this acquisition is
 MD_USER_NOTE = "User note"  # (string) Whatever comment the user has added to the image
 MD_USER_TINT = "Display tint"  # Either RGB (3-tuple of 0<int<255): colour to display the (greyscale) image or a matplotlib.colors.Colormap name
+MD_USER = "Username"  # (string) Username to identify which user acquired the image
 
 MD_HW_NOTE = "Hardware note"  # (string) "Free" description of the hardware status and settings.
 
@@ -243,3 +244,7 @@ MD_CELL_DIGITAL_GAIN = "Cell digital gain"  # nested tuple, the digital gain int
 
 # Fastem: Correction for the shift in (x, y) between immersion mode and field free mode
 MD_FIELD_FREE_POS_SHIFT = "Field free position shift"  # tuple [m]
+
+# Fastem: Parameters used for stitching and reconstruction of 3D volumes
+MD_SLICE_IDX = "Index of slice in volume stack"  # int
+MD_FIELD_SIZE = "Average field of view of a megafield"  # tuple (px, px)

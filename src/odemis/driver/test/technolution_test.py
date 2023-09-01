@@ -40,6 +40,7 @@ import matplotlib
 
 matplotlib.use("TkAgg")  # GUI-backend
 import matplotlib.pyplot as plt
+
 import numpy
 
 from odemis import model
@@ -48,7 +49,7 @@ from odemis.util import testing
 try:
     from odemis.driver.technolution import AcquisitionServer, convertRange, AsmApiException, DATA_CONTENT_TO_ASM, \
         VOLT_RANGE, I16_SYM_RANGE
-    from technolution_asm.models import CalibrationLoopParameters
+    from technolution_asm.models import CalibrationLoopParameters, FieldMetaData
     from technolution_asm.models.mega_field_meta_data import MegaFieldMetaData
     technolution_available = True
 except ImportError as err:
@@ -316,34 +317,6 @@ class TestAcquisitionServer(unittest.TestCase):
         axs[1].legend(loc="upper left")
         plt.show()
         self.ASM_manager.calibrationMode.value = False
-
-    def test_checkMegaFieldExists(self):
-        """Check if a megafield exists on the external storage or not."""
-
-        # Set dwell time to minimum so scanning of an image is fast.
-        self.EBeamScanner.dwellTime.value = self.EBeamScanner.dwellTime.range[0]
-
-        filename = self.MPPC.filename.value  # sub-directories and file name (megafield id)
-
-        dataflow = self.MPPC.data
-        image = dataflow.get()  # acquire a small megafield (it is just a single field)
-        time.sleep(1)  # wait a bit until image is offloaded to the external storage
-
-        # check if just acquired megafield exists on external storage
-        image_received = self.ASM_manager.checkMegaFieldExists(filename)
-        self.assertTrue(image_received)
-
-        # request filename containing invalid characters
-        with self.assertRaises(ValueError):
-            self.ASM_manager.checkMegaFieldExists("sub-dir/wrong_mega_field_id_#@$")
-
-        # request path on external storage containing invalid characters
-        with self.assertRaises(ValueError):
-            self.ASM_manager.checkMegaFieldExists("wrong_storage_dir_@#$/megafield_id")
-
-        # check for a megafield which should not be on external storage
-        image_received = self.ASM_manager.checkMegaFieldExists("test-from-last-century/test/1900-13-40-100-1000-10")
-        self.assertFalse(image_received)
 
     def test_AsmApiException(self):
         """Test exceptions are raised for incorrect ASM API calls."""
@@ -1645,11 +1618,13 @@ class TestMPPC(unittest.TestCase):
         self.assertIsInstance(megafield_metadata, MegaFieldMetaData)
 
         # Test attributes megafield_metadata which contiain only primitive datatypes (int, float, string but not lists)
-        self.assertIsInstance(megafield_metadata.mega_field_id, str)
+        self.assertIsInstance(megafield_metadata.stack_id, str)
+        self.assertIsNone(megafield_metadata.info)
         self.assertIsInstance(megafield_metadata.storage_directory, str)
         self.assertIsInstance(megafield_metadata.custom_data, str)
         self.assertIsInstance(megafield_metadata.stage_position_x, float)
         self.assertIsInstance(megafield_metadata.stage_position_x, float)
+        self.assertIsInstance(megafield_metadata.z_position, int)
         self.assertIsInstance(megafield_metadata.pixel_size, int)
         self.assertIsInstance(megafield_metadata.dwell_time, int)
         self.assertIsInstance(megafield_metadata.x_scan_to_acq_delay, int)
@@ -1663,7 +1638,6 @@ class TestMPPC(unittest.TestCase):
         self.assertIsInstance(megafield_metadata.y_scan_gain, float)
         self.assertIsInstance(megafield_metadata.y_scan_offset, float)
         self.assertIsInstance(megafield_metadata.y_descan_offset, int)
-        self.assertIsInstance(megafield_metadata.y_prescan_lines, int)
         self.assertIsInstance(megafield_metadata.x_scan_delay, int)
         self.assertIsInstance(megafield_metadata.scan_rotation, float)
         self.assertIsInstance(megafield_metadata.descan_rotation, float)
