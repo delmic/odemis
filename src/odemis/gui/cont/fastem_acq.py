@@ -445,7 +445,7 @@ class FastEMAcquiController(object):
         for p in self._tab_data_model.projects.value:
             for roa in p.roas.value:
                 roc = roa.roc_2.value
-                if roc.coordinates.value == stream.UNDEFINED_ROI:
+                if roc.coordinates.value == stream.UNDEFINED_ROI or not roc.parameters:
                     undefined.add(roc.name.value)
         return sorted(undefined)
 
@@ -457,7 +457,7 @@ class FastEMAcquiController(object):
         for p in self._tab_data_model.projects.value:
             for roa in p.roas.value:
                 roc = roa.roc_3.value
-                if roc.coordinates.value == stream.UNDEFINED_ROI:
+                if roc.coordinates.value == stream.UNDEFINED_ROI or not roc.parameters:
                     undefined.add(roc.name.value)
         return sorted(undefined)
 

@@ -340,8 +340,9 @@ class FastEMROAController(object):
     # already running in main GUI thread as it receives event from GUI
     def _on_combobox(self, _):
         num = self.panel.calibration_ctrl.GetSelection() + 1
+        logging.debug("ROA calibration selection changed to %s.", num)
         self.model.roc_2.value = self._tab_data.calibrations[CALIBRATION_2].regions.value[num]
-        logging.debug("ROA calibration changed to %s.", self.model.roc_2.value.name.value)
+        self.model.roc_3.value = self._tab_data.calibrations[CALIBRATION_3].regions.value[num]
 
     # already running in main GUI thread as it receives event from GUI
     def _on_text(self, evt):
@@ -492,6 +493,7 @@ class FastEMCalibrationRegionsController(object):
         else:
             # reset coordinates for ROC to undefined and remove overlay
             roc_ctrl.calib_model.coordinates.value = acqstream.UNDEFINED_ROI
+            roc_ctrl.calib_model.parameters.clear()
             roc_ctrl.remove_calibration_overlay()
         # update ROC buttons
         self._update_buttons()
