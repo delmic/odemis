@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
+from typing import Hashable
 
 from odemis import model
 from odemis.model import ComponentBase
@@ -103,7 +104,7 @@ class CompositedScanner(model.Emitter):
 
         for cname, ckwargs in children.items():
             if not cname.startswith("detector"):
-                raise ValueError(f"Only children detector* are supported, but got '{cname}'")
+                raise ValueError(f"Only supports children with role as 'detector...', but got '{cname}'")
 
             detector = CompositedDetector(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(detector)
@@ -111,10 +112,8 @@ class CompositedScanner(model.Emitter):
             # Setting up the automatic blanker on the composited scanner
             if model.hasVA(self._external_scanner, "blanker") and None in self._external_scanner.blanker.choices:
                 self.blanker = self._external_scanner.blanker
-
             elif model.hasVA(self._external_scanner, "blanker") and None not in self._external_scanner.blanker.choices:
                 self._createAutoBlanker(self._external_scanner)
-
             elif model.hasVA(self._internal_scanner, "blanker"):  # Internal blankers are never automatic, so we create one
                 self._createAutoBlanker(self._internal_scanner)
             else:
@@ -123,16 +122,15 @@ class CompositedScanner(model.Emitter):
             # Setting up the automatic external VA on the composited scanner (For switching between acquisition mode and external mode on the SEM)
             if model.hasVA(self._external_scanner, "external") and None in self._external_scanner.external.choices:
                 self.external = self._external_scanner.external
-
             elif model.hasVA(self._external_scanner, "external") and None not in self._external_scanner.external.choices:
                 self._createAutoExternal(self._external_scanner)
-
             elif model.hasVA(self._internal_scanner, "external"):
                 self._createAutoExternal(self._internal_scanner)
             else:
                 logging.debug("No external VA supported for the Composited Scanner.")
 
-        if not self.children.value:  # If no automatic blanker/external, just duplicate the original ones
+        # If no automatic blanker/external, just duplicate the original ones
+        if not self.children.value:
             va_names += ["blanker", "external"]
 
         for vaname in va_names:
@@ -209,14 +207,14 @@ class CompositedScanner(model.Emitter):
     def getMetadata(self):
         return self._external_scanner.getMetadata()
 
-    def claimBeam(self, claim: bool, user: object):
+    def claimBeam(self, claim: bool, user: Hashable):
         """
         Used to indicate the start and end of beam usage. It takes care of
           updating the blanker and external control, if present and set to None
           (ie, automatic control).
         :param claim (boolean): True for when starting to use the beam. False when
           not using the beam any more.
-        :param user: the object that is claiming (or not) the beam
+        :param user: an object used to identify who is claiming (or not) the beam
         """
         if claim:
             self._beamUsers.add(user)
