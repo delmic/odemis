@@ -45,6 +45,7 @@ CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 METEOR_TFS1_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 METEOR_ZEISS1_CONFIG = CONFIG_PATH + "sim/meteor-zeiss-sim.odm.yaml"
+METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
 
 
@@ -338,7 +339,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
         for axis in self.ROTATION_AXES:
             self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
 
-    # test linked ym axis movement when in fm imaging area
+    # test linked axes movement when in fm imaging area
     def test_moving_in_grid1_fm_imaging_area_after_loading(self):
         """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
         # move the stage to the loading position
@@ -576,6 +577,44 @@ class TestMeteorZeiss1Move(TestMeteorTFS1Move):
         estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
         self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
                                                                    "the FM imaging grid 1 area.")
+
+
+class TestMeteorTescan1Move(TestMeteorTFS1Move):
+    """
+    Test the MeteorPostureManager functions for Tescan 1
+    """
+    MIC_CONFIG = METEOR_TESCAN1_CONFIG
+    ROTATION_AXES = {'rx', 'rz'}
+
+    def test_moving_in_grid1_fm_imaging_area_after_loading(self):
+        """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
+        super().test_moving_in_grid1_fm_imaging_area_after_loading()
+
+        # move in the same imaging mode using linked YZ stage
+        old_stage_pos = self.stage.position.value
+        old_linked_yz_pos = self.linked_stage.position.value
+        self.linked_stage.moveRel({"y": 1.0e-3}).result()
+        new_stage_pos = self.stage.position.value
+        new_linked_yz_pos = self.linked_stage.position.value
+
+        self.assertAlmostEqual(old_linked_yz_pos["y"] + 1.0e-3, new_linked_yz_pos["y"], places=3)
+        self.assertTrue(old_stage_pos["y"] < new_stage_pos["y"])
+
+        # the stage moved in the right direction if the pre-tilt and tilt angles were maintained
+        beta = math.radians(40)
+        alpha = math.radians(15)
+        ratio = math.cos(alpha + beta) / math.sin(beta)
+        estimated_ratio = (old_stage_pos["y"] - new_stage_pos["y"]) / (
+                old_stage_pos["z"] - new_stage_pos["z"])  # delta y/ delta z
+        self.assertAlmostEqual(ratio, estimated_ratio, places=3)
+
+    def test_unknown_label_at_initialization(self):
+        arbitrary_position = {'rx': 0.0, 'rz': math.radians(-60), 'x': 0, 'y': 0, 'z': 40.e-3}
+        self.stage.moveAbs(arbitrary_position).result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(UNKNOWN, current_imaging_mode)
+        current_grid = self.posture_manager.getCurrentGridLabel()
+        self.assertEqual(current_grid, None)
 
 
 class TestMimasMove(unittest.TestCase):

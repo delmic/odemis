@@ -606,7 +606,7 @@ class ConvertStage(model.Actuator):
             raise ValueError("Incorrect number of axes.")
 
     def __init__(self, name, role, dependencies, axes,
-                 rotation=0, scale=None, translation=None, **kwargs):
+                 rotation=0, scale=None, translation=None, shear=None, **kwargs):
         """
         dependencies (dict str -> actuator): name to objective lens actuator
         axes (list of 2 strings): names of the axes for x and y
@@ -624,6 +624,8 @@ class ConvertStage(model.Actuator):
             scale = (1, 1)
         if translation is None:
             translation = (0, 0)
+        if shear is None:
+            shear = (0, 0)
 
         axes_def = {"x": copy.deepcopy(self._dependency.axes[axes[0]]),
                     "y": copy.deepcopy(self._dependency.axes[axes[1]])}
@@ -632,6 +634,7 @@ class ConvertStage(model.Actuator):
         self._metadata[model.MD_POS_COR] = translation
         self._metadata[model.MD_ROTATION_COR] = rotation
         self._metadata[model.MD_PIXEL_SIZE_COR] = scale
+        self._metadata[model.MD_SHEAR_COR] = shear
         self._updateConversion()
         self._updateAxesRange()
 
@@ -688,9 +691,13 @@ class ConvertStage(model.Actuator):
     def _updateConversion(self):
         translation = self._metadata[model.MD_POS_COR]
         scale = self._metadata[model.MD_PIXEL_SIZE_COR]
-        # Rotation * scaling for convert back/forth between exposed and dep
-        self._Mtodep = self._get_rot_matrix() * scale
-        self._Mfromdep = self._get_rot_matrix(invert=True) / scale
+        shear = self._metadata[model.MD_SHEAR_COR]
+
+        # Scaling*Shearing*Rotation for convert back/forth between exposed and dep
+        shear_matrix = numpy.array([[1, shear[0]],[shear[1], 1]])
+        scale_matrix = numpy.array([[scale[0], 0], [0, scale[1]]])
+        self._Mtodep = scale_matrix @ shear_matrix @ self._get_rot_matrix()
+        self._Mfromdep = numpy.linalg.inv(self._Mtodep)
 
         # Offset between origins of the coordinate systems
         self._O = numpy.array(translation, dtype=float)
