@@ -1060,8 +1060,8 @@ class ActuatorGUIData(MicroscopyGUIData):
                   "spec_focus": (100e-6, [1e-6, 1000e-6], "spectrograph", {"focus"}),
                   "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", {"ry", "rz"}),
                   # SPARCv2 light aligner dichroic mirror and spec switch foldable mirror
-                  "light_aligner": (1e-6, [100e-9, 1e-4], "light_aligner", None),
-                  "spec_switch": (1e-6, [100e-9, 1e-4], "spec_switch", None),
+                  "light_aligner": (50e-6, [5e-6, 500e-6], "light_aligner", None),
+                  "spec_switch": (50e-6, [5e-6, 500e-6], "spec_switch", None),
                   }
         # Use mirror_xy preferably, and fallback to mirror
         if main.mirror_xy:
