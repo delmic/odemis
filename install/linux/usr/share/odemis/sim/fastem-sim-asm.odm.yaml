@@ -148,19 +148,19 @@ FASTEM-sim: {
     metadata: {
         # X/Y: position of the scintillators
         # Z: useful range for the (auto) focus
-        POS_ACTIVE_RANGE: {"x": [-25.e-3, 25.e-3], "y": [-25.e-3, 25.e-3], "z": [-85.e-6, 5.e-6]}, # m, min/max
+        POS_ACTIVE_RANGE: {"x": [-25.e-3, 25.e-3], "y": [-24.5e-3, 24.5e-3], "z": [-85.e-6, 5.e-6]}, # m, min/max
         FAV_POS_ACTIVE: {"z": -63.e-6},  # [m] Estimate for good focus position - autofocus starts here to search
         # Centers (X, Y) [m] of each scintillator from bottom-left position with a sample
         SAMPLE_CENTERS: {
-            "SCINTILLATOR 1": [7.0e-3, 7.0e-3],
-            "SCINTILLATOR 2": [7.0e-3, 25.0e-3],
-            "SCINTILLATOR 3": [7.0e-3, 43.0e-3],
-            "SCINTILLATOR 4": [25.0e-3, 7.0e-3],
-            "SCINTILLATOR 5": [25.0e-3, 25.0e-3],
-            "SCINTILLATOR 6": [25.0e-3, 43.0e-3],
-            "SCINTILLATOR 7": [43.0e-3, 7.0e-3],
-            "SCINTILLATOR 8": [43.0e-3, 25.0e-3],
-            "SCINTILLATOR 9": [43.0e-3, 43.0e-3],
+            "SCINTILLATOR 1": [7.0e-3, 6.5e-3],
+            "SCINTILLATOR 2": [7.0e-3, 24.5e-3],
+            "SCINTILLATOR 3": [7.0e-3, 42.5e-3],
+            "SCINTILLATOR 4": [25.0e-3, 6.5e-3],
+            "SCINTILLATOR 5": [25.0e-3, 24.5e-3],
+            "SCINTILLATOR 6": [25.0e-3, 42.5e-3],
+            "SCINTILLATOR 7": [43.0e-3, 6.5e-3],
+            "SCINTILLATOR 8": [43.0e-3, 24.5e-3],
+            "SCINTILLATOR 9": [43.0e-3, 42.5e-3],
         },
         # Size [m] of each scintillator
         SAMPLE_SIZES: {
@@ -176,14 +176,14 @@ FASTEM-sim: {
         },
         # minx, miny, maxx, maxy [m] positions of rectangles for background from bottom-left position with a sample
         SAMPLE_BACKGROUND: [
-            [-35.0e-3, -35.0e-3, 0.0, 85.0e-3],
-            [14.0e-3, -35.0e-3, 18.0e-3, 85.0e-3],
-            [32.0e-3, -35.0e-3, 36.0e-3, 85.0e-3],
-            [50.0e-3, -35.0e-3, 85.0e-3, 85.0e-3],
-            [-35.0e-3, -35.0e-3, 85.0e-3, 0.0e-3],
+            [-35.0e-3, -35.5e-3, 0.0, 84.5e-3],
+            [14.0e-3, -35.5e-3, 18.0e-3, 84.5e-3],
+            [32.0e-3, -35.5e-3, 36.0e-3, 84.5e-3],
+            [50.0e-3, -35.5e-3, 85.0e-3, 84.5e-3],
+            [-35.0e-3, -35.5e-3, 85.0e-3, 0.0e-3],
             [-35.0e-3, 13.0e-3, 85.0e-3, 18.0e-3],
             [-35.0e-3, 31.0e-3, 85.0e-3, 36.0e-3],
-            [-35.0e-3, 49.0e-3, 85.0e-3, 85.0e-3],
+            [-35.0e-3, 49.0e-3, 85.0e-3, 84.5e-3],
         ],
     },
     affects: ["Diagnostic Camera", "MultiBeam Scanner XT", "MultiBeam Scanner", "MPPC"]
