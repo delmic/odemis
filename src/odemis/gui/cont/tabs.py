@@ -2533,6 +2533,12 @@ class ChamberTab(Tab):
         self.tab_data_model.main.is_acquiring.value = True
 
         self.panel.btn_cancel.Enable()
+        # We focus the cancel button mostly to not keep the focus on the switch
+        # mirror button, because having the focus means that when pressing "space"
+        # key the button is pressed (immediately). That can be quite dangerous after
+        # parking the mirror, if the user is not paying close attention to the
+        # keyboard. So that's a safety measure.
+        self.panel.btn_cancel.SetFocus()
         self.panel.btn_switch_mirror.SetLabel(btn_text)
 
     def _on_move_done(self, future):
