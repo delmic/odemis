@@ -634,6 +634,9 @@ class OpticalPathManager():
                     continue
                 if not hasattr(comp, "axes") or not isinstance(comp.axes, dict):
                     continue
+                if axis not in comp.axes:
+                    logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
+                    continue
                 if isinstance(pos, tuple):  # several ways to find the position => pick the first one that works
                     for position in pos:
                         if isinstance(position, str) and position.startswith("MD:"):
@@ -648,93 +651,89 @@ class OpticalPathManager():
                     else:
                         logging.warning("Failed to find any correct position for component %s in %s", comp.name, pos)
                 if isinstance(pos, str) and pos.startswith("MD:"):
-                    pos = self.mdToValue(comp, pos[3:])[axis] if axis in comp.axes else None
-                if axis in comp.axes:
-                    if axis == "band":
-                        # Handle the filter wheel in a special way. Search
-                        # for the position (key) that corresponds to the requested
-                        # position name (value), typically 'pass-through'.
-                        choices = comp.axes[axis].choices
-                        for key, value in choices.items():
-                            if value == pos:
-                                pos = key
-                                # Just to store current band in order to restore
-                                # it once we leave this mode
-                                if self._last_mode not in ALIGN_MODES:
-                                    self._stored[comp_role, axis] = comp.position.value[axis]
-                                break
-                        else:
-                            if mode == "mirror-align" and pos == BAND_PASS_THROUGH:
-                                # On the SPARC, if there is a filter-wheel in front of the CCD,
-                                # there should be a pass-through position. So if it's missing
-                                # that's typically a sign that the microscope file is incorrect
-                                # eg, a typo in the filter name.
-                                logging.warning("No 'pass-through' provided by %s.%s, "
-                                                "alignment might be harder due to limited signal. "
-                                                "That might be a sign of issue in the microscope file.",
-                                                comp.name, axis)
-                            else:
-                                logging.debug("Choice %s is not present in %s.%s axis, leaving at %s",
-                                              pos, comp.name, axis, comp.position.value[axis])
-                            continue
-                    elif axis == "grating":
-                        # If mirror is to be used but not found in grating
-                        # choices, then we use zero order. In case of
-                        # GRATING_NOT_MIRROR we either use the last known
-                        # grating or the first grating that is not mirror.
-                        choices = comp.axes[axis].choices
-                        if pos == "mirror":
-                            # Store current grating (if we use one at the moment)
-                            # to restore it once we use a normal grating again
-                            if choices[comp.position.value[axis]] != "mirror":
+                    pos = self.mdToValue(comp, pos[3:])[axis]
+                if axis == "band":
+                    # Handle the filter wheel in a special way. Search
+                    # for the position (key) that corresponds to the requested
+                    # position name (value), typically 'pass-through'.
+                    choices = comp.axes[axis].choices
+                    for key, value in choices.items():
+                        if value == pos:
+                            pos = key
+                            # Just to store current band in order to restore
+                            # it once we leave this mode
+                            if self._last_mode not in ALIGN_MODES:
                                 self._stored[comp_role, axis] = comp.position.value[axis]
-                                self._stored[comp_role, 'wavelength'] = comp.position.value['wavelength']
-                            # Use the special "mirror" grating, if it exists
-                            for key, value in choices.items():
-                                if value == "mirror":
-                                    pos = key
-                                    break
-                            else:
-                                # Fallback to zero order (aka "low-quality mirror")
-                                axis = 'wavelength'
-                                pos = 0
-                        elif pos == GRATING_NOT_MIRROR:
-                            if choices[comp.position.value[axis]] == "mirror":
-                                # if there is a grating stored use this one
-                                # otherwise find the non-mirror grating
-                                if (comp_role, axis) in self._stored:
-                                    pos = self._stored[comp_role, axis]
-                                else:
-                                    pos = self.findNonMirror(choices)
-                                if (comp_role, 'wavelength') in self._stored:
-                                    mv['wavelength'] = self._stored[comp_role, 'wavelength']
-                            else:
-                                pos = comp.position.value[axis]  # no change
-                            try:
-                                del self._stored[comp_role, axis]
-                            except KeyError:
-                                pass
-                            try:
-                                del self._stored[comp_role, 'wavelength']
-                            except KeyError:
-                                pass
+                            break
+                    else:
+                        if mode == "mirror-align" and pos == BAND_PASS_THROUGH:
+                            # On the SPARC, if there is a filter-wheel in front of the CCD,
+                            # there should be a pass-through position. So if it's missing
+                            # that's typically a sign that the microscope file is incorrect
+                            # eg, a typo in the filter name.
+                            logging.warning("No 'pass-through' provided by %s.%s, "
+                                            "alignment might be harder due to limited signal. "
+                                            "That might be a sign of issue in the microscope file.",
+                                            comp.name, axis)
                         else:
-                            logging.debug("Using grating position as-is: '%s'", pos)
-                            pass  # use pos as-is
-                    elif axis == "slit-in":
-                        if mode in ALIGN_MODES and (comp_role, axis) not in self._stored:
+                            logging.debug("Choice %s is not present in %s.%s axis, leaving at %s",
+                                          pos, comp.name, axis, comp.position.value[axis])
+                        continue
+                elif axis == "grating":
+                    # If mirror is to be used but not found in grating
+                    # choices, then we use zero order. In case of
+                    # GRATING_NOT_MIRROR we either use the last known
+                    # grating or the first grating that is not mirror.
+                    choices = comp.axes[axis].choices
+                    if pos == "mirror":
+                        # Store current grating (if we use one at the moment)
+                        # to restore it once we use a normal grating again
+                        if choices[comp.position.value[axis]] != "mirror":
                             self._stored[comp_role, axis] = comp.position.value[axis]
-                    elif hasattr(comp.axes[axis], "choices") and isinstance(comp.axes[axis].choices, dict):
-                        choices = comp.axes[axis].choices
+                            self._stored[comp_role, 'wavelength'] = comp.position.value['wavelength']
+                        # Use the special "mirror" grating, if it exists
                         for key, value in choices.items():
-                            if value == pos:
+                            if value == "mirror":
                                 pos = key
                                 break
-                    # write actuator axis and position in dict
-                    if pos:
-                        mv[axis] = pos
-                else:
-                    logging.debug("Not moving axis %s.%s as it is not present", comp_role, axis)
+                        else:
+                            # Fallback to zero order (aka "low-quality mirror")
+                            axis = 'wavelength'
+                            pos = 0
+                    elif pos == GRATING_NOT_MIRROR:
+                        if choices[comp.position.value[axis]] == "mirror":
+                            # if there is a grating stored use this one
+                            # otherwise find the non-mirror grating
+                            if (comp_role, axis) in self._stored:
+                                pos = self._stored[comp_role, axis]
+                            else:
+                                pos = self.findNonMirror(choices)
+                            if (comp_role, 'wavelength') in self._stored:
+                                mv['wavelength'] = self._stored[comp_role, 'wavelength']
+                        else:
+                            pos = comp.position.value[axis]  # no change
+                        try:
+                            del self._stored[comp_role, axis]
+                        except KeyError:
+                            pass
+                        try:
+                            del self._stored[comp_role, 'wavelength']
+                        except KeyError:
+                            pass
+                    else:
+                        logging.debug("Using grating position as-is: '%s'", pos)
+                        pass  # use pos as-is
+                elif axis == "slit-in":
+                    if mode in ALIGN_MODES and (comp_role, axis) not in self._stored:
+                        self._stored[comp_role, axis] = comp.position.value[axis]
+                elif hasattr(comp.axes[axis], "choices") and isinstance(comp.axes[axis].choices, dict):
+                    choices = comp.axes[axis].choices
+                    for key, value in choices.items():
+                        if value == pos:
+                            pos = key
+                            break
+                # write actuator axis and position in dict
+                mv[axis] = pos
 
             if mv:
                 try:

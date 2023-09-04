@@ -6326,15 +6326,16 @@ class Sparc2AlignTab(Tab):
             # move the spec_switch mirror to the default (retracted) position
             main = self.tab_data_model.main
             spec_switch_data = main.spec_switch.getMetadata()
+            spec_switch_xpos = main.spec_switch.position.value["x"]
+            spec_switch_xmd_deactive = spec_switch_data[model.MD_FAV_POS_DEACTIVE]["x"]
+            spec_switch_xmd_active = spec_switch_data[model.MD_FAV_POS_ACTIVE]["x"]
 
             # if the spec_switch mirror is not positioned either on ACTIVE or
             # DEACTIVE position move it to the default (DEACTIVE) position
-            if not almost_equal(main.spec_switch.position.value["x"],
-                                spec_switch_data[model.MD_FAV_POS_DEACTIVE]["x"]):
-                if not almost_equal(main.spec_switch.position.value["x"],
-                                    spec_switch_data[model.MD_FAV_POS_ACTIVE]["x"]):
-                    self._spec_switch_f = main.spec_switch.moveAbs(spec_switch_data[model.MD_FAV_POS_DEACTIVE])
-                    self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
+            if ((not almost_equal(spec_switch_xpos, spec_switch_xmd_deactive)) and
+                    (not almost_equal(spec_switch_xpos, spec_switch_xmd_active))):
+                self._spec_switch_f = main.spec_switch.moveAbs(spec_switch_xmd_deactive)
+                self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
 
             # future and progress connector for tracking the progress of the gauge when moving
             self._pfc_spec_switch = None
@@ -7222,8 +7223,7 @@ class Sparc2AlignTab(Tab):
         self.panel.btn_p_spec_switch_x.Enable(False)
 
         # show the gauge if it is hidden
-        if not self.panel.gauge_specswitch.IsShown():
-            self.panel.gauge_specswitch.Show()
+        self.panel.gauge_specswitch.Show()
 
         # unsubscribe to position changes to prevent overwriting FAV_POS
         if self.tab_data_model.main.spec_switch:
@@ -7571,10 +7571,7 @@ class Sparc2AlignTab(Tab):
                 main.fibaligner.position.unsubscribe(self._onFiberPos)
             if main.light_aligner:
                 main.light_aligner.position.unsubscribe(self._onLightAlignPos)
-
-
-            # Also fit to content now, so that next time the tab is displayed,
-            # it's ready
+            # Also fit to content now, so that next time the tab is displayed, it's ready
             self.panel.vp_align_lens.canvas.fit_view_to_content()
 
     def terminate(self):

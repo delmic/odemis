@@ -263,8 +263,8 @@ class ProgressiveMove(model.ProgressiveFuture):
         super().__init__(est_start, est_start + axes_total_move_time)
 
         self._running_subf = comp.moveAbs(pos)
-        self.set_running_or_notify_cancel()
         self.task_canceller = self._cancel
+        self.set_running_or_notify_cancel()
         self._running_subf.add_done_callback(self._on_future_done)  # called when a sub-future is done
 
     def _cancel(self, _) -> bool:

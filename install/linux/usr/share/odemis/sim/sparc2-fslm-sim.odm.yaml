@@ -330,7 +330,7 @@ SPARC2-FSLM: {
         FAV_POS_ACTIVE: {"x": 0.0121716}, # laser out (external)
         FAV_POS_DEACTIVE: {"x": -0.03541916}, # laser in (internal)
         FAV_POS_ACTIVE_DEST: ["External Camera", "External Spectrometer"],
-        FAV_POS_DEACTIVE_DEST: ["Camera", "Integrated Spectrometer"],
+        # FAV_POS_DEACTIVE_DEST: ["Camera", "Integrated Spectrometer"],
     },
     affects: ["Camera", "Integrated Spectrometer", "External Camera", "External Spectrometer"],
 }
