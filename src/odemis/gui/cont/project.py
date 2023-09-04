@@ -379,6 +379,14 @@ class FastEMROCController(object):
         self._viewport = viewport
         self._tab_data = tab_data
         self.calib_prefix = calib_prefix
+        scintillator_position = self._tab_data.main.scintillator_positions[number]
+        scintillator_size = self._tab_data.main.scintillator_sizes[number]
+        self._sample_bbox = (
+            scintillator_position[0] - scintillator_size[0] / 2,
+            scintillator_position[1] - scintillator_size[1] / 2,
+            scintillator_position[0] + scintillator_size[0] / 2,
+            scintillator_position[1] + scintillator_size[1] / 2,
+        )  # (minx, miny, maxx, maxy) [m]
 
         # Get ROC model (exists already in tab data) and change coordinates
         calibration_regions = getattr(tab_data, "regions_" + calib_prefix)
@@ -424,10 +432,13 @@ class FastEMROCController(object):
                     self.overlay = self._viewport.canvas.\
                         add_calibration_overlay(self.calib_model.coordinates,
                                                 self.calib_model.name.value,
+                                                self._sample_bbox,
                                                 colour="#00ff00")  # green
                 else:  # use default color (orange)
                     self.overlay = self._viewport.\
-                        canvas.add_calibration_overlay(self.calib_model.coordinates, self.calib_model.name.value)
+                        canvas.add_calibration_overlay(self.calib_model.coordinates,
+                                                       self.calib_model.name.value,
+                                                       self._sample_bbox)
 
 
 class FastEMCalibrationRegionsController(object):

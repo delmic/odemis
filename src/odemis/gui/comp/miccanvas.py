@@ -1814,13 +1814,14 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         self.remove_world_overlay(overlay)
         wx.CallAfter(self.request_drawing_update)
 
-    def add_calibration_overlay(self, coordinates, label, colour=gui.FG_COLOUR_WARNING):
+    def add_calibration_overlay(self, coordinates, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
         """
         coordinates (TupleContinuousVA): VA of 4 floats representing region of calibration coordinates
         label (str): label for the overlay (typically a number 1-9)
+        sample_bbox (tuple): bounding box coordinates of the sample holder (minx, miny, maxx, maxy) [m]
         colour (str): border colour of ROA overlay, given as string of hex code
         """
-        overlay = world_overlay.FastEMROCOverlay(self, coordinates, label, colour=colour)
+        overlay = world_overlay.FastEMROCOverlay(self, coordinates, label, sample_bbox, colour=colour)
         self.add_world_overlay(overlay)
         overlay.active.value = False  # no need to activate/select by default
         return overlay
