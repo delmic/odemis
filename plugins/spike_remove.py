@@ -221,7 +221,11 @@ class SpikeRemovalPlugin(Plugin):
         # using the values in neighboring pixels in the spectrum.
 
         spikestep = self.threshold.value
-        specdat = numpy.squeeze(raw_spec_dat.copy())
+
+        assert raw_spec_dat.ndim == 5
+        s = raw_spec_dat.shape
+        specdat = numpy.reshape(raw_spec_dat, (s[-5], s[-2], s[-1]))
+
         assert specdat.ndim == 3
         # this diff calculation requires higher numerical precision than 16 bits because it is squared.
         # 32 uint should be good enough as the max diff < 2**16. However for the summation of ms_step it is more convenient to use float32.
