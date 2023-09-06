@@ -1844,54 +1844,38 @@ def extract_imagej_metadata(ldata) -> str:
     :return (str): metadata compatible with ImageJ
     """
     num_channels = 0
-    num_frames = 0  # Time frames
-    num_slices = 0  # zlevels
 
-    # Check the ZYX dimensions of the first DataArray
-    Y, X = ldata[0].shape[-2:]
-    if len(ldata[0].shape) >= 3:
-        Z = ldata[0].shape[-3]
-    else:
-        Z = 1
+    # Check the CTZYX dimensions of the first DataArray
+    size = ldata[0].shape
+    res = (1,) * (5 - len(size)) + size
 
-    # Add to "channels" and "frames" the other DataArray which have the same ZYX dimension.
-    for n in range(len(ldata)):
-        if ldata[n].shape[-2:] != (Y, X):
+    # Add to "channels" if other DataArray(s) have the same TZYX dimension.
+    for data in ldata:
+        next_shape = data.shape
+        next_res = (1,) * (5 - len(next_shape)) + next_shape
+        if next_res == res:
+            if len(data.shape) == 5:
+                num_channels += data.shape[-5]
+            else:
+                num_channels += 1
+        else:
             # Tiff data is not compatible with ImageJ
             break
 
-        if len(ldata[n].shape) >= 3:
-            if ldata[n].shape[-3] == Z:
-                num_slices = ldata[n].shape[-3]
-            else:
-                # Tiff data is not compatible with ImageJ
-                break
 
-        if len(ldata[n].shape) >= 4:
-            num_frames += ldata[n].shape[-4]
-
-        if len(ldata[n].shape) == 5:
-            num_channels += ldata[n].shape[-5]
-        else:
-            num_channels += 1
-    # Default "slices" and/or "frames" to 1, if these dimensions
-    # are not supported in the DataArray shape
-    if num_slices == 0:
-        num_slices = 1
-    if num_frames == 0:
-        num_frames = 1
     # Define relevant ImageJ identifiers
     md = {
         "ImageJ": "1.11a",
-        "images": num_channels * num_frames * num_slices,
+        "images": num_channels * res[-3] * res[-4],
         "channels": num_channels,
-        "slices": num_slices,
-        "frames": num_frames,
+        "slices": res[-3],
+        "frames": res[-4],
         "hyperstack": "true",
         "unit": 'm'
     }
     imagej_description = "\n".join(f"{k}={md[k]}" for k in md.keys()) + "\n"
     return imagej_description
+
 
 def _genResizedShapes(data):
     """
