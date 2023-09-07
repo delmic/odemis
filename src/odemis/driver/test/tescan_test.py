@@ -18,22 +18,23 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-import math
-
-import Pyro4
-from concurrent.futures import CancelledError
 import copy
 import logging
-from odemis import model
-from odemis.dataio import hdf5
-from odemis.driver import tescan
-from odemis.util import testing, output_window
+import math
 import os
 import pickle
 import threading
 import time
 import unittest
-from unittest.case import skip
+from concurrent.futures import CancelledError
+
+import Pyro4
+
+from odemis import model
+from odemis.dataio import hdf5
+from odemis.driver import tescan
+from odemis.util import testing
+
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
