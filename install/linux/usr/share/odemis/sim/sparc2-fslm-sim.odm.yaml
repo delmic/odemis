@@ -255,7 +255,7 @@ SPARC2-FSLM: {
         address: null,
         axes: ["l1", "l2", "inx", "spec-switch", "slit"],
         # These values only need to be roughly correct
-        ustepsize: [7.5e-8, 25.1e-9, 25.1e-9, 1.4e-7, 5.e-9], # m/µstep
+        ustepsize: [25.1e-9, 25.1e-9, 25.1e-9, 1.4e-7, 5.e-9], # m/µstep
         unit: ["m", "m", "m", "m", "m"],
         rng: [[0, 100.e-3], [-1.e-3, 100.e-3], [0, 18.e-3], [-5.e-2, 5.e-2], [0, 2.e-3]],
         refproc: "Standard",
@@ -294,7 +294,7 @@ SPARC2-FSLM: {
         # Position away
         FAV_POS_DEACTIVE: {"x": 0.0}, # m
         # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": -0.0509299496}, # m
+        FAV_POS_ACTIVE: {"x": -0.00509299496}, # m
         POS_ACTIVE_RANGE: {"x": [-1.e-3, 1.e-3]},  # relative min/max from the active position when doing EK-scanning
     },
     affects: ["Camera", "Integrated Spectrometer"],

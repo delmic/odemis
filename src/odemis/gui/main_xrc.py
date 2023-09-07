@@ -5185,7 +5185,6 @@ def __init_resources():
                         <flag>wxLEFT</flag>
                         <border>5</border>
                         <minsize>90,-1</minsize>
-                        <proportion>1</proportion>
                       </object>
                       <object class="sizeritem">
                         <object class="ImageTextButton" name="btn_spec_switch_engage">
@@ -5201,7 +5200,6 @@ def __init_resources():
                         <flag>wxLEFT</flag>
                         <border>5</border>
                         <minsize>90,-1</minsize>
-                        <proportion>1</proportion>
                       </object>
                       <object class="sizeritem">
                         <object class="wxGauge" name="gauge_specswitch">
@@ -5214,9 +5212,8 @@ def __init_resources():
                           </XRCED>
                         </object>
                         <option>1</option>
-                        <flag>wxLEFT|wxALIGN_CENTRE</flag>
-                        <border>7</border>
-                        <proportion>2</proportion>
+                        <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
+                        <border>10</border>
                         <minsize>-1,10</minsize>
                       </object>
                       <orient>wxHORIZONTAL</orient>

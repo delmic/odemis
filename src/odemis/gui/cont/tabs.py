@@ -6334,7 +6334,7 @@ class Sparc2AlignTab(Tab):
             # DEACTIVE position move it to the default (DEACTIVE) position
             if ((not almost_equal(spec_switch_xpos, spec_switch_xmd_deactive)) and
                     (not almost_equal(spec_switch_xpos, spec_switch_xmd_active))):
-                self._spec_switch_f = main.spec_switch.moveAbs(spec_switch_xmd_deactive)
+                self._spec_switch_f = main.spec_switch.moveAbs({"x": spec_switch_xmd_deactive})
                 self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
 
             # future and progress connector for tracking the progress of the gauge when moving
@@ -7236,11 +7236,18 @@ class Sparc2AlignTab(Tab):
         self._pfc_spec_switch = ProgressiveFutureConnector(self._spec_switch_f, self.panel.gauge_specswitch)
 
     @call_in_wx_main
-    def _on_specswitch_button_done(self, _):
+    def _on_specswitch_button_done(self, future):
         """
         Called when pressing one of the spec-switch buttons to retract or engage the mirror.
         After a button is pressed, either the movement is done or it was cancelled.
         """
+        try:
+            future.result()
+        except CancelledError:
+            pass
+        except Exception:
+            logging.exception("Failure during the move of spec-switch")
+
         # reset the labels on both buttons to support rollback after calling cancelling
         self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retract", wx.BLACK)
         self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)
