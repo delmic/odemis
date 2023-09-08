@@ -623,12 +623,12 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         stage_md = self.stage.getMetadata()
 
         if current_pos_label == SEM_IMAGING:
-            grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+            grid1_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE].copy()
             grid2_pos = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
             grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
             grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
         elif current_pos_label == FM_IMAGING:
-            grid1_pos = stage_md[model.MD_FAV_FM_POS_ACTIVE]
+            grid1_pos = stage_md[model.MD_FAV_FM_POS_ACTIVE].copy()
             grid2_pos = stage_md[model.MD_FAV_FM_POS_ACTIVE]
             grid1_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]])
             grid2_pos.update(stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]])
@@ -806,9 +806,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                 if target == SEM_IMAGING:
                     # when switching from FM to SEM
                     # move in the following order
-                    sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'rm', 'x', 'y'}, target_pos)))
-                    sub_moves.append((stage, filter_dict({'m', 'z'}, target_pos)))
+                    sub_moves.append((stage, filter_dict({'rx', 'rm', 'x', 'y', 'm', 'z'}, target_pos)))
                 if target == FM_IMAGING:
 
                     if current_label == LOADING:
@@ -828,9 +826,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                     if current_label == SEM_IMAGING:
                         # when switching from SEM to FM
                         # move in the following order :
-                        sub_moves.append((stage, filter_dict({'m', 'z'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'y', 'x', 'rm'}, target_pos)))
-                        sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
+                        sub_moves.append((stage, filter_dict({'rx', 'rm', 'x', 'y', 'm', 'z'}, target_pos)))
 
                     # Engage the focuser
                     sub_moves.append((focus, focus_active))
