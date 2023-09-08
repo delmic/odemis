@@ -17,6 +17,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import copy
 import logging
+import math
 import os
 import time
 import unittest
@@ -42,7 +43,8 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
-METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
+METEOR_TFS1_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
+METEOR_ZEISS1_CONFIG = CONFIG_PATH + "sim/meteor-zeiss-sim.odm.yaml"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
 
 
@@ -155,7 +157,6 @@ class TestEnzelMove(unittest.TestCase):
         f.result()
         testing.assert_pos_almost_equal(align.position.value, self.align_alignment,
                                      atol=ATOL_LINEAR_POS)
-
 
     def test_cancel_loading(self):
         """
@@ -298,18 +299,21 @@ class TestEnzelMove(unittest.TestCase):
                                      atol=ATOL_LINEAR_POS)
 
 
-class TestMeteorMove(unittest.TestCase):
+class TestMeteorTFS1Move(unittest.TestCase):
     """
-    Test the MeteorPostureManager functions
+    Test the MeteorPostureManager functions for Thermofisher 1
     """
+    MIC_CONFIG = METEOR_TFS1_CONFIG
+    ROTATION_AXES = {'rx', 'rz'}
     @classmethod
     def setUpClass(cls):
-        testing.start_backend(METEOR_CONFIG)
+        testing.start_backend(cls.MIC_CONFIG)
         cls.microscope = model.getMicroscope()
         cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
 
         # get the stage components
         cls.stage = model.getComponent(role="stage-bare")
+        cls.linked_stage = model.getComponent(role="stage")
 
         # get the metadata
         stage_md = cls.stage.getMetadata()
@@ -329,21 +333,54 @@ class TestMeteorMove(unittest.TestCase):
         grid_label = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(position_label, SEM_IMAGING)
         self.assertEqual(grid_label, GRID_1)
+        # check the values of tilt and rotation
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
 
-    def test_moving_to_grid1_in_sem_imaging_area_after_loading_2nd_method(self):
-        # move the stage to the loading position  
+    # test linked ym axis movement when in fm imaging area
+    def test_moving_in_grid1_fm_imaging_area_after_loading(self):
+        """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
+        # move the stage to the loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
         f.result()
-        # move the stage to grid1, and sem imaging area will be chosen by default. 
+        # move the stage to the fm imaging area, and grid1 will be chosen by default
+        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        position_label = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(position_label, FM_IMAGING)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
+
+        # move in the same imaging mode using linked YZ stage
+        old_stage_pos = self.stage.position.value
+        old_linked_pos = self.linked_stage.position.value
+        self.linked_stage.moveRel({"y": 1e-3}).result()
+        new_stage_pos = self.stage.position.value
+        new_linked_pos = self.linked_stage.position.value
+
+        self.assertAlmostEqual(old_linked_pos["y"] + 1e-3, new_linked_pos["y"], places=4)
+        self.assertTrue(old_stage_pos["y"] < new_stage_pos["y"])
+
+    def test_moving_to_grid1_in_sem_imaging_area_after_loading_2nd_method(self):
+        # move the stage to the loading position
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to grid1, and sem imaging area will be chosen by default.
         f = self.posture_manager.cryoSwitchSamplePosition(GRID_1)
         f.result()
         position_label = self.posture_manager.getCurrentPostureLabel()
         grid_label = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(position_label, SEM_IMAGING)
         self.assertEqual(grid_label, GRID_1)
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
 
     def test_moving_to_grid1_in_fm_imaging_area_after_loading(self):
-        # move the stage to the loading position  
+        # move the stage to the loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
         f.result()
         # move the stage to the fm imaging area, and grid1 will be chosen by default
@@ -353,6 +390,10 @@ class TestMeteorMove(unittest.TestCase):
         grid_label = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(position_label, FM_IMAGING)
         self.assertEqual(grid_label, GRID_1)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
 
     def test_moving_to_grid2_in_sem_imaging_area_after_loading(self):
         # move the stage to the loading position  
@@ -365,6 +406,9 @@ class TestMeteorMove(unittest.TestCase):
         grid_label = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(position_label, SEM_IMAGING)
         self.assertEqual(grid_label, GRID_2)
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
 
     def test_moving_from_grid1_to_grid2_in_sem_imaging_area(self):
         # move to loading position
@@ -386,6 +430,9 @@ class TestMeteorMove(unittest.TestCase):
         # make sure we are still in sem  imaging area 
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
 
     def test_moving_from_grid2_to_grid1_in_sem_imaging_area(self):
         # move to loading position
@@ -409,7 +456,10 @@ class TestMeteorMove(unittest.TestCase):
         # make sure we are still in the sem imaging area
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
-    
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
+
     def test_moving_from_sem_to_fm(self):
         # move to loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
@@ -424,6 +474,10 @@ class TestMeteorMove(unittest.TestCase):
         f.result()
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
 
     def test_moving_from_grid1_to_grid2_in_fm_imaging_Area(self):
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
@@ -444,6 +498,10 @@ class TestMeteorMove(unittest.TestCase):
         # make sure we are still in fm imaging area
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
 
     def test_moving_from_grid2_to_grid1_in_fm_imaging_Area(self):
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
@@ -466,6 +524,10 @@ class TestMeteorMove(unittest.TestCase):
         # make sure we are still in fm imaging area
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
 
     def test_moving_to_sem_from_fm(self):
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
@@ -480,6 +542,9 @@ class TestMeteorMove(unittest.TestCase):
         f.result()
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
 
     def test_unknown_label_at_initialization(self):
         arbitrary_position = {"x": 0.0, "y": 0.0, "z":-3.0e-3}
@@ -488,6 +553,29 @@ class TestMeteorMove(unittest.TestCase):
         self.assertEqual(UNKNOWN, current_imaging_mode)
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(current_grid, None)
+
+
+class TestMeteorZeiss1Move(TestMeteorTFS1Move):
+    """
+    Test the MeteorPostureManager functions for Zeiss 1
+    """
+    MIC_CONFIG = METEOR_ZEISS1_CONFIG
+    ROTATION_AXES = {'rx', 'rm'}
+
+    def test_moving_in_grid1_fm_imaging_area_after_loading(self):
+        """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
+        super().test_moving_in_grid1_fm_imaging_area_after_loading()
+
+        # move in the same imaging mode using linked YM stage
+        old_stage_pos = self.stage.position.value
+        self.linked_stage.moveRel({"y": 1e-3}).result()
+        new_stage_pos = self.stage.position.value
+
+        # the stage moved in the right direction if the pre-tilt angle was maintained at 26-degrees
+        beta = 0.4537856055185  # 26-degrees in radians
+        estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
+        self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
+                                                                   "the FM imaging grid 1 area.")
 
 
 class TestMimasMove(unittest.TestCase):
@@ -668,7 +756,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
     @classmethod
     def setUpClass(cls):
         # Backend can be any of these : Meteor/Enzel/Mimas
-        testing.start_backend(METEOR_CONFIG)
+        testing.start_backend(METEOR_TFS1_CONFIG)
         cls.microscope = model.getMicroscope()
         cls.posture_manager = MicroscopePostureManager(microscope=cls.microscope)
 
