@@ -507,6 +507,7 @@ class AcquisitionTask(object):
         self._path = path  # sub-directories on external storage
         self._future = future
         self._pre_calibrations = pre_calibrations
+        self._pre_calibrations_future = None
         self._settings_obs = settings_obs
 
         self.path = fastem_util.create_image_dir("beam-shift-correction")
@@ -689,13 +690,17 @@ class AcquisitionTask(object):
 
         stage_pos = self.get_abs_stage_movement()
 
-        f = align(self._scanner, self._multibeam,
-                  self._descanner, self._detector,
-                  self._stage, self._ccd,
-                  self._beamshift, None,  # no need for the detector rotator
-                  calibrations=pre_calibrations, stage_pos=stage_pos)
+        self._pre_calibrations_future = align(self._scanner, self._multibeam,
+                                              self._descanner, self._detector,
+                                              self._stage, self._ccd,
+                                              self._beamshift, None,  # no need for the detector rotator
+                                              calibrations=pre_calibrations, stage_pos=stage_pos)
 
-        f.result()  # wait for the calibrations to be finished
+        try:
+            self._pre_calibrations_future.result()  # wait for the calibrations to be finished
+        except CancelledError:
+            logging.debug("Cancelled acquisition pre-calibrations.")
+            raise
 
         logging.debug("Finish pre-calibration.")
 
@@ -716,6 +721,10 @@ class AcquisitionTask(object):
         :return: (bool) True if cancelled, False if too late to cancel as future is already finished.
         """
         self._cancelled = True
+        # Also cancel the pre-calibrations if they have not finished executing
+        if self._pre_calibrations_future and not self._pre_calibrations_future.done():
+            self._pre_calibrations_future.cancel()
+            self._pre_calibrations_future = None
 
         # Report if it's too late for cancellation (and the f.result() will return)
         if not self._fields_remaining:
