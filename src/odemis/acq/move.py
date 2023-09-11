@@ -503,6 +503,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 # The current mode doesn't change. Only X/Y/Z should move (typically
                 # only X/Y).
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
             elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
