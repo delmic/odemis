@@ -6335,7 +6335,7 @@ class Sparc2AlignTab(Tab):
             if ((not almost_equal(spec_switch_xpos, spec_switch_xmd_deactive)) and
                     (not almost_equal(spec_switch_xpos, spec_switch_xmd_active))):
                 self._spec_switch_f = main.spec_switch.moveAbs({"x": spec_switch_xmd_deactive})
-                self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
+                # self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
 
             # future and progress connector for tracking the progress of the gauge when moving
             self._pfc_spec_switch = None
@@ -6830,8 +6830,8 @@ class Sparc2AlignTab(Tab):
 
         # updates the spec-switch ACTIVE position when the user moves it
         if self.tab_data_model.main.spec_switch:
-            self._adjust_spec_switch_button_state()
             self.panel.pnl_spec_switch.Enable(True)
+            self._adjust_spec_switch_button_state()
 
         # updates the light-aligner ACTIVE position when the user moves it
         if self.tab_data_model.main.light_aligner:

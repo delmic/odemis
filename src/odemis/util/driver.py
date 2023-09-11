@@ -247,6 +247,11 @@ def guessActuatorMoveDuration(actuator, axis, distance, accel=DEFAULT_ACCELERATI
 
 
 class ProgressiveMove(model.ProgressiveFuture):
+    """
+    Specific class which purpose is to track a move by calculating the total time it takes to move the
+    component actuators from current position to target position. Due to the nature of the class being
+    a progressive future this can be perfectly combined with a gauge tracking this particular movement.
+    """
     def __init__(self, comp, pos):
         self.name = comp.name
         est_start = time.time() + 0.1
@@ -283,6 +288,8 @@ class ProgressiveMove(model.ProgressiveFuture):
             self.set_exception(ex)
             return
 
+        # wait just a little before setting the result to prevent a connected gauge from finishing too early
+        time.sleep(0.5)
         self.set_result(f.result())
 
 
