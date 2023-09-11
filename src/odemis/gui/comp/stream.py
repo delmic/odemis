@@ -2111,7 +2111,7 @@ class FastEMCalibrationPanel(wx.Panel):
         assert(isinstance(parent, FastEMCalibrationPanelHeader))
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
 
-        self.buttons = {}  # int --> wx.Button
+        self.buttons = {}  # wx.ToggleButton (scintillator's toggle button) --> int (scintillator number)
 
         self._panel_sizer = wx.BoxSizer(wx.VERTICAL)
         self.SetSizer(self._panel_sizer)
@@ -2139,7 +2139,7 @@ class FastEMCalibrationPanel(wx.Panel):
                 subsz.Add(txt, wx.LEFT | wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, 5)
                 subsz.AddSpacer(20)
 
-                self.buttons[elem] = btn
+                self.buttons[btn] = elem
 
         self._panel_sizer.Add(calgrid_sz, 0, wx.ALL | wx.ALIGN_CENTER, 10)
         self._panel_sizer.AddSpacer(10)
@@ -2158,7 +2158,7 @@ class FastEMOverviewSelectionPanel(wx.Panel):
         e.g. [[6, 5, 4], [3, 2, 1]]
         """
         wx.Panel.__init__(self, parent, wid, pos, size, style, name)
-        self.buttons = {}  # int --> wx.Button
+        self.buttons = {}  # wx.ToggleButton (scintillator's toggle button) --> int (scintillator number)
         # Dwell time slider variables
         self.dwell_time_slider_ctrl = None
         self._dwell_time_grid_sz = wx.GridBagSizer()
@@ -2227,5 +2227,5 @@ class FastEMOverviewSelectionPanel(wx.Panel):
                 subsz.Add(txt, wx.LEFT | wx.RIGHT | wx.ALIGN_CENTER_VERTICAL, 5)
                 subsz.AddSpacer(20)
 
-                self.buttons[elem] = btn
+                self.buttons[btn] = elem
         self._panel_sizer.Add(calgrid_sz, 0, wx.ALL | wx.ALIGN_CENTER, 10)

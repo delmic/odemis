@@ -3524,13 +3524,15 @@ class FastEMROCOverlay(FastEMSelectOverlay):
         super(FastEMROCOverlay, self).__init__(cnvs, coordinates, colour)
         self.label = label
         self._sample_bbox = sample_bbox
+        # VA which states if the ROC is selected
+        self.selected = model.BooleanVA(False)
 
     def on_left_down(self, evt):
         """
         Replaces SelectionMixin.on_left_down, only allow dragging, no editing or starting a selection.
         """
-        # Start dragging if the overlay is active
-        if self.active.value:
+        # Start dragging if the overlay is active and ROC is selected
+        if self.active.value and self.selected.value:
             DragMixin._on_left_down(self, evt)
 
             if self.left_dragging:
@@ -3546,36 +3548,38 @@ class FastEMROCOverlay(FastEMSelectOverlay):
             WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
-        # Activate region if clicked
-        self._view_to_phys()
-        rect = self.get_physical_sel()
-        pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-        # The calibration region often needs to be selected from a distant zoom level, so it is difficult
-        # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
-        # the rectangle if the selection is near (based on mpp value, so independent of scale).
-        margin = self.cnvs.view.mpp.value * 20
-        self.active.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or (self.selection_mode == SEL_MODE_DRAG)
-
-        # Get new ROC coordinates
         if self.active.value:
-            self._coordinates.value = rect
+            # Select region if clicked
+            self._view_to_phys()
+            rect = self.get_physical_sel()
+            pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
+            # The calibration region often needs to be selected from a distant zoom level, so it is difficult
+            # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
+            # the rectangle if the selection is near (based on mpp value, so independent of scale).
+            margin = self.cnvs.view.mpp.value * 20
+            self.selected.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or (self.selection_mode == SEL_MODE_DRAG)
 
-        # Stop dragging
-        # Don't use SelectionMixin._on_left_up, there is some confusion with editing the size of the region, which is
-        # not possible here. To keep it simple, the selection mode is just reset manually.
-        self.clear_drag()
-        self.selection_mode = SEL_MODE_NONE
-        self.edit_hover = None
+            # Set new ROC coordinates
+            if self.selected.value:
+                logging.debug("Setting ROC '%s' coordinates to %s.", self.label, rect)
+                self._coordinates.value = rect
 
-        self.cnvs.update_drawing()  # Line width changes in .draw when .active is changed
-        self.cnvs.reset_default_cursor()
+            # Stop dragging
+            # Don't use SelectionMixin._on_left_up, there is some confusion with editing the size of the region, which is
+            # not possible here. To keep it simple, the selection mode is just reset manually.
+            self.clear_drag()
+            self.selection_mode = SEL_MODE_NONE
+            self.edit_hover = None
+
+            self.cnvs.update_drawing()  # Line width changes in .draw when .active is changed
+            self.cnvs.reset_default_cursor()
         WorldOverlay.on_left_up(self, evt)
 
     def on_motion(self, evt):
         """
         Process drag motion, similar to function in WorldSelectOverlay, but don't show the cursors for editing.
         """
-        if self.active.value:
+        if self.active.value and self.selected.value:
             self._on_motion(evt)  # Call the SelectionMixin motion handler
 
             if not self.dragging:
@@ -3609,9 +3613,9 @@ class FastEMROCOverlay(FastEMSelectOverlay):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """
-        Draw with adaptive line width (depending on whether or not the overlay is active) and add label.
+        Draw with adaptive line width (depending on whether or not the overlay is active and enabled) and add label.
         """
-        line_width = 5 if self.active.value else 2
+        line_width = 5 if (self.active.value and self.selected.value) else 2
         super(FastEMROCOverlay, self).draw(ctx, shift, scale, line_width, dash=False)
 
         # Draw the label of the ROC on the bottom left of the rectangle

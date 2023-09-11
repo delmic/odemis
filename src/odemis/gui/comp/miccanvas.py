@@ -1823,7 +1823,9 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         """
         overlay = world_overlay.FastEMROCOverlay(self, coordinates, label, sample_bbox, colour=colour)
         self.add_world_overlay(overlay)
-        overlay.active.value = False  # no need to activate/select by default
+        # Always activate after creating, otherwise the code to select the region in
+        # FastEMROCOverlay.on_left_up will never be called.
+        overlay.active.value = True
         return overlay
 
     def zoom_out(self):
