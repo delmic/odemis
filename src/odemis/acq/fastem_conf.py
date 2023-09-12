@@ -158,9 +158,11 @@ def configure_detector(detector, roc2, roc3):
     :param roc3: (FastEMROC) The calibration 3 object corresponding to the selected scintillator,
                  which stores the calibrated settings if calibration was performed.
     """
-    dark_offset = roc2.parameters.get("cellDarkOffset")
-    digital_gain = roc2.parameters.get("cellDigitalGain")
-    cell_translation = roc3.parameters.get("cellTranslation")
+    roc2_mppc_parameters = roc2.parameters.get("mppc", {})
+    roc3_mppc_parameters = roc3.parameters.get("mppc", {})
+    dark_offset = roc2_mppc_parameters.get("cellDarkOffset")
+    digital_gain = roc2_mppc_parameters.get("cellDigitalGain")
+    cell_translation = roc3_mppc_parameters.get("cellTranslation")
 
     if not dark_offset:
         logging.warning("Region of calibration doesn't have dark offset parameters.")

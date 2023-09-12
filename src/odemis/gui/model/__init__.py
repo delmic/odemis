@@ -30,10 +30,13 @@ import math
 
 from odemis.acq.feature import CryoFeature
 from odemis.acq.move import MicroscopePostureManager
-from odemis.gui import conf
+from odemis.gui import conf, FG_COLOUR_WARNING
 from odemis.util.filename import create_filename, make_unique_name
 from odemis import model
 from odemis.acq import path, acqmng, fastem
+from odemis.acq.align.fastem import Calibrations
+from odemis.acq.fastem import (CALIBRATION_1, CALIBRATION_2, CALIBRATION_3,
+                               FastEMCalibration)
 import odemis.acq.stream as acqstream
 from odemis.acq.stream import Stream, StreamTree, RGBSpatialProjection, DataProjection
 from odemis.gui.conf import get_general_conf, get_acqui_conf
@@ -1499,30 +1502,81 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
     calibration regions.
     """
 
-    def __init__(self, main):
+    def __init__(self, main, panel):
         assert main.microscope is not None
         super(FastEMAcquisitionGUIData, self).__init__(main)
+        self.calibrations = {}  # dict, name --> FastEMCalibration
 
-        # calibration regions for calibration step 2
-        self.regions_calib_2 = model.VigilantAttribute({})  # dict, number --> FastEMROC
-        for i in main.scintillator_positions:
-            self.regions_calib_2.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+        if main.microscope.name.lower().endswith("sim"):
+            calib_1_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN]
+            calib_2_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                                    Calibrations.DARK_OFFSET]
+            calib_3_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN]
+        else:
+            calib_1_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_ROTATION_PREALIGN,
+                                    Calibrations.SCAN_ROTATION_PREALIGN,
+                                    Calibrations.DESCAN_GAIN_STATIC,
+                                    Calibrations.SCAN_AMPLITUDE_PREALIGN,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                                    Calibrations.IMAGE_ROTATION_FINAL,
+                                    Calibrations.IMAGE_TRANSLATION_FINAL]
+            calib_2_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                                    Calibrations.DARK_OFFSET,
+                                    Calibrations.DIGITAL_GAIN]
+            calib_3_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                                    Calibrations.SCAN_ROTATION_FINAL,
+                                    Calibrations.SCAN_AMPLITUDE_FINAL,
+                                    Calibrations.CELL_TRANSLATION]
 
-        # calibration regions for calibration step 3
-        self.regions_calib_3 = model.VigilantAttribute({})  # dict, number --> FastEMROC
-        for i in main.scintillator_positions:
-            self.regions_calib_3.value[i] = fastem.FastEMROC(str(i), acqstream.UNDEFINED_ROI)
+        for name in [CALIBRATION_1, CALIBRATION_2, CALIBRATION_3]:
+            calibration = FastEMCalibration(name, panel)
+
+            if name == CALIBRATION_1:
+                calibration.calibrations.value = calib_1_calibrations
+                calibration.panel.GetParent().GetParent() \
+                    .SetToolTip("Optical path and pattern calibrations: Calibrating and "
+                                "focusing the optical path and the multiprobe pattern. "
+                                "Calibrating the scanning orientation and distance.")
+            elif name == CALIBRATION_2:
+                calibration.calibrations.value = calib_2_calibrations
+                calibration.panel.GetParent().GetParent() \
+                    .SetToolTip("Dark offset and digital gain calibration (orange square): "
+                                "Correcting between cell images for differences in "
+                                "background noise and homogenizing across amplification "
+                                "differences.")
+                calibration.panel.SetToolTip("Select to place region of calibration (ROC) on empty "
+                                             "scintillator.")
+            elif name == CALIBRATION_3:
+                calibration.calibrations.value = calib_3_calibrations
+                calibration.panel.GetParent().GetParent() \
+                    .SetToolTip("Cell image calibration (green square): Fine-tuning the cell "
+                                "image size and the cell image orientation in respect to the "
+                                "scanning direction. Stitching of cell images into a single "
+                                "field image.")
+                calibration.panel.SetToolTip("Select to place region of calibration (ROC) on "
+                                             "tissue.")
+
+            # Assign FastEMROC only for calibration 2 and 3
+            if name in (CALIBRATION_2, CALIBRATION_3):
+                if name == CALIBRATION_2:
+                    colour = FG_COLOUR_WARNING
+                elif name == CALIBRATION_3:
+                    colour = "#00ff00"  # green
+                for num in main.scintillator_positions:
+                    calibration.regions.value[num] = fastem.FastEMROC(str(num),
+                                                                      acqstream.UNDEFINED_ROI,
+                                                                      colour=colour)
+
+            self.calibrations[name] = calibration
 
         self.projects = model.ListVA([])  # list of FastEMProject
 
-        # Indicates the calibration state:
-        # True: is calibrated successfully for all in the acquisition tab selected scintillators
-        # False: not yet calibrated
-        self.is_calib_1_done = model.BooleanVA(False)
-        self.is_calib_2_done = model.BooleanVA(False)
-        self.is_calib_3_done = model.BooleanVA(False)
-        # Indicates the microscope state: True: is currently calibrating; False: not in calibration mode
-        self.is_calibrating = model.BooleanVA(False)
 
 
 class FastEMOverviewGUIData(MicroscopyGUIData):

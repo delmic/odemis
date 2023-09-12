@@ -634,18 +634,18 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
         self.pnl_acq_settings = xrc.XRCCTRL(self, "pnl_acq_settings")
-        self.calib_1_pnl_fastem = xrc.XRCCTRL(self, "calib_1_pnl_fastem")
+        self.calib_1_pnl = xrc.XRCCTRL(self, "calib_1_pnl")
         self.calib_1_btn = xrc.XRCCTRL(self, "calib_1_btn")
         self.calib_1_gauge = xrc.XRCCTRL(self, "calib_1_gauge")
         self.calib_1_label = xrc.XRCCTRL(self, "calib_1_label")
         self.calib_2_btn = xrc.XRCCTRL(self, "calib_2_btn")
         self.calib_2_gauge = xrc.XRCCTRL(self, "calib_2_gauge")
         self.calib_2_label = xrc.XRCCTRL(self, "calib_2_label")
-        self.calib_2_pnl_regions = xrc.XRCCTRL(self, "calib_2_pnl_regions")
+        self.calib_2_pnl = xrc.XRCCTRL(self, "calib_2_pnl")
         self.calib_3_btn = xrc.XRCCTRL(self, "calib_3_btn")
         self.calib_3_gauge = xrc.XRCCTRL(self, "calib_3_gauge")
         self.calib_3_label = xrc.XRCCTRL(self, "calib_3_label")
-        self.calib_3_pnl_regions = xrc.XRCCTRL(self, "calib_3_pnl_regions")
+        self.calib_3_pnl = xrc.XRCCTRL(self, "calib_3_pnl")
         self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
         self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
@@ -6929,7 +6929,7 @@ def __init_resources():
                             <bg>#555555</bg>
                         </object>
                       <object class="FoldPanelItem">
-                        <object class="wxPanel" name="calib_1_pnl_fastem">
+                        <object class="wxPanel" name="calib_1_pnl">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <object class="wxBoxSizer">
@@ -7028,7 +7028,7 @@ def __init_resources():
                             <orient>wxHORIZONTAL</orient>
                           </object>
                         </object>
-                        <object class="FastEMCalibrationPanelHeader" name="calib_2_pnl_regions">
+                        <object class="FastEMCalibrationPanelHeader" name="calib_2_pnl">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -7089,7 +7089,7 @@ def __init_resources():
                             <orient>wxHORIZONTAL</orient>
                           </object>
                         </object>
-                        <object class="FastEMCalibrationPanelHeader" name="calib_3_pnl_regions">
+                        <object class="FastEMCalibrationPanelHeader" name="calib_3_pnl">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>

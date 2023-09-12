@@ -318,12 +318,10 @@ class FastEMAcquiController(object):
     Takes care of the acquisition button and process in the FastEM acquisition tab.
     """
 
-    def __init__(self, tab_data, tab_panel, calib_prefixes):
+    def __init__(self, tab_data, tab_panel):
         """
         :param tab_data: (FastEMGUIData) The representation of the microscope GUI.
         :param tab_panel: (wx.Frame) The frame which contains the viewport.
-        :param calib_prefixes: (list of str) A list of prefixes, which can indicate the order/type of the
-                                calibration (e.g. "calib_1).
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
@@ -357,17 +355,11 @@ class FastEMAcquiController(object):
         # Set of ROAs, whose ROC 2 and ROC 3 are listened by the GUI.
         self.subscribed_roas = set()  # (needed to make sure we don't subscribe to the same ROA twice)
         tab_data.projects.subscribe(self._on_projects, init=True)
-        # add attributes that represent the calibration regions (e.g. regions_calib_2)
-        for prefix in calib_prefixes:
-            setattr(self, "regions_" + prefix, getattr(tab_data, "regions_" + prefix))
-        for roc in self.regions_calib_2.value.values():
-            roc.coordinates.subscribe(self._on_va_change)
-        for roc in self.regions_calib_3.value.values():
-            roc.coordinates.subscribe(self._on_va_change)
+        for calibration in self._tab_data_model.calibrations.values():
+            calibration.is_done.subscribe(self._on_va_change, init=True)
+            for roc in calibration.regions.value.values():
+                roc.coordinates.subscribe(self._on_va_change)
 
-        self._tab_data_model.is_calib_1_done.subscribe(self._on_va_change, init=True)
-        self._tab_data_model.is_calib_2_done.subscribe(self._on_va_change, init=True)
-        self._tab_data_model.is_calib_3_done.subscribe(self._on_va_change, init=True)
         self._main_data_model.is_acquiring.subscribe(self._on_va_change)
 
         # update the estimated acquisition time when the dwell time changes
@@ -404,9 +396,7 @@ class FastEMAcquiController(object):
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def check_acquire_button(self):
-        self.btn_acquire.Enable(self._tab_data_model.is_calib_1_done.value
-                                and self._tab_data_model.is_calib_2_done.value
-                                and self._tab_data_model.is_calib_3_done.value
+        self.btn_acquire.Enable(all(calibration.is_done.value for calibration in self._tab_data_model.calibrations.values())
                                 and self.roa_count
                                 and not self._get_undefined_calibrations_2()
                                 and not self._get_undefined_calibrations_3() and
@@ -416,9 +406,7 @@ class FastEMAcquiController(object):
     def update_acquisition_time(self):
 
         lvl = None  # icon status shown
-        if not self._tab_data_model.is_calib_1_done.value \
-                or not self._tab_data_model.is_calib_2_done.value \
-                or not self._tab_data_model.is_calib_3_done.value:
+        if any(not calibration.is_done.value for calibration in self._tab_data_model.calibrations.values()):
             lvl = logging.WARN
             txt = "System is not calibrated."
         elif self.roa_count == 0:
@@ -576,30 +564,21 @@ class FastEMCalibrationController:
     Controls the calibration button to start the calibration and the process in the calibration panel
     in the FastEM overview and acquisition tab.
     """
-    def __init__(self, tab_data, tab_panel, calib_prefix, calibrations):
+    def __init__(self, tab_data, calibration):
         """
         :param tab_data: (FastEMAcquisitionGUIData) The representation of the microscope GUI.
-        :param tab_panel: (wx.Frame) The calibration panel, which contains the calibration button to start
-                          the calibration, and the gauge and the label of the gauge to indicate the progress.
-        :param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
-        :param calibrations: (list[Calibrations]) List of calibrations that should be run.
+        :param calibration: (FastEMCalibration) The object containing FastEM calibration related attributes.
         """
         self._tab_data = tab_data
         self._main_data_model = tab_data.main
-        self._panel = tab_panel
-        self._calib_prefix = calib_prefix
-        self.calibrations = calibrations
+        self.calibration = calibration
 
-        self.button = getattr(tab_panel, calib_prefix + "_btn")
-        self.gauge = getattr(tab_panel, calib_prefix + "_gauge")
-        self.label = getattr(tab_panel, calib_prefix + "_label")
+        # enable/disable calibration button, panel, overlay if acquiring
+        self._main_data_model.is_acquiring.subscribe(self._on_is_acquiring)
+        # enable/disable calibration button, panel, overlay if calibrating
+        self.calibration.is_calibrating.subscribe(self._on_is_acquiring)
 
-        # add attribute that keeps track of calibration status
-        setattr(self, "is_" + calib_prefix + "_done", getattr(tab_data, "is_" + calib_prefix + "_done"))
-        tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable button if acquiring
-        tab_data.is_calibrating.subscribe(self._on_is_acquiring)  # enable/disable button if calibrating
-
-        self.button.Bind(wx.EVT_BUTTON, self.on_calibrate)
+        self.calibration.button.Bind(wx.EVT_BUTTON, self.on_calibrate)
 
         self._on_calibration_state()  # display estimated calibration time
 
@@ -611,32 +590,32 @@ class FastEMCalibrationController:
         :param evt: (GenButtonEvent) Button triggered.
         """
         # check if cancelled
-        if self._tab_data.is_calibrating.value:
+        if self.calibration.is_calibrating.value:
             logging.debug("Calibration was cancelled.")
             align_fastem._executor.cancel()  # all the rest will be handled by on_alignment_done()
             return
 
         # calibrate
-        self._tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        self.calibration.is_calibrating.unsubscribe(self._on_is_acquiring)
         # Don't catch this event (is_calibrating = True) - this would disable the button,
         # but it should be still enabled in order to be able to cancel the calibration
-        self._tab_data.is_calibrating.value = True  # make sure the acquire/tab buttons are disabled
-        self._tab_data.is_calibrating.subscribe(self._on_is_acquiring)
+        self.calibration.is_calibrating.value = True  # make sure the acquire/tab buttons are disabled
+        self.calibration.is_calibrating.subscribe(self._on_is_acquiring, init=True)
 
         self._on_calibration_state()  # update the controls in the panel
 
-        logging.debug("Starting calibration step %s", self._calib_prefix)
+        logging.debug("Starting calibration step %s", self.calibration.name.value)
 
         # Start alignment
         f = align.fastem.align(self._main_data_model.ebeam, self._main_data_model.multibeam,
                                self._main_data_model.descanner, self._main_data_model.mppc,
                                self._main_data_model.stage, self._main_data_model.ccd,
                                self._main_data_model.beamshift, self._main_data_model.det_rotator,
-                               calibrations=self.calibrations)
+                               calibrations=self.calibration.calibrations.value)
 
         f.add_done_callback(self._on_calibration_done)  # also handles cancelling and exceptions
         # connect the future to the progress bar and its label
-        self._future_connector = ProgressiveFutureConnector(f, self.gauge, self.label, full=False)
+        self._future_connector = ProgressiveFutureConnector(f, self.calibration.gauge, self.calibration.label, full=False)
 
     @call_in_wx_main
     def _on_calibration_done(self, future, _=None):
@@ -645,21 +624,21 @@ class FastEMCalibrationController:
         :param future: (ProgressiveFuture) Calibration future object, which can be cancelled.
         """
 
-        self._tab_data.is_calibrating.value = False
+        self.calibration.is_calibrating.value = False
         self._future_connector = None  # reset connection to the progress bar
 
         try:
             future.result()  # wait until the calibration is done
-            getattr(self, "is_" + self._calib_prefix + "_done").value = True  # allow acquiring ROAs
-            logging.debug("Finished calibration step %s successfully", self._calib_prefix)
+            self.calibration.is_done.value = True  # allow acquiring ROAs
+            logging.debug("Finished calibration step %s successfully", self.calibration.name.value)
             self._update_calibration_controls("Calibration successful")
         except CancelledError:
-            getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
-            logging.debug("Calibration step %s cancelled.", self._calib_prefix)
+            self.calibration.is_done.value = False  # don't enable ROA acquisition
+            logging.debug("Calibration step %s cancelled.", self.calibration.name.value)
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
         except Exception as ex:
-            getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
-            logging.exception("Calibration step %s failed with exception: %s.", self._calib_prefix, ex)
+            self.calibration.is_done.value = False  # don't enable ROA acquisition
+            logging.exception("Calibration step %s failed with exception: %s.", self.calibration.name.value, ex)
             self._update_calibration_controls("Calibration failed")
 
     @call_in_wx_main
@@ -676,40 +655,46 @@ class FastEMCalibrationController:
         :param text: (None or str) A (error) message to display instead of the estimated acquisition time.
         :param button_state: (bool) Enabled or disable button depending on state. Default is enabled.
         """
-        self.button.Enable(button_state)  # enable/disable button
+        self.calibration.button.Enable(button_state)  # enable/disable button
 
         # TODO disable ROC overlay, so it cannot be moved while calibrating!
 
-        if self._tab_data.is_calibrating.value:
-            self.button.SetLabel("Cancel")  # indicate canceling is possible
-            self.gauge.Show()  # show progress bar
+        if self.calibration.is_calibrating.value:
+            self.calibration.button.SetLabel("Cancel")  # indicate canceling is possible
+            self.calibration.gauge.Show()  # show progress bar
         else:
-            self.button.SetLabel("Calibrate")  # change button label back to ready for calibration
-            self.gauge.Hide()  # hide progress bar
+            self.calibration.button.SetLabel("Calibrate")  # change button label back to ready for calibration
+            self.calibration.gauge.Hide()  # hide progress bar
 
         if text is not None:
-            self.label.SetLabel(text)
+            self.calibration.label.SetLabel(text)
         else:
             duration = self.estimate_calibration_time()
-            self.label.SetLabel(units.readable_time(duration, full=False))
+            self.calibration.label.SetLabel(units.readable_time(duration, full=False))
 
-        self.button.Parent.Layout()
+        self.calibration.button.Parent.Layout()
 
     def estimate_calibration_time(self):
         """
         Calculate the estimated calibration time based on the calibrations that need to be run.
         :return (float): The estimated calibration time in seconds.
         """
-        return align.fastem.estimate_calibration_time(self.calibrations)
+        return align.fastem.estimate_calibration_time(self.calibration.calibrations.value)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_acquiring(self, mode):
         """
-        Enable or disable the button to start a calibration depending on whether
+        Enable or disable the calibration button, panel and overlay depending on whether
         a calibration or acquisition is already ongoing or not.
         :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
         """
-        self.button.Enable(not mode)
+        for calibration in self._tab_data.calibrations.values():
+            calibration.button.Enable(not mode)
+            if calibration.regions_controller:
+                calibration.panel.Enable(not mode)
+                for roc_ctrl in calibration.regions_controller.roc_ctrls.values():
+                    if roc_ctrl.overlay:
+                        roc_ctrl.overlay.active.value = not mode
 
 
 class FastEMScintillatorCalibrationController(FastEMCalibrationController):
@@ -717,21 +702,15 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
     Controls the selection panel for the individual scintillators, the calibration button to start the
     calibration and the process in the calibration panel in the FastEM acquisition tab.
     """
-    def __init__(self, tab_data, tab_panel, calib_prefix, calibrations):
+    def __init__(self, tab_data, calibration):
         """
         :param tab_data: (FastEMAcquisitionGUIData) The representation of the microscope GUI.
-        :param tab_panel: (wx.Frame) The calibration panel, which contains the selection buttons
-                          for the individual scintillators, the calibration button to start the
-                          calibration, and the gauge and the label of the gauge to indicate the progress.
-        :param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
-        :param calibrations: (list[Calibrations]) List of calibrations that should be run.
+        :param calibration: (FastEMCalibration) The object containing FastEM calibration related attributes.
         """
-        super().__init__(tab_data, tab_panel, calib_prefix, calibrations)
-
-        self.calibration_regions = getattr(tab_data, "regions_" + calib_prefix)
+        super().__init__(tab_data, calibration)
 
         # listen to calibration regions selected/deselected and update estimated calibration time accordingly
-        for roc in self.calibration_regions.value.values():
+        for roc in self.calibration.regions.value.values():
             roc.coordinates.subscribe(self._on_calibration_state)
 
         self._main_data_model.active_scintillators.subscribe(self._on_calibration_state)
@@ -743,46 +722,46 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         :param evt: (GenButtonEvent) Button triggered.
         """
         # check if cancelled
-        if self._tab_data.is_calibrating.value:
+        if self.calibration.is_calibrating.value:
             logging.debug("Calibration was cancelled.")
             align_fastem._executor.cancel()  # all the rest will be handled by on_alignment_done()
             return
 
         # Check if there are any calibration regions, if not: return because there is nothing to calibrate
         roc_available = any(
-            roc.coordinates.value != stream.UNDEFINED_ROI for k, roc in self.calibration_regions.value.items()
+            roc.coordinates.value != stream.UNDEFINED_ROI for roc in self.calibration.regions.value.values()
         )
 
         if not roc_available:
             logging.warning("No calibration regions selected, cannot run calibration.")
-            self._tab_data.is_calibrating.value = False
+            self.calibration.is_calibrating.value = False
             self._on_calibration_state()  # update the controls in the panel
             return
 
         # calibrate
-        self._tab_data.is_calibrating.unsubscribe(self._on_is_acquiring)
+        self.calibration.is_calibrating.unsubscribe(self._on_is_acquiring)
         # Briefly unsubscribe as don't need to know about this event (is_acquiring = True):
         # It  would disable the calibration button, but want to be able to still cancel calibration.
-        self._tab_data.is_calibrating.value = True  # make sure the acquire/tab buttons are disabled
-        self._tab_data.is_calibrating.subscribe(self._on_is_acquiring)
+        self.calibration.is_calibrating.value = True  # make sure the acquire/tab buttons are disabled
+        self.calibration.is_calibrating.subscribe(self._on_is_acquiring, init=True)
 
         self._on_calibration_state()  # update the controls in the panel
 
         futures = {}
         try:
-            for roc_num in sorted(self.calibration_regions.value.keys()):
+            for roc_num in sorted(self.calibration.regions.value.keys()):
                 # check if calibration region (ROC) on scintillator is set (undefined = not set)
-                roc = self.calibration_regions.value[roc_num]
+                roc = self.calibration.regions.value[roc_num]
                 if roc.coordinates.value != stream.UNDEFINED_ROI:
-                    logging.debug("Starting calibration step %s for ROC number %s", self._calib_prefix, roc_num)
+                    logging.debug("Starting calibration step %s for ROC number %s", self.calibration.name.value, roc_num)
 
                     # calculate the center position of the ROC (half field right/bottom
                     # compared to top/left corner in view)
                     xmin, ymin, _, _ = roc.coordinates.value
-                    field_size = (self._tab_data.main.multibeam.resolution.value[0]
-                                  * self._tab_data.main.multibeam.pixelSize.value[0],
-                                  self._tab_data.main.multibeam.resolution.value[1]
-                                  * self._tab_data.main.multibeam.pixelSize.value[1])
+                    field_size = (self._main_data_model.multibeam.resolution.value[0]
+                                  * self._main_data_model.multibeam.pixelSize.value[0],
+                                  self._main_data_model.multibeam.resolution.value[1]
+                                  * self._main_data_model.multibeam.pixelSize.value[1])
                     roc_center = (xmin + field_size[0] / 2, ymin + field_size[1] / 2)
 
                     # start calibration
@@ -790,8 +769,8 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
                                            self._main_data_model.descanner, self._main_data_model.mppc,
                                            self._main_data_model.stage, self._main_data_model.ccd,
                                            self._main_data_model.beamshift, self._main_data_model.det_rotator,
-                                           calibrations=self.calibrations, stage_pos=roc_center)
-                    t = align.fastem.estimate_calibration_time(self.calibrations)
+                                           calibrations=self.calibration.calibrations.value, stage_pos=roc_center)
+                    t = align.fastem.estimate_calibration_time(self.calibration.calibrations.value)
                     # also handles cancelling and exceptions
                     f.add_done_callback(partial(self._on_calibration_done, roc_num=roc_num))
                     futures[f] = t
@@ -800,7 +779,7 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
             # also handles cancelling and exceptions
             calib_future.add_done_callback(self._on_batch_calibrations_done)
             # connect the future to the progress bar and its label
-            self._future_connector = ProgressiveFutureConnector(calib_future, self.gauge, self.label, full=False)
+            self._future_connector = ProgressiveFutureConnector(calib_future, self.calibration.gauge, self.calibration.label, full=False)
         except Exception as ex:  # In case all calibrations failed to start
             logging.warning("Calibration failed with %s", ex)
             for f in futures.keys():
@@ -820,12 +799,12 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         try:
             config = future.result()  # wait until the calibration is done
             self.save_calibrated_settings(roc_num, config)  # save calibrated
-            logging.debug("Finished calibration step %s successfully for ROC number %s", self._calib_prefix, roc_num)
+            logging.debug("Finished calibration step %s successfully for ROC number %s", self.calibration.name.value, roc_num)
         except CancelledError:
             pass  # nothing to do here, callback of batch future takes care of everything
         except Exception as ex:
             logging.exception("Calibration step %s failed for ROC number %s with exception: %s.",
-                              self._calib_prefix, roc_num, ex)  # callback of batch future takes care of the rest
+                              self.calibration.name.value, roc_num, ex)  # callback of batch future takes care of the rest
 
     def _on_batch_calibrations_done(self, batch_future):
         """
@@ -833,21 +812,21 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         :param batch_future: (ProgressiveFuture) Calibration future object, which can be cancelled.
         """
 
-        self._tab_data.is_calibrating.value = False
+        self.calibration.is_calibrating.value = False
         self._future_connector = None  # reset connection to the progress bar
 
         try:
             batch_future.result()  # wait until the calibration is done
-            getattr(self, "is_" + self._calib_prefix + "_done").value = True  # allow acquiring ROAs
-            logging.debug("Finished calibration step %s successfully.", self._calib_prefix)
+            self.calibration.is_done.value = True  # allow acquiring ROAs
+            logging.debug("Finished calibration step %s successfully.", self.calibration.name.value)
             self._update_calibration_controls("Calibration successful")
         except CancelledError:
-            getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
-            logging.debug("Calibration step %s cancelled.", self._calib_prefix)
+            self.calibration.is_done.value = False  # don't enable ROA acquisition
+            logging.debug("Calibration step %s cancelled.", self.calibration.name.value)
             self._update_calibration_controls("Calibration cancelled")  # update label to indicate cancelling
         except Exception as ex:
-            getattr(self, "is_" + self._calib_prefix + "_done").value = False  # don't enable ROA acquisition
-            logging.exception("Calibration step %s failed with exception: %s.", self._calib_prefix, ex)
+            self.calibration.is_done.value = False  # don't enable ROA acquisition
+            logging.exception("Calibration step %s failed with exception: %s.", self.calibration.name.value, ex)
             self._update_calibration_controls("Calibration failed")
 
     @call_in_wx_main
@@ -862,16 +841,18 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         else:
             # check if at least one ROC was selected (undefined = not set)
             if any(roc.coordinates.value != stream.UNDEFINED_ROI
-                   for roc in self.calibration_regions.value.values()):
+                   for roc in self.calibration.regions.value.values()):
                 self._update_calibration_controls()
             else:
                 self._update_calibration_controls("No calibration region selected.", False)
 
-    def save_calibrated_settings(self, _):
+    def save_calibrated_settings(self, roc_num, config):
         """
         Save the calibrated settings on the region of calibration (ROC) object.
+        :param roc_num: (int) The number of the region of calibration.
+        :param config: (nested dict) Dictionary containing various calibrated settings.
         """
-        pass
+        self.calibration.regions.value[roc_num].parameters.update(config)
 
     def estimate_calibration_time(self):
         """
@@ -880,69 +861,9 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
         :return (float): The estimated calibration time in seconds.
         """
         # get number of rocs set
-        nroc = len([roc for roc in self.calibration_regions.value.values()
+        nroc = len([roc for roc in self.calibration.regions.value.values()
                    if roc.coordinates.value != stream.UNDEFINED_ROI])  # (undefined = not set)
 
         # TODO take dwell time into account during calibration?
 
-        return nroc * align.fastem.estimate_calibration_time(self.calibrations)
-
-
-class FastEMCalibration2Controller(FastEMScintillatorCalibrationController):
-    """
-    Controller for calibration step 2 (dark offset, digital gain calibration).
-    Controls the selection panel for the individual scintillators, the calibration button to start the
-    calibration and the process in the calibration panel in the FastEM acquisition tab.
-    """
-    def __init__(self, tab_data, tab_panel, calib_prefix, calibrations):
-        """
-        :param tab_data: (FastEMAcquisitionGUIData) The representation of the microscope GUI.
-        :param tab_panel: (wx.Frame) The calibration panel, which contains the selection buttons
-                          for the individual scintillators, the calibration button to start the
-                          calibration, and the gauge and the label of the gauge to indicate the progress.
-        :param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
-        :param calibrations: (list[Calibrations]) List of calibrations that should be run.
-        """
-        super().__init__(tab_data, tab_panel, calib_prefix, calibrations)
-
-    def save_calibrated_settings(self, roc_num, config):
-        """
-        Save the calibrated settings on the region of calibration (ROC) object.
-        :param roc_num: (int) The number of the region of calibration.
-        :param config: (nested dict) Dictionary containing various calibrated settings.
-        """
-        # FIXME this now happens outside of future, so it could be that next calibration is already running
-        #  -> still save to do? Or pass the self._tab_data.calibration_regions to the calibration manager?
-        dark_offset = config["mppc"]["cellDarkOffset"]
-        digital_gain = config["mppc"]["cellDigitalGain"]
-        self.calibration_regions.value[roc_num].parameters = {"cellDarkOffset": dark_offset,
-                                                              "cellDigitalGain": digital_gain}
-
-
-class FastEMCalibration3Controller(FastEMScintillatorCalibrationController):
-    """
-    Controller for calibration step 3 (field corrections).
-    Controls the selection panel for the individual scintillators, the calibration button to start the
-    calibration and the process in the calibration panel in the FastEM acquisition tab.
-    """
-    def __init__(self, tab_data, tab_panel, calib_prefix, calibrations):
-        """
-        :param tab_data: (FastEMAcquisitionGUIData) The representation of the microscope GUI.
-        :param tab_panel: (wx.Frame) The calibration panel, which contains the selection buttons
-                          for the individual scintillators, the calibration button to start the
-                          calibration, and the gauge and the label of the gauge to indicate the progress.
-        :param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
-        :param calibrations: (list[Calibrations]) List of calibrations that should be run.
-        """
-        super().__init__(tab_data, tab_panel, calib_prefix, calibrations)
-
-    def save_calibrated_settings(self, roc_num, config):
-        """
-        Save the calibrated settings on the region of calibration (ROC) object.
-        :param roc_num: (int) The number of the region of calibration.
-        :param config: (nested dict) Dictionary containing various calibrated settings.
-        """
-        # FIXME this now happens outside of future, so it could be that next calibration is already running
-        #  -> still save to do? Or pass the self._tab_data.calibration_regions to the calibration manager?
-        translation = config["mppc"]["cellTranslation"]
-        self.calibration_regions.value[roc_num].parameters = {"cellTranslation": translation}
+        return nroc * align.fastem.estimate_calibration_time(self.calibration.calibrations.value)

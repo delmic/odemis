@@ -30,10 +30,10 @@ import logging
 
 import wx
 
-import odemis.acq.fastem
+from odemis.acq.fastem import CALIBRATION_2, CALIBRATION_3, FastEMROA
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
-from odemis.gui import conf, FG_COLOUR_WARNING
+from odemis.gui import conf, FG_COLOUR_RADIO_INACTIVE, FG_COLOUR_BUTTON
 from odemis.gui.comp.stream import FastEMProjectPanel, FastEMROAPanel, FastEMCalibrationPanel
 from odemis.gui.util import call_in_wx_main
 from odemis.util.filename import make_unique_name
@@ -133,8 +133,8 @@ class FastEMProjectController(object):
         self._tab_data = tab_data
         self._project_bar = project_list
         self._viewport = viewport
-        self.regions_calib_2 = tab_data.regions_calib_2
-        self.regions_calib_3 = tab_data.regions_calib_3
+        self.regions_calib_2 = tab_data.calibrations[CALIBRATION_2].regions
+        self.regions_calib_3 = tab_data.calibrations[CALIBRATION_3].regions
 
         self.roa_ctrls = {}  # dict int --> FastEMROAController
         self.colour = colour
@@ -283,10 +283,10 @@ class FastEMROAController(object):
         # Read the overlap from the acquisition configuration
         acqui_conf = conf.get_acqui_conf()
 
-        self.model = odemis.acq.fastem.FastEMROA(name, acqstream.UNDEFINED_ROI, roc_2, roc_3,
-                                                 self._tab_data.main.asm, self._tab_data.main.multibeam,
-                                                 self._tab_data.main.descanner, self._tab_data.main.mppc,
-                                                 acqui_conf.overlap)
+        self.model = FastEMROA(name, acqstream.UNDEFINED_ROI, roc_2, roc_3,
+                               self._tab_data.main.asm, self._tab_data.main.multibeam,
+                               self._tab_data.main.descanner, self._tab_data.main.mppc,
+                               acqui_conf.overlap)
         self.model.coordinates.subscribe(self._on_coordinates)
         self.model.roc_2.subscribe(self._on_roc)
         self.model.roc_3.subscribe(self._on_roc)
@@ -340,7 +340,7 @@ class FastEMROAController(object):
     # already running in main GUI thread as it receives event from GUI
     def _on_combobox(self, _):
         num = self.panel.calibration_ctrl.GetSelection() + 1
-        self.model.roc_2.value = self._tab_data.regions_calib_2.value[num]
+        self.model.roc_2.value = self._tab_data.calibrations[CALIBRATION_2].regions.value[num]
         logging.debug("ROA calibration changed to %s.", self.model.roc_2.value.name.value)
 
     # already running in main GUI thread as it receives event from GUI
@@ -369,7 +369,7 @@ class FastEMROCController(object):
     Controller for a single region of calibration (ROC).
     """
 
-    def __init__(self, number, tab_data, viewport, calib_prefix):
+    def __init__(self, main_data, viewport, calib_model):
         """
         :param number: (int) The number of the calibration region.
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
@@ -377,10 +377,9 @@ class FastEMROCController(object):
         param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
         """
         self._viewport = viewport
-        self._tab_data = tab_data
-        self.calib_prefix = calib_prefix
-        scintillator_position = self._tab_data.main.scintillator_positions[number]
-        scintillator_size = self._tab_data.main.scintillator_sizes[number]
+        self._main_data_model = main_data
+        scintillator_position = self._main_data_model.scintillator_positions[int(calib_model.name.value)]
+        scintillator_size = self._main_data_model.scintillator_sizes[int(calib_model.name.value)]
         self._sample_bbox = (
             scintillator_position[0] - scintillator_size[0] / 2,
             scintillator_position[1] - scintillator_size[1] / 2,
@@ -389,8 +388,7 @@ class FastEMROCController(object):
         )  # (minx, miny, maxx, maxy) [m]
 
         # Get ROC model (exists already in tab data) and change coordinates
-        calibration_regions = getattr(tab_data, "regions_" + calib_prefix)
-        self.calib_model = calibration_regions.value[number]
+        self.calib_model = calib_model
 
         self.overlay = None
 
@@ -403,8 +401,8 @@ class FastEMROCController(object):
         logging.debug("Zooming in on calibration region %s.", self.calib_model.name.value)
         cnvs = self._viewport.canvas
         xmin, ymin, xmax, ymax = self.calib_model.coordinates.value
-        size = (self._tab_data.main.multibeam.resolution.value[0] * self._tab_data.main.multibeam.pixelSize.value[0],
-                self._tab_data.main.multibeam.resolution.value[1] * self._tab_data.main.multibeam.pixelSize.value[1])
+        size = (self._main_data_model.multibeam.resolution.value[0] * self._main_data_model.multibeam.pixelSize.value[0],
+                self._main_data_model.multibeam.resolution.value[1] * self._main_data_model.multibeam.pixelSize.value[1])
         # zoom in on ROC; add some space around ROC (factor 5 defines zoom level)
         # wx.callAfter: then don't need decorator to run it in main GUI thread
         wx.CallAfter(cnvs.fit_to_bbox, [xmin - 5 * size[0], ymin - 5 * size[1], xmax + 5 * size[0], ymax + 5 * size[1]])
@@ -414,17 +412,11 @@ class FastEMROCController(object):
         Create the calibration region (ROC) overlay.
         """
         if self.overlay is None:
-            if self.calib_prefix == "calib_3":
-                self.overlay = self._viewport.canvas.\
-                    add_calibration_overlay(self.calib_model.coordinates,
-                                            self.calib_model.name.value,
-                                            self._sample_bbox,
-                                            colour="#00ff00")  # green
-            else:  # use default color (orange)
-                self.overlay = self._viewport.\
-                    canvas.add_calibration_overlay(self.calib_model.coordinates,
-                                                   self.calib_model.name.value,
-                                                   self._sample_bbox)
+            self.overlay = self._viewport.canvas.\
+                add_calibration_overlay(self.calib_model.coordinates,
+                                        self.calib_model.name.value,
+                                        self._sample_bbox,
+                                        colour=self.calib_model.colour)
 
     def remove_calibration_overlay(self):
         """
@@ -440,35 +432,31 @@ class FastEMCalibrationRegionsController(object):
     Listens to the calibration buttons and creates the FastEMROCControllers accordingly.
     """
 
-    def __init__(self, tab_data, calibration_panel, viewport, calib_prefix):
+    def __init__(self, tab_data, viewport, calibration):
         """
         :param tab_data (FastEMAcquisitionGUIData): The tab data model.
-        :param calibration_panel (FastEMCalibrationPanelHeader): The main calibration panel including the 9 regions
-                of calibration (ROC) buttons, the calibrate button, the gauge and the label.
         :param viewport (FastEMAcquisitionViewport): The acquisition view.
-        :param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
+        :param calibration: (FastEMCalibration) The object containing FastEM calibration related attributes.
         """
-        self._tab_data = tab_data
-        self._data_model = tab_data.main
-        self._calibration_panel = calibration_panel
-        self._viewport = viewport
-        self._calib_prefix = calib_prefix
+        self._main_data_model = tab_data.main
+        self.calibration = calibration
 
-        self.panel = FastEMCalibrationPanel(calibration_panel, tab_data.main.scintillator_layout)
-        calibration_panel.add_calibration_panel(self.panel)
+        self.panel = FastEMCalibrationPanel(self.calibration.panel, self._main_data_model.scintillator_layout)
+        self.calibration.panel.add_calibration_panel(self.panel)
 
-        self.roc_ctrls = {}
         # Bind toggle button and create calibration controller for each scintillator
-        for btn, num in self.panel.buttons.items():
+        for btn in self.panel.buttons.keys():
             btn.Bind(wx.EVT_TOGGLEBUTTON, self._on_button)
             btn.Enable(False)  # disabled by default, need to select scintillator in chamber tab first
-            self.roc_ctrls[num] = FastEMROCController(num, tab_data, viewport, calib_prefix)
+
+        # create calibration controller for each scintillator
+        self.roc_ctrls = {}
+        for roc_num, roc in self.calibration.regions.value.items():
+            self.roc_ctrls[roc_num] = FastEMROCController(self._main_data_model, viewport, roc)
 
         # Only enable buttons for scintillators which have been selected in the chamber tab
-        tab_data.main.active_scintillators.subscribe(self._on_active_scintillators)
+        self._main_data_model.active_scintillators.subscribe(self._on_active_scintillators)
 
-        tab_data.main.is_acquiring.subscribe(self._on_is_calibrating)  # enable/disable calib button during acquisition
-        tab_data.is_calibrating.subscribe(self._on_is_calibrating)  # enable/disable calib button during calibration
 
     # already running in main GUI thread as it receives event from GUI
     def _on_button(self, evt):
@@ -489,9 +477,9 @@ class FastEMCalibrationRegionsController(object):
             # By default, the calibration region is in the center of the scintillator.
             # It is a single field image and thus its size is defined by the
             # multibeam resolution and pixel size.
-            pos = self._data_model.scintillator_positions[num]
-            sz = (self._data_model.multibeam.resolution.value[0] * self._data_model.multibeam.pixelSize.value[0],
-                  self._data_model.multibeam.resolution.value[1] * self._data_model.multibeam.pixelSize.value[1])
+            pos = self._main_data_model.scintillator_positions[num]
+            sz = (self._main_data_model.multibeam.resolution.value[0] * self._main_data_model.multibeam.pixelSize.value[0],
+                  self._main_data_model.multibeam.resolution.value[1] * self._main_data_model.multibeam.pixelSize.value[1])
 
             xmin = pos[0] - 0.5 * sz[0]
             ymin = pos[1] + 0.5 * sz[1]
@@ -509,32 +497,29 @@ class FastEMCalibrationRegionsController(object):
         self._update_buttons()
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def _update_buttons(self, active_scintillators=None):
+    def _update_buttons(self, _=None):
         """
         Checks that the region of calibration (ROC) buttons are up-to-date (synchronize model with GUI).
         Whenever the list of active scintillators changes and or a ROC is selected/deselected, the
         buttons are updated/enabled/disabled accordingly.
         :param active_scintillators: (list of int) A list of active (loaded) scintillators as indicated in the chamber tab.
         """
-        if active_scintillators is None:
-            active_scintillators = self._tab_data.main.active_scintillators.value
+        active_scintillators = self._main_data_model.active_scintillators.value
 
         for b, num in self.panel.buttons.items():
             if num in active_scintillators:
                 b.Enable(True)  # always enable the button when the scintillator is active
-                if self.roc_ctrls[num].overlay:
+                roc_ctrl = self.roc_ctrls[num]
+                if roc_ctrl.overlay:
                     b.SetLabel("OK")
-                    if self._calib_prefix == "calib_2":
-                        b.SetForegroundColour(FG_COLOUR_WARNING)
-                    else:
-                        b.SetForegroundColour(wx.GREEN)  # default to green
+                    b.SetForegroundColour(roc_ctrl.calib_model.colour)
                 else:
                     b.SetLabel("?")
-                    b.SetForegroundColour(odemis.gui.FG_COLOUR_RADIO_INACTIVE)
+                    b.SetForegroundColour(FG_COLOUR_RADIO_INACTIVE)
             else:  # scintillator unselected
                 b.Enable(False)
                 b.SetLabel("?")
-                b.SetForegroundColour(odemis.gui.FG_COLOUR_BUTTON)
+                b.SetForegroundColour(FG_COLOUR_BUTTON)
 
     def _on_active_scintillators(self, scintillators):
         """
@@ -551,16 +536,5 @@ class FastEMCalibrationRegionsController(object):
                 roc_ctrl.remove_calibration_overlay()
 
         # update ROC buttons
-        self._update_buttons(scintillators)
+        self._update_buttons()
 
-    @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def _on_is_calibrating(self, mode):
-        """
-        Enable or disable the calibration panel depending on whether
-        a calibration or acquisition is already ongoing or not.
-        :param mode: (bool) Whether the system is currently acquiring/calibrating or not acquiring/calibrating.
-        """
-        self._calibration_panel.Enable(not mode)
-        for num in self.panel.buttons.values():
-            if self.roc_ctrls[num].overlay:
-                self.roc_ctrls[num].overlay.active.value = not mode
