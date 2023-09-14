@@ -288,8 +288,6 @@ class ProgressiveMove(model.ProgressiveFuture):
             self.set_exception(ex)
             return
 
-        # wait just a little before setting the result to prevent a connected gauge from finishing too early
-        time.sleep(0.5)
         self.set_result(f.result())
 
 

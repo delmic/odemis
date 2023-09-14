@@ -6334,8 +6334,9 @@ class Sparc2AlignTab(Tab):
             # DEACTIVE position move it to the default (DEACTIVE) position
             if ((not almost_equal(spec_switch_xpos, spec_switch_xmd_deactive)) and
                     (not almost_equal(spec_switch_xpos, spec_switch_xmd_active))):
+                # execute a move without tracking using a progress bar so
+                # no update to the GUI when the alignment tab is hidden
                 self._spec_switch_f = main.spec_switch.moveAbs({"x": spec_switch_xmd_deactive})
-                # self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
 
             # future and progress connector for tracking the progress of the gauge when moving
             self._pfc_spec_switch = None

@@ -31,7 +31,6 @@ from odemis.acq import path, stream
 from odemis.acq.move import (FM_IMAGING, LOADING, MicroscopePostureManager)
 from odemis.acq.path import ACQ_QUALITY_BEST, ACQ_QUALITY_FAST
 from odemis.util import testing
-from odemis.util.driver import ProgressiveMove
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -1255,10 +1254,6 @@ class Sparc2SpecSwitchTestCase(unittest.TestCase):
         cls.light_align = model.getComponent(role="light-aligner")
         cls.opt_mngr = path.OpticalPathManager(cls.microscope)
 
-        # add spec-switch attribute to light-in-align mode just for testing. normally it is left out of the
-        # modes because we do not want to automatically switch it back and forth while switching modes
-        # cls.opt_mngr._modes["light-in-align"][1].update({'spec-switch': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE}})
-
     @classmethod
     def tearDownClass(cls):
         del cls.opt_mngr  # garbage collect it
@@ -1273,8 +1268,8 @@ class Sparc2SpecSwitchTestCase(unittest.TestCase):
         spec_sw_md = self.spec_switch.getMetadata()
 
         # set the spec-switch mirror to the default retracted position (FAV_POS_DEACTIVE)
-        prog_f = ProgressiveMove(self.spec_switch, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
-        prog_f._running_subf.result()
+        f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_DEACTIVE])
+        f.result()
         testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
 
         # test if switching to light-in-align mode works properly
@@ -1289,8 +1284,8 @@ class Sparc2SpecSwitchTestCase(unittest.TestCase):
         testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
 
         # test if the spec-switch mirror can be moved to the engage position (FAV_POS_ACTIVE)
-        prog_f = ProgressiveMove(self.spec_switch, spec_sw_md[model.MD_FAV_POS_ACTIVE])
-        prog_f._running_subf.result()
+        f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_ACTIVE])
+        f.result()
         testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_ACTIVE])
 
         # call light-in-align mode again and check if the spec-switch mirror is not moved afterward
@@ -1298,12 +1293,12 @@ class Sparc2SpecSwitchTestCase(unittest.TestCase):
         testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_ACTIVE])
 
         # test if the movement of the spec-switch can be cancelled
-        prog_f = ProgressiveMove(self.spec_switch, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
+        f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_DEACTIVE])
         time.sleep(3)
-        prog_f.cancel()
+        f.cancel()
 
         with self.assertRaises(CancelledError):
-            prog_f.result()
+            f.result()
 
         # check if the mirror is somewhere inbetween engaged or retracted state
         testing.assert_pos_not_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
