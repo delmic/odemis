@@ -2418,7 +2418,7 @@ class ChamberTab(Tab):
                 moves.append((mirror.reference, {a}))
             btn_text = "PARKING MIRROR"
             # position doesn't update during referencing, so just pulse
-            self._pulse_timer.Start(250.0)  # 4 Hz
+            self._pulse_timer.Start(250)  # 4 Hz
         else:
             # => Park
             # Use standard move to show the progress of the mirror position, but
