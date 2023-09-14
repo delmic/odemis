@@ -48,4 +48,4 @@ def show_message(parent, title, message=None, timeout=3.0, level=logging.INFO):
         message = " "
 
     m = NotificationMessage(title, message, parent=parent, flags=flags)
-    m.Show(timeout)
+    m.Show(int(timeout))
