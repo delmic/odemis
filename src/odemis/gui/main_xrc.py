@@ -7450,7 +7450,7 @@ def __init_resources():
                           <object class="wxGridBagSizer">
                             <cols>2</cols>
                             <rows>3</rows>
-                            <hgap>200</hgap>
+                            <hgap>160</hgap>
                             <object class="sizeritem">
                               <object class="wxStaticText" name="lbl_optical_autofocus">
                                 <label>Optical Autofocus</label>
