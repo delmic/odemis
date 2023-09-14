@@ -3323,7 +3323,8 @@ class CryoAcquiredStreamsController(StreamBarController):
             self._stream_bar.remove_stream_panel(sc.stream_panel)
             if hasattr(v, "removeStream"):
                 v.removeStream(sc.stream)
-            self.stream_controllers.remove(sc)
+            if sc in self.stream_controllers:
+                self.stream_controllers.remove(sc)
 
         self._stream_bar.fit_streams()
 
