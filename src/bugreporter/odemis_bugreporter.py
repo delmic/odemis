@@ -134,13 +134,13 @@ def parse_config(configfile):
 
     config = DEFAULT_CONFIG.copy()
     try:
-        f = open(configfile)
-        for line in shlex.split(f, comments=True):
-            tokens = line.split("=")
-            if len(tokens) != 2:
-                logging.warning("Can't parse '%s', skipping the line", line)
-            else:
-                _add_var_config(config, tokens[0], tokens[1])
+        with open(configfile) as f:
+            for line in shlex.split(f, comments=True):
+                tokens = line.split("=")
+                if len(tokens) != 2:
+                    logging.warning("Can't parse '%s', skipping the line", line)
+                else:
+                    _add_var_config(config, tokens[0], tokens[1])
     except Exception:
         logging.exception("Failed to parse the config file %s", configfile)
 
