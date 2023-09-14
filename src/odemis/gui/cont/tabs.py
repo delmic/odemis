@@ -5128,7 +5128,7 @@ class EnzelAlignTab(Tab):
 
         # Destroy the old stream controllers  # TODO This is a temporary fix and it could be handled better
         for stream_controller in self._stream_controllers:
-            stream_controller._on_stream_panel_destroy(None)
+            stream_controller._on_stream_panel_destroy()
 
         # Keep a reference to the stream controllers so the garbage collector does not delete them.
         self._stream_controllers = []
