@@ -21,16 +21,23 @@ IMAGEDIR       = .
 
 .PHONY: help clean html dirhtml singlehtml pickle json htmlhelp qthelp devhelp epub latex latexpdf text man changes linkcheck doctest gettext
 
+# Inkscape 1.0+ (Ubuntu 22.04+) has a totally new command-line format
+INK_VER := $(shell inkscape --version 2>/dev/null | grep -oE "Inkscape [0-9]*\.")
+
 # Pattern rule for converting SVG to PDF
+ifeq "$(INK_VER)" "Inkscape 0."
 %.pdf : %.svg
 	inkscape -z -f $< -A $@
+else  # Inkscape 1. (or more)
+%.pdf : %.svg
+	inkscape $< -o $@
+endif
 
 # Build a list of SVG files to convert to PDFs
 PDFs := $(patsubst %.svg,%.pdf,$(wildcard $(IMAGEDIR)/*.svg))
 
 # Make a rule to build the PDFs
 images: $(PDFs)
-
 
 help:
 	@echo "Please use \`make <target>' where <target> is one of"
