@@ -501,8 +501,10 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
 
             if target in (GRID_1, GRID_2):
                 # The current mode doesn't change. Only X/Y/Z should move (typically
-                # only X/Y).
+                # only X/Y). In the same mode, GRID 1/2, the rx/rz values should not change
+                # TODO: probably a better way would be to forbid grid switching if not in SEM/FM imaging posture
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
             elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
