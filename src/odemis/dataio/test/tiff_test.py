@@ -524,7 +524,7 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(md_dict["slices"], str(num_slices))
         self.assertEqual(md_dict["frames"], str(num_frames))
         self.assertEqual(md_dict["hyperstack"], "true")
-        self.assertEqual(md_dict["unit"], "m")
+        self.assertEqual(md_dict["unit"], "cm")
 
     def testImageJMetadata(self):
         """

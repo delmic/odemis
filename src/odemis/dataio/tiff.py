@@ -1867,7 +1867,7 @@ def extract_imagej_metadata(ldata) -> str:
         "slices": res[-3],
         "frames": res[-4],
         "hyperstack": "true",
-        "unit": 'm'
+        "unit": 'cm'
     }
     imagej_description = "\n".join(f"{k}={md[k]}" for k in md.keys()) + "\n"
     return imagej_description
