@@ -1843,22 +1843,22 @@ def extract_imagej_metadata(ldata) -> str:
     :param ldata: (list of DataArray) list of 2D data of int or float. Should have at least one array
     :return (str): metadata compatible with ImageJ
     """
-    num_channels = 0
-
     # Check the CTZYX dimensions of the first DataArray
     size = ldata[0].shape
     # Pad the shape with 1s to always get 5 dimensions
     res = (1,) * (5 - len(size)) + size
+    num_channels = res[-5]
 
     # Add to "channels" if other DataArray(s) have the same TZYX dimension.
-    for data in ldata:
+    for data in ldata[1:]:
         next_shape = data.shape
         next_res = (1,) * (5 - len(next_shape)) + next_shape
-        if next_res == res:
-            num_channels += next_res[-5]
+        if next_res == res and res[-5] == 1:
+            num_channels += 1
         else:
-            # Tiff data is not compatible with ImageJ
+            # Rest of Tiff data is not compatible with ImageJ
             break
+
     # Define relevant ImageJ identifiers
     md = {
         "ImageJ": "1.11a",
