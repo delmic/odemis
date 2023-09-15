@@ -1847,6 +1847,7 @@ def extract_imagej_metadata(ldata) -> str:
 
     # Check the CTZYX dimensions of the first DataArray
     size = ldata[0].shape
+    # Pad the shape with 1s to always get 5 dimensions
     res = (1,) * (5 - len(size)) + size
 
     # Add to "channels" if other DataArray(s) have the same TZYX dimension.
@@ -1854,15 +1855,10 @@ def extract_imagej_metadata(ldata) -> str:
         next_shape = data.shape
         next_res = (1,) * (5 - len(next_shape)) + next_shape
         if next_res == res:
-            if len(data.shape) == 5:
-                num_channels += data.shape[-5]
-            else:
-                num_channels += 1
+            num_channels += next_res[-5]
         else:
             # Tiff data is not compatible with ImageJ
             break
-
-
     # Define relevant ImageJ identifiers
     md = {
         "ImageJ": "1.11a",
@@ -2402,30 +2398,25 @@ class AcquisitionDataTIFF(AcquisitionData):
         # It's OME TIFF, if it has a valid ome-tiff XML in the first T.TIFFTAG_IMAGEDESCRIPTION
         tfile.SetDirectory(0)
         desc = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
-        if desc:
-            desc_lower = desc.lower()
 
-        if (desc and ((b"<?xml" in desc_lower and b"<ome " in desc_lower and not desc_lower.startswith(b"<ome ")) or
-                desc_lower[:4] == b'<ome')):
-            try:
-                pattern = rb'<OME.*?>(.*?)</OME>'
-                match = re.search(pattern, desc, re.DOTALL)
+        try:
+            pattern = rb'<ome.+>(.+)</ome>'
+            match = re.search(pattern, desc, re.DOTALL | re.IGNORECASE) if desc else None
 
-                if match:
-                    desc_extract = match.group()
-                    desc_extract = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                                  b"", desc_extract, count=1)
-                    desc_extract = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
-                                  b"", desc_extract)
+            if match:
+                desc_extract = match.group()
+                desc_extract = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                              b"", desc_extract, count=1)
+                desc_extract = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
+                              b"", desc_extract)
                 root = ET.fromstring(desc_extract)
 
                 if root.tag.lower() == "ome":
                     return root
                 raise LookupError("XML data is not OME: %s" % (desc,))
-            except ET.ParseError as ex:
-                raise LookupError("OME XML couldn't be parsed: %s" % (ex,))
+        except ET.ParseError as ex:
+            raise LookupError("OME XML couldn't be parsed: %s" % (ex,))
 
-        raise LookupError("No OME XML data found")
 
     @staticmethod
     def _createDataArrayShadows(tfile, dir_index, lock):
