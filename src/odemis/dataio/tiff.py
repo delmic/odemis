@@ -2400,7 +2400,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         desc = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
 
         try:
-            pattern = rb'<ome.+>(.+)</ome>'
+            pattern = rb'<ome.+>.+</ome>'
             match = re.search(pattern, desc, re.DOTALL | re.IGNORECASE) if desc else None
 
             if match:
