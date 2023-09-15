@@ -2417,6 +2417,7 @@ class AcquisitionDataTIFF(AcquisitionData):
         except ET.ParseError as ex:
             raise LookupError("OME XML couldn't be parsed: %s" % (ex,))
 
+        raise LookupError("No OME XML data found")
 
     @staticmethod
     def _createDataArrayShadows(tfile, dir_index, lock):
