@@ -1607,6 +1607,10 @@ class Scanner(model.Emitter):
 
     def _setDwellTime(self, dwell_time):
         self.parent.set_dwell_time(dwell_time)
+        # Cannot set the dwell_time on the parent if the scan mode is 'external'
+        # hence return the requested value itself
+        if self._isExternal():
+            return dwell_time
         return self.parent.get_dwell_time()
 
     def _setVoltage(self, voltage):
@@ -1691,6 +1695,12 @@ class Scanner(model.Emitter):
         """
         scan_mode = "external" if external else "full_frame"
         self.parent.set_scan_mode(scan_mode)
+        # The dwellTime VA setter can only reflect changes on the SEM server side (parent)
+        # after the external VA is set to False i.e. 'full_frame'
+        if not external:
+            if self.dwellTime.value != self.parent.get_dwell_time():
+                # Set the VA value again to reflect changes on the parent
+                self.dwellTime.value = self.dwellTime.value
         return external
 
     def prepareForScan(self):
