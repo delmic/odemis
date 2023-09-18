@@ -1791,13 +1791,17 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
         # Only get the corresponding data for this file
         ldata = sorted_x[file_index][1]
 
+    # Extract ImageJ compatible Image description
+    imagej_description = extract_imagej_metadata(ldata)
+
     # TODO: to keep the code simple, we should just first convert the DAs into
     # 2D or 3D DAs and put it in an dict original DA -> DAs
     for data in ldata:
         # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
         tags = _convertToTiffTag(data.metadata)
-        if ometxt: # save OME tags if not yet done
-            f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, ometxt)
+        if ometxt:  # save OME tags if not yet done
+            # If thumbnail is present, the tiff file is not compatible with ImageJ
+            f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, imagej_description.encode('ascii') + ometxt)
             ometxt = None
 
         # if metadata indicates YXC format just handle it as RGB
@@ -1827,6 +1831,42 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
             else:
                 c = compression
             write_image(f, data[i], write_rgb=write_rgb, compression=c, pyramid=pyramid)
+
+
+def extract_imagej_metadata(ldata) -> str:
+    """
+    Create ImageJ compatible metadata that is added to the ImageDescription identifier for the tiff files.
+    :param ldata: (list of DataArray) list of 2D data of int or float. Should have at least one array
+    :return (str): metadata compatible with ImageJ
+    """
+    # Check the CTZYX dimensions of the first DataArray
+    size = ldata[0].shape
+    # Pad the shape with 1s to always get 5 dimensions
+    res = (1,) * (5 - len(size)) + size
+    num_channels = res[-5]
+
+    # Add to "channels" if other DataArray(s) have the same TZYX dimension.
+    for data in ldata[1:]:
+        next_shape = data.shape
+        next_res = (1,) * (5 - len(next_shape)) + next_shape
+        if next_res == res and res[-5] == 1:
+            num_channels += 1
+        else:
+            # Rest of Tiff data is not compatible with ImageJ
+            break
+
+    # Define relevant ImageJ identifiers
+    md = {
+        "ImageJ": "1.11a",
+        "images": num_channels * res[-3] * res[-4],
+        "channels": num_channels,
+        "slices": res[-3],
+        "frames": res[-4],
+        "hyperstack": "true",
+        "unit": 'cm'
+    }
+    imagej_description = "\n".join(f"{k}={md[k]}" for k in md.keys()) + "\n"
+    return imagej_description
 
 
 def _genResizedShapes(data):
@@ -2355,19 +2395,23 @@ class AcquisitionDataTIFF(AcquisitionData):
         tfile.SetDirectory(0)
         desc = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
 
-        if (desc and ((desc.startswith(b"<?xml") and b"<ome " in desc.lower()) or
-                      desc[:4].lower() == b'<ome')):
-            try:
-                desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
-                              b"", desc, count=1)
-                desc = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
-                              b"", desc)
-                root = ET.fromstring(desc)
+        try:
+            pattern = rb'<ome.+>.+</ome>'
+            match = re.search(pattern, desc, re.DOTALL | re.IGNORECASE) if desc else None
+
+            if match:
+                desc_extract = match.group()
+                desc_extract = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
+                              b"", desc_extract, count=1)
+                desc_extract = re.sub(b'xmlns="http://www.openmicroscopy.org/Schemas/ROI/....-.."',
+                              b"", desc_extract)
+                root = ET.fromstring(desc_extract)
+
                 if root.tag.lower() == "ome":
                     return root
                 raise LookupError("XML data is not OME: %s" % (desc,))
-            except ET.ParseError as ex:
-                raise LookupError("OME XML couldn't be parsed: %s" % (ex,))
+        except ET.ParseError as ex:
+            raise LookupError("OME XML couldn't be parsed: %s" % (ex,))
 
         raise LookupError("No OME XML data found")
 

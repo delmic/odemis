@@ -459,8 +459,13 @@ class TestTiffIO(unittest.TestCase):
 
         # check OME-TIFF metadata
         omemd = imo.GetField("ImageDescription").decode('utf-8')
-        self.assertTrue(omemd.startswith('<?xml') or omemd[:4].lower() == '<ome')
+        self.assertTrue(("<?xml" in omemd) or (omemd[:4].lower() == "<ome"))
 
+        pattern = r'<ome.+>(.+)</ome>'
+        match = re.search(pattern, omemd, re.DOTALL | re.IGNORECASE)
+
+        if match:
+            omemd = match.group()
         # remove "xmlns" which is the default namespace and is appended everywhere
         omemd = re.sub('xmlns="http://www.openmicroscopy.org/Schemas/OME/....-.."',
                        "", omemd, count=1)
@@ -493,6 +498,75 @@ class TestTiffIO(unittest.TestCase):
 
         self.assertEqual(json.loads(ime.find("ExtraSettings").text), exp_extra_md)
         imo.close()
+
+    def checkImageJMetadata(self, sizes: list, num_channels: int, num_slices: int, num_frames: int):
+        """
+        Extracts ImageJ metadata and checks the values.
+        """
+        metadata = {model.MD_SW_VERSION: "1.0-test"}
+        ldata = []
+        for size in sizes:
+            dtype = numpy.uint16
+            ldata.append(model.DataArray(numpy.zeros(size, dtype), metadata=metadata))
+
+        md = tiff.extract_imagej_metadata(ldata)
+
+        md_dict = {}
+        for line in md.split("\n"):
+            if not line:
+                continue
+            k, v = line.split("=")
+            md_dict[k] = v
+
+        self.assertIn('ImageJ', md_dict)
+        self.assertEqual(md_dict["images"], str(num_frames*num_slices*num_channels))
+        self.assertEqual(md_dict["channels"], str(num_channels))
+        self.assertEqual(md_dict["slices"], str(num_slices))
+        self.assertEqual(md_dict["frames"], str(num_frames))
+        self.assertEqual(md_dict["hyperstack"], "true")
+        self.assertEqual(md_dict["unit"], "cm")
+
+    def testImageJMetadata(self):
+        """
+        Checks the ImageJ metadata for different image shapes.
+
+        Eg: description = "ImageJ=1.11a\nimages={num_slices * num_channels * num_frames}\nchannels={num_channels}
+                           f\nslices={num_slices}\nframes=num_frames\nhyperstack=true\nunit=m\n"
+        """
+        # CTZYX
+        sizes = [(1, 2, 256, 512)]
+        self.checkImageJMetadata(sizes, num_channels=1, num_frames=1, num_slices=2)
+
+        # With below sizes, first image size is used and rest are dropped
+        sizes = [(1, 1, 256, 512),
+                 (2, 3, 256, 512),
+                 (1, 1, 256, 512)
+                 ]
+        self.checkImageJMetadata(sizes, num_channels=1, num_frames=1, num_slices=1)
+
+        sizes = [(1, 1, 256, 512),
+                 (1, 1, 1, 256, 512),
+                 (1, 256, 512)
+                 ]
+        self.checkImageJMetadata(sizes, num_channels=3, num_frames=1, num_slices=1)
+
+        # First two sizes will be used
+        sizes = [(3, 5, 256, 512),
+                 (3, 5, 256, 512),
+                 (1, 5, 256, 512)
+                 ]
+        self.checkImageJMetadata(sizes, num_channels=2, num_frames=3, num_slices=5)
+
+        sizes = [(3, 1, 1, 256, 512),
+                 (1, 1, 1, 256, 512),
+                 (1, 1, 256, 512)
+                 ]
+        self.checkImageJMetadata(sizes, num_channels=3, num_frames=1, num_slices=1)
+
+        sizes = [(40, 1, 10, 300, 400),
+                 (40, 1, 10, 300, 400)
+                 ]
+        self.checkImageJMetadata(sizes, num_channels=40, num_frames=1, num_slices=10)
 
 #    @skip("simple")
     def testExportRead(self):
