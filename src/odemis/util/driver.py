@@ -124,27 +124,48 @@ def estimateMoveDuration(distance, speed, accel):
     acceleration. It considers that the speed curve of the move will follow
     a trapezoidal profile: first acceleration, then maximum speed, and then
     deceleration.
-    distance (0 <= float): distance that will be traveled (in m)
-    speed (0 < float): maximum speed allowed (in m/s)
-    accel (0 < float): acceleration and deceleration (in m/s²)
+
+    :param distance: (0 <= float) distance that will be traveled (in m)
+    :param speed: (0 < float) maximum speed allowed (in m/s)
+    :param accel: (0 < float) acceleration of the move, which is equal to the deceleration (in m/s²)
     return (0 <= float): time in s
     """
-    if speed <= 0 or accel <= 0:
-        raise ValueError("Speed and accel must be > 0, but got %g and %g" % (speed, accel))
+    if speed <= 0 or accel <= 0 or distance < 0:
+        raise ValueError("Speed, accel and distance must be > 0, but got %g, %g and %g" % (speed, accel, distance))
 
     # Given the distance to be traveled, determine whether we have a
     # triangular or a trapezoidal motion profile.
-    A = (2 * accel) / (accel ** 2)
-    s = 0.5 * A * speed ** 2
+
+    #  v ↑   ______________
+    #    |  /¦            ¦\
+    #    | / ¦            ¦ \
+    #    |/  ¦            ¦  \
+    #    ---------------------------→
+    #    ¦ t1¦    t2      ¦t3 ¦     t
+    #
+    # s is the distance traveled in the triangular part
+    # The profile is symmetrical therefore t1 = t3 and:
+    # s1 = s3 = speed * t1 / 2
+    # t1 = speed / accel
+    # s = s1 + s3 = 2 * speed * t1 / 2 = speed * speed / accel = speed**2 / accel
+    s = speed ** 2 / accel
+
+    # if the total distance is larger than the distance of the triangular part,
+    # the motion profile is trapezoidal
     if distance > s:
-        t1 = speed / accel
+        t1 = t3 = speed / accel
         t2 = (distance - s) / speed
-        t3 = speed / accel
         return t1 + t2 + t3
-    else:
-        vp = math.sqrt(2.0 * distance / A)
-        t1 = vp / accel
-        t2 = vp / accel
+    else:  # triangular
+        #  v ↑    _
+        #    |   /¦\
+        #    |  / ¦ \
+        #    | /  ¦  \
+        #    -------------→
+        #     ¦t1 ¦t2 ¦   t
+        # Calculate the peak velocity, because for a triangular profile the max velocity might not be reached
+        vp = math.sqrt(distance * accel)
+        t1 = t2 = vp / accel
         return t1 + t2
 
 
@@ -204,20 +225,23 @@ DEFAULT_ACCELERATION = 0.01  # m/s²
 
 def guessActuatorMoveDuration(actuator, axis, distance, accel=DEFAULT_ACCELERATION):
     """
-    actuator (Actuator): actuator object 
-    axis (str): indicates along which axis the movement is. 
-    distance (float): the move for which the time to be estimated  
+    Guess the speed of the axis of an actuator and estimate the duration of moving a certain distance.
+
+    :param actuator: (Actuator) actuator object
+    :param axis: (str) indicates along which axis the movement is.
+    :param distance: (0 <= float) distance that will be traveled (in m)
+    :param accel: (0 < float) acceleration of the move, which is equal to the deceleration (in m/s²)
     return (float >= 0): the estimated time (in s)
     """
-    speed = None
     if not (hasattr(actuator, "axes") and isinstance(actuator.axes, dict)):
         raise ValueError("The component %s should be an actuator, but it is not." % actuator)
-    if not axis in actuator.axes:
+    if axis not in actuator.axes:
         raise KeyError("The actuator component %s is expected to have %s axis, but it does not." % (actuator, axis))
+
+    speed = DEFAULT_SPEED
     if model.hasVA(actuator, "speed"):
-        speed = actuator.speed.value.get("z", None)
-    if speed is None:
-        speed = DEFAULT_SPEED
+        speed = actuator.speed.value.get(axis, DEFAULT_SPEED)
+
     return estimateMoveDuration(distance, speed, accel)
 
 

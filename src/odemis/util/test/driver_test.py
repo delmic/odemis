@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 26 Apr 2013
 
 @author: Éric Piel
@@ -18,18 +18,20 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with 
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 import logging
-from odemis import model
-import odemis
-from odemis.util import testing
-from odemis.util.driver import getSerialDriver, speedUpPyroConnect, readMemoryUsage, \
-    get_linux_version
+import math
 import os
 import sys
 import time
 import unittest
+from unittest.mock import Mock
 
+import odemis
+from odemis import model
+from odemis.util import testing
+from odemis.util.driver import getSerialDriver, speedUpPyroConnect, readMemoryUsage, \
+    get_linux_version, estimateMoveDuration, guessActuatorMoveDuration, DEFAULT_SPEED
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -41,6 +43,7 @@ class TestDriver(unittest.TestCase):
     """
     Test the different functions of driver
     """
+
     def test_getSerialDriver(self):
         # very simple to fit any platform => just check it doesn't raise exception
 
@@ -58,7 +61,7 @@ class TestDriver(unittest.TestCase):
             logging.error(str(exp))
             raise
 
-        model._components._microscope = None # force reset of the microscope for next connection
+        model._components._microscope = None  # force reset of the microscope for next connection
 
         speedUpPyroConnect(model.getMicroscope())
 
@@ -80,7 +83,96 @@ class TestDriver(unittest.TestCase):
             with self.assertRaises(LookupError):
                 v = get_linux_version()
 
+    def test_estimateMoveDuration(self):
+        """Test estimateMoveDuration takes the correct input and returns a correct estimation."""
+        # Test a ValueError is raised for input values that are not allowed
+        distances = [-1, 1, 1]
+        speeds = [1, 0, 1]
+        accels = [1, 1, 0]
+        for distance, speed, accel in zip(distances, speeds, accels):
+            with self.assertRaises(ValueError):
+                estimateMoveDuration(distance, speed, accel)
+
+        # test that moving a distance of 0 m, takes 0 s
+        t_actual = estimateMoveDuration(distance=0, speed=1, accel=2)
+        self.assertEqual(t_actual, 0)
+
+        # test a trapezoidal profile
+        distance = 10
+        speed = 3
+        accel = 2
+        t_actual = estimateMoveDuration(distance, speed, accel)
+        s = speed ** 2 / accel
+        t_exp = (distance - s) / speed + 2 * speed / accel
+        self.assertEqual(t_actual, t_exp)
+
+        # test a triangular profile
+        distance = 1
+        speed = 2
+        accel = 4
+        t_actual = estimateMoveDuration(distance, speed, accel)
+        t_exp = 2 * math.sqrt(distance * accel) / accel
+        self.assertEqual(t_actual, t_exp)
+
+    def test_guessActuatorMoveDuration(self):
+        """Test guessActuatorMoveDuration takes the correct input and returns a correct estimation."""
+        # test that a value error is raised when the actuator has no axes attribute
+        actuator = Mock(speed=Mock(value={"x": 1, "y": 1.5, "z": 2}))
+        axis = "z"
+        distance = 0
+        accel = 1
+        with self.assertRaises(ValueError):
+            guessActuatorMoveDuration(actuator, axis, distance, accel)
+
+        # test that a ValueError is raised when the axes attribute is not a dictionary
+        actuator = Mock(speed=Mock(value={"x": 1, "y": 1.5, "z": 2}),
+                        axes=1)
+        axis = "z"
+        distance = 0
+        accel = 1
+        with self.assertRaises(ValueError):
+            guessActuatorMoveDuration(actuator, axis, distance, accel)
+
+        # test that a KeyError is raised when the requested axis is not in the axes dictionary
+        actuator = Mock(speed=Mock(value={"x": 1, "y": 1.5, "z": 2}),
+                        axes={"x": None, "y": None, "z": None})
+        axis = "a"
+        distance = 0
+        accel = 1
+        with self.assertRaises(KeyError):
+            guessActuatorMoveDuration(actuator, axis, distance, accel)
+
+        # test that moving a distance of 0 m, takes 0 s
+        actuator = Mock(speed=Mock(value={"x": 1, "y": 1.5, "z": 2}),
+                        axes={"x": None, "y": None, "z": None})
+        axis = "z"
+        distance = 0
+        accel = 1
+        t_actual = guessActuatorMoveDuration(actuator, axis, distance, accel)
+        self.assertEqual(t_actual, 0)
+
+        # test that the speed from the actuator is used when available
+        actuator = Mock(speed=Mock(value={"x": 1, "y": 1.5, "z": 2}),
+                        axes={"x": None, "y": None, "z": None})
+        axis = "z"
+        distance = 0
+        accel = 1
+        t_actual = guessActuatorMoveDuration(actuator, axis, distance, accel)
+        speed = actuator.speed.value.get(axis)
+        t_exp = estimateMoveDuration(distance, speed, accel)
+        self.assertEqual(t_actual, t_exp)
+
+        # test that the default speed is used when the actuator has no speed attribute
+        actuator = Mock(axes={"x": None, "y": None, "z": None})
+        axis = "z"
+        distance = 0
+        accel = 1
+        t_actual = guessActuatorMoveDuration(actuator, axis, distance, accel)
+        speed = DEFAULT_SPEED
+        t_exp = estimateMoveDuration(distance, speed, accel)
+        self.assertEqual(t_actual, t_exp)
+
 
 if __name__ == "__main__":
-    #import sys;sys.argv = ['', 'Test.testName']
+    #  import sys;sys.argv = ['', 'Test.testName']
     unittest.main()
