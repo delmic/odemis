@@ -19,6 +19,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # Test module for model.Stream classes
+from concurrent.futures import CancelledError
 import logging
 import os
 import time
@@ -54,6 +55,8 @@ SPARC2_EXT_SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-ext-spec-sim.odm.yaml"
 SECOM_FLIM_CONFIG = CONFIG_PATH + "sim/secom-flim-sim.odm.yaml"
 SPARC2_POLARIZATIONANALYZER_CONFIG = CONFIG_PATH + "sim/sparc2-ek-polarizer-sim.odm.yaml"
 SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
+SPARC2_FPLM_CONFIG = CONFIG_PATH + "sim/sparc2-fplm-sim.odm.yaml"
+SPARC2_FSLM_CONFIG = CONFIG_PATH + "sim/sparc2-fslm-sim.odm.yaml"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
 
 
@@ -1182,6 +1185,129 @@ class Sparc2FourSpecPathTestCase(unittest.TestCase):
         # No slit/spectrograph as they are not affecting the detector
         self.assertAlmostEqual(self.spec_sel.position.value["x"], 0.026112848)
         self.assertAlmostEqual(self.spec_dd_sel.position.value["rx"], 0, places=2)
+
+
+class Sparc2LightInTestCase(unittest.TestCase):
+    """
+    Tests of a (simulated) SPARC2 with a light-aligner (FPLM)
+    (should work the same with ELIM and FSLM)
+    """
+    @classmethod
+    def setUpClass(cls):
+        testing.start_backend(SPARC2_FPLM_CONFIG)
+
+        # Microscope component
+        cls.microscope = model.getComponent(role="sparc2")
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd")
+        cls.spectrograph = model.getComponent(role="spectrograph")
+        cls.lens_switch = model.getComponent(role="lens-switch")
+        cls.spec_det_sel = model.getComponent(role="spec-det-selector")
+        cls.slit = model.getComponent(role="slit-in-big")
+        cls.light_align = model.getComponent(role="light-aligner")
+        cls.optmngr = path.OpticalPathManager(cls.microscope)
+
+    @classmethod
+    def tearDownClass(cls):
+        del cls.optmngr  # To garbage collect it
+
+    def test_set_path(self):
+        """
+        Test setting light-in-align
+        """
+        # Light aligner should always be in active position, for any mode
+
+        # Start by going to a different mode: use ar (lens 2 is active)
+        self.optmngr.setPath("ar").result()
+        # Assert that actuator was moved according to mode given
+        assert_pos_as_in_mode(self, self.lens_switch, "ar")
+        assert_pos_as_in_mode(self, self.slit, "ar")
+        assert_pos_as_in_mode(self, self.spectrograph, "ar")
+        assert_pos_as_in_mode(self, self.light_align, "ar")
+        self.assertEqual(self.spec_det_sel.position.value, {'rx': 0})
+
+        # setting light-align: lens 2 should be deactive
+        self.optmngr.setPath("light-in-align").result()
+        # Assert that actuator was moved according to mode given
+        assert_pos_as_in_mode(self, self.lens_switch, "light-in-align")
+        assert_pos_as_in_mode(self, self.slit, "light-in-align")
+        assert_pos_as_in_mode(self, self.light_align, "light-in-align")
+
+
+class Sparc2SpecSwitchTestCase(unittest.TestCase):
+    """
+    Tests of a (simulated) SPARC2 with a spec-switch component (FSLM)
+    """
+    @classmethod
+    def setUpClass(cls):
+        testing.start_backend(SPARC2_FSLM_CONFIG)
+
+        # Microscope component
+        cls.microscope = model.getComponent(role="sparc2")
+        # Find CCD & SEM components
+        cls.ccd = model.getComponent(role="ccd")
+        cls.spectrograph = model.getComponent(role="spectrograph")
+        cls.lens_switch = model.getComponent(role="lens-switch")
+        cls.lens_mover = model.getComponent(role="lens-mover")
+        cls.spec_switch = model.getComponent(role="spec-switch")
+        cls.slit = model.getComponent(role="slit-in-big")
+        cls.light_align = model.getComponent(role="light-aligner")
+        cls.opt_mngr = path.OpticalPathManager(cls.microscope)
+
+    @classmethod
+    def tearDownClass(cls):
+        del cls.opt_mngr  # garbage collect it
+
+    def test_spec_switch_mirror(self):
+        """
+        Default movement of the spec-switch mirror is tested.
+        Basically the mirror moves either to engage position or to retract position.
+        The moves however are executed through a progressive future. This future type is
+        represented in odemis.util.driver as a generic class.
+        """
+        spec_sw_md = self.spec_switch.getMetadata()
+
+        # set the spec-switch mirror to the default retracted position (FAV_POS_DEACTIVE)
+        f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_DEACTIVE])
+        f.result()
+        testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
+
+        # test if switching to light-in-align mode works properly
+        self.opt_mngr.setPath("light-in-align").result()
+
+        # exclude the check for pos in mode for the spec-switch, it's not in light-in-align mode by default
+        assert_pos_as_in_mode(self, self.lens_switch, "light-in-align")
+        assert_pos_as_in_mode(self, self.lens_mover, "light-in-align")
+        assert_pos_as_in_mode(self, self.light_align, "light-in-align")
+
+        # check if the spec-switch did not move and is still at the right position (FAV_POS_DEACTIVE)
+        testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
+
+        # test if the spec-switch mirror can be moved to the engage position (FAV_POS_ACTIVE)
+        f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_ACTIVE])
+        f.result()
+        testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_ACTIVE])
+
+        # call light-in-align mode again and check if the spec-switch mirror is not moved afterward
+        self.opt_mngr.setPath("light-in-align").result()
+        testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_ACTIVE])
+
+        # test if the movement of the spec-switch can be cancelled
+        f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_DEACTIVE])
+        time.sleep(3)
+        f.cancel()
+
+        with self.assertRaises(CancelledError):
+            f.result()
+
+        # check if the mirror is somewhere inbetween engaged or retracted state
+        testing.assert_pos_not_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
+        testing.assert_pos_not_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_ACTIVE])
+
+        # set the spec-switch mirror back to starting position
+        f = self.spec_switch.moveAbs(spec_sw_md[model.MD_FAV_POS_DEACTIVE])
+        f.result()
+        testing.assert_pos_almost_equal(self.spec_switch.position.value, spec_sw_md[model.MD_FAV_POS_DEACTIVE])
 
 
 class SecomPathTestCase(unittest.TestCase):

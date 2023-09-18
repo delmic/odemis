@@ -100,7 +100,7 @@ from odemis.gui.model import TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, \
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter, VigilantAttributeConnector
-from odemis.util import units, spot, limit_invocation, almost_equal, fluo
+from odemis.util import units, spot, limit_invocation, almost_equal, fluo, driver, executeAsyncTask
 from odemis.util.dataio import data_to_static_streams, open_acquisition
 from odemis.util.driver import ATOL_LINEAR_POS
 from odemis.util.units import readable_str
@@ -6319,6 +6319,28 @@ class Sparc2AlignTab(Tab):
             else:
                 logging.warning("Fiber-aligner present, but found no detector affected by it.")
 
+        if main_data.spec_switch:
+            self.panel.btn_spec_switch_retract.Bind(wx.EVT_BUTTON, self._on_spec_switch_btn)
+            self.panel.btn_spec_switch_engage.Bind(wx.EVT_BUTTON, self._on_spec_switch_btn)
+
+            # move the spec_switch mirror to the default (retracted) position
+            main = self.tab_data_model.main
+            spec_switch_data = main.spec_switch.getMetadata()
+            spec_switch_xpos = main.spec_switch.position.value["x"]
+            spec_switch_xmd_deactive = spec_switch_data[model.MD_FAV_POS_DEACTIVE]["x"]
+            spec_switch_xmd_active = spec_switch_data[model.MD_FAV_POS_ACTIVE]["x"]
+
+            # if the spec_switch mirror is not positioned either on ACTIVE or
+            # DEACTIVE position move it to the default (DEACTIVE) position
+            if ((not almost_equal(spec_switch_xpos, spec_switch_xmd_deactive)) and
+                    (not almost_equal(spec_switch_xpos, spec_switch_xmd_active))):
+                # execute a move without tracking using a progress bar so
+                # no update to the GUI when the alignment tab is hidden
+                self._spec_switch_f = main.spec_switch.moveAbs({"x": spec_switch_xmd_deactive})
+
+            # future and progress connector for tracking the progress of the gauge when moving
+            self._pfc_spec_switch = None
+
         # Switch between alignment modes
         # * lens-align: first auto-focus spectrograph, then align lens1
         # * mirror-align: move x, y of mirror with moment of inertia feedback
@@ -6329,6 +6351,8 @@ class Sparc2AlignTab(Tab):
         # * streak-align: vertical and horizontal alignment of the streak camera,
         #                 change of the mag due to changed input optics and
         #                 calibration of the trigger delays for temporal resolved acq
+        # * light-in-align: engage or retract the folding mirror to switch to
+        #                     internal or external spectrograph
         self._alignbtn_to_mode = collections.OrderedDict((
             (panel.btn_align_lens, "lens-align"),
             (panel.btn_align_mirror, "mirror-align"),
@@ -6337,6 +6361,7 @@ class Sparc2AlignTab(Tab):
             (panel.btn_align_ek, "ek-align"),
             (panel.btn_align_fiber, "fiber-align"),
             (panel.btn_align_streakcam, "streak-align"),
+            (panel.btn_align_light_in, "light-in-align"),
         ))
 
         # The GUI mode to the optical path mode (see acq.path.py)
@@ -6348,8 +6373,9 @@ class Sparc2AlignTab(Tab):
             "ek-align": "ek-align",
             "fiber-align": "fiber-align",
             "streak-align": "streak-align",
+            "light-in-align": "light-in-align",
         }
-        # Note: ActuatorController hides the fiber alignment panel if not needed.
+        # Note: ActuatorController automatically hides the unnecessary alignment panels, based on the axes present.
         for btn, mode in list(self._alignbtn_to_mode.items()):
             if mode in tab_data.align_mode.choices:
                 btn.Bind(wx.EVT_BUTTON, self._onClickAlignButton)
@@ -6551,6 +6577,14 @@ class Sparc2AlignTab(Tab):
         if mode != "lens2-align":
             if main.lens_switch:
                 main.lens_switch.position.unsubscribe(self._onLensSwitchPos)
+        if mode != "center-align":
+            if main.light_aligner:
+                main.light_aligner.position.unsubscribe(self._onLightAlignPos)
+        if mode != "light-in-align":
+            if main.spec_switch:
+                main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
+            if main.light_aligner:
+                main.light_aligner.position.unsubscribe(self._onLightAlignPos)
 
         # This is running in a separate thread (future). In most cases, no need to wait.
         op_mode = self._mode_to_opm[mode]
@@ -6570,7 +6604,6 @@ class Sparc2AlignTab(Tab):
             self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_lens_switch.Enable(False)
             self.panel.pnl_focus.Enable(True)
@@ -6579,6 +6612,8 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
+            self.panel.pnl_light_aligner.Enable(False)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
@@ -6589,7 +6624,6 @@ class Sparc2AlignTab(Tab):
             self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_mirror.Enable(True)  # also allow to move the mirror here
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_lens_switch.Enable(False)
             self.panel.pnl_focus.Enable(False)
@@ -6599,6 +6633,8 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
+            self.panel.pnl_light_aligner.Enable(False)
             # TODO: in this mode, if focus change, update the focus image once
             # (by going to spec-focus mode, turning the light, and acquiring an
             # AR image). Problem is that it takes about 10s.
@@ -6609,13 +6645,14 @@ class Sparc2AlignTab(Tab):
                 self._moi_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_mirror.Enable(True)
             self.panel.pnl_lens_mover.Enable(False)
             self.panel.pnl_lens_switch.Enable(False)
             self.panel.pnl_focus.Enable(False)
             self.panel.pnl_moi_settings.Show(True)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
+            self.panel.pnl_light_aligner.Enable(False)
         elif mode == "center-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_center.view
             self._ccd_stream.should_update.value = True
@@ -6628,6 +6665,12 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
+            # If light-aligner available, allow to adjust it in this view too,
+            # as the lens 2 is active, which allows to further align the light input.
+            self.panel.pnl_light_aligner.Enable(True)
+            if main.light_aligner:
+                main.light_aligner.position.subscribe(self._onLightAlignPos)
         elif mode == "ek-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_ek.view
             self._as_stream.should_update.value = True
@@ -6640,6 +6683,8 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
+            self.panel.pnl_light_aligner.Enable(False)
         elif mode == "fiber-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_fiber.view
             if self._speccnt_stream:
@@ -6658,6 +6703,8 @@ class Sparc2AlignTab(Tab):
             self.panel.btn_m_fibaligner_y.Enable(False)
             self.panel.btn_p_fibaligner_y.Enable(False)
             self.panel.pnl_streak.Enable(False)
+            self.panel.pnl_spec_switch.Enable(False)
+            self.panel.pnl_light_aligner.Enable(False)
             # Note: it's OK to leave autofocus enabled, as it will wait by itself
             # for the fiber-aligner to be in place
             f.add_done_callback(self._on_fibalign_done)
@@ -6679,39 +6726,63 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_moi_settings.Show(False)
             self.panel.pnl_fibaligner.Enable(False)
             self.panel.pnl_streak.Enable(True)
+            self.panel.pnl_spec_switch.Enable(False)
+            self.panel.pnl_light_aligner.Enable(False)
+        elif mode == "light-in-align":
+            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view  # allows to see the focused slit line
+            self._ccd_stream.should_update.value = True
+            if self._mirror_settings_controller:
+                self._mirror_settings_controller.enable(False)
+            self.panel.pnl_mirror.Enable(False)
+            self.panel.pnl_lens_mover.Enable(False)
+            self.panel.pnl_lens_switch.Enable(False)
+            self.panel.pnl_focus.Enable(False)
+            self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_fibaligner.Enable(False)
+            self.panel.pnl_streak.Enable(False)
+            self.panel.pnl_light_aligner.Enable(True)
+            self.panel.pnl_spec_switch.Enable(False)  # Wait until the spec-switch is engaged
+            f.add_done_callback(self._on_light_in_align_done)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
 
         # clear documentation panel when different mode is requested
-        # only display doc for current mode selected
+        # only display doc for selected mode
         self.panel.html_moi_doc.LoadPage(self.doc_path)
+        pages = []
         if mode == "lens-align":
             if self._focus_streams:
-                doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_autofocus.html")
-                self.panel.html_moi_doc.AppendToPage(doc_cnt)
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_lens.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+                pages.append("doc/sparc2_autofocus.html")
+            pages.append("doc/sparc2_lens.html")
         elif mode == "mirror-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_mirror.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_mirror.html")
         elif mode == "lens2-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_lens_switch.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_lens_switch.html")
         elif mode == "center-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_centering.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_centering.html")
         elif mode == "ek-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_ek.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_ek.html")
         elif mode == "fiber-align":
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_fiber.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_fiber.html")
         elif mode == "streak-align":
-            # add documentation for streak cam
-            doc_cnt = pkg_resources.resource_string("odemis.gui", "doc/sparc2_streakcam.html")
-            self.panel.html_moi_doc.AppendToPage(doc_cnt)
+            pages.append("doc/sparc2_streakcam.html")
+        elif mode == "light-in-align":
+            # Several modules have this mode, but require different alignment procedure.
+            # So we have to detect precisely which module is present (FSLM, FPLM, or ELIM).
+            main = self.tab_data_model.main
+            if main.spec_switch:  # only FSLM has spec-switch
+                pages.append("doc/sparc2_light_in_fslm.html")
+            elif main.mirror and main.mirror.name in main.light_aligner.affects.value:
+                # FPLM affects the mirror, not the ELIM
+                pages.append("doc/sparc2_light_in_fplm.html")
+            else:  # default to ELIM
+                pages.append("doc/sparc2_light_in_elim.html")
         else:
             logging.warning("Could not find alignment documentation for mode %s requested." % mode)
+
+        for p in pages:
+            doc_cnt = pkg_resources.resource_string("odemis.gui", p)
+            self.panel.html_moi_doc.AppendToPage(doc_cnt)
 
         # To adapt to the pnl_moi_settings showing on/off
         self.panel.html_moi_doc.Parent.Layout()
@@ -6750,6 +6821,22 @@ class Sparc2AlignTab(Tab):
         if self.tab_data_model.main.lens_switch:
             self.tab_data_model.main.lens_switch.position.subscribe(self._onLensSwitchPos)
             self.panel.pnl_lens_switch.Enable(True)
+
+    @call_in_wx_main
+    def _on_light_in_align_done(self, f):
+        # Has no effect now, as OPM future are not cancellable (but it makes the
+        # code more future-proof)
+        if f.cancelled():
+            return
+
+        # updates the spec-switch ACTIVE position when the user moves it
+        if self.tab_data_model.main.spec_switch:
+            self.panel.pnl_spec_switch.Enable(True)
+            self._adjust_spec_switch_button_state()
+
+        # updates the light-aligner ACTIVE position when the user moves it
+        if self.tab_data_model.main.light_aligner:
+            self.tab_data_model.main.light_aligner.position.subscribe(self._onLightAlignPos)
 
     @call_in_wx_main
     def _on_fibalign_done(self, f):
@@ -7101,6 +7188,127 @@ class Sparc2AlignTab(Tab):
         # Enable manual focus when done running autofocus
         self.panel.btn_manual_focus.Enable(True)
 
+    @call_in_wx_main
+    def _on_spec_switch_btn(self, event):
+        """
+        Called when one of the retract and engage spec-switch mirror buttons are pressed.
+        It will start movement for the spec-switch mirror (retract/engage).
+        GUI is adjusted in this method and therefore make the call in main.
+        """
+        main = self.tab_data_model.main
+        spec_switch = main.spec_switch.getMetadata()
+        # assign the button which got the click event
+        btn = event.GetEventObject()
+
+        if btn.GetLabel() in {"Engage", "Engaged"}:
+            # set the requested position to ACTIVE and change the appearance of the retract and engage buttons
+            pos = spec_switch[model.MD_FAV_POS_ACTIVE]
+            self._change_spec_switch_btn_lbl(btn, "Cancel", wx.BLACK)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retract", wx.BLACK)
+            # pause the stream when engaging the mirror
+            self._ccd_stream.should_update.value = False
+        elif btn.GetLabel() in {"Retract", "Retracted"}:
+            # set the requested position to DEACTIVE and change the appearance of the retract and engage buttons
+            pos = spec_switch[model.MD_FAV_POS_DEACTIVE]
+            self._change_spec_switch_btn_lbl(btn, "Cancel", wx.BLACK)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)
+            # continue the stream when retracting the mirror
+            self._ccd_stream.should_update.value = True
+        elif btn.GetLabel() == "Cancel":
+            self._spec_switch_f.cancel()
+            self._adjust_spec_switch_button_state()
+            return
+
+        # disable the alignment buttons when moving the mirror
+        self.panel.btn_m_spec_switch_x.Enable(False)
+        self.panel.btn_p_spec_switch_x.Enable(False)
+
+        # show the gauge if it is hidden
+        self.panel.gauge_specswitch.Show()
+
+        # unsubscribe to position changes to prevent overwriting FAV_POS
+        if self.tab_data_model.main.spec_switch:
+            self.tab_data_model.main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
+
+        # move the mirror to the right position using a progressive future
+        self._spec_switch_f = driver.ProgressiveMove(main.spec_switch, pos)
+        self._spec_switch_f.add_done_callback(self._on_specswitch_button_done)
+        # take care of a moving gauge while moving the mirror
+        self._pfc_spec_switch = ProgressiveFutureConnector(self._spec_switch_f, self.panel.gauge_specswitch)
+
+    @call_in_wx_main
+    def _on_specswitch_button_done(self, future):
+        """
+        Called when pressing one of the spec-switch buttons to retract or engage the mirror.
+        After a button is pressed, either the movement is done or it was cancelled.
+        """
+        try:
+            future.result()
+        except CancelledError:
+            pass
+        except Exception:
+            logging.exception("Failure during the move of spec-switch")
+
+        # reset the labels on both buttons to support rollback after calling cancelling
+        self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract, "Retract", wx.BLACK)
+        self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage, "Engage", wx.BLACK)
+
+        # check if the state of the buttons need adjustments
+        self._adjust_spec_switch_button_state()
+        self._pfc_spec_switch = None
+
+        # hide the gauge as there is no convenient way to reset it
+        self.panel.gauge_specswitch.Hide()
+
+    def _change_spec_switch_btn_lbl(self, button: wx.Button, label: str, fg_color: str):
+        """
+        Small support method to change the button properties for the spec-switch mirror.
+        There are currently buttons both for retracting and engaging the mirror.
+        :param button: wx.ImageTextButton button object
+        :param label: text of the button label
+        :param fg_color: color of the button label
+        """
+        button.SetForegroundColour(fg_color)
+        button.SetLabel(label)
+
+    def _adjust_spec_switch_button_state(self):
+        """
+        Here the state of the buttons for retracting and engaging the spec-switch mirror is checked
+        and handled according to the current position.
+        Only when the mirror is at the engaged (FAV_POS_ACTIVE) position it can be aligned manually.
+        """
+        # disable the manual alignment buttons on default
+        self.panel.btn_m_spec_switch_x.Enable(False)
+        self.panel.btn_p_spec_switch_x.Enable(False)
+
+        # request the metadata to be able to compare with FAV_POS
+        spec_switch_md = self.tab_data_model.main.spec_switch.getMetadata()
+
+        # when the mirror is in the ACTIVE position enable the
+        # option to align it manually and to update the FAV_POS
+        if almost_equal(self.tab_data_model.main.spec_switch.position.value["x"],
+                        spec_switch_md[model.MD_FAV_POS_ACTIVE]["x"], atol=1e-5):
+            self.tab_data_model.main.spec_switch.position.subscribe(self._onSpecSwitchPos)
+            # enable the manual alignment buttons when the mirror is engaged
+            self.panel.btn_m_spec_switch_x.Enable(True)
+            self.panel.btn_p_spec_switch_x.Enable(True)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage,
+                                             "Engaged", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract,
+                                             "Retract", wx.BLACK)
+        # when the mirror is in the DEACTIVE position disable manual alignment and update of FAV_POS
+        elif almost_equal(self.tab_data_model.main.spec_switch.position.value["x"],
+                          spec_switch_md[model.MD_FAV_POS_DEACTIVE]["x"], atol=1e-5):
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract,
+                                             "Retracted", odemis.gui.FG_COLOUR_RADIO_ACTIVE)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage,
+                                             "Engage", wx.BLACK)
+        else:
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_engage,
+                                             "Engage", odemis.gui.FG_COLOUR_ERROR)
+            self._change_spec_switch_btn_lbl(self.panel.btn_spec_switch_retract,
+                                             "Retract", odemis.gui.FG_COLOUR_ERROR)
+
     def _onBkgAcquire(self, evt):
         """
         Called when the user presses the "Acquire background" button
@@ -7263,7 +7471,7 @@ class Sparc2AlignTab(Tab):
         Called when the spec-selector (wrapper to the X axis of fiber-aligner)
           is moved (and the fiber align mode is active)
         """
-        if not self.IsShown():
+        if self.tab_data_model.main.tab.value != self:
             # Should never happen, but for safety, we double check
             logging.warning("Received active fiber position while outside of alignment tab")
             return
@@ -7274,12 +7482,38 @@ class Sparc2AlignTab(Tab):
         logging.debug("Updating the active fiber X position to %s", pos)
         ss.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
 
+    def _onSpecSwitchPos(self, pos):
+        """
+        Called when the light-aligner is moved (and the light-out-alignment mode is active)
+        """
+        if self.tab_data_model.main.tab.value != self:
+            # Should never happen, but for safety, we double check
+            logging.warning("Received active spec-switch position while outside of alignment tab")
+            return
+
+        spec_switch = self.tab_data_model.main.spec_switch
+        logging.debug("Updating the spec switch X position to %s", pos)
+        spec_switch.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
+    def _onLightAlignPos(self, pos):
+        """
+        Called when the light-aligner is moved (and the light-out-alignment mode is active)
+        """
+        if self.tab_data_model.main.tab.value != self:
+            # Should never happen, but for safety, we double check
+            logging.warning("Received active light-aligner position while outside of alignment tab")
+            return
+
+        light_align = self.tab_data_model.main.light_aligner
+        logging.debug("Updating the light aligner X position to %s", pos)
+        light_align.updateMetadata({model.MD_FAV_POS_ACTIVE: pos})
+
     def _onFiberPos(self, pos):
         """
         Called when the fiber-aligner is moved (and the fiber align mode is active),
           for updating the Y position. (X pos is handled by _onSpecSelPos())
         """
-        if not self.IsShown():
+        if self.tab_data_model.main.tab.value != self:
             # Should never happen, but for safety, we double check
             logging.warning("Received active fiber position while outside of alignment tab")
             return
@@ -7309,7 +7543,8 @@ class Sparc2AlignTab(Tab):
 
             mode = self.tab_data_model.align_mode.value
             self._onAlignMode(mode)
-            main.mirror.position.subscribe(self._onMirrorPos)
+            if main.mirror:
+                main.mirror.position.subscribe(self._onMirrorPos)
 
             # Reset the focus progress bar (as any focus action has been cancelled)
             wx.CallAfter(self.panel.gauge_autofocus.SetValue, 0)
@@ -7333,14 +7568,18 @@ class Sparc2AlignTab(Tab):
                 main.lens_mover.position.unsubscribe(self._onLensPos)
             if main.lens_switch:
                 main.lens_switch.position.unsubscribe(self._onLensSwitchPos)
-            main.mirror.position.unsubscribe(self._onMirrorPos)
+            if main.mirror:
+                main.mirror.position.unsubscribe(self._onMirrorPos)
             if main.spec_sel:
                 main.spec_sel.position.unsubscribe(self._onSpecSelPos)
+            if main.spec_switch:
+                main.spec_switch.position.unsubscribe(self._onSpecSwitchPos)
+                main.spec_switch.position.unsubscribe(self._onLightAlignPos)
             if main.fibaligner:
                 main.fibaligner.position.unsubscribe(self._onFiberPos)
-
-            # Also fit to content now, so that next time the tab is displayed,
-            # it's ready
+            if main.light_aligner:
+                main.light_aligner.position.unsubscribe(self._onLightAlignPos)
+            # Also fit to content now, so that next time the tab is displayed, it's ready
             self.panel.vp_align_lens.canvas.fit_view_to_content()
 
     def terminate(self):
@@ -7354,6 +7593,9 @@ class Sparc2AlignTab(Tab):
             mirror = main_data.mirror
             if mirror and set(mirror.axes.keys()) == {"l", "s"}:
                 return 5
+        # Special case for SPARCv2 with ELIM module: only light-aligner
+        if main_data.role == "sparc2" and main_data.light_aligner:
+            return 10
 
         return None
 

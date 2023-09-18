@@ -172,9 +172,11 @@ class MainGUIData(object):
         "lens-mover": "lens_mover",  # lens1 of SPARCv2
         "lens-switch": "lens_switch",  # lens2 of SPARCv2. Supports EK if has FAV_POS_ACTIVE
         "spec-selector": "spec_sel",
+        "spec-switch": "spec_switch",
         "pcd-selector": "pcd_sel",
         "chamber": "chamber",
         "light": "light",
+        "light-aligner": "light_aligner",  # for light in-coupler on SPARCv2
         "brightlight": "brightlight",
         "backlight": "backlight",
         "filter": "light_filter",
@@ -233,6 +235,7 @@ class MainGUIData(object):
         self.mirror = None  # actuator to change the mirror position (SPARC)
         self.mirror_xy = None  # mirror in X/Y referential (SPARCv2)
         self.fibaligner = None  # actuator to move/calibrate the fiber (SPARC)
+        self.light_aligner = None  # actuator to move/calibrate the light aligner mirror (SPARCv2)
         self.light = None  # epi-fluorescence light (SECOM/DELPHI)
         self.brightlight = None  # special light for white illumination (SECOM) or calibration (SPARC)
         self.backlight = None  # for dark field illumination (SECOM)
@@ -255,6 +258,7 @@ class MainGUIData(object):
         self.lens_mover = None  # actuator to align the lens1 (SPARCv2)
         self.lens_switch = None  # actuator to align the lens2 (SPARCv2)
         self.spec_sel = None  # actuator to activate the path to the spectrometer (SPARCv2)
+        self.spec_switch = None  # actuator to activate the path to an external spectrometer (SPARCv2)
         self.pcd_sel = None  # actuator to activate the path to the probe current
         self.chamber = None  # actuator to control the chamber (has vacuum, pumping etc.)
         self.chamber_ccd = None  # view of inside the chamber
@@ -353,7 +357,7 @@ class MainGUIData(object):
                 required_roles += ["light", "stage", "focus", "align", "ion-beam"]
             elif self.role in ("sparc", "sparc2"):
                 # SPARCv1 can also work without a lens
-                required_roles += ["e-beam", "mirror"]
+                required_roles += ["e-beam"]
                 if self.role == "sparc2":
                     required_roles += ["lens"]
             elif self.role == "mbsem":
@@ -1055,6 +1059,9 @@ class ActuatorGUIData(MicroscopyGUIData):
                   # On the typical SPARCv2, the smallest step is ~10µm, anything below will not move.
                   "spec_focus": (100e-6, [1e-6, 1000e-6], "spectrograph", {"focus"}),
                   "mirror_r": (10e-6, [100e-9, 1e-3], "mirror", {"ry", "rz"}),
+                  # SPARCv2 light aligner dichroic mirror and spec switch foldable mirror
+                  "light_aligner": (50e-6, [5e-6, 500e-6], "light_aligner", None),
+                  "spec_switch": (50e-6, [5e-6, 500e-6], "spec_switch", None),
                   }
         # Use mirror_xy preferably, and fallback to mirror
         if main.mirror_xy:
@@ -1184,7 +1191,10 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         self.viewLayout = model.IntEnumerated(VIEW_LAYOUT_ONE, choices={VIEW_LAYOUT_ONE})
 
         # Mode values are different from the modes of the OpticalPathManager
-        amodes = ["lens-align", "mirror-align", "lens2-align", "center-align", "ek-align", "streak-align", "fiber-align"]
+        amodes = [
+                  "lens-align", "mirror-align", "lens2-align", "center-align",
+                  "ek-align", "streak-align", "fiber-align", "light-in-align"
+                 ]
 
         # VA for autofocus procedure mode
         self.autofocus_active = BooleanVA(False)
@@ -1194,6 +1204,9 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # hybrid/custom SPARC)
         if not main.spectrograph or not main.lens_mover:
             amodes.remove("lens-align")
+
+        if not main.mirror:
+            amodes.remove("mirror-align")
 
         if main.lens and model.hasVA(main.lens, "polePosition"):
             # Position of the hole from the center of the AR image (in m)
@@ -1238,6 +1251,15 @@ class Sparc2AlignGUIData(ActuatorGUIData):
 
         if main.streak_ccd is None:
             amodes.remove("streak-align")
+
+        if main.light_aligner is None:
+            amodes.remove("light-in-align")
+        else:
+            if main.spec_switch:
+                # Check that the spec-selector has the right metadata
+                md = main.spec_switch.getMetadata()
+                if not {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()):
+                    raise ValueError("spec-switch should have FAV_POS_ACTIVE and FAV_POS_DEACTIVE")
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 
