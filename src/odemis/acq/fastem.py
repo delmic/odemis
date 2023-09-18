@@ -31,6 +31,7 @@ from concurrent.futures import CancelledError
 import numpy
 
 from odemis.acq.align.fastem import align, estimate_calibration_time
+from odemis.util.driver import guessActuatorMoveDuration
 from odemis.util.registration import estimate_grid_orientation_from_img
 from odemis.util.transform import to_physical_space, SimilarityTransform
 
@@ -794,6 +795,11 @@ class AcquisitionTask(object):
         rel_move_hor = self.field_idx[0] * px_size[0] * field_res[0] * (1 - self._roa.overlap)  # in meter
         rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1] * (1 - self._roa.overlap)  # in meter
 
+        # Acceleration unknown, guessActuatorMoveDuration uses a default acceleration
+        estimated_time_x = guessActuatorMoveDuration(self._stage, "x", abs(rel_move_hor))  # s
+        estimated_time_y = guessActuatorMoveDuration(self._stage, "y", abs(rel_move_hor))  # s
+        logging.debug(f"Estimated time for stage movement: {estimated_time_x + estimated_time_y} s")
+
         # With role="stage", move positive in x direction, because the second field should be right of the first,
         # and move negative in y direction, because the second field should be bottom of the first.
         pos_hor = self._pos_first_tile[0] + rel_move_hor
@@ -808,11 +814,17 @@ class AcquisitionTask(object):
 
     def move_stage_to_next_tile(self):
         """Move the stage to the next tile (field image) position."""
-
         pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
+
         logging.debug(f"Moving to stage position x: {pos_hor}, y: {pos_vert}")
+        t = time.time()
         self._stage.moveAbsSync({'x': pos_hor, 'y': pos_vert})  # move the stage
-        logging.debug(f"Moved to stage position {self._stage.position.value}")
+        logging.debug(f"Actual time for stage movement: {time.time() - t} s")
+        stage_pos = self._stage.position.value
+        diff_x = stage_pos["x"] - pos_hor
+        diff_y = stage_pos["y"] - pos_vert
+        logging.debug(f"Moved to stage position {stage_pos}, "
+                      f"difference in xy between actual and target stage position: {diff_x}, {diff_y} m")
 
     def correct_beam_shift(self):
         """
