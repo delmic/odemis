@@ -7557,9 +7557,9 @@ class Sparc2AlignTab(Tab):
             mirror = main_data.mirror
             if mirror and set(mirror.axes.keys()) == {"l", "s"}:
                 return 5
-        # Special case for SPARCv2 with ELIM module: only light-aligner
-        if main_data.role == "sparc2" and main_data.light_aligner:
-            return 10
+            elif main_data.light_aligner:
+                # Special case for ELIM module: no mirror, but light-aligner
+                return 5
 
         return None
 
