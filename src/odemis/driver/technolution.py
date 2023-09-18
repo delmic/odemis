@@ -64,7 +64,7 @@ ASM_USER_CHARS = r'[A-Za-z0-9]+'  # + -> should be at least one character
 ASM_PASSWORD_CHARS = r'[A-Za-z0-9]+'
 ASM_HOST_CHARS = r'[A-Za-z0-9.]+'
 ASM_PATH_CHARS = r'[A-Za-z0-9/_()-]+'
-ASM_SUBDIR_CHARS = r'[A-Za-z0-9/_()-]*'  # * -> subdirectories can also be empty string
+ASM_SUBDIR_CHARS = r'[A-Za-z0-9/_()-.]*'  # * -> subdirectories can also be empty string
 ASM_FILE_CHARS = r'[A-Za-z0-9_()-]+'
 
 
