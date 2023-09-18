@@ -1695,12 +1695,15 @@ class Scanner(model.Emitter):
         """
         scan_mode = "external" if external else "full_frame"
         self.parent.set_scan_mode(scan_mode)
-        # The dwellTime VA setter can only reflect changes on the SEM server side (parent)
+        # The dwellTime and scale VA setter can only reflect changes on the SEM server side (parent)
         # after the external VA is set to False i.e. 'full_frame'
         if not external:
             if self.dwellTime.value != self.parent.get_dwell_time():
                 # Set the VA value again to reflect changes on the parent
                 self.dwellTime.value = self.dwellTime.value
+            if self.resolution.value != tuple(self.parent.get_resolution()):
+                # Set the VA value again to reflect changes on the parent
+                self.scale.value = self.scale.value
         return external
 
     def prepareForScan(self):
