@@ -106,10 +106,10 @@ def rgb_to_frgb(rgb):
     """
     # check if the tuple consists of three values
     if len(rgb) != 3:
-        raise ValueError("Illegal RGB colour %s" % rgb)
+        raise ValueError("Illegal RGB colour %s" % (rgb,))
     # check if the tuple values are valid RGB values
-    if not numpy.all(tuple(0 <= c <= 255 for c in rgb)):
-        raise ValueError("Not all values are valid RGB values (0-255)")
+    if not all(0 <= c <= 255 for c in rgb):
+        raise ValueError("Not all values are valid RGB values (0-255) of passed colour %s" % (rgb,))
     return tuple(v / 255.0 for v in rgb)
 
 
