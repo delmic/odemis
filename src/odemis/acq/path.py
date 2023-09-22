@@ -173,7 +173,7 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spectrograph': {'grating': 'mirror'},
+                 'spectrograph': {'grating': 'mirror', 'wavelength': 0},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
@@ -186,7 +186,7 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spectrograph': {'grating': 'mirror'},
+                 'spectrograph': {'grating': 'mirror', 'wavelength': 0},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  }),
@@ -203,7 +203,7 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spectrograph': {'grating': 'mirror'},
+                 'spectrograph': {'grating': 'mirror', 'wavelength': 0},
                  # Note: focus is store/restore when going to/from this mode
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
@@ -216,7 +216,8 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
+                 # slit to the minimum, wavelength to the zeroth order
+                 'spectrograph': {'slit-in': 10e-6, 'wavelength': 0},
                  # 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
