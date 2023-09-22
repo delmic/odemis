@@ -797,6 +797,9 @@ class LiveViewport(MicroscopeViewport):
         Called whenever the current (playing) stream changes.
         Used to update the focus capability based on the stream
         """
+        if self._view is None:  # In case it's called after being destroyed
+            return
+
         if CAN_FOCUS not in self._orig_abilities:
             return
         # find out the current playing stream in the view
