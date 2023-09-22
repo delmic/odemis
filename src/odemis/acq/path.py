@@ -191,7 +191,7 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spectrograph': {'grating': 'mirror'},
+                 'spectrograph': {'grating': 'mirror', 'wavelength': 0},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
@@ -206,7 +206,7 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spectrograph': {'grating': 'mirror'},
+                 'spectrograph': {'grating': 'mirror', 'wavelength': 0},
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
@@ -227,7 +227,7 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'on'},
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spectrograph': {'grating': 'mirror'},
+                 'spectrograph': {'grating': 'mirror', 'wavelength': 0},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'on'},
@@ -241,7 +241,8 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
+                 # slit to the minimum, wavelength to the zeroth order
+                 'spectrograph': {'slit-in': 10e-6, 'wavelength': 0},
                  # 'cl-det-selector': {'x': 'off'},
                  # 'spec-det-selector': {'rx': 0},
                  'chamber-light': {'power': 'off'},
@@ -279,6 +280,7 @@ SPARC2_MODES = {
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'filter': {'band': BAND_PASS_THROUGH},
+                 'spectrograph': {'grating': 'mirror', 'wavelength': 0},
                  'slit-in-big': {'x': 'on'},  # fully opened
                  # 'spec-switch': {'x': "MD:" + model.MD_FAV_POS_DEACTIVE},
                  'chamber-light': {'power': 'off'},
