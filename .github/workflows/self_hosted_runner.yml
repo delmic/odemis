@@ -13,7 +13,7 @@ jobs:
       # Don't cancel all in-progress and queued jobs in the matrix if any job in the matrix fails
       fail-fast: false
       matrix:
-        vm_name: ["Odemis Testing 18", "Odemis Testing 20"]
+        vm_name: ["Odemis Testing 18", "Odemis Testing 20", "Odemis Testing 22"]
     steps:
     - name: List of all VMs
       run: VBoxManage list vms
