@@ -146,6 +146,7 @@ class FastEMOverviewAcquiController(object):
                 b.Enable(True)
             else:
                 b.Enable(False)
+                b.SetBackgroundColour(FG_COLOUR_BUTTON)
                 if num in self._tab_data_model.selected_scintillators.value:
                     self._tab_data_model.selected_scintillators.value.remove(num)
         self.update_acquisition_time()
