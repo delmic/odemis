@@ -440,7 +440,6 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
         self.pnl_vp_grid = xrc.XRCCTRL(self, "pnl_vp_grid")
         self.vp_align_lens = xrc.XRCCTRL(self, "vp_align_lens")
-        self.vp_moi = xrc.XRCCTRL(self, "vp_moi")
         self.vp_align_center = xrc.XRCCTRL(self, "vp_align_center")
         self.vp_align_ek = xrc.XRCCTRL(self, "vp_align_ek")
         self.vp_align_streak = xrc.XRCCTRL(self, "vp_align_streak")
@@ -4307,7 +4306,7 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Lens1</label>
+                      <label>Lens 1</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -4439,7 +4438,7 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Lens2</label>
+                      <label>Lens 2</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -5502,11 +5501,6 @@ def __init_resources():
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_vp_grid">
           <object class="LiveViewport" name="vp_align_lens">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="LiveViewport" name="vp_moi">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>

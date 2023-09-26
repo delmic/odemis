@@ -3192,7 +3192,7 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Lens1</label>
+                      <label>Lens 1</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -3324,7 +3324,7 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxStaticText">
-                      <label>Lens2</label>
+                      <label>Lens 2</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
@@ -4387,11 +4387,6 @@
       <object class="sizeritem">
         <object class="ViewportGrid" name="pnl_vp_grid">
           <object class="LiveViewport" name="vp_align_lens">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="LiveViewport" name="vp_moi">
             <XRCED>
               <assign_var>1</assign_var>
             </XRCED>
