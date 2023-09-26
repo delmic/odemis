@@ -1511,10 +1511,21 @@ class Scanner(model.Emitter):
         """
         logging.debug("Updating SEM settings")
         try:
-            dwell_time = self.parent.get_dwell_time()
-            if dwell_time != self.dwellTime.value:
-                self.dwellTime._value = dwell_time
-                self.dwellTime.notify(dwell_time)
+            external = self._isExternal()
+            if external != self.external.value:
+                self.external._value = external
+                self.external.notify(external)
+            # Read dwellTime and resolution settings from the SEM and reflects them on the VAs only
+            # when external is False i.e. the scan mode is 'full_frame'.
+            # If external is True i.e. the scan mode is 'external' the dwellTime and resolution are
+            # disabled and hence no need to reflect settings on the VAs.
+            if not self.external.value:
+                dwell_time = self.parent.get_dwell_time()
+                if dwell_time != self.dwellTime.value:
+                    self.dwellTime._value = dwell_time
+                    self.dwellTime.notify(dwell_time)
+                if self._has_detector:
+                    self._updateResolution()
             voltage = self.parent.get_ht_voltage()
             v_range = self.accelVoltage.range
             if not v_range[0] <= voltage <= v_range[1]:
@@ -1547,12 +1558,6 @@ class Scanner(model.Emitter):
                 self.magnification._value = mag
                 self.horizontalFoV.notify(fov)
                 self.magnification.notify(mag)
-            external = self._isExternal()
-            if external != self.external.value:
-                self.external._value = external
-                self.external.notify(external)
-            if self._has_detector:
-                self._updateResolution()
         except Exception:
             logging.exception("Unexpected failure when polling settings")
 
