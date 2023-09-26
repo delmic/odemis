@@ -24,26 +24,26 @@ see http://www.gnu.org/licenses/.
 # they were initialised with.
 
 from past.builtins import long
-from collections.abc import Iterable
 import copy
 import gc
 import logging
 import math
-import numpy
-from odemis import model, util
-from odemis.acq import calibration
-from odemis.model import MD_POS, MD_POL_MODE, VigilantAttribute, MD_POL_S0
-from odemis.util import img, conversion, spectrum, find_closest, almost_equal
 import threading
 import time
 import weakref
+from collections.abc import Iterable
 
-from ._base import Stream, POL_POSITIONS_RESULTS, POL_POSITIONS
-
+import numpy
 try:
     import arpolarimetry
 except ImportError:
     arpolarimetry = None
+
+from odemis import model, util
+from odemis.acq import calibration
+from odemis.model import MD_POL_MODE, MD_POL_S0, MD_POS, VigilantAttribute
+from odemis.util import almost_equal, conversion, find_closest, img, spectrum
+from ._base import POL_POSITIONS, POL_POSITIONS_RESULTS, Stream
 
 
 class StaticStream(Stream):
@@ -669,8 +669,6 @@ class StaticSpectrumStream(StaticStream):
         # Peak method index, None if spectrum peak fitting curve is not displayed
         self.peak_method = model.VAEnumerated("gaussian", {"gaussian", "lorentzian", None})
 
-        # TODO: allow to pass the calibration data as argument to avoid
-        # recomputing the data just after init?
         # Spectrum efficiency compensation data: None or a DataArray (cf acq.calibration)
         self.efficiencyCompensation = model.VigilantAttribute(None, setter=self._setEffComp)
         self.efficiencyCompensation.subscribe(self._onCalib)
@@ -687,6 +685,8 @@ class StaticSpectrumStream(StaticStream):
 
         # the raw data after calibration
         self.calibrated = model.VigilantAttribute(None)
+        # Store the previous parameters used to calibrate the data to skip unnecessary calls
+        self._calib_parameters = (None, None)  # numpy arrays or None
         # Immediately compute it, without any correction, as it can still be
         # different from image if it's an angular spectrum dataset.
         self._updateCalibratedData(image, bckg=None, coef=self.efficiencyCompensation.value)
@@ -826,6 +826,7 @@ class StaticSpectrumStream(StaticStream):
         Try to update the data with a new calibration. The two parameters are
         the same as apply_spectrum_corrections(). The input data comes from
         .raw and the calibrated data is saved in .calibrated
+        :param data: (DataArray or None) The raw data. If None is given, .raw[0] is used.
         :param bckg: (DataArray or None) The background image.
         :param coef: (DataArray or None) The spectrum efficiency correction data.
         :raise ValueError: If the data and calibration data are not valid or
@@ -833,6 +834,14 @@ class StaticSpectrumStream(StaticStream):
         """
         if data is None:
             data = self.raw[0]  # only one image in .raw for spectrum, temporal spectrum and chronograph
+            prev_bckg, prev_coef = self._calib_parameters
+            # Because we can assume that arrays are used as read-only, compare
+            # numpy arrays with just "is" to check that they are exactly the
+            # same object. Using "is" is a lot faster than comparing the content
+            # of the array, and it also simplifies to the code to handle None.
+            if bckg is prev_bckg and coef is prev_coef:
+                logging.debug("Skipping re-calibration with the same parameters")
+                return
 
         if data is None:  # Very unlikely, but in that case, don't try too hard
             self.calibrated.value = None
@@ -851,6 +860,7 @@ class StaticSpectrumStream(StaticStream):
             # Force a call to the setter to make sure it's rounded to a pixel
             self.selected_angle.value = self.selected_angle.value
 
+        self._calib_parameters = (bckg, coef)
         self.calibrated.value = calibrated
 
     def _setBackground(self, bckg):
