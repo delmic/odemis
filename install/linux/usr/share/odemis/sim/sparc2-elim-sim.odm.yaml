@@ -182,7 +182,7 @@ SPARC2-ELIM: {
     role: lens,
     # No parabolic mirror. Still need a lens to make Odemis happy about the magnification
     init: {
-       mag: 0.31, # ratio
+       mag: 1.5, # ratio
        na: 0.2, # ratio, numerical aperture
        ri: 1.0, # ratio, refractive index
     },
@@ -208,41 +208,6 @@ SPARC2-ELIM: {
         # +inx should move the same direction as +l1 and +l2: towards the back
         # +inz should go further away from the light source
     },
-}
-
-# The first lens of Plate 1, able to move along the whole range
-"Lens1 Mover": {
-    class: actuator.MultiplexActuator,
-    role: "lens-mover",
-    dependencies: {"x": "Optical Actuators"},
-    init: {
-        axes_map: {"x": "l1"},
-        ref_on_init: ["x"],
-    },
-    metadata: {
-        # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": 0.0045} # m
-    },
-    affects: ["Lens2 Switch"],
-}
-
-# The second lens of Plate 1, either to working or parking position
-"Lens2 Switch": {
-    class: actuator.MultiplexActuator,
-    role: "lens-switch",
-    dependencies: {"x": "Optical Actuators"},
-    init: {
-        axes_map: {"x": "l2"},
-        ref_on_init: ["x"],
-    },
-    metadata: {
-        # Position away
-        FAV_POS_DEACTIVE: {"x": -0.02}, # m
-        # Default position of the lens (can be improved by user)
-        FAV_POS_ACTIVE: {"x": -4.0e-3}, # m
-        POS_ACTIVE_RANGE: {"x": [-1.e-3, 1.e-3]},  # relative min/max from the active position when doing EK-scanning
-    },
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectral Camera", "Spectrometer IR"],
 }
 
 # Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
