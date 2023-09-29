@@ -418,11 +418,11 @@ class TestHDF5IO(unittest.TestCase):
         ypos = f["Acquisition0/ImageData/YOffset"][()]
         self.assertAlmostEqual(metadata[model.MD_POS][1], ypos)
 
-        # Check physical metadata
-        desc = f["Acquisition0/PhysicalData/Title"][()]
+        # Check physical metadata, read_str converts from bytes to str
+        desc = hdf5.convert_to_str(f["Acquisition0/PhysicalData/Title"][()])
         self.assertEqual(metadata[model.MD_DESCRIPTION], desc)
 
-        iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()] # m
+        iwl = f["Acquisition0/PhysicalData/ExcitationWavelength"][()]  # m
         self.assertTrue((metadata[model.MD_IN_WL][0] <= iwl <= metadata[model.MD_IN_WL][1]))
 
         expt = f["Acquisition0/PhysicalData/IntegrationTime"][()] # s
