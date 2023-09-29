@@ -24,6 +24,7 @@ import json
 import logging
 import os
 import time
+from typing import Union
 
 import h5py
 import numpy
@@ -618,9 +619,7 @@ def _read_image_info(group):
                     if isinstance(group["COffset"], (bytes, str)):
                         # Only to support some files saved with Odemis 2.3-alpha
                         logging.warning("COffset is a string, not officially supported")
-                        out_wl = group["COffset"]
-                        if not isinstance(out_wl, str):
-                            out_wl = out_wl.decode("utf-8", "replace")
+                        out_wl = convert_to_str(group["COffset"])
                         md[model.MD_OUT_WL] = out_wl
                     else:
                         # read polynomial: first is C offset, second coefficient polynomial first order (linear)
@@ -712,29 +711,15 @@ def _parse_physical_data(pdgroup, da):
     for i, d in enumerate(das):
         md = d.metadata
         try:
-            cd = pdgroup["ChannelDescription"][i]
-            # For Python 2, where it returns a "str", which are actually UTF-8 encoded bytes
-            if not isinstance(cd, str):
-                cd = cd.decode("utf-8", "replace")
+            cd = convert_to_str(pdgroup["ChannelDescription"][i])
             md[model.MD_DESCRIPTION] = cd
         except (KeyError, IndexError, UnicodeDecodeError):
             # maybe Title is more informative... but it's not per channel
             try:
-                title = pdgroup["Title"][()]
-                if not isinstance(cd, str):
-                    title = title.decode("utf-8", "replace")
+                title = convert_to_str(pdgroup["Title"][()])
                 md[model.MD_DESCRIPTION] = title
             except (KeyError, IndexError, UnicodeDecodeError):
                 pass
-
-        # make sure we can read both bytes (HDF5 ascii) and string (HDF5 utf8) metadata
-        # That's important because Python 2 strings are stored as bytes (ie ascii), while Python 3 strings
-        # (unicode) are always stored as utf-8.
-        # This forces both ascii and utf8 to be stored as strings (unicode)
-        def read_str(s):
-            if isinstance(s, bytes):
-                s = s.decode('utf8')
-            return s
 
         read_metadata(pdgroup, i, md, "ExcitationWavelength", model.MD_IN_WL, converter=float)
         read_metadata(pdgroup, i, md, "EmissionWavelength", model.MD_OUT_WL, converter=float)
@@ -756,8 +741,8 @@ def _parse_physical_data(pdgroup, da):
                       converter=numpy.ndarray.tolist,
                       bad_states=(ST_INVALID, ST_DEFAULT))
 
-        read_metadata(pdgroup, i, md, "HardwareName", model.MD_HW_NAME, converter=read_str)
-        read_metadata(pdgroup, i, md, "HardwareVersion", model.MD_HW_VERSION, converter=read_str)
+        read_metadata(pdgroup, i, md, "HardwareName", model.MD_HW_NAME, converter=convert_to_str)
+        read_metadata(pdgroup, i, md, "HardwareVersion", model.MD_HW_VERSION, converter=convert_to_str)
 
         # angle resolved
         read_metadata(pdgroup, i, md, "PolePosition", model.MD_AR_POLE, converter=tuple)
@@ -768,7 +753,7 @@ def _parse_physical_data(pdgroup, da):
         read_metadata(pdgroup, i, md, "FocusDistance", model.MD_AR_FOCUS_DISTANCE, converter=float)
         read_metadata(pdgroup, i, md, "ParabolaF", model.MD_AR_PARABOLA_F, converter=float)
         # polarization analyzer
-        read_metadata(pdgroup, i, md, "Polarization", model.MD_POL_MODE, converter=read_str)
+        read_metadata(pdgroup, i, md, "Polarization", model.MD_POL_MODE, converter=convert_to_str)
         read_metadata(pdgroup, i, md, "QuarterWavePlate", model.MD_POL_POS_QWP, converter=float)
         read_metadata(pdgroup, i, md, "LinearPolarizer", model.MD_POL_POS_LINPOL, converter=float)
         # streak camera
@@ -1663,3 +1648,16 @@ def read_thumbnail(filename):
     # TODO: support filename to be a File or Stream
 
     return _thumbFromHDF5(filename)
+
+
+def convert_to_str(s: Union[bytes, str]) -> str:
+    """
+    Make sure we can read both bytes (HDF5 ascii) and string (HDF5 utf8) metadata
+    HDF5 has different types of strings: ASCII vs UTF8, and fixed- vs variable-length.
+    h5py convert some to "unicode" (aka string) and some to bytes. Which one is converted
+    to what depends on the version of h5py! To keep some sanity, when it is known that a
+    data is a unicode text, use this function to ensure it.
+    """
+    if isinstance(s, bytes):
+        s = s.decode("utf8", "replace")
+    return s
