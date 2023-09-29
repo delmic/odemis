@@ -96,12 +96,6 @@ jobs:
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/util/test/peak_local_max_test.py --verbose
 
-    - name: Run tests from odemis.util.peak_local_max
-      if: success() || failure()
-      run: |
-        export PYTHONPATH="$PWD/src:$PYTHONPATH"
-        python3 -m unittest src/odemis/util/test/peak_local_max_test.py --verbose
-
     - name: Run tests from odemis.util.peak
       if: success() || failure()
       run: |
@@ -157,3 +151,27 @@ jobs:
       run: |
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/acq/test/feature_test.py --verbose
+
+    - name: Run tests from odemis.gui.conf
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src.odemis.gui.conf.test.conf_test.AcquisitionConfigTest --verbose
+        python3 -m unittest src.odemis.gui.conf.test.conf_test.CalibrationConfigTest --verbose
+        python3 -m unittest src.odemis.gui.conf.test.conf_test.GeneralConfigTest.test_save --verbose
+        python3 -m unittest src.odemis.gui.conf.test.conf_test.GeneralConfigTest.test_save_unicode --verbose
+        python3 -m unittest src.odemis.gui.conf.test.conf_test.GeneralConfigTest.test_simple --verbose
+        # test_default fails on CI, because the manual path does not exist on the server
+        # python3 -m unittest src.odemis.gui.conf.test.conf_test.GeneralConfigTest.test_default --verbose
+
+    - name: Run tests from odemis.gui.util.conversion
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/gui/util/test/conversion_test.py --verbose
+
+    - name: Run tests from odemis.gui.win
+      if: success() || failure()
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src/odemis/gui/win/test/acquisition_test.py --verbose
