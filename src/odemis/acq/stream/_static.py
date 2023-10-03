@@ -466,6 +466,19 @@ class StaticARStream(StaticStream):
 
         super(StaticARStream, self).__init__(name, list(self._pos.values()), *args, **kwargs)
 
+        # show the selected band filter wavelength in the emission field
+        try:
+            em_range = data[0].metadata[model.MD_OUT_WL]
+            if isinstance(em_range, str):
+                unit = None
+            else:
+                unit = "m"
+            self.emission = VigilantAttribute(em_range, unit=unit,
+                                              readonly=True)
+
+        except KeyError:
+            logging.info("No emission wavelength for AR stream")
+
     def _init_projection_vas(self):
         # override Stream._init_projection_vas.
         # This stream doesn't provide the projection(s) to an .image by itself.
