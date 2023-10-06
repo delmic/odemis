@@ -6560,7 +6560,7 @@ class Sparc2AlignTab(Tab):
                 self._ccd_stream.should_update.value = True
             if self._mirror_settings_controller:
                 self._mirror_settings_controller.enable(False)
-            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_mirror.Show(True)
             self.panel.pnl_lens_mover.Show(True)
             self.panel.pnl_lens_mover.Enable(False)  # Will be enabled once the lens is at the correct place
             self.panel.pnl_lens_switch.Show(False)
@@ -6635,7 +6635,13 @@ class Sparc2AlignTab(Tab):
             else:
                 self.panel.pnl_light_aligner.Show(False)
 
-            self.panel.pnl_moi_settings.Show(False)
+            self.panel.pnl_moi_settings.Show(True)
+            # Shows the "Acquire/remove background" button, so that if a background has been previously
+            # acquired it can be removed. As the optical path is changed, the background can easily
+            # be different.
+            # TODO: use a different stream from the one in lens-align, so that they don't share the
+            # same background data.
+            self.panel.btn_bkg_acquire.Enable(True)
         elif mode == "ek-align":
             self.tab_data_model.focussedView.value = self.panel.vp_align_ek.view
             self._as_stream.should_update.value = True
