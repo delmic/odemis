@@ -555,6 +555,29 @@ class TestDataArray2RGB(unittest.TestCase):
         self.assertTrue(numpy.all(out[..., 0] == 0))
         numpy.testing.assert_array_equal(data, out[:, :, 2])
 
+
+    def test_int16(self):
+        """
+        Test signed integer handling
+        """
+        irange = (-18000, 30000)  # Bigger range than 2**15
+        shape = (1024, 836)
+        tint = (0, 73, 255)
+        data = numpy.random.randint(irange[0], irange[1] + 1, shape).astype(numpy.int16)
+        # to be really sure there is at least one of the min and max values
+        data[0, 0] = irange[0]
+        data[0, 1] = irange[1]
+
+        out = img.DataArray2RGB(data, irange, tint=tint)
+
+        pixel1 = out[0, 1]
+        numpy.testing.assert_array_equal(pixel1, list(tint))
+
+        self.assertTrue(numpy.all(out[..., 0] == 0))
+
+        self.assertEqual(out[..., 2].min(), 0)
+        self.assertEqual(out[..., 2].max(), 255)
+
     def test_float(self):
         irange = (0.3, 468.4)
         shape = (102, 965)
