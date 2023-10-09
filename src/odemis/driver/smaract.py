@@ -40,6 +40,15 @@ from odemis.model import CancellableFuture, CancellableThreadPoolExecutor, isasy
 from odemis.util import driver, RepeatingTimer, almost_equal
 from concurrent.futures import CancelledError, TimeoutError
 
+try:
+    import smaract.si as si
+    import smaract.picoscale as ps
+
+    smaract_python_sdk = True
+except ImportError as err:
+    logging.info("Smaract Python SDK modules not found with error: {}".format(err))
+    smaract_python_sdk = False
+
 
 def add_coord(pos1, pos2):
     """
@@ -4912,6 +4921,406 @@ class Picoscale(model.HwComponent):
 
         return True
 
+
+class PicoscalePythonSDK(model.HwComponent):
+    """
+    A driver for a SmarAct Picoscale interferometer system using the Python SDK.
+
+    The device does not contain any actuators. Its main functionality is to provide the position for each
+    of its channels through a VA.
+
+    Attributes
+    ==========
+    .position (VA: str --> float): position in m for each channel
+    .referenced (VA: str --> bool): indicates which channels have been referenced
+
+    Functions
+    =========
+    .reference: performs adjustment routine required for precise position values
+    """
+
+    def __init__(self, name, role, locator, channels, ref_on_init=False, precision_mode=0, *args, **kwargs):
+        """
+        name: (str)
+        role: (str)
+        locator: (str)
+            For a real device, Picoscale controllers with USB interface can be addressed with the
+            following locator syntax:
+                usb:ix:<id>
+            where <id> is the first part of a USB devices serial number which
+            is printed on the Picoscale controller.
+            If the controller has a TCP/IP connection, use:
+                network:<ip>:<port>
+            The device can also be addressed by its serial number:
+                usb:sn:<serial_number>
+                network:sn:<serial_number>
+        channels: (str --> int) dictionary mapping channel names to channel numbers
+        ref_on_init: (True, False, "always", "if necessary", "never")
+            * "always": Run referencing procedure every time the driver is initialized, no matter the state it was in.
+            * True / "if necessary": If the channels are already in a valid state (i.e. the device was not turned off
+                since the last referencing), don't reference again. Only reference if the channels are not valid (i.e.
+                the device was turned off after the last referencing). In any case, the device can be used after
+                the referencing procedure is complete. It is recommended to reference the system frequently though.
+                In case the system has not been power cycled in a long time, the referencing parameters might become
+                outdated and the reported position values might not be accurate.
+            * False / "never": Never reference. This means that the device might not be able to produce position data,
+                if it was not previously referenced.
+        precision_mode: (0 <= int <= 5) strength of digital lowpass filter, a higher level corresponds to higher
+            precision, but lower velocity. Not available on all systems.
+        """
+        model.HwComponent.__init__(self, name, role, *args, **kwargs)
+
+        if not smaract_python_sdk:
+            raise ModuleNotFoundError("Smaract Python SDK modules are missing. Cannot run PicoScale driver.")
+
+        # Connection
+        try:
+            self.id = si.Open(locator)
+        except si.Error as error:
+            logging.debug(self._getReadableSIError(error))
+            logging.debug("Could not open connection to the device by locator %s.", locator)
+            raise
+
+        # Device information
+        devname = si.GetProperty_s(self.id, si.EPK(si.Property.DEVICE_NAME, 0, 0))
+        sn = si.GetProperty_s(self.id, si.EPK(si.Property.DEVICE_SERIAL_NUMBER, 0, 0))
+        num_ch = si.GetProperty_i32(self.id, si.EPK(si.Property.NUMBER_OF_CHANNELS, 0, 0))
+        self._hwVersion = "SmarAct %s (s/n %s) with %s channels." % (devname, sn, num_ch,)
+        self._swVersion = si.GetFullVersionString()
+        logging.debug("Using Picoscale library version %s to connect to %s. ", self._swVersion, self._hwVersion)
+
+        # Check channels
+        if not channels:
+            raise ValueError("Needs at least 1 axis.")
+        for num in channels.values():
+            if not 0 <= num <= num_ch - 1:
+                raise ValueError("Channel %s not available, needs to be 0 < channel < %s." % (num, num_ch - 1))
+        self._channels = channels  # channel name -> channel number used by controller
+        self._axes = {ch: model.Axis(range=(-10, 10), unit="m") for ch in self._channels}  # range is arbitrarily large
+
+        # Device setup
+        si.SetProperty_i32(self.id, si.EPK(ps.Property.SYS_FULL_ACCESS_CONNECTION, 0, 0), si.ENABLED)
+        # If referencing is still running, cancel it
+        si.Cancel(self.id)
+        # Reset referencing state if necessary (in case referencing has been stopped improperly)
+        state = si.GetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0))
+        if state != ps.AdjustmentState.DISABLED:
+            si.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.DISABLED)
+
+        # Log configuration
+        flen = si.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_FIBERLENGTH_HEAD, 0, 0))
+        ext_flen = si.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_FIBERLENGTH_EXTENSION, 0, 0))
+        wdist_min = si.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_WORKING_DISTANCE_MIN, 0, 0))
+        wdist_max = si.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_WORKING_DISTANCE_MAX, 0, 0))
+        logging.debug("Picoscale configuration: fiber length %s, extension fiber length %s, "
+                      "working distance [%s, %s].", flen, ext_flen, wdist_min, wdist_max)
+
+        # Position polling thread
+        # Will be started later, either after referencing, or in __init__ if we're not referencing on startup
+        # During referencing, ._polling_thread will be stopped and set back to None.
+        self.position = model.VigilantAttribute({}, getter=self._getPosition, readonly=True)
+        self._polling_thread = None
+
+        # Precision mode
+        # The precision mode is a special feature that needs to be purchased separately, so it is not available
+        # by default.
+        # TODO: this functionality has not yet been tested
+        try:
+            si.SetProperty_f64(self.id, si.EPK(ps.Property.AF_PRECISION_MODE_LEVEL, 0, 0), precision_mode)
+        except si.Error as error:
+            logging.debug(self._getReadableSIError(error))
+            if error.code == si.ErrorCode.INVALID_DATA_TYPE:
+                logging.debug("Precision mode not available.")
+            else:
+                raise
+
+        # State: starting until first referencing/validation procedure is done
+        self.state._set_value(model.ST_STARTING, force_write=True)
+
+        # Referencing
+        self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
+        channel_ref = {ch: bool(si.GetProperty_i32(self.id, si.EPK(ps.Property.CH_IS_VALID, num, 0))) for ch, num in self._channels.items()}
+        self.referenced = model.VigilantAttribute(channel_ref, readonly=True)  # VA dict str(channel) -> bool
+
+        all_channels_valid = all(channel_ref.values())
+        f = None
+        if ref_on_init == "always":
+            f = self.reference()
+        elif ref_on_init in (True, "if necessary"):
+            if not all_channels_valid:
+                f = self.reference()
+                logging.debug("Not all channels are valid, will run referencing.")
+            else:
+                logging.debug("System already referenced, not referencing again.")
+        elif ref_on_init in (False, "never"):
+            if not all_channels_valid:
+                raise ValueError("Picoscale is not referenced. The device cannot be used until the referencing "
+                                "procedure is called.")
+        else:
+            raise ValueError("Invalid parameter %s for ref_on_init." % ref_on_init)
+        # These procedure can take a while (up to 10 minutes), especially after the power of the system
+        # has just been turned on. Therefore, we don't wait until the procedure is complete.
+        # Starting from standby is generally much faster.
+        if f:
+            f.add_done_callback(self._on_referenced)
+        else:
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+            self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
+            self._polling_thread.start()
+
+    def _on_referenced(self, future):
+        """
+        Callback function for referencing/validation future in __init__.
+        """
+        try:
+            future.result()
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        except Exception as e:
+            self.state._set_value(e, force_write=True)
+            logging.exception(e)
+
+    def _updatePosition(self):
+        """
+        Updates the position VA.
+        """
+        pos = self._getPosition()
+        self.position._set_value(pos, force_write=True)
+        logging.debug("Updated position to %s.", pos)
+
+    def _doReference(self, future):
+        """
+        Actually runs the referencing code.
+        future (Future): the future it handles
+        raise:
+            IOError: if referencing failed due to hardware
+            CancelledError if was cancelled
+        """
+        try:
+            # TODO: can we leave the position polling thread on? It does not seem
+            # to interfere with the referencing procedure.
+            if self._polling_thread:
+                self._polling_thread.cancel()
+                self._polling_thread = None
+
+            with future._moving_lock:
+                if future._must_stop.is_set():
+                    raise CancelledError()
+                # Reset reference so that if it fails, it states the axes are not referenced (anymore)
+                self.referenced._value = {a: False for a in self._channels.keys()}
+                # Cannot go immediately to automatic adjustment --> first switch to manual adjustment
+                si.SetProperty_i32(self.id, si.Property.EVENT_NOTIFICATION_ENABLED << 16 | ps.EventType.AF_ADJUSTMENT_PROGRESS, si.ENABLED)
+                # Enable channels
+                for channel_index in self._channels.values():
+                    si.SetProperty_i32(self.id, si.EPK(ps.Property.CH_ENABLED, channel_index, 0), si.ENABLED)
+                si.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.MANUAL_ADJUST)
+            self._wait_for_progress_event(ps.AdjustmentState.MANUAL_ADJUST, timeout=600)
+            logging.debug("Manual adjustment finished.")
+
+            with future._moving_lock:
+                if future._must_stop.is_set():
+                    raise CancelledError()
+                # Activate working distance
+                si.SetProperty_i32(self.id, si.EPK(ps.Property.SYS_WORKING_DISTANCE_ACTIVATE, 0, 0), ps.WorkingDistanceShrinkMode.LEFT_RIGHT)
+            # attribute is write-only and there is no corresponding event type (yet some waiting time is necessary)
+            # --> wait 1 s for command to be processed
+            if future._must_stop.wait(1):
+                raise CancelledError()
+            logging.debug("Working distance active.")
+
+            with future._moving_lock:
+                if future._must_stop.is_set():
+                    raise CancelledError()
+                # Switch to automatic adjustment
+                si.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.AUTO_ADJUST)
+            self._wait_for_progress_event(ps.AdjustmentState.DISABLED, timeout=600)  # state will be DISABLED when done
+            logging.debug("Finished referencing.")
+
+            # We could save the referencing parameters to memory here. This could be useful for the validation,
+            # because it initializes the system by loading the stored referencing parameters. However, we don't
+            # currently use validation, so there is no need to store the values every time we reference.
+        except si.Error as error:
+            logging.debug(self._getReadableSIError(error))
+            # This occurs if a stop command interrupts referencing
+            if error.code == si.ErrorCode.CANCELED:
+                logging.info("Referencing stopped: %s", error)
+                raise CancelledError()
+            elif future._must_stop.is_set():
+                raise CancelledError()
+            else:
+                logging.error("Referencing failed: %s", error)
+                raise
+        except CancelledError:
+            logging.debug("Referencing cancelled.")
+            raise  # No fuss, pass it as-is
+        except Exception:
+            logging.exception("Referencing failure.")
+            raise
+        finally:
+            # Update the referenced values for the channels
+            for ch, num in self._channels.items():
+                self.referenced._value[ch] = bool(si.GetProperty_i32(self.id, si.EPK(ps.Property.CH_IS_VALID, num, 0)))
+            # If the measuring system is stable and ready to produce accurate results start the polling
+            if bool(si.GetProperty_i32(self.id, si.EPK(ps.Property.SYS_IS_STABLE, 0, 0))):
+                # Start polling thread
+                self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
+                self._polling_thread.start()
+                self._updatePosition()
+            else:
+                raise ValueError("The system did not become stable after the referencing procedure.")
+            # We only notify after updating the position so that when a listener
+            # receives updates both values are already updated.
+            self.referenced.notify(self.referenced.value)
+
+            # The adjustment state should be "disabled" after automatic adjustment. If the referencing
+            # procedure was stopped prematurely, right after it was set to "manual", it might be in the
+            # wrong state --> make sure it's set to disabled here.
+            if si.GetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0)) != ps.AdjustmentState.DISABLED:
+                si.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.DISABLED)
+                self._wait_for_progress_event(ps.AdjustmentState.DISABLED, timeout=600)  # state will be DISABLED when done
+            si.SetProperty_i32(self.id, si.Property.EVENT_NOTIFICATION_ENABLED << 16 | ps.EventType.AF_ADJUSTMENT_PROGRESS, si.DISABLED)
+
+    def _getReadableSIError(self, error):
+        """
+        Get readable SI error for logging purposes.
+
+        :param error: (si.Error or ps.Error) The error/exception raised.
+        :return: (str) The readable SI error.
+
+        """
+        err_name = "(0x{:04X})".format(error.code)
+        if error.code in set(err.value for err in si.ErrorCode):
+            err_name = "si.ErrorCode." + si.ErrorCode(error.code).name + " " + err_name
+        elif error.code in set(err.value for err in ps.ErrorCode):
+            err_name = "ps.ErrorCode." + ps.ErrorCode(error.code).name + " " + err_name
+        return f"SI function {error.func} raised error: {err_name}"
+
+    def _getReadableEvent(self, event):
+        """
+        Get readable event name for logging purposes.
+
+        :param error: (si.EventType or ps.EventType) The event.
+        :return: (str) The readable event name.
+
+        """
+        ev_name = "(0x{:04X})".format(event.type)
+        if event.type in set(ev.value for ev in si.EventType):
+            ev_name = "si.EventType." + si.EventType(event.type).name + " " + ev_name
+        elif event.type in set(ev.value for ev in ps.EventType):
+            ev_name = "ps.EventType." + ps.EventType(event.type).name + " " + ev_name
+        return ev_name
+
+    def _cancelReference(self, future):
+        """
+        Cancels the referencing procedure.
+        future (Future): the future to stop
+        """
+        logging.debug("Cancelling referencing...")
+        future._must_stop.set()  # tell the thread taking care of the referencing it's over
+
+        # Synchronise with the ending of the future
+        with future._moving_lock:
+            si.Cancel(self.id)
+
+        return True
+
+    def _createReferenceFuture(self):
+        """
+        returns: (CancellableFuture)
+        """
+        f = CancellableFuture()
+        f._must_stop = threading.Event()  # cancel of the current future requested
+        f._moving_lock = threading.Lock()  # taken while moving
+        f.task_canceller = self._cancelReference
+        return f
+
+    @isasync
+    def reference(self, _=None):
+        """
+        This is not a "normal" referencing procedure since the hardware doesn't have any actuators. Instead,
+        it performs an internal adjustment routine which is required to get accurate position values.
+        """
+        f = self._createReferenceFuture()
+        self._executor.submitf(f, self._doReference, f)
+        return f
+
+    def _getPosition(self):
+        """
+        Getter for .position VA. Requests position from device.
+        returns: dict (str --> float)
+        """
+        # Polling thread is running all the time except during referencing
+        if self._polling_thread is None:
+            logging.warning("Cannot report position, device needs to be referenced first.")
+            return {}
+        pos = {}
+        for name, num in self._channels.items():
+            pos[name] = si.GetValue_f64(self.id, num, 0)
+        return pos
+
+    def terminate(self):
+        # should be safe to close the device multiple times if terminate is called more than once.
+        if self._polling_thread:
+            self._polling_thread.cancel()
+        if self._executor:
+            self._executor.cancel()
+            si.Close(self.id)
+            self._executor = None
+        super(PicoscalePythonSDK, self).terminate()
+
+    @roattribute
+    def axes(self):
+        """ dict str->Axis: name of each axis available -> their definition."""
+        return self._axes
+
+    def _wait_for_progress_event(self, end_state, timeout=float("inf")):
+        """
+        Blocks until progress event is triggered or timeout.
+        It is assumed that only one event type is enabled. The function will wait until the
+        .devEventParameter contains the end_state. This can mean different things depending on the event.
+        end_state (int): state of event variable to wait for
+        timeout (float): maximum time to wait in s. If inf, it will wait forever.
+        raises
+            TimeoutError: timeout exceeded
+            CancelledError: function was cancelled by SA_SI_Cancel
+            SA_SI_Error: other problem reported by device
+        """
+        if timeout == float("inf"):
+            tend = None
+        else:
+            tend = time.time() + timeout
+
+        state = None
+        while state != end_state:
+            if tend is not None:
+                t = int((tend - time.time()) * 1000)  # convert to milliseconds
+                if t < 0:
+                    raise TimeoutError("Timeout limit of %s s exceeded." % timeout)
+            else:
+                t = si.TIMEOUT_INFINITE
+
+            try:
+                ev = si.WaitForEvent(self.id, t)  # raise TimeOut/CancelledError by itself
+                if ev.type == ps.EventType.AF_ADJUSTMENT_PROGRESS:
+                    # lowest 16-bits is the adjustment state
+                    state = ev.devEventParameter & 0xffff
+                    progress = (ev.devEventParameter & 0xffff0000) >> 16
+                    if state == ps.AdjustmentState.MANUAL_ADJUST:
+                        # The manual progress state written about earlier
+                        # We're still in the adjustment phase. Update progress.
+                        # (The progress is given in permille. We display percent here.)
+                        logging.debug("[Manual] Adjustment Progress: {}%".format(progress / 10.0))
+                    elif state == ps.AdjustmentState.AUTO_ADJUST:
+                        logging.debug("[Auto] Adjustment Progress: {}%".format(progress / 10.0))
+                elif ev.type == ps.EventType.STABLE_STATE_CHANGED:
+                    # new state, 0 means unstable, 1 means stable
+                    state = ev.devEventParameter
+                else:
+                    logging.debug("Skipped event %s" % self._getReadableEvent(ev))
+            except si.Error as error:
+                if error.code == si.ErrorCode.CANCELED:
+                    raise CancelledError()
+                else:
+                    raise error
 
 class _PicoscaleScanned(Picoscale):
     """
