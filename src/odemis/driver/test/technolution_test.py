@@ -58,7 +58,8 @@ except ImportError as err:
     technolution_available = False
 
 # Set logger level to debug to observe all the output (useful when a test fails)
-logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG,
+                    format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
 # Export TEST_NOHW = 1 to prevent using the real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
@@ -1720,7 +1721,11 @@ class TestASMDataFlow(unittest.TestCase):
         # Change megafield id to prevent testing on existing images/overwriting issues.
         self.mppc.filename.value = time.strftime("test_images/project/testing_megafield_id-%Y-%m-%d-%H-%M-%S")
 
+        # the timeout (s) for waiting for an acquisition to finish
+        self.timeout = 10
+
         self._data_received = threading.Event()
+        self._data_received2 = threading.Event()
         time.sleep(5)  # give the ASM some extra time to empty the offload queue
 
     def tearDown(self):
@@ -1766,6 +1771,7 @@ class TestASMDataFlow(unittest.TestCase):
             raise ValueError("Found wrong acquisition date in the metadata of the received image.")
 
         self.counter2 += 1
+        self._data_received2.set()
         logging.info("image two received")
 
     def data_content_to_resolution(self, data_content_string):
@@ -1808,9 +1814,9 @@ class TestASMDataFlow(unittest.TestCase):
                 self._data_received.clear()
                 # Here the stage would move to the right position
                 dataflow.next((x, y))
-                # Allow 3 seconds per field image to be acquired
-                if not self._data_received.wait(3):
-                    self.fail("No data received after 3s for field %d, %d" % (x, y))
+                # Allow some time per field image to be acquired
+                if not self._data_received.wait(self.timeout):
+                    self.fail("No data received after %d s for field %d, %d" % (self.timeout, x, y))
 
         # Wait a bit to allow some processing and receive images.
         dataflow.unsubscribe(self.image_received)
@@ -1834,10 +1840,13 @@ class TestASMDataFlow(unittest.TestCase):
 
         # Check it's fine to pass numpy ints
         for x, y in numpy.ndindex(field_images[::-1]):
+            # Reset the event that waits for the image being received (puts flag to False).
+            self._data_received.clear()
             dataflow.next((x, y))
+            # Wait until single field image data has been received (image_received sets flag to True).
+            if not self._data_received.wait(self.timeout):
+                self.fail("No data received after %d s for field %d, %d" % (self.timeout, x, y))
 
-        # Wait a bit to allow some processing and receive images.
-        time.sleep(1.5 * field_images[0] * field_images[1])  # Allow 1.5 seconds per field image to offload.
         dataflow.unsubscribe(self.image_received)
         time.sleep(0.5)
         self.assertEqual(field_images[0] * field_images[1], self.counter)
@@ -1866,20 +1875,25 @@ class TestASMDataFlow(unittest.TestCase):
 
         dataflow = self.mppc.data
         dataflow.subscribe(self.image_received)
-
+        terminate_acquisition = False
         for x in range(field_images[0]):
             for y in range(field_images[1]):
                 if x == termination_point[0] and y == termination_point[1]:
                     logging.debug("Send terminating command")
                     self.mppc.terminate()
-                    time.sleep(1.5)
+                    time.sleep(2)
                     self.assertEqual(self.mppc.acq_queue.qsize(), 0,
                                      "Queue was not cleared properly and is not empty")
-                    time.sleep(0.5)
+                    terminate_acquisition = True
                     break
-
+                # Reset the event that waits for the image being received (puts flag to False).
+                self._data_received.clear()
                 dataflow.next((x, y))
-                time.sleep(1.5)
+                # Wait until single field image data has been received (image_received sets flag to True).
+                if not self._data_received.wait(self.timeout):
+                    self.fail("No data received after %d s for field %d, %d" % (self.timeout, x, y))
+            if terminate_acquisition:
+                break
 
         self.assertFalse(self.mppc._acq_thread.is_alive())
         self.assertEqual((termination_point[0] * field_images[1]) + termination_point[1], self.counter)
@@ -1897,9 +1911,13 @@ class TestASMDataFlow(unittest.TestCase):
 
         for x in range(field_images[0]):
             for y in range(field_images[1]):
+                # Reset the event that waits for the image being received (puts flag to False).
+                self._data_received.clear()
                 dataflow.next((x, y))
+                # Wait until single field image data has been received (image_received sets flag to True).
+                if not self._data_received.wait(self.timeout):
+                    self.fail("No data received after %d s for field %d, %d" % (self.timeout, x, y))
 
-        time.sleep(1.5 * field_images[0] * field_images[1])  # Wait a bit to allow some processing and receive images.
         dataflow.unsubscribe(self.image_received)
         dataflow.unsubscribe(self.image_2_received)
         time.sleep(0.5)
@@ -1923,8 +1941,12 @@ class TestASMDataFlow(unittest.TestCase):
                     # Wait until all the old items in the queue are handled so the outcome of the first counter is known
                     logging.debug("Adding second subscription")
                     dataflow.subscribe(self.image_2_received)
+                self._data_received.clear()
+                # Here the stage would move to the right position
                 dataflow.next((x, y))
-                time.sleep(1.5)
+                # Allow 15 seconds per field image to be acquired
+                if not self._data_received.wait(self.timeout):
+                    self.fail("No data received after %d s for field %d, %d" % (self.timeout, x, y))
 
         dataflow.unsubscribe(self.image_received)
         dataflow.unsubscribe(self.image_2_received)
@@ -1940,38 +1962,46 @@ class TestASMDataFlow(unittest.TestCase):
         possible to call get() and subscribe() at the same time."""
         field_images = (3, 4)
         self.counter = 0
-        self.counter2 = 0
 
         dataflow = self.mppc.data
         dataflow.subscribe(self.image_received)
 
         for x in range(field_images[0]):
             for y in range(field_images[1]):
+                # Reset the event that waits for the image being received (puts flag to False).
+                self._data_received.clear()
                 dataflow.next((x, y))
+                # Wait until single field image data has been received (image_received sets flag to True).
+                if not self._data_received.wait(self.timeout):
+                    self.fail("No data received after %d s for field %d, %d" % (self.timeout, x, y))
 
         # Acquire single field without unsubscribing listener (expect error)
         with self.assertRaises(Exception):
             image = dataflow.get()
 
-        time.sleep(1.5 * field_images[0] * field_images[1])  # Wait a bit to allow some processing and receive images.
         self.assertEqual(field_images[0] * field_images[1], self.counter)
         dataflow.unsubscribe(self.image_received)
+
+        self.counter = 0
 
         # Acquire single field after unsubscribing listener
         image = dataflow.get()
         self.assertIsInstance(image, model.DataArray)
 
         # Start acquiring second mega field
-        dataflow.subscribe(self.image_2_received)
+        dataflow.subscribe(self.image_received)
         for x in range(field_images[0]):
             for y in range(field_images[1]):
+                # Reset the event that waits for the image being received (puts flag to False).
+                self._data_received.clear()
                 dataflow.next((x, y))
+                # Wait until single field image data has been received (image_received sets flag to True).
+                if not self._data_received.wait(self.timeout):
+                    self.fail("No data received after %d s for field %d, %d" % (self.timeout, x, y))
 
-        time.sleep(1.5 * field_images[0] * field_images[1])  # Wait a bit to allow some processing and receive images.
-        dataflow.unsubscribe(self.image_2_received)
+        dataflow.unsubscribe(self.image_received)
         time.sleep(0.5)
         self.assertEqual(field_images[0] * field_images[1], self.counter)
-        self.assertEqual(field_images[0] * field_images[1], self.counter2)
 
     def test_error_get(self):
         """Test that exceptions are raised if wrong settings are not caught in the wrapper, but on the ASM."""
@@ -2026,7 +2056,7 @@ class TestASMDataFlow(unittest.TestCase):
         # add new subscriber
         dataflow.subscribe(image_received_2)
         dataflow.next((0, 0))
-        img = img_queue_2.get(timeout=3)  # read the image
+        img = img_queue_2.get(timeout=self.timeout)  # read the image
         # check queue is empty after reading the image (no further images...)
         assert img_queue_2.empty()
         # check that the previous subscriber did unsubscribe properly (image_received_1)
