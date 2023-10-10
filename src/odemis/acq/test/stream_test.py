@@ -4054,18 +4054,71 @@ class StaticStreamsTestCase(unittest.TestCase):
         # DataArray with very big type, but very small values
         da = model.DataArray(numpy.zeros((512, 1024), dtype=numpy.uint32), md)
         da[2:100, 5:600] = 1
-        da[3, :] = 2
+        da[3, :] = 2  # The whole line
 
         cls = stream.StaticCLStream("test", da)
         time.sleep(0.5)  # wait a bit for the image to update
 
         h = cls.histogram.value
-        ir = cls.intensityRange.range
+        ir = cls.intensityRange.range[0][0], cls.intensityRange.range[1][1]
 
-        self.assertEqual(ir[0][0], 0)
-        self.assertGreaterEqual(ir[1][1], da.max())
-        self.assertLessEqual(ir[1][1], 3)  # Should be rounded to the next power of 2 -1
-        self.assertEqual(h[2], da.shape[1])
+        self.assertEqual(ir[0], 0)
+        self.assertGreaterEqual(ir[1], da.max())
+        self.assertEqual(ir[1], 255)  # Rounded to the next power of 2 -1, starting from 255
+        self.assertEqual(h[2], da.shape[1])  # how many values == 2: a whole line
+        self.assertEqual((ir[1] - ir[0] + 1) % 256, 0, f"range {ir} doesn't have a length multiple of 256")
+
+    def test_int_hist(self):
+        """Test histogram computation with signed int"""
+        md = {
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_POS: (1.2e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+        }
+
+        # DataArray with very big type, but very small values
+        da = model.DataArray(numpy.zeros((512, 1024), dtype=numpy.int16), md)
+        # Use values near power of 2, so that it rounds up to that values
+        da[2:100, 5:600] = -1000  # >= -1024
+        da[3, :] = 8000  # <= 8191
+
+        cls = stream.StaticCLStream("test", da)
+        time.sleep(0.5)  # wait a bit for the image to update
+
+        h = cls.histogram.value
+        ir = cls.intensityRange.range[0][0], cls.intensityRange.range[1][1]
+
+        self.assertEqual(ir[0], -1024) # rounded to the previous power of 2
+        self.assertGreaterEqual(ir[1], da.max())
+        self.assertEqual(ir[1], 8191)  # rounded to the next power of 2 -1
+        self.assertEqual((ir[1] - ir[0] + 1) % 256, 0, f"range {ir} doesn't have a length multiple of 256")
+
+    def test_uint16_hist(self):
+        """Test histogram computation with int16, with a small width"""
+        md = {
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_POS: (1.2e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+        }
+
+        # DataArray with very big type, and only values very large
+        da = model.DataArray(numpy.zeros((512, 1024), dtype=numpy.uint16), md) + 60000
+        # Use values near each other so that 10% is preferred
+        da[2:100, 5:600] += 1
+        da[3, :] += 1000
+
+        cls = stream.StaticCLStream("test", da)
+        time.sleep(0.5)  # wait a bit for the image to update
+
+        h = cls.histogram.value
+        ir = cls.intensityRange.range[0][0], cls.intensityRange.range[1][1]
+
+        self.assertTrue(59000 <= ir[0] <= da.min())  # round 10% less
+        self.assertTrue(da.max() <= ir[1] <= 62000)  # rounded 10% more
+        self.assertEqual((ir[1] - ir[0] + 1) % 256, 0, f"range {ir} doesn't have a length multiple of 256")
+
 
     def _create_ar_data(self, shape, tweak=0, pol=None):
         """

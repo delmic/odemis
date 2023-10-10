@@ -841,6 +841,8 @@ class Stream(object):
             # * dtype is int -> follow MD_BPP/shape/dtype.max, and if too wide use data.max
             # * dtype is float -> data.max
             if data is not None:
+                prev_drange = self._drange if not self._drange_unreliable else None
+
                 if data.dtype.kind in "biu":
                     try:
                         depth = 2 ** data.metadata[model.MD_BPP]
@@ -860,34 +862,69 @@ class Stream(object):
 
                     # If range is too big to be used as is => look really at the data
                     if (drange[1] - drange[0] > 4095 and
-                        (self._drange is None or
-                         self._drange_unreliable or
-                         self._drange[1] - self._drange[0] < drange[1] - drange[0])):
+                            (prev_drange is None or
+                             prev_drange[1] - prev_drange[0] < drange[1] - drange[0])):
                         mn = int(data.view(numpy.ndarray).min())
                         mx = int(data.view(numpy.ndarray).max())
-                        if self._drange is not None and not self._drange_unreliable:
-                            # Only allow the range to expand, to avoid it constantly moving
-                            mn = min(mn, self._drange[0])
-                            mx = max(mx, self._drange[1])
-                        # Try to find "round" values. Either:
-                        # * mn = 0, mx = max rounded to next power of 2  -1
-                        # * mn = min, width = width rounded to next power of 2
-                        # => pick the one which gives the smallest width
-                        diff = max(2, mx - mn + 1)
-                        diffrd = 2 ** int(math.ceil(math.log(diff, 2)))  # next power of 2
-                        width0 = max(2, mx + 1)
-                        width0rd = 2 ** int(math.ceil(math.log(width0, 2)))  # next power of 2
-                        if diffrd < width0rd:
-                            drange = (mn, mn + diffrd - 1)
+
+                        # Try to find a range that contain the whole data, and also if the detector generate
+                        # new data mostly still fit. We also don't want a too big range.
+                        # => Two options:
+                        # * add 10% margin on each side
+                        # * round to the nearest power of 2 on each side
+                        # Take whichever is the smallest... and also ensure that the length is a multiple of 256 because
+                        # the histogram computation is much faster in such case.
+                        width10 = max(127, int((mx - mn) / 10))  # 10%, and at least 8 bits
+
+                        # Min: only change the range if the previous one doesn't fit anymore
+                        if prev_drange is None or mn < prev_drange[0]:
+                            mn10 = mn - width10
+                            mn10 = math.floor(mn10 / 256) * 256
+
+                            # Round to previous power of 2, with at least 8 bits
+                            if 0 <= mn <= 255:  # if 0 or small positive value => round down to 0
+                                mn_p2 = 0
+                            elif mn > 0:
+                                mn_p2 = 2 ** int(math.floor(math.log(mn + 1, 2)))
+                                mn_p2 -= 1  # maximum value represented with N bits
+                            else:  # mn < 0
+                                mn_p2 = max(256, -mn)  # At least assume 8 bits
+                                mn_p2 = 2 ** int(math.ceil(math.log(mn_p2, 2)))
+                                mn_p2 = -mn_p2  # minimum value represented with N bits signed
+
+                            mn = max(mn10, mn_p2)
                         else:
-                            drange = (0, width0rd - 1)
+                            mn = prev_drange[0]
+
+                        # Max: only change the range if the previous one doesn't fit anymore
+                        if prev_drange is None or mx > prev_drange[1]:
+                            mx10 = mx + width10
+                            mx10 = math.ceil(mx10 / 256) * 256
+
+                            # Round to next power of 2, with at least 8 bits
+                            if -255 <= mx <= 0:  # For 0 or small negative values, round up to 0
+                                mx_p2 = 0
+                            elif mx > 0:
+                                mx_p2 = max(255, mx)  # At least assume 8 bits
+                                mx_p2 = 2 ** int(math.ceil(math.log(mx_p2 + 1, 2)))
+                                mx_p2 -= 1  # maximum value represented with N bits
+                            else:  # mx < 0
+                                mx_p2 = -mx
+                                mx_p2 = 2 ** int(math.floor(math.log(mx_p2, 2)))
+                                mx_p2 = -mx_p2  # minimum value represented with N bits signed
+
+                            mx = min(mx10, mx_p2)
+                        else:
+                            mx = prev_drange[1]
+
+                        drange = (mn, mx)
                 else:  # float
                     # cast to ndarray to ensure a scalar (instead of a DataArray)
                     drange = (data.view(numpy.ndarray).min(),
                               data.view(numpy.ndarray).max())
-                    if self._drange is not None and not self._drange_unreliable:
-                        drange = (min(drange[0], self._drange[0]),
-                                  max(drange[1], self._drange[1]))
+                    if prev_drange:
+                        drange = (min(drange[0], prev_drange[0]),
+                                  max(drange[1], prev_drange[1]))
 
                 if drange:
                     self._drange_unreliable = False

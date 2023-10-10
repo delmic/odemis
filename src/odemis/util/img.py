@@ -428,8 +428,16 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
                 irange = (irange[0] - 1e-9, irange[0])
             data = data.clip(*irange)
 
-        dshift = data - irange[0]
-        if data.dtype == numpy.uint8:
+        # use .tolist() to force conversion to "safe" Python type, which avoid overflows
+        range_width = irange[1].tolist() - irange[0].tolist()
+        if data.dtype.kind == "i":
+            # Signed ints are "special" because we cannot use the same type to store the values shifted to 0.
+            dtype_uint = numpy.min_scalar_type(max(255, range_width))
+            dshift = numpy.subtract(data, irange[0], dtype=dtype_uint, casting="unsafe")
+        else:
+            dshift = data - irange[0]
+
+        if dshift.dtype == numpy.uint8:
             drescaled = dshift  # re-use memory for the result
         else:
             # TODO: could directly use one channel of the 'rgb' variable?
@@ -437,7 +445,7 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
         # Ideally, it would be 255 / (irange[1] - irange[0]) + 0.5, but to avoid
         # the addition, we can just use 255.99, and with the rounding down, it's
         # very similar.
-        b = 255.99 / (irange[1] - irange[0])
+        b = 255.99 / range_width
         numpy.multiply(dshift, b, out=drescaled, casting="unsafe")
 
     # Now duplicate it 3 times to make it RGB (as a simple approximation of
