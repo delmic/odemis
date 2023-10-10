@@ -22,21 +22,19 @@ This file is part of Odemis.
 
 import logging
 import math
-import random
-
-from odemis import model
-import odemis
-
-from odemis.driver import simulated, tmcm, smaract
-from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
-    CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
-    LinkedHeightFocus, DualChannelPositionSensor, LinkedAxesActuator, Convert3DStage
-from odemis.util import testing
 import os
+import random
 import time
 import unittest
 
+import odemis
 import simulated_test
+from odemis import model
+from odemis.driver import simulated, tmcm, smaract
+from odemis.driver.actuator import ConvertStage, AntiBacklashActuator, MultiplexActuator, FixedPositionsActuator, \
+    CombinedSensorActuator, RotationActuator, CombinedFixedPositionActuator, LinearActuator, LinkedHeightActuator, \
+    DualChannelPositionSensor, LinkedAxesActuator, Convert3DStage
+from odemis.util import testing
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -547,6 +545,55 @@ class TestConvertStage(unittest.TestCase):
         testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-05, "y": 2e-05})
 
         testing.assert_pos_almost_equal(stage.speed.value, {"x": 10e-6, "y": 20e-6})
+
+    def test_update_axes_range(self):
+        """
+        Test the range calculation in ConvertStage
+        """
+        a_min, a_max = (0.e-3, 100.e-3)
+        b_min, b_max = (0.e-3, 13.e-3)
+        dependency = simulated.Stage("stage_", "test", axes=["a", "b"],
+                                     ranges={"a": [a_min, a_max], "b": [b_min, b_max]})
+        # Map dependency onto a given rotation
+        tilt = math.radians(26)
+        stage = ConvertStage("conv", "align", {"orig": dependency},
+                             axes=["a", "b"], rotation=tilt)
+        # get the range of stage
+        x_min, x_max = stage.axes["x"].range
+        y_min, y_max = stage.axes["y"].range
+
+        # Test that the dependency range is not affected by the convert stage range
+        # and it is still the same as its initial set value
+        self.assertEqual(dependency.axes["a"].range, (a_min, a_max))
+
+        # Testing stage movement based on its range
+        # Move stage inside its range but outside the range of dependency
+        # Test with one of the four corner points of the rotated range of dependency
+        x_pos = 0.08987940462991671
+        y_pos = -0.04383711467890774
+        self.assertTrue(x_min <= x_pos <= x_max)
+        self.assertTrue(y_min <= y_pos <= y_max)
+        self.assertFalse(a_min <= y_pos <= a_max)
+        self.assertFalse(b_min <= y_pos <= b_max)
+        f = stage.moveAbs({"x": x_pos, "y": y_pos})
+        f.result()
+        # Move stage outside its range
+        with self.assertRaises(ValueError):
+            f = stage.moveAbs({"x": -2 * x_min, "y": 2 * y_max})
+            f.result()
+        # Move stage within its range
+        x_pos = 2e-03
+        y_pos = 0
+        self.assertTrue(x_min <= x_pos <= x_max)
+        self.assertTrue(y_min <= y_pos <= y_max)
+        f = stage.moveAbs({"x": x_pos, "y": y_pos})
+        f.result()
+        # Check if the stage is at desired location
+        testing.assert_pos_almost_equal(stage.position.value, {"x": x_pos, "y": y_pos})
+        new_x_pos = x_pos * math.cos(tilt)
+        new_y_pos = x_pos * math.sin(tilt)
+        # Check the value of dependency taking rotation into account
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": new_x_pos, "b": new_y_pos})
 
     # @skip("skip")
     def test_move_rel(self):

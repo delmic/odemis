@@ -594,6 +594,7 @@ class ConvertStage(model.Actuator):
     the two stages, as for each SEM stage move it is able to perform the
     corresponding “compensate” move in objective lens.
     """
+
     def __new__(cls, *args, **kwargs):
         # Automatically create Convert3DStage object if the number of axes = 3
         axes = kwargs['axes']
@@ -624,17 +625,15 @@ class ConvertStage(model.Actuator):
         if translation is None:
             translation = (0, 0)
 
-        # TODO: range of axes could at least be updated with scale + translation
-        # and (when there is rotation) canUpdate would only be True if both axes
-        # canUpdate.
-        axes_def = {"x": self._dependency.axes[axes[0]],
-                    "y": self._dependency.axes[axes[1]]}
+        axes_def = {"x": copy.deepcopy(self._dependency.axes[axes[0]]),
+                    "y": copy.deepcopy(self._dependency.axes[axes[1]])}
         model.Actuator.__init__(self, name, role, dependencies=dependencies, axes=axes_def, **kwargs)
 
         self._metadata[model.MD_POS_COR] = translation
         self._metadata[model.MD_ROTATION_COR] = rotation
         self._metadata[model.MD_PIXEL_SIZE_COR] = scale
         self._updateConversion()
+        self._updateAxesRange()
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute({"x": 0, "y": 0},
@@ -665,6 +664,26 @@ class ConvertStage(model.Actuator):
         if invert:
             rotation *= -1
         return RigidTransform(rotation=rotation).matrix
+
+    def _updateAxesRange(self):
+        """
+        Calculate the axes range of position VA from the given range of dep's.
+        """
+        # Calculate rectangular border points on the given range
+        min_x, max_x = self.axes["x"].range
+        min_y, max_y = self.axes["y"].range
+        coordinates = [[min_x, min_y],
+                       [min_x, max_y],
+                       [max_x, min_y],
+                       [max_x, max_y]]
+
+        # Calculate range based on the conversion
+        new_coordinates = list(map(self._convertPosFromdep, coordinates))
+
+        # Update default axes range
+        new_range = numpy.array(new_coordinates, dtype=float)
+        self.axes["x"].range = (min(new_range[:, 0]), max(new_range[:, 0]))
+        self.axes["y"].range = (min(new_range[:, 1]), max(new_range[:, 1]))
 
     def _updateConversion(self):
         translation = self._metadata[model.MD_POS_COR]

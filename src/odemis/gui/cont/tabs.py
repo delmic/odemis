@@ -3240,7 +3240,7 @@ class CryoChamberTab(Tab):
         return: True if the user accepts, False if the move should be cancelled.
         """
         pos_str = []
-        for axis in ("x", "y", "z", "rx", "ry", "rz"):
+        for axis in ("x", "y", "z", "m", "rx", "ry", "rz", "rm"):
             if axis in end_pos:
                 if axis.startswith("r"):
                     pos_str.append(f"{axis} = " + readable_str(math.degrees(end_pos[axis]), "°", 4))
