@@ -4226,7 +4226,8 @@ class Picoscale(model.HwComponent):
         model.HwComponent.__init__(self, name, role, *args, **kwargs)
 
         if not smaract_python_sdk:
-            raise ModuleNotFoundError("Smaract Python SDK modules are missing. Cannot run PicoScale driver.")
+            raise ModuleNotFoundError("Smaract Python SDK modules are missing. Cannot run Picoscale driver. "
+                                      "Install them by running: sudo apt install python3-smaract-si python3-smaract-picoscale.")
 
         # Connection
         if locator == "fake":
@@ -4237,7 +4238,7 @@ class Picoscale(model.HwComponent):
         try:
             self.id = self.core.Open(locator)
         except si.Error as error:
-            logging.debug(self._getReadableSIError(error))
+            logging.debug(self._getReadableError(error))
             logging.debug("Could not open connection to the device by locator %s.", locator)
             raise
 
@@ -4288,7 +4289,7 @@ class Picoscale(model.HwComponent):
         try:
             self.core.SetProperty_f64(self.id, si.EPK(ps.Property.AF_PRECISION_MODE_LEVEL, 0, 0), precision_mode)
         except si.Error as error:
-            logging.debug(self._getReadableSIError(error))
+            logging.debug(self._getReadableError(error))
             if error.code == si.ErrorCode.INVALID_DATA_TYPE:
                 logging.debug("Precision mode not available.")
             else:
@@ -4313,7 +4314,7 @@ class Picoscale(model.HwComponent):
             else:
                 logging.debug("System already referenced, not referencing again.")
         elif ref_on_init in (False, "never"):
-            if not all_channels_valid:
+            if not all_channels_valid and locator != "fake":
                 raise ValueError("Picoscale is not referenced. The device cannot be used until the referencing "
                                 "procedure is called.")
         else:
@@ -4399,15 +4400,14 @@ class Picoscale(model.HwComponent):
             # because it initializes the system by loading the stored referencing parameters. However, we don't
             # currently use validation, so there is no need to store the values every time we reference.
         except si.Error as error:
-            logging.debug(self._getReadableSIError(error))
             # This occurs if a stop command interrupts referencing
             if error.code == si.ErrorCode.CANCELED:
-                logging.info("Referencing stopped: %s", error)
+                logging.info("Referencing stopped: %s", self._getReadableError(error))
                 raise CancelledError()
             elif future._must_stop.is_set():
                 raise CancelledError()
             else:
-                logging.error("Referencing failed: %s", error)
+                logging.error("Referencing failed: %s", self._getReadableError(error))
                 raise
         except CancelledError:
             logging.debug("Referencing cancelled.")
@@ -4439,19 +4439,21 @@ class Picoscale(model.HwComponent):
                 self._wait_for_progress_event(ps.AdjustmentState.DISABLED, timeout=600)  # state will be DISABLED when done
             self.core.SetProperty_i32(self.id, si.Property.EVENT_NOTIFICATION_ENABLED << 16 | ps.EventType.AF_ADJUSTMENT_PROGRESS, si.DISABLED)
 
-    def _getReadableSIError(self, error):
+    def _getReadableError(self, error):
         """
-        Get readable SI error for logging purposes.
+        Get readable error for logging purposes.
 
         :param error: (si.Error or ps.Error) The error/exception raised.
         :return: (str) The readable SI error.
 
         """
-        err_name = "(0x{:04X})".format(error.code)
-        if error.code in set(err.value for err in si.ErrorCode):
-            err_name = "si.ErrorCode." + si.ErrorCode(error.code).name + " " + err_name
-        elif error.code in set(err.value for err in ps.ErrorCode):
-            err_name = "ps.ErrorCode." + ps.ErrorCode(error.code).name + " " + err_name
+        try:
+            err_name = "si.ErrorCode." + si.ErrorCode(error.code).name + " " + "0x{:04X}".format(si.ErrorCode(error.code).value)
+        except ValueError:
+            try:
+                err_name = "ps.ErrorCode." + ps.ErrorCode(error.code).name + " " + "0x{:04X}".format(ps.ErrorCode(error.code).value)
+            except ValueError:
+                err_name = "0x{:04X}".format(error.code)
         return f"SI function {error.func} raised error: {err_name}"
 
     def _getReadableEvent(self, event):
@@ -4462,11 +4464,13 @@ class Picoscale(model.HwComponent):
         :return: (str) The readable event name.
 
         """
-        ev_name = "(0x{:04X})".format(event.type)
-        if event.type in set(ev.value for ev in si.EventType):
-            ev_name = "si.EventType." + si.EventType(event.type).name + " " + ev_name
-        elif event.type in set(ev.value for ev in ps.EventType):
-            ev_name = "ps.EventType." + ps.EventType(event.type).name + " " + ev_name
+        try:
+            ev_name = "si.EventType." + si.EventType(event.type).name + " " + "0x{:04X}".format(si.EventType(event.type).value)
+        except ValueError:
+            try:
+                ev_name = "ps.EventType." + ps.EventType(event.type).name + " " + "0x{:04X}".format(ps.EventType(event.type).value)
+            except ValueError:
+                ev_name = "0x{:04X}".format(event.type)
         return ev_name
 
     def _cancelReference(self, future):
@@ -4525,14 +4529,14 @@ class Picoscale(model.HwComponent):
             self._executor.cancel()
             self.core.Close(self.id)
             self._executor = None
-        super(PicoscalePythonSDK, self).terminate()
+        super(Picoscale, self).terminate()
 
     @roattribute
     def axes(self):
         """ dict str->Axis: name of each axis available -> their definition."""
         return self._axes
 
-    def _wait_for_progress_event(self, end_state, timeout=float("inf")):
+    def _wait_for_progress_event(self, end_state, timeout=math.inf):
         """
         Blocks until progress event is triggered or timeout.
         It is assumed that only one event type is enabled. The function will wait until the
@@ -4544,7 +4548,7 @@ class Picoscale(model.HwComponent):
             CancelledError: function was cancelled by SA_SI_Cancel
             SA_SI_Error: other problem reported by device
         """
-        if timeout == float("inf"):
+        if timeout == math.inf:
             tend = None
         else:
             tend = time.time() + timeout
@@ -4554,7 +4558,7 @@ class Picoscale(model.HwComponent):
             if tend is not None:
                 t = int((tend - time.time()) * 1000)  # convert to milliseconds
                 if t < 0:
-                    raise TimeoutError("Timeout limit of %s s exceeded." % timeout)
+                    raise TimeoutError("Timeout limit of %s s exceeded." % timeout / 1000)
             else:
                 t = si.TIMEOUT_INFINITE
 
@@ -4648,6 +4652,7 @@ class FakePicoscale(object):
             self.cancel_event = True
             # Wait for the future to be finished
             self.executor.cancel()
+            logging.debug("Cancelled.")
 
     def EPK(self, key, idx0=0, idx1=0):
         return key << 16 | idx0 << 8 | idx1
@@ -4673,7 +4678,7 @@ class FakePicoscale(object):
     def SetProperty_i32(self, handle, property_key, value):
         shifted_key = property_key >> 16
         if shifted_key not in self.properties:
-            raise si.Error(self.SetProperty_s, si.ErrorCode.INVALID_PARAMETER, "INVALID_PARAMETER")
+            raise si.Error(self.SetProperty_i32, si.ErrorCode.INVALID_PARAMETER, "INVALID_PARAMETER")
         self.properties[shifted_key] = value.value if hasattr(value, "value") else value
 
         # Change active property (for SA_SI_WaitForEvent function)
@@ -4687,6 +4692,8 @@ class FakePicoscale(object):
         if shifted_key == ps.Property.AF_ADJUSTMENT_STATE.value:
             # System not stable while adjusting
             self.properties[ps.Property.SYS_IS_STABLE.value] = 0
+            # Channel not valid while adjusting
+            self.properties[ps.Property.CH_IS_VALID.value] = 0
             self.cancel_event = False
             # Reset cancelling flag
             self.cancel_referencing = False
@@ -4731,7 +4738,7 @@ class FakePicoscale(object):
         if level == ps.AdjustmentState.AUTO_ADJUST.value:
             # after autoadjust, state is set to 0
             finished_param = 0
-            wait_time = 2  # auto adjustment takes a bit longer
+            wait_time = 6  # auto adjustment takes a bit longer
         else:
             # otherwise return the state that was requested
             finished_param = level

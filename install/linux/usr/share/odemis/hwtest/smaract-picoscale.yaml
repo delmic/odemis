@@ -15,7 +15,7 @@ Metrology: {
 }
 
 Picoscale: {
-    class: smaract.PicoscalePythonSDK,
+    class: smaract.Picoscale,
     role: position-sensor,
     init: {
         locator: "network:192.168.10.5:55555",
