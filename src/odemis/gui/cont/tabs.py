@@ -392,6 +392,8 @@ class LocalizationTab(Tab):
 
         # Default view is the Live 1
         tab_data.focussedView.value = panel.vp_secom_bl.view
+        tab_data.focussedView.subscribe(self._onView, init=True)
+        self.panel = panel
 
         self._view_selector = viewcont.ViewButtonController(
             tab_data,
@@ -497,6 +499,17 @@ class LocalizationTab(Tab):
                 panel,
                 self
             )
+
+    def _onView(self, view):
+        """Hide hardware related sub-panels on the right when not in live stream"""
+        if "Live" in view.name.value:
+            self.panel.fp_settings_secom_optical.Show(True)
+            self.panel.fp_secom_streams.Show(True)
+            self.panel.fp_acquisitions.Show(True)
+        else:
+            self.panel.fp_settings_secom_optical.Hide()
+            self.panel.fp_secom_streams.Hide()
+            self.panel.fp_acquisitions.Hide()
 
     @property
     def settingsbar_controller(self):
