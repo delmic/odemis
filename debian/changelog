@@ -1,3 +1,24 @@
+odemis (3.3.1-1) bionic; urgency=medium
+
+  * New version: 3.3.1
+  * Main new changes and features:
+    -
+  * Other improvements and bug fixes:
+    - spike removal tool fixed
+    - add tabs enabler plugin
+    - add focus points on the edges of bounding box in overview acquisition
+    - fixes for future support of Ubuntu 22.04
+    - driver scanner: support multiple detectors
+    - acq calibration: if multiple background data, average should be the same dtype as raw data
+    - gui PlotCanvas: handle corner cases when data changes outside of the range
+    - sparc chamber tab: don't keep focus on mirror switching button
+    - Adjust Makefile for developer manual to support new version of Inksape
+
+  * Improvements and bug fixes already present in the v3.3 branch:
+    -
+
+ -- Thera Pals <pals@delmic.com>  Wed, 11 Oct 2023 13:11:58 +0200
+
 odemis (3.3.0-1) bionic; urgency=medium
 
   * New version 3.3
