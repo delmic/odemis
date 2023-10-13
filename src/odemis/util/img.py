@@ -216,22 +216,31 @@ def compactHistogram(hist, length):
     length (0<int<=hist.size): final length required. It must be a multiple of
      the length of hist
     return (ndarray 1D of 0<=int): histogram representing the same bins, but
-      accumulated together as necessary to only have "length" bins.
+      accumulated together as necessary to have at most "length" bins (and at least length/2 bins).
     """
     if hist.size < length:
         raise ValueError("Cannot compact histogram of length %d to length %d" %
                          hist.size, length)
     elif hist.size == length:
         return hist
-    elif hist.size % length != 0:
-        # Very costly (in CPU time) and probably a sign something went wrong
+
+    # If the histogram size is not an exact multiple of the requested length, return a smaller length.
+    # Ex: hist.size == 400 px and length == 256 -> make 200 bins of 2 px
+    bin_size = int(math.ceil(hist.size / length))
+
+    # If the histogram size isn't a round number of bins (so that each large bin is the
+    # accumulation of the same number of the original bins), we add a few zeros to have (just) last bin
+    # a partial accumulation.
+    if hist.size % bin_size != 0:
+        # Costly (in CPU time) and probably a sign something went wrong
         logging.warning("Length of histogram = %d, not multiple of %d",
-                         hist.size, length)
+                        hist.size, bin_size)
         # add enough zeros at the end to make it a multiple
-        hist = numpy.append(hist, numpy.zeros(length - hist.size % length, dtype=hist.dtype))
+        hist = numpy.append(hist, numpy.zeros(bin_size - hist.size % bin_size, dtype=hist.dtype))
+
     # Reshape to have on first axis the length, and second axis the bins which
     # must be accumulated.
-    chist = hist.reshape(length, hist.size // length)
+    chist = hist.reshape(-1, bin_size)
     return numpy.sum(chist, 1)
 
 # TODO: compute histogram faster. There are several ways:

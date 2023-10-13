@@ -312,6 +312,23 @@ class TestHistogram(unittest.TestCase):
         nchist = img.compactHistogram(hist, depth)
         numpy.testing.assert_array_equal(hist, nchist)
 
+    def test_compact_not_multiple(self):
+        """
+        test the compactHistogram()
+        """
+        # Histogram 1 pixel "too" long -> 1025px -> bins of 5 px -> length of 205px (multiple of bin size)
+        hist = numpy.ones(1025, dtype="uint16")
+        # make it compact
+        chist = img.compactHistogram(hist, 256)
+        self.assertEqual(len(chist), 205)
+        self.assertEqual(numpy.sum(chist), numpy.sum(hist))
+
+        # Histogram size deliberately not a multiple of 2: 401px -> bins of 2px -> length of 201px
+        hist = numpy.ones(401, dtype="uint16")
+        chist = img.compactHistogram(hist, 256)
+        self.assertEqual(len(chist), 201)
+        self.assertEqual(numpy.sum(chist), numpy.sum(hist))
+
 
 class TestDataArray2RGB(unittest.TestCase):
     @staticmethod
