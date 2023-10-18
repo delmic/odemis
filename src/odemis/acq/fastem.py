@@ -31,6 +31,7 @@ from concurrent.futures import CancelledError
 import numpy
 
 from odemis.acq.align.fastem import align, estimate_calibration_time
+from odemis.gui import FG_COLOUR_WARNING
 from odemis.util.driver import guessActuatorMoveDuration
 from odemis.util.registration import estimate_grid_orientation_from_img
 from odemis.util.transform import to_physical_space, SimilarityTransform
@@ -398,7 +399,7 @@ class FastEMROC(object):
     scintillator is acquired and assigned with all ROAs on the respective scintillator.
     """
 
-    def __init__(self, name, coordinates, colour):
+    def __init__(self, name, coordinates, colour=FG_COLOUR_WARNING):
         """
         :param name: (str) Name of the region of calibration (ROC). It is the name of the megafield (id) as stored on
                      the external storage.
