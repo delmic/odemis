@@ -777,7 +777,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # High overlap percentage is not required as the stitching is based only on stage position,
         # independent of the image content. It just needs to be big enough to make sure that even with some stage
         # imprecision, all the tiles will overlap or at worse be next to each other (i.e. , no space between tiles)
-        self.overlap = 0.05
+        self.overlap = 0.10
         try:
             # Use the stage range, which can be overridden by the MD_POS_ACTIVE_RANGE.
             # Note: this last one might be temporary, until we have a RoA tool provided in the GUI.
