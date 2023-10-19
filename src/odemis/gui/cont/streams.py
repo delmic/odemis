@@ -1909,7 +1909,6 @@ class StreamBarController(object):
 
     def _onView(self, view):
         """ Handle the changing of the focused view """
-
         if not view or self.ignore_view:
             return
 
@@ -2532,6 +2531,52 @@ class SecomStreamsController(StreamBarController):
                 self._tab_data_model.emState.value = guimodel.STATE_ON
             else:
                 self._tab_data_model.emState.value = guimodel.STATE_OFF
+
+
+class CryoStreamsController(StreamBarController):
+    """
+    Controls the display of stream panels without affecting the actual streams
+    """
+
+    def _onView(self, view):
+        """ Handle the changing of the focused view """
+        if not view or self.ignore_view:
+            return
+
+        # hide/show the stream panels which are compatible with the view
+        allowed_classes = view.stream_classes
+        ov_streams = self._tab_data_model.overviewStreams.value
+        static = issubclass(allowed_classes, StaticStream)
+        for e in self._stream_bar.stream_panels:
+            # Three primary options for views are outlined here:
+            # 1. Live Stream: Focused on real-time viewership, generating 'Live Views'.
+            # 2. Acquired (Static) Stream Related to a Feature: Resulting in 'Acquired' views.
+            # 3. Static Overviews: Leading to 'Overview' views.
+            if static:
+                # Distinguishing Views for StaticStream:
+                # To differentiate between the two views linked to StaticStream,
+                # reliance solely on 'stream_classes' isn't feasible.
+                # Therefore, differentiation is achieved based on:
+                #   - Class Type:'FeatureOverviewView' is the only class type for the 'Overview' view.
+                #   - Association with 'overviewStreams': This stream's presence within the
+                #     'overviewStreams' signifies its classification.
+                # Thus, combining the class type and 'overviewStreams' presence ensures
+                # the accurate identification of the 'Overview' view.
+                if isinstance(view, guimodel.FeatureOverviewView):
+                    e.Show(e.stream in ov_streams)
+                else:
+                    e.Show(e.stream not in ov_streams)
+            else:
+                e.Show(isinstance(e.stream, allowed_classes))
+
+        self._stream_bar.fit_streams()
+
+        # update the "visible" icon of each stream panel to match the list
+        # of streams in the view
+        if self._prev_view is not None:
+            self._prev_view.stream_tree.flat.unsubscribe(self._on_visible_streams)
+        view.stream_tree.flat.subscribe(self._on_visible_streams, init=True)
+        self._prev_view = view
 
 
 class SparcStreamsController(StreamBarController):
@@ -3238,7 +3283,7 @@ class FastEMStreamsController(StreamBarController):
                 canvas.view.addStream(s)
 
 
-class CryoAcquiredStreamsController(StreamBarController):
+class CryoAcquiredStreamsController(CryoStreamsController):
     """
     StreamBarController to control the display of the Static streams in the Cryo
     Localization tab. It deals with two types of streams:

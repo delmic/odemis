@@ -405,7 +405,7 @@ class LocalizationTab(Tab):
             tab_data
         )
 
-        self._streambar_controller = streamcont.SecomStreamsController(
+        self._streambar_controller = streamcont.CryoStreamsController(
             tab_data,
             panel.pnl_secom_streams,
             view_ctrl=self.view_controller
