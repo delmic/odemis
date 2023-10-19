@@ -344,7 +344,7 @@ class MillingManagerTestCase(unittest.TestCase):
 
         # Milling does not start from an unknown stage position
         # Set the stage to loading position
-        cryoSwitchSamplePosition(LOADING).result()
+        self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
 
         milling_setting_1 = MillingSettings(name='rough_milling_1', current=self.probe_current, horizontal_fov=35e-6,
                                             roi=(0.5, 0.5, 0.8, 0.8),
@@ -414,7 +414,7 @@ class MillingManagerTestCase(unittest.TestCase):
         """
         # Milling does not start from an unknown stage position
         # Set the stage to loading position
-        cryoSwitchSamplePosition(LOADING).result()
+        self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
 
         millings = load_config(MILLING_CONFIG_PATH + "/milling-series-test-working-config.mill.yaml")
         logging.debug(millings)
