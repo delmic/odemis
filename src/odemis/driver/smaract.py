@@ -46,7 +46,7 @@ try:
 
     smaract_python_sdk = True
 except ImportError as err:
-    logging.info("Smaract Python SDK modules not found with error: {}".format(err))
+    logging.info("Smaract Python SDK modules for Picoscale driver not found with error: {}".format(err))
     smaract_python_sdk = False
 
 
@@ -4057,7 +4057,6 @@ FEATURE_SIGNAL_GENERATORS = 1
 FEATURE_CALCULATION_SYSTEM = 2
 FEATURE_PRECISION_MODE = 3
 
-
 class SA_SIDLL(CDLL):
     """
     Subclass of CDLL specific to SA_SI library, which handles error codes for
@@ -4206,7 +4205,7 @@ class Picoscale(model.HwComponent):
             is printed on the Picoscale controller.
             If the controller has a TCP/IP connection, use:
                 network:<ip>:<port>
-            The device can also be addressed by its serial number:
+            The device can also be addressed by its serial number. Note: this has caused connection issue on some devices.
                 usb:sn:<serial_number>
                 network:sn:<serial_number>
         channels: (str --> int) dictionary mapping channel names to channel numbers
@@ -4231,23 +4230,24 @@ class Picoscale(model.HwComponent):
 
         # Connection
         if locator == "fake":
-            self.core = FakePicoscale()
+            # Fake smaract.si module
+            self.si = FakePicoscale()
         else:
-            self.core = si
+            self.si = si
 
         try:
-            self.id = self.core.Open(locator)
+            self.id = self.si.Open(locator)
         except si.Error as error:
             logging.debug(self._getReadableError(error))
             logging.debug("Could not open connection to the device by locator %s.", locator)
             raise
 
         # Device information
-        devname = self.core.GetProperty_s(self.id, si.EPK(si.Property.DEVICE_NAME, 0, 0))
-        sn = self.core.GetProperty_s(self.id, si.EPK(si.Property.DEVICE_SERIAL_NUMBER, 0, 0))
-        num_ch = self.core.GetProperty_i32(self.id, si.EPK(si.Property.NUMBER_OF_CHANNELS, 0, 0))
+        devname = self.si.GetProperty_s(self.id, si.EPK(si.Property.DEVICE_NAME, 0, 0))
+        sn = self.si.GetProperty_s(self.id, si.EPK(si.Property.DEVICE_SERIAL_NUMBER, 0, 0))
+        num_ch = self.si.GetProperty_i32(self.id, si.EPK(si.Property.NUMBER_OF_CHANNELS, 0, 0))
         self._hwVersion = "SmarAct %s (s/n %s) with %s channels." % (devname, sn, num_ch,)
-        self._swVersion = self.core.GetFullVersionString()
+        self._swVersion = self.si.GetFullVersionString()
         logging.debug("Using Picoscale library version %s to connect to %s. ", self._swVersion, self._hwVersion)
 
         # Check channels
@@ -4260,19 +4260,19 @@ class Picoscale(model.HwComponent):
         self._axes = {ch: model.Axis(range=(-10, 10), unit="m") for ch in self._channels}  # range is arbitrarily large
 
         # Device setup
-        self.core.SetProperty_i32(self.id, si.EPK(ps.Property.SYS_FULL_ACCESS_CONNECTION, 0, 0), si.ENABLED)
+        self.si.SetProperty_i32(self.id, si.EPK(ps.Property.SYS_FULL_ACCESS_CONNECTION, 0, 0), si.ENABLED)
         # If referencing is still running, cancel it
-        self.core.Cancel(self.id)
+        self.si.Cancel(self.id)
         # Reset referencing state if necessary (in case referencing has been stopped improperly)
-        state = self.core.GetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0))
+        state = self.si.GetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0))
         if state != ps.AdjustmentState.DISABLED:
-            self.core.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.DISABLED)
+            self.si.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.DISABLED)
 
         # Log configuration
-        flen = self.core.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_FIBERLENGTH_HEAD, 0, 0))
-        ext_flen = self.core.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_FIBERLENGTH_EXTENSION, 0, 0))
-        wdist_min = self.core.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_WORKING_DISTANCE_MIN, 0, 0))
-        wdist_max = self.core.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_WORKING_DISTANCE_MAX, 0, 0))
+        flen = self.si.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_FIBERLENGTH_HEAD, 0, 0))
+        ext_flen = self.si.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_FIBERLENGTH_EXTENSION, 0, 0))
+        wdist_min = self.si.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_WORKING_DISTANCE_MIN, 0, 0))
+        wdist_max = self.si.GetProperty_f64(self.id, si.EPK(ps.Property.SYS_WORKING_DISTANCE_MAX, 0, 0))
         logging.debug("Picoscale configuration: fiber length %s, extension fiber length %s, "
                       "working distance [%s, %s].", flen, ext_flen, wdist_min, wdist_max)
 
@@ -4287,20 +4287,18 @@ class Picoscale(model.HwComponent):
         # by default.
         # TODO: this functionality has not yet been tested
         try:
-            self.core.SetProperty_f64(self.id, si.EPK(ps.Property.AF_PRECISION_MODE_LEVEL, 0, 0), precision_mode)
+            self.si.SetProperty_f64(self.id, si.EPK(ps.Property.AF_PRECISION_MODE_LEVEL, 0, 0), precision_mode)
         except si.Error as error:
             logging.debug(self._getReadableError(error))
             if error.code == si.ErrorCode.INVALID_DATA_TYPE:
-                logging.debug("Precision mode not available.")
-            else:
-                raise
+                raise ValueError(f"Precision mode {precision_mode} is not available.")
 
         # State: starting until first referencing/validation procedure is done
         self.state._set_value(model.ST_STARTING, force_write=True)
 
         # Referencing
         self._executor = CancellableThreadPoolExecutor(1)  # one task at a time
-        channel_ref = {ch: bool(self.core.GetProperty_i32(self.id, si.EPK(ps.Property.CH_IS_VALID, num, 0))) for ch, num in self._channels.items()}
+        channel_ref = {ch: bool(self.si.GetProperty_i32(self.id, si.EPK(ps.Property.CH_IS_VALID, num, 0))) for ch, num in self._channels.items()}
         self.referenced = model.VigilantAttribute(channel_ref, readonly=True)  # VA dict str(channel) -> bool
 
         all_channels_valid = all(channel_ref.values())
@@ -4314,9 +4312,10 @@ class Picoscale(model.HwComponent):
             else:
                 logging.debug("System already referenced, not referencing again.")
         elif ref_on_init in (False, "never"):
-            if not all_channels_valid and locator != "fake":
-                raise ValueError("Picoscale is not referenced. The device cannot be used until the referencing "
+            if not all_channels_valid:
+                err = model.HwError("Picoscale is not referenced. The device cannot be used until the referencing "
                                 "procedure is called.")
+                self.state._set_value(err, force_write=True)
         else:
             raise ValueError("Invalid parameter %s for ref_on_init." % ref_on_init)
         # These procedure can take a while (up to 10 minutes), especially after the power of the system
@@ -4369,11 +4368,11 @@ class Picoscale(model.HwComponent):
                 # Reset reference so that if it fails, it states the axes are not referenced (anymore)
                 self.referenced._value = {a: False for a in self._channels.keys()}
                 # Cannot go immediately to automatic adjustment --> first switch to manual adjustment
-                self.core.SetProperty_i32(self.id, si.Property.EVENT_NOTIFICATION_ENABLED << 16 | ps.EventType.AF_ADJUSTMENT_PROGRESS, si.ENABLED)
+                self.si.SetProperty_i32(self.id, si.Property.EVENT_NOTIFICATION_ENABLED << 16 | ps.EventType.AF_ADJUSTMENT_PROGRESS, si.ENABLED)
                 # Enable channels
                 for channel_index in self._channels.values():
-                    self.core.SetProperty_i32(self.id, si.EPK(ps.Property.CH_ENABLED, channel_index, 0), si.ENABLED)
-                self.core.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.MANUAL_ADJUST)
+                    self.si.SetProperty_i32(self.id, si.EPK(ps.Property.CH_ENABLED, channel_index, 0), si.ENABLED)
+                self.si.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.MANUAL_ADJUST)
             self._wait_for_progress_event(ps.AdjustmentState.MANUAL_ADJUST, timeout=600)
             logging.debug("Manual adjustment finished.")
 
@@ -4381,7 +4380,7 @@ class Picoscale(model.HwComponent):
                 if future._must_stop.is_set():
                     raise CancelledError()
                 # Activate working distance
-                self.core.SetProperty_i32(self.id, si.EPK(ps.Property.SYS_WORKING_DISTANCE_ACTIVATE, 0, 0), ps.WorkingDistanceShrinkMode.LEFT_RIGHT)
+                self.si.SetProperty_i32(self.id, si.EPK(ps.Property.SYS_WORKING_DISTANCE_ACTIVATE, 0, 0), ps.WorkingDistanceShrinkMode.LEFT_RIGHT)
             # attribute is write-only and there is no corresponding event type (yet some waiting time is necessary)
             # --> wait 1 s for command to be processed
             if future._must_stop.wait(1):
@@ -4392,9 +4391,14 @@ class Picoscale(model.HwComponent):
                 if future._must_stop.is_set():
                     raise CancelledError()
                 # Switch to automatic adjustment
-                self.core.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.AUTO_ADJUST)
+                self.si.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.AUTO_ADJUST)
             self._wait_for_progress_event(ps.AdjustmentState.DISABLED, timeout=600)  # state will be DISABLED when done
             logging.debug("Finished referencing.")
+
+            # If the system did not become stable after referencing procedure raise a ValueError
+            with future._moving_lock:
+                if not bool(self.si.GetProperty_i32(self.id, si.EPK(ps.Property.SYS_IS_STABLE, 0, 0))):
+                    raise ValueError("The system did not become stable after the referencing procedure.")
 
             # We could save the referencing parameters to memory here. This could be useful for the validation,
             # because it initializes the system by loading the stored referencing parameters. However, we don't
@@ -4416,17 +4420,17 @@ class Picoscale(model.HwComponent):
             logging.exception("Referencing failure.")
             raise
         finally:
-            # Update the referenced values for the channels
-            for ch, num in self._channels.items():
-                self.referenced._value[ch] = bool(self.core.GetProperty_i32(self.id, si.EPK(ps.Property.CH_IS_VALID, num, 0)))
-            # If the measuring system is stable and ready to produce accurate results start the polling
-            if bool(self.core.GetProperty_i32(self.id, si.EPK(ps.Property.SYS_IS_STABLE, 0, 0))):
+            # If the state of the device is stable and all channels are valid, the referencing procedure
+            # succeeded. Typically, all channels become valid at the same time during the reference procedure.
+            # We still check all of them individually to be sure.
+            if bool(self.si.GetProperty_i32(self.id, si.EPK(ps.Property.SYS_IS_STABLE, 0, 0))):
+                for ch, num in self._channels.items():
+                    self.referenced._value[ch] = bool(self.si.GetProperty_i32(self.id, si.EPK(ps.Property.CH_IS_VALID, num, 0)))
                 # Start polling thread
                 self._polling_thread = util.RepeatingTimer(1, self._updatePosition, "Position polling")
                 self._polling_thread.start()
                 self._updatePosition()
-            else:
-                raise ValueError("The system did not become stable after the referencing procedure.")
+
             # We only notify after updating the position so that when a listener
             # receives updates both values are already updated.
             self.referenced.notify(self.referenced.value)
@@ -4434,10 +4438,10 @@ class Picoscale(model.HwComponent):
             # The adjustment state should be "disabled" after automatic adjustment. If the referencing
             # procedure was stopped prematurely, right after it was set to "manual", it might be in the
             # wrong state --> make sure it's set to disabled here.
-            if self.core.GetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0)) != ps.AdjustmentState.DISABLED:
-                self.core.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.DISABLED)
+            if self.si.GetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0)) != ps.AdjustmentState.DISABLED:
+                self.si.SetProperty_i32(self.id, si.EPK(ps.Property.AF_ADJUSTMENT_STATE, 0, 0), ps.AdjustmentState.DISABLED)
                 self._wait_for_progress_event(ps.AdjustmentState.DISABLED, timeout=600)  # state will be DISABLED when done
-            self.core.SetProperty_i32(self.id, si.Property.EVENT_NOTIFICATION_ENABLED << 16 | ps.EventType.AF_ADJUSTMENT_PROGRESS, si.DISABLED)
+            self.si.SetProperty_i32(self.id, si.Property.EVENT_NOTIFICATION_ENABLED << 16 | ps.EventType.AF_ADJUSTMENT_PROGRESS, si.DISABLED)
 
     def _getReadableError(self, error):
         """
@@ -4448,12 +4452,12 @@ class Picoscale(model.HwComponent):
 
         """
         try:
-            err_name = "si.ErrorCode." + si.ErrorCode(error.code).name + " " + "0x{:04X}".format(si.ErrorCode(error.code).value)
+            err_name = f"si.ErrorCode.{si.ErrorCode(error.code).name} 0x{error.code:04X}"
         except ValueError:
             try:
-                err_name = "ps.ErrorCode." + ps.ErrorCode(error.code).name + " " + "0x{:04X}".format(ps.ErrorCode(error.code).value)
+                err_name = f"ps.ErrorCode.{ps.ErrorCode(error.code).name} 0x{error.code:04X}"
             except ValueError:
-                err_name = "0x{:04X}".format(error.code)
+                err_name = f"0x{error.code:04X}"
         return f"SI function {error.func} raised error: {err_name}"
 
     def _getReadableEvent(self, event):
@@ -4465,12 +4469,12 @@ class Picoscale(model.HwComponent):
 
         """
         try:
-            ev_name = "si.EventType." + si.EventType(event.type).name + " " + "0x{:04X}".format(si.EventType(event.type).value)
+            ev_name = f"si.EventType.{si.EventType(event.type).name} 0x{event.type:04X}"
         except ValueError:
             try:
-                ev_name = "ps.EventType." + ps.EventType(event.type).name + " " + "0x{:04X}".format(ps.EventType(event.type).value)
+                ev_name = f"ps.EventType.{ps.EventType(event.type).name} 0x{event.type:04X}"
             except ValueError:
-                ev_name = "0x{:04X}".format(event.type)
+                ev_name = f"0x{event.type:04X}"
         return ev_name
 
     def _cancelReference(self, future):
@@ -4483,7 +4487,7 @@ class Picoscale(model.HwComponent):
 
         # Synchronise with the ending of the future
         with future._moving_lock:
-            self.core.Cancel(self.id)
+            self.si.Cancel(self.id)
 
         return True
 
@@ -4518,7 +4522,7 @@ class Picoscale(model.HwComponent):
             return {}
         pos = {}
         for name, num in self._channels.items():
-            pos[name] = self.core.GetValue_f64(self.id, num, 0)
+            pos[name] = self.si.GetValue_f64(self.id, num, 0)
         return pos
 
     def terminate(self):
@@ -4527,7 +4531,7 @@ class Picoscale(model.HwComponent):
             self._polling_thread.cancel()
         if self._executor:
             self._executor.cancel()
-            self.core.Close(self.id)
+            self.si.Close(self.id)
             self._executor = None
         super(Picoscale, self).terminate()
 
@@ -4558,12 +4562,12 @@ class Picoscale(model.HwComponent):
             if tend is not None:
                 t = int((tend - time.time()) * 1000)  # convert to milliseconds
                 if t < 0:
-                    raise TimeoutError("Timeout limit of %s s exceeded." % timeout / 1000)
+                    raise TimeoutError("Timeout limit of %s s exceeded." % timeout)
             else:
                 t = si.TIMEOUT_INFINITE
 
             try:
-                ev = self.core.WaitForEvent(self.id, t)  # raise TimeOut/CancelledError by itself
+                ev = self.si.WaitForEvent(self.id, t)  # raise TimeOut/CancelledError by itself
                 if ev.type == ps.EventType.AF_ADJUSTMENT_PROGRESS:
                     # lowest 16-bits is the adjustment state
                     state = ev.devEventParameter & 0xffff
@@ -4584,7 +4588,7 @@ class Picoscale(model.HwComponent):
                 if error.code == si.ErrorCode.CANCELED:
                     raise CancelledError()
                 else:
-                    raise error
+                    raise
 
 
 class SIEvent(object):
