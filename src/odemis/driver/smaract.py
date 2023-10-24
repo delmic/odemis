@@ -2028,7 +2028,7 @@ class MC_5DOF(model.Actuator):
         Blocking and cancellable absolute move
         future (Future): the future it handles
         _pos (dict str -> float): axis name -> absolute target position
-        retrial (bool): a boolean to retry the movement in case of timeout error
+        retrial (bool): indicates that the movement is being retried, due to a timeout error
         raise:
             SA_MCError: if the controller reported an error
             CancelledError: if cancelled before the end of the move
