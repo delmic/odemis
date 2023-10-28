@@ -33,7 +33,7 @@ from builtins import range
 log.init_logger(logging.DEBUG)
 test.goto_manual()
 
-LOG_FUNCTIONS = (logging.debug, logging.info, logging.warn, logging.error, logging.exception)
+LOG_FUNCTIONS = (logging.debug, logging.info, logging.warning, logging.error, logging.exception)
 
 
 class TestLogWindow(test.GuiTestCase):
