@@ -2290,7 +2290,7 @@ class AndorCam2(model.DigitalCamera):
 
             if time.time() > tend:
                 logging.warning("Timeout after %g s", time.time() - tstart)
-                raise  # seems actually serious
+                raise TimeoutError(f"Timeout after {time.time() - tstart} s")
 
     def _acquire(self):
         """
