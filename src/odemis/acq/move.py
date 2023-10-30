@@ -1103,6 +1103,34 @@ class EnzelPostureManager(MicroscopePostureManager):
          the current position of the stage.
         :return: a label UNKNOWN, COATING, SEM_IMAGING, THREE_BEAMS, ALIGNMENT, LOADING or LOADING_PATH
         """
+        stage_posture = self._getCurrentStagePostureLabel(stage_pos)
+        if stage_posture == UNKNOWN:
+            return UNKNOWN
+
+        align_posture = self._getCurrentAlignerPositionLabel()
+        if align_posture == UNKNOWN:
+            return UNKNOWN
+
+        if (align_posture == LOADING  # Parked
+                and stage_posture in (LOADING, COATING, SEM_IMAGING, LOADING_PATH)):
+            return stage_posture
+        elif (align_posture == THREE_BEAMS  # Engaged
+                and stage_posture in (IMAGING, ALIGNMENT, THREE_BEAMS)):
+            return stage_posture
+        elif (align_posture == LOADING_PATH
+                and stage_posture == LOADING_PATH):
+            return stage_posture
+
+        # None of the above -> unknown position
+        return UNKNOWN
+
+    def _getCurrentStagePostureLabel(self, stage_pos: Dict[str, float] = None) -> int:
+        """
+        Detects the current stage position of enzel.
+        :param stage_pos: (dict str->float) the stage position in which the label needs to be found. If None, it uses
+         the current position of the stage.
+        :return: a label UNKNOWN, COATING, SEM_IMAGING, THREE_BEAMS, ALIGNMENT, LOADING or LOADING_PATH
+        """
         stage_md = self.stage.getMetadata()
         stage_deactive = stage_md[model.MD_FAV_POS_DEACTIVE]
         stage_active = stage_md[model.MD_FAV_POS_ACTIVE]
@@ -1159,7 +1187,7 @@ class EnzelPostureManager(MicroscopePostureManager):
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
         :param target: (int) target position either one of the constants: LOADING, IMAGING,
-         ALIGNMENT, COATING, LOADING_PATH, MILLING, SEM_IMAGING, FM_IMAGING.
+         ALIGNMENT, COATING, MILLING, SEM_IMAGING, FM_IMAGING.
         """
         try:
             try:
@@ -1169,11 +1197,7 @@ class EnzelPostureManager(MicroscopePostureManager):
 
             # Create axis->pos dict from target position given smaller number of axes
             filter_dict = lambda keys, d: {key: d[key] for key in keys}
-            # get the stage and aligner objects
-
-            stage_md = self.stage.getMetadata()
             align_md = self.align.getMetadata()
-
             align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
             stage_referenced = all(self.stage.referenced.value.values())
             target_position = self.getTargetPosition(target)
@@ -1181,7 +1205,7 @@ class EnzelPostureManager(MicroscopePostureManager):
             # To hold the sub moves to run if normal ordering failed
             fallback_submoves = [{'x', 'y', 'z'}, {'rx', 'rz'}]
 
-            current_label = self.getCurrentPostureLabel()
+            current_label = self._getCurrentStagePostureLabel()
             current_name = POSITION_NAMES[current_label]
 
             if target == LOADING:
@@ -1405,7 +1429,7 @@ class EnzelPostureManager(MicroscopePostureManager):
     def _getCurrentAlignerPositionLabel(self) -> int:
         """
         Determine the current aligner position
-        :return: (int) a value representing stage position from the constants LOADING, THREE_BEAMS, COATING, etc.
+        :return: (int) a value representing stage position from the constants LOADING, THREE_BEAMS, etc.
         """
         align_md = self.align.getMetadata()
         align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
