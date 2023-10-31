@@ -932,6 +932,7 @@ class xrcpnl_tab_localization(wx.Panel):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_feature_panel = xrc.XRCCTRL(self, "fp_feature_panel")
         self.pnl_features = xrc.XRCCTRL(self, "pnl_features")
+        self.btn_delete_feature = xrc.XRCCTRL(self, "btn_delete_feature")
         self.cmb_features = xrc.XRCCTRL(self, "cmb_features")
         self.btn_create_move_feature = xrc.XRCCTRL(self, "btn_create_move_feature")
         self.cmb_feature_status = xrc.XRCCTRL(self, "cmb_feature_status")
@@ -9454,34 +9455,41 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-					<object class="FoldPanelItem" name="fp_feature_panel">
-						<object class="wxPanel" name="pnl_features">
-							<object class="wxBoxSizer">
-							<object class="sizeritem">
-								<object class="wxBoxSizer">
-										<object class="sizeritem">
-											<object class="OwnerDrawnComboBox" name="cmb_features">
-											  <size>155,20</size>
-											  <fg>#2FA7D4</fg>
-											  <bg>#333333</bg>
-											  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
-											</object>
-									  </object>
-									  <object class="sizeritem">
-										<object class="ImageTextButton" name="btn_create_move_feature">
-										  <height>24</height>
-										    <bg>#000000</bg>
-										  <label>Create/Move</label>
-										  <style>wxALIGN_CENTRE</style>
-										</object>
-										<flag>wxLEFT</flag>
-										<border>65</border>
-									</object>
-								<orient>wxHORIZONTAL</orient>
-								</object>
-								<flag>wxLEFT|wxTOP</flag>
-								<border>10</border>
-							</object>
+                      <object class="FoldPanelItem" name="fp_feature_panel">
+                        <object class="wxPanel" name="pnl_features">
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="ImageButton" name="btn_delete_feature">
+                                    <icon>img_icon_ico_trash_png</icon>
+                                    <height>16</height>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="OwnerDrawnComboBox" name="cmb_features">
+                                    <size>145,20</size>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_create_move_feature">
+                                    <height>24</height>
+                                    <bg>#000000</bg>
+                                    <label>Create/Move</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>52</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxTOP</flag>
+                              <border>10</border>
+                            </object>
 							<object class="sizeritem">
 									<object class="wxBoxSizer">
 										 <object class="sizeritem">
@@ -9492,7 +9500,7 @@ def __init_resources():
 										</object>
 										<object class="sizeritem">
 												<object class="OwnerDrawnComboBox" name="cmb_feature_status">
-												  <size>110,16</size>
+												  <size>122,16</size>
 												  <fg>#2FA7D4</fg>
 												  <bg>#333333</bg>
 												  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
@@ -9511,7 +9519,7 @@ def __init_resources():
 												  </XRCED>
 												</object>
 												<flag>wxLEFT</flag>
-												<border>65</border>
+												<border>52</border>
 											</object>
 									<orient>wxHORIZONTAL</orient>
 								</object>
@@ -13293,6 +13301,16 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
 \xfb\xcf_V\x8cj~\xe1f5\xbf\xb3S\x11\x9d<\xea\xdd;\x00dk\xb5<\x90\xe7\x1f\
 \xf4\x13\x033\x01\xae{\xd0\xa9\xd4\x00\x00\x00\x00IEND\xaeB`\x82'''
 
+    img_icon_ico_trash_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\
+\x9a\x9c\x18\x00\x00\x00MIDATx\x9cc`\xa0\x11hc``\xf8\xc9\xc0\xc0\xf0\x1f\
+J\xb7\x90j\xc0O\x06\x06\x06!(\x1bD\xff F\xd3\x120^C(\x91g\xf8O$=j\xc0\xa0\
+\x0e\xc4\x9fH)\x10\x1d\x10\x95"Ai\x1e\x96\x07\xd01H\xbc\x99\x90\x01\xf4\
+\x07\x00\xd8]?\xea\xa3 \xa6\xc2\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     wx.MemoryFSHandler.AddFile('XRC/main/main_xrc', bytearray(main_xrc.encode('utf-8')))
     wx.MemoryFSHandler.AddFile('XRC/main/img_logo_h30_png', bytearray(img_logo_h30_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_chevron_down_png', bytearray(img_icon_ico_chevron_down_png))
@@ -13347,5 +13365,6 @@ U\x8a\xf3\x13\x13\x84\xf18A\xa9\xc4J_\x1fa"\xc1\xd5l\x16\xa7\xa3\x83\x93\
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_press_green_png', bytearray(img_icon_ico_press_green_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_export_png', bytearray(img_icon_ico_export_png))
     wx.MemoryFSHandler.AddFile('XRC/main/img_icon_dialog_error_png', bytearray(img_icon_dialog_error_png))
+    wx.MemoryFSHandler.AddFile('XRC/main/img_icon_ico_trash_png', bytearray(img_icon_ico_trash_png))
     __res.Load('memory:XRC/main/main_xrc')
 
