@@ -222,10 +222,12 @@ def observe_comp_state(comps):
                 show_message(wx.GetApp().main_frame, 'Recovered ' + component_name,
                              'Functionality of the "' + component_name + '" is recovered successfully.',
                              timeout=3.0, level=logging.INFO)
+                logging.debug("Reporting recovery of %s", component_name)
 
             elif isinstance(component_state_value, HwError):
                 show_message(wx.GetApp().main_frame, 'Error in ' + component_name, str(component_state_value),
                              timeout=5.0, level=logging.WARNING)
+                logging.debug("Reporting error in %s: %s", component_name, str(component_state_value))
 
         # Keep a reference to each subscriber function so they won't get dereferenced (because VA's use weakrefs)
         state_subscribers.append(state_change_pop_up)
