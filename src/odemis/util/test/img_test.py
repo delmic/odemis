@@ -2004,7 +2004,7 @@ class TestAssembleZCube(unittest.TestCase):
 
         # create a list of DA
         for x in range(len(self.z_list)):
-            img_list.append(model.DataArray(numpy.random.random_integers(0, 220, size), self.md))
+            img_list.append(model.DataArray(numpy.random.randint(0, 221, size), self.md))
 
         with self.assertRaises(ValueError):
             img.assembleZCube(img_list, self.z_list)
@@ -2020,7 +2020,7 @@ class TestAssembleZCube(unittest.TestCase):
 
         # create a list of DA
         for z in z_list:
-            img_list.append(model.DataArray(numpy.random.random_integers(0, 220, self.size), self.md))
+            img_list.append(model.DataArray(numpy.random.randint(0, 221, self.size), self.md))
 
         output_da_before = img.assembleZCube(img_list, z_list)
 
