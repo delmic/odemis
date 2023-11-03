@@ -3053,6 +3053,9 @@ class Scanner(model.Emitter):
                 # parse the new message
                 logging.debug("Decoding scanning state message %s", msg)
                 if msg is None:
+                    if stopt is not None:
+                        # Should set the scan state to off soon, instead, immediately do it
+                        self._set_scan_state(False)
                     return
                 elif msg is True:
                     self._set_scan_state(True)
