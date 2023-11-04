@@ -255,7 +255,13 @@ class TestEnzelMove(unittest.TestCase):
         pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, THREE_BEAMS)
 
-        # Test disabled, because typically ALIGNEMENT is the same as
+        # Move away the align (only), and check that this is now considered an UNKNOWN position
+        f = self.posture_manager._cryoSwitchAlignPosition(LOADING)
+        f.result(30)
+        pos_label = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(pos_label, UNKNOWN)
+
+        # Test disabled, because typically ALIGNMENT is the same as
         # THREE_BEAMS, so it's not possible to differentiate them.
         # Move to alignment
         # f = cryoSwitchSamplePosition(ALIGNMENT)
@@ -264,6 +270,7 @@ class TestEnzelMove(unittest.TestCase):
         # self.assertEqual(pos_label, ALIGNMENT)
 
         # Move to SEM imaging
+        self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
         pos_label = self.posture_manager.getCurrentPostureLabel()
