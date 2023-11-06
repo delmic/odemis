@@ -451,6 +451,11 @@ class TestDataArray2RGB(unittest.TestCase):
 
     def test_fast(self):
         """Test the fast conversion"""
+        try:
+            import odemis.util.img_fast
+        except ImportError as ex:
+            self.skipTest(f"img_fast not available ({ex}), cannot test it")
+
         data = numpy.ones((251, 200), dtype="uint16")
         data[:, :] = numpy.arange(200)
         data[2, :] = 56
