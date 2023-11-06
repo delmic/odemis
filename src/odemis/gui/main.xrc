@@ -8576,7 +8576,7 @@
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
-                      <object class="FoldPanelItem">
+                      <object class="FoldPanelItem" name="fp_secom_streams">
                         <object class="StreamBar" name="pnl_secom_streams">
                           <size>300,-1</size>
                           <add_button>1</add_button>
@@ -8590,7 +8590,7 @@
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-                      <object class="FoldPanelItem">
+                      <object class="FoldPanelItem" name="fp_acquisitions">
                         <object class="wxPanel">
                             <object class="wxBoxSizer">
                                 <object class="sizeritem">
