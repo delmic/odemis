@@ -1,13 +1,27 @@
 #!/bin/bash
 # Open gedit with root permisions. It surprisingly difficult to do.
 
+version_greater_equal()
+{
+    printf '%s\n%s\n' "$2" "$1" | sort --check=quiet --version-sort
+}
+
 # TODO use gedit version (3.10 != 3.18) instead of Ubuntu?
 uver="$(lsb_release -r -s)" # Ubuntu version
-if [ "$uver" = "12.04" ]; then
-	# On 12.04, copying DBUS_SESSION_BUS_ADDRESS prevents gedit to show up
-	pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY gedit "$@"
-else
+
+# From 22.04, the admin:// works fine (on 20.04, it asks for the password twice)
+if version_greater_equal "$uver" "22.04"; then
+	full_path=$(readlink -m "$1")
+	gedit "admin://$full_path"
+elif version_greater_equal "$uver" "18.04"; then
+	# On 18.04+, having DBUS_SESSION_BUS_ADDRESS prevents changing the preferences,
+	# and the menu works fine anyway (unlike 16.04, which uses Unity)
+	pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY GTK_MODULES=$GTK_MODULES gedit "$@"
+elif version_greater_equal "$uver" "16.04"; then
 	# On 16.04, without DBUS_SESSION_BUS_ADDRESS, there is no menu
 	pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY GTK_MODULES=$GTK_MODULES DBUS_SESSION_BUS_ADDRESS=$DBUS_SESSION_BUS_ADDRESS gedit "$@"
+else
+	# On 12.04, copying DBUS_SESSION_BUS_ADDRESS prevents gedit to show up
+	pkexec env DISPLAY=$DISPLAY XAUTHORITY=$XAUTHORITY gedit "$@"
 fi
 
