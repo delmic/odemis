@@ -34,6 +34,8 @@ jobs:
         sudo mkdir /var/run/odemisd
         sudo chmod a+rw /var/run/odemisd
 
+        python3 setup.py build_ext --inplace
+
     - name: Run tests from odemis.dataio
       run: |
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
