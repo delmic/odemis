@@ -21,7 +21,9 @@ see http://www.gnu.org/licenses/.
 
 import logging
 import math
-from odemis.acq.move import FM_IMAGING, SEM_IMAGING, MicroscopePostureManager
+
+from odemis import model
+from odemis.acq.move import FM_IMAGING, SEM_IMAGING
 from odemis.gui.plugin import Plugin
 from odemis.util.units import readable_str
 from typing import Dict
@@ -75,16 +77,29 @@ class MeteorEngageWarnPlugin(Plugin):
         pos_str = "\n". join(pos_str)
 
         # Guess (back) which position the users wants to go to
-        target_pos = self.main_app.main_frame.getCurrentPostureLabel(end_pos)
+        target_pos = self.main_app.main_data.posture_manager.getCurrentPostureLabel(end_pos)
+        stage = self.main_app.main_data.stage_bare
         if target_pos == FM_IMAGING:
             warn_msg = FM_WARN_MSG
+            # Check the deviation in rotation angle when
+            # switching from SEM to FM,
+            # give a warning message if switching is done from a different rotation angle
+            stage_md = stage.getMetadata()
+            fav_angles = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+            axis_name = "rz" if "rz" in fav_angles else "rm"
+            current_angle = stage.position.value[axis_name]
+            fav_angle = fav_angles[axis_name]
+
+            if not math.isclose(current_angle, fav_angle):
+                warn_msg = ("The current rotation value is different from the desired value. The switching behavior"
+                            " may not be proper.\n\n") + FM_WARN_MSG
         elif target_pos == SEM_IMAGING:
             warn_msg = SEM_WARN_MSG
         else:
             logging.warning("Unexpected target position %s", target_pos)
             warn_msg = SEM_WARN_MSG
 
-        box = wx.MessageDialog(self.main_frame,
+        box = wx.MessageDialog(self.main_app.main_frame,
                                warn_msg % (pos_str,),
                                caption="Large move of the stage",
                                style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)

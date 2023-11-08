@@ -3255,8 +3255,24 @@ class CryoChamberTab(Tab):
                 else:
                     pos_str.append(f"{axis} = " + readable_str(end_pos[axis], "m", 4))
         pos_str = "\n". join(pos_str)
+
+        # Check the deviation in rotation angle when switching from SEM to FM,
+        # give a warning message if switching is done from a different rotation angle
+        target_label = self.tab_data_model.main.posture_manager.getCurrentPostureLabel(end_pos)
+        warn_msg = "The stage will move to this position:\n%s\n\nIs it safe?"
+        if target_label == FM_IMAGING:
+            stage_md = self._stage.getMetadata()
+            fav_angles = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+            axis_name = "rz" if "rz" in fav_angles else "rm"
+            current_angle = self._stage.position.value[axis_name]
+            fav_angle = fav_angles[axis_name]
+
+            if not math.isclose(current_angle, fav_angle):
+                warn_msg = ("The current rotation value is different from the desired value. The switching behavior"
+                            " may not be proper.\n\n") + warn_msg
+
         box = wx.MessageDialog(self.main_frame,
-                               "The stage will move to this position:\n" + pos_str + "\n\nIs this safe?",
+                               warn_msg % (pos_str,),
                                caption="Large move of the stage",
                                style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
         ans = box.ShowModal()  # Waits for the window to be closed
