@@ -137,8 +137,10 @@ def data_to_static_streams(data):
             klass = stream.StaticSEMStream
 
         if issubclass(klass, stream.Static2DStream):
-            # FIXME: doesn't work currently if d is a DAS
             if numpy.prod(d.shape[:-3]) != 1:
+                if isinstance(d, model.DataArrayShadow):
+                    # DataArrayShadow doesn't allow changing the shape, so convert to the real DataArray
+                    d = d.getData()
                 logging.warning("Dropping dimensions from the data %s of shape %s",
                             name, d.shape)
                 #      T  Z  X  Y
