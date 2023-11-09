@@ -749,7 +749,9 @@ class SpectrumSettingsStream(CCDSettingsStream):
         # (We expect the original shape is (1, X).
         if data.shape[0] != 1:
             logging.warning("Got a spectrum with multiple lines (shape = %s)", data.shape)
+            data = data[0:1]  # Keep only the first element
         specdata = data.reshape((data.shape[-1], 1, 1, 1, 1))
+        specdata.metadata[model.MD_DIMS] = "CTZYX"
 
         # Set POS and PIXEL_SIZE from the e-beam (which is in spot mode)
         epxs = self.emitter.pixelSize.value
