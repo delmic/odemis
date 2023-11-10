@@ -61,7 +61,7 @@ class CryoFeatureController(object):
         if feature:
             pos = feature.pos.value
             current_focus = self._main_data_model.focus.position.value['z']
-            feature.pos.value = (pos[0], pos[1], current_focus)
+            feature.pos.value = (pos[0], pos[1], pos[2], current_focus)
 
     def _on_btn_go_to_feature(self, _):
         """
@@ -72,8 +72,8 @@ class CryoFeatureController(object):
             return
         pos = feature.pos.value
         logging.info(f"Moving to position: {pos}")
-        self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1]})
-        self._main_data_model.focus.moveAbs({'z': pos[2]})
+        self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1], 'z': pos[2]})
+        self._main_data_model.focus.moveAbs({'z': pos[3]})
 
     def _enable_feature_ctrls(self, enable: bool):
         """
@@ -177,8 +177,8 @@ class CryoFeatureController(object):
                                                                   va_2_ctrl=self._on_feature_pos)
 
     def _on_feature_pos(self, feature_pos):
-        # Set the feature Z ctrl with the 3rd (focus) element of the feature position
-        self._panel.ctrl_feature_z.SetValue(feature_pos[2])
+        #  Set the feature Z ctrl with the 4th (focus) element of the feature position
+        self._panel.ctrl_feature_z.SetValue(feature_pos[3])
         save_features(self._tab.conf.pj_last_path, self._tab_data_model.main.features.value)
 
     def _on_feature_name(self, _):
@@ -236,6 +236,6 @@ class CryoFeatureController(object):
         feature = self._tab_data_model.main.currentFeature.value
         if not feature:
             logging.error("No feature connected, but Z position changed!")
-            return None, None, zpos
+            return None, None, None, zpos
         pos = feature.pos.value
-        return pos[0], pos[1], zpos
+        return pos[0], pos[1], pos[2], zpos

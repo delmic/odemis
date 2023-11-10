@@ -12,19 +12,23 @@ class CryoFeature(object):
     Model class for a cryo interesting feature
     """
 
-    def __init__(self, name, x, y, z, streams=None):
+    def __init__(self, name, x, y, z, d=None, streams=None):
         """
         :param name: (string) the feature name
         :param x: (float) the X axis of the feature position
         :param y: (float) the Y axis of the feature position
         :param z: (float) the Z axis of the feature position
+        :param d: (float) distance of feature position from focus
         :param streams: (List of StaticStream) list of acquired streams on this feature
         """
         self.name = model.StringVA(name)
         # The 3D position of an interesting point in the site (Typically, the milling should happen around that
         # volume, never touching it.)
-        self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), unit="m")
-        
+        if d:
+            self.pos = model.TupleContinuous((x, y, z, d), range=((-1, -1, -1, -1), (1, 1, 1, 1)), cls=(int, float),
+                                             unit="m")
+        else:
+            self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), unit="m")
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
         self.streams = streams if streams is not None else model.ListVA()

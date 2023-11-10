@@ -745,7 +745,8 @@ class CryoGUIData(MicroscopyGUIData):
             f_name = make_unique_name("Feature-1", existing_names)
         if pos_z is None:
             pos_z = self.main.focus.position.value['z']
-        feature = CryoFeature(f_name, pos_x, pos_y, pos_z)
+        stage_pos = self.main.stage.position.value
+        feature = CryoFeature(f_name, pos_x, pos_y, stage_pos['z'], pos_z)
         self.main.features.value.append(feature)
         self.main.currentFeature.value = feature
         return feature
