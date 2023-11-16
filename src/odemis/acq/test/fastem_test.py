@@ -1034,7 +1034,12 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         cls.multibeam.resolution.value = (6400, 6400)
 
         cls.descanner = None
-        cls.stage = None
+        cls.stage = Mock()
+        cls.stage.axes = {
+            "x": model.Axis(unit="m", range=(-100.0e-6, 100.0e-6)),
+            "y": model.Axis(unit="m", range=(-100.0e-6, 100.0e-6)),
+            "z": model.Axis(unit="m", range=(-100.0e-6, 100.0e-6)),
+        }
         cls.ccd = None
         cls.beamshift = None
         cls.lens = None
