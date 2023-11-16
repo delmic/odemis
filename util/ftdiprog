@@ -1,0 +1,139 @@
+#!/usr/bin/python3
+from __future__ import annotations
+
+import functools
+import logging
+
+from dataclasses import dataclass
+
+import ftdi1
+
+
+USB_VID = 0x0403
+USB_PID = 0x6001
+
+MANUFACTURER = "Delmic"
+DESCRIPTION_LIST = [
+    "FAST-EM BeamShift Controller",
+    "FAST-EM Sample Stage Controller",
+]
+
+
+logging.basicConfig(
+    format="%(asctime)s [%(levelname)s] %(name)s : %(message)s",
+    datefmt="%Y-%m-%d %H:%M:%S",
+    level=logging.INFO,
+)
+
+logger = logging.getLogger(__name__)
+
+
+@dataclass
+class FTDIDevice:
+    vendor: int
+    product: int
+    manufacturer: str
+    description: str
+    serial: str
+
+    def __str__(self):
+        return f"{self.description} ({self.serial})"
+
+
+class FTDIContext:
+    def __init__(self) -> None:
+        self._ctx = ftdi1.new()
+        if self._ctx == 0:
+            logger.error("ftdi1.new() failed")
+
+    def __enter__(self) -> FTDIContext:
+        return self
+
+    def __exit__(self, type, value, traceback):
+        self.close()
+
+    def __getattr__(self, name: str):
+        func = getattr(ftdi1, name)
+
+        @functools.wraps(func)
+        def wrapper(*args, **kwargs):
+            ret = func(self._ctx, *args, **kwargs)
+            logger.debug(f"Call to ftdi1.{name} returned {ret!r}.")
+            if isinstance(ret, int):
+                values = None
+            elif len(ret) == 2:
+                ret, values = ret
+            else:
+                ret, *values = ret
+            if ret < 0:
+                raise RuntimeError(
+                    f"ftdi1.{name} failed with error {ret}: {ftdi1.get_error_string(self._ctx)}"
+                )
+            return values
+
+        return wrapper
+
+    def close(self) -> None:
+        ftdi1.free(self._ctx)
+
+    def usb_open_dev(self, device: FTDIDevice):
+        return self.usb_open_desc(
+            device.vendor, device.product, device.description, device.serial
+        )
+
+
+class FTDIDeviceIterator:
+    def __init__(self, vendor: int, product: int) -> None:
+        self._vendor = vendor
+        self._product = product
+        self._ctx = FTDIContext()
+        self._devlist = self._ctx.usb_find_all(vendor, product)
+        self._ptr = self._devlist
+
+    def __iter__(self) -> FTDIDeviceIterator:
+        return self
+
+    def __next__(self) -> FTDIDevice:
+        if self._ptr is None:
+            ftdi1.list_free2(self._devlist)
+            self._ctx.close()
+            raise StopIteration()
+        manufacturer, description, serial = self._ctx.usb_get_strings(self._ptr.dev)
+        self._ptr = self._ptr.next
+        return FTDIDevice(
+            self._vendor, self._product, manufacturer, description, serial
+        )
+
+
+def selection_menu(options, name):
+    print(f"\n--- Available {name}s:")
+    for i, option in enumerate(options, 1):
+        print(f"--- {i:2}: {option}")
+    while True:
+        selection = input(f"--- Enter {name} index: ")
+        try:
+            index = int(selection) - 1
+            if not 0 <= index < len(options):
+                print("--- Invalid index!")
+        except ValueError:
+            pass
+        else:
+            return options[index]
+
+
+def main():
+    devices = list(FTDIDeviceIterator(USB_VID, USB_PID))
+    device = selection_menu(devices, "device")
+    description = selection_menu(DESCRIPTION_LIST, "description")
+    with FTDIContext() as ctx:
+        ctx.usb_open_dev(device)
+        ctx.read_eeprom()
+        ctx.eeprom_decode(False)
+        ctx.eeprom_set_strings(MANUFACTURER, description, None)
+        ctx.eeprom_build()
+        ctx.write_eeprom()
+        ctx.usb_close()
+
+
+if __name__ == "__main__":
+    main()

@@ -66,6 +66,7 @@ Depends: ${shlibs:Depends},
          python3-requests,
 # Needed for xtadapter update notification feature
          notification-daemon,
+         python3-ftdi1,
 Suggests: imagej
 Description: Open Delmic Microscope Software
  Odemis is the acquisition software for the Delmic microscopes. In particular,

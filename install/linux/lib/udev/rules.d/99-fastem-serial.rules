@@ -1,0 +1,2 @@
+KERNEL=="ttyUSB[0-9]*", SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{manufacturer}=="Delmic", ATTRS{product}=="FAST-EM BeamShift Controller", SYMLINK+="ttyUSB-BeamShift%n", GROUP="odemis", ENV{ID_MM_DEVICE_IGNORE}="1"
+KERNEL=="ttyUSB[0-9]*", SUBSYSTEM=="tty", ATTRS{idVendor}=="0403", ATTRS{idProduct}=="6001", ATTRS{manufacturer}=="Delmic", ATTRS{product}=="FAST-EM Sample Stage Controller", SYMLINK+="ttyUSB-SampleStage%n", GROUP="odemis", ENV{ID_MM_DEVICE_IGNORE}="1"
