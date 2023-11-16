@@ -299,7 +299,7 @@ class StreamTestCase(unittest.TestCase):
         #  * The intensity range should adapt to the actual data (rounded)
         #  * The histogram should stay not too long (<=1024 values)
         d = numpy.zeros(ebeam.shape[::-1], "uint16") + 1
-        d[1] = 1561  # Next power of 2 is 2**11
+        d[1] = 1561  # Next multiple of 256 is 1792
         md = {model.MD_BPP: 16,
               model.MD_PIXEL_SIZE: (1e-6, 2e-5),  # m/px
               model.MD_POS: (1e-3, -30e-3),  # m
@@ -312,7 +312,7 @@ class StreamTestCase(unittest.TestCase):
         h = ss.histogram.value
         ir = ss.intensityRange.range
         self.assertLessEqual(len(h), 1024)
-        self.assertEqual((ir[0][0], ir[1][1]), (0, 2048 - 1))
+        self.assertEqual((ir[0][0], ir[1][1]), (0, 1792 - 1))
 
         # Send a 16 bit image with 12 BPP =>
         #  * The intensity range should update to 12-bit
@@ -4117,6 +4117,29 @@ class StaticStreamsTestCase(unittest.TestCase):
 
         self.assertTrue(59000 <= ir[0] <= da.min())  # round 10% less
         self.assertTrue(da.max() <= ir[1] <= 62000)  # rounded 10% more
+        self.assertEqual((ir[1] - ir[0] + 1) % 256, 0, f"range {ir} doesn't have a length multiple of 256")
+
+
+    def test_uint16_hist_white(self):
+        """Test histogram computation with int16, with only a single value"""
+        md = {
+            model.MD_ACQ_DATE: time.time(),
+            model.MD_PIXEL_SIZE: (2e-5, 2e-5),  # m/px
+            model.MD_POS: (1.2e-3, -30e-3),  # m
+            model.MD_EXP_TIME: 1.2,  # s
+        }
+
+        # DataArray with very big type, and only values very large
+        da = model.DataArray(numpy.zeros((512, 1024), dtype=numpy.uint16), md)
+        da[:] = 2**16 - 1 # max
+
+        cls = stream.StaticCLStream("test", da)
+        time.sleep(0.5)  # wait a bit for the image to update
+
+        h = cls.histogram.value
+        ir = cls.intensityRange.range[0][0], cls.intensityRange.range[1][1]
+
+        self.assertGreaterEqual((ir[1] - ir[0] + 1), 256)
         self.assertEqual((ir[1] - ir[0] + 1) % 256, 0, f"range {ir} doesn't have a length multiple of 256")
 
 
