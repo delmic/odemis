@@ -1381,6 +1381,7 @@ class StreamBar(wx.Panel):
         acq.stream.ScannerSettingsStream,
         acq.stream.SEMStream,
         acq.stream.StaticSEMStream,
+        acq.stream.EBICSettingsStream,
         acq.stream.BrightfieldStream,
         acq.stream.StaticStream,
         acq.stream.FluoStream,
