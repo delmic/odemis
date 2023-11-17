@@ -966,48 +966,6 @@ class TestMicroscopeInternal(unittest.TestCase):
         self.assertTrue("unit" in mpp_orientation_info)
         self.assertEqual(len(mpp_orientation_info["range"]), 2)
 
-    def test_get_aperture_index(self):
-        """
-        Test getting the aperture index.
-        """
-        if self.xt_type != 'xttoolkit':
-            self.skipTest("This test needs XTToolkit to run.")
-
-        aperture_index = self.microscope.get_aperture_index()
-        self.assertIsInstance(aperture_index, int)
-        self.assertTrue(0 <= aperture_index <= 14)
-
-    def test_set_aperture_index(self):
-        """
-        Test setting the aperture index.
-        """
-        if self.xt_type != 'xttoolkit':
-            self.skipTest("This test needs XTToolkit to run.")
-
-        current_aperture_index = self.microscope.get_aperture_index()
-        aperture_range = tuple(self.microscope.aperture_index_info()["range"])
-        new_aperture_index = current_aperture_index + 1 if current_aperture_index < aperture_range[1] else \
-            current_aperture_index - 1
-
-        self.microscope.set_aperture_index(new_aperture_index)
-        aperture_index = self.microscope.get_aperture_index()
-        self.assertEqual(aperture_index, new_aperture_index)
-
-        self.microscope.set_aperture_index(current_aperture_index)
-        aperture_index = self.microscope.get_aperture_index()
-        self.assertEqual(aperture_index, current_aperture_index)
-
-    def test_aperture_index_info(self):
-        """
-        Test getting the aperture index info.
-        """
-        if self.xt_type != 'xttoolkit':
-            self.skipTest("This test needs XTToolkit to run.")
-
-        aperture_index_info = self.microscope.aperture_index_info()
-        self.assertIsInstance(aperture_index_info, dict)
-        self.assertEqual(len(aperture_index_info["range"]), 2)
-
     def test_get_beamlet_index(self):
         """
         Test getting the beamlet index.
@@ -1357,26 +1315,6 @@ class TestMBScanner(unittest.TestCase):
         with self.assertRaises(NotSettableError):
             self.scanner.multiprobeRotation.value = mpp_rotation
 
-    def test_aperture_index_VA(self):
-        current_value = self.scanner.apertureIndex.value
-
-        # Test if directly changing it via the VA works
-        for test_aperture_index in self.scanner.apertureIndex.range:
-            self.scanner.apertureIndex.value = test_aperture_index
-            self.assertEqual(test_aperture_index, self.microscope.get_aperture_index())
-
-        # Test if errors are produced when a value outside of the range is set.
-        with self.assertRaises(IndexError):
-            self.scanner.apertureIndex.value = 1.2 * self.scanner.apertureIndex.range[1]
-        self.assertEqual(test_aperture_index, self.microscope.get_aperture_index())
-
-        # Test if the value is automatically updated when the value is not changed via the VA
-        self.microscope.set_aperture_index(0)
-        time.sleep(6)
-        self.assertEqual(0, self.scanner.apertureIndex.value)
-
-        self.scanner.apertureIndex.value = current_value
-
     def test_beamlet_index_VA(self):
         current_value = self.scanner.beamletIndex.value
 
@@ -1419,7 +1357,6 @@ class TestMBScanner(unittest.TestCase):
 
     def test_multiprobe_mode_VA(self):
         current_beam_mode = self.scanner.multiBeamMode.value
-        current_aperture_index = self.scanner.apertureIndex.value
         current_beamlet_index = self.scanner.beamletIndex.value
 
         # Test multiple time to see if the change from True --> False and the other way around succeeds also if it is
@@ -1428,8 +1365,6 @@ class TestMBScanner(unittest.TestCase):
             self.scanner.multiBeamMode.value = multi_beam_boolean
             self.assertEqual(self.scanner.multiBeamMode.value, multi_beam_boolean)
             self.assertEqual(self.microscope.get_use_case(), 'MultiBeamTile' if multi_beam_boolean else 'SingleBeamlet')
-            # Check if aperture and beamlet index do not change while switching beam modes.
-            self.assertEqual(self.microscope.get_aperture_index(), current_aperture_index)
             self.assertEqual(self.microscope.get_beamlet_index(), current_beamlet_index)
 
         # Test if the value is automatically updated when the value is not changed via the VA (and end the test with
