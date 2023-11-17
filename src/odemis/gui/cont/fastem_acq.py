@@ -516,7 +516,8 @@ class FastEMAcquiController(object):
             for roa in p.roas.value:
                 f = fastem.acquire(roa, p.name.value, self._main_data_model.ebeam,
                                    self._main_data_model.multibeam, self._main_data_model.descanner,
-                                   self._main_data_model.mppc, self._main_data_model.stage, self._main_data_model.ccd,
+                                   self._main_data_model.mppc, self._main_data_model.stage,
+                                   self._main_data_model.scan_stage, self._main_data_model.ccd,
                                    self._main_data_model.beamshift, self._main_data_model.lens,
                                    pre_calibrations=pre_calibrations, settings_obs=self._main_data_model.settings_obs)
                 t = estimate_acquisition_time(roa, pre_calibrations)
