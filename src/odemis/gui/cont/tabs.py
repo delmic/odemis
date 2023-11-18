@@ -3417,8 +3417,8 @@ class AnalysisTab(Tab):
         assert(isinstance(viewports[6], LineSpectrumViewport))
         assert(isinstance(viewports[7], TemporalSpectrumViewport))
         assert(isinstance(viewports[8], ChronographViewport))
-        assert (isinstance(viewports[9], AngularResolvedViewport))
-        assert (isinstance(viewports[10], AngularSpectrumViewport))
+        assert(isinstance(viewports[9], AngularResolvedViewport))
+        assert(isinstance(viewports[10], AngularSpectrumViewport))
         assert(isinstance(viewports[11], ThetaViewport))
 
         vpv = collections.OrderedDict([
@@ -5124,15 +5124,7 @@ class EnzelAlignTab(Tab):
         # Pause all streams
         self.stream_bar_controller.pauseAllStreams()
 
-        for view in self.panel.pnl_two_streams_grid.viewports:
-            if view is top['viewport'] or view is bottom['viewport']:
-                view.Shown = True
-            else:
-                view.Shown = False
-        self.view_controller._grid_panel.set_shown_viewports(top['viewport'], bottom['viewport'])
         self.tab_data_model.visible_views.value = [top['viewport'].view, bottom['viewport'].view]
-
-        self.panel.pnl_two_streams_grid._layout_viewports()
 
         # Destroy the old stream controllers  # TODO This is a temporary fix and it could be handled better
         for stream_controller in self._stream_controllers:

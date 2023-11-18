@@ -143,7 +143,6 @@ class ViewPortController(object):
         object gets changed.
 
         """
-
         msg = "Resetting views to %s"
         msgdata = [str(v) for v in visible_views] if visible_views is not None else "default"
         logging.debug(msg, msgdata)
@@ -151,7 +150,6 @@ class ViewPortController(object):
         parent = self._viewports[0].Parent
 
         parent.Freeze()
-
         try:
             visible_viewports = self.views_to_viewports(visible_views)
 
@@ -179,24 +177,17 @@ class ViewPortController(object):
             self._data_model.focussedView.value = visible_views[0]
 
     def _on_focussed_view(self, view):
-        """ Called when another focussed view changes.
-
-        :param view: (MicroscopeView) The newly focussed view
-
         """
-
+        Called when the focussed view changes.
+        :param view: (MicroscopeView) The newly focussed view
+        """
         logging.debug("Changing focus to view %s", view.name.value)
 
-        for vp in self._viewports:
-            if vp.view is view:
-                viewport = vp
-                vp.canvas.Bind(EVT_KNOB_PRESS, self._on_knob_press)
-                break
-        else:
-            raise ValueError("No associated ViewPort found for view %s" % (view,))
+        viewport = self.views_to_viewports([view])[0]
+        viewport.canvas.Bind(EVT_KNOB_PRESS, self._on_knob_press)
 
         if self._data_model.viewLayout.value == model.VIEW_LAYOUT_ONE:
-            self._grid_panel.set_shown_viewports(viewport)
+            self._grid_panel.set_visible_viewports([viewport])
             # Enable/disable ZOOM_FIT tool according to view ability
             if self._toolbar:
                 can_fit = hasattr(viewport.canvas, "fit_view_to_content")
@@ -236,20 +227,18 @@ class ViewPortController(object):
 
         if layout == model.VIEW_LAYOUT_ONE:
             logging.debug("Displaying single viewport")
-            for viewport in self._viewports:
-                if viewport.view == self._data_model.focussedView.value:
-                    self._grid_panel.set_shown_viewports(viewport)
-                    break
-            else:
-                raise ValueError("No focussed view found!")
+            focused_viewport = self.views_to_viewports([self._data_model.focussedView.value])
+            self._grid_panel.set_visible_viewports(focused_viewport)
 
         elif layout == model.VIEW_LAYOUT_22:
             logging.debug("Displaying 2x2 viewport grid")
-            self._grid_panel.show_grid_viewports()
+            visible_viewports = self.views_to_viewports(self._data_model.visible_views.value[:4])
+            self._grid_panel.set_visible_viewports(visible_viewports)
 
         elif layout == model.VIEW_LAYOUT_VERTICAL:
             logging.debug("Displaying two viewport stacked vertically")
-            self._grid_panel.show_2_vert_stacked_viewports()
+            visible_viewports = self.views_to_viewports(self._data_model.visible_views.value[:2])
+            self._grid_panel.set_visible_viewports(visible_viewports)
 
         elif layout == model.VIEW_LAYOUT_FULLSCREEN:
             raise NotImplementedError()
