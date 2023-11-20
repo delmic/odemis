@@ -1,8 +1,30 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
-# Starts the SPARC spectrograph and select a specific turret
-# To start automatically with Odemis, run with:
-# sh -c "env PYTHONPATH=$HOME/development/odemis/src/ $HOME/development/odemis/scripts/odemis-start-turret.py 1 && odemis-start"
+"""
+Created 23 September 2022
+
+@author: Éric Piel
+
+Copyright © 2022-2023 Éric Piel, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms 
+of the GNU General Public License version 2 as published by the Free Software 
+Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with 
+Odemis. If not, see http://www.gnu.org/licenses/.
+
+Ensure the SPARC spectrograph is powered and turned on, and then select a specific turret.
+To start automatically with Odemis, run with:
+sh -c "env PYTHONPATH=$HOME/development/odemis/src/ $HOME/development/odemis/scripts/odemis-start-turret.py 1 && odemis-start"
+"""
+
 
 import logging
 import sys
@@ -24,9 +46,8 @@ KWARGS_PCU = {
     "delay": { # Time it takes before a component is accessible
         "Spectrograph": 90, # SR-193 needs a looong time to initialise
     },
-    # The hardware (wire) has an issue which prevents reading the PMT EEPROM
     #"ids": [],
-    "check_power": False,
+    "check_power": False,  # Works even if the PCU doesn't detect power (due to missing EEPROMs or issue with the EEPROM reading)
 }
 
 KWARGS_SHRK = {
