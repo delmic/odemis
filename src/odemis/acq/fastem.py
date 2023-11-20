@@ -99,8 +99,7 @@ class FastEMROA(object):
     and detector.
     """
 
-    def __init__(self, name, coordinates, roc_2, roc_3, asm, multibeam, descanner, detector, overlap=0):
-
+    def __init__(self, name, coordinates, roc_2, roc_3, asm, multibeam, descanner, detector, overlap=0.06):
         """
         :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
                      the external storage.
@@ -117,8 +116,7 @@ class FastEMROA(object):
         :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
         :param overlap: (float), optional
             The amount of overlap required between single fields. An overlap of 0.2 means that two neighboring fields
-            overlap by 20%. By default, the overlap is 0, this means there is no overlap and one field is exactly next
-            to the neighboring field.
+            overlap by 20%. By default, the overlap is 0.06, this means there is 6% overlap between the fields.
         """
         self.name = model.StringVA(name)
         self.coordinates = model.TupleContinuous(coordinates,

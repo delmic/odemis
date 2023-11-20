@@ -1737,7 +1737,14 @@ class MPPC(model.Detector):
         if model.MD_FIELD_SIZE in md:
             # The ASM API only accepts an effective field size that is a multiple of 32
             eff_field_size = md.get(model.MD_FIELD_SIZE)
-            if eff_field_size[0] % 32 != 0 or eff_field_size[1] % 32 != 0:
+            # FIXME there is a bug on technolutions side, therefore an overlap of 0% is not allowed.
+            #  Once this bug is fixed the first check can be removed.
+            if (eff_field_size[0] == self._scanner.resolution.value[0] or
+                    eff_field_size[1] == self._scanner.resolution.value[0]):
+                sug_field_size = self._scanner.resolution.value[0] - 32
+                suggested_overlap = 1 - sug_field_size / self._scanner.resolution.value[0]
+                raise ValueError(f"Overlap of 0 is not allowed, suggested overlap: {suggested_overlap * 100}%")
+            elif eff_field_size[0] % 32 != 0 or eff_field_size[1] % 32 != 0:
                 # Calculate the suggested overlap only based on the first axis,
                 # because the overlap is a single number and it is just a suggestion.
                 if eff_field_size[0] % 32 <= 16:
