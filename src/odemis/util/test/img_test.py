@@ -75,11 +75,19 @@ class TestFindOptimalRange(unittest.TestCase):
         self.assertEqual(irange, (0, 255))
 
     def test_with_outliers(self):
-        # almost nothing, but more than 0
+        # almost no outliers, but more than 0 to trigger the "standard" path
         hist = numpy.zeros(256, dtype="int32")
         hist[128] = 4564
         irange = img.findOptimalRange(hist, (0, 255), 1e-6)
         self.assertEqual(irange, (128, 128))
+
+        # first + last
+        hist = numpy.zeros(256, dtype="int32")
+        hist[0] = 4564
+        hist[1] = 1  # to not trigger the special "trick" that skips the bin 0 if the bin 1 is empty
+        hist[255] = 4564
+        irange = img.findOptimalRange(hist, (0, 255), 1e-6)
+        self.assertEqual(irange, (0, 255))
 
         # 1%
         hist = numpy.zeros(256, dtype="int32")

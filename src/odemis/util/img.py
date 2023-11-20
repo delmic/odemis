@@ -142,7 +142,10 @@ def findOptimalRange(hist, edges, outliers=0):
     edges (tuple of 2 numbers): the values corresponding to the first and last
       bin of the histogram. To get an index, use edges = (0, len(hist)).
     outliers (0<float<0.5): ratio of outliers to discard (on both side). 0
-      discards no value, 0.5 discards every value (and so returns the median).
+    discards no value, 0.5 discards every value (and so returns the median).
+    Note: if outliers > 0, there is a trick that treats bin 0 (which represents pure black) as "special".
+    If bin 1 is empty, bin 0 will be considered empty. This is to handle images which have a black frame,
+    or black legend, so they are not included in the outliers count, and only the actual data counts.
     return (tuple of 2 values): the range (min and max values)
     """
     # If we got an histogram with only one value, don't try too hard.
@@ -162,7 +165,7 @@ def findOptimalRange(hist, edges, outliers=0):
         cum_hist = hist.cumsum()
         nval = cum_hist[-1]
 
-        # If it's an histogram of an empty array, don't try too hard.
+        # If it's a histogram of an empty array, don't try too hard.
         if nval == 0:
             return edges
 
@@ -170,7 +173,7 @@ def findOptimalRange(hist, edges, outliers=0):
         # value just above it, it's a sign that the black is not part of the
         # signal and so is all outliers
         if hist[1] == 0 and cum_hist[0] / nval > 0.01 and cum_hist[0] < nval:
-            cum_hist -= cum_hist[0] # don't count 0's in the outliers
+            cum_hist -= cum_hist[0]  # don't count 0's in the outliers
             nval = cum_hist[-1]
 
         # find out how much is the value corresponding to outliers
