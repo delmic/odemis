@@ -475,6 +475,53 @@ class TestCoupledStage(unittest.TestCase):
 
 class TestConvertStage(unittest.TestCase):
 
+    def test_mix(self):
+        """
+        Tests typical rotation and shear in Meteor
+        """
+        stage_bare = simulated.Stage("stage", "test", axes=["x", "y"])
+        stage = ConvertStage("inclined", "align", {"orig": stage_bare},
+                             axes=["x", "y"], rotation=math.radians(40),
+                             shear=(-math.tan(math.radians(15)), 0),
+                             scale=(1, 1 / math.cos(math.radians(15)))
+                             )
+
+        # Move using stage
+        old_stage_bare_pos = stage_bare.position.value
+        old_stage_pos = stage.position.value
+        stage.moveRel({"x": 1.0e-3}).result()
+        new_stage_bare_pos = stage_bare.position.value
+        new_stage_pos = stage.position.value
+
+        self.assertAlmostEqual(old_stage_pos["x"] + 1.0e-3, new_stage_pos["x"], places=3)
+        self.assertLess(old_stage_bare_pos["x"], new_stage_bare_pos["x"])
+
+        # The stage moves in the correct direction if the inclination of sample stage w.r.t to vacuum floor
+        # is unchanged when the stage moves in y direction
+        beta = math.radians(40)
+        alpha = math.radians(15)
+        ratio = math.cos(alpha + beta) / math.sin(beta)
+        estimated_ratio = ((old_stage_bare_pos["x"] - new_stage_bare_pos["x"]) /
+                           (old_stage_bare_pos["y"] - new_stage_bare_pos["y"]))
+        self.assertAlmostEqual(ratio, estimated_ratio, places=5)
+
+    def test_simple_shear(self):
+        """
+        Tests simple shear
+        """
+        dependency = simulated.Stage("stage", "test", axes=["a", "b"])
+        stage = ConvertStage("inclined", "align", {"orig": dependency},
+                             axes=["a", "b"], shear=(1, 0))
+
+        f = stage.moveRel({"x": 1e-06, "y": 2e-06})
+        f.result()
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 1e-06, "y": 2e-06})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 3e-06, "b": 2e-06})
+        f = stage.moveRel({"x": -1e-06, "y": -2e-06})
+        f.result()
+        testing.assert_pos_almost_equal(stage.position.value, {"x": 0, "y": 0})
+        testing.assert_pos_almost_equal(dependency.position.value, {"a": 0, "b": 0})
+
     def test_ab_rotation(self):
         """
         Test typical rotation stage for the SECOM v1 A/B alignment
@@ -570,7 +617,7 @@ class TestConvertStage(unittest.TestCase):
         # Move stage inside its range but outside the range of dependency
         # Test with one of the four corner points of the rotated range of dependency
         x_pos = 0.08987940462991671
-        y_pos = -0.04383711467890774
+        y_pos = -0.0438371146789077
         self.assertTrue(x_min <= x_pos <= x_max)
         self.assertTrue(y_min <= y_pos <= y_max)
         self.assertFalse(a_min <= y_pos <= a_max)

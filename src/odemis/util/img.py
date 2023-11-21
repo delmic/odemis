@@ -150,13 +150,10 @@ def findOptimalRange(hist, edges, outliers=0):
         return edges
 
     if outliers == 0:
-        # short-cut if no outliers: find first and last non null value
-        inz = numpy.flatnonzero(hist)
-        try:
-            idxrng = inz[0], inz[-1]
-        except IndexError:
-            # No non-zero => data had no value => histogram of an empty array
-            return edges
+        # short-cut if no outliers: find first and last non zero value
+        inz = hist > 0  # Boolean array with non-zero values as True
+        lowi = numpy.argmax(inz)  # First non-zero
+        highi = len(inz) - numpy.argmax(inz[::-1]) - 1  # Last non-zero
     else:
         # accumulate each bin into the next bin
         cum_hist = hist.cumsum()
@@ -186,13 +183,11 @@ def findOptimalRange(hist, edges, outliers=0):
         # within hist)
         highi = numpy.searchsorted(cum_hist, highv, side="left")
 
-        idxrng = lowi, highi
-
     # convert index into intensity values
     a = edges[0]
     b = (edges[1] - edges[0]) / (hist.size - 1)
     # TODO: rng should be the same type as edges
-    rng = (a + b * idxrng[0], a + b * idxrng[1])
+    rng = (a + b * lowi, a + b * highi)
     return rng
 
 

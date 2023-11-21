@@ -606,13 +606,14 @@ class ConvertStage(model.Actuator):
             raise ValueError("Incorrect number of axes.")
 
     def __init__(self, name, role, dependencies, axes,
-                 rotation=0, scale=None, translation=None, **kwargs):
+                 rotation=0, scale=None, translation=None, shear=None, **kwargs):
         """
         dependencies (dict str -> actuator): name to objective lens actuator
         axes (list of 2 strings): names of the axes for x and y
         scale (None tuple of 2 floats): scale factor from exported to original position
         rotation (float): rotation factor (in radians)
         translation (None or tuple of 2 floats): translation offset (in m)
+        shear (None or tuple of 2 floats): shear along x and y axes
         """
         assert len(axes) == 2
         if len(dependencies) != 1:
@@ -624,6 +625,8 @@ class ConvertStage(model.Actuator):
             scale = (1, 1)
         if translation is None:
             translation = (0, 0)
+        if shear is None:
+            shear = (0, 0)
 
         axes_def = {"x": copy.deepcopy(self._dependency.axes[axes[0]]),
                     "y": copy.deepcopy(self._dependency.axes[axes[1]])}
@@ -632,6 +635,7 @@ class ConvertStage(model.Actuator):
         self._metadata[model.MD_POS_COR] = translation
         self._metadata[model.MD_ROTATION_COR] = rotation
         self._metadata[model.MD_PIXEL_SIZE_COR] = scale
+        self._metadata[model.MD_SHEAR_COR] = shear
         self._updateConversion()
         self._updateAxesRange()
 
@@ -688,9 +692,19 @@ class ConvertStage(model.Actuator):
     def _updateConversion(self):
         translation = self._metadata[model.MD_POS_COR]
         scale = self._metadata[model.MD_PIXEL_SIZE_COR]
-        # Rotation * scaling for convert back/forth between exposed and dep
-        self._Mtodep = self._get_rot_matrix() * scale
-        self._Mfromdep = self._get_rot_matrix(invert=True) / scale
+        shear = self._metadata[model.MD_SHEAR_COR]
+
+        if len(shear) == 3:
+            # TODO update the shear matrix if shear is in the first or second axis
+            # The shear matrix is for the shear in the z axis
+            shear_matrix = numpy.array([[1, 0, 0], [0, 1, 0], [shear[0], shear[1], 1]])
+        else:
+            shear_matrix = numpy.array([[1, shear[0]], [shear[1], 1]])
+
+        # Scaling*Shearing*Rotation for convert back/forth between exposed and dep
+        scale_matrix = numpy.identity(len(scale)) * scale
+        self._Mtodep = scale_matrix @ shear_matrix @ self._get_rot_matrix()
+        self._Mfromdep = numpy.linalg.inv(self._Mtodep)
 
         # Offset between origins of the coordinate systems
         self._O = numpy.array(translation, dtype=float)
@@ -792,7 +806,7 @@ class Convert3DStage(ConvertStage):
     Extends original ConvertStage with an additional axis Z
     """
     def __init__(self, name, role, dependencies, axes,
-                 rotation=(0, 0, 0), scale=(1, 1, 1), translation=(0, 0, 0), **kwargs):
+                 rotation=(0, 0, 0), scale=(1, 1, 1), translation=(0, 0, 0), shear=(0, 0, 0), **kwargs):
         """
         dependencies (dict str -> actuator): name (anything is fine) to "original" actuator
         axes (list of 3 strings): names of the axes for x, y and z
@@ -800,6 +814,7 @@ class Convert3DStage(ConvertStage):
         rotation (tuple of 3 floats): rz, ry, rx (Tait–Bryan) angles using extrinsic rotations (in radians)
           applied in the order rz, ry, rx from exported to original position
         translation (None or tuple of 3 floats): translation offset (in m)
+        shear (tuple of 3 floats): shear values
         """
         assert len(axes) == 3
         if len(dependencies) != 1:
@@ -818,6 +833,7 @@ class Convert3DStage(ConvertStage):
         self._metadata[model.MD_POS_COR] = translation
         self._metadata[model.MD_ROTATION_COR] = rotation
         self._metadata[model.MD_PIXEL_SIZE_COR] = scale
+        self._metadata[model.MD_SHEAR_COR] = shear
         self._updateConversion()
 
         # RO, as to modify it the client must use .moveRel() or .moveAbs()

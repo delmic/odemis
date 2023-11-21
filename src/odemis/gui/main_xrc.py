@@ -945,7 +945,9 @@ class xrcpnl_tab_localization(wx.Panel):
         self.lbl_stigmator_angle = xrc.XRCCTRL(self, "lbl_stigmator_angle")
         self.cmb_stigmator_angle = xrc.XRCCTRL(self, "cmb_stigmator_angle")
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
+        self.fp_secom_streams = xrc.XRCCTRL(self, "fp_secom_streams")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
+        self.fp_acquisitions = xrc.XRCCTRL(self, "fp_acquisitions")
         self.streams_chk_list = xrc.XRCCTRL(self, "streams_chk_list")
         self.z_stack_chkbox = xrc.XRCCTRL(self, "z_stack_chkbox")
         self.param_Zmin = xrc.XRCCTRL(self, "param_Zmin")
@@ -9750,7 +9752,7 @@ def __init_resources():
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
-                      <object class="FoldPanelItem">
+                      <object class="FoldPanelItem" name="fp_secom_streams">
                         <object class="StreamBar" name="pnl_secom_streams">
                           <size>300,-1</size>
                           <add_button>1</add_button>
@@ -9764,7 +9766,7 @@ def __init_resources():
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
-                      <object class="FoldPanelItem">
+                      <object class="FoldPanelItem" name="fp_acquisitions">
                         <object class="wxPanel">
                             <object class="wxBoxSizer">
                                 <object class="sizeritem">

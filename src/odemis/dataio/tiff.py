@@ -617,7 +617,6 @@ def _updateMDFromOME(root, das):
         # each C only by the order they are specified.
         wl_list = [] # we'll know it only once all the channels are passed
         for chan, che in enumerate(pxe.findall("Channel")):
-
             mdc = {}
             try:
                 mdc[model.MD_DESCRIPTION] = che.attrib["Name"]
@@ -735,9 +734,13 @@ def _updateMDFromOME(root, das):
                 chans = [slice(None)] * len(hdims)
                 chans[ci] = chan
                 chans = tuple(chans)
+                if chan >= hd_2_ifd.shape[ci]:
+                    logging.warning("Channel %d information available, but not such channel, skipping", chan)
+                    continue
             except ValueError:
                 if chan > 0:
-                    raise ValueError("Multiple channels information but C dimension is low")
+                    logging.warning("Channel %d information available, but there is no C dimension, skipping", chan)
+                    continue
                 chans = slice(None)  # all of the IFDs
 
             for ifd in hd_2_ifd[chans].flat:
@@ -1006,7 +1009,7 @@ def _getIFDsFromOME(pxe, offset=0):
         needed_ifds = numpy.prod(hdshape)
         if needed_ifds > nbifds:
             if hdims == "C" and hdshape[0] in (3, 4) and nbifds == 1:
-                logging.debug("High dims are %s = %s, while only 1 IFD, guessing it's a RGB image")
+                logging.debug("High dims are %s = %s, while only 1 IFD, guessing it's a RGB image", hdims, hdshape)
                 hdshape = [1]
             else:
                 logging.warning("High dims are %s = %s, which would require %d IFDs, but only %d seem present",
@@ -2540,7 +2543,7 @@ class AcquisitionDataTIFF(AcquisitionData):
                 chans = tuple(chans)
             except ValueError:
                 chans = slice(None)  # all of the IFDs
-            das_tz0n = list(imsetn[chans])
+            das_tz0n = list(imsetn[chans].flat)
             das_tz0 = [das[i] for i in das_tz0n]
             if not _canBeMerged(das_tz0):
                 for sub_imsetn in imsetn:
