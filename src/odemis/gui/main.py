@@ -190,6 +190,12 @@ class OdemisGUIApp(wx.App):
                     "button": self.main_frame.btn_tab_localization,
                     "panel": main_xrc.xrcpnl_tab_localization
                 },
+                                {
+                    "name": "meteor-correlation",
+                    "controller": tabs.CorrelationTab,
+                    "button": self.main_frame.btn_tab_correlation,
+                    "panel": main_xrc.xrcpnl_tab_correlation
+                },
                 {
                     "name": "secom_align",
                     "controller": tabs.SecomAlignTab,
