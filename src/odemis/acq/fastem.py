@@ -52,7 +52,7 @@ from odemis import model, util
 from odemis.acq import fastem_conf, stitching
 from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod
 from odemis.acq.stream import SEMStream
-from odemis.util import img, TimeoutError
+from odemis.util import img, TimeoutError, transform
 
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
@@ -433,7 +433,7 @@ def estimate_acquisition_time(roa, pre_calibrations=None):
     return tot_time
 
 
-def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beamshift,
+def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift,
             lens, pre_calibrations=None, settings_obs=None):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
@@ -450,7 +450,7 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
     :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
     :param stage: (actuator.ConvertStage) The stage in the sample carrier coordinate system. The x and y axes are
         aligned with the x and y axes of the ebeam scanner.
-        FIXME use: The stage in the corrected scan coordinate system, the x and y axes are
+    :param scan_stage: (actuator.ConvertStage) The stage in the corrected scan coordinate system, the x and y axes are
             aligned with the x and y axes of the multiprobe and the multibeam scanner.
     :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
@@ -473,7 +473,7 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, ccd, beam
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
-    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path,
+    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, roa, path,
                            pre_calibrations, settings_obs, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
@@ -491,7 +491,7 @@ class AcquisitionTask(object):
     An ROA consists of multiple single field images.
     """
 
-    def __init__(self, scanner, multibeam, descanner, detector, stage, ccd, beamshift, lens, roa, path,
+    def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, roa, path,
                  pre_calibrations, settings_obs, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
@@ -500,8 +500,8 @@ class AcquisitionTask(object):
         :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
         :param stage: (actuator.ConvertStage) The stage in the sample carrier coordinate system. The x and y axes are
             aligned with the x and y axes of the ebeam scanner.
-            FIXME use: The stage in the corrected scan coordinate system, the x and y axes are
-                aligned with the x and y axes of the multiprobe and the multibeam scanner.
+        :param scan_stage: (actuator.ConvertStage) The stage in the corrected scan coordinate system, the x and y axes
+            are aligned with the x and y axes of the multiprobe and the multibeam scanner.
         :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
         :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
         :param lens: (static.OpticalLens) Optical lens component.
@@ -526,6 +526,7 @@ class AcquisitionTask(object):
         self._descanner = descanner
         self._detector = detector
         self._stage = stage
+        self._stage_scan = scan_stage
         self._ccd = ccd
         self._beamshift = beamshift
         self._lens = lens
@@ -715,14 +716,16 @@ class AcquisitionTask(object):
             raise ModuleNotFoundError("Need fastem_calibrations repository to run pre-calibrations.")
 
         logging.debug("Start pre-calibration.")
+        pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
 
-        stage_pos = self.get_abs_stage_movement()
+        logging.debug(f"Moving to stage position x: {pos_hor}, y: {pos_vert}")
+        self._stage_scan.moveAbsSync({'x': pos_hor, 'y': pos_vert})
 
         self._pre_calibrations_future = align(self._scanner, self._multibeam,
                                               self._descanner, self._detector,
                                               self._stage, self._ccd,
                                               self._beamshift, None,  # no need for the detector rotator
-                                              calibrations=pre_calibrations, stage_pos=stage_pos)
+                                              calibrations=pre_calibrations)
 
         try:
             self._pre_calibrations_future.result()  # wait for the calibrations to be finished
@@ -763,8 +766,6 @@ class AcquisitionTask(object):
     def get_pos_first_tile(self):
         """
         Get the stage position of the first tile
-        :param pos_first_tile: (float, float)
-            The (x, y) position of the center of the first tile, in the role='stage' coordinate system.
         """
         px_size = self._multibeam.pixelSize.value
         field_res = self._multibeam.resolution.value
@@ -773,11 +774,16 @@ class AcquisitionTask(object):
         # role='stage' coordinate system.
         xmin_roa, _, _, ymax_roa = self._roa.coordinates.value  # TODO: update with boundingbox instead of coordinates
 
+        # Transform from stage to scan-stage coordinate system
+        rot_cor = self._stage_scan.getMetadata()[model.MD_ROTATION_COR]
+        t = transform.RigidTransform(rotation=-rot_cor)
+        coords = t.apply([xmin_roa, ymax_roa])
+
         # The position of the stage when acquiring the top/left tile needs to be matching the center of that tile.
         # The stage coordinate system is pointing to the right in the x direction, and upwards in the y direction,
         # therefore add half a field in the x-direction and subtract half a field in the y-direction.
-        pos_first_tile = (xmin_roa + field_res[0] / 2 * px_size[0],
-                          ymax_roa - field_res[1] / 2 * px_size[1])
+        pos_first_tile = (coords[0] + field_res[0] / 2 * px_size[0],
+                          coords[1] - field_res[1] / 2 * px_size[1])
 
         return pos_first_tile
 
@@ -795,19 +801,14 @@ class AcquisitionTask(object):
         rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1] * (1 - self._roa.overlap)  # in meter
 
         # Acceleration unknown, guessActuatorMoveDuration uses a default acceleration
-        estimated_time_x = guessActuatorMoveDuration(self._stage, "x", abs(rel_move_hor))  # s
-        estimated_time_y = guessActuatorMoveDuration(self._stage, "y", abs(rel_move_hor))  # s
+        estimated_time_x = guessActuatorMoveDuration(self._stage_scan, "x", abs(rel_move_hor))  # s
+        estimated_time_y = guessActuatorMoveDuration(self._stage_scan, "y", abs(rel_move_hor))  # s
         logging.debug(f"Estimated time for stage movement: {estimated_time_x + estimated_time_y} s")
 
         # With role="stage", move positive in x direction, because the second field should be right of the first,
         # and move negative in y direction, because the second field should be bottom of the first.
         pos_hor = self._pos_first_tile[0] + rel_move_hor
         pos_vert = self._pos_first_tile[1] - rel_move_vert
-        # TODO when stage-scan is implemented use commented lines
-        #   With role="stage-scan", move negative in x direction, because the second field should be right of the first,
-        #   and move positive in y direction, because the second field should be bottom of the first.
-        # pos_hor = pos_first_tile[0] - rel_move_hor
-        # pos_vert = pos_first_tile[1] + rel_move_vert
 
         return pos_hor, pos_vert
 
@@ -815,14 +816,14 @@ class AcquisitionTask(object):
         """Move the stage to the next tile (field image) position."""
         pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
 
-        logging.debug(f"Moving to stage position x: {pos_hor}, y: {pos_vert}")
+        logging.debug(f"Moving to scan-stage position x: {pos_hor}, y: {pos_vert}")
         t = time.time()
-        self._stage.moveAbsSync({'x': pos_hor, 'y': pos_vert})  # move the stage
+        self._stage_scan.moveAbsSync({'x': pos_hor, 'y': pos_vert})  # move the stage
         logging.debug(f"Actual time for stage movement: {time.time() - t} s")
-        stage_pos = self._stage.position.value
+        stage_pos = self._stage_scan.position.value
         diff_x = stage_pos["x"] - pos_hor
         diff_y = stage_pos["y"] - pos_vert
-        logging.debug(f"Moved to stage position {stage_pos}, "
+        logging.debug(f"Moved to scan-stage position {stage_pos}, "
                       f"difference in xy between actual and target stage position: {diff_x}, {diff_y} m")
 
     def correct_beam_shift(self):

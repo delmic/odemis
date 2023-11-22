@@ -157,6 +157,8 @@ class MainGUIData(object):
         "chamber-ccd": "chamber_ccd",
         "overview-ccd": "overview_ccd",
         "stage": "stage",
+        # In SPARC scan-stage is an extra stage that scans instead of moving the e-beam,
+        # in FAST-EM scan-stage is the bare stage converted to move in the scan direction.
         "scan-stage": "scan_stage",
         "stage-bare": "stage_bare",
         "focus": "focus",
