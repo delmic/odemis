@@ -89,7 +89,7 @@ def register(tiles, method=REGISTER_GLOBAL_SHIFT):
 
 def weave(tiles, method=WEAVER_MEAN, adjust_brightness=False):
     """
-    tiles (list of DataArray of shape YX): The tiles to draw
+    tiles (list of DataArray or DataArrayShadow of shape YX): The tiles to draw
     method (WEAVER_*): WEAVER_MEAN → MeanWeaver, WEAVER_COLLAGE → CollageWeaver
     return:
         image (DataArray of shape Y'X'): A large image containing all the tiles
@@ -105,6 +105,8 @@ def weave(tiles, method=WEAVER_MEAN, adjust_brightness=False):
         raise ValueError("Invalid weaver %s" % (method,))
 
     for t in tiles:
+        if isinstance(t, model.DataArrayShadow):
+            t =  t.getData()
         weaver.addTile(t)
     stitched_image = weaver.getFullImage()
 
