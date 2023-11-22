@@ -101,7 +101,7 @@ from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector, \
     ScannerFoVAdapter, VigilantAttributeConnector
 from odemis.util import units, spot, limit_invocation, almost_equal, fluo, driver, executeAsyncTask
-from odemis.util.dataio import data_to_static_streams, open_acquisition
+from odemis.util.dataio import data_to_static_streams, open_acquisition, open_files_and_stitch
 from odemis.util.driver import ATOL_LINEAR_POS
 from odemis.util.units import readable_str
 
@@ -3536,6 +3536,7 @@ class AnalysisTab(Tab):
             static=True
         )
         self._stream_bar_controller.add_action("From file...", self._on_add_file)
+        self._stream_bar_controller.add_action("From tileset...", self._on_add_tileset)
 
         # Show the file info and correction selection
         self._settings_controller = settings.AnalysisSettingsController(
@@ -3560,11 +3561,12 @@ class AnalysisTab(Tab):
     def stream_bar_controller(self):
         return self._stream_bar_controller
 
-    def select_acq_file(self, extend=False):
+    def select_acq_file(self, extend=False, tileset: bool = False):
         """ Open an image file using a file dialog box
 
         extend (bool): if False, will ensure that the previous streams are closed.
           If True, will add the new file to the current streams opened.
+        tileset (bool): if True, open files as tileset and stitch together
         return (boolean): True if the user did pick a file, False if it was
         cancelled.
         """
@@ -3594,14 +3596,18 @@ class AnalysisTab(Tab):
         # Detect the format to use
         fmt = formats[dialog.GetFilterIndex()]
 
-        for filename in dialog.GetPaths():
-            if extend:
-                logging.debug("Extending the streams with file %s", filename)
-            else:
-                logging.debug("Current file set to %s", filename)
+        if tileset:
+            filenames = dialog.GetPaths()
+            self.load_tileset(filenames, extend=extend)
+        else:
+            for filename in dialog.GetPaths():
+                if extend:
+                    logging.debug("Extending the streams with file %s", filename)
+                else:
+                    logging.debug("Current file set to %s", filename)
 
-            self.load_data(filename, fmt, extend=extend)
-            extend = True  # If multiple files loaded, the first one is considered main one
+                self.load_data(filename, fmt, extend=extend)
+                extend = True  # If multiple files loaded, the first one is considered main one
 
         return True
 
@@ -3616,6 +3622,13 @@ class AnalysisTab(Tab):
         # If no acquisition file, behave as just opening a file normally
         extend = bool(self.tab_data_model.streams.value)
         self.select_acq_file(extend)
+
+    def _on_add_tileset(self):
+        self.select_acq_file(extend=True, tileset=True)
+
+    def load_tileset(self, filenames, extend=False):
+        data = open_files_and_stitch(filenames) # TODO: allow user defined registration / weave methods
+        self.display_new_data(filenames[0], data, extend=extend)
 
     def load_data(self, filename, fmt=None, extend=False):
         data = open_acquisition(filename, fmt)
