@@ -1148,36 +1148,6 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.mpp_orientation_info()
 
-    def get_aperture_index(self):
-        """
-        Get the current aperture index.
-
-        :return (int): Aperture index (typical range 0 - 14)
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return int(self.server.get_aperture_index())
-
-    def set_aperture_index(self, aperture_idx):
-        """
-        Set the current aperture index.
-
-        :param aperture_idx (int): Aperture index (typical range 0 - 14)
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            self.server.set_aperture_index(float(aperture_idx))
-
-    def aperture_index_info(self):
-        """
-        Get the current aperture index information, contains the range (typically 0 - 14).
-
-        :return (dict str -> list (of length 2)): The range of the aperture index for the keyword "range".
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.aperture_index_info()
-
     def get_beamlet_index(self):
         """
         Get the current beamlet index which is represented by the two values in a grid (x,y).
@@ -2612,7 +2582,7 @@ class MultiBeamScanner(Scanner):
     xt_client.Scanner contains Vigilant Attributes for magnification, accel voltage, blanking, spotsize, beam shift,
     rotation and dwell time. This class adds XTtoolkit functionality via the Vigilant Attributes for the delta pitch,
     beam stigmator, pattern stigmator, the beam shift transformation matrix (read-only),
-    multiprobe rotation (read-only), aperture index, beamlet index, beam mode (multi/single beam)
+    multiprobe rotation (read-only), beamlet index, beam mode (multi/single beam)
     Whenever one of these attributes is changed, its setter also updates another value if needed.
     """
 
@@ -2663,13 +2633,6 @@ class MultiBeamScanner(Scanner):
             math.radians(self.parent.get_mpp_orientation()),
             unit="rad",
             readonly=True)
-
-        aperture_index_info = self.parent.aperture_index_info()
-        self.apertureIndex = model.IntContinuous(
-            int(self.parent.get_aperture_index()),
-            unit=None,
-            range=tuple(int(i) for i in aperture_index_info["range"]),
-            setter=self._setApertureIndex)
 
         beamlet_index_info = self.parent.beamlet_index_info()
         beamlet_index_range_x = beamlet_index_info["range"]["x"]
@@ -2757,10 +2720,6 @@ class MultiBeamScanner(Scanner):
             if mpp_rotation != self.multiprobeRotation.value:
                 self.multiprobeRotation._value = mpp_rotation
                 self.multiprobeRotation.notify(mpp_rotation)
-            aperture_index = self.parent.get_aperture_index()
-            if aperture_index != self.apertureIndex.value:
-                self.apertureIndex._value = aperture_index
-                self.apertureIndex.notify(aperture_index)
             beamlet_index = tuple(int(i) for i in self.parent.get_beamlet_index())
             if beamlet_index != self.beamletIndex.value:
                 self.beamletIndex._value = beamlet_index
@@ -2791,10 +2750,6 @@ class MultiBeamScanner(Scanner):
     def _setPatternStigmator(self, pattern_stigmator_value):
         self.parent.set_pattern_stigmator(*pattern_stigmator_value)
         return self.parent.get_pattern_stigmator()
-
-    def _setApertureIndex(self, aperture_index):
-        self.parent.set_aperture_index(aperture_index)
-        return int(self.parent.get_aperture_index())
 
     def _setBeamletIndex(self, beamlet_index):
         self.parent.set_beamlet_index(beamlet_index)
@@ -2835,22 +2790,11 @@ class MultiBeamScanner(Scanner):
             self.magnification.range = (mag_range_min, mag_range_max)
 
     def _setMultiBeamMode(self, multi_beam_mode):
-        # TODO: When changing the beam mode of the microscope changes we don't want to also change the aperture and
-        #  beamlet index. However, it seems that this is the way TFS will be implementing and supporting XTtoolkit.
-        #  Therefore in the future code like the uncommented parts below need to be implemented.
-        #  Note: this code still needs to be tested and is therefore now just an example of an implementation.
-        # current_aperture = self.apertureIndex.value
-        # current_beamlet = self.beamletIndex.value
         if multi_beam_mode:
             self.parent.set_use_case('MultiBeamTile')
         else:
             self.parent.set_use_case('SingleBeamlet')
 
-        # TODO: Example of an implementation to make sure aperture is unchanged when switching modes, see TODO above.
-        # if self.parent.get_aperture_index() != current_aperture or self.parent.get_beamlet_index() != current_beamlet:
-        #     time.sleep(3)
-        #     self.apertureIndex.value = current_aperture
-        #     self.beamletIndex.value = current_beamlet
         return (self.parent.get_use_case() == 'MultiBeamTile')
 
 
