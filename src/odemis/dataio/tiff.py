@@ -20,6 +20,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import calendar
+import configparser
 from datetime import datetime
 import json
 from libtiff import TIFF
@@ -78,6 +79,12 @@ LOSSY = False
 # TODO: make sure that _all_ the metadata is saved, either in TIFF tags, OME-TIFF,
 # or in a separate mechanism.
 
+# Add special fei_md tag to the tag "library"
+TIFFTAG_FEI_MD = 34682
+TIFFTAG_FEI_MD_XML = 34683
+tag_fei = T.TIFFFieldInfo(TIFFTAG_FEI_MD, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"fei_md")
+tag_fei_xml = T.TIFFFieldInfo(TIFFTAG_FEI_MD_XML, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"fei_md_XML")
+ext = T.add_tags([tag_fei, tag_fei_xml]) # Note: if you ever dereference ext, libtiff will crash
 
 def _convertToTiffTag(metadata):
     """
@@ -221,6 +228,14 @@ def _readTiffTag(tfile):
             md[model.MD_ACQ_DATE] = t
         except (OverflowError, ValueError):
             logging.info("Failed to parse date '%s'", val)
+
+    fei_md = tfile.GetField(TIFFTAG_FEI_MD)
+    if fei_md is not None:
+        try:
+            fei_md = fei_md.decode("latin1")
+            md.update(_convertTFStoOdemisMD(fei_md))
+        except Exception as e:
+            logging.info(f"Failed to parse ThermoFisher metadata: {e}")
 
     return md
 
@@ -2616,3 +2631,94 @@ class AcquisitionDataTIFF(AcquisitionData):
             tiff_file.ReadDirectory()
             dir_index += 1
             yield dir_index
+
+
+### ThermoFisher Metadata parsing
+def _convertTFStoOdemisMD(metadata: str) -> dict:
+    """
+    Converts ThermoFisher Scientific (TFS) metadata to odemis metadata format
+    :param metadata: metadata string as ini (TFS format)
+    :return: (dict) metadata as dictionary (odemis format)
+    :raises: (KeyError): if the metadata cannot be parsed
+    """
+
+    # parse ini metadata as dictionary
+    fei_md = {}
+    try:
+        cfg = configparser.ConfigParser()
+        cfg.read_string(metadata)
+        fei_md = cfg
+    except Exception as e:
+        logging.warning("Failed to parse metadata as ini: %s", e)
+        return fei_md
+    
+    # convert to odemis format
+    md = {}
+    
+    # general
+    try:
+        datetime_str = fei_md["User"]["date"] + " " + fei_md["User"]["time"]
+        date = datetime.strptime(datetime_str, "%m/%d/%Y %I:%M:%S %p")
+        md[model.MD_ACQ_DATE] = date.timestamp()
+    except Exception as e:
+        logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_ACQ_DATE} - {e}")
+    try:
+        md[model.MD_HW_NAME] = fei_md["System"]["systemtype"] + "-" + fei_md["System"]["dnumber"]    
+    except Exception as e:
+        logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_HW_NAME} -  {e}")
+    try:
+        md[model.MD_SW_VERSION] = fei_md["System"]["software"]
+    except Exception as e:
+        logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_SW_VERSION} - {e}")
+
+    try:
+        md[model.MD_PIXEL_SIZE] = (float(fei_md["Scan"]["pixelwidth"]), 
+                                   float(fei_md["Scan"]["pixelheight"]))
+    except Exception as e:
+        logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_PIXEL_SIZE} - {e}")
+
+    try:
+        md[model.MD_DWELL_TIME] = float(fei_md["Scan"]["dwelltime"])
+    except Exception as e:
+        logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_DWELL_TIME} - {e}")
+    try:
+        # MD_POS should match image dimensions, e.g. only XY for 2D, XYZ for 3D, etc.
+        md[model.MD_POS] = (float(fei_md["Stage"]["stagex"]), 
+                           float(fei_md["Stage"]["stagey"]),
+                           )
+    except Exception as e:
+        logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_POS} - {e}")
+
+    try:
+        # beam metadata
+        beam_type = fei_md["Beam"]["beam"]
+        md[model.MD_ROTATION] = float(fei_md[beam_type]["scanrotation"])
+        md[model.MD_EBEAM_VOLTAGE] = float(fei_md[beam_type]["hv"])
+        md[model.MD_EBEAM_CURRENT] = float(fei_md[beam_type]["beamcurrent"])
+        
+        # acquistion type
+        acq_map =  {
+            "EBeam": model.MD_AT_EM,
+            "IBeam": model.MD_AT_FIB,
+        }
+        md[model.MD_ACQ_TYPE] = acq_map[beam_type]
+
+    except Exception as e:
+        logging.warning(f"""Failed to parse ThermoFisher metadata: {model.MD_ROTATION}, 
+                        {model.MD_EBEAM_VOLTAGE}, {model.MD_EBEAM_CURRENT}, 
+                        {model.MD_ACQ_TYPE} - {e}""")
+    try:
+        # NB: this is not actual spot size, actual spot diam is in xml metadata
+        md[model.MD_EBEAM_SPOT_DIAM] = float(fei_md["Beam"]["spot"]) 
+    except Exception as e:
+        logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_EBEAM_SPOT_DIAM} - {e}")
+
+    try:
+        # detector
+        md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL 
+                                    if fei_md["Detectors"]["name"] in ["ETD", "TLD"] 
+                                    else model.MD_DT_INTEGRATING)
+    except Exception as e:
+        logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_DET_TYPE} - {e}")
+
+    return md

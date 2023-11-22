@@ -57,6 +57,10 @@ class Weaver(metaclass=ABCMeta):
         """
         # Merge the correction metadata inside each image (to keep the rest of the
         # code simple)
+        if isinstance(tile, model.DataArrayShadow):
+            raise TypeError(f"Tile must be a loaded DataArray, not a DataArrayShadow. To load a DataArrayShadow, call: tile = tile.getData()")
+        if not isinstance(tile, model.DataArray):
+            raise TypeError(f"Tile must be a DataArray, not {type(tile)}")
         tile = model.DataArray(tile, tile.metadata.copy())
         img.mergeMetadata(tile.metadata)
         self.tiles.append(tile)

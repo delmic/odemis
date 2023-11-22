@@ -36,6 +36,7 @@ import time
 import unittest
 from unittest.case import skip
 import json
+from datetime import datetime
 
 import libtiff.libtiff_ctypes as T # for the constant names
 import xml.etree.ElementTree as ET
@@ -2343,6 +2344,49 @@ class TestTiffIO(unittest.TestCase):
         numpy.testing.assert_almost_equal(tile_md[model.MD_POS], [4.9999907, 7.000003])
         # the size of this tile is also the size of the image
         self.assertEqual(tiles[0][0].shape, (156, 187))
+
+    def testConvertTFStoOdemisMD(self):
+        
+        # open example image
+        TFS_FILENAME = os.path.join(os.path.dirname(__file__), "tfs_example.tif")
+        data = tiff.open_data(TFS_FILENAME)
+
+        # assert data
+        self.assertIsInstance(data, tiff.AcquisitionDataTIFF)
+        self.assertEqual(len(data.content), 1)
+        self.assertEqual(data.content[0].shape, (1092, 1536))
+        self.assertEqual(data.content[0].dtype, numpy.uint8)
+
+
+        # special case to deal with local timezone matching
+        md_acq_date = datetime.strptime('11/10/2023 02:09:15 PM', 
+                                        "%m/%d/%Y %I:%M:%S %p").timestamp()
+        # assert metadata
+        md = {
+            model.MD_ACQ_DATE: md_acq_date,
+            model.MD_HW_NAME: "Scios-9923184",
+            model.MD_SW_VERSION: "7.7.1.4284",
+            model.MD_PIXEL_SIZE: (2.69792e-07, 2.69792e-07),
+            model.MD_DWELL_TIME: 1e-6,
+            model.MD_POS: (0.000133417, -0.000717625),
+            model.MD_ROTATION: 0.0,
+            model.MD_EBEAM_VOLTAGE: 2000.0,
+            model.MD_EBEAM_CURRENT: 1.41708e-11,
+            model.MD_EBEAM_SPOT_DIAM: 5.181,
+            model.MD_ACQ_TYPE: model.MD_AT_EM,
+            model.MD_DET_TYPE: model.MD_DT_NORMAL,
+            model.MD_DESCRIPTION: os.path.basename(TFS_FILENAME).replace(".tif", ""),
+        }
+
+        for key in md.keys():
+            self.assertIn(key, data.content[0].metadata)
+
+        for key, value in md.items():
+            if key in [model.MD_PIXEL_SIZE, model.MD_POS]: # array equal
+                numpy.testing.assert_array_equal(value, data.content[0].metadata[key])
+            else:
+                self.assertEqual(value, data.content[0].metadata[key])
+
 
 
 # Not used anymore
