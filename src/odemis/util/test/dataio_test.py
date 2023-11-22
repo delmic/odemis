@@ -15,6 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
+import os 
 import re
 import time
 import unittest
@@ -25,9 +26,10 @@ import numpy
 from odemis import model
 from odemis.acq import stream
 from odemis.dataio import tiff
+from odemis.util import testing
 from odemis.util.dataio import (_split_planes, data_to_static_streams,
-                                open_acquisition, splitext)
-
+                                open_acquisition, open_files_and_stitch, splitext)
+FILENAMES = [u"test_%d" % i + tiff.EXTENSIONS[0] for i in range(4)]
 
 class TestDataIO(unittest.TestCase):
 
@@ -39,6 +41,14 @@ class TestDataIO(unittest.TestCase):
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
         )
+    
+    def tearDown(self):
+        # clean up
+        try:
+            for filename in FILENAMES:
+                os.remove(filename)
+        except Exception:
+            pass
 
     def test_data_to_stream(self):
         """
@@ -233,6 +243,41 @@ class TestDataIO(unittest.TestCase):
             ao = splitext(inp)
             self.assertEqual(ao, eo, "Unexpected output for '%s': %s" % (inp, ao))
 
+    def test_open_files_and_stitch(self):
+        # create fake data tiles data
+        POSITIONS = [(50e-6, 50e-6), (50e-6, 0), (0, 50e-6), (0, 0)]
+
+        for filename, position in zip(FILENAMES, POSITIONS):
+            md = {model.MD_SW_VERSION: "1.0-test",
+                        model.MD_HW_NAME: "fake hw",
+                        model.MD_DESCRIPTION: "sem",
+                        model.MD_ACQ_DATE: time.time() - 1,
+                        model.MD_BPP: 16,
+                        model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                        model.MD_POS: position,  # m
+                        model.MD_DWELL_TIME: 1e-6,  # s
+                        }
+
+            size = (256, 256)
+            dtype = numpy.dtype("uint16")
+            ldata = model.DataArray(numpy.zeros(size[::-1], dtype), md.copy())
+            tiff.export(filename, ldata)
+    
+        # open files and stitch together
+        rdata = open_files_and_stitch(FILENAMES)
+        
+        # assert array data
+        self.assertIsInstance(rdata[0], model.DataArray, f"Unexpected type for stitched data {type(rdata)}")
+        numpy.testing.assert_array_equal(rdata[0], 0)
+
+        # assert metadata
+        self.assertEqual(rdata[0].metadata[model.MD_HW_NAME], "fake hw")
+        self.assertEqual(rdata[0].metadata[model.MD_DESCRIPTION], "sem")
+        self.assertEqual(rdata[0].metadata[model.MD_DIMS], "YX")
+        self.assertEqual(rdata[0].metadata[model.MD_BPP], 16)
+        
+        testing.assert_tuple_almost_equal(rdata[0].metadata[model.MD_POS], (25e-6, 25e-6))
+        testing.assert_tuple_almost_equal(rdata[0].metadata[model.MD_PIXEL_SIZE], (1e-6, 1e-6))
 
 class TestSplitPlanes(unittest.TestCase):
 

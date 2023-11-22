@@ -21,13 +21,18 @@ see http://www.gnu.org/licenses/.
 """
 
 import logging
+import os
 import numpy
 from odemis import dataio
 from odemis import model
-from odemis.acq import stream
+from odemis.acq import stitching, stream
 from odemis.model import MD_WL_LIST, MD_TIME_LIST, MD_THETA_LIST
-import os
 
+from odemis.acq.stitching import REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT, REGISTER_SHIFT, \
+                              WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE, WEAVER_MEAN
+from odemis.acq.stream import StaticARStream, StaticCLStream, StaticFluoStream, StaticSEMStream, \
+                              StaticSpectrumStream
+                               
 
 def data_to_static_streams(data):
     """ Split the given data into static streams
@@ -236,3 +241,93 @@ def splitext(path):
 
     root = path[:len(path) - len(ext)]
     return root, ext
+
+
+def add_acq_type_md(das):
+    """
+    Add acquisition type to das.
+    returns: das with updated metadata
+    """
+    streams = data_to_static_streams(das)
+    for da, stream in zip(das, streams):
+        if isinstance(stream, StaticSEMStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_EM
+        elif isinstance(stream, StaticCLStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_CL
+        elif isinstance(stream, StaticARStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
+        elif isinstance(stream, StaticSpectrumStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_SPECTRUM
+        elif isinstance(stream, StaticFluoStream):
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_FLUO
+        else:
+            da.metadata[model.MD_ACQ_TYPE] = "Unknown"
+            logging.warning("Unexpected stream of shape %s in input data." % da.shape)
+
+    # If AR Stream is present, multiple data arrays are created. The data_to_static_streams
+    # function returns a single ARStream, so in this case many data arrays will not be assigned a
+    # stream and therefore also don't have an acquisition type.
+    for da in das:
+        if model.MD_ACQ_TYPE not in da.metadata:
+            da.metadata[model.MD_ACQ_TYPE] = model.MD_AT_AR
+    return das
+
+
+def open_files_and_stitch(infns: list, registration_method: int = REGISTER_IDENTITY, weaving_method: int = WEAVER_MEAN) -> list:
+    """
+    Stitches a set of tiles.
+    :param infns: file names of tiles
+    :param registration_method: method used for registration
+    :param weaving_method: method used for weaving
+    :return: list of data arrays containing the stitched images for every stream
+    """
+
+    def leader_quality(da):
+        """
+        Function for sorting different streams. Use largest EM stream first, then other EM streams,
+        then other types of streams sorted by their size.
+        return: (int) The bigger the more leadership
+        """
+        # For now, we prefer a lot the EM images, because they are usually the
+        # one with the smallest FoV and the most contrast
+        if da.metadata[model.MD_ACQ_TYPE] == model.MD_AT_EM:  # SEM stream
+            return numpy.prod(da.shape)  # More pixel to find the overlap
+        else:
+            # A lot less likely
+            return numpy.prod(da.shape) / 100
+
+    da_streams = []  # for each stream, a list of DataArrays
+    for fn in infns:
+        # Read data
+        converter = dataio.find_fittest_converter(fn)
+        # TODO: use open_data/DataArrayShadow when converter support it
+        das = converter.read_data(fn)
+        logging.debug("Got %d streams from file %s", len(das), fn)
+
+        # Remove the DAs we don't want to (cannot) stitch
+        das = add_acq_type_md(das)
+        das = [da for da in das if da.metadata[model.MD_ACQ_TYPE] not in \
+               (model.MD_AT_AR, model.MD_AT_SPECTRUM)]
+
+        # Add sorted DAs to list
+        das = sorted(das, key=leader_quality, reverse=True)
+        da_streams.append(tuple(das))
+
+    def get_acq_time(das):
+        return das[0].metadata.get(model.MD_ACQ_DATE, 0)
+
+    da_streams = sorted(da_streams, key=get_acq_time)
+
+    das_registered = stitching.register(da_streams, registration_method)
+
+    # Weave every stream
+    st_data = []
+    for s in range(len(das_registered[0])):
+        streams = []
+        for da in das_registered:
+            streams.append(da[s])
+        da = stitching.weave(streams, weaving_method)
+        da.metadata[model.MD_DIMS] = "YX"
+        st_data.append(da)
+
+    return st_data
