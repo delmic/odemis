@@ -47,107 +47,67 @@ class GridPanelTestCase(test.GuiTestCase):
             vp.view = v
 
     def test_grid_view(self):
+        """
+        test showing 1, 2 and 4 windows
+        """
 
         gp = self.frame.grid_panel
 
         gui_loop(0.2)
         csize = self.frame.ClientSize
 
-        # Hide 1 windows
-
-        # Hide top left
-        gp.hide_viewport(self.frame.red)
+        f = self.frame
+        gp.set_visible_viewports([f.yellow, f.blue, f.purple, f.brown])
         gui_loop(0.2)
-        self.assertEqual(self.frame.blue.Size, (csize.x, gp.grid_layout.tr.size.y))
-        self.assertEqual(self.frame.purple.Size, gp.grid_layout.bl.size)
-        self.assertEqual(self.frame.brown.Size, gp.grid_layout.br.size)
-        gp.show_viewport(self.frame.red)
+        self.assertEqual(f.yellow.Size, gp.grid_layout.tl.size)
+        self.assertEqual(f.blue.Size, gp.grid_layout.tr.size)
+        self.assertEqual(f.purple.Size, gp.grid_layout.bl.size)
+        self.assertEqual(f.brown.Size, gp.grid_layout.br.size)
 
-        # Hide top right
-        gp.hide_viewport(self.frame.blue)
+        # Mix them around
+        gp.set_visible_viewports([f.green, f.yellow, f.blue, f.purple])
         gui_loop(0.2)
-        self.assertEqual(self.frame.red.Size, (csize.x, gp.grid_layout.tl.size.y))
-        self.assertEqual(self.frame.purple.Size, gp.grid_layout.bl.size)
-        self.assertEqual(self.frame.brown.Size, gp.grid_layout.br.size)
-        gp.show_viewport(self.frame.blue)
+        self.assertEqual(f.green.Size, gp.grid_layout.tl.size)
+        self.assertEqual(f.yellow.Size, gp.grid_layout.tr.size)
+        self.assertEqual(f.blue.Size, gp.grid_layout.bl.size)
+        self.assertEqual(f.purple.Size, gp.grid_layout.br.size)
 
-        # Hide bottom left
-        gp.hide_viewport(self.frame.purple)
+        # Show just 1 viewport
+        gp.set_visible_viewports([f.green])
         gui_loop(0.2)
-        self.assertEqual(self.frame.red.Size, gp.grid_layout.tl.size)
-        self.assertEqual(self.frame.blue.Size, gp.grid_layout.tr.size)
-        self.assertEqual(self.frame.brown.Size, (csize.x, gp.grid_layout.br.size.y))
-        gp.show_viewport(self.frame.purple)
+        self.assertEqual(f.green.Size, csize)
 
-        # Hide bottom right
-        gp.hide_viewport(self.frame.brown)
+        gp.set_visible_viewports([f.purple])
         gui_loop(0.2)
-        self.assertEqual(self.frame.red.Size, gp.grid_layout.tl.size)
-        self.assertEqual(self.frame.blue.Size, gp.grid_layout.tr.size)
-        self.assertEqual(self.frame.purple.Size, (csize.x, gp.grid_layout.bl.size.y))
-        gp.show_viewport(self.frame.brown)
+        self.assertEqual(f.purple.Position, (0, 0))
+        self.assertEqual(f.purple.Size, csize)
+        self.assertTrue(f.purple.Shown)
+        self.assertFalse(f.green.Shown)
 
-        # Hide 2 windows
-
-        # Hide top
-        gp.hide_viewport(self.frame.red)
-        gp.hide_viewport(self.frame.blue)
+        # Back to 2x2
+        gp.set_visible_viewports([f.green, f.yellow, f.blue, f.purple])
         gui_loop(0.2)
-        self.assertEqual(self.frame.purple.Size, (csize.x, gp.grid_layout.tl.size.y))
-        self.assertEqual(self.frame.brown.Size, (csize.x, gp.grid_layout.bl.size.y))
-        gp.show_viewport(self.frame.red)
-        gp.show_viewport(self.frame.blue)
+        self.assertEqual(f.green.Size, gp.grid_layout.tl.size)
+        self.assertEqual(f.yellow.Size, gp.grid_layout.tr.size)
+        self.assertEqual(f.blue.Size, gp.grid_layout.bl.size)
+        self.assertEqual(f.purple.Size, gp.grid_layout.br.size)
 
-        # Hide right
-        gp.hide_viewport(self.frame.blue)
-        gp.hide_viewport(self.frame.brown)
+        # 2 stacked
+
+        gp.set_visible_viewports([f.blue, f.purple])
         gui_loop(0.2)
-        self.assertEqual(self.frame.red.Size, (csize.x, gp.grid_layout.tl.size.y))
-        self.assertEqual(self.frame.purple.Size, (csize.x, gp.grid_layout.bl.size.y))
-        gp.show_viewport(self.frame.brown)
-        gp.show_viewport(self.frame.blue)
+        self.assertEqual(f.blue.Size, (csize.x, gp.grid_layout.tr.size.y))
+        self.assertEqual(f.purple.Size, (csize.x, gp.grid_layout.br.size.y))
+        self.assertTrue(f.purple.Shown)
+        self.assertFalse(f.green.Shown)
 
-        # Hide bottom
-        gp.hide_viewport(self.frame.purple)
-        gp.hide_viewport(self.frame.brown)
+        # Back to 4x2
+        gp.set_visible_viewports([f.green, f.yellow, f.blue, f.purple])
         gui_loop(0.2)
-        self.assertEqual(self.frame.red.Size, (csize.x, gp.grid_layout.tl.size.y))
-        self.assertEqual(self.frame.blue.Size, (csize.x, gp.grid_layout.bl.size.y))
-        gp.show_viewport(self.frame.brown)
-        gp.show_viewport(self.frame.purple)
-
-        # Hide left
-        gp.hide_viewport(self.frame.red)
-        gp.hide_viewport(self.frame.purple)
-        gui_loop(0.2)
-        self.assertEqual(self.frame.blue.Size, (csize.x, gp.grid_layout.tr.size.y))
-        self.assertEqual(self.frame.brown.Size, (csize.x, gp.grid_layout.br.size.y))
-        gp.show_viewport(self.frame.purple)
-        gp.show_viewport(self.frame.red)
-
-        # Hide 3 windows
-
-        gp.set_shown_viewports(self.frame.red)
-        gui_loop(0.2)
-        self.assertEqual(self.frame.red.Size, csize)
-
-        gp.set_shown_viewports(self.frame.blue)
-        gui_loop(0.2)
-        self.assertEqual(self.frame.blue.Size, csize)
-
-        gp.set_shown_viewports(self.frame.purple)
-        gui_loop(0.2)
-        self.assertEqual(self.frame.purple.Size, csize)
-
-        gp.set_shown_viewports(self.frame.brown)
-        gui_loop(0.2)
-        self.assertEqual(self.frame.brown.Size, csize)
-
-        gp.set_shown_viewports(self.frame.yellow)
-        gui_loop(0.2)
-        self.assertEqual(self.frame.yellow.Size, csize)
-
-        gp.show_grid_viewports()
+        self.assertEqual(f.green.Size, gp.grid_layout.tl.size)
+        self.assertEqual(f.yellow.Size, gp.grid_layout.tr.size)
+        self.assertEqual(f.blue.Size, gp.grid_layout.bl.size)
+        self.assertEqual(f.purple.Size, gp.grid_layout.br.size)
 
     def test_grid_edit(self):
 
