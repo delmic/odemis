@@ -237,7 +237,7 @@ class SEM(model.HwComponent):
             raise HwError("Failed to connect to XT server '%s'. Check that the "
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
-        except OSError:
+        except OSError as err:
             raise HwError("XT server reported error: %s." % (err,))
 
         # Transfer latest xtadapter package if available
