@@ -299,15 +299,16 @@ def open_files_and_stitch(infns: list, registration_method: int = REGISTER_IDENT
     da_streams = []  # for each stream, a list of DataArrays
     for fn in infns:
         # Read data
-        converter = dataio.find_fittest_converter(fn)
-        # TODO: use open_data/DataArrayShadow when converter support it
-        das = converter.read_data(fn)
+        das = open_acquisition(fn)
         logging.debug("Got %d streams from file %s", len(das), fn)
 
         # Remove the DAs we don't want to (cannot) stitch
         das = add_acq_type_md(das)
         das = [da for da in das if da.metadata[model.MD_ACQ_TYPE] not in \
                (model.MD_AT_AR, model.MD_AT_SPECTRUM)]
+
+        # Make sure they are not DataArrayShadow, because we need the data to do the stitching
+        das = [da.getData() if isinstance(da, model.DataArrayShadow) else da for da in das]
 
         # Add sorted DAs to list
         das = sorted(das, key=leader_quality, reverse=True)
