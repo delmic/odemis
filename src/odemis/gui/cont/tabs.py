@@ -443,6 +443,8 @@ class LocalizationTab(Tab):
         self.tab_data_model.autofocus_active.subscribe(self._onAutofocus)
         tab_data.streams.subscribe(self._on_current_stream)
         self._streambar_controller.addFluo(add_to_view=True, play=False)
+        # Link which overview streams is shown with the ones shown in the Chamber
+        self.tab_data_model.views.value[0].stream_tree.flat.subscribe(self._on_overview_visible)
 
         # Will create SEM stream with all settings local
         emtvas = set()
@@ -498,6 +500,23 @@ class LocalizationTab(Tab):
                 panel,
                 self
             )
+
+    def _on_overview_visible(self, val):
+        """
+        Apply the visibility status of overview streams in the Localisation tab to
+        the overview streams in the Chamber tab.
+        """
+        # All the overview streams
+        ov_streams = set(self.tab_data_model.overviewStreams.value)
+        # Visible overview streams
+        visible_ov_streams = set(self.tab_data_model.views.value[0].getStreams())
+        # Invisible overview streams
+        invisible_ov_streams = ov_streams.difference(visible_ov_streams)
+        # Hide the invisible overview streams
+        chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+        chamber_tab.remove_overview_streams(invisible_ov_streams)
+        # Show the visible overview streams
+        chamber_tab.load_overview_streams(visible_ov_streams)
 
     def _on_view(self, view):
         """Hide hardware related sub-panels on the right when not in live stream"""
@@ -682,7 +701,7 @@ class LocalizationTab(Tab):
                 self.tab_data_model.overviewStreams.value.remove(st)
                 # Remove from chamber tab too
                 chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
-                chamber_tab.remove_overview_stream(st)
+                chamber_tab.remove_overview_streams([st])
             else:
                 # Remove the stream from all the features
                 for feature in self.tab_data_model.main.features.value:
@@ -2751,14 +2770,15 @@ class CryoChamberTab(Tab):
 
         return overview_view
 
-    def remove_overview_stream(self, overview_stream):
+    def remove_overview_streams(self, streams):
         """
-       Remove the overview static stream from the view
-       :param overview_stream: (StaticStream) overview static stream to remove from view
-       """
+        Remove the overview static stream from the view with the given list of acquired static streams
+        :param streams: (list of StaticStream) the newly acquired static streams from the localization tab
+        """
         try:
             overview_view = self._get_overview_view()
-            overview_view.removeStream(overview_stream)
+            for stream in streams:
+                overview_view.removeStream(stream)
         except AttributeError:  # No overview view
             pass
 
@@ -2877,6 +2897,8 @@ class CryoChamberTab(Tab):
 
     def _reset_project_data(self):
         try:
+            streams = self._get_overview_view().getStreams()
+            self.remove_overview_streams(streams)
             localization_tab = self.tab_data_model.main.getTabByName("cryosecom-localization")
             localization_tab.clear_acquired_streams()
             localization_tab.reset_live_streams()
