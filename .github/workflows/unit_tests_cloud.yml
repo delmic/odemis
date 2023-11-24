@@ -177,3 +177,9 @@ jobs:
       run: |
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/gui/win/test/acquisition_test.py --verbose
+
+    - name: Run mocked tests from odemis.acq.fastem
+      if: ${{ !cancelled() }}
+      run: |
+        export PYTHONPATH="$PWD/src:$PYTHONPATH"
+        python3 -m unittest src.odemis.acq.test.fastem_test.TestFastEMAcquisitionTaskMock --verbose

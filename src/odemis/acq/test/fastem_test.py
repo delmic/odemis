@@ -32,7 +32,6 @@ from unittest.mock import Mock
 import numpy
 
 import odemis
-from fastem_calibrations import configure_hw
 from odemis import model
 from odemis.acq import fastem, stream
 from odemis.acq.acqmng import SettingsObserver
@@ -1013,7 +1012,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
 
-        asm_config_orig = configure_hw.get_config_asm(self.multibeam, self.descanner, self.mppc)
+        asm_config_orig = fastem_calibrations.configure_hw.get_config_asm(self.multibeam, self.descanner, self.mppc)
         pre_calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         try:
             task.pre_calibrate(pre_calibrations=pre_calibrations)
@@ -1021,7 +1020,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             # Handle optical autofocus calibration raised ValueError.
             # For now, pass and continue with the test.
             pass
-        asm_config_current = configure_hw.get_config_asm(self.multibeam, self.descanner, self.mppc)
+        asm_config_current = fastem_calibrations.configure_hw.get_config_asm(self.multibeam, self.descanner, self.mppc)
 
         # Verify that all settings, except the descanner scan offset, stay the same after running the pre-calibrations.
         for component, settings in asm_config_current.items():
@@ -1126,6 +1125,17 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         cls.ccd = None
         cls.beamshift = None
         cls.lens = None
+
+        # Mock fastem_calibrations and fastem_calibrations.util, to be able to call them on systems where
+        # fastem_calibrations is not available.
+        import sys
+        from importlib import reload
+
+        sys.modules['fastem_calibrations'] = Mock()
+        sys.modules['fastem_calibrations'].util = Mock()
+        sys.modules['fastem_calibrations'].util.configure_mock(**{"create_image_dir.return_value": ""})
+        # Reload odemis.acq.fastem so that the mocked modules get imported.
+        reload(fastem)
 
     @classmethod
     def tearDownClass(cls):
