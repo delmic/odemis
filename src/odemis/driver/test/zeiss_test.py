@@ -233,17 +233,20 @@ class TestSEM3Axes(unittest.TestCase):
         testing.assert_pos_almost_equal(self.stage.position.value, p)
 
         # Check that a long move takes time (ie, that it waits until the end of the move)
-        # It's tricky, because it always waits at least 1s.
+        # It's tricky, because it always waits at least 1s, so we need to do a big move (more than 1s).
+        # The simulator goes at 2mm/s (see ._speed_lin), so we need to move more than 2mm.
+        # 4mm should take 2s, so that give a good margin. Also, moving 4 mm in the X axis on a real
+        # SEM is *normally* safe.
         prev_pos = self.stage.position.value.copy()
         tstart = time.time()
-        self.stage.moveRelSync({"x": 1e-3})
+        self.stage.moveRelSync({"x": 4e-3})
         dur = time.time() - tstart
-        self.assertGreaterEqual(dur, 1.1, "1 mm move took only %g s" % dur)
+        self.assertGreaterEqual(dur, 1.5, "1 mm move took only %g s" % dur)
 
         tstart = time.time()
         self.stage.moveAbsSync(prev_pos)
         dur = time.time() - tstart
-        self.assertGreaterEqual(dur, 1.1, "1 mm move took only %g s" % dur)
+        self.assertGreaterEqual(dur, 1.5, "1 mm move took only %g s" % dur)
 
     def test_stop(self):
         """
