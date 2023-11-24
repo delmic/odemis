@@ -702,6 +702,58 @@ class TestFastEMAcquisition(unittest.TestCase):
         # check stage position is matching expected position (Note: stage accuracy is ~ TODO fix decimal accordingly)
         numpy.testing.assert_almost_equal(exp_position, cur_position, decimal=6)
 
+    def test_stage_movement_rotation_correction(self):
+        """
+        Test that the stage move corresponds to one field image
+        (excluding over-scanned pixels) with rotation correction.
+        """
+        x_fields = 1
+        y_fields = 1
+        overlap = 0.06
+        res_x, res_y = self.multibeam.resolution.value  # single field size
+        px_size_x, px_size_y = self.multibeam.pixelSize.value
+
+        rot_cor = math.radians(45)
+        self.scan_stage.updateMetadata({model.MD_ROTATION_COR: rot_cor})
+        # Note: Do not change those values; _calculate_field_indices handles floating point errors the same way
+        # as an ROA that does not match an integer number of field indices by just adding an additional row or column
+        # of field images.
+        xmin = 0  # -0.002  # top corner coordinate of ROA in stage coordinates in meter
+        ymin = 0  # +0.001  # left corner coordinate of ROA in stage coordinates in meter
+        xmax = xmin + res_x * px_size_x * x_fields * (1 - overlap)
+        ymax = ymin + res_y * px_size_y * y_fields * (1 - overlap)
+        coordinates = (xmin, ymin, xmax, ymax)  # in m
+        roc_2 = fastem.FastEMROC("roc_2", coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+        roa_name = "test_megafield_id"
+        roa = fastem.FastEMROA(roa_name,
+                               coordinates,
+                               roc_2,
+                               roc_3,
+                               self.asm,
+                               self.multibeam,
+                               self.descanner,
+                               self.mppc,
+                               overlap=overlap)
+
+        path_storage = "test_project_stage_move_rot_cor"
+        f = fastem.acquire(roa, path_storage,
+                           self.scanner, self.multibeam, self.descanner, self.mppc,
+                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens)
+        data, e = f.result()
+
+        self.assertIsNone(e)  # check no exceptions were returned
+
+        # get the last stage position (it is the center of the last field)
+        cur_position = (self.stage.position.value['x'], self.stage.position.value['y'])
+        # For a single field and a positive 45 degree rotation correction it is expected that the stage moves only in x.
+        # It should move by half the diagonal size of a field in x.
+        exp_pos_x = exp_pos_x = math.hypot(res_x / 2 * px_size_x, res_y / 2 * px_size_y)
+        exp_pos_y = ymax
+        # check stage position is matching expected position (Note: stage accuracy is ~ TODO fix decimal accordingly)
+        numpy.testing.assert_almost_equal((exp_pos_x, exp_pos_y), cur_position, decimal=7)
+        self.scan_stage.updateMetadata({model.MD_ROTATION_COR: rot_cor})
+
     def on_done(self, future):
         self.done = True
 
