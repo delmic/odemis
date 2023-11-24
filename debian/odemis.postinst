@@ -31,6 +31,9 @@ case "$1" in
 		chown root:odemis /etc/authbind/byport/23
 		chmod 774 /etc/authbind/byport/23
 	fi
+
+    # Trigger udev after installing new rules
+    udevadm trigger --subsystem-match=tty --action=change || true
   ;;
   abort-upgrade|abort-remove|abort-deconfigure)
   ;;
