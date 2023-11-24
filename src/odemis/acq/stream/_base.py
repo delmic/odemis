@@ -805,7 +805,6 @@ class Stream(object):
                 # the VA setter to catch again the change
                 self._linkHwVAs()
                 self._linkHwAxes()
-                # TODO: create generic fct linkHWAxes and call here
             else:
                 self._unlinkHwVAs()
                 self._unlinkHwAxes()
