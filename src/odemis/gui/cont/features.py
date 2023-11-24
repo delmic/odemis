@@ -47,6 +47,7 @@ class CryoFeatureController(object):
         # Event binding
         self._panel.cmb_features.Bind(wx.EVT_COMBOBOX, self._on_cmb_features_change)
         self._panel.btn_create_move_feature.Bind(wx.EVT_BUTTON, self._on_btn_create_move_feature)
+        self._panel.btn_delete_feature.Bind(wx.EVT_BUTTON, self._on_btn_delete_feature)
         self._panel.btn_go_to_feature.Bind(wx.EVT_BUTTON, self._on_btn_go_to_feature)
         self._panel.btn_use_current_z.Bind(wx.EVT_BUTTON, self._on_btn_use_current_z)
 
@@ -54,6 +55,21 @@ class CryoFeatureController(object):
         # As this button is identical to clicking the feature tool,
         # directly change the tool to feature tool
         self._tab_data_model.tool.value = TOOL_FEATURE
+
+    def _on_btn_delete_feature(self, _):
+        """
+        Delete the currently selected feature
+        """
+        current_feature = self._tab_data_model.main.currentFeature.value
+        feature_name = current_feature.name.value
+        box = wx.MessageDialog(self._panel,
+                               feature_name + " will be deleted.\n\nAre you sure you want to delete?",
+                               caption="Feature Deletion",
+                               style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+        ans = box.ShowModal()
+        if ans == wx.ID_YES:
+            self._tab_data_model.main.features.value.remove(current_feature)
+            self._tab_data_model.main.currentFeature.value = None
 
     def _on_btn_use_current_z(self, _):
         # Use current focus to set currently selected feature
@@ -85,6 +101,7 @@ class CryoFeatureController(object):
         self._panel.ctrl_feature_z.Enable(enable)
         self._panel.btn_use_current_z.Enable(enable)
         self._panel.btn_go_to_feature.Enable(enable)
+        self._panel.btn_delete_feature.Enable(enable)
 
     def _update_feature_cmb_list(self):
         """
@@ -92,6 +109,13 @@ class CryoFeatureController(object):
         To be called in the main GUI thread
         """
         current_feature = self._tab_data_model.main.currentFeature.value
+
+        # Update the combo list with current feature list
+        features = self._tab_data_model.main.features.value
+        self._panel.cmb_features.Clear()
+        for i, feature in enumerate(features):
+            self._panel.cmb_features.Insert(feature.name.value, i, feature)
+
         # Special case: there is no selected feature
         if current_feature is None:
             self._enable_feature_ctrls(False)
@@ -99,12 +123,6 @@ class CryoFeatureController(object):
             self._panel.cmb_feature_status.SetValue(FEATURE_ACTIVE)  # Default
         else:
             self._enable_feature_ctrls(True)
-
-            features = self._tab_data_model.main.features.value
-            self._panel.cmb_features.Clear()
-            for i, feature in enumerate(features):
-                self._panel.cmb_features.Insert(feature.name.value, i, feature)
-
             # Select the current feature
             index = features.index(current_feature)
             if index == -1:

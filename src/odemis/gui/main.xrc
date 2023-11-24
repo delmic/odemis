@@ -8380,34 +8380,41 @@
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-					<object class="FoldPanelItem" name="fp_feature_panel">
-						<object class="wxPanel" name="pnl_features">
-							<object class="wxBoxSizer">
-							<object class="sizeritem">
-								<object class="wxBoxSizer">
-										<object class="sizeritem">
-											<object class="OwnerDrawnComboBox" name="cmb_features">
-											  <size>155,20</size>
-											  <fg>#2FA7D4</fg>
-											  <bg>#333333</bg>
-											  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
-											</object>
-									  </object>
-									  <object class="sizeritem">
-										<object class="ImageTextButton" name="btn_create_move_feature">
-										  <height>24</height>
-										    <bg>#000000</bg>
-										  <label>Create/Move</label>
-										  <style>wxALIGN_CENTRE</style>
-										</object>
-										<flag>wxLEFT</flag>
-										<border>65</border>
-									</object>
-								<orient>wxHORIZONTAL</orient>
-								</object>
-								<flag>wxLEFT|wxTOP</flag>
-								<border>10</border>
-							</object>
+                      <object class="FoldPanelItem" name="fp_feature_panel">
+                        <object class="wxPanel" name="pnl_features">
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="ImageButton" name="btn_delete_feature">
+                                    <icon>img/icon/ico_trash.png</icon>
+                                    <height>16</height>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="OwnerDrawnComboBox" name="cmb_features">
+                                    <size>145,20</size>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_create_move_feature">
+                                    <height>24</height>
+                                    <bg>#000000</bg>
+                                    <label>Create/Move</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>52</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxTOP</flag>
+                              <border>10</border>
+                            </object>
 							<object class="sizeritem">
 									<object class="wxBoxSizer">
 										 <object class="sizeritem">
@@ -8418,7 +8425,7 @@
 										</object>
 										<object class="sizeritem">
 												<object class="OwnerDrawnComboBox" name="cmb_feature_status">
-												  <size>110,16</size>
+												  <size>122,16</size>
 												  <fg>#2FA7D4</fg>
 												  <bg>#333333</bg>
 												  <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
@@ -8437,7 +8444,7 @@
 												  </XRCED>
 												</object>
 												<flag>wxLEFT</flag>
-												<border>65</border>
+												<border>52</border>
 											</object>
 									<orient>wxHORIZONTAL</orient>
 								</object>
