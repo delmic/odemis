@@ -124,21 +124,21 @@ class OpticalLens(model.HwComponent):
         # range. The main goal of using a TupleContinuous over a TupleVA is to
         # check it's 2 floats.
         if mirror_pos_top is not None:
-            if (not isinstance(pole_pos, Iterable) or
-                len(pole_pos) != 2 or any(not isinstance(v, numbers.Real) for v in mirror_pos_top)):
-                raise ValueError("pole_pos must be 2 floats, got %s" % mirror_pos_top)
+            if (not isinstance(mirror_pos_top, Iterable) or
+                    len(mirror_pos_top) != 2 or any(not isinstance(v, numbers.Real) for v in mirror_pos_top)):
+                raise ValueError("mirror_pos_top must be 2 floats, got %s" % mirror_pos_top)
             self.mirrorPositionTop = model.TupleContinuous(tuple(mirror_pos_top),
-                                                      range=((-1e18, -1e18), (1e18, 1e18)),
-                                                      cls=numbers.Real,
-                                                      unit="px, px/m")
+                                                           range=((-1e18, -1e18), (1e18, 1e18)),
+                                                           cls=numbers.Real,
+                                                           unit="px, px/m")
         if mirror_pos_bottom is not None:
-            if (not isinstance(pole_pos, Iterable) or
-                len(pole_pos) != 2 or any(not isinstance(v, numbers.Real) for v in mirror_pos_bottom)):
-                raise ValueError("pole_pos must be 2 floats, got %s" % mirror_pos_bottom)
+            if (not isinstance(mirror_pos_bottom, Iterable) or
+                    len(mirror_pos_bottom) != 2 or any(not isinstance(v, numbers.Real) for v in mirror_pos_bottom)):
+                raise ValueError("mirror_pos_bottom must be 2 floats, got %s" % mirror_pos_bottom)
             self.mirrorPositionBottom = model.TupleContinuous(tuple(mirror_pos_bottom),
-                                                      range=((-1e18, -1e18), (1e18, 1e18)),
-                                                      cls=numbers.Real,
-                                                      unit="px, px/m")
+                                                              range=((-1e18, -1e18), (1e18, 1e18)),
+                                                              cls=numbers.Real,
+                                                              unit="px, px/m")
 
         if x_max is not None:
             self.xMax = model.FloatVA(x_max, unit="m")
