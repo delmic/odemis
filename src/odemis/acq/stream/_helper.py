@@ -1211,33 +1211,19 @@ class AngularSpectrumSettingsStream(PolarizedCCDSettingsStream):
             simple_md[model.MD_WL_LIST] = md[model.MD_WL_LIST]
         return simple_md
 
-    def _is_active_setter(self, active):
+    def _linkHwVAs(self):
         """
-        Called when stream is active/playing. Links the angular and spectrum binning VAs to
-        the camera resolution VA and the detector binning depending on whether the stream
-        is active or not.
-        :param active: (boolean) True if stream is playing.
-        :returns: (boolean) If stream is playing or not.
+        Subscribes the detector binning to the spectrum and angular binning VAs.
         """
-        self._active = super(AngularSpectrumSettingsStream, self)._is_active_setter(active)
-
-        if self._active:
-            self._linkBin2CamRes()
-        else:
-            self._unlinkBin2CamRes()
-        return self._active
-
-    def _linkBin2CamRes(self):
-        """
-        Subscribes the detector resolution and binning to the spectrum and angular binning VAs.
-        """
+        super()._linkHwVAs()
         self.angular_binning.subscribe(self._onBinning, init=True)
         self.spectrum_binning.subscribe(self._onBinning, init=True)
 
-    def _unlinkBin2CamRes(self):
+    def _unlinkHwVAs(self):
         """
-        Unsubscribes the detector resolution and binning and update the GUI
+        Unsubscribes the detector binning
         """
+        super()._unlinkHwVAs()
         self.angular_binning.unsubscribe(self._onBinning)
         self.spectrum_binning.unsubscribe(self._onBinning)
 
