@@ -142,7 +142,10 @@ def findOptimalRange(hist, edges, outliers=0):
     edges (tuple of 2 numbers): the values corresponding to the first and last
       bin of the histogram. To get an index, use edges = (0, len(hist)).
     outliers (0<float<0.5): ratio of outliers to discard (on both side). 0
-      discards no value, 0.5 discards every value (and so returns the median).
+    discards no value, 0.5 discards every value (and so returns the median).
+    Note: if outliers > 0, there is a trick that treats bin 0 (which represents pure black) as "special".
+    If bin 1 is empty, bin 0 will be considered empty. This is to handle images which have a black frame,
+    or black legend, so they are not included in the outliers count, and only the actual data counts.
     return (tuple of 2 values): the range (min and max values)
     """
     # If we got an histogram with only one value, don't try too hard.
@@ -159,7 +162,7 @@ def findOptimalRange(hist, edges, outliers=0):
         cum_hist = hist.cumsum()
         nval = cum_hist[-1]
 
-        # If it's an histogram of an empty array, don't try too hard.
+        # If it's a histogram of an empty array, don't try too hard.
         if nval == 0:
             return edges
 
@@ -167,7 +170,7 @@ def findOptimalRange(hist, edges, outliers=0):
         # value just above it, it's a sign that the black is not part of the
         # signal and so is all outliers
         if hist[1] == 0 and cum_hist[0] / nval > 0.01 and cum_hist[0] < nval:
-            cum_hist -= cum_hist[0] # don't count 0's in the outliers
+            cum_hist -= cum_hist[0]  # don't count 0's in the outliers
             nval = cum_hist[-1]
 
         # find out how much is the value corresponding to outliers
@@ -211,22 +214,31 @@ def compactHistogram(hist, length):
     length (0<int<=hist.size): final length required. It must be a multiple of
      the length of hist
     return (ndarray 1D of 0<=int): histogram representing the same bins, but
-      accumulated together as necessary to only have "length" bins.
+      accumulated together as necessary to have at most "length" bins (and at least length/2 bins).
     """
     if hist.size < length:
         raise ValueError("Cannot compact histogram of length %d to length %d" %
                          hist.size, length)
     elif hist.size == length:
         return hist
-    elif hist.size % length != 0:
-        # Very costly (in CPU time) and probably a sign something went wrong
+
+    # If the histogram size is not an exact multiple of the requested length, return a smaller length.
+    # Ex: hist.size == 400 px and length == 256 -> make 200 bins of 2 px
+    bin_size = int(math.ceil(hist.size / length))
+
+    # If the histogram size isn't a round number of bins (so that each large bin is the
+    # accumulation of the same number of the original bins), we add a few zeros to have (just) last bin
+    # a partial accumulation.
+    if hist.size % bin_size != 0:
+        # Costly (in CPU time) and probably a sign something went wrong
         logging.warning("Length of histogram = %d, not multiple of %d",
-                         hist.size, length)
+                        hist.size, bin_size)
         # add enough zeros at the end to make it a multiple
-        hist = numpy.append(hist, numpy.zeros(length - hist.size % length, dtype=hist.dtype))
+        hist = numpy.append(hist, numpy.zeros(bin_size - hist.size % bin_size, dtype=hist.dtype))
+
     # Reshape to have on first axis the length, and second axis the bins which
     # must be accumulated.
-    chist = hist.reshape(length, hist.size // length)
+    chist = hist.reshape(-1, bin_size)
     return numpy.sum(chist, 1)
 
 # TODO: compute histogram faster. There are several ways:

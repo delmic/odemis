@@ -871,8 +871,8 @@ class Stream(object):
                         # => Two options:
                         # * add 10% margin on each side
                         # * round to the nearest power of 2 on each side
-                        # Take whichever is the smallest... and also ensure that the length is a multiple of 256 because
-                        # the histogram computation is much faster in such case.
+                        # Take whichever is the smallest... and also ensure that the length (mx - mn + 1)
+                        # is a multiple of 256 because the histogram computation is much faster in such case.
                         width10 = max(127, int((mx - mn) / 10))  # 10%, and at least 8 bits
 
                         # Min: only change the range if the previous one doesn't fit anymore
@@ -884,8 +884,7 @@ class Stream(object):
                             if 0 <= mn <= 255:  # if 0 or small positive value => round down to 0
                                 mn_p2 = 0
                             elif mn > 0:
-                                mn_p2 = 2 ** int(math.floor(math.log(mn + 1, 2)))
-                                mn_p2 -= 1  # maximum value represented with N bits
+                                mn_p2 = 2 ** int(math.floor(math.log(mn, 2)))
                             else:  # mn < 0
                                 mn_p2 = max(256, -mn)  # At least assume 8 bits
                                 mn_p2 = 2 ** int(math.ceil(math.log(mn_p2, 2)))
@@ -896,25 +895,31 @@ class Stream(object):
                             mn = prev_drange[0]
 
                         # Max: only change the range if the previous one doesn't fit anymore
+                        # Round to 256, and subtract 1, so that the length of the range is a multiple of 256.
                         if prev_drange is None or mx > prev_drange[1]:
                             mx10 = mx + width10
-                            mx10 = math.ceil(mx10 / 256) * 256
+                            mx10 = math.ceil(mx10 / 256) * 256 - 1  # To make sure the length is a multiple of 256
 
-                            # Round to next power of 2, with at least 8 bits
-                            if -255 <= mx <= 0:  # For 0 or small negative values, round up to 0
-                                mx_p2 = 0
-                            elif mx > 0:
+                            # Round to next power of 2 - 1, with at least 8 bits
+                            if -255 <= mx <= -1:  # For small negative values, round up to -1
+                                mx_p2 = -1
+                            elif mx >= 0:
                                 mx_p2 = max(255, mx)  # At least assume 8 bits
                                 mx_p2 = 2 ** int(math.ceil(math.log(mx_p2 + 1, 2)))
                                 mx_p2 -= 1  # maximum value represented with N bits
-                            else:  # mx < 0
-                                mx_p2 = -mx
-                                mx_p2 = 2 ** int(math.floor(math.log(mx_p2, 2)))
-                                mx_p2 = -mx_p2  # minimum value represented with N bits signed
+                            else:  # mx < -255
+                                mx_p2 = 2 ** int(math.floor(math.log(-mx, 2)))
+                                mx_p2 = -mx_p2 - 1  # minimum value represented with N bits signed
 
                             mx = min(mx10, mx_p2)
                         else:
                             mx = prev_drange[1]
+
+                        # Some sanity check: if we end up with a very small range (eg, because there is a single value)
+                        # make the range at least 256 wide
+                        if mx - mn < 255:
+                            logging.warning(f"{mn} ~= {mx}")
+                            mx = mn + 255
 
                         drange = (mn, mx)
                 else:  # float
