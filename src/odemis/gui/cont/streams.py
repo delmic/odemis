@@ -3375,6 +3375,8 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         acquired_streams = feature.streams.value if feature else []
         for stream in acquired_streams:
             self.showFeatureStream(stream)
+        # refit the selected feature in the acquired view
+        self._view_controller.viewports[1].canvas.fit_view_to_content()
 
     def clear_feature_streams(self):
         """
