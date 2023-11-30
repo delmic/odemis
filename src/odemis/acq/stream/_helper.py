@@ -697,10 +697,6 @@ class CCDSettingsStream(RepetitionStream):
         return duration
 
 
-class PMTSettingsStream(RepetitionStream):
-    pass
-
-
 class SpectrumSettingsStream(CCDSettingsStream):
     """ A Spectrum stream.
 
@@ -860,7 +856,7 @@ class TemporalSpectrumSettingsStream(CCDSettingsStream):
             self.detMCPGain.range = (0, self.detMCPGain.value)
 
 
-class MonochromatorSettingsStream(PMTSettingsStream):
+class MonochromatorSettingsStream(RepetitionStream):
     """
     A stream acquiring a count corresponding to the light at a given wavelength,
     typically with a counting PMT as a detector via a spectrograph.
@@ -1278,29 +1274,13 @@ class AngularSpectrumAlignmentStream(AngularSpectrumSettingsStream):
 
         super(AngularSpectrumSettingsStream, self)._onNewData(dataflow, data)
 
-
-class CLSettingsStream(PMTSettingsStream):
-    """
-    A spatial cathodoluminescense stream, typically with a PMT as a detector.
-    It's physically very similar to the AR stream, but as the acquisition time
-    is many magnitudes shorter (ie, close to the SED), the live view is the
-    entire image.
-
-    In live view, the ROI is not applied, but the pixelSize is.
-
-    Note: It could be possible to acquire an image simultaneously to the
-      SED in live view, but they would need to pick one dwell time/resolution.
-      That would be tricky to handle when starting/stopping one of the streams.
-
-    """
+class FastScanningDetector(RepetitionStream):
 
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
         """
         emtvas: don't put resolution or scale
         """
-        if "acq_type" not in kwargs:
-            kwargs["acq_type"] = model.MD_AT_CL
-        super(CLSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
         # Don't change pixel size, as we keep the same as the SEM
 
         # Fuzzing is not handled for SEM/SEM streams (and doesn't make much
@@ -1358,7 +1338,7 @@ class CLSettingsStream(PMTSettingsStream):
         logging.debug("Setting scale to %f, based on pxs = %g m", scale, self.pixelSize.value)
         self._emitter.scale.value = (scale, scale)
 
-        # use full FoV
+        # use the full FoV
         res = tuple(int(round(s / scale)) for s in self._emitter.shape[:2])
         self._emitter.resolution.value = res
 
@@ -1370,7 +1350,7 @@ class CLSettingsStream(PMTSettingsStream):
         if active:
             self._applyROI()
 
-        super(CLSettingsStream, self)._onActive(active)
+        super()._onActive(active)
 
     def _onDwellTime(self, value):
         # TODO: restarting the acquisition means also resetting the protection.
@@ -1380,13 +1360,58 @@ class CLSettingsStream(PMTSettingsStream):
     def _onResolution(self, value):
         self._updateAcquisitionTime()
 
+
+class CLSettingsStream(RepetitionStream):
+    """
+    A spatial cathodoluminescense stream, typically with a PMT as a detector.
+    It's physically very similar to the AR stream, but as the acquisition time
+    is many magnitudes shorter (ie, close to the SED), the live view is the
+    entire image.
+
+    In live view, the ROI is not applied, but the pixelSize is.
+
+    Note: It could be possible to acquire an image simultaneously to the
+      SED in live view, but they would need to pick one dwell time/resolution.
+      That would be tricky to handle when starting/stopping one of the streams.
+
+    """
+
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        """
+        emtvas: don't put resolution or scale
+        """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_CL
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
+        # Don't change pixel size, as we keep the same as the SEM
+
     def _onNewData(self, dataflow, data):
         # TODO: read protection status just after acquisition
         # How? Export protection VA from PMT? Have a warning status?
         # protection = self._detector.protection.value
         # And update the stream status if protection was triggered
-        super(CLSettingsStream, self)._onNewData(dataflow, data)
+        super()._onNewData(dataflow, data)
 
+
+class EBICSettingsStream(FastScanningDetector):
+    """
+    A SEM stream, typically with a EBIC (current) as a detector.
+    It's physically very similar to the SEM stream, but as we want to select just a region
+    it's in practice similar to the CLSettingStream.
+
+    In live view, the ROI is not applied, but the pixelSize is.
+
+    Note: It could be possible to acquire an image simultaneously to the
+      SED in live view, but they would need to pick one dwell time/resolution.
+      That would be tricky to handle when starting/stopping one of the streams.
+    """
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        """
+        emtvas: don't put resolution or scale
+        """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_EM
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
 
 # Maximum allowed overlay difference in electron coordinates.
 # Above this, the find overlay procedure will consider an error occurred and

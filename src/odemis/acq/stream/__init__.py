@@ -57,6 +57,7 @@ class EMStream(ABC):
 EMStream.register(SEMStream)
 EMStream.register(SpotSEMStream)
 EMStream.register(StaticSEMStream)
+EMStream.register(EBICSettingsStream)
 
 
 class CLStream(ABC):
@@ -69,7 +70,6 @@ class CLStream(ABC):
 CLStream.register(CLSettingsStream)
 CLStream.register(StaticCLStream)
 # TODO, also include MonochromatorSettingsStream and SEMMDStream?
-
 
 class SpectrumStream(ABC):
     pass

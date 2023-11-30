@@ -2,15 +2,6 @@
 SPARC2: {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
-               "Optical Path Properties", "Spectrometer Vis-NIR",
-               "Camera", "CL Detector", "Spectrograph",
-               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
-               "Mirror Actuators", "Mirror Actuators in XY referential",
-               "Slit", "CL Selector", "CL Filter Wheel",
-               "Lens1 Mover", "Lens2 Switch",
-               "Streak Readout CCD", "Streak Delay Generator", "Streak Unit",
-               "Streak Lens"],
 }
 
 # Light (lamp with known spectrum)
@@ -57,6 +48,7 @@ SPARC2: {
        scanner: "SEM E-beam",
        detector0: "SEM Detector",
        detector1: "CL PMT",
+       detector2: "EBIC",
     }
 }
 
@@ -79,7 +71,7 @@ SPARC2: {
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Camera", "EBIC"] # affects the CCD in case of cathodoluminescence
 }
 
 # Must be connected on AI 0/AI GND
@@ -126,6 +118,18 @@ SPARC2: {
        "pmt-control": "CL PMT control unit",
     },
 }
+
+# EBIC: In either configuration, the signal is either ±10V or ±5V. As the signal can be positive and negative, is uses the full range.
+# Must be connected on AI 2/AI 10 (differential)
+"EBIC": {
+    # Internal child of SEM Scan Interface, so no class
+    role: ebic-detector,
+    init: {
+        channel: 2,
+        limits: [-10, 10], # V
+    },
+}
+
 
 # In reality, this is a Zyla, but you need libandor3-dev to simulate an AndorCam3
 # Depending exactly on the configuration, it might also be used for spectrometer

@@ -2659,13 +2659,6 @@ class SparcStreamsController(StreamBarController):
 
         raise LookupError("No spectrometer corresponding to %s found" % (detector.name,))
 
-    def addEBIC(self, **kwargs):
-        # Need to use add_to_view=True to force only showing on the right
-        # view (and not onself.cnvs.update_drawing() the current view)
-        # TODO: should it be handled the same way as CLIntensity? (ie, respects
-        # the ROA)
-        return super(SparcStreamsController, self).addEBIC(add_to_view=True, **kwargs)
-
     def _add_sem_stream(self, name, detector, **kwargs):
 
         # Only put some local VAs, the rest should be global on the SE stream
@@ -2805,6 +2798,39 @@ class SparcStreamsController(StreamBarController):
                                                 [sem_stream, ar_stream])
 
         return self._addRepStream(ar_stream, sem_ar_stream)
+
+
+    def addEBIC(self, **kwargs):
+
+        main_data = self._main_data_model
+
+        ebic_stream = acqstream.EBICSettingsStream(
+            "EBIC",
+            main_data.ebic,
+            main_data.ebic.data,
+            main_data.ebeam,
+            sstage=main_data.scan_stage,
+            focuser=self._main_data_model.ebeam_focus,
+            emtvas={"dwellTime"},
+            detvas=get_local_vas(main_data.ebic, self._main_data_model.hw_settings_config),
+        )
+
+        # Create the equivalent MDStream
+        sem_stream = self._tab_data_model.semStream
+        sem_ebic_stream = acqstream.SEMMDStream("SEM EBIC",
+                                               [sem_stream, ebic_stream])
+
+        ret = self._addRepStream(ebic_stream, sem_ebic_stream,
+                                  play=False
+                                  )
+
+        # With EBIC, often the user wants to get the whole area, same as the survey.
+        # But it's not very easy to select all of it, so do it automatically.
+        # (after the controller creation, to automatically set the ROA too)
+        if ebic_stream.roi.value == acqstream.UNDEFINED_ROI:
+            ebic_stream.roi.value = (0, 0, 1, 1)
+        return ret
+
 
     def addCLIntensity(self):
         """ Create a CLi stream and add to to all compatible viewports """
