@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License along with Ode
 # convert --input file-as.hdf5 --output file-as.ome.tiff
 
 import argparse
+import glob
 from gettext import ngettext
 import logging
 import numpy
@@ -249,6 +250,14 @@ def main(args):
                      len(data), ngettext("image", "images", len(data)),
                      len(thumbs), ngettext("thumbnail", "thumbnails", len(thumbs)))
     elif tifns:
+        if len(tifns) == 1:
+            # Only passed a single filename for tiling? Most likely that is a pattern, so let's expand it.
+            # In the case it was really a specific file, we just end up with the same file, so it's safe.
+            file_pattern = tifns[0]
+            tifns = glob.glob(file_pattern)
+            if not tifns:
+                raise ValueError(f"No file matching filename {file_pattern}")
+
         registration_method = {"identity": REGISTER_IDENTITY, "shift": REGISTER_SHIFT,
                                "global_shift": REGISTER_GLOBAL_SHIFT}[options.registrar]
         weaving_method = {"collage": WEAVER_COLLAGE, "mean": WEAVER_MEAN,
