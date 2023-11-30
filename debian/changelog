@@ -1,3 +1,25 @@
+odemis (3.3.2-1) bionic; urgency=medium
+
+  * New version: 3.3.2
+  * Main bug fixes and improvements:
+   - New odemis-start-turret script to force the spectrograph turret number
+     before starting Odemis (SPARC)
+   - Bash autocompletion also works for "odemis" (in addition to "odemis-cli")
+   - Improve stitching registration when shift is large
+   - Adjust gedit when editing odemis.conf so that the preferences can be changed
+   - Spectrum plots cursor displays value without rounding it
+   - Improve large overview acquisition on METEOR on TFS SEM which could have
+     small areas missing
+   - TIFF reader loads data even if the metadata for wavelength is incorrect
+   - HDF5 reader had issues reading metadata on Ubuntu 22.04
+   - Fix snapshot of spectrum data when saved as TIFF (SPARC)
+   - Fix SPARC autofocus when no grating mirror is present, which could
+     sometimes fail
+   - Fix Andor camera error handler which incorrectly always gave up
+   - Fix xtclient error message which could itself fail
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 30 Nov 2023 09:23:39 +0100
+
 odemis (3.3.1-1) bionic; urgency=medium
 
   * New version: 3.3.1
