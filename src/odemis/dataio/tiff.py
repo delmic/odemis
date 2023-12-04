@@ -82,9 +82,11 @@ LOSSY = False
 # Add special fei_md tag to the tag "library"
 TIFFTAG_FEI_MD = 34682
 TIFFTAG_FEI_MD_XML = 34683
+TIFFTAG_TESCAN_MD = 50431
 tag_fei = T.TIFFFieldInfo(TIFFTAG_FEI_MD, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"fei_md")
 tag_fei_xml = T.TIFFFieldInfo(TIFFTAG_FEI_MD_XML, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"fei_md_XML")
-ext = T.add_tags([tag_fei, tag_fei_xml]) # Note: if you ever dereference ext, libtiff will crash
+tag_tescan = T.TIFFFieldInfo(TIFFTAG_TESCAN_MD, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"tescan_md")
+ext = T.add_tags([tag_fei, tag_fei_xml, tag_tescan]) # Note: if you ever dereference ext, libtiff will crash
 
 def _convertToTiffTag(metadata):
     """
@@ -236,6 +238,16 @@ def _readTiffTag(tfile):
             md.update(_convertTFStoOdemisMD(fei_md))
         except Exception as e:
             logging.info(f"Failed to parse ThermoFisher metadata: {e}")
+
+    # attempt to parse tescan md
+    tescan_md = tfile.GetField(TIFFTAG_TESCAN_MD, ignore_undefined_tag=True)
+    print("TESCAN_MD", tescan_md)
+    if tescan_md is not None:
+        try:
+            tescan_md = tescan_md.decode("utf-8", errors="ignore")
+            md.update(_convertTescanToOdemisMD(tescan_md))
+        except Exception as e:
+            logging.info(f"Failed to parse Tescan metadata: {e}")
 
     return md
 
@@ -2632,6 +2644,21 @@ class AcquisitionDataTIFF(AcquisitionData):
             dir_index += 1
             yield dir_index
 
+def _convertTescanToOdemisMD(metadata: str) -> dict:
+
+    from pprint import pprint
+
+    print("PARSING TESCAN MD")
+
+    pprint(metadata)
+
+
+    md = {}
+    
+    return md 
+
+
+
 
 ### ThermoFisher Metadata parsing
 def _convertTFStoOdemisMD(metadata: str) -> dict:
@@ -2720,5 +2747,136 @@ def _convertTFStoOdemisMD(metadata: str) -> dict:
                                     else model.MD_DT_INTEGRATING)
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_DET_TYPE} - {e}")
+
+    return md
+
+
+
+def _parse_tescan_metadata_image(filename: str) -> dict:
+    import PIL.Image
+    from PIL.TiffTags import TAGS
+
+    with PIL.Image.open(filename) as img:
+        # PARSE TE
+        tmd = img.tag[50431].decode("utf-8", errors='ignore')
+        
+        valid_md = tmd[tmd.find("AccFrames="):].split("\n")[:-1]
+
+    # TODO: we need to read the metadata correctly so we can determine the correct beamtype
+    # for now, dont' differentiate between SEM and FIB
+    
+    md = {"MAIN": {}, "SEM": {}}
+
+    sk = "MAIN"
+    for vmd in valid_md:
+        try:
+            k, v = (vmd.split("="))[-2:]
+
+            if "AcceleratorVoltage" in k:
+                # remove leading binary chars
+                k = k[k.find("AcceleratorVoltage"):] 
+                sk="SEM"
+
+        except Exception as e:
+            print(f"Error: {vmd} - {e}")    
+            continue
+        
+        md[sk][k.lower()] = v
+
+    return md
+
+
+def _read_tescan_metadata_file(filename: str) -> dict:
+
+    # import re
+    md_filename = filename.replace(".tif", "-tif.hdr")
+
+    # parse md with configparser
+    cfg = configparser.ConfigParser()
+
+    with open(md_filename, "r") as f:
+        cfg.read_file(f)
+
+    return cfg
+    # convert to dict
+    # d = {s: dict(cfg.items(s)) for s in cfg.sections()}
+
+    # return d
+
+def _convert_to_odemis_format(tmd: dict) -> dict:
+    """Converts TESCAN metadata to ODEMIS metadata format."""
+    md = {}
+
+    try:
+        beam_type = "SEM" if "SEM" in tmd else "FIB"
+        _ = tmd[beam_type]
+    except:
+        raise ValueError(f"Failed to parse TESCAN metadata: beam_type {beam_type} not supported")
+
+    try:
+        datetime_str = tmd["MAIN"]["date"] + " " + tmd["MAIN"]["time"]
+        date = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+        md[model.MD_ACQ_DATE] = date.timestamp()
+    except Exception as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_ACQ_DATE} - {e}")
+
+    try:
+        md[model.MD_HW_NAME] = tmd["MAIN"]["device"] + "-" + tmd["MAIN"]["serialnumber"]    
+    except Exception as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_HW_NAME} -  {e}")
+    try:
+        md[model.MD_SW_VERSION] = tmd["MAIN"]["softwareversion"]
+    except Exception as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_SW_VERSION} - {e}")
+
+    try:
+        md[model.MD_PIXEL_SIZE] = (float(tmd["MAIN"]["pixelsizex"]), 
+                                   float(tmd["MAIN"]["pixelsizey"]))
+    except Exception as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_PIXEL_SIZE} - {e}")
+
+    try:
+        md[model.MD_DWELL_TIME] = float(tmd[beam_type]["dwelltime"])
+    except Exception as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_DWELL_TIME} - {e}")
+    try:
+        # MD_POS should match image dimensions, e.g. only XY for 2D, XYZ for 3D, etc.
+        md[model.MD_POS] = (float(tmd[beam_type]["stagex"]), 
+                           float(tmd[beam_type]["stagey"]),
+                           )
+    except Exception as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_POS} - {e}")
+
+    try:
+        # beam metadata
+        md[model.MD_ROTATION] = numpy.deg2rad(float(tmd[beam_type]["scanrotation"]))
+        md[model.MD_EBEAM_VOLTAGE] = float(tmd[beam_type]["hv"])
+        md[model.MD_EBEAM_CURRENT] = float(tmd[beam_type]["emissioncurrent"])
+        
+        # acquistion type
+        acq_map =  {
+            "SEM": model.MD_AT_EM,
+            "FIB": model.MD_AT_FIB,
+        }
+        md[model.MD_ACQ_TYPE] = acq_map[beam_type]
+
+    except Exception as e:
+        logging.warning(f"""Failed to parse TESCAN metadata: {model.MD_ROTATION}, 
+                        {model.MD_EBEAM_VOLTAGE}, {model.MD_EBEAM_CURRENT}, 
+                        {model.MD_ACQ_TYPE} - {e}""")
+    
+    try:
+        md[model.MD_EBEAM_SPOT_DIAM] = float(tmd[beam_type]["spotsize"]) 
+    except Exception as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_EBEAM_SPOT_DIAM} - {e}")
+
+    try:
+        # detector
+        md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL 
+                                    if tmd[beam_type]["detector"] in ["E-T", "SE"] 
+                                    else model.MD_DT_INTEGRATING)
+    except Exception as e:
+        logging.warning(f"Failed to parse ThermoFTESCANisher metadata: {model.MD_DET_TYPE} - {e}")
+
 
     return md
