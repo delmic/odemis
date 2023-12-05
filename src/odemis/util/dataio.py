@@ -116,9 +116,6 @@ def data_to_static_streams(data):
         elif model.MD_OUT_WL in d.metadata:  # only MD_OUT_WL
             name = d.metadata.get(model.MD_DESCRIPTION, "Cathodoluminescence")
             klass = stream.StaticCLStream
-        elif model.MD_USER_TINT in d.metadata:  # User requested a colour => fallback to FluoStream
-            name = d.metadata.get(model.MD_DESCRIPTION, "Filtered colour")
-            klass = stream.StaticFluoStream
         elif dims in ("CYX", "YXC") and d.shape[ci] in (3, 4):
             # Only decide it's RGB as last resort, because most microscopy data is not RGB
             name = d.metadata.get(model.MD_DESCRIPTION, "RGB data")
