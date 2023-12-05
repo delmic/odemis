@@ -1,24 +1,31 @@
 #!/bin/bash
 # Release a new Odemis release
+#
+# Prerequisites are that you can build the Odemis package and upload it to the PPA.
+# That means your computer has the build tools installed (devscripts), configured
+# a signature, and are allowed to upload packages to the odemis PPA (on launchpad.net)
+# The odemis git repo is clone in ~/development/odemis, and the main github repo is
+# called "upstream".
+#
 # Beforehand, make sure you have already:
 #  1. switched to the right branch (eg, v2.6-branch)
-#  2. updated setup.py with the correct version number
-#  3. updated the changelog with dch -i
+#  2. updated setup.py with the correct version number (eg, 2.6.1)
+#  3. updated the changelog with dch -i (version should be like "2.6.1-1")
 #  4. all is commited
-# Call with "release-odemis"
+# Call with "release-odemis".
 #
 # Note: for a new major release (eg v2.7), it does NOT create a new branch
-# Create it with:
+# Create it (after updating the changelog) with:
 # git checkout -b v2.7-branch $commit-number-to-branch-from$
 #
 # It will:
 #  1. Tag the git repo with the changelog as description
 #  2. Push to the upstream remote
 #  3. Switch to ../pkg-native/odemis/ and update the repo
-#  4. Build for xenial (16.04), and then bionic (18.04).
+#  4. Build for bionic (18.04), focal (20.04) and jammy (22.04).
 
 if [ ! -d ~/development/pkg-native/odemis ]; then
-     echo "Need directory ~/development/pkg-native/odemis with a clone of the odemis repository"
+     echo "Need directory ~/development/pkg-native/odemis with a clone of the odemis repository. Creating one now..."
      # Do so with:
      mkdir -p ~/development/pkg-native/
      cd ~/development/pkg-native/
@@ -102,7 +109,7 @@ dput ppa:delmic-soft/odemis ../odemis_${PVERSION}_source.changes
 
 # Also rebuild the package to "focal" (Ubuntu 20.04)
 # Just add to debian changelog
-sed -i "1s/^/odemis (${PVERSION}focal1) focal; urgency=medium\n\n  * Rebuild for focal\n\n -- Éric Piel (Delmic) <piel@delmic.com>  $(date -R)\n\n/" debian/changelog
+dch -D focal -v ${PVERSION}focal1 "Rebuild for focal"
 
 debuild -S || exit 1
 # Immediately drop the changes
@@ -112,7 +119,7 @@ dput ppa:delmic-soft/odemis ../odemis_${PVERSION}focal1_source.changes
 
 # Also rebuild the package to "jammy" (Ubuntu 22.04)
 # Just add to debian changelog
-sed -i "1s/^/odemis (${PVERSION}jammy1) jammy; urgency=medium\n\n  * Rebuild for jammy\n\n -- Éric Piel (Delmic) <piel@delmic.com>  $(date -R)\n\n/" debian/changelog
+dch -D jammy -v ${PVERSION}jammy1 "Rebuild for jammy"
 
 debuild -S || exit 1
 # Immediately drop the changes
