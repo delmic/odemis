@@ -80,7 +80,7 @@ class ViewportGrid(wx.Panel):
                 raise ValueError(f"Unknown Viewport ({vvp.view.name.value})!")
 
         if len(vis_viewports) not in (1, 2, 4):
-            raise ValueError("Can only show 1, 2, or 4 viewports, but %d requested", len(vis_viewports))
+            raise ValueError(f"Can only show 1, 2, or 4 viewports, but {len(vis_viewports)} requested")
 
         self.visible_viewports = tuple(vis_viewports)
         logging.debug("Now showing %d viewports: %s", len(vis_viewports),
@@ -174,7 +174,7 @@ class ViewportGrid(wx.Panel):
                 vp.SetSize(layout.size)
 
         else:
-            raise ValueError("Doesn't know how to display %d viewports in a grid", num_vis_total)
+            raise ValueError(f"Doesn't know how to display {num_vis_total} viewports in a grid")
 
         # Set the size of the invisible viewport to a relative small value, so we make sure that
         # grabbing the client area for thumbnails will be relatively cheap
