@@ -89,7 +89,7 @@ tag_fei = T.TIFFFieldInfo(TIFFTAG_FEI_MD, -1, -1, T.TIFFDataType.TIFF_ASCII, T.F
 tag_fei_xml = T.TIFFFieldInfo(TIFFTAG_FEI_MD_XML, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"fei_md_XML")
 tag_zeiss_md_1 = T.TIFFFieldInfo(TIFFTAG_ZEISS_MD_1, -3, -3, T.TIFFDataType.TIFF_BYTE, T.FIELD_CUSTOM, False, True, b"zeiss_md_1")
 tag_zeiss_md_2 = T.TIFFFieldInfo(TIFFTAG_ZEISS_MD_2, -3, -3, T.TIFFDataType.TIFF_BYTE, T.FIELD_CUSTOM, False, True, b"zeiss_md_2")
-tag_tescan = T.TIFFFieldInfo(TIFFTAG_TESCAN_MD, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"tescan_md")
+tag_tescan = T.TIFFFieldInfo(TIFFTAG_TESCAN_MD, -3, -3, T.TIFFDataType.TIFF_BYTE, T.FIELD_CUSTOM, False, True, b"tescan_md")
 ext = T.add_tags([tag_fei, tag_fei_xml, tag_zeiss_md_1, tag_zeiss_md_2, tag_tescan]) # Note: if you ever dereference ext, libtiff will crash
 
 # Hack: they are officially defined as "ASCII" in the file, but they are not
@@ -98,6 +98,7 @@ ext = T.add_tags([tag_fei, tag_fei_xml, tag_zeiss_md_1, tag_zeiss_md_2, tag_tesc
 # So we have to explicitly change the format to indicate it'll be variable (and GetField will work fine)
 T.tifftags[TIFFTAG_ZEISS_MD_1] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d: d[1][:d[0]])
 T.tifftags[TIFFTAG_ZEISS_MD_2] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d: d[1][:d[0]])
+T.tifftags[TIFFTAG_TESCAN_MD] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d: d[1][:d[0]])
 
 # suppress warnings and errors from libtiff
 T.suppress_errors()
@@ -268,13 +269,12 @@ def _readTiffTag(tfile):
             logging.info(f"Failed to parse Zeiss metadata: {e}")
 
 
-
-    # attempt to parse tescan md
-    tescan_md = tfile.GetField(TIFFTAG_TESCAN_MD, ignore_undefined_tag=True)
+    # parse tescan metadata
+    tescan_md = tfile.GetField(TIFFTAG_TESCAN_MD)
     print("TESCAN_MD", tescan_md)
     if tescan_md is not None:
         try:
-            tescan_md = tescan_md.decode("utf-8", errors="ignore")
+            tescan_md = tescan_md.decode("latin1")
             md.update(_convertTescanToOdemisMD(tescan_md))
         except Exception as e:
             logging.info(f"Failed to parse Tescan metadata: {e}")
@@ -2674,21 +2674,6 @@ class AcquisitionDataTIFF(AcquisitionData):
             dir_index += 1
             yield dir_index
 
-def _convertTescanToOdemisMD(metadata: str) -> dict:
-
-    from pprint import pprint
-
-    print("PARSING TESCAN MD")
-
-    pprint(metadata)
-
-
-    md = {}
-    
-    return md 
-
-
-
 
 ### ThermoFisher Metadata parsing
 def _convertTFStoOdemisMD(metadata: str) -> dict:
@@ -2833,7 +2818,7 @@ def _read_tescan_metadata_file(filename: str) -> dict:
 
     # return d
 
-def _convert_to_odemis_format(tmd: dict) -> dict:
+def _convert_tescan_to_odemis_format(tmd: dict) -> dict:
     """Converts TESCAN metadata to ODEMIS metadata format."""
     md = {}
 
@@ -2913,21 +2898,31 @@ def _convert_to_odemis_format(tmd: dict) -> dict:
 
 
 
-def _parse_tescan_metadata_image(filename: str) -> dict:
+def _parse_tescan_metadata_image(filename: str) -> str:
     import PIL.Image
     from PIL.TiffTags import TAGS
 
     with PIL.Image.open(filename) as img:
         # PARSE TE
         tmd = img.tag[50431].decode("utf-8", errors='ignore')
-        
-        valid_md = tmd[tmd.find("AccFrames="):].split("\n")[:-1]
+    
+    return tmd
+    
+def _parseTESCANMetadata(metadata: str) -> dict:
+    
+    # The metadata should be formatted as ini, but seems to be corrupted
+    # and not parsed correctly by configparser
 
+    # the data is split into two sections, MAIN and SEM/FIB
+    # we need to parse the data into two sections, then parse the sections
+    # the header for SEM/FIB seems to be corrupt as well?
+    from pprint import pprint
+    valid_md = metadata[metadata.find("AccFrames="):].split("\n")[:-1]
+    # pprint(valid_md)
     # TODO: we need to read the metadata correctly so we can determine the correct beamtype
     # for now, dont' differentiate between SEM and FIB
     
     md = {"MAIN": {}, "SEM": {}}
-
     sk = "MAIN"
     for vmd in valid_md:
         try:
@@ -2935,16 +2930,43 @@ def _parse_tescan_metadata_image(filename: str) -> dict:
 
             if "AcceleratorVoltage" in k:
                 # remove leading binary chars
-                k = k[k.find("AcceleratorVoltage"):] 
+                idx = k.find("AcceleratorVoltage")
+                sk = k[:idx]
+                k = k[idx:]
+                # print(idx, sk, k)
+                if "!" in sk:
+                    print("FIB?")
+
                 sk="SEM"
 
         except Exception as e:
-            print(f"Error: {vmd} - {e}")    
+            logging.warning(f"Error: {vmd} - {e}")    
             continue
         
         md[sk][k.lower()] = v
-
     return md
+
+
+def _convertTescanToOdemisMD(metadata: str) -> dict:
+
+    from pprint import pprint
+
+    print("PARSING TESCAN MD")
+
+    try:
+    #    pprint(metadata)
+       tmd = _parseTESCANMetadata(metadata)
+    #    pprint(tmd)
+
+    except Exception as e:
+        print(e)
+
+
+    md = {}
+
+    md = _convert_tescan_to_odemis_format(tmd)
+    
+    return md 
 
 
 def _read_tescan_metadata_file(filename: str) -> dict:
@@ -2959,12 +2981,8 @@ def _read_tescan_metadata_file(filename: str) -> dict:
         cfg.read_file(f)
 
     return cfg
-    # convert to dict
-    # d = {s: dict(cfg.items(s)) for s in cfg.sections()}
 
-    # return d
-
-def _convert_to_odemis_format(tmd: dict) -> dict:
+def _convert_tescan_to_odemis_format(tmd: dict) -> dict:
     """Converts TESCAN metadata to ODEMIS metadata format."""
     md = {}
 
@@ -3013,6 +3031,7 @@ def _convert_to_odemis_format(tmd: dict) -> dict:
         md[model.MD_ROTATION] = numpy.deg2rad(float(tmd[beam_type]["scanrotation"]))
         md[model.MD_EBEAM_VOLTAGE] = float(tmd[beam_type]["hv"])
         md[model.MD_EBEAM_CURRENT] = float(tmd[beam_type]["emissioncurrent"])
+        
         
         # acquistion type
         acq_map =  {
