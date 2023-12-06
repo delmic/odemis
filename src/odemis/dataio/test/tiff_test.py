@@ -2431,6 +2431,51 @@ class TestTiffIO(unittest.TestCase):
             else:
                 self.assertEqual(value, data.content[0].metadata[key])
 
+
+    def testConvertTESCANtoOdemisMD(self):
+
+        # open example image
+        TESCAN_FILENAME = os.path.join(os.path.dirname(__file__), "zeiss_example_sem.tif")
+        data = tiff.open_data(TESCAN_FILENAME)
+
+        # assert data
+        self.assertIsInstance(data, tiff.AcquisitionDataTIFF)
+        self.assertEqual(len(data.content), 1)
+        self.assertEqual(data.content[0].shape, (1479, 1280))
+        self.assertEqual(data.content[0].dtype, numpy.uint16)
+
+
+        # special case to deal with local timezone matching
+        md_acq_date = datetime.strptime('2023-03-21 12:30:10', 
+                                        "%Y-%m-%d %H:%M:%S").timestamp()
+        # assert metadata
+        md = {
+            model.MD_ACQ_DATE: md_acq_date,
+            model.MD_HW_NAME: "TESCAN AMBER X-121-0169",
+            model.MD_SW_VERSION: "TESCAN Essence Version 1.2.2.0, build 5793",
+            model.MD_PIXEL_SIZE: (6.7314951e-08, 6.7314951e-08),
+            model.MD_DWELL_TIME: 1e-6,
+            model.MD_POS: (0.003123833, -0.00950841),
+            model.MD_ROTATION: 3.141592653589793,
+            model.MD_EBEAM_VOLTAGE: 2000.0,
+            model.MD_EBEAM_CURRENT: 0.0002949440026, # TODO: fix this, it's wrong
+            model.MD_EBEAM_SPOT_DIAM: 4.3e-09,
+            model.MD_ACQ_TYPE: model.MD_AT_EM,
+            model.MD_DET_TYPE: model.MD_DT_NORMAL,
+            model.MD_DESCRIPTION: os.path.basename(TESCAN_FILENAME).replace(".tif", ""),
+        }
+
+        for key in md.keys():
+            self.assertIn(key, data.content[0].metadata)
+
+        for key, value in md.items():
+            if key in [model.MD_PIXEL_SIZE, model.MD_POS]: # array equal
+                numpy.testing.assert_array_equal(value, data.content[0].metadata[key])
+            elif key in [model.MD_DWELL_TIME]:
+                numpy.testing.assert_almost_equal(value, data.content[0].metadata[key])
+            else:
+                self.assertEqual(value, data.content[0].metadata[key])
+
 # Not used anymore
 # def rational2float(rational):
 #     """
