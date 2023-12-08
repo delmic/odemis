@@ -32,7 +32,8 @@ from odemis.acq.stitching import REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT, REGIS
                               WEAVER_COLLAGE, WEAVER_COLLAGE_REVERSE, WEAVER_MEAN
 from odemis.acq.stream import StaticARStream, StaticCLStream, StaticFluoStream, StaticSEMStream, \
                               StaticSpectrumStream
-                               
+from odemis.util import img
+
 
 def data_to_static_streams(data):
     """ Split the given data into static streams
@@ -306,6 +307,17 @@ def open_files_and_stitch(infns: list, registration_method: int = REGISTER_IDENT
 
         # Make sure they are not DataArrayShadow, because we need the data to do the stitching
         das = [da.getData() if isinstance(da, model.DataArrayShadow) else da for da in das]
+        # For now the stitching doesn't handle more than 2 dimensions, so force the data to be 2D
+        das_2d = []
+        for da in das:
+            try:
+                das_2d.append(img.ensure2DImage(da))
+            except ValueError:
+                logging.info("Skipping %s because it is not 2D", da)
+        das = das_2d
+
+        if not das:
+            raise ValueError(f"No compatible 2D data found in file {fn}")
 
         # Add sorted DAs to list
         das = sorted(das, key=leader_quality, reverse=True)
