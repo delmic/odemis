@@ -41,6 +41,10 @@ import time
 # code is still useful to understand how to call the IDS SDK.
 IGNORE_PARAMETER = -1
 
+# For InitCamera()
+USE_DEVICE_ID = 0x8000
+ALLOW_STARTER_FW_UPLOAD = 0x10000
+
 # For DeviceFeature()
 
 DEVICE_FEATURE_CMD_GET_SUPPORTED_FEATURES = 1
@@ -1366,8 +1370,17 @@ class Camera(model.DigitalCamera):
                 raise HwError("Failed to find IDS uEye camera with S/N %s, check the connection to the computer" % (sn,))
 
         try:
-            # TODO, add IS_ALLOW_STARTER_FW_UPLOAD to hcam to allow firmware update?
-            self._dll.is_InitCamera(byref(hcam), None)
+            try:
+                # We could always pass ALLOW_STARTER_FW_UPLOAD, but it's handy to log it, so first
+                # fail, and then try with the firmware upload.
+                self._dll.is_InitCamera(byref(hcam), None)
+            except UEyeError as ex:
+                if ex.errno != 184:  # STARTER_FW_UPLOAD_NEEDED
+                    raise
+                # Starter firmware upload is typically required, once, just after an SDK update.
+                hcam.value |= ALLOW_STARTER_FW_UPLOAD
+                logging.info("Uploading the starter firmware, will take ~30s")
+                self._dll.is_InitCamera(byref(hcam), None)
         except UEyeError as ex:
             raise HwError("Failed to open IDS uEye camera: %s" % (ex,))
 
