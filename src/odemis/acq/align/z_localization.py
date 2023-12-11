@@ -186,7 +186,7 @@ def determine_z_position(image, calibration_data, fit_tol=0.1):
         if not(warning):
             warning = warn_flag
 
-    z_position = zopt[0]*1e-9 - calibration_data["z_least_confusion"]
+    z_position = calibration_data["z_least_confusion"] - zopt[0] * 1e-9
 
     if not(calibration_data["z_calibration_range"][0] < z_position < calibration_data["z_calibration_range"][1]):
         # Always log this warning but only update this error if no other cause of the error is found.
