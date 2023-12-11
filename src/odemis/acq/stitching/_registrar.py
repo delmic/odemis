@@ -283,6 +283,9 @@ class ShiftRegistrar(object):
         Returns an estimation of the similarity between the given images
         when the second is shifted by the shift value. It is used to assess 
         the quality of a shift measurement by giving the shifted image.
+        imageA:
+        imageB:
+        shift: shift after phase correlation
         return (0 <= float<=1): the bigger, the more similar are the images
         """
         # If the tile is shifted more than the size of the overlap region in one dimension,
@@ -327,7 +330,7 @@ class ShiftRegistrar(object):
         """
         Measures the shift on the overlap between the two tiles when the second is shifted
         by the shift value.
-        shift (2 ints): shift between prev_tile and tile
+        shift (2 ints): shift between prev_tile and tile based on stage position
         return (2 ints): guessed shift
         """
         (l1, t1, r1, b1), (l2, t2, r2, b2) = self._estimateROI(shift)
@@ -383,7 +386,7 @@ class ShiftRegistrar(object):
         exp_shift = (0, int(self.size[0] - self.osize))
         prev_pos = self.registered_positions[row - 1][col]
         prev_tile = self.tiles[row - 1][col]
-        x, y = self._get_shift(prev_tile, tile, exp_shift)
+        x, y = self._get_shift(prev_tile, tile, exp_shift)  # calculates shift based on phase correlation
         match = self._estimateMatch(prev_tile, tile, (exp_shift[0] - x, exp_shift[1] - y))
 
         # Add shift to expected position
@@ -425,14 +428,16 @@ class ShiftRegistrar(object):
             first_pos = self.tiles[0][0].metadata[model.MD_POS]
             # registered positions have their origin in (0, 0)
             registered_pos = numpy.divide((tile.metadata[model.MD_POS][0] - first_pos[0],
-                                    -tile.metadata[model.MD_POS][1] + first_pos[1]),
-                                    self.px_size)
+                                           -tile.metadata[model.MD_POS][1] + first_pos[1]),
+                                          self.px_size)
 
         # In case both registrations give good matches, use the one that is closest to
         # the expected position. This decreases the chances of error propagation.
         elif match_hor > GOOD_MATCH and match_ver > GOOD_MATCH:
-            registered_pos = min([pos_hor, pos_ver], key=lambda x: numpy.hypot(
-                                    *numpy.subtract(x, tile.metadata[model.MD_POS])))
+            tile_pos = numpy.divide(tile.metadata[model.MD_POS], self.px_size)
+            hor_diff = numpy.hypot(*numpy.subtract(pos_hor, tile_pos))
+            ver_diff = numpy.hypot(*numpy.subtract(pos_ver, tile_pos))
+            registered_pos = pos_hor if hor_diff < ver_diff else pos_ver
         elif ((pos_hor is None) or match_hor < match_ver) and pos_ver:
             registered_pos = pos_ver
         else:
