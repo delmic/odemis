@@ -508,6 +508,12 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
             elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
+                # save rotation and tilt in SEM before switching to FM imaging
+                # to restore rotation and tilt while switching back from FM -> SEM
+                if current_label == SEM_IMAGING and target == FM_IMAGING:
+                    current_value = self.stage.position.value
+                    self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
+                                                                             'rz': current_value['rz']}})
                 # Park the focuser for safety
                 if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
                     sub_moves.append((self.focus, focus_deactive))
@@ -828,6 +834,11 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                         sub_moves.append((stage, filter_dict({'rx'}, target_pos)))
 
                     if current_label == SEM_IMAGING:
+                        # save rotation and tilt in SEM before switching to FM imaging
+                        # to restore rotation and tilt while switching back from FM -> SEM
+                        current_value = self.stage.position.value
+                        self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
+                                                                                 'rm': current_value['rm']}})
                         # when switching from SEM to FM
                         # move in the following order :
                         sub_moves.append((stage, filter_dict({'rx', 'rm', 'x', 'y', 'm', 'z'}, target_pos)))
@@ -1140,6 +1151,11 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                         sub_moves.append((stage, filter_dict({'z'}, target_pos)))
 
                     if current_label == SEM_IMAGING:
+                        # save rotation and tilt in SEM before switching to FM imaging
+                        # to restore rotation and tilt while switching back from FM -> SEM
+                        current_value = self.stage.position.value
+                        self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
+                                                                                 'rz': current_value['rz']}})
                         # when switching from SEM to FM
                         # move in the following order :
                         sub_moves.append((stage, filter_dict({'z'}, target_pos)))
