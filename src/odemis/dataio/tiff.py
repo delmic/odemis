@@ -79,12 +79,12 @@ LOSSY = False
 # TODO: make sure that _all_ the metadata is saved, either in TIFF tags, OME-TIFF,
 # or in a separate mechanism.
 
-# Add special fei_md tag to the tag "library"
-TIFFTAG_FEI_MD = 34682
-TIFFTAG_FEI_MD_XML = 34683
-tag_fei = T.TIFFFieldInfo(TIFFTAG_FEI_MD, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"fei_md")
-tag_fei_xml = T.TIFFFieldInfo(TIFFTAG_FEI_MD_XML, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"fei_md_XML")
-ext = T.add_tags([tag_fei, tag_fei_xml]) # Note: if you ever dereference ext, libtiff will crash
+# Add special tfs_md tag to the tag "library"
+TIFFTAG_TFS_MD = 34682
+TIFFTAG_TFS_MD_XML = 34683
+tag_tfs = T.TIFFFieldInfo(TIFFTAG_TFS_MD, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"tfs_md")
+tag_tfs_xml = T.TIFFFieldInfo(TIFFTAG_TFS_MD_XML, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"tfs_md_XML")
+ext = T.add_tags([tag_tfs, tag_tfs_xml]) # Note: if you ever dereference ext, libtiff will crash
 
 def _convertToTiffTag(metadata):
     """
@@ -229,11 +229,11 @@ def _readTiffTag(tfile):
         except (OverflowError, ValueError):
             logging.info("Failed to parse date '%s'", val)
 
-    fei_md = tfile.GetField(TIFFTAG_FEI_MD)
-    if fei_md is not None:
+    tfs_md = tfile.GetField(TIFFTAG_TFS_MD)
+    if tfs_md is not None:
         try:
-            fei_md = fei_md.decode("latin1")
-            md.update(_convertTFStoOdemisMD(fei_md))
+            tfs_md = tfs_md.decode("latin1")
+            md.update(_convert_thermo_fisher_to_odemis_metadata(tfs_md))
         except Exception as e:
             logging.info(f"Failed to parse ThermoFisher metadata: {e}")
 
@@ -2634,7 +2634,7 @@ class AcquisitionDataTIFF(AcquisitionData):
 
 
 ### ThermoFisher Metadata parsing
-def _convertTFStoOdemisMD(metadata: str) -> dict:
+def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
     """
     Converts ThermoFisher Scientific (TFS) metadata to odemis metadata format
     :param metadata: metadata string as ini (TFS format)
@@ -2643,58 +2643,58 @@ def _convertTFStoOdemisMD(metadata: str) -> dict:
     """
 
     # parse ini metadata as dictionary
-    fei_md = {}
+    tfs_md = {}
     try:
         cfg = configparser.ConfigParser()
         cfg.read_string(metadata)
-        fei_md = cfg
+        tfs_md = cfg
     except Exception as e:
         logging.warning("Failed to parse metadata as ini: %s", e)
-        return fei_md
+        return tfs_md
     
     # convert to odemis format
     md = {}
     
     # general
     try:
-        datetime_str = fei_md["User"]["date"] + " " + fei_md["User"]["time"]
+        datetime_str = tfs_md["User"]["date"] + " " + tfs_md["User"]["time"]
         date = datetime.strptime(datetime_str, "%m/%d/%Y %I:%M:%S %p")
         md[model.MD_ACQ_DATE] = date.timestamp()
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_ACQ_DATE} - {e}")
     try:
-        md[model.MD_HW_NAME] = fei_md["System"]["systemtype"] + "-" + fei_md["System"]["dnumber"]    
+        md[model.MD_HW_NAME] = tfs_md["System"]["systemtype"] + "-" + tfs_md["System"]["dnumber"]    
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_HW_NAME} -  {e}")
     try:
-        md[model.MD_SW_VERSION] = fei_md["System"]["software"]
+        md[model.MD_SW_VERSION] = tfs_md["System"]["software"]
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_SW_VERSION} - {e}")
 
     try:
-        md[model.MD_PIXEL_SIZE] = (float(fei_md["Scan"]["pixelwidth"]), 
-                                   float(fei_md["Scan"]["pixelheight"]))
+        md[model.MD_PIXEL_SIZE] = (float(tfs_md["Scan"]["pixelwidth"]), 
+                                   float(tfs_md["Scan"]["pixelheight"]))
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_PIXEL_SIZE} - {e}")
 
     try:
-        md[model.MD_DWELL_TIME] = float(fei_md["Scan"]["dwelltime"])
+        md[model.MD_DWELL_TIME] = float(tfs_md["Scan"]["dwelltime"])
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_DWELL_TIME} - {e}")
     try:
         # MD_POS should match image dimensions, e.g. only XY for 2D, XYZ for 3D, etc.
-        md[model.MD_POS] = (float(fei_md["Stage"]["stagex"]), 
-                           float(fei_md["Stage"]["stagey"]),
+        md[model.MD_POS] = (float(tfs_md["Stage"]["stagex"]), 
+                           float(tfs_md["Stage"]["stagey"]),
                            )
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_POS} - {e}")
 
     try:
         # beam metadata
-        beam_type = fei_md["Beam"]["beam"]
-        md[model.MD_ROTATION] = float(fei_md[beam_type]["scanrotation"])
-        md[model.MD_EBEAM_VOLTAGE] = float(fei_md[beam_type]["hv"])
-        md[model.MD_EBEAM_CURRENT] = float(fei_md[beam_type]["beamcurrent"])
+        beam_type = tfs_md["Beam"]["beam"]
+        md[model.MD_ROTATION] = float(tfs_md[beam_type]["scanrotation"])
+        md[model.MD_EBEAM_VOLTAGE] = float(tfs_md[beam_type]["hv"])
+        md[model.MD_EBEAM_CURRENT] = float(tfs_md[beam_type]["beamcurrent"])
         
         # acquistion type
         acq_map =  {
@@ -2709,14 +2709,14 @@ def _convertTFStoOdemisMD(metadata: str) -> dict:
                         {model.MD_ACQ_TYPE} - {e}""")
     try:
         # NB: this is not actual spot size, actual spot diam is in xml metadata
-        md[model.MD_EBEAM_SPOT_DIAM] = float(fei_md["Beam"]["spot"]) 
+        md[model.MD_EBEAM_SPOT_DIAM] = float(tfs_md["Beam"]["spot"]) 
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_EBEAM_SPOT_DIAM} - {e}")
 
     try:
         # detector
         md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL 
-                                    if fei_md["Detectors"]["name"] in ["ETD", "TLD"] 
+                                    if tfs_md["Detectors"]["name"] in ["ETD", "TLD"] 
                                     else model.MD_DT_INTEGRATING)
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_DET_TYPE} - {e}")
