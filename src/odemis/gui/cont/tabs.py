@@ -702,11 +702,6 @@ class LocalizationTab(Tab):
                 # Remove from chamber tab too
                 chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
                 chamber_tab.remove_overview_streams([st])
-            else:
-                # Remove the stream from all the features
-                for feature in self.tab_data_model.main.features.value:
-                    if st in feature.streams.value:
-                        feature.streams.value.remove(st)
 
     @call_in_wx_main
     def display_acquired_data(self, data):
@@ -724,6 +719,9 @@ class LocalizationTab(Tab):
                 self.tab_data_model.main.currentFeature.value.streams.value.append(s)
             self.tab_data_model.streams.value.insert(0, s)  # TODO: let addFeatureStream do that
             self._acquired_stream_controller.showFeatureStream(s)
+        # refit the latest acquired feature so that the new data is fully visible in the
+        # acquired view even when the user had moved around/zoomed in
+        self.panel.vp_secom_tr.canvas.fit_view_to_content()
 
     def _on_acquisition(self, is_acquiring):
         # When acquiring, the tab is automatically disabled and should be left as-is
