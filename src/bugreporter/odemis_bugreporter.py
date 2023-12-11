@@ -318,6 +318,17 @@ class OdemisBugreporter(object):
             if delphi_calib_reps and (time.time() - os.path.getmtime(delphi_calib_reps[-1])) / 3600 < 24:
                 files.append(delphi_calib_reps[-1])
 
+            # Add the latest fastem-calibration image if it's possibly related (ie, less than a week old)
+            fastem_calib_dir = os.path.join(home_dir, "development/fastem-calibrations/images/cell-translation")
+            fastem_calib_reps = glob(os.path.join(fastem_calib_dir, '*'))
+            fastem_calib_reps.sort(key=os.path.getmtime)
+            # If the last calibration failed, the image might not have been created, then get the last available image.
+            for f in fastem_calib_reps[::-1]:
+                calib_file = os.path.join(f, "plot_cell_translations.png")
+                if os.path.isfile(calib_file) and (time.time() - os.path.getmtime(f)) / 3600 < (24 * 7):
+                    files.append(calib_file)
+                    break
+
             # Save hw status (if available)
             try:
                 ret_code = subprocess.call(['odemis-cli', '--check'])
