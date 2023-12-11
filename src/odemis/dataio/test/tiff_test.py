@@ -2345,7 +2345,7 @@ class TestTiffIO(unittest.TestCase):
         # the size of this tile is also the size of the image
         self.assertEqual(tiles[0][0].shape, (156, 187))
 
-    def testConvertTFStoOdemisMD(self):
+    def test_convert_thermo_fisher_to_odemis_metadata(self):
         
         # open example image
         TFS_FILENAME = os.path.join(os.path.dirname(__file__), "tfs_example.tif")
