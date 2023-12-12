@@ -1,3 +1,5 @@
+# This microscope file can be used to test the focustracker in simulated mode.
+# This is only intended to be used as a backend, not with the GUI.
 MBSEM: {
     class: Microscope,
     role: mbsem,

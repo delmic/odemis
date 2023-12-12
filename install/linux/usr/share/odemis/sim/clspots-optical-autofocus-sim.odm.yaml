@@ -1,3 +1,5 @@
+# This microscope file can be used to test the optical autofocus for the FAST-EM systems in simulated mode.
+# This is only intended to be used as a backend, not with the GUI.
 MultiBeamSEM: {
     class: Microscope,
     role: mbsem,
