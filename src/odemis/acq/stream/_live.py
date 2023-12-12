@@ -1133,6 +1133,11 @@ class FluoStream(CameraStream):
             self._stop_light()
 
     def onExcitation(self, value):
+        # All intensities to 0, but the one corresponding to the selected band
+        choices = self._emitter.spectra.value
+        self._channel_idx = choices.index(self.excitation.value)
+        # Update the current power range
+        self.power.range = tuple(r[self._channel_idx] for r in self._emitter.power.range)
         if self.is_active.value:
             self._setup_excitation()
 
@@ -1179,11 +1184,6 @@ class FluoStream(CameraStream):
         """
         Set-up the hardware to emit light in the excitation band.
         """
-        # All intensities to 0, but the one corresponding to the selected band
-        choices = self._emitter.spectra.value
-        self._channel_idx = choices.index(self.excitation.value)
-        # Update the current power range
-        self.power.range = tuple(r[self._channel_idx] for r in self._emitter.power.range)
         # Call _onPower to update emitter power
         self._onPower(self.power.value)
 
