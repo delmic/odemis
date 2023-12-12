@@ -18,7 +18,7 @@ Picoscale: {
     class: smaract.Picoscale,
     role: position-sensor,
     init: {
-        locator: "network:sn:PSC-00000178",
+        locator: "network:192.168.10.5:55555",
         channels: {"x1": 0, "x2": 1, "y": 2},
         ref_on_init: "if necessary",  # use "always" to force referencing at init
     },
