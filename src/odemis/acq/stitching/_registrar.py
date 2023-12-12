@@ -291,8 +291,12 @@ class ShiftRegistrar(object):
         # y axis of shift has increasing values when going down, for MD_POS it is the opposite
         exp_shift_x = int((imageB.metadata[model.MD_POS][0] - imageA.metadata[model.MD_POS][0]) / px_size[0])
         exp_shift_y = -int((imageB.metadata[model.MD_POS][1] - imageA.metadata[model.MD_POS][1]) / px_size[1])
-        if max(abs(exp_shift_x - shift[0]), abs(exp_shift_y - shift[1])) > max(numpy.multiply(self.size, self.ovrlp)):
-            logging.info("Calculated shift is larger than the overlap size, using expected position "
+
+        # TODO: overlap should be computed per tile, and independently between X & Y. See global shift.
+        rel_shift = exp_shift_x - shift[0], exp_shift_y - shift[1]
+        overlap_px = numpy.multiply(self.size, self.ovrlp)
+        if numpy.any(numpy.abs(rel_shift) > overlap_px):
+            logging.info(f"Calculated shift {rel_shift} is larger than the overlap size ({overlap_px}, using expected position "
                          "instead.")
             return 0
 
@@ -647,11 +651,10 @@ class GlobalShiftRegistrar(object):
             return exp_shift, 0
         # Normalized cross correlation (values between -1 and 1)
         ncc = (covar / (stDev[0] * stDev[1]))
-
-        overlap = min(numpy.abs(numpy.subtract(tile.shape, numpy.abs(exp_shift))))
-        if max(numpy.abs(shift)) > overlap:
-            logging.info("Calculated shift is larger than the overlap size, using expected position "
-                         "instead.")
+        overlap = numpy.abs(numpy.subtract(tile.shape[::-1], numpy.abs(exp_shift)))  # tile.shape is YX, so reverse it
+        if numpy.any(numpy.abs(shift) > overlap):
+            logging.info(f"Calculated shift {shift} is larger than the overlap size {overlap}, "
+                         f"using expected position instead.")
             return exp_shift, 0
 
         return shift_total, ncc
