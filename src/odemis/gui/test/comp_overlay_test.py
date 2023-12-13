@@ -1174,7 +1174,7 @@ class OverlayTestCase(test.GuiTestCase):
         }
         ccd = mock.FakeCCD(img)  # role is always "ccd"
 
-        class FakeTabData():
+        class FakeTabData:
             def __init__(self):
                 self.mirrorPositionTopPhys = model.TupleContinuous((100e-6, 0),
                                            ((-1e18, -1e18), (1e18, 1e18)), unit="m",
