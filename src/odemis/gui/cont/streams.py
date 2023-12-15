@@ -2533,7 +2533,7 @@ class SecomStreamsController(StreamBarController):
                 self._tab_data_model.emState.value = guimodel.STATE_OFF
 
 
-class CryoStreamsController(StreamBarController):
+class CryoStreamsController(SecomStreamsController):
     """
     Controls the display of stream panels without affecting the actual streams
     """
