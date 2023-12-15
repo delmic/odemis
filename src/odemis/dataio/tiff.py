@@ -30,7 +30,7 @@ import numpy
 from odemis import model, util
 import odemis
 from odemis.model import DataArrayShadow, AcquisitionData
-from odemis.util import spectrum, img, fluo
+from odemis.util import spectrum, img, fluo, units
 from odemis.util.conversion import get_tile_md_pos, JsonExtraEncoder
 import operator
 import os
@@ -79,12 +79,28 @@ LOSSY = False
 # TODO: make sure that _all_ the metadata is saved, either in TIFF tags, OME-TIFF,
 # or in a separate mechanism.
 
-# Add special tfs_md tag to the tag "library"
+# Add special tags to the tag "library"
 TIFFTAG_TFS_MD = 34682
 TIFFTAG_TFS_MD_XML = 34683
+TIFFTAG_ZEISS_MD_1 = 34118
+TIFFTAG_ZEISS_MD_2 = 34119
 tag_tfs = T.TIFFFieldInfo(TIFFTAG_TFS_MD, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"tfs_md")
 tag_tfs_xml = T.TIFFFieldInfo(TIFFTAG_TFS_MD_XML, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"tfs_md_XML")
-ext = T.add_tags([tag_tfs, tag_tfs_xml]) # Note: if you ever dereference ext, libtiff will crash
+tag_zeiss_md_1 = T.TIFFFieldInfo(TIFFTAG_ZEISS_MD_1, -3, -3, T.TIFFDataType.TIFF_BYTE, T.FIELD_CUSTOM, False, True, b"zeiss_md_1")
+tag_zeiss_md_2 = T.TIFFFieldInfo(TIFFTAG_ZEISS_MD_2, -3, -3, T.TIFFDataType.TIFF_BYTE, T.FIELD_CUSTOM, False, True, b"zeiss_md_2")
+ext = T.add_tags([tag_tfs, tag_tfs_xml, tag_zeiss_md_1, tag_zeiss_md_2]) # Note: if you ever dereference ext, libtiff will crash
+
+# Hack: they are officially defined as "ASCII" in the file, but they are not
+# null terminated. So read them "raw", clip to the count, and then convert from bytes to the right string format.
+# However, for now pylibtiff doesn't support reading variable length tags via add_tags(),
+# So we have to explicitly change the format to indicate it'll be variable (and GetField will work fine)
+T.tifftags[TIFFTAG_ZEISS_MD_1] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d: d[1][:d[0]])
+T.tifftags[TIFFTAG_ZEISS_MD_2] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d: d[1][:d[0]])
+
+# suppress warnings and errors from libtiff (written to stderr by default)
+# T.suppress_errors() # deliberately commented out
+T.suppress_warnings()
+
 
 def _convertToTiffTag(metadata):
     """
@@ -229,13 +245,25 @@ def _readTiffTag(tfile):
         except (OverflowError, ValueError):
             logging.info("Failed to parse date '%s'", val)
 
-    tfs_md = tfile.GetField(TIFFTAG_TFS_MD)
+    # parse thermofisher metadata
+    tfs_md = tfile.GetField(TIFFTAG_TFS_MD, ignore_undefined_tag=True)
     if tfs_md is not None:
         try:
             tfs_md = tfs_md.decode("latin1")
             md.update(_convert_thermo_fisher_to_odemis_metadata(tfs_md))
         except Exception as e:
             logging.info(f"Failed to parse ThermoFisher metadata: {e}")
+
+    # parse zeiss metadata
+    zmd = tfile.GetField(TIFFTAG_ZEISS_MD_1, ignore_undefined_tag=True)
+    # zmd2 = tfile.GetField(TIFFTAG_ZEISS_MD_2) # NOTE: unused (same content, utf16 encoded)
+
+    if zmd is not None:
+        try:
+            zmd = zmd.decode("latin1")
+            md.update(_convert_zeiss_to_odemis_metadata(zmd))
+        except Exception as e:
+            logging.info(f"Failed to parse Zeiss metadata: {e}")
 
     return md
 
@@ -2720,5 +2748,192 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
                                     else model.MD_DT_INTEGRATING)
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_DET_TYPE} - {e}")
+
+    return md
+
+def _parse_zeiss_metadata(metadata:str) -> dict:
+    """
+    Parses ZEISS metadata to dictionary
+    :param metadata: metadata string
+    :return: (dict) metadata as dictionary
+    """
+    zmd = {}
+    for line in metadata.split("\r\n"):
+        # Metadata is in the format:
+        # HEADER
+        # key = value unit
+
+        # Example:
+        # AP_STAGE_AT_X
+        # Stage at X = 48.5090 mm
+
+        try:
+            
+            # skip all caps lines as they are headers
+            if line.isupper():
+                continue
+
+            # NOTE: 
+            # Date, Time are separated by : 
+            # everything else is separated by =
+            try:
+                k, v = line.split("=")
+            except ValueError:             
+                k, v = line.split(":", maxsplit=1) 
+            k, v = k.strip(), v.strip()
+            zmd[k] = v
+        except ValueError:
+            continue  # skip lines that don't contain key value pairs
+        except Exception as e:
+            # any other error -> something has gone wrong
+            logging.warning(f"Failed to parse ZEISS metadata: {line} - {e}", exc_info=True)
+
+    return zmd
+
+
+def _convert_zeiss_to_odemis_metadata(metadata: str) -> dict:
+    """Converts ZEISS metadata to odemis metadata format
+    :param metadata: metadata string
+    :return: (dict) metadata as dictionary
+    """
+
+    # parse as dict
+    zmd = _parse_zeiss_metadata(metadata)
+
+    md = {}
+
+    # general
+    try:
+        datetime_str = zmd["Date"] + " " + zmd["Time"]
+        date = datetime.strptime(datetime_str, "%d %b %Y %H:%M:%S")
+        md[model.MD_ACQ_DATE] = date.timestamp()
+    except Exception as e:
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_ACQ_DATE} - {type(e)}: {e}")
+    try:
+        md[model.MD_HW_NAME] = zmd["Serial No."]
+    except KeyError as e:
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
+    try:
+        md[model.MD_SW_VERSION] = zmd["Version"]
+    except KeyError as e:
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_SW_VERSION} - {type(e)}: {e}")
+
+    try:
+        # NOTE: 
+        # There are three values in the ZEISS metadata for pixel size
+        # Pixel Size, Image Pixel Size, and FIB Pixel Size
+        # Pixel Size is the one we want as it changes based on the beam type (FIB Imaging field)
+
+        str_pixel_size = zmd["Pixel Size"]
+        str_val, si_prefix, unit = units.decompose_si_prefix(str_pixel_size, "m")
+        pixel_size = units.si_scale_val(float(str_val), si_prefix)
+
+        md[model.MD_PIXEL_SIZE] = (pixel_size, pixel_size)
+    except Exception as e:
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_PIXEL_SIZE} - {type(e)}: {e}")
+
+    try:
+        str_dwell_time = zmd["Dwell Time"]
+        str_val, si_prefix, unit = units.decompose_si_prefix(str_dwell_time, "s")
+        dwell_time = units.si_scale_val(float(str_val), si_prefix)
+
+        md[model.MD_DWELL_TIME] = dwell_time
+    except Exception as e:
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_DWELL_TIME} - {type(e)}: {e}")
+
+    try:
+        str_x = zmd["Stage at X"]
+        str_val, si_prefix, unit = units.decompose_si_prefix(str_x, "m")
+        x = units.si_scale_val(float(str_val), si_prefix)
+
+        str_y = zmd["Stage at Y"]
+        str_val, si_prefix, unit = units.decompose_si_prefix(str_y, "m")
+        y = units.si_scale_val(float(str_val), si_prefix)
+        
+        # MD_POS should match image dimensions, e.g. only XY for 2D, XYZ for 3D, etc.
+        md[model.MD_POS] = (x, y)
+    except Exception as e:
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_POS} - {type(e)}: {e}")
+
+    # scan rotation
+    try:
+        # check if scan rotation is enabled
+        if zmd["Scan Rot"] == "Off":
+            scan_rotation = 0
+        else:
+            beam_type = zmd["FIB Imaging"]
+
+            rot_map =  {
+                "SEM": "Scan Rotation",
+                "FIB": "FIB Scan Rot",
+            }
+
+            scan_rotation = float(zmd[rot_map[beam_type]].split(" ")[0])
+        md[model.MD_ROTATION] = numpy.deg2rad(scan_rotation)
+    except Exception as e:
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_ROTATION} - {type(e)}: {e}")
+        # log the exception type
+
+    # beam metadata (dependent keys)
+    try:
+        beam_type = zmd["FIB Imaging"]
+
+        # acquisition type
+        try:
+            acq_map =  {
+                "SEM": model.MD_AT_EM,
+                "FIB": model.MD_AT_FIB,
+            }
+            md[model.MD_ACQ_TYPE] = acq_map[beam_type]
+        except Exception as e:
+            logging.warning(f"Failed to parse ZEISS metadata: {model.MD_ACQ_TYPE} - {type(e)}: {e}")
+
+        # beam current
+        try:
+            bc_map ={
+                "SEM": "I Probe",
+                "FIB": "FIB Probe Current Actual",
+            } 
+            beam_current_key = bc_map[beam_type]
+
+            str_beam_current = zmd[beam_current_key]
+            str_val, si_prefix, unit = units.decompose_si_prefix(str_beam_current, "A")
+            beam_current = units.si_scale_val(float(str_val), si_prefix)
+
+            md[model.MD_EBEAM_CURRENT] = beam_current
+        except Exception as e:
+            logging.warning(f"Failed to parse ZEISS metadata: {model.MD_EBEAM_CURRENT} - {type(e)}: {e}")
+
+        # high voltage
+        try:
+            hv_map ={
+                "SEM": "EHT",
+                "FIB": "FIB EHT",
+            } 
+            hv_key = hv_map[beam_type]
+
+            str_hv = zmd[hv_key]
+            str_val, si_prefix, unit = units.decompose_si_prefix(str_hv, "V")
+            hv = units.si_scale_val(float(str_val), si_prefix)
+
+            md[model.MD_EBEAM_VOLTAGE] = hv
+        except Exception as e:
+            logging.warning(f"Failed to parse ZEISS metadata: {model.MD_EBEAM_VOLTAGE} - {type(e)}: {e}")
+    except Exception as e:
+        logging.warning(f"Failed to parse ZEISS metadata: BeamType - {type(e)}: {e}")
+        
+    # spot size
+    try:
+        md[model.MD_EBEAM_SPOT_DIAM] = float(zmd["Spot Size"]) 
+    except Exception as e:
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_EBEAM_SPOT_DIAM} - {type(e)}: {e}")
+
+    # detector
+    try:
+        md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL 
+                                    if zmd["Signal A"] in ["InLens", "SE2"] 
+                                    else model.MD_DT_INTEGRATING)
+    except Exception as e:
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_DET_TYPE} - {type(e)}: {e}")
 
     return md

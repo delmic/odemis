@@ -2387,7 +2387,49 @@ class TestTiffIO(unittest.TestCase):
             else:
                 self.assertEqual(value, data.content[0].metadata[key])
 
+    def test_convert_zeiss_to_odemis_metadata(self):
 
+        # open example image
+        ZEISS_FILENAME = os.path.join(os.path.dirname(__file__), "zeiss_example_sem.tif")
+        data = tiff.open_data(ZEISS_FILENAME)
+
+        # assert data
+        self.assertIsInstance(data, tiff.AcquisitionDataTIFF)
+        self.assertEqual(len(data.content), 1)
+        self.assertEqual(data.content[0].shape, (768, 1024))
+        self.assertEqual(data.content[0].dtype, numpy.uint8)
+
+
+        # special case to deal with local timezone matching
+        md_acq_date = datetime.strptime('2023-04-11 08:40:47', 
+                                        "%Y-%m-%d %H:%M:%S").timestamp()
+        # assert metadata
+        md = {
+            model.MD_ACQ_DATE: md_acq_date,
+            model.MD_HW_NAME: "Crossbeam 550-8404010334",
+            model.MD_SW_VERSION: "V07.03.00.00 : 07-Feb-23",
+            model.MD_PIXEL_SIZE: (5.933e-07, 5.933e-07),
+            model.MD_DWELL_TIME: 50e-9,
+            model.MD_POS: (0.048509000000000004, 0.0486715),
+            model.MD_ROTATION: 0.0,
+            model.MD_EBEAM_VOLTAGE: 5000.0,
+            model.MD_EBEAM_CURRENT: 2e-10,
+            model.MD_EBEAM_SPOT_DIAM: 1.0,
+            model.MD_ACQ_TYPE: model.MD_AT_EM,
+            model.MD_DET_TYPE: model.MD_DT_NORMAL,
+            model.MD_DESCRIPTION: os.path.basename(ZEISS_FILENAME).replace(".tif", ""),
+        }
+
+        for key in md.keys():
+            self.assertIn(key, data.content[0].metadata)
+
+        for key, value in md.items():
+            if key in [model.MD_PIXEL_SIZE, model.MD_POS]: # array equal
+                numpy.testing.assert_array_equal(value, data.content[0].metadata[key])
+            elif key in [model.MD_DWELL_TIME]:
+                numpy.testing.assert_almost_equal(value, data.content[0].metadata[key])
+            else:
+                self.assertEqual(value, data.content[0].metadata[key])
 
 # Not used anymore
 # def rational2float(rational):
