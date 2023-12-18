@@ -9552,6 +9552,7 @@ def __init_resources():
 											  <height>24</height>
 											    <bg>#000000</bg>
 											  <label>Use Current Z</label>
+                                              <tooltip>Save the current position of the focus as the feature Z position</tooltip>
 											  <style>wxALIGN_CENTRE</style>
 											</object>
 										<flag>wxLEFT</flag>

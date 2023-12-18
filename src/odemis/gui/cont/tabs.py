@@ -519,11 +519,12 @@ class LocalizationTab(Tab):
         chamber_tab.load_overview_streams(visible_ov_streams)
 
     def _on_view(self, view):
-        """Hide hardware related sub-panels on the right when not in live stream"""
+        """Hide/Disable hardware related sub-panels and controls on the right when not in live stream"""
         live = issubclass(view.stream_classes, odemis.acq.stream._live.LiveStream)
         self.panel.fp_settings_secom_optical.Show(live)
         self.panel.fp_secom_streams.Show(live)
         self.panel.fp_acquisitions.Show(live)
+        self.panel.btn_use_current_z.Enable(live)
 
     @property
     def settingsbar_controller(self):
