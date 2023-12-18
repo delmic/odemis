@@ -1546,7 +1546,6 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
                                     Calibrations.IMAGE_ROTATION_PREALIGN,
                                     Calibrations.SCAN_ROTATION_PREALIGN,
                                     Calibrations.DESCAN_GAIN_STATIC,
-                                    Calibrations.SCAN_AMPLITUDE_PREALIGN,
                                     Calibrations.IMAGE_TRANSLATION_PREALIGN,
                                     Calibrations.IMAGE_ROTATION_FINAL,
                                     Calibrations.IMAGE_TRANSLATION_FINAL]
@@ -1557,7 +1556,6 @@ class FastEMAcquisitionGUIData(MicroscopyGUIData):
             calib_3_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
                                     Calibrations.IMAGE_TRANSLATION_PREALIGN,
                                     Calibrations.SCAN_ROTATION_FINAL,
-                                    Calibrations.SCAN_AMPLITUDE_FINAL,
                                     Calibrations.CELL_TRANSLATION]
 
         for name in [CALIBRATION_1, CALIBRATION_2, CALIBRATION_3]:
