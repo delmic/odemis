@@ -67,12 +67,14 @@ class FastEMProjectListController(object):
         tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable project panel
 
     # already running in main GUI thread as it receives event from GUI
-    def _add_project(self, _):
+    def _add_project(self, _, name=None):
         # Get the smallest number that is not already in use. It's a bit challenging because projects can be
         # deleted, so we might have project 2 in colour red, but project 1 in blue has been deleted, so the
         # next project (which is now again the second project) should not use red again.
         num = next(idx for idx, num in enumerate(sorted(self.project_ctrls.keys()) + [0], 1) if idx != num)
-        name = "Project-%s" % num
+        if name is None:
+            name = "Project-%s" % num
+        name = make_unique_name(name, [project_ctrl.model.name.value for project_ctrl in self.project_ctrls.values()])
         logging.debug("Creating new project %s.", name)
         colour = FASTEM_PROJECT_COLOURS[(num - 1) % len(FASTEM_PROJECT_COLOURS)]
         project_ctrl = FastEMProjectController(name, colour, self._tab_data_model, self._project_list, self._viewport)
@@ -83,6 +85,8 @@ class FastEMProjectListController(object):
 
         # Remove callback for every new remove button
         project_ctrl.panel.btn_remove.Bind(wx.EVT_BUTTON, lambda evt: self._remove_project(evt, project_ctrl))
+
+        return project_ctrl
 
     # already running in main GUI thread as it receives event from GUI
     def _remove_project(self, _, project_ctrl):
@@ -166,7 +170,7 @@ class FastEMProjectController(object):
         evt.Skip()
 
     # already running in main GUI thread as it receives event from GUI
-    def _on_btn_roa(self, _):
+    def _on_btn_roa(self, _, name=None):
         # Two-step process: Instantiate FastEM object here, but wait until first ROA is selected until
         # further processing. The process can still be aborted by clicking in the viewport without dragging.
         # In the callback to the ROI, the ROI creation will be completed or aborted.
@@ -178,7 +182,8 @@ class FastEMProjectController(object):
 
         # Minimum index that has not yet been deleted, find the first index which is not in the existing indices
         num = next(idx for idx, n in enumerate(sorted(self.roa_ctrls.keys()) + [0], 1) if idx != n)
-        name = "ROA-%s" % num
+        if name is None:
+            name = "ROA-%s" % num
         name = make_unique_name(name, [roa.name.value for roa in self.model.roas.value])
         # better guess for parameters after region is selected in _add_roa_ctrl
         roa_ctrl = FastEMROAController(name, None, None, self.colour, self._tab_data, self.panel, self._viewport)
@@ -186,12 +191,12 @@ class FastEMProjectController(object):
         self._current_roa_ctrl = roa_ctrl
 
         roa_ctrl.model.coordinates.subscribe(self._add_roa_ctrl)
+        return roa_ctrl
 
     # already running in main GUI thread as it receives event from GUI
     def _on_btn_remove(self, _, roa_ctrl):
         self.remove_roa_ctrl(roa_ctrl)
 
-    @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _add_roa_ctrl(self, coords):
         roa_ctrl = self._current_roa_ctrl
         self._current_roa_ctrl = None
