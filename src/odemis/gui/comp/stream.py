@@ -2130,7 +2130,7 @@ class FastEMCalibrationPanel(wx.Panel):
                 # needed. Also tried using wx.Font to lower the label text size for 30x30, but
                 # does not make a difference.
                 # btn.SetSize(btn.GetSizeFromTextSize(btn.GetTextExtent("OK"))) returns (-1, -1)
-                btn = wx.ToggleButton(self, wx.ALL | wx.ALIGN_CENTER, label="?", size=(35, 35))
+                btn = wx.ToggleButton(self, label="?", size=(35, 35))
                 btn.SetBackgroundColour(FG_COLOUR_BUTTON)
                 subsz.Add(btn)
                 subsz.AddSpacer(8)
@@ -2218,7 +2218,7 @@ class FastEMOverviewSelectionPanel(wx.Panel):
         for row_idx, row in enumerate(layout):
             for col_idx, elem in enumerate(row):
                 subsz = wx.BoxSizer(wx.HORIZONTAL)
-                btn = wx.ToggleButton(self, wx.ALL | wx.ALIGN_CENTER, size=(30, 30))
+                btn = wx.ToggleButton(self, size=(30, 30))
                 btn.SetBackgroundColour("#999999")
                 subsz.Add(btn)
                 subsz.AddSpacer(8)
