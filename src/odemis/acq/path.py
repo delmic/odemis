@@ -373,7 +373,7 @@ def affectsGraph(microscope):
     return graph
 
 
-class OpticalPathManager():
+class OpticalPathManager:
     """
     The purpose of this module is setting the physical components contained in
     the optical path of a SPARC system to the right position/configuration with
