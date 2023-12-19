@@ -2430,6 +2430,112 @@ class TestTiffIO(unittest.TestCase):
                 numpy.testing.assert_almost_equal(value, data.content[0].metadata[key])
             else:
                 self.assertEqual(value, data.content[0].metadata[key])
+    def test_convert_tescan_to_odemis_metadata(self):
+        # NOTE: not using the other images for now, as they are too large to include. 
+        # Useful for because they have different metadata (FIB / SEM)
+        
+        # example images
+        filenames =[
+            os.path.join(os.path.dirname(__file__), "tescan_example_sem1.tif"),
+            # os.path.join(os.path.dirname(__file__), "tescan_example_sem.tif"),
+            # os.path.join(os.path.dirname(__file__), "tescan_example_fib1.tif"),
+        ]
+
+        # assert metadata
+        metadata = [
+            {
+                "shape": (888, 1024),
+                "dtype": numpy.uint16,
+                "length": 1,
+                # special case to deal with local timezone matching
+                model.MD_ACQ_DATE: datetime.strptime('2016-05-16 16:03:27', 
+                                            "%Y-%m-%d %H:%M:%S").timestamp(),
+                model.MD_HW_NAME: "MIRA3 XMU-MI3261471CZ",
+                model.MD_HW_VERSION: "MIRA3 XMU MI3261471CZ",
+                # model.MD_SW_VERSION: "TESCAN Essence Version 1.2.2.0, build 5793", # missing key
+                model.MD_PIXEL_SIZE: (2.5012e-06, 2.5012e-06),
+                model.MD_DWELL_TIME: 3.2e-06,
+                model.MD_POS: (0.0051572, 0.0060938),
+                model.MD_ROTATION: 0.0,
+                model.MD_EBEAM_VOLTAGE: 10000.0,
+                model.MD_EBEAM_CURRENT:  2.64366291318e-10,
+                model.MD_EBEAM_SPOT_DIAM: 8.35230955092e-08,
+                model.MD_ACQ_TYPE: model.MD_AT_EM,
+                model.MD_DET_TYPE: model.MD_DT_NORMAL,
+                model.MD_DESCRIPTION: os.path.basename(filenames[0]).replace(".tif", ""),
+            },
+
+            # {
+            #     "shape": (1479, 1280),
+            #     "dtype": numpy.uint16,
+            #     "length": 1,
+            #     # special case to deal with local timezone matching
+            #     model.MD_ACQ_DATE: datetime.strptime('2023-03-21 12:30:10', 
+            #                                 "%Y-%m-%d %H:%M:%S").timestamp(),
+            #     model.MD_HW_NAME: "TESCAN AMBER X-121-0169",
+            #     model.MD_HW_VERSION: "TESCAN AMBER X-S8252X",
+            #     model.MD_SW_VERSION: "TESCAN Essence Version 1.2.2.0, build 5793",
+            #     model.MD_PIXEL_SIZE: (6.7314951e-08, 6.7314951e-08),
+            #     model.MD_DWELL_TIME: 1e-6,
+            #     model.MD_POS: (0.003123833, -0.00950841),
+            #     model.MD_ROTATION: 3.141592653589793,
+            #     model.MD_EBEAM_VOLTAGE: 2000.0,
+            #     model.MD_EBEAM_CURRENT:  5.03e-11,
+            #     model.MD_EBEAM_SPOT_DIAM: 4.3e-09,
+            #     model.MD_ACQ_TYPE: model.MD_AT_EM,
+            #     model.MD_DET_TYPE: model.MD_DT_NORMAL,
+            #     model.MD_DESCRIPTION: os.path.basename(filenames[1]).replace(".tif", ""),
+            # },
+            # {
+            #     "shape": (1035, 1280),
+            #     "dtype": numpy.uint16,
+            #     "length": 1,
+            #     # special case to deal with local timezone matching
+            #     # special case to deal with local timezone matching
+            #     model.MD_ACQ_DATE: datetime.strptime('2023-03-21 13:48:48', 
+            #                                 "%Y-%m-%d %H:%M:%S").timestamp(),
+            #     model.MD_HW_NAME: "TESCAN AMBER X-121-0169",
+            #     model.MD_HW_VERSION: "TESCAN AMBER X-S8252X",
+            #     model.MD_SW_VERSION: "TESCAN Essence Version 1.2.2.0, build 5793",
+            #     model.MD_PIXEL_SIZE: (3.90625e-08, 3.90625e-08),
+            #     model.MD_DWELL_TIME: 3.2e-06,
+            #     model.MD_POS: (0.003116365, -0.009506906),
+            #     model.MD_ROTATION: 3.141592653589793,
+            #     model.MD_EBEAM_VOLTAGE: 30000.0,
+            #     model.MD_EBEAM_CURRENT:  1.2715e-09,
+            #     model.MD_EBEAM_SPOT_DIAM: 1.90595e-07,
+            #     model.MD_ACQ_TYPE: model.MD_AT_FIB,
+            #     model.MD_DET_TYPE: model.MD_DT_NORMAL,
+            #     model.MD_DESCRIPTION: os.path.basename(filenames[2]).replace(".tif", ""),
+            # },
+            
+            ]
+
+        for fname, md in zip(filenames, metadata):
+
+            data = tiff.open_data(fname)
+
+            # assert data
+            self.assertIsInstance(data, tiff.AcquisitionDataTIFF)
+            self.assertEqual(len(data.content), md["length"])
+            self.assertEqual(data.content[0].shape, md["shape"])
+            self.assertEqual(data.content[0].dtype, md["dtype"])
+
+            for key in md.keys():
+                if key in ["shape", "dtype", "length"]:
+                    continue # skip
+                self.assertIn(key, data.content[0].metadata)
+
+            for key, value in md.items():
+                if key in ["shape", "dtype", "length"]:
+                    continue # skip
+                if key in [model.MD_PIXEL_SIZE, model.MD_POS]: # array equal
+                    numpy.testing.assert_array_equal(value, data.content[0].metadata[key])
+                elif key in [model.MD_DWELL_TIME]:
+                    numpy.testing.assert_almost_equal(value, data.content[0].metadata[key])
+                else:
+                    self.assertEqual(value, data.content[0].metadata[key])
+
 
 # Not used anymore
 # def rational2float(rational):

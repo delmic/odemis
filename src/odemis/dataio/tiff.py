@@ -84,11 +84,13 @@ TIFFTAG_TFS_MD = 34682
 TIFFTAG_TFS_MD_XML = 34683
 TIFFTAG_ZEISS_MD_1 = 34118
 TIFFTAG_ZEISS_MD_2 = 34119
+TIFFTAG_TESCAN_MD = 50431
 tag_tfs = T.TIFFFieldInfo(TIFFTAG_TFS_MD, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"tfs_md")
 tag_tfs_xml = T.TIFFFieldInfo(TIFFTAG_TFS_MD_XML, -1, -1, T.TIFFDataType.TIFF_ASCII, T.FIELD_CUSTOM, True, False, b"tfs_md_XML")
 tag_zeiss_md_1 = T.TIFFFieldInfo(TIFFTAG_ZEISS_MD_1, -3, -3, T.TIFFDataType.TIFF_BYTE, T.FIELD_CUSTOM, False, True, b"zeiss_md_1")
 tag_zeiss_md_2 = T.TIFFFieldInfo(TIFFTAG_ZEISS_MD_2, -3, -3, T.TIFFDataType.TIFF_BYTE, T.FIELD_CUSTOM, False, True, b"zeiss_md_2")
-ext = T.add_tags([tag_tfs, tag_tfs_xml, tag_zeiss_md_1, tag_zeiss_md_2]) # Note: if you ever dereference ext, libtiff will crash
+tag_tescan = T.TIFFFieldInfo(TIFFTAG_TESCAN_MD, -3, -3, T.TIFFDataType.TIFF_BYTE, T.FIELD_CUSTOM, False, True, b"tescan_md")
+ext = T.add_tags([tag_tfs, tag_tfs_xml, tag_zeiss_md_1, tag_zeiss_md_2, tag_tescan]) # Note: if you ever dereference ext, libtiff will crash
 
 # Hack: they are officially defined as "ASCII" in the file, but they are not
 # null terminated. So read them "raw", clip to the count, and then convert from bytes to the right string format.
@@ -96,6 +98,10 @@ ext = T.add_tags([tag_tfs, tag_tfs_xml, tag_zeiss_md_1, tag_zeiss_md_2]) # Note:
 # So we have to explicitly change the format to indicate it'll be variable (and GetField will work fine)
 T.tifftags[TIFFTAG_ZEISS_MD_1] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d: d[1][:d[0]])
 T.tifftags[TIFFTAG_ZEISS_MD_2] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d: d[1][:d[0]])
+
+# pylibtiff doesn't support reading variable length tags via add_tags(),
+# So we have to explicitly change the format to indicate it'll be variable (and GetField will work fine)
+T.tifftags[TIFFTAG_TESCAN_MD] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d: d[1][:d[0]])
 
 # suppress warnings and errors from libtiff (written to stderr by default)
 # T.suppress_errors() # deliberately commented out
@@ -264,6 +270,14 @@ def _readTiffTag(tfile):
             md.update(_convert_zeiss_to_odemis_metadata(zmd))
         except Exception as e:
             logging.info(f"Failed to parse Zeiss metadata: {e}")
+
+    # parse tescan metadata
+    tescan_md = tfile.GetField(TIFFTAG_TESCAN_MD)
+    if tescan_md is not None:
+        try:
+            md.update(_convert_tescan_to_odemis_metadata(tescan_md))
+        except Exception as e:
+            logging.info(f"Failed to parse Tescan metadata: {e}", exc_info=True)
 
     return md
 
@@ -2937,3 +2951,185 @@ def _convert_zeiss_to_odemis_metadata(metadata: str) -> dict:
         logging.warning(f"Failed to parse ZEISS metadata: {model.MD_DET_TYPE} - {type(e)}: {e}")
 
     return md
+
+### Tescan Metadata parsing
+def _parse_tescan_metadata(metadata: bytes) -> str:
+    """
+    Parses TESCAN metadata bytes to str
+    :param metadata: metadata bytes (TESCAN bytes format)
+    :return: (str) metadata (TESCAN ini format)
+    """
+    # NOTE:
+    # METADATA FORMAT
+    # JPEG2000 metadata
+    #   4 bytes: length of the next chunk (n)
+    #   2 bytes: header of the next chunk (type)
+    #   n bytes: chunk data
+    # MAIN metadata
+    #   4 bytes: length of the next chunk (n)
+    #   2 bytes: header of the next chunk (type)
+    #   n bytes: valid chunk data
+    # SEM/FIB metadata
+    #   4 bytes: length of the next chunk (n)
+    #   2 bytes: header of the next chunk (type)
+    #   n bytes: valid chunk data
+
+    # constants
+    LENGTH_BYTES = 4
+    HEADER_BYTES = 2
+
+    # valid metadata str
+    vmd = ""
+
+    # header type map
+    # 1: JPEG2000 Image header (thumbnail?) which is not used here. 
+    header_map ={
+        2: "[MAIN]",
+        3: "[SEM]",
+        5: "[FIB]"
+    }
+
+    # loop through the chunks, extract the valid data
+    while len(metadata) > LENGTH_BYTES + HEADER_BYTES:
+        
+        # read the length of the next chunk (first 4 bytes)
+        chunk_len = int.from_bytes(metadata[:LENGTH_BYTES], 
+                                            byteorder="little", signed=False)
+        
+        # read the type of the chunk (next 2 bytes)
+        chunk_type = int.from_bytes(metadata[LENGTH_BYTES:LENGTH_BYTES + HEADER_BYTES], 
+                                            byteorder="little", signed=False)
+        if chunk_type == 0:
+            break # end of metadata
+
+        # read the chunk data as string
+        chunk_start = LENGTH_BYTES + HEADER_BYTES
+        chunk_end = LENGTH_BYTES + chunk_len
+        chunk = metadata[chunk_start:chunk_end]
+        
+        # add the chunk data to the metadata string (if valid), not including the null byte at the end of the string
+        if chunk_type in header_map:
+            vmd += header_map[chunk_type] + "\n" + chunk[:-1].decode("latin1")
+        
+        # skip to next chunk
+        metadata = metadata[chunk_end:]  # skip to next chunk        
+        
+    return vmd
+
+
+def _convert_tescan_to_odemis_metadata(metadata: bytes) -> dict:
+    """
+    Converts TESCAN metadata to odemis metadata format
+    :param metadata: metadata bytes (TESCAN format)
+    :return: (dict) metadata as dictionary (odemis format)
+    :raises: (ValueError): if the metadata cannot be parsed
+    """
+
+    # parse metadata bytes as str (valid metadata)
+    try:    
+        vmd: str = _parse_tescan_metadata(metadata)
+    except ValueError as e:
+        raise ValueError(f"Failed to parse TESCAN metadata: {e}")
+
+    # parse the metadata string as ini
+    # NOTE: ConfigParser converts keys to case-insensitive (lower) by default
+    # so metadata keys are all lower case (this behaviour can be altered, see link below)
+    # https://stackoverflow.com/questions/19359556/configparser-reads-capital-keys-and-make-them-lower-case
+    tmd = configparser.ConfigParser()
+    tmd.read_string(vmd)
+        
+    md = {}
+
+    # general
+    try:
+        datetime_str = tmd["MAIN"]["date"] + " " + tmd["MAIN"]["time"]
+        date = datetime.strptime(datetime_str, "%Y-%m-%d %H:%M:%S")
+        md[model.MD_ACQ_DATE] = date.timestamp()
+    except Exception as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_ACQ_DATE} - {type(e)}: {e}")
+
+    try:
+        md[model.MD_HW_NAME] = tmd["MAIN"]["device"] + "-" + tmd["MAIN"]["serialnumber"]    
+    except KeyError as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
+    try:
+        md[model.MD_HW_VERSION] = tmd["MAIN"]["device"] + "-" + tmd["MAIN"]["devicemodel"]    
+    except KeyError as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
+    
+    try:
+        md[model.MD_SW_VERSION] = tmd["MAIN"]["softwareversion"]
+    except KeyError as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_SW_VERSION} - {type(e)}: {e}")
+
+    try:
+        md[model.MD_PIXEL_SIZE] = (float(tmd["MAIN"]["pixelsizex"]), 
+                                   float(tmd["MAIN"]["pixelsizey"]))
+    except KeyError as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {model.MD_PIXEL_SIZE} - {type(e)}: {e}")
+
+    # beam metadata
+
+    try:
+        # beam types is the section header of SEM/FIB metadata
+        beam_type = "SEM" if "SEM" in tmd.sections() else "FIB"
+        
+        # check if beam type is valid
+        assert beam_type in tmd.sections()
+            
+        try:
+            md[model.MD_DWELL_TIME] = float(tmd[beam_type]["dwelltime"])
+        except KeyError as e:
+            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_DWELL_TIME} - {e}")
+        try:
+            # MD_POS should match image dimensions, e.g. only XY for 2D, XYZ for 3D, etc.
+            md[model.MD_POS] = (float(tmd[beam_type]["stagex"]), 
+                                float(tmd[beam_type]["stagey"]),
+                            )
+        except KeyError as e:
+            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_POS} - {e}")
+
+        try:   
+            acq_map =  {
+                "SEM": model.MD_AT_EM,
+                "FIB": model.MD_AT_FIB,
+            }
+            md[model.MD_ACQ_TYPE] = acq_map[beam_type]
+
+        except KeyError as e:
+            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_ACQ_TYPE} - {e}")
+
+        try:
+            md[model.MD_ROTATION] = numpy.deg2rad(float(tmd[beam_type]["scanrotation"]))
+        except KeyError as e:
+            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_ROTATION} - {e}")
+        
+        try:
+            md[model.MD_EBEAM_VOLTAGE] = float(tmd[beam_type]["hv"])
+        except KeyError as e:
+            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_EBEAM_VOLTAGE} - {e}")
+        
+        try:    
+            md[model.MD_EBEAM_CURRENT] = float(tmd[beam_type]["predictedbeamcurrent"]) 
+        except KeyError as e:
+            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_EBEAM_CURRENT} - {e}")
+
+        try:
+            # beam spot size
+            md[model.MD_EBEAM_SPOT_DIAM] = float(tmd[beam_type]["spotsize"]) 
+        except KeyError as e:
+            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_EBEAM_SPOT_DIAM} - {e}")
+
+        try:
+            # detector
+            md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL 
+                                        if tmd[beam_type]["detector"] in ["E-T", "SE"] 
+                                        else model.MD_DT_INTEGRATING)
+        except KeyError as e:
+            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_DET_TYPE} - {e}")
+
+    except Exception as e:
+        logging.warning(f"Failed to parse TESCAN metadata: {e}", exc_info=True)
+    
+    return md
+
