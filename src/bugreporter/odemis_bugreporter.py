@@ -319,7 +319,7 @@ class OdemisBugreporter(object):
                 files.append(delphi_calib_reps[-1])
 
             # Add the latest fastem-calibration image if it's possibly related (ie, less than a week old)
-            fastem_calib_dir = os.path.join(home_dir, "development/fastem-calibrations/images/cell-translation")
+            fastem_calib_dir = os.path.join(home_dir, "odemis-status/fastem-calibrations/images/cell-translation")
             fastem_calib_reps = glob(os.path.join(fastem_calib_dir, '*'))
             fastem_calib_reps.sort(key=os.path.getmtime, reverse=True)
             # If the last calibration failed, the image might not have been created, then get the last available image.
