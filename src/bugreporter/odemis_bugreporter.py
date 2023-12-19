@@ -318,6 +318,23 @@ class OdemisBugreporter(object):
             if delphi_calib_reps and (time.time() - os.path.getmtime(delphi_calib_reps[-1])) / 3600 < 24:
                 files.append(delphi_calib_reps[-1])
 
+            # Add the latest fastem-calibration image if it's possibly related (ie, less than a week old)
+            fastem_calib_dir = os.path.join(home_dir, "odemis-status/fastem-calibrations/images/cell-translation")
+            fastem_calib_reps = glob(os.path.join(fastem_calib_dir, '*'))
+            fastem_calib_reps.sort(key=os.path.getmtime, reverse=True)
+            # If the last calibration failed, the image might not have been created, then get the last available image.
+            for f in fastem_calib_reps:
+                calib_file = os.path.join(f, "plot_cell_translations.png")
+                if os.path.isfile(calib_file) and (time.time() - os.path.getmtime(f)) / 3600 < (24 * 7):
+                    files.append(calib_file)
+                    break
+
+            # add the contents of the entire content of odemis-status dir if available,
+            # no need to filter, because the status gets overwritten.
+            odemis_status_dir = os.path.join(home_dir, "odemis-status")
+            if os.path.isdir(odemis_status_dir):
+                files.append(odemis_status_dir)
+
             # Save hw status (if available)
             try:
                 ret_code = subprocess.call(['odemis-cli', '--check'])
@@ -359,6 +376,10 @@ class OdemisBugreporter(object):
                         logging.debug("Adding directory %s", f)
                         dirnamef = os.path.dirname(f)
                         for top, _, files in os.walk(f):
+                            if "fastem-calibrations/images" in top:
+                                # For the fastem we want to add everything in the odemis-status directory,
+                                # except for all the images, because that would take up too much space.
+                                continue
                             for subf in files:
                                 full_path = os.path.join(top, subf)
                                 archive.write(full_path, full_path[len(dirnamef) + 1:])
