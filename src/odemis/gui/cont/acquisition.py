@@ -1245,8 +1245,10 @@ class SparcAcquiController(object):
         self.acq_future = None
         self.gauge_acq = self._tab_panel.gauge_sparc_acq
         self.lbl_acqestimate = self._tab_panel.lbl_sparc_acq_estimate
+        self.lbl_fold_acq = self._tab_panel.lbl_sparc_fold_acq
         self.bmp_acq_status_warn = self._tab_panel.bmp_acq_status_warn
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
+        self.bmp_fold_acq_info = self._tab_panel.bmp_fold_acq_info
         self._acq_future_connector = None
 
         # TODO: share an executor with the whole GUI.
@@ -1395,6 +1397,11 @@ class SparcAcquiController(object):
             lvl = logging.WARN
         else:
             streams = self._tab_data_model.acquisitionStreams
+
+            has_folds = len(streams) > len(acqmng.foldStreams(streams))
+            self.lbl_fold_acq.Show(has_folds)
+            self.bmp_fold_acq_info.Show(has_folds)
+
             acq_time = acqmng.estimateTime(streams)
             acq_time = math.ceil(acq_time)  # round a bit pessimistic
             txt = u"Estimated time is {}."
@@ -1500,8 +1507,16 @@ class SparcAcquiController(object):
         self._show_status_icons(None)
         self._tab_panel.Layout()  # to put the gauge at the right place
 
-        # start acquisition + connect events to callback
-        self.acq_future = acqmng.acquire(self._tab_data_model.acquisitionStreams, self._main_data_model.settings_obs)
+        # fold the streams if possible
+        folds = tuple(acqmng.foldStreams(self._tab_data_model.acquisitionStreams))
+
+        if len(self._tab_data_model.acquisitionStreams) > len(folds):
+            self.lbl_acqestimate.SetLabel("EBIC and CL streams acquired simultaneously")
+
+        # start acquisition
+        self.acq_future = acqmng.acquire(folds, self._main_data_model.settings_obs)
+
+        # connect events to callback
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
                                                                 self.lbl_acqestimate)

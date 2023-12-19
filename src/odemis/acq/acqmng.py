@@ -233,7 +233,8 @@ class ZStackAcquisitionTask(object):
                     except CancelledError:
                         raise
                     except Exception as e:
-                        logging.exception("The acquisition failed at the %s-th zlevel of the stream %s, because %s" %(i+1, stream, e))
+                        logging.exception("The acquisition failed at the %s-th zlevel of the stream %s, because %s" % (
+                        i + 1, stream, e))
                         # TODO handle zstack assembling in case of error 
                         return acquired_data, e
                         
@@ -273,7 +274,7 @@ def estimateZStackAcquisitionTime(streams, zlevels):
         zs = zlevels.get(s, [0])  # concider that streams without zlevels are acquired at a single z
         if len(zs) > 1 and s.focuser:
             zstep = abs(zs[0] - zs[1])
-            tot_zstep_time = (len(zs) - 1) *  guessActuatorMoveDuration(s.focuser, axis="z", distance=zstep)
+            tot_zstep_time = (len(zs) - 1) * guessActuatorMoveDuration(s.focuser, axis="z", distance=zstep)
             acq_time += tot_zstep_time
 
     return acq_time
@@ -305,8 +306,8 @@ def foldStreams(streams, reuse=None):
     reuse (list of Streams, or None): list of streams which was previously output
       by this function. If it's present, the streams will be reused when possible,
       for optimisation.
-    return (list of Streams): The list of streams, with the ones that can be
-      folded replaced by a MD streams, the other streams are pass as-is.
+    return (set of Streams): The set of streams, with the ones that can be
+      folded replaced by an MD streams, the other streams are pass as-is.
     """
     # TODO: support SPARC streams
     if reuse is None:
@@ -317,6 +318,7 @@ def foldStreams(streams, reuse=None):
 
     folds = set()
     scan_fluos = []  # List of sets of ScannedFluoStream with compatible settings
+    scan_semmds = []  # List of sets of SEMMDStream with compatible settings
     for s in streams:
         if isinstance(s, ScannedFluoStream):
             # Store it for folding
@@ -337,6 +339,24 @@ def foldStreams(streams, reuse=None):
         elif isinstance(s, ScannedRemoteTCStream):
             # Don't add extra FLIM streams
             continue
+        elif isinstance(s, SEMMDStream):
+            # Fold streams if roi, repetition and dwellTime are the same, but they all have different detectors
+            # (except for the e-beam)
+            for smds in scan_semmds:
+                compatible = True
+                for smd in smds:
+                    if not (smd._dwellTime.value == s._dwellTime.value and
+                            smd.repetition.value == s.repetition.value and
+                            smd.roi.value == s.roi.value and
+                            # as of now, each MDStream has only 2 streams, and the first one is always the SEM stream.
+                            smd.streams[1].detector.name != s.streams[1].detector.name
+                    ):
+                        compatible = False
+                if compatible:
+                    smds.add(s)
+                    break
+            else:  # No existing group of SEMMDStreams compatible => create a new one
+                scan_semmds.append({s})
         else:
             folds.add(s)
 
@@ -354,6 +374,22 @@ def foldStreams(streams, reuse=None):
             logging.debug("Creating a new FluoMDStream for %d streams", len(sfs))
             name = "Combined %s" % (", ".join(sf.name.value for sf in sfs),)
             s = ScannedFluoMDStream(name, tuple(sfs))
+            folds.add(s)
+
+    for smds in scan_semmds:
+        if len(smds) >= 2:
+            new_streams = []
+            for smd in smds:
+                for stream in smd.streams:
+                    if stream not in new_streams:
+                        new_streams.append(stream)
+            logging.debug("Creating a new SEMMDStream for %d streams", len(new_streams))
+            name = "Combined %s" % (", ".join(smd.name.value for smd in new_streams),)
+            s = SEMMDStream(name, tuple(new_streams))
+            folds.add(s)
+        else:
+            s = next(iter(smds))
+            logging.debug("Reusing %s", s)
             folds.add(s)
 
     return folds

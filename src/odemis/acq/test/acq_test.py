@@ -44,6 +44,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
+SPARC_EBIC_CONFIG = CONFIG_PATH + "sim/sparc2-streakcam-sim.odm.yaml"
 SECOM_CONFIG = CONFIG_PATH + "sim/secom-sim.odm.yaml"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 
@@ -563,6 +564,126 @@ class SPARCTestCase(unittest.TestCase):
         self.start = start
         self.end = end
         self.updates += 1
+
+
+class SPARCEBICTestCase(unittest.TestCase):
+    """
+    Tests to be run with a simulated SPARC that has EBIC
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            testing.start_backend(SPARC_EBIC_CONFIG)
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find CCD & SEM components
+        cls.microscope = model.getMicroscope()
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.cld = model.getComponent(role="cl-detector")
+        cls.ebd = model.getComponent(role="ebic-detector")
+
+    def test_valid_folding(self):
+        """
+        Test folding of 3 streams that have the same roi, dwellTime and repetition values but
+        different detector names
+        """
+        # Create the streams
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+
+        ebics = stream.EBICSettingsStream("test ebic", self.ebd, self.ebd.data, self.ebeam)
+
+        cls = stream.CLSettingsStream("test cl", self.cld, self.cld.data, self.ebeam)
+
+        sms_ebic = stream.SEMMDStream("sem ebic", [sems, ebics])
+        sms_cl = stream.SEMMDStream("sem cl", [sems, cls])
+
+        # SEM survey settings are via the current hardware settings
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
+
+        cls.roi.value = (0, 0, 1, 1)
+        cls.repetition.value = (1024, 1024)
+
+        ebics.roi.value = (0, 0, 1, 1)
+        ebics.repetition.value = (1024, 1024)
+
+        folds = acqmng.foldStreams([sms_ebic, sms_cl])
+        folds = tuple(folds)
+
+        self.assertEqual(len(folds), 1)
+        self.assertEqual(len(folds[0].streams), 3)
+
+
+    def test_folding_same_detector_name(self):
+        """
+        Test folding of the streams that have the same repetition and dwell time values but different
+        roi and detector names
+        """
+        # Create the streams
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+
+        ebics = stream.EBICSettingsStream("test ebic", self.cld, self.cld.data, self.ebeam)
+
+        cls = stream.CLSettingsStream("test cl", self.cld, self.cld.data, self.ebeam)
+
+        sms_ebic = stream.SEMMDStream("sem ebic", [sems, ebics])
+        sms_cl = stream.SEMMDStream("sem cl", [sems, cls])
+
+        # SEM survey settings are via the current hardware settings
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
+
+        cls.roi.value = (0, 0, 1, 1)
+        cls.repetition.value = (1024, 1024)
+
+        ebics.roi.value = (0, 0, 1, 1)
+        ebics.repetition.value = (1024, 1024)
+
+        folds = acqmng.foldStreams([sms_ebic, sms_cl])
+        folds = tuple(folds)
+
+        self.assertEqual(len(folds), 2)
+        self.assertEqual(len(folds[0].streams), 2)
+        self.assertEqual(len(folds[1].streams), 2)
+
+    def test_folding_pairs_of_two(self):
+        """
+        Test folding of the streams that have the same repetition and dwell time values but different
+        roi and detector names
+        """
+        # Create the streams
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+
+        ebics = stream.EBICSettingsStream("test ebic", self.ebd, self.ebd.data, self.ebeam)
+
+        cls = stream.CLSettingsStream("test cl", self.cld, self.cld.data, self.ebeam)
+
+        sms_ebic = stream.SEMMDStream("sem ebic", [sems, ebics])
+        sms_cl = stream.SEMMDStream("sem cl", [sems, cls])
+
+        # SEM survey settings are via the current hardware settings
+        self.ebeam.dwellTime.value = self.ebeam.dwellTime.range[0]
+
+        cls.roi.value = (0, 0, 1, 1)
+        cls.repetition.value = (1024, 1024)
+
+        ebics.roi.value = (0, 0, 0.5, 0.5)
+        ebics.repetition.value = (1024, 1024)
+
+        folds = acqmng.foldStreams([sms_ebic, sms_cl])
+        folds = tuple(folds)
+
+        self.assertEqual(len(folds), 2)
+        self.assertEqual(len(folds[0].streams), 2)
+        self.assertEqual(len(folds[1].streams), 2)
+
+        self.assertEqual(len(folds), 2)
 
 class CRYOSECOMTestCase(unittest.TestCase):
     backend_was_running = False
