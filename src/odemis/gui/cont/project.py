@@ -26,6 +26,7 @@ as the region of acquisition (ROA), region of calibration (ROC) and projects in 
 FASTEM system.
 """
 
+from functools import partial
 import logging
 
 import wx
@@ -58,7 +59,7 @@ class FastEMProjectListController(object):
         self._project_list = project_list
         self._viewport = viewport
 
-        self.project_ctrls = {}  # dict int --> FastEMProjectController
+        self.project_ctrls = {}  # dict FastEMProjectController --> int
         self._project_list.btn_add_project.Bind(wx.EVT_BUTTON, self._add_project)
 
         # Always show one project by default
@@ -71,16 +72,16 @@ class FastEMProjectListController(object):
         # Get the smallest number that is not already in use. It's a bit challenging because projects can be
         # deleted, so we might have project 2 in colour red, but project 1 in blue has been deleted, so the
         # next project (which is now again the second project) should not use red again.
-        num = next(idx for idx, num in enumerate(sorted(self.project_ctrls.keys()) + [0], 1) if idx != num)
+        num = next(idx for idx, num in enumerate(sorted(self.project_ctrls.values()) + [0], 1) if idx != num)
         if name is None:
             name = "Project-%s" % num
-        name = make_unique_name(name, [project_ctrl.model.name.value for project_ctrl in self.project_ctrls.values()])
+        name = make_unique_name(name, [project_ctrl.model.name.value for project_ctrl in self.project_ctrls.keys()])
         logging.debug("Creating new project %s.", name)
         colour = FASTEM_PROJECT_COLOURS[(num - 1) % len(FASTEM_PROJECT_COLOURS)]
         project_ctrl = FastEMProjectController(name, colour, self._tab_data_model, self._project_list, self._viewport)
 
         # Add the project model to tab_data
-        self.project_ctrls[num] = project_ctrl
+        self.project_ctrls[project_ctrl] = num
         self._tab_data_model.projects.value.append(project_ctrl.model)
 
         # Remove callback for every new remove button
@@ -95,19 +96,16 @@ class FastEMProjectListController(object):
         # Delete all ROIs of the project
         # .remove_roa_ctrl automatically removes itself from .roa_ctrls, so a for-loop doesn't work
         while project_ctrl.roa_ctrls:
-            project_ctrl.remove_roa_ctrl(next(iter(project_ctrl.roa_ctrls.values())))
+            project_ctrl.remove_roa_ctrl(next(iter(project_ctrl.roa_ctrls.keys())))
 
         # Remove panel
         self._project_list.remove_project_panel(project_ctrl.panel)
-
-        # Remove controller from .project_ctrls list
-        self.project_ctrls = {key: val for key, val in self.project_ctrls.items() if val != project_ctrl}
 
         # Remove model
         self._tab_data_model.projects.value.remove(project_ctrl.model)
 
         # Destroy ROAController object
-        del project_ctrl
+        del self.project_ctrls[project_ctrl]
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_is_acquiring(self, mode):
@@ -140,7 +138,7 @@ class FastEMProjectController(object):
         self.regions_calib_2 = tab_data.calibrations[CALIBRATION_2].regions
         self.regions_calib_3 = tab_data.calibrations[CALIBRATION_3].regions
 
-        self.roa_ctrls = {}  # dict int --> FastEMROAController
+        self.roa_ctrls = {}  # dict FastEMROAController --> int
         self.colour = colour
         self.model = guimodel.FastEMProject(name)
 
@@ -153,7 +151,7 @@ class FastEMProjectController(object):
         self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)
 
         # For ROA creation process
-        self._current_roa_ctrl = None
+        self._roa_coord_sub_callback = {}
 
     # already running in main GUI thread as it receives event from GUI
     def _on_text(self, evt):
@@ -177,36 +175,35 @@ class FastEMProjectController(object):
         self._project_bar.enable_buttons(False)
 
         # Deactivate all ROAs
-        for roa_ctrl in self.roa_ctrls.values():
+        for roa_ctrl in self.roa_ctrls.keys():
             roa_ctrl.overlay.active.value = False
 
         # Minimum index that has not yet been deleted, find the first index which is not in the existing indices
-        num = next(idx for idx, n in enumerate(sorted(self.roa_ctrls.keys()) + [0], 1) if idx != n)
+        num = next(idx for idx, n in enumerate(sorted(self.roa_ctrls.values()) + [0], 1) if idx != n)
         if name is None:
             name = "ROA-%s" % num
         name = make_unique_name(name, [roa.name.value for roa in self.model.roas.value])
         # better guess for parameters after region is selected in _add_roa_ctrl
         roa_ctrl = FastEMROAController(name, None, None, self.colour, self._tab_data, self.panel, self._viewport)
-        self.roa_ctrls[num] = roa_ctrl
-        self._current_roa_ctrl = roa_ctrl
-
-        roa_ctrl.model.coordinates.subscribe(self._add_roa_ctrl)
+        self.roa_ctrls[roa_ctrl] = num
+        sub_callback = partial(self._add_roa_ctrl, roa_ctrl=roa_ctrl)
+        self._roa_coord_sub_callback[roa_ctrl] = sub_callback
+        roa_ctrl.model.coordinates.subscribe(sub_callback)
         return roa_ctrl
 
     # already running in main GUI thread as it receives event from GUI
     def _on_btn_remove(self, _, roa_ctrl):
         self.remove_roa_ctrl(roa_ctrl)
 
-    def _add_roa_ctrl(self, coords):
-        roa_ctrl = self._current_roa_ctrl
-        self._current_roa_ctrl = None
-        roa_ctrl.model.coordinates.unsubscribe(self._add_roa_ctrl)
+    @call_in_wx_main # call in main thread as changes in GUI are triggered
+    def _add_roa_ctrl(self, coords, roa_ctrl):
+        roa_ctrl.model.coordinates.unsubscribe(self._roa_coord_sub_callback[roa_ctrl])
 
         # Abort ROA creation if nothing was selected
         if coords == acqstream.UNDEFINED_ROI:
             logging.debug("Aborting ROA creation.")
             self._viewport.canvas.remove_overlay(roa_ctrl.overlay)
-            self.roa_ctrls = {key: val for key, val in self.roa_ctrls.items() if val != roa_ctrl}
+            del self.roa_ctrls[roa_ctrl]
         else:
             # Create the panel
             roa_ctrl.create_panel()
@@ -235,17 +232,15 @@ class FastEMProjectController(object):
         roa_ctrl.panel.Destroy()
         self.panel.fit_panels()
 
-        # Remove controller from .roa_ctrl list
-        self.roa_ctrls = {key: val for key, val in self.roa_ctrls.items() if val != roa_ctrl}
-
         # Remove overlay
         self._viewport.canvas.remove_overlay(roa_ctrl.overlay)
 
         # Remove model
         self.model.roas.value.remove(roa_ctrl.model)
 
-        # Destroy ROAController object
-        del roa_ctrl
+        # Destroy roa controller and its subscriber callback
+        del self.roa_ctrls[roa_ctrl]
+        del self._roa_coord_sub_callback[roa_ctrl]
 
     def _find_closest_scintillator(self, coordinates):
         """
