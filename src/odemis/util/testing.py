@@ -115,7 +115,7 @@ def run_backend(config):
 
     time.sleep(3)  # give some time to the backend to start a little bit
 
-    timeout = 30  # s timeout
+    timeout = 40  # s timeout
     end = time.time() + timeout
     while time.time() < end:
         status = driver.get_backend_status()

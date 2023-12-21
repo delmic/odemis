@@ -37,7 +37,7 @@ from past.builtins import long
 
 import odemis
 from odemis import model
-from odemis.acq import stream, calibration, path, leech
+from odemis.acq import stream, calibration, path, leech, acqmng
 from odemis.acq.leech import ProbeCurrentAcquirer
 from odemis.acq.stream import RGBSpatialSpectrumProjection, \
     SinglePointSpectrumProjection, SinglePointTemporalProjection, \
@@ -58,6 +58,7 @@ SPARC_CONFIG = CONFIG_PATH + "sim/sparc-pmts-sim.odm.yaml"
 SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim-scanner.odm.yaml"
 SPARC2POL_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
 SPARC2STREAK_CONFIG = CONFIG_PATH + "sim/sparc2-streakcam-sim.odm.yaml"
+SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
 TIME_CORRELATOR_CONFIG = CONFIG_PATH + "sim/sparc2-time-correlator-sim.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
@@ -1577,40 +1578,6 @@ class SPARC2TestCase(unittest.TestCase):
         if self.backend_was_running:
             self.skipTest("Running backend found")
 
-    def _roiToPhys(self, repst):
-        """
-        Compute the (expected) physical position of a stream ROI
-        repst (RepetitionStream): the repetition stream with ROI
-        return:
-            pos (tuple of 2 floats): physical position of the center
-            pxs (tuple of 2 floats): pixel size in m
-            res (tuple of ints): number of pixels
-        """
-        res = repst.repetition.value
-        pxs = (repst.pixelSize.value,) * 2
-
-        # To compute pos, we need to convert the ROI to physical coordinates
-        roi = repst.roi.value
-        roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
-
-        try:
-            sem_center = repst.detector.getMetadata()[model.MD_POS]
-        except KeyError:
-            # no stage => pos is always 0,0
-            sem_center = (0, 0)
-        # TODO: pixelSize will be updated when the SEM magnification changes,
-        # so we might want to recompute this ROA whenever pixelSize changes so
-        # that it's always correct (but maybe not here in the view)
-        emt = repst.emitter
-        sem_width = (emt.shape[0] * emt.pixelSize.value[0],
-                     emt.shape[1] * emt.pixelSize.value[1])
-        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
-        pos = (sem_center[0] + sem_width[0] * (roi_center[0] - 0.5),
-               sem_center[1] - sem_width[1] * (roi_center[1] - 0.5))
-
-        logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
-        return pos, pxs, res
-
     def test_acq_cl(self):
         """
         Test short & long acquisition for SEM MD CL intensity
@@ -1658,7 +1625,7 @@ class SPARC2TestCase(unittest.TestCase):
         mcs.emtDwellTime.value = 1e-6  # s
 
         mcs.repetition.value = (500, 700)
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(mcs)
 
         # Start acquisition
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
@@ -1696,7 +1663,7 @@ class SPARC2TestCase(unittest.TestCase):
         mcs.repetition.value = (3000, 4000)
         b0, b1 = list(mcs.axisFilter.choices)[:2]
         mcs.axisFilter.value = b0
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(mcs)
 
         # Start acquisition
         timeout = 1 + 2.5 * sms.estimateAcquisitionTime()
@@ -1747,7 +1714,7 @@ class SPARC2TestCase(unittest.TestCase):
         mcs.emtDwellTime.value = 1e-6  # s
 
         mcs.repetition.value = (500, 700)
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(mcs)
 
         # Start acquisition
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
@@ -1806,7 +1773,7 @@ class SPARC2TestCase(unittest.TestCase):
         mcs.emtDwellTime.value = 1e-6  # s
 
         mcs.repetition.value = (500, 700)
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(mcs)
 
         # Start acquisition
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
@@ -1861,7 +1828,7 @@ class SPARC2TestCase(unittest.TestCase):
         specs.roi.value = (0.25, 0.45, 0.6, 0.7)
         specs.repetition.value = (5, 6)
         specs.detExposureTime.value = 0.3  # s
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(specs)
 
         f.result()
 
@@ -1901,7 +1868,7 @@ class SPARC2TestCase(unittest.TestCase):
         specs.detExposureTime.value = 0.01  # s
         specs.pixelSize.value = 1e-6
         specs.repetition.value = (25, 30)
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(specs)
 
         # Start acquisition
         estt = sps.estimateAcquisitionTime()
@@ -1973,7 +1940,7 @@ class SPARC2TestCase(unittest.TestCase):
 
         # Check it still works after cancelling
         specs.detExposureTime.value = 0.01  # s
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(specs)
 
         # Start acquisition
         estt = sps.estimateAcquisitionTime()
@@ -2034,7 +2001,7 @@ class SPARC2TestCase(unittest.TestCase):
         specs.roi.value = (0.25, 0.45, 0.6, 0.7)
         specs.repetition.value = (5, 6)
         specs.detExposureTime.value = 0.3  # s
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(specs)
 
         f.result()
 
@@ -2087,7 +2054,7 @@ class SPARC2TestCase(unittest.TestCase):
         specs.detExposureTime.value = 0.01  # s
         specs.pixelSize.value = 1e-6
         specs.repetition.value = (25, 30)
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(specs)
 
         # Start acquisition
         estt = sps.estimateAcquisitionTime()
@@ -2147,7 +2114,7 @@ class SPARC2TestCase(unittest.TestCase):
         # Long acquisition (small rep to avoid being too long) > 0.1s
         specs.detExposureTime.value = 0.3  # s
         specs.repetition.value = (5, 6)
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(specs)
         pca.period.value = 0.6  # ~every second pixel
 
         # Start acquisition
@@ -2209,7 +2176,7 @@ class SPARC2TestCase(unittest.TestCase):
         mcs.emtDwellTime.value = 1e-6  # s
         mcs.repetition.value = (500, 700)
         pca.period.value = 4900e-6  # ~every 10 lines
-        exp_pos, exp_pxs, exp_res = self._roiToPhys(mcs)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(mcs)
 
         # Start acquisition
         timeout = 1 + 1.5 * sms.estimateAcquisitionTime() + (0.3 * 700 / 10)
@@ -2241,6 +2208,149 @@ class SPARC2TestCase(unittest.TestCase):
 
         pcmd = cl_md[model.MD_EBEAM_CURRENT_TIME]
         self.assertGreater(len(pcmd), 500 / 10)
+
+
+class SPARC2TestCaseStageWrapper(unittest.TestCase):
+    """
+    This test case is specifically targeting the use of a stage wrapper to
+    enable stage scanning with the SEM sample stage.
+    """
+    # The hardware is very similar to the SPARCv1, so just check special behaviour
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        try:
+            testing.start_backend(SPARC2_4SPEC_CONFIG)
+        except LookupError:
+            logging.info("A running backend is already found, skipping tests")
+            cls.backend_was_running = True
+            return
+        except IOError as exp:
+            logging.error(str(exp))
+            raise
+
+        # Find CCD & SEM components
+        cls.microscope = model.getMicroscope()
+        cls.ccd = model.getComponent(role="sp-ccd1")
+        cls.spec = model.getComponent(role="spectrometer")
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.scan_stage = model.getComponent(role="scan-stage")
+        cls.sem_stage = model.getComponent(role="sem-stage")
+        cls.ebic = model.getComponent(role="ebic-detector")
+
+    @classmethod
+    def tearDownClass(cls):
+        if cls.backend_was_running:
+            return
+        testing.stop_backend()
+
+    def setUp(self):
+        if self.backend_was_running:
+            self.skipTest("Running backend found")
+
+    def test_scan_stage_wrapper(self):
+        """
+        Simple test case to check if the scan stage wrapper works like expected.
+        This wrapper setup is needed when there is no dedicated (physical) scan stage
+        """
+        # Create the SEM and Spectrum streams
+        sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
+        specs_sstage = stream.SpectrumSettingsStream("test spec",
+                                              self.spec,
+                                              self.spec.data,
+                                              self.ebeam,
+                                              sstage=self.scan_stage)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs_sstage])
+
+        # set stage scanning to true
+        specs_sstage.useScanStage.value = True
+
+        # Keep ROI minimal to keep the acquisition time as low as possible with a low repetition
+        #     roi ~ 20um x 20um
+        #     rep 5, 5
+        specs_sstage.roi.value = (0.492, 0.492, 0.508, 0.508)
+        specs_sstage.repetition.value = (5, 5)
+
+        # ROI phys = (2.0600156250000022e-5, 2.0600156250000022e-5) = 20.6 um x 20.6 um
+        exp_cpos, exp_pxsize, exp_pxnum = roi_to_phys(specs_sstage)
+        # pos should be between -10.3e-6 and 10.3e-6 both x and y
+        roi_rng = (-(exp_pxsize[0] * exp_pxnum[0]) / 2, (exp_pxsize[1] * exp_pxnum[1]) / 2)
+
+        self.stage_positions = []
+        self.ebeam_positions = []
+        self.done = 0
+
+        # Run acquisition
+        f = sps.acquire()
+        # prepare callbacks
+        f.add_update_callback(self.on_progress_update)
+        f.add_done_callback(self.on_done)
+
+        self.data = f.result()
+        self.assertTrue(f.done())
+
+        # check if the ProgressiveFuture used to start the acquisition request is done
+        time.sleep(0.1)  # wait a tiny bit to assert done status
+        self.assertEqual(self.done, 1)
+
+        # check if the stage moved instead of the e-beam
+        self.assertTrue(self.stage_positions)
+        self.assertFalse(self.ebeam_positions)
+
+        # check if the sem data is of the right shape
+        sem_da = self.data[0]
+        self.assertEqual(sem_da.shape, exp_pxnum[::-1])
+
+        # check if the spectrum data is of the right shape
+        sp_da = self.data[1]
+        self.assertEqual(len(sp_da.shape), 5)
+
+        # check if the centre position of the metadata matches both the streams
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
+        self.assertAlmostEqual(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        self.assertAlmostEqual(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        # check if the spectrum centre pos is comparable with the expected centre pos of the ROI
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_cpos, atol=1e-18)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxsize)
+
+        # check if the centre pixel positions in stage_positions fall within the range of the selected ROI
+        for pos in self.stage_positions:
+            # pos is dict {x, y}
+            self.assertGreater(pos["x"], roi_rng[0])
+            self.assertLess(pos["x"], roi_rng[1])
+            self.assertGreater(pos["y"], roi_rng[0])
+            self.assertLess(pos["y"], roi_rng[1])
+
+    def test_scan_stage_wrapper_noccd(self):
+        """
+        start a scan with a detector which is not of type ccd
+        """
+        # use the component EBIC as a detector in this case
+        sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
+        specs_sstage = stream.SpectrumSettingsStream("test spec",
+                                                     self.ebic,
+                                                     self.ebic.data,
+                                                     self.ebeam,
+                                                     sstage=self.scan_stage)
+
+        # check if passing a non-ccd detector in specs_sstage raises a ValueError
+        with self.assertRaises(ValueError):
+            stream.SEMSpectrumMDStream("test sem-spec", [sems, specs_sstage])
+
+    def on_done(self, _):
+        logging.debug("On done called")
+        if all([x == (0, 0) for x in self.stage_positions]):
+            self.stage_positions = None
+        if all([x == (0, 0) for x in self.ebeam_positions]):
+            self.ebeam_positions = None
+        self.done += 1
+
+    def on_progress_update(self, _, start, end):
+        self.stage_positions.append(self.scan_stage.position.value)
+        self.ebeam_positions.append(self.ebeam.translation.value)
 
 
 class SPARC2StreakCameraTestCase(unittest.TestCase):
@@ -5568,8 +5678,42 @@ class StaticStreamsTestCase(unittest.TestCase):
         self.assertRaises(ValueError, strUpd.update, new_da)
 
 
-# TODO time correlator test cases?
+def roi_to_phys(repst):
+    """
+    Compute the (expected) physical position of a stream ROI
+    repst (RepetitionStream): the repetition stream with ROI
+    return:
+        pos (tuple of 2 floats): physical position of the center
+        pxs (tuple of 2 floats): pixel size in m
+        res (tuple of ints): number of pixels
+    """
+    res = repst.repetition.value
+    pxs = (repst.pixelSize.value,) * 2
 
+    # To compute pos, we need to convert the ROI to physical coordinates
+    roi = repst.roi.value
+    roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+    try:
+        sem_center = repst.detector.getMetadata()[model.MD_POS]
+    except KeyError:
+        # no stage => pos is always 0,0
+        sem_center = (0, 0)
+    # TODO: pixelSize will be updated when the SEM magnification changes,
+    # so we might want to recompute this ROA whenever pixelSize changes so
+    # that it's always correct (but maybe not here in the view)
+    emt = repst.emitter
+    sem_width = (emt.shape[0] * emt.pixelSize.value[0],
+                 emt.shape[1] * emt.pixelSize.value[1])
+    # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+    pos = (sem_center[0] + sem_width[0] * (roi_center[0] - 0.5),
+           sem_center[1] - sem_width[1] * (roi_center[1] - 0.5))
+
+    logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
+    return pos, pxs, res
+
+
+# TODO time correlator test cases?
 
 if __name__ == "__main__":
     unittest.main()
