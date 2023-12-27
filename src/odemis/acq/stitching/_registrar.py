@@ -28,14 +28,16 @@ content, in other words performing "image registration".
 
 """
 
-from odemis.acq.drift import MeasureShift
-import numpy
-import math
-from odemis import model
 import logging
+import math
+from collections import deque
+
+import numpy
 from scipy.sparse import csr_matrix
 from scipy.sparse.csgraph import minimum_spanning_tree
-from collections import deque
+
+from odemis import model
+from odemis.acq.drift import MeasureShift
 
 GOOD_MATCH = 0.9  # consider all registrations with match > GOOD_MATCH
 LEFT_TO_RIGHT = 1
@@ -97,16 +99,16 @@ class ShiftRegistrar(object):
         self.ovrlp = 0
 
         # List of 2D indices for grid positions in order of acquisition
-        self.acqOrder = []
+        self.acq_order = []
 
         # Shift between main tile and dependent tiles
         self.shift_tile_dep_tiles = []  # N x K list. N: number of tiles, K: number of dep_tiles.
 
         self.px_size = None  # Tuple of 2 ints. (X,Y) pixel size of the current tile in m/px.
         self.size = None  # Tuple of 2 ints. (Y,X) shape of the current tile in px.
-        self.posX = None  # int. Position of the current tile in the grid. (0,0) is the top left, posX
+        self.pos_x = None  # int. Position of the current tile in the grid. (0,0) is the top left, pos_x
         # increases when moving to the right
-        self.posY = None  # int. Y position, increases when moving down.
+        self.pos_y = None  # int. Y position, increases when moving down.
         self.pos_prev_x = None  # int. X coordinate of previous tile. Used to determine whether
         # the current tile should be compared to the right or to the left tile.
         self.osize = None  # int. Overlap size in pixels
@@ -125,91 +127,30 @@ class ShiftRegistrar(object):
         supported.
         """
 
-        if dependent_tiles is None:
-            dependent_tiles = []
-        else:
-            # Shift between tile and its dependent tiles
-            self.shift_tile_dep_tiles.append([])
+        self._insert_tile_to_grid(tile)
+        self._compute_registration(tile, self.pos_y, self.pos_x)
+        self.pos_prev_x = self.pos_x
 
-        # Find position of the tile in the grid. Indices of grid position are
-        # given as posX, posY.
-        if self.tiles[0][0] is None:
-            self.size = tile.shape
-            self.px_size = tile.metadata[model.MD_PIXEL_SIZE]
-            self.posX = 0
-            self.posY = 0
-
-            self.pos_prev_x = 0  # used to determine if tile should be compared to right or left tile
-        else:
-            if tile.shape != self.tiles[0][0].shape:
-                raise ValueError("Tile shape differs from previous tile shapes %s != %s" %
-                                 (tile.shape, self.tiles[0][0].shape))
-
-            md_pos = tile.metadata[model.MD_POS]
-
-            # Find the registered tile that is closest to the new tile.
-            pos_prev, md_pos_prev = self._find_closest_tile(md_pos)
-
-            # Insert new tile either to the right or to the bottom of the
-            # closest tile.
-            ver_diff = md_pos[1] - md_pos_prev[1]
-            hor_diff = md_pos[0] - md_pos_prev[0]
-            if abs(ver_diff) > abs(hor_diff):
-                if ver_diff < 0:
-                    self.posY = pos_prev[0] + 1
-                    self.posX = pos_prev[1]
-                    if len(self.registered_positions_px) <= self.posY:
-                        self._updateGrid("y")  # extend grid in y direction
-                else:
-                    self.posY = pos_prev[0] - 1
-                    self.posX = pos_prev[1]
-            else:
-                if hor_diff > 0:
-                    self.posY = pos_prev[0]
-                    self.posX = pos_prev[1] + 1
-                    if len(self.registered_positions_px[0]) <= self.posX:
-                        self._updateGrid("x")  # extend grid in x direction
-                else:
-                    self.posY = pos_prev[0]
-                    self.posX = pos_prev[1] - 1
-
-            # Calculate overlap
-            if abs(ver_diff) > abs(hor_diff):
-                size_meter = self.size[0] * self.px_size[1]
-                diff = abs(tile.metadata[model.MD_POS][1] - md_pos_prev[1])
-                self.ovrlp = abs(size_meter - diff) / size_meter
-                # self.size is given as YX, MD_POS as XY
-                self.osize = self.size[0] * self.ovrlp  # overlap size in pixels
-            else:
-                size_meter = self.size[1] * self.px_size[0]
-                diff = abs(tile.metadata[model.MD_POS][0] - md_pos_prev[0])
-                self.ovrlp = abs(size_meter - diff) / size_meter
-
-                self.osize = self.size[1] * self.ovrlp  # overlap size in pixels
-
-        for dt in dependent_tiles:
-            sdt = numpy.subtract(dt.metadata[model.MD_POS], tile.metadata[model.MD_POS])
-            self.shift_tile_dep_tiles[-1].append(sdt)
-
-        self._compute_registration(tile, self.posY, self.posX)
-        self.pos_prev_x = self.posX
+        if dependent_tiles is not None:
+            offsets = []
+            for dt in dependent_tiles:
+                offsets.append(numpy.subtract(dt.metadata[model.MD_POS], tile.metadata[model.MD_POS]))
+            self.shift_tile_dep_tiles.append(offsets)
 
     def getPositions(self):
         """
         returns:
         tile_positions (list of N tuples): the adjusted position in X/Y for each tile, in the order they were added
-        dep_tile_positions (list of N tuples of K tuples of 2 floats): for each tile, it returns 
+        dep_tile_positions (list of N tuples of K tuples of 2 floats): for each tile, it returns
         the adjusted position of each dependent tile (in the order they were passed)
         """
-        firstPosition = numpy.divide(
-            self.tiles[0][0].metadata[model.MD_POS], self.px_size)
+        first_position_m = self.tiles[0][0].metadata[model.MD_POS]
         tile_positions = []
         dep_tile_positions = []
-
-        for ti in self.acqOrder:
+        for ti in self.acq_order:
             shift = self.registered_positions_px[ti[0]][ti[1]]
-            tile_positions.append(((shift[0] + firstPosition[0]) * self.px_size[0],
-                                   (firstPosition[1] - shift[1]) * self.px_size[1]))
+            tile_positions.append((first_position_m[0] + shift[0] * self.px_size[0],
+                                   first_position_m[1] - shift[1] * self.px_size[1]))
 
         # Return positions for dependent tiles
         for t, sdts in zip(tile_positions, self.shift_tile_dep_tiles):
@@ -218,6 +159,72 @@ class ShiftRegistrar(object):
                 dts.append((t[0] + sdt[0], t[1] + sdt[1]))
             dep_tile_positions.append(dts)
         return tile_positions, dep_tile_positions
+
+    def _insert_tile_to_grid(self, tile):
+        """
+        Stores the tile at the proper place in the grid. If necessary, the grid is
+        extended to accommodate the new tile.
+
+        :param tile: (DataArray) tile to be inserted
+        :returns: (int, int) row, col grid position of the tile
+        :updates self.tiles, self.pos_x, self.pos_y, self.ovrlp, self.px_size, self.size:
+        """
+        # Find position of the tile in the grid. Indices of grid position are
+        # given as pos_x, pos_y.
+        if self.tiles[0][0] is None:
+            self.size = tile.shape
+            self.px_size = tile.metadata[model.MD_PIXEL_SIZE]
+            self.pos_x = 0
+            self.pos_y = 0
+
+            self.pos_prev_x = 0  # used to determine if tile should be compared to right or left tile
+            return
+
+        if tile.shape != self.tiles[0][0].shape:
+            raise ValueError("Tile shape differs from previous tile shapes %s != %s" %
+                             (tile.shape, self.tiles[0][0].shape))
+
+        md_pos = tile.metadata[model.MD_POS]
+
+        # Find the registered tile that is closest to the new tile.
+        pos_prev, md_pos_prev = self._find_closest_tile(md_pos)
+
+        # Insert new tile either to the right or to the bottom of the
+        # closest tile.
+        ver_diff = md_pos[1] - md_pos_prev[1]
+        hor_diff = md_pos[0] - md_pos_prev[0]
+        if abs(ver_diff) > abs(hor_diff):
+            if ver_diff < 0:
+                self.pos_y = pos_prev[0] + 1
+                self.pos_x = pos_prev[1]
+                if len(self.registered_positions_px) <= self.pos_y:
+                    self._updateGrid("y")  # extend grid in y direction
+            else:
+                self.pos_y = pos_prev[0] - 1
+                self.pos_x = pos_prev[1]
+        else:
+            if hor_diff > 0:
+                self.pos_y = pos_prev[0]
+                self.pos_x = pos_prev[1] + 1
+                if len(self.registered_positions_px[0]) <= self.pos_x:
+                    self._updateGrid("x")  # extend grid in x direction
+            else:
+                self.pos_y = pos_prev[0]
+                self.pos_x = pos_prev[1] - 1
+
+        # Calculate overlap
+        if abs(ver_diff) > abs(hor_diff):
+            size_meter = self.size[0] * self.px_size[1]
+            diff = abs(tile.metadata[model.MD_POS][1] - md_pos_prev[1])
+            self.ovrlp = abs(size_meter - diff) / size_meter
+            # self.size is given as YX, MD_POS as XY
+            self.osize = self.size[0] * self.ovrlp  # overlap size in pixels
+        else:
+            size_meter = self.size[1] * self.px_size[0]
+            diff = abs(tile.metadata[model.MD_POS][0] - md_pos_prev[0])
+            self.ovrlp = abs(size_meter - diff) / size_meter
+
+            self.osize = self.size[1] * self.ovrlp  # overlap size in pixels
 
     def _find_closest_tile(self, pos):
         """ finds the tile in the grid that is closest to pos.
@@ -283,9 +290,9 @@ class ShiftRegistrar(object):
         Returns an estimation of the similarity between the given images
         when the second is shifted by the shift value. It is used to assess 
         the quality of a shift measurement by giving the shifted image.
-        imageA:
-        imageB:
-        shift: shift after phase correlation
+        imageA: (DataArray) first image that is to be compared to imageB
+        imageB: (DataArray) second image that is shifted by the shift, compared to imageA
+        shift: (tuple) (x, y)-shift after phase correlation
         return (0 <= float<=1): the bigger, the more similar are the images
         """
         # If the tile is shifted more than the size of the overlap region in one dimension,
@@ -299,8 +306,9 @@ class ShiftRegistrar(object):
         rel_shift = exp_shift_x - shift[0], exp_shift_y - shift[1]
         overlap_px = numpy.multiply(self.size, self.ovrlp)
         if numpy.any(numpy.abs(rel_shift) > overlap_px):
-            logging.info(f"Calculated shift {rel_shift} is larger than the overlap size ({overlap_px}, using expected position "
-                         "instead.")
+            logging.info(
+                f"Calculated shift {rel_shift} is larger than the overlap size ({overlap_px}, using expected position "
+                "instead.")
             return 0
 
         (l1, t1, r1, b1), (l2, t2, r2, b2) = self._estimateROI(shift)
@@ -445,18 +453,17 @@ class ShiftRegistrar(object):
 
         # store the position of the tile
         self.registered_positions_px[row][col] = registered_pos
-        self.acqOrder.append([row, col])
+        self.acq_order.append([row, col])
 
 
-class GlobalShiftRegistrar(object):
+class GlobalShiftRegistrar(ShiftRegistrar):
     """
     Uses the cross-correlation algorithm to find the optimal shift for each tile with all of its
     neighbours and performs a global optimization to find the best path connecting the tiles.
     """
 
     def __init__(self):
-        # Store all the tiles. Each cell contains either None or a DataArray
-        self.tiles = [[None]]
+        super().__init__()
 
         # Store the shifts in a data structure with shape num_rows x (num_cols - 1) x 2 for the
         # horizontal shifts and (num_cols - 1) x num_rows x 2 for the vertical shifts. The data
@@ -471,12 +478,6 @@ class GlobalShiftRegistrar(object):
         # Calculated position of each tile relative to the upper left (first) tile in pixels as a 3D array of floats
         self.registered_positions_px = None  # 3D array of calculated shifts in px
 
-        # List of 2D indices for grid positions in order of acquisition
-        self.acq_order = []
-
-        # Shift between main tile and dependent tiles, shape: number of tiles x number of dep_tiles.
-        self.offsets_dep_tiles = []
-
     def addTile(self, tile, dependent_tiles=None):
         """
         Extends grid by one tile. The first tile is added at the top left position. Any following
@@ -488,13 +489,13 @@ class GlobalShiftRegistrar(object):
         relative to main tile. Their content and metadata are not used for the computation of the final position.
         """
         row, col = self._insert_tile_to_grid(tile)
-        self._compute_registration(row, col)
+        self._compute_registration(tile, row, col)
 
         if dependent_tiles is not None:
             offsets = []
             for dt in dependent_tiles:
                 offsets.append(numpy.subtract(dt.metadata[model.MD_POS], tile.metadata[model.MD_POS]))
-            self.offsets_dep_tiles.append(offsets)
+            self.shift_tile_dep_tiles.append(offsets)
 
     def getPositions(self):
         """
@@ -506,25 +507,8 @@ class GlobalShiftRegistrar(object):
         :returns dep_tile_positions: (list of N tuples of K tuples of 2 floats) for each tile, it returns
         the adjusted position of all dependent tile (in the order they were passed)
         """
-        px_size = self.tiles[0][0].metadata[model.MD_PIXEL_SIZE]
-        firstPosition = numpy.divide(self.tiles[0][0].metadata[model.MD_POS], px_size)
-        tile_positions = []
-        dep_tile_positions = []
-
         self.registered_positions_px = self._assemble_mosaic()  # px
-        for ti in self.acq_order:
-            shift = self.registered_positions_px[ti[0]][ti[1]]
-            tile_positions.append(((shift[0] + firstPosition[0]) * px_size[0],
-                                   (firstPosition[1] - shift[1]) * px_size[1]))
-
-        # Return positions for dependent tiles
-        for t, sdts in zip(tile_positions, self.offsets_dep_tiles):
-            dts = []  # dependent tiles for tile
-            for sdt in sdts:
-                dts.append((t[0] + sdt[0], t[1] + sdt[1]))
-            dep_tile_positions.append(dts)
-
-        return tile_positions, dep_tile_positions
+        return super().getPositions()
 
     def _insert_tile_to_grid(self, tile):
         """
@@ -533,11 +517,12 @@ class GlobalShiftRegistrar(object):
 
         :param tile: (DataArray) tile to be inserted
         :returns: (int, int) row, col grid position of the tile
-        :updates self.tiles, self.shifts, self.acq_order:
+        :updates self.tiles, self.shifts_hor, self.shifts_ver, self.acq_order:
         """
         if self.tiles[0][0] is None:
             self.tiles[0][0] = tile
             self.acq_order.append([0, 0])
+            self.px_size = tile.metadata[model.MD_PIXEL_SIZE]  # m / px
             return 0, 0
 
         if tile.shape != self.tiles[0][0].shape:
@@ -619,52 +604,57 @@ class GlobalShiftRegistrar(object):
         px_size = tile.metadata[model.MD_PIXEL_SIZE]
         # The y-axis of the reference coordinate system used here is inverted compared to
         # the metadata position.
-        exp_shift = ((tile.metadata[model.MD_POS][0] - prev_tile.metadata[model.MD_POS][0]) / px_size[0],
-                     (-tile.metadata[model.MD_POS][1] + prev_tile.metadata[model.MD_POS][1]) / px_size[1])
+        # expected distance between the two tiles
+        exp_tile_dist_px = ((tile.metadata[model.MD_POS][0] - prev_tile.metadata[model.MD_POS][0]) / px_size[0],
+                            (-tile.metadata[model.MD_POS][1] + prev_tile.metadata[model.MD_POS][1]) / px_size[1])
 
         # Get the region of interest
-        if abs(exp_shift[0]) >= tile.shape[1] or abs(exp_shift[1]) >= tile.shape[0]:
-            raise ValueError("There is no overlap between tiles for the shift given %s" % (exp_shift,))
-        if exp_shift[0] < 0:
-            l1, r1 = 0, tile.shape[1] + int(exp_shift[0])
-            l2, r2 = -int(exp_shift[0]), tile.shape[1]
+        if abs(exp_tile_dist_px[0]) >= tile.shape[1] or abs(exp_tile_dist_px[1]) >= tile.shape[0]:
+            raise ValueError("There is no overlap between tiles for the shift given %s" % (exp_tile_dist_px,))
+        if exp_tile_dist_px[0] < 0:
+            l1, r1 = 0, tile.shape[1] + int(exp_tile_dist_px[0])
+            l2, r2 = -int(exp_tile_dist_px[0]), tile.shape[1]
         else:
-            l1, r1 = int(exp_shift[0]), tile.shape[1]
-            l2, r2 = 0, tile.shape[1] - int(exp_shift[0])
+            l1, r1 = int(exp_tile_dist_px[0]), tile.shape[1]
+            l2, r2 = 0, tile.shape[1] - int(exp_tile_dist_px[0])
 
-        if exp_shift[1] < 0:
-            t1, b1 = 0, tile.shape[0] + int(exp_shift[1])
-            t2, b2 = -int(exp_shift[1]), tile.shape[0]
+        if exp_tile_dist_px[1] < 0:
+            t1, b1 = 0, tile.shape[0] + int(exp_tile_dist_px[1])
+            t2, b2 = -int(exp_tile_dist_px[1]), tile.shape[0]
         else:
-            t1, b1 = int(exp_shift[1]), tile.shape[0]
-            t2, b2 = 0, tile.shape[0] - int(exp_shift[1])
+            t1, b1 = int(exp_tile_dist_px[1]), tile.shape[0]
+            t2, b2 = 0, tile.shape[0] - int(exp_tile_dist_px[1])
+
+        # TODO should we take a larger area?
         prev_tile_roi = numpy.array(prev_tile)[t1:b1, l1:r1]
         tile_roi = numpy.array(tile)[t2:b2, l2:r2]
 
         # If you need to crop the tile without changing the output shift,
         # you can do it here with the pattern tile_roi[t:-b, l:-r]
-        shift = MeasureShift(tile_roi, prev_tile_roi)
-        shift_total = numpy.subtract(exp_shift, shift)
+        meas_tile_dist_px = MeasureShift(tile_roi, prev_tile_roi)
+        # How much to shift the tile relative to the metadata position
+        shift_px = numpy.subtract(exp_tile_dist_px, meas_tile_dist_px)
 
         # Measure accuracy (ncc value)
         avg = numpy.average(prev_tile), numpy.average(tile)
-        dist = prev_tile_roi - avg[0], tile_roi - avg[1]
-        covar = numpy.sum(dist[0] * dist[1]) / prev_tile_roi.size
-        var = numpy.sum(dist[0] ** 2) / prev_tile_roi.size, numpy.sum(dist[1] ** 2) / tile_roi.size
-        stDev = (numpy.sqrt(var[0]), numpy.sqrt(var[1]))
-        if stDev[0] == 0 or stDev[1] == 0:
-            return exp_shift, 0
+        diff = prev_tile_roi - avg[0], tile_roi - avg[1]
+        covar = numpy.sum(diff[0] * diff[1]) / prev_tile_roi.size
+        var = numpy.sum(diff[0] ** 2) / prev_tile_roi.size, numpy.sum(diff[1] ** 2) / tile_roi.size
+        st_dev = (numpy.sqrt(var[0]), numpy.sqrt(var[1]))
+        if st_dev[0] == 0 or st_dev[1] == 0:
+            return exp_tile_dist_px, 0
         # Normalized cross correlation (values between -1 and 1)
-        ncc = (covar / (stDev[0] * stDev[1]))
-        overlap = numpy.abs(numpy.subtract(tile.shape[::-1], numpy.abs(exp_shift)))  # tile.shape is YX, so reverse it
-        if numpy.any(numpy.abs(shift) > overlap):
-            logging.info(f"Calculated shift {shift} is larger than the overlap size {overlap}, "
+        ncc = (covar / (st_dev[0] * st_dev[1]))
+        overlap = numpy.abs(
+            numpy.subtract(tile.shape[::-1], numpy.abs(exp_tile_dist_px)))  # tile.shape is YX, so reverse it
+        if numpy.any(numpy.abs(meas_tile_dist_px) > overlap):
+            logging.info(f"Calculated shift {meas_tile_dist_px} is larger than the overlap size {overlap}, "
                          f"using expected position instead.")
-            return exp_shift, 0
+            return exp_tile_dist_px, 0
 
-        return shift_total, ncc
+        return shift_px, ncc
 
-    def _compute_registration(self, row, col):
+    def _compute_registration(self, tile, row, col):
         """
         Performs registration of the tile at grid position row, col with respect to every
         available neighbour. The computed shifts and the respective cross-correlation values
@@ -674,7 +664,6 @@ class GlobalShiftRegistrar(object):
         :param col: (int) col index
         :updates self.shifts:
         """
-        tile = self.tiles[row][col]
         num_cols = len(self.tiles[0])
         num_rows = len(self.tiles)
 
@@ -698,7 +687,7 @@ class GlobalShiftRegistrar(object):
             self.shifts_ver[row - 1][col] = self._get_shift(nbr_top, tile)
         if nbr_bottom is not None and not shift_bottom:
             self.shifts_ver[row][col] = self._get_shift(tile, nbr_bottom)
-            
+
     def _assemble_mosaic(self):
         """
         Performs a global optimization to find the best path through the tile grid using 
