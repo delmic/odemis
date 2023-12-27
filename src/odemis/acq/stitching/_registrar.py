@@ -140,7 +140,7 @@ class ShiftRegistrar(object):
     def getPositions(self):
         """
         returns:
-        tile_positions (list of N tuples): the adjusted position in X/Y for each tile, in the order they were added
+        tile_positions (list of N tuples): the adjusted position in X/Y for each tile, in the order they were added [m]
         dep_tile_positions (list of N tuples of K tuples of 2 floats): for each tile, it returns
         the adjusted position of each dependent tile (in the order they were passed)
         """
