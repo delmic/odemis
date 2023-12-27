@@ -652,6 +652,7 @@ class xrcpnl_tab_fastem_acqui(wx.Panel):
         self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_fastem_acquisition_streams = xrc.XRCCTRL(self, "pnl_fastem_acquisition_streams")
         self.pnl_acq_settings = xrc.XRCCTRL(self, "pnl_acq_settings")
         self.calib_1_pnl = xrc.XRCCTRL(self, "calib_1_pnl")
         self.calib_1_btn = xrc.XRCCTRL(self, "calib_1_btn")
@@ -7339,18 +7340,34 @@ def __init_resources():
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
-                        <object class="FoldPanelItem" name="pnl_acq_settings">
-                            <size>300,-1</size>
-                            <add_button>1</add_button>
-                            <fg>#7F7F7F</fg>
-                            <bg>#333333</bg>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            <label>ACQUISITION SETTINGS</label>
-                            <fg>#1A1A1A</fg>
-                            <bg>#555555</bg>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_fastem_acquisition_streams">
+                          <size>300,-1</size>
+                          <add_button>0</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
+                        <label>SEM</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem" name="pnl_acq_settings">
+                        <object class="wxPanel">
+                          <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                        </object>
+                        <label>ACQUISITION SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
                       <object class="FoldPanelItem">
                         <object class="wxPanel" name="calib_1_pnl">
                           <fg>#7F7F7F</fg>
