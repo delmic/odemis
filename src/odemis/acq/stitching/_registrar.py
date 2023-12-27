@@ -87,7 +87,8 @@ class ShiftRegistrar(object):
         # initialize grid to 1x1. The size will increase as new tiles are
         # added.
         self.nx = 1  # (int) total number of cols
-        self.registered_positions = [[None]]  # (None or tuple of 2 floats) list of calculated positions
+        # list of calculated absolute positions in px, relative to the top left tile
+        self.registered_positions_px = [[None]]  # (None or tuple of 2 floats) list of calculated shifts in px
         self.tiles = [[None]]  # (None or DataArray) list of tiles
 
         # Initialize overlap. This will be modified after the second tile has been added.
@@ -157,7 +158,7 @@ class ShiftRegistrar(object):
                 if ver_diff < 0:
                     self.posY = pos_prev[0] + 1
                     self.posX = pos_prev[1]
-                    if len(self.registered_positions) <= self.posY:
+                    if len(self.registered_positions_px) <= self.posY:
                         self._updateGrid("y")  # extend grid in y direction
                 else:
                     self.posY = pos_prev[0] - 1
@@ -166,7 +167,7 @@ class ShiftRegistrar(object):
                 if hor_diff > 0:
                     self.posY = pos_prev[0]
                     self.posX = pos_prev[1] + 1
-                    if len(self.registered_positions[0]) <= self.posX:
+                    if len(self.registered_positions_px[0]) <= self.posX:
                         self._updateGrid("x")  # extend grid in x direction
                 else:
                     self.posY = pos_prev[0]
@@ -206,7 +207,7 @@ class ShiftRegistrar(object):
         dep_tile_positions = []
 
         for ti in self.acqOrder:
-            shift = self.registered_positions[ti[0]][ti[1]]
+            shift = self.registered_positions_px[ti[0]][ti[1]]
             tile_positions.append(((shift[0] + firstPosition[0]) * self.px_size[0],
                                    (firstPosition[1] - shift[1]) * self.px_size[1]))
 
@@ -216,7 +217,6 @@ class ShiftRegistrar(object):
             for sdt in sdts:
                 dts.append((t[0] + sdt[0], t[1] + sdt[1]))
             dep_tile_positions.append(dts)
-
         return tile_positions, dep_tile_positions
 
     def _find_closest_tile(self, pos):
@@ -242,10 +242,10 @@ class ShiftRegistrar(object):
             self.nx += 1
             for i in range(len(self.tiles)):
                 self.tiles[i].append(None)
-                self.registered_positions[i].append(None)
+                self.registered_positions_px[i].append(None)
         else:
             self.tiles.append([None] * self.nx)
-            self.registered_positions.append([None] * self.nx)
+            self.registered_positions_px.append([None] * self.nx)
 
     def _estimateROI(self, shift):
         """
@@ -354,11 +354,11 @@ class ShiftRegistrar(object):
         tile = self.tiles[row][col]
         if xdir == LEFT_TO_RIGHT:
             exp_shift = (int(self.size[1] - self.osize), 0)
-            prev_pos = self.registered_positions[row][col - 1]
+            prev_pos = self.registered_positions_px[row][col - 1]
             prev_tile = self.tiles[row][col - 1]
         elif xdir == RIGHT_TO_LEFT:
             exp_shift = (-int(self.size[1] - self.osize), 0)
-            prev_pos = self.registered_positions[row][col + 1]
+            prev_pos = self.registered_positions_px[row][col + 1]
             prev_tile = self.tiles[row][col + 1]
         else:
             raise ValueError("xdir argument is %s, must be either LEFT_TO_RIGHT or RIGHT_TO_LEFT." % xdir)
@@ -384,7 +384,7 @@ class ShiftRegistrar(object):
 
         tile = self.tiles[row][col]
         exp_shift = (0, int(self.size[0] - self.osize))
-        prev_pos = self.registered_positions[row - 1][col]
+        prev_pos = self.registered_positions_px[row - 1][col]
         prev_tile = self.tiles[row - 1][col]
         x, y = self._get_shift(prev_tile, tile, exp_shift)  # calculates shift based on phase correlation
         match = self._estimateMatch(prev_tile, tile, (exp_shift[0] - x, exp_shift[1] - y))
@@ -444,7 +444,7 @@ class ShiftRegistrar(object):
             registered_pos = pos_hor
 
         # store the position of the tile
-        self.registered_positions[row][col] = registered_pos
+        self.registered_positions_px[row][col] = registered_pos
         self.acqOrder.append([row, col])
 
 
@@ -469,7 +469,7 @@ class GlobalShiftRegistrar(object):
         self.shifts_ver = [[None]]
 
         # Calculated position of each tile relative to the upper left (first) tile in pixels as a 3D array of floats
-        self.registered_positions = None
+        self.registered_positions_px = None  # 3D array of calculated shifts in px
 
         # List of 2D indices for grid positions in order of acquisition
         self.acq_order = []
@@ -502,7 +502,7 @@ class GlobalShiftRegistrar(object):
         adjusted tile_positions & dep_tile_positions. When calling this function .registered_positions is updated with
         the calculated position of each tile relative to the upper left (first) tile in pixels as a 3D array.
         :returns tile_positions: (list of N tuples) the adjusted position in X/Y for each tile, in the
-        order they were added
+        order they were added in meters
         :returns dep_tile_positions: (list of N tuples of K tuples of 2 floats) for each tile, it returns
         the adjusted position of all dependent tile (in the order they were passed)
         """
@@ -511,9 +511,9 @@ class GlobalShiftRegistrar(object):
         tile_positions = []
         dep_tile_positions = []
 
-        self.registered_positions = self._assemble_mosaic()
+        self.registered_positions_px = self._assemble_mosaic()  # px
         for ti in self.acq_order:
-            shift = self.registered_positions[ti[0]][ti[1]]
+            shift = self.registered_positions_px[ti[0]][ti[1]]
             tile_positions.append(((shift[0] + firstPosition[0]) * px_size[0],
                                    (firstPosition[1] - shift[1]) * px_size[1]))
 
@@ -553,7 +553,7 @@ class GlobalShiftRegistrar(object):
             for j in range(num_cols):
                 if self.tiles[i][j] is not None:
                     dist = math.hypot(*numpy.subtract(tile.metadata[model.MD_POS],
-                                                     self.tiles[i][j].metadata[model.MD_POS]))
+                                                      self.tiles[i][j].metadata[model.MD_POS]))
                     if dist < minDist:
                         minDist = dist
                         prev_row, prev_col = (i, j)
