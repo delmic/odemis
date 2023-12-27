@@ -1810,11 +1810,40 @@ class FastEMAcquisitionTab(Tab):
         self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
 
         # Streams controller
+        # Single-beam SEM stream
+        hwemt_vanames = ("resolution", "scale", "horizontalFoV")
+        emt_vanames = ("dwellTime")
+        hwdet_vanames = ("brightness", "contrast")
+        hwemtvas = set()
+        emtvas = set()
+        hwdetvas = set()
+        for vaname in getVAs(main_data.ebeam):
+            if vaname in hwemt_vanames:
+                hwemtvas.add(vaname)
+            if vaname in emt_vanames:
+                emtvas.add(vaname)
+        for vaname in getVAs(main_data.sed):
+            if vaname in hwdet_vanames:
+                hwdetvas.add(vaname)
+        sem_stream = acqstream.FastEMSEMStream(
+            "Single Beam",
+            main_data.sed,
+            main_data.sed.data,
+            main_data.ebeam,
+            focuser=main_data.ebeam_focus,
+            hwemtvas=hwemtvas,
+            hwdetvas=hwdetvas,
+            emtvas=emtvas,
+        )
+        tab_data.streams.value.append(sem_stream)  # it should also be saved
+        tab_data.semStream = sem_stream
         self._streams_controller = streamcont.FastEMStreamsController(tab_data,
-                                                                      panel.pnl_fastem_projects,
+                                                                      panel.pnl_fastem_acquisition_streams,
                                                                       ignore_view=True,
                                                                       view_ctrl=self.view_controller,
                                                                       )
+        self.sem_stream_cont = self._streams_controller.addStream(sem_stream, add_to_view=True)
+        self.sem_stream_cont.stream_panel.show_remove_btn(False)
 
         for name, calibration in self.tab_data_model.calibrations.items():
             if name == CALIBRATION_1:
