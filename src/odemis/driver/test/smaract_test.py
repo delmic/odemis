@@ -768,7 +768,7 @@ class TestPicoscale(unittest.TestCase):
         self.dev.position.subscribe(pos_listener)
         if TEST_NOHW:
             # New sensor position in simulator
-            self.dev.core.positions[0] = 2.5e-6
+            self.dev.si.positions[0] = 2.5e-6
         time.sleep(1.1)  # position should be updated every second
         self.assertTrue(self.pos_update)
 
