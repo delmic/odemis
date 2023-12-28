@@ -1835,6 +1835,7 @@ class FastEMAcquisitionTab(Tab):
             hwdetvas=hwdetvas,
             emtvas=emtvas,
         )
+        sem_stream.should_update.subscribe(self._is_stream_live)
         tab_data.streams.value.append(sem_stream)  # it should also be saved
         tab_data.semStream = sem_stream
         self._streams_controller = streamcont.FastEMStreamsController(tab_data,
@@ -1896,6 +1897,11 @@ class FastEMAcquisitionTab(Tab):
             return 1
         else:
             return None
+
+    def _is_stream_live(self, flag):
+        # Disable chamber and overview tab buttons when playing live stream
+        self.main_frame.btn_tab_fastem_chamber.Enable(not flag)
+        self.main_frame.btn_tab_fastem_overview.Enable(not flag)
 
 
 class FastEMOverviewTab(Tab):
@@ -1959,6 +1965,7 @@ class FastEMOverviewTab(Tab):
             hwdetvas=hwdetvas,
             emtvas=emtvas,
         )
+        sem_stream.should_update.subscribe(self._is_stream_live)
         self.tab_data.streams.value.append(sem_stream)  # it should also be saved
         self.tab_data.semStream = sem_stream
         self._stream_controller = streamcont.FastEMStreamsController(
@@ -2168,6 +2175,11 @@ class FastEMOverviewTab(Tab):
 
     def terminate(self):
         self._stream_controller.pauseStreams()
+
+    def _is_stream_live(self, flag):
+        # Disable chamber and acquisition tab buttons when playing live stream
+        self.main_frame.btn_tab_fastem_chamber.Enable(not flag)
+        self.main_frame.btn_tab_fastem_acqui.Enable(not flag)
 
 
 class FastEMChamberTab(Tab):
