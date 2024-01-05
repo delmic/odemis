@@ -2391,7 +2391,7 @@ class TestDualChannelPositionSensor(unittest.TestCase):
         self.dev.rotation.subscribe(on_rotation)
 
         # New sensor position
-        self.dev.sensor.core.positions[0] = 2.5e-6
+        self.dev.sensor.si.positions[0] = 2.5e-6
 
         time.sleep(1.1)
         self.assertEqual(self.pos_updated, True)
@@ -2405,18 +2405,18 @@ class TestDualChannelPositionSensor(unittest.TestCase):
         Test the calculation of the position and angle.
         """
         # Force sensor positions in simulator
-        self.dev.sensor.core.positions = [0, 1e-6, 0]
+        self.dev.sensor.si.positions = [0, 1e-6, 0]
         self.assertEqual(self.dev.position.value['x'], 0.5e-6)
         # Position difference same as distance between sensors, angle should be 45 degrees
         self.assertEqual(self.dev.rotation.value, math.pi / 4)
 
         # Force sensor positions in simulator
-        self.dev.sensor.core.positions = [0, 0, 0]
+        self.dev.sensor.si.positions = [0, 0, 0]
         self.assertEqual(self.dev.position.value['x'], 0)
         self.assertEqual(self.dev.rotation.value, 0)
 
         # Force sensor positions in simulator
-        self.dev.sensor.core.positions = [0, -1e-6, 0]
+        self.dev.sensor.si.positions = [0, -1e-6, 0]
         self.assertEqual(self.dev.position.value['x'], -0.5e-6)
         self.assertEqual(self.dev.rotation.value, -math.pi / 4)
 
