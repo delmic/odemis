@@ -680,7 +680,7 @@ class AcquisitionTask(object):
             try:
                 self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
             except Exception:
-                logging.exception("Correcting the beam shift failed.")
+                logging.exception("Correcting the beam shift failed, check if the image quality is still good.")
                 # In case of failure save the ccd image
                 ccd_image = self._ccd.data.get(asap=False)
                 fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)

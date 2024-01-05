@@ -372,7 +372,8 @@ def _cluster_edges(
 
     if not is_connected(graph):
         # no point in continuing if the graph is disconnected.
-        raise ValueError("Expected a connected graph, but got a disconnected graph.")
+        raise ValueError("Expected a graph of 4-connected nearest neighbors,"
+                         " but got a disconnected graph.")
 
     # Create an array `shifts` containing the displacement vectors for all
     # edges in the graph.
