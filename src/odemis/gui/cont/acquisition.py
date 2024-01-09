@@ -307,7 +307,11 @@ class SnapshotController(object):
         """
 
         if not os.name == 'nt':
-            xrandr_out = subprocess.check_output("xrandr")
+            try:
+                xrandr_out = subprocess.check_output("xrandr")
+            except subprocess.CalledProcessError as ex:
+                logging.warning("Failed to detect displays: %s", ex)
+                return []
             # only pick the "connected" outputs
             ret = re.findall(b"^(\\S+) connected ", xrandr_out, re.MULTILINE)
             return [o.decode("utf-8") for o in ret]
