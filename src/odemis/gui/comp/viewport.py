@@ -868,6 +868,11 @@ class FastEMAcquisitionViewport(MicroscopeViewport):
         cpol.active.value = True
         self.canvas.add_world_overlay(cpol)
 
+        # Double-click to move the stage
+        slol = StagePointSelectOverlay(self.canvas)
+        slol.active.value = True
+        self.canvas.add_world_overlay(slol)
+
         # Listen to the stage position and update the label in the callback
         view.stage_pos.subscribe(self._on_stage_pos_change, init=True)
 
