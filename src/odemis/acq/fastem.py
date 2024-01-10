@@ -674,7 +674,16 @@ class AcquisitionTask(object):
 
             self.move_stage_to_next_tile()  # move stage to next field image position
             self._scanner.blanker.value = False  # unblank the beam
-            self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
+            # TODO remove the below temporary fix when a proper solution is found
+            # The temporary fix has been applied so that the ROAs acquisition can still continue upon failure
+            # of correcting the beam shift
+            try:
+                self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
+            except Exception:
+                logging.exception("Correcting the beam shift failed, check if the image quality is still good.")
+                # In case of failure save the ccd image
+                ccd_image = self._ccd.data.get(asap=False)
+                fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)
 
             dataflow.next(field_idx)  # acquire the next field image.
 
@@ -878,9 +887,6 @@ class AcquisitionTask(object):
         self._beamshift.shift.value = (cur_beam_shift_pos + beam_shift_cor)
 
         logging.debug("New beam shift m: {}".format(self._beamshift.shift.value))
-
-        ccd_image = self._ccd.data.get(asap=False)
-        fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)
 
     def _create_acquisition_metadata(self):
         """
