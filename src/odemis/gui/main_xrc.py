@@ -75,6 +75,7 @@ class xrcfr_main(wx.Frame):
         self.btn_tab_align_enzel = xrc.XRCCTRL(self, "btn_tab_align_enzel")
         self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
         self.btn_tab_localization = xrc.XRCCTRL(self, "btn_tab_localization")
+        self.btn_tab_correlation = xrc.XRCCTRL(self, "btn_tab_correlation")
         self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
         self.btn_tab_fastem_chamber = xrc.XRCCTRL(self, "btn_tab_fastem_chamber")
         self.btn_tab_fastem_overview = xrc.XRCCTRL(self, "btn_tab_fastem_overview")
@@ -816,7 +817,7 @@ class xrcpnl_tab_inspection(wx.Panel):
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
         self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
-        self.btn_secom_export = xrc.XRCCTRL(self, "btn_secom_export")
+        self.btn_export = xrc.XRCCTRL(self, "btn_export")
 
 
 
@@ -968,6 +969,64 @@ class xrcpnl_tab_localization(wx.Panel):
         self.gauge_milling_series = xrc.XRCCTRL(self, "gauge_milling_series")
         self.txt_milling_series_left_time = xrc.XRCCTRL(self, "txt_milling_series_left_time")
         self.btn_milling_cancel = xrc.XRCCTRL(self, "btn_milling_cancel")
+
+
+
+class xrcpnl_tab_correlation(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_correlation.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_correlation.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_correlation")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_correlation")
+
+        # Define variables for the controls, bind event handlers
+        self.correlation_toolbar = xrc.XRCCTRL(self, "correlation_toolbar")
+        self.lbl_correlation_view_all = xrc.XRCCTRL(self, "lbl_correlation_view_all")
+        self.btn_correlation_view_all = xrc.XRCCTRL(self, "btn_correlation_view_all")
+        self.lbl_correlation_view_tl = xrc.XRCCTRL(self, "lbl_correlation_view_tl")
+        self.btn_correlation_view_tl = xrc.XRCCTRL(self, "btn_correlation_view_tl")
+        self.lbl_correlation_view_tr = xrc.XRCCTRL(self, "lbl_correlation_view_tr")
+        self.btn_correlation_view_tr = xrc.XRCCTRL(self, "btn_correlation_view_tr")
+        self.lbl_correlation_view_bl = xrc.XRCCTRL(self, "lbl_correlation_view_bl")
+        self.btn_correlation_view_bl = xrc.XRCCTRL(self, "btn_correlation_view_bl")
+        self.lbl_correlation_view_br = xrc.XRCCTRL(self, "lbl_correlation_view_br")
+        self.btn_correlation_view_br = xrc.XRCCTRL(self, "btn_correlation_view_br")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.pnl_correlaton_grid = xrc.XRCCTRL(self, "pnl_correlaton_grid")
+        self.vp_correlation_tl = xrc.XRCCTRL(self, "vp_correlation_tl")
+        self.vp_correlation_tr = xrc.XRCCTRL(self, "vp_correlation_tr")
+        self.vp_correlation_bl = xrc.XRCCTRL(self, "vp_correlation_bl")
+        self.vp_correlation_br = xrc.XRCCTRL(self, "vp_correlation_br")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_correlation_streams = xrc.XRCCTRL(self, "fp_correlation_streams")
+        self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
+        self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
+        self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
+        self.ctrl_enable_correlation = xrc.XRCCTRL(self, "ctrl_enable_correlation")
+        self.cmb_correlation_stream = xrc.XRCCTRL(self, "cmb_correlation_stream")
+        self.dx_step_cntrl = xrc.XRCCTRL(self, "dx_step_cntrl")
+        self.dy_step_cntrl = xrc.XRCCTRL(self, "dy_step_cntrl")
+        self.dr_step_cntrl = xrc.XRCCTRL(self, "dr_step_cntrl")
+        self.dpx_step_cntrl = xrc.XRCCTRL(self, "dpx_step_cntrl")
+        self.btn_reset_correlation = xrc.XRCCTRL(self, "btn_reset_correlation")
+        self.btn_export = xrc.XRCCTRL(self, "btn_export")
 
 
 
@@ -1382,6 +1441,24 @@ def __init_resources():
                 <size>160,30</size>
                 <face_colour>def</face_colour>
                 <label>LOCALIZATION</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_correlation">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>CORRELATION</label>
                 <fg>#E5E5E5</fg>
                 <font>
                   <size>11</size>
@@ -8642,7 +8719,7 @@ def __init_resources():
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_secom_export">
+                    <object class="ImageTextButton" name="btn_export">
                       <size>382,-1</size>
                       <icon>img_icon_ico_export_png</icon>
                       <height>48</height>
@@ -10166,6 +10243,493 @@ def __init_resources():
               <option>1</option>
               <flag>wxEXPAND</flag>
               <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+  </object>
+   <object class="wxPanel" name="pnl_tab_correlation">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="ToolBar" name="correlation_toolbar">
+                    <style>wxVERTICAL</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_all">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_all">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_tl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_tl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_tr">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_tr">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_bl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_bl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_br">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_br">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <orient>wxVERTICAL</orient>
+              </object>
+              <option>1</option>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <size>200,-1</size>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_correlaton_grid">
+          <object class="MicroscopeViewport" name="vp_correlation_tl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_correlation_tr">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_correlation_bl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_correlation_br">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+
+
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_correlation_streams">
+                        <object class="StreamBar" name="pnl_correlation_streams">
+                          <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>STREAMS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_meteor_correlation">
+                        <object class="wxPanel" name="pnl_meteor_correlation">
+                            <object class="wxBoxSizer">
+                              <orient>wxVERTICAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticText">
+                                  <label>Instructions: \n    Select a stream to move. \n    Shift + Left Click to Move the Stream.\n    Use the arrow keys to move Up/Down and Left/Right. \n    Shift + Arrow Keys to control Rotation and Scale. </label>
+                                  <fg>#E5E5E5</fg>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                <border>5</border>
+                                <flag>wxEXPAND</flag>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxCheckBox" name="ctrl_enable_correlation">
+                                  <label>Correlaton Enabled</label>
+                                  <fg>#E5E5E5</fg>
+                                  <XRCED>
+                                      <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <option>0</option>
+                                <flag>wxTOP|wxLEFT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxFlexGridSizer">
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Move Stream</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                    <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                    <border>5</border>
+                                    <flag>wxEXPAND</flag>
+                                  </object>
+                                  <object class="sizeritem"> 
+                                    <object class="OwnerDrawnComboBox" name="cmb_correlation_stream">
+                                        <size>250,-1</size>
+                                        <fg>#2FA7D4</fg>
+                                        <bg>#333333</bg>
+                                        <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+                                        <tooltip>Select a stream to move. Shift + Left Click to Move the Stream, Use the arrow keys to move, Shift + Arrow Keys to control Rotation and Scale.</tooltip>
+                                      </object>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>X Step Size</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                      <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                      <border>10</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="UnitFloatCtrl" name="dx_step_cntrl">
+                                      <value>1e-6</value>
+                                      <key_step>0.000001</key_step>
+                                      <min>0</min>
+                                      <max>10</max>
+                                      <unit>m</unit>
+                                      <accuracy>3</accuracy>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                      <font>
+                                        <size>9</size>
+                                      </font>
+                                      <bg>#333333</bg>
+                                    </object>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Y Step Size</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                      <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                      <border>10</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="UnitFloatCtrl" name="dy_step_cntrl">
+                                      <value>1e-6</value>
+                                      <key_step>0.000001</key_step>
+                                      <min>0</min>
+                                      <max>10</max>
+                                      <unit>m</unit>
+                                      <accuracy>3</accuracy>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                      <font>
+                                        <size>9</size>
+                                      </font>
+                                      <bg>#333333</bg>
+                                    </object>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Rotation Step Size</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                      <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                      <border>10</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="UnitFloatCtrl" name="dr_step_cntrl">
+                                      <value>1</value>
+                                      <key_step>0.000001</key_step>
+                                      <min>0</min>
+                                      <max>180</max>
+                                      <unit>deg</unit>
+                                      <accuracy>3</accuracy>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                      <font>
+                                        <size>9</size>
+                                      </font>
+                                      <bg>#333333</bg>
+                                    </object>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Scale Step Size</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                      <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                      <border>10</border>
+                                  </object>
+                                  <object class="sizeritem">
+                                    <object class="UnitFloatCtrl" name="dpx_step_cntrl">
+                                      <value>1</value>
+                                      <key_step>0.000001</key_step>
+                                      <min>0</min>
+                                      <max>10</max>
+                                      <unit>%</unit>
+                                      <accuracy>3</accuracy>
+                                      <XRCED>
+                                        <assign_var>1</assign_var>
+                                      </XRCED>
+                                      <font>
+                                        <size>9</size>
+                                      </font>
+                                      <bg>#333333</bg>
+                                    </object>
+                                  </object>
+                                  <cols>2</cols>
+                                  <rows>5</rows>
+                                  <vgap>10</vgap>
+                                  <hgap>10</hgap>
+                                  <growablecols>1</growablecols>
+                                </object>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="ImageTextButton" name="btn_reset_correlation">
+                                  <label>Reset Correlation Data</label>                               
+                                  <height>24</height>
+                                  <XRCED>
+                                      <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              <flag>wxTOP</flag>
+                              <border>12</border>
+                              <option>0</option>                              
+                              </object>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                          </object>
+                        <label>CORRELATION CONTROLS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_export">
+                      <size>382,-1</size>
+                      <icon>img_icon_ico_export_png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
+                      <label>EXPORT IMAGE</label>
+                      <fg>#FFFFFF</fg>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
             </object>
             <orient>wxVERTICAL</orient>
           </object>
