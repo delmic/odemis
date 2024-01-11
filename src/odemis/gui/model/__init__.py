@@ -873,6 +873,27 @@ class CryoLocalizationGUIData(CryoGUIData):
                     config.pj_last_path, config.fn_ptn,
                     config.last_extension,
                     config.fn_count)
+        
+class CryoCorrelationGUIData(CryoGUIData):
+    """ Represent an interface used to correlate multiple streams together.
+
+    Used for METEOR systems.
+
+    """
+
+    def __init__(self, main):
+        super().__init__(main)
+
+        # Current tool selected (from the toolbar)
+        tools = {TOOL_NONE}
+        # Update the tool selection with the new tool list
+        self.tool.choices = tools
+
+        # the streams to correlate among all streams in .streams
+        self.selected_stream = model.VigilantAttribute(None)
+        
+        # for export tool
+        self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
 
 
 class SparcAcquisitionGUIData(MicroscopyGUIData):

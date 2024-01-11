@@ -76,3 +76,7 @@ magic.odm.yaml
 /src/odemis/driver/jeol.py
 /src/odemis/driver/nikonc.py
 /.mypy_cache/
+
+# vscode settings
+.vscode/*
+*.code-workspace

@@ -70,7 +70,7 @@ class ExportController(object):
         self._conf = get_acqui_conf()
 
         # Listen to "export" button and menu
-        self._tab_panel.btn_secom_export.Bind(wx.EVT_BUTTON, self.on_export)
+        self._tab_panel.btn_export.Bind(wx.EVT_BUTTON, self.on_export)
         self._main_frame.Bind(wx.EVT_MENU, self.on_export, id=self._main_frame.menu_item_export_as.GetId())
         self._main_frame.menu_item_export_as.Enable(False)
 
@@ -81,13 +81,21 @@ class ExportController(object):
     @call_in_wx_main
     def on_tab_change(self, tab):
         """ Subscribe to the the current tab """
-        # Only let Export to be enabled in "our" tab, ie the analysis tab
+        # Only let Export to be enabled in current tab
         if tab is not None and tab.tab_data_model is self._data_model:
+            # rebind menu event
+            self._main_frame.Bind(wx.EVT_MENU, self.on_export, 
+                                  id=self._main_frame.menu_item_export_as.GetId())
+            
             self._data_model.focussedView.subscribe(self.on_view_change, init=True)
         else:
             self._data_model.focussedView.unsubscribe(self.on_view_change)
             self._main_frame.menu_item_export_as.Enable(False)
-            self._tab_panel.btn_secom_export.Enable(False)
+            self._tab_panel.btn_export.Enable(False)
+            
+            # unbind menu event to avoid multiple calls
+            self._main_frame.Unbind(wx.EVT_MENU, handler=self.on_export, 
+                                    source=self._main_frame.menu_item_export_as)
 
     def on_view_change(self, view):
         """
@@ -106,7 +114,7 @@ class ExportController(object):
 
         enabled = (len(streams) > 0)
         self._main_frame.menu_item_export_as.Enable(enabled)
-        self._tab_panel.btn_secom_export.Enable(enabled)
+        self._tab_panel.btn_export.Enable(enabled)
 
     def on_export(self, event):
         """
