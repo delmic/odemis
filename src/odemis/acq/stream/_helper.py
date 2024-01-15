@@ -1076,7 +1076,6 @@ class ARSettingsStream(PolarizedCCDSettingsStream):
     """
 
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
-
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_AR
 
@@ -1361,7 +1360,7 @@ class FastScanningDetector(RepetitionStream):
         self._updateAcquisitionTime()
 
 
-class CLSettingsStream(RepetitionStream):
+class CLSettingsStream(FastScanningDetector):
     """
     A spatial cathodoluminescense stream, typically with a PMT as a detector.
     It's physically very similar to the AR stream, but as the acquisition time
@@ -1498,6 +1497,7 @@ class OverlayStream(Stream):
           by the FindOverlay function to make it return DataArrays, as a normal
           future from a Stream should do.
         """
+
         @wraps(f)
         def result_as_da(timeout=None):
             trans_val, (opt_md, sem_md) = f(timeout)
@@ -1717,6 +1717,7 @@ class ScannedTemporalSettingsStream(CCDSettingsStream):
     """
     Stream that allows to acquire a 2D spatial map with the time correlator for lifetime mapping or g(2) mapping.
     """
+
     def __init__(self, name, detector, dataflow, emitter, **kwargs):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_TEMPORAL

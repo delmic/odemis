@@ -613,6 +613,8 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
         self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
+        self.bmp_fold_acq_info = xrc.XRCCTRL(self, "bmp_fold_acq_info")
+        self.lbl_sparc_fold_acq = xrc.XRCCTRL(self, "lbl_sparc_fold_acq")
         self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
         self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
         self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
@@ -7232,6 +7234,45 @@ def __init_resources():
                           <flag>wxALL|wxEXPAND</flag>
                           <border>10</border>
                         </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_fold_acq_info">
+                                  <bitmap>img_icon_dialog_info_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              <flag>wxRIGHT</flag>
+                              <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_sparc_fold_acq">
+                                  <label>Some streams will be acquired simultaneously</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              </object>
+                        </object>
+                      </object>
+                        <flag>wxLEFT</flag>
+                        <border>12</border>
+                      <bg>#333333</bg>
+                      <object>
+                        <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
+                        <border>12</border>
+                      </object>
+                    </object>
                         <object class="sizeritem">
                           <object class="wxPanel">
                             <object class="wxBoxSizer">
