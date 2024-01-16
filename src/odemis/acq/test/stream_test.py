@@ -2281,8 +2281,10 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         self.stage_positions = []
         self.ebeam_positions = []
         self.done = 0
+        self.ebeam_start_pos = self.ebeam.translation.value
+        self.sstage_start_pos = self.scan_stage.position.value
 
-        # Run acquisition
+        # Run the acquisition
         f = sps.acquire()
         # prepare callbacks
         f.add_update_callback(self.on_progress_update)
@@ -2295,7 +2297,7 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         time.sleep(0.1)  # wait a tiny bit to assert done status
         self.assertEqual(self.done, 1)
 
-        # check if the stage moved instead of the e-beam
+        # check if the stage has moved instead of the e-beam
         self.assertTrue(self.stage_positions)
         self.assertFalse(self.ebeam_positions)
 
@@ -2318,7 +2320,6 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
 
         # check if the centre pixel positions in stage_positions fall within the range of the selected ROI
         for pos in self.stage_positions:
-            # pos is dict {x, y}
             self.assertGreater(pos["x"], roi_rng[0])
             self.assertLess(pos["x"], roi_rng[1])
             self.assertGreater(pos["y"], roi_rng[0])
@@ -2340,11 +2341,52 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         with self.assertRaises(ValueError):
             stream.SEMSpectrumMDStream("test sem-spec", [sems, specs_sstage])
 
+    def test_roi_out_of_stage_limits(self):
+        """
+        Check if a ROI at the edge of the stage limits generates an out of range
+        exception for the ROI dimensions.
+        """
+        # Create the SEM and Spectrum streams
+        sems = stream.SEMStream("test sem cl", self.sed, self.sed.data, self.ebeam)
+        specs_sstage = stream.SpectrumSettingsStream("test spec",
+                                              self.spec,
+                                              self.spec.data,
+                                              self.ebeam,
+                                              sstage=self.scan_stage)
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs_sstage])
+
+        # set stage scanning to true
+        specs_sstage.useScanStage.value = True
+
+        # get stage limits (rng)
+        xrng_stage = self.sem_stage.axes["x"].range
+        yrng_stage = self.sem_stage.axes["y"].range
+
+        # do a quick out of range check
+        f = self.sem_stage.moveAbs({"x": xrng_stage[0] - 1e-6, "y": yrng_stage[0] - 1e-6})
+        with self.assertRaises(ValueError):
+            f.result()
+
+        # position to got to is the top-left (stage) limit on both x and y axes
+        f = self.sem_stage.moveAbs({"x": xrng_stage[0], "y": yrng_stage[0]})
+        f.result()
+
+        # now go to the top left corner and create a ROI with out of range dimensions
+        specs_sstage.roi.value = (0, 0, 0.02, 0.02)
+        specs_sstage.repetition.value = (5, 5)
+
+        # Run the acquisition
+        f = sps.acquire()
+
+        # ROI goes outside the scan stage range
+        with self.assertRaises(ValueError):
+            f.result()
+
     def on_done(self, _):
         logging.debug("On done called")
-        if all([x == (0, 0) for x in self.stage_positions]):
+        if all([x == self.sstage_start_pos for x in self.stage_positions]):
             self.stage_positions = None
-        if all([x == (0, 0) for x in self.ebeam_positions]):
+        if all([x == self.ebeam_start_pos for x in self.ebeam_positions]):
             self.ebeam_positions = None
         self.done += 1
 
