@@ -1557,6 +1557,7 @@ class PixelTemporalSpectrumProjection(RGBProjection):
 
         radius = width / 2
         mean = img.mean_within_circle(spec2d, (x, y), radius)
+        mean = numpy.swapaxes(mean, 0, 1)
 
         return model.DataArray(mean.astype(spec2d.dtype), md)
 
