@@ -26,6 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 from concurrent.futures import CancelledError
 from functools import partial
+from typing import List
 import gc
 import logging
 import math
@@ -1843,7 +1844,7 @@ class CorrelationTab(Tab):
     def correlation_controller(self):
         return self._correlation_controller
 
-    def _create_views(self, viewports: list) -> collections.OrderedDict:
+    def _create_views(self, viewports: List) -> collections.OrderedDict:
         """
         Create views depending on the actual hardware present
         :param viewports: list of viewports
@@ -1882,7 +1883,7 @@ class CorrelationTab(Tab):
     def _on_add_tileset(self) -> None:
         self.select_acq_file(extend=True, tileset=True)
 
-    def load_tileset(self, filenames: list[str], extend: bool = False) -> None:
+    def load_tileset(self, filenames: List[str], extend: bool = False) -> None:
         data = open_files_and_stitch(filenames) # TODO: allow user defined registration / weave methods
         self.load_streams(data)
 
@@ -1933,7 +1934,7 @@ class CorrelationTab(Tab):
                 extend = True  # If multiple files loaded, the first one is considered main one
 
     @call_in_wx_main
-    def load_streams(self, data: list[model.DataArray]) -> None:
+    def load_streams(self, data: List[model.DataArray]) -> None:
         """ Load the data in the overview viewports
         :param data: (list[model.DataArray]) list of data arrays to load as streams
         """
@@ -1946,7 +1947,7 @@ class CorrelationTab(Tab):
         for vp in self.panel.pnl_correlaton_grid.viewports:
             vp.canvas.fit_view_to_content()
    
-    def add_streams(self, streams:list) -> None:
+    def add_streams(self, streams: List) -> None:
         """add streams to correlation tab
         :param streams: (list[Stream]) list of streams to add"""
         self.correlation_controller.add_streams(streams)
