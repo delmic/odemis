@@ -28,10 +28,6 @@ from concurrent.futures import CancelledError
 import logging
 import math
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis import model
 import odemis.acq.stream as acqstream
@@ -39,10 +35,15 @@ import odemis.gui.cont.streams as streamcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.gui.conf.data import get_local_vas
-from odemis.gui.cont.tabs import MIRROR_BAD, MIRROR_ENGAGED, MIRROR_NOT_REFD, \
-    MIRROR_ONPOS_RADIUS, MIRROR_PARKED, MIRROR_POS_PARKED
+from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main
+
+# Different states of the mirror stage positions
+MIRROR_NOT_REFD = 0
+MIRROR_PARKED = 1
+MIRROR_BAD = 2  # not parked, but not fully engaged either
+MIRROR_ENGAGED = 3
 
 
 class ChamberTab(Tab):

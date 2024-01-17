@@ -27,10 +27,6 @@ import collections
 from concurrent.futures import CancelledError
 import logging
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis.model import getVAs
 

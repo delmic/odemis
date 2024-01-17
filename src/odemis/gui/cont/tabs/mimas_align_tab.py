@@ -28,10 +28,6 @@ from concurrent.futures import CancelledError
 import logging
 import pkg_resources
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis.gui.comp.overlay.world import CryoFeatureOverlay
 from odemis.model import BAND_PASS_THROUGH, InstantaneousFuture

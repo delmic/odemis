@@ -29,10 +29,6 @@ import logging
 import math
 import os.path
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis.gui import conf
 from odemis.gui.util.wx_adapter import fix_static_text_clipping

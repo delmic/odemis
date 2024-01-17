@@ -103,6 +103,10 @@ ALL_TOOL_MODES = {
 # "Actions" are also buttons on the toolbar, but with immediate effect:
 TOOL_ACT_ZOOM_FIT = 104  # Select a zoom to fit the current image content
 
+# The constant order of the toolbar buttons
+TOOL_ORDER = (TOOL_ZOOM, TOOL_ROI, TOOL_ROA, TOOL_RO_ANCHOR, TOOL_RULER, TOOL_POINT,
+              TOOL_LABEL, TOOL_LINE, TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_FEATURE)
+
 # Autofocus state
 TOOL_AUTO_FOCUS_ON = True
 TOOL_AUTO_FOCUS_OFF = False

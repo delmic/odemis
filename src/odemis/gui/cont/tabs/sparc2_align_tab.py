@@ -31,10 +31,6 @@ import math
 import pkg_resources
 import time
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 
@@ -49,7 +45,7 @@ from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
 from odemis.gui.conf.data import get_local_vas, get_hw_config
 from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings
-from odemis.gui.cont.tabs import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
+from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation

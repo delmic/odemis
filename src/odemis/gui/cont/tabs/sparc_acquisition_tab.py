@@ -25,10 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import collections
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis import model
 import odemis.acq.stream as acqstream
@@ -44,7 +40,6 @@ from odemis.acq.stream import SpectrumStream, TemporalSpectrumStream, \
 from odemis.gui.comp.viewport import MicroscopeViewport, \
     PlotViewport, TemporalSpectrumViewport
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
-from odemis.gui.cont.tabs import TOOL_ORDER
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_NONE
 from odemis.gui.util import call_in_wx_main
@@ -237,7 +232,7 @@ class SparcAcquisitionTab(Tab):
 
         # Toolbar
         self.tb = self.panel.sparc_acq_toolbar
-        for t in TOOL_ORDER:
+        for t in guimod.TOOL_ORDER:
             if t in tab_data.tool.choices:
                 self.tb.add_tool(t, tab_data.tool)
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)

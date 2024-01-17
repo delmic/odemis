@@ -28,10 +28,6 @@ from functools import partial
 import logging
 import numpy
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis import model
 import odemis.acq.stream as acqstream
@@ -46,11 +42,14 @@ from odemis.acq.stream import OpticalStream, EMStream, FIBStream, \
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont import settings
 from odemis.gui.cont.microscope import SecomStateController, DelphiStateController
-from odemis.gui.cont.tabs import AUTOFOCUS_BINNING, AUTOFOCUS_HFW, TOOL_ORDER
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_SPOT, TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import ScannerFoVAdapter
+
+# Preferable autofocus values to be set when triggering autofocus in delphi
+AUTOFOCUS_BINNING = (8, 8)
+AUTOFOCUS_HFW = 300e-06  # m
 
 
 class SecomStreamsTab(Tab):
@@ -185,7 +184,7 @@ class SecomStreamsTab(Tab):
 
         # Toolbar
         self.tb = panel.secom_toolbar
-        for t in TOOL_ORDER:
+        for t in guimod.TOOL_ORDER:
             if t in tab_data.tool.choices:
                 self.tb.add_tool(t, tab_data.tool)
         # Add fit view to content to toolbar

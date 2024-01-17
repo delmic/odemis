@@ -26,10 +26,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 import logging
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis import model
 import odemis.acq.stream as acqstream

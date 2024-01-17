@@ -27,12 +27,7 @@ import collections
 import logging
 import os.path
 from typing import List
-
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis.gui import conf
 
@@ -48,7 +43,6 @@ from odemis.acq.stream import OpticalStream, EMStream, StaticStream
 from odemis.gui.cont.correlation import CorrelationController
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main
-from odemis.gui.cont.tabs import TOOL_ORDER
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.util.dataio import data_to_static_streams, open_acquisition, open_files_and_stitch
 
@@ -119,7 +113,7 @@ class CorrelationTab(Tab):
 
         # Toolbar
         self.tb = panel.correlation_toolbar
-        for t in TOOL_ORDER:
+        for t in guimod.TOOL_ORDER:
             if t in tab_data.tool.choices:
                 self.tb.add_tool(t, tab_data.tool)
         # Add fit view to content to toolbar

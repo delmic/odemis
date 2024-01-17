@@ -27,10 +27,6 @@ import collections
 import logging
 import numpy
 import wx
-# IMPORTANT: wx.html needs to be imported for the HTMLWindow defined in the XRC
-# file to be correctly identified. See: http://trac.wxwidgets.org/ticket/3626
-# This is not related to any particular wxPython version and is most likely permanent.
-import wx.html
 
 from odemis.gui import conf
 from odemis.gui.cont.features import CryoFeatureController
@@ -51,7 +47,6 @@ from odemis.acq.stream import LiveStream, StaticStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont import settings
 from odemis.gui.cont.acquisition import CryoZLocalizationController
-from odemis.gui.cont.tabs import TOOL_ORDER
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT, TOOL_AUTO_FOCUS
 from odemis.gui.util import call_in_wx_main
@@ -146,7 +141,7 @@ class LocalizationTab(Tab):
 
         # Toolbar
         self.tb = panel.secom_toolbar
-        for t in TOOL_ORDER:
+        for t in guimod.TOOL_ORDER:
             if t in tab_data.tool.choices:
                 self.tb.add_tool(t, tab_data.tool)
         # Add fit view to content to toolbar

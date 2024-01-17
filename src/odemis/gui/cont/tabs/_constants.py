@@ -23,20 +23,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-from .analysis_tab import AnalysisTab
-from .correlation_tab import CorrelationTab
-from .cryo_chamber_tab import CryoChamberTab
-from .enzel_align_tab import EnzelAlignTab
-from .fastem_acquisition_tab import FastEMAcquisitionTab
-from .fastem_chamber_tab import FastEMChamberTab
-from .fastem_overview_tab import FastEMOverviewTab
-from .localization_tab import LocalizationTab
-from .mimas_align_tab import MimasAlignTab
-from .secom_align_tab import SecomAlignTab
-from .secom_streams_tab import SecomStreamsTab
-from .sparc_acquisition_tab import SparcAcquisitionTab
-from .sparc_align_tab import SparcAlignTab
-from .sparc2_align_tab import Sparc2AlignTab
-from .sparc2_chamber_tab import ChamberTab
-from .tab_bar_controller import TabBarController
-from .tab import Tab
+# Position of the mirror to be under the e-beam, when we don't know better
+# Note: the exact position is reached by mirror alignment procedure
+# Used in Sparc2AlignTab, ChamberTab
+MIRROR_POS_PARKED = {"l": 0, "s": 0}  # (Hopefully) constant, and same as reference position
+MIRROR_ONPOS_RADIUS = 2e-3  # m, distance from a position that is still considered that position
