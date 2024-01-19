@@ -41,7 +41,7 @@ from odemis.acq.stream import (FastEMOverviewStream, MeanSpectrumProjection,
                                StaticStream)
 from odemis.gui import (CONTROL_COMBO, CONTROL_FLT, FG_COLOUR_DIS,
                         FG_COLOUR_ERROR, FG_COLOUR_WARNING)
-from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
+from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.comp.stream import (EVT_STREAM_PEAK, EVT_STREAM_VISIBLE,
                                     OPT_BTN_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW,
                                     OPT_BTN_TINT, OPT_BTN_UPDATE, OPT_FIT_RGB,

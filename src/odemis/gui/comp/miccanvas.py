@@ -44,9 +44,16 @@ from wx.lib.imageutils import stepColour
 import wx.lib.newevent
 
 import odemis.gui as gui
+from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
+from odemis.gui.comp.overlay.fastem import FastEMROAOverlay, FastEMROCOverlay, FastEMBackgroundOverlay
+from odemis.gui.comp.overlay.gadget import GadgetOverlay
+from odemis.gui.comp.overlay.pixel_select import PixelSelectOverlay
+from odemis.gui.comp.overlay.points import PointsOverlay
+from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
+from odemis.gui.comp.overlay.spectrum_line_select import SpectrumLineSelectOverlay
+from odemis.gui.comp.overlay.spot_mode import SpotModeOverlay
 import odemis.gui.comp.canvas as canvas
 import odemis.gui.comp.overlay.view as view_overlay
-import odemis.gui.comp.overlay.world as world_overlay
 import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
 
@@ -207,7 +214,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             tools_possible &= self.allowed_modes
 
         if guimodel.TOOL_RULER in tools_possible or guimodel.TOOL_LABEL in tools_possible:
-            self.gadget_overlay = world_overlay.GadgetOverlay(self, tab_data.tool)
+            self.gadget_overlay = GadgetOverlay(self, tab_data.tool)
             # Ruler selection overlay: always shown & active
             self.add_world_overlay(self.gadget_overlay)
             self.gadget_overlay.active.value = True
@@ -215,14 +222,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if guimodel.TOOL_ROA in tools_possible:
             # Get the region of interest and link it to the ROA overlay
             self._roa = tab_data.roa
-            self.roa_overlay = world_overlay.RepetitionSelectOverlay(self, self._roa,
+            self.roa_overlay = RepetitionSelectOverlay(self, self._roa,
                                                                      tab_data.fovComp)
             self.add_world_overlay(self.roa_overlay)
 
         if guimodel.TOOL_RO_ANCHOR in tools_possible:
             # Link drift correction region
             self._dc_region = tab_data.driftCorrector.roi
-            self.driftcor_overlay = world_overlay.RepetitionSelectOverlay(self,
+            self.driftcor_overlay = RepetitionSelectOverlay(self,
                 self._dc_region, tab_data.fovComp, colour=gui.SELECTION_COLOUR_2ND)
             self.add_world_overlay(self.driftcor_overlay)
 
@@ -232,14 +239,14 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
                 tab_data.fovComp.pixelSize.subscribe(self._on_hw_fov)
 
         if guimodel.TOOL_POINT in tools_possible:
-            self.points_overlay = world_overlay.PointsOverlay(self)
-            self.pixel_overlay = world_overlay.PixelSelectOverlay(self)
+            self.points_overlay = PointsOverlay(self)
+            self.pixel_overlay = PixelSelectOverlay(self)
 
         if guimodel.TOOL_LINE in tools_possible:
-            self.line_overlay = world_overlay.SpectrumLineSelectOverlay(self)
+            self.line_overlay = SpectrumLineSelectOverlay(self)
 
         if guimodel.TOOL_FEATURE in tools_possible:
-            self.cryofeature_overlay = world_overlay.CryoFeatureOverlay(self, tab_data)
+            self.cryofeature_overlay = CryoFeatureOverlay(self, tab_data)
             self.add_world_overlay(self.cryofeature_overlay)
             self.cryofeature_overlay.active.value = True
 
@@ -326,7 +333,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self._spotmode_ol is None:
                 if use_world:
                     spot_va = self._tab_data_model.spotPosition
-                    self._spotmode_ol = world_overlay.SpotModeOverlay(self, spot_va,
+                    self._spotmode_ol = SpotModeOverlay(self, spot_va,
                                                                       self._tab_data_model.fovComp)
                 else:
                     spot_va = None
@@ -1003,7 +1010,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """
 
         if rep is None:
-            self.roa_overlay.fill = world_overlay.RepetitionSelectOverlay.FILL_NONE
+            self.roa_overlay.fill = RepetitionSelectOverlay.FILL_NONE
         else:
             self.roa_overlay.fill = style
             self.roa_overlay.repetition = rep
@@ -1790,21 +1797,21 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         """
         rectangles (list of (float, float, float, float)): background rectangles in physical ltrb coordinates
         """
-        overlay = world_overlay.FastEMBackgroundOverlay(self, rectangles)
-        self.add_world_overlay(overlay)
-        return overlay
+        bg_overlay = FastEMBackgroundOverlay(self, rectangles)
+        self.add_world_overlay(bg_overlay)
+        return bg_overlay
 
     def add_roa_overlay(self, coordinates, colour=gui.SELECTION_COLOUR):
         """
         coordinates (TupleContinuousVA): VA of 4 floats representing region of acquisition coordinates
         colour (str): border colour of ROA overlay, given as string of hex code
         """
-        overlay = world_overlay.FastEMROAOverlay(self, coordinates, colour=colour)
-        self.add_world_overlay(overlay)
+        roa_overlay = FastEMROAOverlay(self, coordinates, colour=colour)
+        self.add_world_overlay(roa_overlay)
         # Always activate after creating, otherwise the code to select the region in
         # FastEMROAOverlay.on_left_down will never be called.
-        overlay.active.value = True
-        return overlay
+        roa_overlay.active.value = True
+        return roa_overlay
 
     def remove_overlay(self, overlay):
         """
@@ -1821,12 +1828,12 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         sample_bbox (tuple): bounding box coordinates of the sample holder (minx, miny, maxx, maxy) [m]
         colour (str): border colour of ROA overlay, given as string of hex code
         """
-        overlay = world_overlay.FastEMROCOverlay(self, coordinates, label, sample_bbox, colour=colour)
-        self.add_world_overlay(overlay)
+        roc_overlay = FastEMROCOverlay(self, coordinates, label, sample_bbox, colour=colour)
+        self.add_world_overlay(roc_overlay)
         # Always activate after creating, otherwise the code to select the region in
         # FastEMROCOverlay.on_left_up will never be called.
-        overlay.active.value = True
-        return overlay
+        roc_overlay.active.value = True
+        return roc_overlay
 
     def zoom_out(self):
         """
