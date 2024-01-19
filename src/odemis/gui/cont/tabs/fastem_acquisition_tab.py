@@ -30,7 +30,7 @@ from odemis.model import getVAs
 
 from odemis.acq.fastem import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3
 import odemis.acq.stream as acqstream
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import FastEMStreamsController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.acq.stream import EMStream
@@ -124,11 +124,11 @@ class FastEMAcquisitionTab(Tab):
         sem_stream.should_update.subscribe(self._is_stream_live)
         tab_data.streams.value.append(sem_stream)  # it should also be saved
         tab_data.semStream = sem_stream
-        self._streams_controller = streamcont.FastEMStreamsController(tab_data,
-                                                                      panel.pnl_fastem_acquisition_streams,
-                                                                      ignore_view=True,
-                                                                      view_ctrl=self.view_controller,
-                                                                      )
+        self._streams_controller = FastEMStreamsController(tab_data,
+                                                           panel.pnl_fastem_acquisition_streams,
+                                                           ignore_view=True,
+                                                           view_ctrl=self.view_controller,
+                                                           )
         self.sem_stream_cont = self._streams_controller.addStream(sem_stream, add_to_view=True)
         self.sem_stream_cont.stream_panel.show_remove_btn(False)
 

@@ -35,7 +35,7 @@ from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui
 import odemis.gui.cont.acquisition as acqcont
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import CryoAcquiredStreamsController, CryoStreamsController
 import odemis.gui.cont.views as viewcont
 from odemis.gui.cont import milling
 import odemis.gui.model as guimod
@@ -116,7 +116,7 @@ class LocalizationTab(Tab):
             tab_data
         )
 
-        self._streambar_controller = streamcont.CryoStreamsController(
+        self._streambar_controller = CryoStreamsController(
             tab_data,
             panel.pnl_secom_streams,
             view_ctrl=self.view_controller
@@ -125,7 +125,7 @@ class LocalizationTab(Tab):
         self._acquisition_controller = acqcont.CryoAcquiController(
             tab_data, panel, self)
 
-        self._acquired_stream_controller = streamcont.CryoAcquiredStreamsController(
+        self._acquired_stream_controller = CryoAcquiredStreamsController(
             tab_data,
             feature_view=tab_data.views.value[1],
             ov_view=tab_data.views.value[0],

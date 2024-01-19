@@ -25,7 +25,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import numpy
 from odemis.acq.stream import Stream, StaticSpectrumStream, BrightfieldStream, \
     SEMStream, FluoStream, StaticFluoStream, StaticSEMStream
-from odemis.gui.cont.streams import StreamBarController, StreamController
+from odemis.gui.cont.stream_bar import StreamBarController
+from odemis.gui.cont.stream import StreamController
 from odemis.util import conversion
 import time
 import unittest

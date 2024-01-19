@@ -37,7 +37,7 @@ from odemis import dataio
 from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui.cont.export as exportcont
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
@@ -222,7 +222,7 @@ class AnalysisTab(Tab):
         self._def_views = list(tab_data.visible_views.value)
 
         # Show the streams (when a file is opened)
-        self._stream_bar_controller = streamcont.StreamBarController(
+        self._stream_bar_controller = StreamBarController(
             tab_data,
             panel.pnl_inspection_streams,
             static=True

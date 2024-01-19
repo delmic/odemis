@@ -29,7 +29,7 @@ import wx
 from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import SparcStreamsController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.acq import leech
@@ -241,7 +241,7 @@ class SparcAcquisitionTab(Tab):
         tab_data.tool.subscribe(self.on_tool_change)
 
         # Create Stream Bar Controller
-        self._stream_controller = streamcont.SparcStreamsController(
+        self._stream_controller = SparcStreamsController(
             tab_data,
             panel.pnl_sparc_streams,
             ignore_view=True,  # Show all stream panels, independent of any selected viewport

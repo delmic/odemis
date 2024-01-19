@@ -41,7 +41,7 @@ from odemis.gui.comp.settings import SettingsPanel
 from odemis.gui.conf.data import HIDDEN_VAS, get_hw_config
 from odemis.gui.conf.util import bind_setting_context_menu, create_setting_entry, SettingEntry, \
     create_axis_entry
-from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.stream import StreamController
 from odemis.gui.model import CHAMBER_UNKNOWN, CHAMBER_VACUUM
 from odemis.gui.util import call_in_wx_main, formats_to_wildcards, get_picture_folder
 from odemis.model import getVAs, VigilantAttributeBase

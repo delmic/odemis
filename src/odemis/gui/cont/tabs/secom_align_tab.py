@@ -43,7 +43,7 @@ from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.cont.auto_center import AutoCenterController
 from odemis.gui.cont.fine_align import FineAlignController
-from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.stream import StreamController
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_SPOT, TOOL_NONE, TOOL_DICHO
 from odemis.gui.util import call_in_wx_main

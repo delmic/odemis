@@ -32,7 +32,7 @@ from odemis.model import getVAs
 
 from odemis.acq.align import fastem
 import odemis.acq.stream as acqstream
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import FastEMStreamsController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.acq.align.fastem import Calibrations
@@ -108,7 +108,7 @@ class FastEMOverviewTab(Tab):
         sem_stream.should_update.subscribe(self._is_stream_live)
         self.tab_data.streams.value.append(sem_stream)  # it should also be saved
         self.tab_data.semStream = sem_stream
-        self._stream_controller = streamcont.FastEMStreamsController(
+        self._stream_controller = FastEMStreamsController(
             self.tab_data,
             panel.pnl_fastem_overview_streams,
             ignore_view=True,  # Show all stream panels, independent of any selected viewport

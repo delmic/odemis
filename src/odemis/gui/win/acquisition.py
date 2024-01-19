@@ -46,7 +46,7 @@ from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.settings import (LocalizationSettingsController,
                                       SecomSettingsController)
-from odemis.gui.cont.streams import StreamBarController
+from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.main_xrc import xrcfr_acq, xrcfr_overview_acq
 from odemis.gui.model import TOOL_NONE, AcquisitionWindowData, StreamView
 from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,

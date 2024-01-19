@@ -37,7 +37,7 @@ from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
@@ -114,7 +114,7 @@ class Sparc2AlignTab(Tab):
             self.streak_unit.timeRange.value = self.streak_unit.timeRange.value
 
         # Create stream & view
-        self._stream_controller = streamcont.StreamBarController(
+        self._stream_controller = StreamBarController(
             tab_data,
             panel.pnl_streams,
             locked=True  # streams cannot be hidden/removed and fixed to the current view

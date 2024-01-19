@@ -30,7 +30,7 @@ import wx
 
 from odemis import model
 import odemis.acq.stream as acqstream
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.gui.cont import settings
@@ -58,7 +58,7 @@ class SparcAlignTab(Tab):
             tab_data,
         )
 
-        self._stream_controller = streamcont.StreamBarController(
+        self._stream_controller = StreamBarController(
             tab_data,
             panel.pnl_sparc_align_streams,
             locked=True
