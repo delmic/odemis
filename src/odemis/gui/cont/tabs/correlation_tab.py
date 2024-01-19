@@ -189,8 +189,9 @@ class CorrelationTab(Tab):
         path = self.conf.last_path
 
         wildcards, formats = guiutil.formats_to_wildcards(formats_to_ext, include_all=True)
+        msg = "Choose a file to load" if not tileset else "Choose a tileset to load"
         dialog = wx.FileDialog(self.panel,
-                            message="Choose a file to load",
+                            message=msg,
                             defaultDir=path,
                             defaultFile="",
                             style=wx.FD_OPEN | wx.FD_FILE_MUST_EXIST | wx.FD_MULTIPLE,
