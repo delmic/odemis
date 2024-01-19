@@ -352,7 +352,7 @@ SPARC2-4Spec: {
 # In reality, this is a Zyla, but you need libandor3-dev to simulate an AndorCam3
 "AR Camera": {
     class: andorcam2.AndorCam2,
-    role: ccd,
+    role: ccd0,
     power_supplier: "Power Control Unit",
     init: {
        device: "fake",
@@ -362,7 +362,7 @@ SPARC2-4Spec: {
 
 "Int Spectrometer 0": {
     class: spectrometer.CompositedSpectrometer,
-    role: spectrometer,
+    role: spectrometer0,
     dependencies: {detector: "AR Camera", spectrograph: "Integrated Spectrograph"},
     init: {
         transp: [1, 2], # only applied to the spectrometer data (not raw CCD)

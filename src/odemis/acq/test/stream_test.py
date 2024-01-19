@@ -2232,8 +2232,8 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
 
         # Find CCD & SEM components
         cls.microscope = model.getMicroscope()
-        cls.ccd = model.getComponent(role="sp-ccd1")
-        cls.spec = model.getComponent(role="spectrometer")
+        cls.ccd = model.getComponent(role="ccd0")
+        cls.spec = model.getComponent(role="spectrometer0")
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
         cls.scan_stage = model.getComponent(role="scan-stage")
@@ -2268,15 +2268,20 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         specs_sstage.useScanStage.value = True
 
         # Keep ROI minimal to keep the acquisition time as low as possible with a low repetition
-        #     roi ~ 20um x 20um
-        #     rep 5, 5
-        specs_sstage.roi.value = (0.492, 0.492, 0.508, 0.508)
-        specs_sstage.repetition.value = (5, 5)
+        #   roi ~ 19um x 28um
+        #   rep 4, 6
+        #   rectangular shape
+        specs_sstage.roi.value = (0.492, 0.49, 0.508, 0.51)
+        specs_sstage.repetition.value = (4, 6)
 
-        # ROI phys = (2.0600156250000022e-5, 2.0600156250000022e-5) = 20.6 um x 20.6 um
+        # determine the ROI's physical centre position, number of pixels and pixel size
         exp_cpos, exp_pxsize, exp_pxnum = roi_to_phys(specs_sstage)
-        # pos should be between -10.3e-6 and 10.3e-6 both x and y
-        roi_rng = (-(exp_pxsize[0] * exp_pxnum[0]) / 2, (exp_pxsize[1] * exp_pxnum[1]) / 2)
+        # determine the range of the ROI by calculating the physical size
+        rng_topleft = (exp_cpos[0] - ((exp_pxsize[0] * exp_pxnum[0]) / 2),
+                       exp_cpos[1] - ((exp_pxsize[1] * exp_pxnum[1]) / 2))
+        rng_bottomright = (exp_cpos[0] + ((exp_pxsize[0] * exp_pxnum[0]) / 2),
+                           exp_cpos[1] + ((exp_pxsize[1] * exp_pxnum[1]) / 2))
+        roi_rng = (rng_topleft, rng_bottomright)
 
         self.stage_positions = []
         self.ebeam_positions = []
@@ -2320,10 +2325,10 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
 
         # check if the centre pixel positions in stage_positions fall within the range of the selected ROI
         for pos in self.stage_positions:
-            self.assertGreater(pos["x"], roi_rng[0])
-            self.assertLess(pos["x"], roi_rng[1])
-            self.assertGreater(pos["y"], roi_rng[0])
-            self.assertLess(pos["y"], roi_rng[1])
+            self.assertGreater(pos["x"], roi_rng[0][0])
+            self.assertLess(pos["x"], roi_rng[1][0])
+            self.assertGreater(pos["y"], roi_rng[0][1])
+            self.assertLess(pos["y"], roi_rng[1][1])
 
     def test_scan_stage_wrapper_noccd(self):
         """
@@ -2371,9 +2376,9 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         f = self.sem_stage.moveAbs({"x": xrng_stage[0], "y": yrng_stage[0]})
         f.result()
 
-        # now go to the top left corner and create a ROI with out of range dimensions
-        specs_sstage.roi.value = (0, 0, 0.02, 0.02)
-        specs_sstage.repetition.value = (5, 5)
+        # now go to the top left corner and create a rectangular shaped ROI with out of range dimensions
+        specs_sstage.roi.value = (0, 0, 0.02, 0.025)
+        specs_sstage.repetition.value = (4, 6)
 
         # Run the acquisition
         f = sps.acquire()
