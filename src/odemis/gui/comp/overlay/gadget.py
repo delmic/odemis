@@ -32,7 +32,7 @@ import odemis.util.conversion as conversion
 import odemis.util.units as units
 import wx
 from odemis import util
-from odemis.gui.comp.overlay.base import (Label,Vec, WorldOverlay)
+from odemis.gui.comp.overlay.base import (Label, Vec, WorldOverlay)
 from odemis.gui.model import TOOL_LABEL, TOOL_NONE, TOOL_RULER
 
 LINE_MODE_NONE = 0
