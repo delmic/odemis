@@ -42,11 +42,11 @@ from odemis.acq.stream import (FastEMOverviewStream, MeanSpectrumProjection,
 from odemis.gui import (CONTROL_COMBO, CONTROL_FLT, FG_COLOUR_DIS,
                         FG_COLOUR_ERROR, FG_COLOUR_WARNING)
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
-from odemis.gui.comp.stream import (EVT_STREAM_PEAK, EVT_STREAM_VISIBLE,
-                                    OPT_BTN_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW,
-                                    OPT_BTN_TINT, OPT_BTN_UPDATE, OPT_FIT_RGB,
-                                    OPT_NAME_EDIT, OPT_NO_COLORMAPS,
-                                    StreamPanel)
+from odemis.gui.comp.stream_panel import (EVT_STREAM_PEAK, EVT_STREAM_VISIBLE,
+                                          OPT_BTN_PEAK, OPT_BTN_REMOVE, OPT_BTN_SHOW,
+                                          OPT_BTN_TINT, OPT_BTN_UPDATE, OPT_FIT_RGB,
+                                          OPT_NAME_EDIT, OPT_NO_COLORMAPS,
+                                          StreamPanel)
 from odemis.gui.conf import data
 from odemis.gui.conf.data import get_hw_config, get_local_vas
 from odemis.gui.conf.util import (SettingEntry, create_axis_entry,

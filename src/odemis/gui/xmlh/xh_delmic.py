@@ -31,7 +31,10 @@ import odemis.gui.comp.buttons as btns
 import odemis.gui.comp.foldpanelbar as fpb
 import odemis.gui.comp.viewport as vport
 import odemis.gui.comp.slider as slide
-import odemis.gui.comp.stream as strm
+from odemis.gui.comp.fastem import (FastEMCalibrationPanelHeader, FastEMOverviewSelectionPanel,
+                                    FastEMProjectList)
+from odemis.gui.comp.stream_bar import StreamBar
+from odemis.gui.comp.stream_panel import StreamPanel
 import odemis.gui.comp.grid as grid
 import odemis.gui.comp.text as txt
 import odemis.gui.cont.tools as tools
@@ -69,7 +72,7 @@ class StreamPanelXmlHandler(xrc.XmlResourceHandler):
 
         parent_window = self.GetParentAsWindow()
         # Now create the object
-        panel = strm.StreamPanel(
+        panel = StreamPanel(
             parent_window,
             self.GetID(),
             self.GetText('label'),
@@ -206,7 +209,7 @@ class StreamBarXmlHandler(xrc.XmlResourceHandler):
 
         if self.GetClass() == 'StreamBar':
             parent = self.GetParentAsWindow()
-            w = strm.StreamBar(parent,
+            w = StreamBar(parent,
                                  self.GetID(),
                                  self.GetPosition(),
                                  self.GetSize(),
@@ -236,7 +239,7 @@ class FastEMProjectBarXmlHandler(xrc.XmlResourceHandler):
 
         if self.GetClass() == 'FastEMProjectList':
             parent = self.GetParentAsWindow()
-            w = strm.FastEMProjectList(parent,
+            w = FastEMProjectList(parent,
                                        self.GetID(),
                                        self.GetPosition(),
                                        self.GetSize(),
@@ -266,7 +269,7 @@ class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
 
         if self.GetClass() == 'FastEMCalibrationPanelHeader':
             parent = self.GetParentAsWindow()
-            w = strm.FastEMCalibrationPanelHeader(parent,
+            w = FastEMCalibrationPanelHeader(parent,
                                                   self.GetID(),
                                                   self.GetPosition(),
                                                   self.GetSize(),
@@ -293,7 +296,7 @@ class FastEMAlignmentBarXmlHandler(xrc.XmlResourceHandler):
 
         if self.GetClass() == 'FastEMAlignmentBar':
             parent = self.GetParentAsWindow()
-            w = strm.FastEMAlignmentBar(parent,
+            w = FastEMAlignmentBar(parent,
                                         self.GetID(),
                                         self.GetPosition(),
                                         self.GetSize(),
@@ -320,7 +323,7 @@ class FastEMSelectionPanelXmlHandler(xrc.XmlResourceHandler):
 
         if self.GetClass() == 'FastEMSelectionPanel':
             parent = self.GetParentAsWindow()
-            w = strm.FastEMOverviewSelectionPanel(parent,
+            w = FastEMOverviewSelectionPanel(parent,
                                                   self.GetID(),
                                                   self.GetPosition(),
                                                   self.GetSize(),
