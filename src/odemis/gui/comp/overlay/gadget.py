@@ -1103,4 +1103,3 @@ class GadgetOverlay(WorldOverlay):
             tool.draw(ctx, highlighted, canvas=canvas, font_size=font_size)
             # The canvas is redrawn so we take the opportunity to check if it has been shifted/rescaled.
             tool.sync_with_canvas(shift=shift, scale=scale)
-

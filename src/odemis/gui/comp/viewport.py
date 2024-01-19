@@ -48,7 +48,7 @@ from odemis.gui.comp.overlay.ek import EKOverlay
 from odemis.gui.comp.overlay.mirror_arc import MirrorArcOverlay
 from odemis.gui.comp.overlay.sample_background import SampleBackgroundOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
-from odemis.gui.comp.overlay.view import CurveOverlay
+from odemis.gui.comp.overlay.curve import CurveOverlay
 from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN, CryoChamberGUIData
 from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \

@@ -29,7 +29,8 @@ import logging
 import pkg_resources
 import wx
 
-from odemis.gui.comp.overlay.view import CenteredLineOverlay, HORIZONTAL_LINE, CROSSHAIR
+from odemis.gui.comp.overlay.centered_line import (HORIZONTAL_LINE, CROSSHAIR,
+                                                   CenteredLineOverlay)
 from odemis.gui.comp.popup import show_message
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 

@@ -25,7 +25,7 @@ This file is part of Odemis.
 import odemis.gui as gui
 import odemis.util.conversion as conversion
 from odemis.gui.comp.overlay.base import WorldOverlay
-from odemis.gui.comp.overlay.view import CenteredLineOverlay
+from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
 from odemis.gui.util import call_in_wx_main
 
 
