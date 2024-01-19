@@ -42,7 +42,7 @@ from odemis.gui.acqmng import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
                                presets)
 from odemis.gui.comp import buttons
-from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
+from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf, util
 from odemis.gui.cont.settings import (LocalizationSettingsController,
                                       SecomSettingsController)

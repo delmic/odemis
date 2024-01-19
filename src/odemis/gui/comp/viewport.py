@@ -38,11 +38,17 @@ from odemis.acq.stream import SpectrumStream, \
     StaticStream, CLStream, FluoStream, \
     StaticFluoStream, Stream, DataProjection, POL_POSITIONS
 from odemis.gui import BG_COLOUR_LEGEND, FG_COLOUR_LEGEND
-from odemis.gui.comp import miccanvas, overlay
+from odemis.gui.comp import miccanvas
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE
 from odemis.gui.comp.legend import InfoLegend, AxisLegend, RadioLegend
-from odemis.gui.comp.overlay.world import CurrentPosCrossHairOverlay, CryoFeatureOverlay, \
-    StagePointSelectOverlay, MirrorArcOverlay, EKOverlay
+from odemis.gui.comp.overlay.box import BoxOverlay
+from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
+from odemis.gui.comp.overlay.current_pos_cross_hair import CurrentPosCrossHairOverlay
+from odemis.gui.comp.overlay.ek import EKOverlay
+from odemis.gui.comp.overlay.mirror_arc import MirrorArcOverlay
+from odemis.gui.comp.overlay.sample_background import SampleBackgroundOverlay
+from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
+from odemis.gui.comp.overlay.view import CurveOverlay
 from odemis.gui.img import getBitmap
 from odemis.gui.model import CHAMBER_VACUUM, CHAMBER_UNKNOWN, CryoChamberGUIData
 from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
@@ -672,7 +678,7 @@ class MicroscopeViewport(ViewPort):
         radius: the radius of a sample in m (all samples are shown with the same radius)
         """
         if not self._sample_overlay:
-            self._sample_overlay = overlay.world.SampleBackgroundOverlay(self.canvas, samples, radius)
+            self._sample_overlay = SampleBackgroundOverlay(self.canvas, samples, radius)
         self.canvas.add_world_overlay(self._sample_overlay)
         wx.CallAfter(self.canvas.request_drawing_update)
 
@@ -686,7 +692,7 @@ class MicroscopeViewport(ViewPort):
 
     def show_stage_limit_overlay(self):
         if not self.stage_limit_overlay:
-            self.stage_limit_overlay = overlay.world.BoxOverlay(self.canvas)
+            self.stage_limit_overlay = BoxOverlay(self.canvas)
         self.canvas.add_world_overlay(self.stage_limit_overlay)
         wx.CallAfter(self.canvas.request_drawing_update)
 
@@ -700,7 +706,7 @@ class MicroscopeViewport(ViewPort):
         roi (4 x float): ltrb, in m from the centre
         """
         if not self.stage_limit_overlay:
-            self.stage_limit_overlay = overlay.world.BoxOverlay(self.canvas)
+            self.stage_limit_overlay = BoxOverlay(self.canvas)
         self.stage_limit_overlay.set_dimensions(roi)
         
     def _on_stream_change(self, streams):
@@ -1811,7 +1817,7 @@ class PointSpectrumViewport(NavigablePlotViewport):
         self._peak_fitter = peak.PeakFitter()
         self._peak_future = model.InstantaneousFuture()
 
-        self._curve_overlay = overlay.view.CurveOverlay(self.canvas)
+        self._curve_overlay = CurveOverlay(self.canvas)
 
         super(PointSpectrumViewport, self).setView(view, tab_data)
 

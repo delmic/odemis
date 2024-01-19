@@ -42,11 +42,20 @@ from odemis import model
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.driver import simsem
 from odemis.driver.tmcm import TMCLController
+from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
+from odemis.gui.comp.overlay.current_pos_cross_hair import CurrentPosCrossHairOverlay
+from odemis.gui.comp.overlay.ek import EKOverlay
+from odemis.gui.comp.overlay.gadget import RulerGadget, LabelGadget
+from odemis.gui.comp.overlay.pixel_select import PixelSelectOverlay
+from odemis.gui.comp.overlay.points import PointsOverlay
+from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
+from odemis.gui.comp.overlay.spectrum_line_select import LineSelectOverlay, SpectrumLineSelectOverlay
+from odemis.gui.comp.overlay.spot_mode import SpotModeOverlay
+from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
+from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
 from odemis.gui.comp.overlay import view as vol
-from odemis.gui.comp.overlay import world as wol
 from odemis.gui.comp.overlay.view import (CROSSHAIR, HORIZONTAL_LINE,
                                           VERTICAL_LINE)
-from odemis.gui.comp.overlay.world import EKOverlay
 from odemis.gui.comp.viewport import ARLiveViewport, MicroscopeViewport
 from odemis.gui.model import (TOOL_LABEL, TOOL_LINE, TOOL_POINT, TOOL_RULER,
                               FeatureOverviewView)
@@ -294,7 +303,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.setView(fview, tab_mod)
         cnvs.view.show_crosshair.value = False
 
-        slol = wol.CurrentPosCrossHairOverlay(cnvs)
+        slol = CurrentPosCrossHairOverlay(cnvs)
         slol.active.value = True
         cnvs.add_world_overlay(slol)
         # stage start at 0,0 (cross hair at center) -> move bt 1mm, 1mm -> then back to 0,0
@@ -483,7 +492,7 @@ class OverlayTestCase(test.GuiTestCase):
         img = wx.Bitmap.ConvertToImage(cnvs._bmp_buffer)
         buffer_clear = wxImage2NDImage(img)
 
-        cryofeature_overlay = wol.CryoFeatureOverlay(cnvs, tab_mod)
+        cryofeature_overlay = CryoFeatureOverlay(cnvs, tab_mod)
         cnvs.add_world_overlay(cryofeature_overlay)
         cryofeature_overlay.active.value = True
 
@@ -524,7 +533,7 @@ class OverlayTestCase(test.GuiTestCase):
         tab_mod.focussedView.value = fview
         cnvs.setView(fview, tab_mod)
 
-        slol = wol.StagePointSelectOverlay(cnvs)
+        slol = StagePointSelectOverlay(cnvs)
         slol.active.value = True
         cnvs.add_world_overlay(slol)
 
@@ -604,7 +613,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
         cnvs.setView(view, tab_mod)
 
-        wsol = wol.WorldSelectOverlay(cnvs)
+        wsol = WorldSelectOverlay(cnvs)
         wsol.active.value = True
         cnvs.add_world_overlay(wsol)
 
@@ -632,7 +641,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        rsol = wol.RepetitionSelectOverlay(cnvs)
+        rsol = RepetitionSelectOverlay(cnvs)
         rsol.active.value = True
         cnvs.add_world_overlay(rsol)
         cnvs.scale = 400
@@ -648,7 +657,7 @@ class OverlayTestCase(test.GuiTestCase):
             self.assertAlmostEqual(o, b, msg="wroi (%s) != bak (%s)" % (wroi, wroi_back))
 
         rsol.repetition = (3, 2)
-        rsol.fill = wol.RepetitionSelectOverlay.FILL_POINT
+        rsol.fill = RepetitionSelectOverlay.FILL_POINT
 
         pos = cnvs.margins[0] + 10,  cnvs.margins[1] + 10
         rsol.add_label("Repetition fill will change in 2 seconds.",
@@ -659,7 +668,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         rsol.set_physical_sel((-0.1, -0.3, 0.4, 0.4))
         rsol.repetition = (50, 80)
-        rsol.fill = wol.RepetitionSelectOverlay.FILL_GRID
+        rsol.fill = RepetitionSelectOverlay.FILL_GRID
 
         pos = cnvs.margins[0] + 10, cnvs.margins[1] + 10
         rsol.add_label("Repetition fill will change in 2 seconds.",
@@ -670,7 +679,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         # Fine grid => solid colour
         rsol.repetition = (500, 800)
-        rsol.fill = wol.RepetitionSelectOverlay.FILL_GRID
+        rsol.fill = RepetitionSelectOverlay.FILL_GRID
 
         pos = cnvs.margins[0] + 10, cnvs.margins[1] + 10
         rsol.add_label("Repetition fill will change in 2 seconds.",
@@ -705,7 +714,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         roa = model.TupleVA(UNDEFINED_ROI)
-        rsol = wol.RepetitionSelectOverlay(cnvs, roa=roa, scanner=ebeam)
+        rsol = RepetitionSelectOverlay(cnvs, roa=roa, scanner=ebeam)
         rsol.active.value = True
         cnvs.add_world_overlay(rsol)
         cnvs.scale = 100000
@@ -755,7 +764,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         spotPosition = model.TupleVA((0.1, 0.1))
-        sol = wol.SpotModeOverlay(cnvs, spot_va=spotPosition, scanner=ebeam)
+        sol = SpotModeOverlay(cnvs, spot_va=spotPosition, scanner=ebeam)
         sol.active.value = True
         cnvs.add_world_overlay(sol)
         cnvs.scale = 100000
@@ -783,7 +792,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.setView(view, tab_mod)
         cnvs.current_mode = TOOL_POINT
 
-        psol = wol.PixelSelectOverlay(cnvs)
+        psol = PixelSelectOverlay(cnvs)
         psol.active.value = True
         psol.enabled = True
 
@@ -837,7 +846,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.setView(view, tab_mod)
         cnvs.current_mode = TOOL_POINT
 
-        slol = wol.SpectrumLineSelectOverlay(cnvs)
+        slol = SpectrumLineSelectOverlay(cnvs)
         slol.active.value = True
 
         cnvs.add_world_overlay(slol)
@@ -908,7 +917,7 @@ class OverlayTestCase(test.GuiTestCase):
         # Create a "big ruler"
         p_start_pos = (-0.00055, -0.00055)
         p_end_pos = (0.00055, 0.00055)
-        ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        ruler = RulerGadget(cnvs, p_start_pos, p_end_pos)
         gol._tools.append(ruler)
 
         # Create a 10 px ruler
@@ -917,7 +926,7 @@ class OverlayTestCase(test.GuiTestCase):
         offset = cnvs.get_half_buffer_size()
         p_start_pos = cnvs.view_to_phys(v_start_pos, offset)
         p_end_pos = cnvs.view_to_phys(v_end_pos, offset)
-        ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        ruler = RulerGadget(cnvs, p_start_pos, p_end_pos)
         gol._tools.append(ruler)
 
         # Create a 1 px ruler
@@ -926,13 +935,13 @@ class OverlayTestCase(test.GuiTestCase):
         offset = cnvs.get_half_buffer_size()
         p_start_pos = cnvs.buffer_to_phys(b_start_pos, offset)
         p_end_pos = cnvs.buffer_to_phys(b_end_pos, offset)
-        ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        ruler = RulerGadget(cnvs, p_start_pos, p_end_pos)
         gol._tools.append(ruler)
 
         # Add one ruler that will become the selected ruler
         p_start_pos = (0, 0)
         p_end_pos = (0, 0.00035)
-        selected_ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        selected_ruler = RulerGadget(cnvs, p_start_pos, p_end_pos)
         gol._tools.append(selected_ruler)
 
         # Update drawing
@@ -966,7 +975,7 @@ class OverlayTestCase(test.GuiTestCase):
         offset = cnvs.get_half_buffer_size()
         p_start_pos = cnvs.view_to_phys(v_start_pos, offset)
         p_end_pos = cnvs.view_to_phys(v_end_pos, offset)
-        label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        label = LabelGadget(cnvs, p_start_pos, p_end_pos)
         label.text = 'A label is added'
         gol._tools.append(label)
 
@@ -1004,7 +1013,7 @@ class OverlayTestCase(test.GuiTestCase):
         # Create a "big label"
         p_start_pos = (-0.00055, -0.00055)
         p_end_pos = (0.00055, 0.00055)
-        label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        label = LabelGadget(cnvs, p_start_pos, p_end_pos)
         label.text = 'label1'
         gol._tools.append(label)
 
@@ -1014,7 +1023,7 @@ class OverlayTestCase(test.GuiTestCase):
         offset = cnvs.get_half_buffer_size()
         p_start_pos = cnvs.view_to_phys(v_start_pos, offset)
         p_end_pos = cnvs.view_to_phys(v_end_pos, offset)
-        label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        label = LabelGadget(cnvs, p_start_pos, p_end_pos)
         label.text = 'label2'
         gol._tools.append(label)
 
@@ -1024,14 +1033,14 @@ class OverlayTestCase(test.GuiTestCase):
         offset = cnvs.get_half_buffer_size()
         p_start_pos = cnvs.buffer_to_phys(b_start_pos, offset)
         p_end_pos = cnvs.buffer_to_phys(b_end_pos, offset)
-        label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        label = LabelGadget(cnvs, p_start_pos, p_end_pos)
         label.text = 'label3'
         gol._tools.append(label)
 
         # Add one ruler that will become the selected ruler
         p_start_pos = (0, 0)
         p_end_pos = (0, 0.00035)
-        selected_label = wol.LabelGadget(cnvs, p_start_pos, p_end_pos)
+        selected_label = LabelGadget(cnvs, p_start_pos, p_end_pos)
         selected_label.text = 'label4'
         gol._tools.append(selected_label)
 
@@ -1067,7 +1076,7 @@ class OverlayTestCase(test.GuiTestCase):
         offset = cnvs.get_half_buffer_size()
         p_start_pos = cnvs.view_to_phys(v_start_pos, offset)
         p_end_pos = cnvs.view_to_phys(v_end_pos, offset)
-        ruler = wol.RulerGadget(cnvs, p_start_pos, p_end_pos)
+        ruler = RulerGadget(cnvs, p_start_pos, p_end_pos)
         gol._tools.append(ruler)
 
         # Update drawing
@@ -1094,7 +1103,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.setView(view, tab_mod)
         cnvs.current_mode = TOOL_LINE
 
-        lsol = wol.LineSelectOverlay(cnvs)
+        lsol = LineSelectOverlay(cnvs)
         lsol.active.value = True
         lsol.enabled = True
 
@@ -1129,7 +1138,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.setView(view, tab_mod)
 
         # Manually add the overlay
-        pol = wol.PointsOverlay(cnvs)
+        pol = PointsOverlay(cnvs)
         cnvs.add_world_overlay(pol)
 
         cnvs.current_mode = guimodel.TOOL_POINT

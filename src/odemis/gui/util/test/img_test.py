@@ -40,7 +40,7 @@ from odemis.acq.stream import (POL_POSITIONS, POL_POSITIONS_RESULTS,
                                SinglePointSpectrumProjection,
                                SinglePointTemporalProjection)
 from odemis.dataio import tiff
-from odemis.gui.comp.overlay import world as wol
+from odemis.gui.comp.overlay.gadget import RulerGadget, LabelGadget
 from odemis.gui.model import TOOL_LABEL, TOOL_RULER
 from odemis.gui.util import img
 from odemis.gui.util.img import (calculate_ticks, format_rgba_darray,
@@ -1209,7 +1209,7 @@ class TestSpatialExport(test.GuiTestCase):
         # Create a ruler
         p_start_pos = tuple(view_pos)
         p_end_pos = (0.00055, 0.00055)
-        ruler = wol.RulerGadget(canvas, p_start_pos, p_end_pos)
+        ruler = RulerGadget(canvas, p_start_pos, p_end_pos)
         canvas.gadget_overlay._tools.append(ruler)
 
         # Export while there is a canvas with a ruler overlay and a ruler was drawn on it.
@@ -1251,7 +1251,7 @@ class TestSpatialExport(test.GuiTestCase):
         # Create a label
         p_start_pos = tuple(view_pos)
         p_end_pos = (0.00055, 0.00055)
-        label = wol.LabelGadget(canvas, p_start_pos, p_end_pos)
+        label = LabelGadget(canvas, p_start_pos, p_end_pos)
         canvas.gadget_overlay._tools.append(label)
 
         # Export while there is a canvas with a ruler overlay and a ruler was drawn on it.

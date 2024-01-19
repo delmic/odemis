@@ -45,7 +45,7 @@ import numpy
 from odemis import dataio, model, util, gui
 from odemis.acq import leech, acqmng
 from odemis.dataio import tiff
-from odemis.gui.comp.overlay.world import RepetitionSelectOverlay
+from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf import util as cutil
 from odemis.gui.model import TOOL_ROA, TOOL_RO_ANCHOR, TOOL_NONE

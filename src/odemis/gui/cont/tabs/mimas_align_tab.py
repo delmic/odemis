@@ -29,7 +29,7 @@ import logging
 import pkg_resources
 import wx
 
-from odemis.gui.comp.overlay.world import CryoFeatureOverlay
+from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
 from odemis.model import BAND_PASS_THROUGH, InstantaneousFuture
 
 from odemis import model
