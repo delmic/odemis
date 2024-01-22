@@ -38,7 +38,7 @@ from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
                                   FocusingMethod, acquireOverview)
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
                                OpticalStream, ScannedFluoStream)
-from odemis.gui.acqmng import (apply_preset, get_global_settings_entries,
+from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
                                presets)
 from odemis.gui.comp import buttons
