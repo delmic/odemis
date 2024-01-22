@@ -48,7 +48,7 @@ from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTem
     TemporalSpectrumSettingsStream, FluoStream, StaticStream, BrightfieldStream, \
     AngularSpectrumSettingsStream
 from odemis.gui import conf, FG_COLOUR_BUTTON
-from odemis.gui.acqmng import preset_as_is, get_global_settings_entries, \
+from odemis.gui.preset import preset_as_is, get_global_settings_entries, \
     get_local_settings_entries, apply_preset
 from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS
