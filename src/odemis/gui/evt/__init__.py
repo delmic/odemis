@@ -18,6 +18,7 @@ see http://www.gnu.org/licenses/.
 
 """
 import wx
+import wx.lib.newevent
 
 # Custom events created for the Powermate rotating knob
 _EVT_KNOB_ROTATE_type = wx.NewEventType()
@@ -60,3 +61,9 @@ class KnobPressEvent(wx.PyCommandEvent):
 
     def AltDown(self):
         return wx.GetKeyState(wx.WXK_ALT)
+
+
+# Used by StreamPanel, StreamBar, StreamController, FastEMProjectList
+StreamRemoveEvent, EVT_STREAM_REMOVE = wx.lib.newevent.NewEvent()
+StreamVisibleEvent, EVT_STREAM_VISIBLE = wx.lib.newevent.NewEvent()
+StreamPeakEvent, EVT_STREAM_PEAK = wx.lib.newevent.NewEvent()

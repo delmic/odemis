@@ -29,13 +29,16 @@ from odemis.gui import FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR_STREAM, \
     FG_COLOUR_BUTTON
 from odemis.gui import img
 from odemis.gui.comp import buttons
-from odemis.gui.comp._constants import CAPTION_PADDING_RIGHT, EVT_STREAM_REMOVE, ICON_WIDTH, ICON_HEIGHT
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
 from odemis.gui.comp.slider import UnitFloatSlider
 from odemis.gui.comp.text import PatternValidator
+from odemis.gui.evt import EVT_STREAM_REMOVE
 import wx
 import wx.lib.newevent
+
+CAPTION_PADDING_RIGHT = 5
+ICON_WIDTH, ICON_HEIGHT = 16, 16
 
 
 class FastEMProjectPanelHeader(wx.Control):

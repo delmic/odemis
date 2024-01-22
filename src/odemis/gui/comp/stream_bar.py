@@ -27,8 +27,8 @@ import logging
 from odemis import acq
 from odemis.gui import FG_COLOUR_BUTTON
 from odemis.gui.comp import buttons
-from odemis.gui.comp._constants import EVT_STREAM_REMOVE
 from odemis.gui.comp.foldpanelbar import FoldPanelItem
+from odemis.gui.evt import EVT_STREAM_REMOVE
 import wx
 
 

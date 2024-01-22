@@ -31,8 +31,6 @@ from odemis.gui import FG_COLOUR_EDIT, FG_COLOUR_MAIN, BG_COLOUR_MAIN, BG_COLOUR
     FG_COLOUR_DIS, FG_COLOUR_RADIO_ACTIVE
 from odemis.gui import img
 from odemis.gui.comp import buttons
-from odemis.gui.comp._constants import (stream_remove_event, CAPTION_PADDING_RIGHT,
-                                        ICON_HEIGHT, ICON_WIDTH)
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.comp.combo import ComboBox, ColorMapComboBox
 from odemis.gui.comp.file import FileBrowser
@@ -41,6 +39,7 @@ from odemis.gui.comp.radio import GraphicalRadioButtonControl
 from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitIntegerSlider, Slider
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
+from odemis.gui.evt import StreamRemoveEvent, StreamVisibleEvent, StreamPeakEvent
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
@@ -48,9 +47,6 @@ import wx
 import wx.lib.newevent
 from odemis.gui.conf.data import COLORMAPS
 import matplotlib.colors as colors
-
-stream_visible_event, EVT_STREAM_VISIBLE = wx.lib.newevent.NewEvent()
-stream_peak_event, EVT_STREAM_PEAK = wx.lib.newevent.NewEvent()
 
 # Values to control which option is available
 OPT_NAME_EDIT = 1  # allow the renaming of the stream (for one time only)
@@ -63,6 +59,9 @@ OPT_FIT_RGB = 64  # allow a Fit RGB colormap (for spectrum stremas)
 OPT_NO_COLORMAPS = 128  # do not allow additional colormaps. Typical for an RGB image
 
 TINT_CUSTOM_TEXT = u"Custom tint…"
+
+CAPTION_PADDING_RIGHT = 5
+ICON_WIDTH, ICON_HEIGHT = 16, 16
 
 
 @decorator
@@ -688,17 +687,17 @@ class StreamPanel(wx.Panel):
         logging.debug("Remove button clicked for '%s'", self.stream.name.value)
 
         # generate EVT_STREAM_REMOVE
-        event = stream_remove_event(spanel=self)
+        event = StreamRemoveEvent(spanel=self)
         wx.PostEvent(self, event)
 
     def on_visibility_btn(self, evt):
         # generate EVT_STREAM_VISIBLE
-        event = stream_visible_event(visible=self._header.btn_show.GetToggle())
+        event = StreamVisibleEvent(visible=self._header.btn_show.GetToggle())
         wx.PostEvent(self, event)
 
     def on_peak_btn(self, evt):
         # generate EVT_STREAM_PEAK
-        event = stream_peak_event(state=self._header.btn_peak.GetState())
+        event = StreamPeakEvent(state=self._header.btn_peak.GetState())
         wx.PostEvent(self, event)
 
     @staticmethod
