@@ -42,20 +42,26 @@ from odemis import model
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.driver import simsem
 from odemis.driver.tmcm import TMCLController
+from odemis.gui.comp.overlay.centered_line import (CROSSHAIR, HORIZONTAL_LINE,
+                                                   VERTICAL_LINE, CenteredLineOverlay)
 from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
 from odemis.gui.comp.overlay.current_pos_cross_hair import CurrentPosCrossHairOverlay
+from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
 from odemis.gui.comp.overlay.ek import EKOverlay
 from odemis.gui.comp.overlay.gadget import RulerGadget, LabelGadget
+from odemis.gui.comp.overlay.history import HistoryOverlay
+from odemis.gui.comp.overlay.marking_line import MarkingLineOverlay
 from odemis.gui.comp.overlay.pixel_select import PixelSelectOverlay
+from odemis.gui.comp.overlay.play_icon import PlayIconOverlay
+from odemis.gui.comp.overlay.point_select import PointSelectOverlay
 from odemis.gui.comp.overlay.points import PointsOverlay
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.comp.overlay.spectrum_line_select import LineSelectOverlay, SpectrumLineSelectOverlay
-from odemis.gui.comp.overlay.spot_mode import SpotModeOverlay
+from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
 from odemis.gui.comp.overlay.stage_point_select import StagePointSelectOverlay
+from odemis.gui.comp.overlay.text_view import TextViewOverlay
+from odemis.gui.comp.overlay.view_select import ViewSelectOverlay
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
-from odemis.gui.comp.overlay import view as vol
-from odemis.gui.comp.overlay.view import (CROSSHAIR, HORIZONTAL_LINE,
-                                          VERTICAL_LINE)
 from odemis.gui.comp.viewport import ARLiveViewport, MicroscopeViewport
 from odemis.gui.model import (TOOL_LABEL, TOOL_LINE, TOOL_POINT, TOOL_RULER,
                               FeatureOverviewView)
@@ -97,7 +103,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = canvas.BitmapCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        ol = vol.TextViewOverlay(cnvs)
+        ol = TextViewOverlay(cnvs)
         cnvs.add_view_overlay(ol)
 
         for f in (False, True):
@@ -118,7 +124,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = canvas.BitmapCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        ol = vol.TextViewOverlay(cnvs)
+        ol = TextViewOverlay(cnvs)
         cnvs.add_view_overlay(ol)
 
         ol.add_label("TextViewOverlay left",
@@ -203,7 +209,7 @@ class OverlayTestCase(test.GuiTestCase):
     def test_text_view_overlay_rotate(self):
         cnvs = canvas.BitmapCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
-        ol = vol.TextViewOverlay(cnvs)
+        ol = TextViewOverlay(cnvs)
         ol.canvas_padding = 0
         cnvs.add_view_overlay(ol)
 
@@ -267,15 +273,15 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        hol = vol.CenteredLineOverlay(cnvs, shape=CROSSHAIR)
+        hol = CenteredLineOverlay(cnvs, shape=CROSSHAIR)
         cnvs.add_view_overlay(hol)
         test.gui_loop()
 
-        hol = vol.CenteredLineOverlay(cnvs, shape=HORIZONTAL_LINE)
+        hol = CenteredLineOverlay(cnvs, shape=HORIZONTAL_LINE)
         cnvs.add_view_overlay(hol)
         test.gui_loop()
 
-        hol = vol.CenteredLineOverlay(cnvs, shape=VERTICAL_LINE)
+        hol = CenteredLineOverlay(cnvs, shape=VERTICAL_LINE)
         cnvs.add_view_overlay(hol)
         test.gui_loop()
 
@@ -328,7 +334,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.background_brush = wx.BRUSHSTYLE_CROSS_HATCH
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        sol = vol.SpotModeOverlay(cnvs)
+        sol = SpotModeViewOverlay(cnvs)
         sol.active.value = True
         cnvs.add_view_overlay(sol)
         cnvs.update_drawing()
@@ -338,7 +344,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        sol = vol.PlayIconOverlay(cnvs)
+        sol = PlayIconOverlay(cnvs)
         cnvs.add_view_overlay(sol)
         test.gui_loop(0.1)
         sol.hide_pause(False)
@@ -367,7 +373,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        vsol = vol.ViewSelectOverlay(cnvs)
+        vsol = ViewSelectOverlay(cnvs)
         vsol.active.value = True
         cnvs.add_view_overlay(vsol)
         # cnvs.current_mode = guimodel.TOOL_ZOOM
@@ -389,16 +395,16 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs.Refresh()
 
         test.gui_loop(0.5)
-        mlol.orientation = vol.MarkingLineOverlay.HORIZONTAL
+        mlol.orientation = MarkingLineOverlay.HORIZONTAL
         cnvs.Refresh()
 
         test.gui_loop(0.5)
-        mlol.orientation = vol.MarkingLineOverlay.VERTICAL
+        mlol.orientation = MarkingLineOverlay.VERTICAL
         mlol.val.value = (301e-9, 12e-6)
         cnvs.Refresh()
 
         test.gui_loop(0.5)
-        mlol.orientation = vol.MarkingLineOverlay.HORIZONTAL | vol.MarkingLineOverlay.VERTICAL
+        mlol.orientation = MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL
         mlol.val.value = (401e-9, 20e-6)
         cnvs.Refresh()
 
@@ -414,7 +420,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         lva = model.ListVA()
 
-        dol = vol.DichotomyOverlay(cnvs, lva)
+        dol = DichotomyOverlay(cnvs, lva)
         cnvs.add_view_overlay(dol)
 
         def do_stuff(value):
@@ -444,7 +450,7 @@ class OverlayTestCase(test.GuiTestCase):
         cnvs = miccanvas.DblMicroscopeCanvas(self.panel)
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
-        slol = vol.PointSelectOverlay(cnvs)
+        slol = PointSelectOverlay(cnvs)
         slol.active.value = True
 
         def print_pos(pos):
@@ -556,7 +562,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
         history_va = model.ListVA()
 
-        hol = vol.HistoryOverlay(cnvs, history_va)
+        hol = HistoryOverlay(cnvs, history_va)
         cnvs.add_view_overlay(hol)
 
         test.gui_loop()
@@ -617,7 +623,7 @@ class OverlayTestCase(test.GuiTestCase):
         wsol.active.value = True
         cnvs.add_world_overlay(wsol)
 
-        tol = vol.TextViewOverlay(cnvs)
+        tol = TextViewOverlay(cnvs)
         tol.add_label("Right click to toggle tool")
         cnvs.add_view_overlay(tol)
 
@@ -688,7 +694,7 @@ class OverlayTestCase(test.GuiTestCase):
         # cnvs.update_drawing()
         test.gui_loop(2)
 
-        tol = vol.TextViewOverlay(cnvs)
+        tol = TextViewOverlay(cnvs)
         tol.add_label("Right click to toggle tool")
         cnvs.add_view_overlay(tol)
 
@@ -764,7 +770,7 @@ class OverlayTestCase(test.GuiTestCase):
         self.add_control(cnvs, wx.EXPAND, proportion=1, clear=True)
 
         spotPosition = model.TupleVA((0.1, 0.1))
-        sol = SpotModeOverlay(cnvs, spot_va=spotPosition, scanner=ebeam)
+        sol = SpotModeWorldOverlay(cnvs, spot_va=spotPosition, scanner=ebeam)
         sol.active.value = True
         cnvs.add_world_overlay(sol)
         cnvs.scale = 100000
@@ -809,7 +815,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         # Tool toggle for debugging
 
-        tol = vol.TextViewOverlay(cnvs)
+        tol = TextViewOverlay(cnvs)
         tol.add_label("Right click to toggle tool", (10, 30))
         cnvs.add_view_overlay(tol)
 
@@ -860,7 +866,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         # Tool toggle for debugging
 
-        tol = vol.TextViewOverlay(cnvs)
+        tol = TextViewOverlay(cnvs)
         tol.add_label("Right click to toggle tool", (10, 30))
         cnvs.add_view_overlay(tol)
 
@@ -1113,7 +1119,7 @@ class OverlayTestCase(test.GuiTestCase):
 
         # Tool toggle for debugging
 
-        tol = vol.TextViewOverlay(cnvs)
+        tol = TextViewOverlay(cnvs)
         tol.add_label("Right click to toggle tool activation", (10, 10))
         cnvs.add_view_overlay(tol)
 

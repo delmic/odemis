@@ -30,7 +30,6 @@ from odemis.acq import stream
 from odemis.acq.stream import DataProjection
 from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
 from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE, BitmapCanvas
-from odemis.gui.comp.overlay.view import HistoryOverlay, PointSelectOverlay, MarkingLineOverlay
 from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
     call_in_wx_main
 from odemis.gui.util.img import format_rgba_darray, apply_flip
@@ -44,16 +43,25 @@ from wx.lib.imageutils import stepColour
 import wx.lib.newevent
 
 import odemis.gui as gui
+import odemis.gui.comp.canvas as canvas
+from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
 from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
+from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
 from odemis.gui.comp.overlay.fastem import FastEMROAOverlay, FastEMROCOverlay, FastEMBackgroundOverlay
+from odemis.gui.comp.overlay.focus import FocusOverlay
 from odemis.gui.comp.overlay.gadget import GadgetOverlay
+from odemis.gui.comp.overlay.history import HistoryOverlay
+from odemis.gui.comp.overlay.marking_line import MarkingLineOverlay
 from odemis.gui.comp.overlay.pixel_select import PixelSelectOverlay
+from odemis.gui.comp.overlay.pixel_value import PixelValueOverlay
+from odemis.gui.comp.overlay.play_icon import PlayIconOverlay
+from odemis.gui.comp.overlay.point_select import PointSelectOverlay
 from odemis.gui.comp.overlay.points import PointsOverlay
+from odemis.gui.comp.overlay.polar import PolarOverlay
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.comp.overlay.spectrum_line_select import SpectrumLineSelectOverlay
-from odemis.gui.comp.overlay.spot_mode import SpotModeOverlay
-import odemis.gui.comp.canvas as canvas
-import odemis.gui.comp.overlay.view as view_overlay
+from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
+from odemis.gui.comp.overlay.text_view import TextViewOverlay
 import odemis.gui.model as guimodel
 import wx.lib.wxcairo as wxcairo
 
@@ -125,7 +133,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         self.cryofeature_overlay = None
 
         # play/pause icon
-        self.play_overlay = view_overlay.PlayIconOverlay(self)
+        self.play_overlay = PlayIconOverlay(self)
         self.add_view_overlay(self.play_overlay)
 
         # Unused at the moment
@@ -290,7 +298,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Activate the cross hair view overlay """
         if activated:
             if self._crosshair_ol is None:
-                self._crosshair_ol = view_overlay.CenteredLineOverlay(self)
+                self._crosshair_ol = CenteredLineOverlay(self)
             self.add_view_overlay(self._crosshair_ol)
         elif self._crosshair_ol:
             self.remove_view_overlay(self._crosshair_ol)
@@ -306,7 +314,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if activated:
             if self._pixelvalue_ol is None:
                 view = self.view
-                self._pixelvalue_ol = view_overlay.PixelValueOverlay(self, view)
+                self._pixelvalue_ol = PixelValueOverlay(self, view)
             self.add_view_overlay(self._pixelvalue_ol)
             self._pixelvalue_ol.active.value = True
         elif self._pixelvalue_ol:
@@ -318,7 +326,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         """ Called when GUI debug mode changes => display FPS overlay """
         if activated:
             if self._fps_ol is None:
-                self._fps_ol = view_overlay.TextViewOverlay(self)
+                self._fps_ol = TextViewOverlay(self)
                 self._fps_ol.add_label("")
             self.add_view_overlay(self._fps_ol)
         elif self._fps_ol:
@@ -333,11 +341,11 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             if self._spotmode_ol is None:
                 if use_world:
                     spot_va = self._tab_data_model.spotPosition
-                    self._spotmode_ol = SpotModeOverlay(self, spot_va,
-                                                                      self._tab_data_model.fovComp)
+                    self._spotmode_ol = SpotModeWorldOverlay(self, spot_va,
+                                                             self._tab_data_model.fovComp)
                 else:
                     spot_va = None
-                    self._spotmode_ol = view_overlay.SpotModeOverlay(self, spot_va)
+                    self._spotmode_ol = SpotModeViewOverlay(self, spot_va)
 
             if use_world:
                 self.add_world_overlay(self._spotmode_ol)
@@ -361,7 +369,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
 
         if tool_mode == guimodel.TOOL_DICHO:
             if not self.dicho_overlay:
-                self.dicho_overlay = view_overlay.DichotomyOverlay(self,
+                self.dicho_overlay = DichotomyOverlay(self,
                                                                    self._tab_data_model.dicho_seq)
                 self.add_view_overlay(self.dicho_overlay)
             self.dicho_overlay.active.value = True
@@ -751,7 +759,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
             self.focus_timer.Stop()
 
         if not self._focus_overlay:
-            self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
+            self._focus_overlay = self.add_view_overlay(FocusOverlay(self))
 
         # Set a timer to clear the overlay in x seconds
         self.focus_timer = wx.CallLater(5000, self._hide_focus_overlay)
@@ -854,7 +862,7 @@ class DblMicroscopeCanvas(canvas.DraggableCanvas):
         if CAN_FOCUS in self.abilities and not self.dragging:
             # Create the overlay, on the first time it is needed
             if not self._focus_overlay:
-                self._focus_overlay = self.add_view_overlay(view_overlay.FocusOverlay(self))
+                self._focus_overlay = self.add_view_overlay(FocusOverlay(self))
             # Note: Set the cursor before the super method is called.
             # There is a Ubuntu/wxPython related bug that SetCursor does not work once CaptureMouse
             # is called (which happens in the super method).
@@ -1209,7 +1217,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
         super(BarPlotCanvas, self).__init__(*args, **kwargs)
 
         # play/pause icon
-        self.play_overlay = view_overlay.PlayIconOverlay(self)
+        self.play_overlay = PlayIconOverlay(self)
         self.add_view_overlay(self.play_overlay)
 
         self.drag_init_pos = None
@@ -1220,7 +1228,7 @@ class BarPlotCanvas(canvas.PlotCanvas):
         self.closed = canvas.PLOT_CLOSE_BOTTOM
         self.plot_mode = canvas.PLOT_MODE_BAR
 
-        self.markline_overlay = view_overlay.MarkingLineOverlay(self,
+        self.markline_overlay = MarkingLineOverlay(self,
             orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL,
             map_y_from_x=True)
         self.add_view_overlay(self.markline_overlay)
@@ -1492,12 +1500,12 @@ class TwoDPlotCanvas(BitmapCanvas):
         self._crosshair_ol = None
         self._pixelvalue_ol = None
 
-        self.markline_overlay = view_overlay.MarkingLineOverlay(self,
+        self.markline_overlay = MarkingLineOverlay(self,
             orientation=MarkingLineOverlay.HORIZONTAL | MarkingLineOverlay.VERTICAL)
         self.add_view_overlay(self.markline_overlay)
 
         # play/pause icon
-        self.play_overlay = view_overlay.PlayIconOverlay(self)
+        self.play_overlay = PlayIconOverlay(self)
         self.add_view_overlay(self.play_overlay)
 
         self.background_brush = wx.BRUSHSTYLE_SOLID
@@ -1583,7 +1591,7 @@ class TwoDPlotCanvas(BitmapCanvas):
         """ Activate the cross hair view overlay """
         if activated:
             if self._crosshair_ol is None:
-                self._crosshair_ol = view_overlay.CenteredLineOverlay(self)
+                self._crosshair_ol = CenteredLineOverlay(self)
             self.add_view_overlay(self._crosshair_ol)
         elif self._crosshair_ol:
             self.remove_view_overlay(self._crosshair_ol)
@@ -1595,7 +1603,7 @@ class TwoDPlotCanvas(BitmapCanvas):
         if activated:
             if self._pixelvalue_ol is None:
                 view = self.view
-                self._pixelvalue_ol = view_overlay.PixelValueOverlay(self, view)
+                self._pixelvalue_ol = PixelValueOverlay(self, view)
             self.add_view_overlay(self._pixelvalue_ol)
         elif self._pixelvalue_ol:
             self.remove_view_overlay(self._pixelvalue_ol)
@@ -1674,7 +1682,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
 
         # Overlays
 
-        self.polar_overlay = view_overlay.PolarOverlay(self)
+        self.polar_overlay = PolarOverlay(self)
         self.polar_overlay.canvas_padding = 10
         self.add_view_overlay(self.polar_overlay)
 

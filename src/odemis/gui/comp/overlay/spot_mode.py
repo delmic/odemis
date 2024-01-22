@@ -25,11 +25,12 @@ This file is part of Odemis.
 import logging
 
 import wx
-from odemis.gui.comp.overlay.base import (DragMixin, SpotModeBase, WorldOverlay)
+from odemis.gui.comp.overlay.base import (DragMixin, SpotModeBase, ViewOverlay,
+                                          WorldOverlay)
 from odemis.util.comp import compute_scanner_fov, get_fov_rect
 
 
-class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
+class SpotModeWorldOverlay(WorldOverlay, DragMixin, SpotModeBase):
     """ Render the spot mode indicator in the center of the view
 
     If a position is provided, the spot will be drawn there.
@@ -187,3 +188,61 @@ class SpotModeOverlay(WorldOverlay, DragMixin, SpotModeBase):
         # callback for .active VA
         self.p_pos = None
         WorldOverlay._deactivate(self)
+
+
+class SpotModeViewOverlay(ViewOverlay, DragMixin, SpotModeBase):
+    """ Render the spot mode indicator in the center of the view
+
+    If a position is provided, the spot will be drawn there.
+
+    If the overlay is activated, the user can use the mouse cursor to select a position
+
+
+    """
+    def __init__(self, cnvs, spot_va=None):
+        ViewOverlay.__init__(self, cnvs)
+        DragMixin.__init__(self)
+        SpotModeBase.__init__(self, cnvs, spot_va=spot_va)
+
+        self.v_pos = None
+
+    def on_spot_change(self, _):
+        self._r_to_v()
+
+    def on_size(self, evt):
+        self._r_to_v()
+        ViewOverlay.on_size(self, evt)
+
+    def _v_to_r(self):
+        if self.v_pos is None:
+            self.r_pos.value = (0.5, 0.5)
+        else:
+            self.r_pos.value = (
+                float(self.v_pos[0] / self.cnvs.view_width),
+                float(self.v_pos[1] / self.cnvs.view_height)
+            )
+
+    def _r_to_v(self):
+        try:
+            self.v_pos = (
+                int(self.cnvs.view_width * self.r_pos.value[0]),
+                int(self.cnvs.view_height * self.r_pos.value[1])
+            )
+        except (TypeError, KeyError):
+            self.v_pos = None
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+
+        if self.v_pos is None:
+            return
+
+        vx, vy = self.v_pos
+        SpotModeBase.draw(self, ctx, vx, vy)
+
+    def _activate(self):
+        self._r_to_v()
+        ViewOverlay._activate(self)
+
+    def _deactivate(self):
+        self.v_pos = None
+        ViewOverlay._deactivate(self)
