@@ -1296,6 +1296,12 @@ class Shamrock(model.Actuator):
         with self._hw_access:
             logging.debug("Moving flipper %d to pos %d", flipper, port)
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
+            if self.GetFlipperMirror(flipper) != port:
+                logging.warning("Flipper %d doesn't seem to have moved yet to pos %d, trying again",
+                                flipper, port)
+                self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
+                if self.GetFlipperMirror(flipper) != port:
+                    raise IOError(f"Flipper {flipper} failed to move to pos {port}")
 
     @callWithReconnect
     def GetFlipperMirror(self, flipper):
