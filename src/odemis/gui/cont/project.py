@@ -35,7 +35,7 @@ from odemis.acq.fastem import CALIBRATION_2, CALIBRATION_3, FastEMROA
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
 from odemis.gui import conf, FG_COLOUR_RADIO_INACTIVE, FG_COLOUR_BUTTON
-from odemis.gui.comp.stream import FastEMProjectPanel, FastEMROAPanel, FastEMCalibrationPanel
+from odemis.gui.comp.fastem import FastEMProjectPanel, FastEMROAPanel, FastEMCalibrationPanel
 from odemis.gui.util import call_in_wx_main
 from odemis.util.filename import make_unique_name
 
