@@ -182,7 +182,7 @@ def main(args=None):
             inputFiles += glob.glob(arg)
     else:
         outputFilename = MAIN_XRC
-        for filename in os.listdir(XMLH_RESOURCES_DIR):
+        for filename in sorted(os.listdir(XMLH_RESOURCES_DIR)):
             if filename.endswith(".xrc"):
                 f = os.path.join(XMLH_RESOURCES_DIR, filename)
                 if os.path.isfile(f):

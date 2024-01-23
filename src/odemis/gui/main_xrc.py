@@ -79,6 +79,581 @@ class xrcfr_acq(wx.Dialog):
 
 
 
+class xrcfr_overview_acq(wx.Dialog):
+#!XRCED:begin-block:xrcfr_overview_acq.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcfr_overview_acq.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreDialog()
+            self.PreCreate(pre)
+            get_resources().LoadOnDialog(pre, parent, "fr_overview_acq")
+            self.PostCreate(pre)
+        else:
+            wx.Dialog.__init__(self)
+            self.PreCreate()
+            get_resources().LoadDialog(self, parent, "fr_overview_acq")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_view_acq = xrc.XRCCTRL(self, "pnl_view_acq")
+        self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
+        self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
+        self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
+        self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
+        self.zstep_size_ctrl = xrc.XRCCTRL(self, "zstep_size_ctrl")
+        self.whole_grid_chkbox = xrc.XRCCTRL(self, "whole_grid_chkbox")
+        self.tiles_number_x_lbl = xrc.XRCCTRL(self, "tiles_number_x_lbl")
+        self.tiles_number_x = xrc.XRCCTRL(self, "tiles_number_x")
+        self.tiles_number_y_lbl = xrc.XRCCTRL(self, "tiles_number_y_lbl")
+        self.tiles_number_y = xrc.XRCCTRL(self, "tiles_number_y")
+        self.selected_grid_lbl = xrc.XRCCTRL(self, "selected_grid_lbl")
+        self.selected_grid_pnl_holder = xrc.XRCCTRL(self, "selected_grid_pnl_holder")
+        self.area_size_txt = xrc.XRCCTRL(self, "area_size_txt")
+        self.autofocus_chkbox = xrc.XRCCTRL(self, "autofocus_chkbox")
+        self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
+        self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
+        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
+
+
+
+
+class xrcfr_plugin(wx.Dialog):
+#!XRCED:begin-block:xrcfr_plugin.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcfr_plugin.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreDialog()
+            self.PreCreate(pre)
+            get_resources().LoadOnDialog(pre, parent, "fr_plugin")
+            self.PostCreate(pre)
+        else:
+            wx.Dialog.__init__(self)
+            self.PreCreate()
+            get_resources().LoadDialog(self, parent, "fr_plugin")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_desc = xrc.XRCCTRL(self, "pnl_desc")
+        self.viewport_l = xrc.XRCCTRL(self, "viewport_l")
+        self.viewport_r = xrc.XRCCTRL(self, "viewport_r")
+        self.spectrum_viewport = xrc.XRCCTRL(self, "spectrum_viewport")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_settings = xrc.XRCCTRL(self, "fp_settings")
+        self.fp_streams = xrc.XRCCTRL(self, "fp_streams")
+        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
+        self.pnl_info = xrc.XRCCTRL(self, "pnl_info")
+        self.lbl_acquisition_info = xrc.XRCCTRL(self, "lbl_acquisition_info")
+        self.pnl_gauge = xrc.XRCCTRL(self, "pnl_gauge")
+        self.gauge_progress = xrc.XRCCTRL(self, "gauge_progress")
+        self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
+        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.pnl_buttons = xrc.XRCCTRL(self, "pnl_buttons")
+
+
+
+
+class xrcfr_main(wx.Frame):
+#!XRCED:begin-block:xrcfr_main.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcfr_main.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PreFrame()
+            self.PreCreate(pre)
+            get_resources().LoadOnFrame(pre, parent, "fr_main")
+            self.PostCreate(pre)
+        else:
+            wx.Frame.__init__(self)
+            self.PreCreate()
+            get_resources().LoadFrame(self, parent, "fr_main")
+
+        # Define variables for the controls, bind event handlers
+        self.menu_item_open = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_open"))
+        self.menu_item_snapshot = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot"))
+        self.menu_item_snapshot_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot_as"))
+        self.menu_item_export_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_export_as"))
+        self.menu_item_reset_finealign = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_reset_finealign"))
+        self.menu_item_reset_overview = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_reset_overview"))
+        self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
+        self.menu_item_recalibrate = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_recalibrate"))
+        self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
+        idx = self.GetMenuBar().FindMenu("View")
+        if idx != wx.NOT_FOUND:
+            self.menu_view = self.GetMenuBar().GetMenu(idx)
+        else:
+            self.menu_view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_view")).GetSubMenu()
+        self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
+        self.menu_item_play_stream = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_play_stream"))
+        self.menu_item_fit_content = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_fit_content"))
+        self.menu_item_auto_cont = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_cont"))
+        self.menu_item_auto_focus = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_focus"))
+        self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
+        self.menu_item_interpolation = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_interpolation"))
+        self.menu_item_rawpixel = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_rawpixel"))
+        self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
+        self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
+        self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
+        self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
+        self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
+        self.menu_item_update = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_update"))
+        self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
+        self.pnl_tabbuttons = xrc.XRCCTRL(self, "pnl_tabbuttons")
+        self.btn_tab_cryosecom_chamber = xrc.XRCCTRL(self, "btn_tab_cryosecom_chamber")
+        self.btn_tab_align_enzel = xrc.XRCCTRL(self, "btn_tab_align_enzel")
+        self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
+        self.btn_tab_localization = xrc.XRCCTRL(self, "btn_tab_localization")
+        self.btn_tab_correlation = xrc.XRCCTRL(self, "btn_tab_correlation")
+        self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
+        self.btn_tab_fastem_chamber = xrc.XRCCTRL(self, "btn_tab_fastem_chamber")
+        self.btn_tab_fastem_overview = xrc.XRCCTRL(self, "btn_tab_fastem_overview")
+        self.btn_tab_fastem_acqui = xrc.XRCCTRL(self, "btn_tab_fastem_acqui")
+        self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
+        self.btn_tab_sparc_chamber = xrc.XRCCTRL(self, "btn_tab_sparc_chamber")
+        self.temperature_display = xrc.XRCCTRL(self, "temperature_display")
+        self.btn_tab_align = xrc.XRCCTRL(self, "btn_tab_align")
+        self.logo = xrc.XRCCTRL(self, "logo")
+        self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.txt_log = xrc.XRCCTRL(self, "txt_log")
+
+
+
+
+class xrcpnl_tab_correlation(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_correlation.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_correlation.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_correlation")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_correlation")
+
+        # Define variables for the controls, bind event handlers
+        self.correlation_toolbar = xrc.XRCCTRL(self, "correlation_toolbar")
+        self.lbl_correlation_view_all = xrc.XRCCTRL(self, "lbl_correlation_view_all")
+        self.btn_correlation_view_all = xrc.XRCCTRL(self, "btn_correlation_view_all")
+        self.lbl_correlation_view_tl = xrc.XRCCTRL(self, "lbl_correlation_view_tl")
+        self.btn_correlation_view_tl = xrc.XRCCTRL(self, "btn_correlation_view_tl")
+        self.lbl_correlation_view_tr = xrc.XRCCTRL(self, "lbl_correlation_view_tr")
+        self.btn_correlation_view_tr = xrc.XRCCTRL(self, "btn_correlation_view_tr")
+        self.lbl_correlation_view_bl = xrc.XRCCTRL(self, "lbl_correlation_view_bl")
+        self.btn_correlation_view_bl = xrc.XRCCTRL(self, "btn_correlation_view_bl")
+        self.lbl_correlation_view_br = xrc.XRCCTRL(self, "lbl_correlation_view_br")
+        self.btn_correlation_view_br = xrc.XRCCTRL(self, "btn_correlation_view_br")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.pnl_correlaton_grid = xrc.XRCCTRL(self, "pnl_correlaton_grid")
+        self.vp_correlation_tl = xrc.XRCCTRL(self, "vp_correlation_tl")
+        self.vp_correlation_tr = xrc.XRCCTRL(self, "vp_correlation_tr")
+        self.vp_correlation_bl = xrc.XRCCTRL(self, "vp_correlation_bl")
+        self.vp_correlation_br = xrc.XRCCTRL(self, "vp_correlation_br")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_correlation_streams = xrc.XRCCTRL(self, "fp_correlation_streams")
+        self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
+        self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
+        self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
+        self.ctrl_enable_correlation = xrc.XRCCTRL(self, "ctrl_enable_correlation")
+        self.cmb_correlation_stream = xrc.XRCCTRL(self, "cmb_correlation_stream")
+        self.dx_step_cntrl = xrc.XRCCTRL(self, "dx_step_cntrl")
+        self.dy_step_cntrl = xrc.XRCCTRL(self, "dy_step_cntrl")
+        self.dr_step_cntrl = xrc.XRCCTRL(self, "dr_step_cntrl")
+        self.dpx_step_cntrl = xrc.XRCCTRL(self, "dpx_step_cntrl")
+        self.btn_reset_correlation = xrc.XRCCTRL(self, "btn_reset_correlation")
+        self.btn_export = xrc.XRCCTRL(self, "btn_export")
+
+
+
+
+class xrcpnl_tab_cryosecom_chamber(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_cryosecom_chamber.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_cryosecom_chamber.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_cryosecom_chamber")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_cryosecom_chamber")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_project = xrc.XRCCTRL(self, "pnl_project")
+        self.txt_projectpath = xrc.XRCCTRL(self, "txt_projectpath")
+        self.btn_change_folder = xrc.XRCCTRL(self, "btn_change_folder")
+        self.pnl_switch_buttons = xrc.XRCCTRL(self, "pnl_switch_buttons")
+        self.btn_switch_sem_imaging = xrc.XRCCTRL(self, "btn_switch_sem_imaging")
+        self.btn_switch_fm_imaging = xrc.XRCCTRL(self, "btn_switch_fm_imaging")
+        self.btn_switch_grid1 = xrc.XRCCTRL(self, "btn_switch_grid1")
+        self.btn_switch_grid2 = xrc.XRCCTRL(self, "btn_switch_grid2")
+        self.btn_switch_loading = xrc.XRCCTRL(self, "btn_switch_loading")
+        self.btn_switch_imaging = xrc.XRCCTRL(self, "btn_switch_imaging")
+        self.btn_switch_zero_tilt_imaging = xrc.XRCCTRL(self, "btn_switch_zero_tilt_imaging")
+        self.btn_switch_coating = xrc.XRCCTRL(self, "btn_switch_coating")
+        self.btn_switch_loading_chamber_tab = xrc.XRCCTRL(self, "btn_switch_loading_chamber_tab")
+        self.btn_switch_optical_chamber_tab = xrc.XRCCTRL(self, "btn_switch_optical_chamber_tab")
+        self.btn_switch_milling_chamber_tab = xrc.XRCCTRL(self, "btn_switch_milling_chamber_tab")
+        self.btn_switch_coating_chamber_tab = xrc.XRCCTRL(self, "btn_switch_coating_chamber_tab")
+        self.gauge_move = xrc.XRCCTRL(self, "gauge_move")
+        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.pnl_ref_msg = xrc.XRCCTRL(self, "pnl_ref_msg")
+        self.txt_warning = xrc.XRCCTRL(self, "txt_warning")
+        self.btn_switch_advanced = xrc.XRCCTRL(self, "btn_switch_advanced")
+        self.pnl_advanced_align = xrc.XRCCTRL(self, "pnl_advanced_align")
+        self.lbl_milling_angle = xrc.XRCCTRL(self, "lbl_milling_angle")
+        self.ctrl_rx = xrc.XRCCTRL(self, "ctrl_rx")
+        self.stage_align_slider_aligner = xrc.XRCCTRL(self, "stage_align_slider_aligner")
+        self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
+        self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
+        self.lbl_px = xrc.XRCCTRL(self, "lbl_px")
+        self.lbl_mx = xrc.XRCCTRL(self, "lbl_mx")
+        self.stage_align_btn_p_aligner_y = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_y")
+        self.stage_align_btn_m_aligner_y = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_y")
+        self.stage_align_btn_m_aligner_x = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_x")
+        self.stage_align_btn_p_aligner_x = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_x")
+        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
+        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
+        self.stage_align_btn_p_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_z")
+        self.stage_align_btn_m_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_z")
+        self.btn_switch_align = xrc.XRCCTRL(self, "btn_switch_align")
+        self.pnl_temperature = xrc.XRCCTRL(self, "pnl_temperature")
+        self.ctrl_sample_heater = xrc.XRCCTRL(self, "ctrl_sample_heater")
+        self.ctrl_sample_target_tmp = xrc.XRCCTRL(self, "ctrl_sample_target_tmp")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.vp_overview_map = xrc.XRCCTRL(self, "vp_overview_map")
+
+
+
+
+class xrcpnl_tab_enzel_align(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_enzel_align.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_enzel_align.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_enzel_align")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_enzel_align")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_alignment_btns = xrc.XRCCTRL(self, "pnl_alignment_btns")
+        self.btn_align_z = xrc.XRCCTRL(self, "btn_align_z")
+        self.btn_align_sem = xrc.XRCCTRL(self, "btn_align_sem")
+        self.btn_align_flm = xrc.XRCCTRL(self, "btn_align_flm")
+        self.pnl_z_align_controls = xrc.XRCCTRL(self, "pnl_z_align_controls")
+        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
+        self.stage_align_btn_p_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_z")
+        self.stage_align_btn_m_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_z")
+        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
+        self.pnl_sem_align_controls = xrc.XRCCTRL(self, "pnl_sem_align_controls")
+        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
+        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
+        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
+        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
+        self.beam_shift_btn_p_aligner_y = xrc.XRCCTRL(self, "beam_shift_btn_p_aligner_y")
+        self.beam_shift_btn_m_aligner_y = xrc.XRCCTRL(self, "beam_shift_btn_m_aligner_y")
+        self.beam_shift_btn_m_aligner_x = xrc.XRCCTRL(self, "beam_shift_btn_m_aligner_x")
+        self.beam_shift_btn_p_aligner_x = xrc.XRCCTRL(self, "beam_shift_btn_p_aligner_x")
+        self.pnl_flm_align_controls = xrc.XRCCTRL(self, "pnl_flm_align_controls")
+        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
+        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
+        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
+        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
+        self.flm_align_btn_p_aligner_y = xrc.XRCCTRL(self, "flm_align_btn_p_aligner_y")
+        self.flm_align_btn_m_aligner_y = xrc.XRCCTRL(self, "flm_align_btn_m_aligner_y")
+        self.flm_align_btn_m_aligner_x = xrc.XRCCTRL(self, "flm_align_btn_m_aligner_x")
+        self.flm_align_btn_p_aligner_x = xrc.XRCCTRL(self, "flm_align_btn_p_aligner_x")
+        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
+        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
+        self.flm_align_btn_p_aligner_z = xrc.XRCCTRL(self, "flm_align_btn_p_aligner_z")
+        self.flm_align_btn_m_aligner_z = xrc.XRCCTRL(self, "flm_align_btn_m_aligner_z")
+        self.controls_step_size_slider = xrc.XRCCTRL(self, "controls_step_size_slider")
+        self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
+        self.btn_custom_alignment = xrc.XRCCTRL(self, "btn_custom_alignment")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.pnl_two_streams_grid = xrc.XRCCTRL(self, "pnl_two_streams_grid")
+        self.view_FIB = xrc.XRCCTRL(self, "view_FIB")
+        self.view_SEM = xrc.XRCCTRL(self, "view_SEM")
+        self.view_FLM = xrc.XRCCTRL(self, "view_FLM")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.top_settings = xrc.XRCCTRL(self, "top_settings")
+        self.bottom_settings = xrc.XRCCTRL(self, "bottom_settings")
+
+
+
+
+class xrcpnl_tab_fastem_acqui(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_fastem_acqui.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_fastem_acqui.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_fastem_acqui")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_fastem_acqui")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
+        self.fastem_acq_toolbar = xrc.XRCCTRL(self, "fastem_acq_toolbar")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_fastem_acquisition_streams = xrc.XRCCTRL(self, "pnl_fastem_acquisition_streams")
+        self.pnl_acq_settings = xrc.XRCCTRL(self, "pnl_acq_settings")
+        self.calib_1_pnl = xrc.XRCCTRL(self, "calib_1_pnl")
+        self.calib_1_btn = xrc.XRCCTRL(self, "calib_1_btn")
+        self.calib_1_gauge = xrc.XRCCTRL(self, "calib_1_gauge")
+        self.calib_1_label = xrc.XRCCTRL(self, "calib_1_label")
+        self.calib_2_btn = xrc.XRCCTRL(self, "calib_2_btn")
+        self.calib_2_gauge = xrc.XRCCTRL(self, "calib_2_gauge")
+        self.calib_2_label = xrc.XRCCTRL(self, "calib_2_label")
+        self.calib_2_pnl = xrc.XRCCTRL(self, "calib_2_pnl")
+        self.calib_3_btn = xrc.XRCCTRL(self, "calib_3_btn")
+        self.calib_3_gauge = xrc.XRCCTRL(self, "calib_3_gauge")
+        self.calib_3_label = xrc.XRCCTRL(self, "calib_3_label")
+        self.calib_3_pnl = xrc.XRCCTRL(self, "calib_3_pnl")
+        self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
+        self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
+        self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
+        self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
+        self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
+        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
+        self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
+        self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
+        self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
+
+
+
+
+class xrcpnl_tab_fastem_chamber(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_fastem_chamber.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_fastem_chamber.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_fastem_chamber")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_fastem_chamber")
+
+        # Define variables for the controls, bind event handlers
+        self.btn_pressure = xrc.XRCCTRL(self, "btn_pressure")
+        self.btn_ebeam = xrc.XRCCTRL(self, "btn_ebeam")
+        self.pressure_label = xrc.XRCCTRL(self, "pressure_label")
+        self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
+
+
+
+
+class xrcpnl_tab_fastem_overview(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_fastem_overview.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_fastem_overview.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_fastem_overview")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_fastem_overview")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
+        self.fastem_overview_toolbar = xrc.XRCCTRL(self, "fastem_overview_toolbar")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.vp_fastem_overview = xrc.XRCCTRL(self, "vp_fastem_overview")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_fastem_overview_streams = xrc.XRCCTRL(self, "pnl_fastem_overview_streams")
+        self.lbl_optical_autofocus = xrc.XRCCTRL(self, "lbl_optical_autofocus")
+        self.btn_optical_autofocus_run = xrc.XRCCTRL(self, "btn_optical_autofocus_run")
+        self.lbl_sem_autofocus = xrc.XRCCTRL(self, "lbl_sem_autofocus")
+        self.btn_sem_autofocus_run = xrc.XRCCTRL(self, "btn_sem_autofocus_run")
+        self.lbl_autobrightness_contrast = xrc.XRCCTRL(self, "lbl_autobrightness_contrast")
+        self.btn_autobrigtness_contrast = xrc.XRCCTRL(self, "btn_autobrigtness_contrast")
+        self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
+        self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
+        self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
+        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
+        self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
+        self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
+        self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
+
+
+
+
+class xrcpnl_tab_inspection(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_inspection.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_inspection.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_inspection")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_inspection")
+
+        # Define variables for the controls, bind event handlers
+        self.btn_open_image = xrc.XRCCTRL(self, "btn_open_image")
+        self.ana_toolbar = xrc.XRCCTRL(self, "ana_toolbar")
+        self.lbl_inspection_view_all = xrc.XRCCTRL(self, "lbl_inspection_view_all")
+        self.btn_inspection_view_all = xrc.XRCCTRL(self, "btn_inspection_view_all")
+        self.lbl_inspection_view_tl = xrc.XRCCTRL(self, "lbl_inspection_view_tl")
+        self.btn_inspection_view_tl = xrc.XRCCTRL(self, "btn_inspection_view_tl")
+        self.lbl_inspection_view_tr = xrc.XRCCTRL(self, "lbl_inspection_view_tr")
+        self.btn_inspection_view_tr = xrc.XRCCTRL(self, "btn_inspection_view_tr")
+        self.lbl_inspection_view_bl = xrc.XRCCTRL(self, "lbl_inspection_view_bl")
+        self.btn_inspection_view_bl = xrc.XRCCTRL(self, "btn_inspection_view_bl")
+        self.lbl_inspection_view_br = xrc.XRCCTRL(self, "lbl_inspection_view_br")
+        self.btn_inspection_view_br = xrc.XRCCTRL(self, "btn_inspection_view_br")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.pnl_inspection_grid = xrc.XRCCTRL(self, "pnl_inspection_grid")
+        self.vp_inspection_tl = xrc.XRCCTRL(self, "vp_inspection_tl")
+        self.vp_inspection_tr = xrc.XRCCTRL(self, "vp_inspection_tr")
+        self.vp_inspection_bl = xrc.XRCCTRL(self, "vp_inspection_bl")
+        self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
+        self.vp_angular = xrc.XRCCTRL(self, "vp_angular")
+        self.vp_inspection_plot = xrc.XRCCTRL(self, "vp_inspection_plot")
+        self.vp_linespec = xrc.XRCCTRL(self, "vp_linespec")
+        self.vp_temporalspec = xrc.XRCCTRL(self, "vp_temporalspec")
+        self.vp_timespec = xrc.XRCCTRL(self, "vp_timespec")
+        self.vp_angular_pol = xrc.XRCCTRL(self, "vp_angular_pol")
+        self.vp_angularspec = xrc.XRCCTRL(self, "vp_angularspec")
+        self.vp_thetaspec = xrc.XRCCTRL(self, "vp_thetaspec")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
+        self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
+        self.btn_export = xrc.XRCCTRL(self, "btn_export")
+
+
+
+
 class xrcpnl_tab_localization(wx.Panel):
 #!XRCED:begin-block:xrcpnl_tab_localization.PreCreate
     def PreCreate(self, *args):
@@ -163,8 +738,8 @@ class xrcpnl_tab_localization(wx.Panel):
 
 
 
-class xrcpnl_tab_inspection(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_inspection.PreCreate
+class xrcpnl_tab_mimas_align(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_mimas_align.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
 
@@ -173,51 +748,31 @@ class xrcpnl_tab_inspection(wx.Panel):
         """
         pass
 
-#!XRCED:end-block:xrcpnl_tab_inspection.PreCreate
+#!XRCED:end-block:xrcpnl_tab_mimas_align.PreCreate
 
     def __init__(self, parent):
         if wx.MAJOR_VERSION == 3:
             # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
             pre = wx.PrePanel()
             self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_inspection")
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_mimas_align")
             self.PostCreate(pre)
         else:
             wx.Panel.__init__(self)
             self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_inspection")
+            get_resources().LoadPanel(self, parent, "pnl_tab_mimas_align")
 
         # Define variables for the controls, bind event handlers
-        self.btn_open_image = xrc.XRCCTRL(self, "btn_open_image")
-        self.ana_toolbar = xrc.XRCCTRL(self, "ana_toolbar")
-        self.lbl_inspection_view_all = xrc.XRCCTRL(self, "lbl_inspection_view_all")
-        self.btn_inspection_view_all = xrc.XRCCTRL(self, "btn_inspection_view_all")
-        self.lbl_inspection_view_tl = xrc.XRCCTRL(self, "lbl_inspection_view_tl")
-        self.btn_inspection_view_tl = xrc.XRCCTRL(self, "btn_inspection_view_tl")
-        self.lbl_inspection_view_tr = xrc.XRCCTRL(self, "lbl_inspection_view_tr")
-        self.btn_inspection_view_tr = xrc.XRCCTRL(self, "btn_inspection_view_tr")
-        self.lbl_inspection_view_bl = xrc.XRCCTRL(self, "lbl_inspection_view_bl")
-        self.btn_inspection_view_bl = xrc.XRCCTRL(self, "btn_inspection_view_bl")
-        self.lbl_inspection_view_br = xrc.XRCCTRL(self, "lbl_inspection_view_br")
-        self.btn_inspection_view_br = xrc.XRCCTRL(self, "btn_inspection_view_br")
+        self.pnl_position_btns = xrc.XRCCTRL(self, "pnl_position_btns")
+        self.btn_position_opt = xrc.XRCCTRL(self, "btn_position_opt")
+        self.btn_position_fib = xrc.XRCCTRL(self, "btn_position_fib")
+        self.btn_reset_alignment = xrc.XRCCTRL(self, "btn_reset_alignment")
+        self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.pnl_inspection_grid = xrc.XRCCTRL(self, "pnl_inspection_grid")
-        self.vp_inspection_tl = xrc.XRCCTRL(self, "vp_inspection_tl")
-        self.vp_inspection_tr = xrc.XRCCTRL(self, "vp_inspection_tr")
-        self.vp_inspection_bl = xrc.XRCCTRL(self, "vp_inspection_bl")
-        self.vp_inspection_br = xrc.XRCCTRL(self, "vp_inspection_br")
-        self.vp_angular = xrc.XRCCTRL(self, "vp_angular")
-        self.vp_inspection_plot = xrc.XRCCTRL(self, "vp_inspection_plot")
-        self.vp_linespec = xrc.XRCCTRL(self, "vp_linespec")
-        self.vp_temporalspec = xrc.XRCCTRL(self, "vp_temporalspec")
-        self.vp_timespec = xrc.XRCCTRL(self, "vp_timespec")
-        self.vp_angular_pol = xrc.XRCCTRL(self, "vp_angular_pol")
-        self.vp_angularspec = xrc.XRCCTRL(self, "vp_angularspec")
-        self.vp_thetaspec = xrc.XRCCTRL(self, "vp_thetaspec")
+        self.pnl_viewport = xrc.XRCCTRL(self, "pnl_viewport")
+        self.vp_optical = xrc.XRCCTRL(self, "vp_optical")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_fileinfo = xrc.XRCCTRL(self, "fp_fileinfo")
-        self.pnl_inspection_streams = xrc.XRCCTRL(self, "pnl_inspection_streams")
-        self.btn_export = xrc.XRCCTRL(self, "btn_export")
+        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
 
 
 
@@ -289,662 +844,6 @@ class xrcpnl_tab_secom_align(wx.Panel):
         self.pnl_sem_toolbar = xrc.XRCCTRL(self, "pnl_sem_toolbar")
         self.lens_align_tb = xrc.XRCCTRL(self, "lens_align_tb")
         self.vp_align_sem = xrc.XRCCTRL(self, "vp_align_sem")
-
-
-
-
-class xrcfr_plugin(wx.Dialog):
-#!XRCED:begin-block:xrcfr_plugin.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcfr_plugin.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PreDialog()
-            self.PreCreate(pre)
-            get_resources().LoadOnDialog(pre, parent, "fr_plugin")
-            self.PostCreate(pre)
-        else:
-            wx.Dialog.__init__(self)
-            self.PreCreate()
-            get_resources().LoadDialog(self, parent, "fr_plugin")
-
-        # Define variables for the controls, bind event handlers
-        self.pnl_desc = xrc.XRCCTRL(self, "pnl_desc")
-        self.viewport_l = xrc.XRCCTRL(self, "viewport_l")
-        self.viewport_r = xrc.XRCCTRL(self, "viewport_r")
-        self.spectrum_viewport = xrc.XRCCTRL(self, "spectrum_viewport")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_settings = xrc.XRCCTRL(self, "fp_settings")
-        self.fp_streams = xrc.XRCCTRL(self, "fp_streams")
-        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
-        self.pnl_info = xrc.XRCCTRL(self, "pnl_info")
-        self.lbl_acquisition_info = xrc.XRCCTRL(self, "lbl_acquisition_info")
-        self.pnl_gauge = xrc.XRCCTRL(self, "pnl_gauge")
-        self.gauge_progress = xrc.XRCCTRL(self, "gauge_progress")
-        self.lbl_gauge = xrc.XRCCTRL(self, "lbl_gauge")
-        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
-        self.pnl_buttons = xrc.XRCCTRL(self, "pnl_buttons")
-
-
-
-
-class xrcpnl_tab_cryosecom_chamber(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_cryosecom_chamber.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcpnl_tab_cryosecom_chamber.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PrePanel()
-            self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_cryosecom_chamber")
-            self.PostCreate(pre)
-        else:
-            wx.Panel.__init__(self)
-            self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_cryosecom_chamber")
-
-        # Define variables for the controls, bind event handlers
-        self.pnl_project = xrc.XRCCTRL(self, "pnl_project")
-        self.txt_projectpath = xrc.XRCCTRL(self, "txt_projectpath")
-        self.btn_change_folder = xrc.XRCCTRL(self, "btn_change_folder")
-        self.pnl_switch_buttons = xrc.XRCCTRL(self, "pnl_switch_buttons")
-        self.btn_switch_sem_imaging = xrc.XRCCTRL(self, "btn_switch_sem_imaging")
-        self.btn_switch_fm_imaging = xrc.XRCCTRL(self, "btn_switch_fm_imaging")
-        self.btn_switch_grid1 = xrc.XRCCTRL(self, "btn_switch_grid1")
-        self.btn_switch_grid2 = xrc.XRCCTRL(self, "btn_switch_grid2")
-        self.btn_switch_loading = xrc.XRCCTRL(self, "btn_switch_loading")
-        self.btn_switch_imaging = xrc.XRCCTRL(self, "btn_switch_imaging")
-        self.btn_switch_zero_tilt_imaging = xrc.XRCCTRL(self, "btn_switch_zero_tilt_imaging")
-        self.btn_switch_coating = xrc.XRCCTRL(self, "btn_switch_coating")
-        self.btn_switch_loading_chamber_tab = xrc.XRCCTRL(self, "btn_switch_loading_chamber_tab")
-        self.btn_switch_optical_chamber_tab = xrc.XRCCTRL(self, "btn_switch_optical_chamber_tab")
-        self.btn_switch_milling_chamber_tab = xrc.XRCCTRL(self, "btn_switch_milling_chamber_tab")
-        self.btn_switch_coating_chamber_tab = xrc.XRCCTRL(self, "btn_switch_coating_chamber_tab")
-        self.gauge_move = xrc.XRCCTRL(self, "gauge_move")
-        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
-        self.pnl_ref_msg = xrc.XRCCTRL(self, "pnl_ref_msg")
-        self.txt_warning = xrc.XRCCTRL(self, "txt_warning")
-        self.btn_switch_advanced = xrc.XRCCTRL(self, "btn_switch_advanced")
-        self.pnl_advanced_align = xrc.XRCCTRL(self, "pnl_advanced_align")
-        self.lbl_milling_angle = xrc.XRCCTRL(self, "lbl_milling_angle")
-        self.ctrl_rx = xrc.XRCCTRL(self, "ctrl_rx")
-        self.stage_align_slider_aligner = xrc.XRCCTRL(self, "stage_align_slider_aligner")
-        self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
-        self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
-        self.lbl_px = xrc.XRCCTRL(self, "lbl_px")
-        self.lbl_mx = xrc.XRCCTRL(self, "lbl_mx")
-        self.stage_align_btn_p_aligner_y = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_y")
-        self.stage_align_btn_m_aligner_y = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_y")
-        self.stage_align_btn_m_aligner_x = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_x")
-        self.stage_align_btn_p_aligner_x = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_x")
-        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
-        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
-        self.stage_align_btn_p_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_z")
-        self.stage_align_btn_m_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_z")
-        self.btn_switch_align = xrc.XRCCTRL(self, "btn_switch_align")
-        self.pnl_temperature = xrc.XRCCTRL(self, "pnl_temperature")
-        self.ctrl_sample_heater = xrc.XRCCTRL(self, "ctrl_sample_heater")
-        self.ctrl_sample_target_tmp = xrc.XRCCTRL(self, "ctrl_sample_target_tmp")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.vp_overview_map = xrc.XRCCTRL(self, "vp_overview_map")
-
-
-
-
-class xrcpnl_tab_fastem_chamber(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_fastem_chamber.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcpnl_tab_fastem_chamber.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PrePanel()
-            self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_fastem_chamber")
-            self.PostCreate(pre)
-        else:
-            wx.Panel.__init__(self)
-            self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_fastem_chamber")
-
-        # Define variables for the controls, bind event handlers
-        self.btn_pressure = xrc.XRCCTRL(self, "btn_pressure")
-        self.btn_ebeam = xrc.XRCCTRL(self, "btn_ebeam")
-        self.pressure_label = xrc.XRCCTRL(self, "pressure_label")
-        self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
-
-
-
-
-class xrcpnl_tab_sparc_align(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_sparc_align.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcpnl_tab_sparc_align.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PrePanel()
-            self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_align")
-            self.PostCreate(pre)
-        else:
-            wx.Panel.__init__(self)
-            self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_sparc_align")
-
-        # Define variables for the controls, bind event handlers
-        self.pnl_alignment_btns = xrc.XRCCTRL(self, "pnl_alignment_btns")
-        self.btn_align_chamber = xrc.XRCCTRL(self, "btn_align_chamber")
-        self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
-        self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
-        self.pnl_sparc_trans = xrc.XRCCTRL(self, "pnl_sparc_trans")
-        self.mirror_align_slider_mirror_x = xrc.XRCCTRL(self, "mirror_align_slider_mirror_x")
-        self.mirror_align_slider_mirror_y = xrc.XRCCTRL(self, "mirror_align_slider_mirror_y")
-        self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
-        self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
-        self.lbl_px = xrc.XRCCTRL(self, "lbl_px")
-        self.lbl_mx = xrc.XRCCTRL(self, "lbl_mx")
-        self.mirror_align_btn_p_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_y")
-        self.mirror_align_btn_m_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_y")
-        self.mirror_align_btn_p_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_x")
-        self.mirror_align_btn_m_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_x")
-        self.pnl_sparc_rot = xrc.XRCCTRL(self, "pnl_sparc_rot")
-        self.mirror_align_slider_mirror_r = xrc.XRCCTRL(self, "mirror_align_slider_mirror_r")
-        self.lbl_pry = xrc.XRCCTRL(self, "lbl_pry")
-        self.lbl_mry = xrc.XRCCTRL(self, "lbl_mry")
-        self.lbl_prz = xrc.XRCCTRL(self, "lbl_prz")
-        self.lbl_mrz = xrc.XRCCTRL(self, "lbl_mrz")
-        self.mirror_align_btn_m_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_ry")
-        self.mirror_align_btn_p_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_ry")
-        self.mirror_align_btn_m_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_rz")
-        self.mirror_align_btn_p_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_rz")
-        self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
-        self.mirror_align_slider_fibaligner = xrc.XRCCTRL(self, "mirror_align_slider_fibaligner")
-        self.lbl_pfy = xrc.XRCCTRL(self, "lbl_pfy")
-        self.lbl_mfy = xrc.XRCCTRL(self, "lbl_mfy")
-        self.lbl_pfx = xrc.XRCCTRL(self, "lbl_pfx")
-        self.lbl_mfx = xrc.XRCCTRL(self, "lbl_mfx")
-        self.mirror_align_btn_p_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_p_fibaligner_y")
-        self.mirror_align_btn_m_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_y")
-        self.mirror_align_btn_m_fibaligner_x = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_x")
-        self.mirror_align_btn_p_fibaligner_x = xrc.XRCCTRL(self, "mirror_align_btn_p_fibaligner_x")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_ma_settings_ar = xrc.XRCCTRL(self, "fp_ma_settings_ar")
-        self.pnl_sparc_align_streams = xrc.XRCCTRL(self, "pnl_sparc_align_streams")
-        self.fp_ma_settings_spectrum = xrc.XRCCTRL(self, "fp_ma_settings_spectrum")
-
-
-
-
-class xrcpnl_tab_correlation(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_correlation.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcpnl_tab_correlation.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PrePanel()
-            self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_correlation")
-            self.PostCreate(pre)
-        else:
-            wx.Panel.__init__(self)
-            self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_correlation")
-
-        # Define variables for the controls, bind event handlers
-        self.correlation_toolbar = xrc.XRCCTRL(self, "correlation_toolbar")
-        self.lbl_correlation_view_all = xrc.XRCCTRL(self, "lbl_correlation_view_all")
-        self.btn_correlation_view_all = xrc.XRCCTRL(self, "btn_correlation_view_all")
-        self.lbl_correlation_view_tl = xrc.XRCCTRL(self, "lbl_correlation_view_tl")
-        self.btn_correlation_view_tl = xrc.XRCCTRL(self, "btn_correlation_view_tl")
-        self.lbl_correlation_view_tr = xrc.XRCCTRL(self, "lbl_correlation_view_tr")
-        self.btn_correlation_view_tr = xrc.XRCCTRL(self, "btn_correlation_view_tr")
-        self.lbl_correlation_view_bl = xrc.XRCCTRL(self, "lbl_correlation_view_bl")
-        self.btn_correlation_view_bl = xrc.XRCCTRL(self, "btn_correlation_view_bl")
-        self.lbl_correlation_view_br = xrc.XRCCTRL(self, "lbl_correlation_view_br")
-        self.btn_correlation_view_br = xrc.XRCCTRL(self, "btn_correlation_view_br")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.pnl_correlaton_grid = xrc.XRCCTRL(self, "pnl_correlaton_grid")
-        self.vp_correlation_tl = xrc.XRCCTRL(self, "vp_correlation_tl")
-        self.vp_correlation_tr = xrc.XRCCTRL(self, "vp_correlation_tr")
-        self.vp_correlation_bl = xrc.XRCCTRL(self, "vp_correlation_bl")
-        self.vp_correlation_br = xrc.XRCCTRL(self, "vp_correlation_br")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_correlation_streams = xrc.XRCCTRL(self, "fp_correlation_streams")
-        self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
-        self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
-        self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
-        self.ctrl_enable_correlation = xrc.XRCCTRL(self, "ctrl_enable_correlation")
-        self.cmb_correlation_stream = xrc.XRCCTRL(self, "cmb_correlation_stream")
-        self.dx_step_cntrl = xrc.XRCCTRL(self, "dx_step_cntrl")
-        self.dy_step_cntrl = xrc.XRCCTRL(self, "dy_step_cntrl")
-        self.dr_step_cntrl = xrc.XRCCTRL(self, "dr_step_cntrl")
-        self.dpx_step_cntrl = xrc.XRCCTRL(self, "dpx_step_cntrl")
-        self.btn_reset_correlation = xrc.XRCCTRL(self, "btn_reset_correlation")
-        self.btn_export = xrc.XRCCTRL(self, "btn_export")
-
-
-
-
-class xrcfr_main(wx.Frame):
-#!XRCED:begin-block:xrcfr_main.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcfr_main.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PreFrame()
-            self.PreCreate(pre)
-            get_resources().LoadOnFrame(pre, parent, "fr_main")
-            self.PostCreate(pre)
-        else:
-            wx.Frame.__init__(self)
-            self.PreCreate()
-            get_resources().LoadFrame(self, parent, "fr_main")
-
-        # Define variables for the controls, bind event handlers
-        self.menu_item_open = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_open"))
-        self.menu_item_snapshot = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot"))
-        self.menu_item_snapshot_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_snapshot_as"))
-        self.menu_item_export_as = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_export_as"))
-        self.menu_item_reset_finealign = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_reset_finealign"))
-        self.menu_item_reset_overview = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_reset_overview"))
-        self.menu_item_halt = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_halt"))
-        self.menu_item_recalibrate = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_recalibrate"))
-        self.menu_item_quit = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_quit"))
-        idx = self.GetMenuBar().FindMenu("View")
-        if idx != wx.NOT_FOUND:
-            self.menu_view = self.GetMenuBar().GetMenu(idx)
-        else:
-            self.menu_view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_view")).GetSubMenu()
-        self.menu_item_22view = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_22view"))
-        self.menu_item_play_stream = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_play_stream"))
-        self.menu_item_fit_content = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_fit_content"))
-        self.menu_item_auto_cont = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_cont"))
-        self.menu_item_auto_focus = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_auto_focus"))
-        self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
-        self.menu_item_interpolation = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_interpolation"))
-        self.menu_item_rawpixel = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_rawpixel"))
-        self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
-        self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
-        self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
-        self.menu_item_debug = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_debug"))
-        self.menu_item_bugreport = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_bugreport"))
-        self.menu_item_update = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_update"))
-        self.menu_item_about = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_about"))
-        self.pnl_tabbuttons = xrc.XRCCTRL(self, "pnl_tabbuttons")
-        self.btn_tab_cryosecom_chamber = xrc.XRCCTRL(self, "btn_tab_cryosecom_chamber")
-        self.btn_tab_align_enzel = xrc.XRCCTRL(self, "btn_tab_align_enzel")
-        self.btn_tab_secom_streams = xrc.XRCCTRL(self, "btn_tab_secom_streams")
-        self.btn_tab_localization = xrc.XRCCTRL(self, "btn_tab_localization")
-        self.btn_tab_correlation = xrc.XRCCTRL(self, "btn_tab_correlation")
-        self.btn_tab_sparc_acqui = xrc.XRCCTRL(self, "btn_tab_sparc_acqui")
-        self.btn_tab_fastem_chamber = xrc.XRCCTRL(self, "btn_tab_fastem_chamber")
-        self.btn_tab_fastem_overview = xrc.XRCCTRL(self, "btn_tab_fastem_overview")
-        self.btn_tab_fastem_acqui = xrc.XRCCTRL(self, "btn_tab_fastem_acqui")
-        self.btn_tab_inspection = xrc.XRCCTRL(self, "btn_tab_inspection")
-        self.btn_tab_sparc_chamber = xrc.XRCCTRL(self, "btn_tab_sparc_chamber")
-        self.temperature_display = xrc.XRCCTRL(self, "temperature_display")
-        self.btn_tab_align = xrc.XRCCTRL(self, "btn_tab_align")
-        self.logo = xrc.XRCCTRL(self, "logo")
-        self.pnl_log = xrc.XRCCTRL(self, "pnl_log")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.txt_log = xrc.XRCCTRL(self, "txt_log")
-
-
-
-
-class xrcpnl_tab_mimas_align(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_mimas_align.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcpnl_tab_mimas_align.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PrePanel()
-            self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_mimas_align")
-            self.PostCreate(pre)
-        else:
-            wx.Panel.__init__(self)
-            self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_mimas_align")
-
-        # Define variables for the controls, bind event handlers
-        self.pnl_position_btns = xrc.XRCCTRL(self, "pnl_position_btns")
-        self.btn_position_opt = xrc.XRCCTRL(self, "btn_position_opt")
-        self.btn_position_fib = xrc.XRCCTRL(self, "btn_position_fib")
-        self.btn_reset_alignment = xrc.XRCCTRL(self, "btn_reset_alignment")
-        self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.pnl_viewport = xrc.XRCCTRL(self, "pnl_viewport")
-        self.vp_optical = xrc.XRCCTRL(self, "vp_optical")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
-
-
-
-
-class xrcpnl_tab_fastem_overview(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_fastem_overview.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcpnl_tab_fastem_overview.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PrePanel()
-            self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_fastem_overview")
-            self.PostCreate(pre)
-        else:
-            wx.Panel.__init__(self)
-            self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_fastem_overview")
-
-        # Define variables for the controls, bind event handlers
-        self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
-        self.fastem_overview_toolbar = xrc.XRCCTRL(self, "fastem_overview_toolbar")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.vp_fastem_overview = xrc.XRCCTRL(self, "vp_fastem_overview")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
-        self.pnl_fastem_overview_streams = xrc.XRCCTRL(self, "pnl_fastem_overview_streams")
-        self.lbl_optical_autofocus = xrc.XRCCTRL(self, "lbl_optical_autofocus")
-        self.btn_optical_autofocus_run = xrc.XRCCTRL(self, "btn_optical_autofocus_run")
-        self.lbl_sem_autofocus = xrc.XRCCTRL(self, "lbl_sem_autofocus")
-        self.btn_sem_autofocus_run = xrc.XRCCTRL(self, "btn_sem_autofocus_run")
-        self.lbl_autobrightness_contrast = xrc.XRCCTRL(self, "lbl_autobrightness_contrast")
-        self.btn_autobrigtness_contrast = xrc.XRCCTRL(self, "btn_autobrigtness_contrast")
-        self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
-        self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
-        self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
-        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
-        self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
-        self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
-        self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
-
-
-
-
-class xrcpnl_tab_sparc_acqui(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_sparc_acqui.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcpnl_tab_sparc_acqui.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PrePanel()
-            self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_acqui")
-            self.PostCreate(pre)
-        else:
-            wx.Panel.__init__(self)
-            self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_sparc_acqui")
-
-        # Define variables for the controls, bind event handlers
-        self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
-        self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
-        self.lbl_sparc_view_all = xrc.XRCCTRL(self, "lbl_sparc_view_all")
-        self.btn_sparc_view_all = xrc.XRCCTRL(self, "btn_sparc_view_all")
-        self.lbl_sparc_view_tl = xrc.XRCCTRL(self, "lbl_sparc_view_tl")
-        self.btn_sparc_view_tl = xrc.XRCCTRL(self, "btn_sparc_view_tl")
-        self.lbl_sparc_view_tr = xrc.XRCCTRL(self, "lbl_sparc_view_tr")
-        self.btn_sparc_view_tr = xrc.XRCCTRL(self, "btn_sparc_view_tr")
-        self.lbl_sparc_view_bl = xrc.XRCCTRL(self, "lbl_sparc_view_bl")
-        self.btn_sparc_view_bl = xrc.XRCCTRL(self, "btn_sparc_view_bl")
-        self.lbl_sparc_view_br = xrc.XRCCTRL(self, "lbl_sparc_view_br")
-        self.btn_sparc_view_br = xrc.XRCCTRL(self, "btn_sparc_view_br")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.pnl_sparc_grid = xrc.XRCCTRL(self, "pnl_sparc_grid")
-        self.vp_sparc_tl = xrc.XRCCTRL(self, "vp_sparc_tl")
-        self.vp_sparc_tr = xrc.XRCCTRL(self, "vp_sparc_tr")
-        self.vp_sparc_bl = xrc.XRCCTRL(self, "vp_sparc_bl")
-        self.vp_sparc_ts = xrc.XRCCTRL(self, "vp_sparc_ts")
-        self.vp_sparc_br = xrc.XRCCTRL(self, "vp_sparc_br")
-        self.vp_sparc_as = xrc.XRCCTRL(self, "vp_sparc_as")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
-        self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
-        self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
-        self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
-        self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
-        self.bmp_fold_acq_info = xrc.XRCCTRL(self, "bmp_fold_acq_info")
-        self.lbl_sparc_fold_acq = xrc.XRCCTRL(self, "lbl_sparc_fold_acq")
-        self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
-        self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
-        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
-        self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
-        self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
-        self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
-
-
-
-
-class xrcfr_overview_acq(wx.Dialog):
-#!XRCED:begin-block:xrcfr_overview_acq.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcfr_overview_acq.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PreDialog()
-            self.PreCreate(pre)
-            get_resources().LoadOnDialog(pre, parent, "fr_overview_acq")
-            self.PostCreate(pre)
-        else:
-            wx.Dialog.__init__(self)
-            self.PreCreate()
-            get_resources().LoadDialog(self, parent, "fr_overview_acq")
-
-        # Define variables for the controls, bind event handlers
-        self.pnl_view_acq = xrc.XRCCTRL(self, "pnl_view_acq")
-        self.main_buttons = xrc.XRCCTRL(self, "main_buttons")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
-        self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
-        self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
-        self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
-        self.zstep_size_ctrl = xrc.XRCCTRL(self, "zstep_size_ctrl")
-        self.whole_grid_chkbox = xrc.XRCCTRL(self, "whole_grid_chkbox")
-        self.tiles_number_x_lbl = xrc.XRCCTRL(self, "tiles_number_x_lbl")
-        self.tiles_number_x = xrc.XRCCTRL(self, "tiles_number_x")
-        self.tiles_number_y_lbl = xrc.XRCCTRL(self, "tiles_number_y_lbl")
-        self.tiles_number_y = xrc.XRCCTRL(self, "tiles_number_y")
-        self.selected_grid_lbl = xrc.XRCCTRL(self, "selected_grid_lbl")
-        self.selected_grid_pnl_holder = xrc.XRCCTRL(self, "selected_grid_pnl_holder")
-        self.area_size_txt = xrc.XRCCTRL(self, "area_size_txt")
-        self.autofocus_chkbox = xrc.XRCCTRL(self, "autofocus_chkbox")
-        self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
-        self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
-        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
-        self.btn_secom_acquire = xrc.XRCCTRL(self, "btn_secom_acquire")
-
-
-
-
-class xrcpnl_tab_sparc_chamber(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_sparc_chamber.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcpnl_tab_sparc_chamber.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PrePanel()
-            self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_chamber")
-            self.PostCreate(pre)
-        else:
-            wx.Panel.__init__(self)
-            self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_sparc_chamber")
-
-        # Define variables for the controls, bind event handlers
-        self.btn_switch_mirror = xrc.XRCCTRL(self, "btn_switch_mirror")
-        self.pnl_move = xrc.XRCCTRL(self, "pnl_move")
-        self.gauge_move = xrc.XRCCTRL(self, "gauge_move")
-        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
-        self.pnl_ref_msg = xrc.XRCCTRL(self, "pnl_ref_msg")
-        self.txt_warning = xrc.XRCCTRL(self, "txt_warning")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
-
-
-
-
-class xrcpnl_tab_fastem_acqui(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_fastem_acqui.PreCreate
-    def PreCreate(self, *args):
-        """ This function is called during the class's initialization.
-
-        Override it for custom setup before the window is created usually to
-        set additional window styles using SetWindowStyle() and SetExtraStyle().
-        """
-        pass
-
-#!XRCED:end-block:xrcpnl_tab_fastem_acqui.PreCreate
-
-    def __init__(self, parent):
-        if wx.MAJOR_VERSION == 3:
-            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
-            pre = wx.PrePanel()
-            self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_fastem_acqui")
-            self.PostCreate(pre)
-        else:
-            wx.Panel.__init__(self)
-            self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_fastem_acqui")
-
-        # Define variables for the controls, bind event handlers
-        self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
-        self.fastem_acq_toolbar = xrc.XRCCTRL(self, "fastem_acq_toolbar")
-        self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.vp_fastem_acqui = xrc.XRCCTRL(self, "vp_fastem_acqui")
-        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
-        self.pnl_fastem_acquisition_streams = xrc.XRCCTRL(self, "pnl_fastem_acquisition_streams")
-        self.pnl_acq_settings = xrc.XRCCTRL(self, "pnl_acq_settings")
-        self.calib_1_pnl = xrc.XRCCTRL(self, "calib_1_pnl")
-        self.calib_1_btn = xrc.XRCCTRL(self, "calib_1_btn")
-        self.calib_1_gauge = xrc.XRCCTRL(self, "calib_1_gauge")
-        self.calib_1_label = xrc.XRCCTRL(self, "calib_1_label")
-        self.calib_2_btn = xrc.XRCCTRL(self, "calib_2_btn")
-        self.calib_2_gauge = xrc.XRCCTRL(self, "calib_2_gauge")
-        self.calib_2_label = xrc.XRCCTRL(self, "calib_2_label")
-        self.calib_2_pnl = xrc.XRCCTRL(self, "calib_2_pnl")
-        self.calib_3_btn = xrc.XRCCTRL(self, "calib_3_btn")
-        self.calib_3_gauge = xrc.XRCCTRL(self, "calib_3_gauge")
-        self.calib_3_label = xrc.XRCCTRL(self, "calib_3_label")
-        self.calib_3_pnl = xrc.XRCCTRL(self, "calib_3_pnl")
-        self.pnl_fastem_projects = xrc.XRCCTRL(self, "pnl_fastem_projects")
-        self.txt_num_rois = xrc.XRCCTRL(self, "txt_num_rois")
-        self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
-        self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
-        self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
-        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
-        self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
-        self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
-        self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
 
 
 
@@ -1134,8 +1033,8 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
 
 
 
-class xrcpnl_tab_enzel_align(wx.Panel):
-#!XRCED:begin-block:xrcpnl_tab_enzel_align.PreCreate
+class xrcpnl_tab_sparc_acqui(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_sparc_acqui.PreCreate
     def PreCreate(self, *args):
         """ This function is called during the class's initialization.
 
@@ -1144,63 +1043,164 @@ class xrcpnl_tab_enzel_align(wx.Panel):
         """
         pass
 
-#!XRCED:end-block:xrcpnl_tab_enzel_align.PreCreate
+#!XRCED:end-block:xrcpnl_tab_sparc_acqui.PreCreate
 
     def __init__(self, parent):
         if wx.MAJOR_VERSION == 3:
             # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
             pre = wx.PrePanel()
             self.PreCreate(pre)
-            get_resources().LoadOnPanel(pre, parent, "pnl_tab_enzel_align")
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_acqui")
             self.PostCreate(pre)
         else:
             wx.Panel.__init__(self)
             self.PreCreate()
-            get_resources().LoadPanel(self, parent, "pnl_tab_enzel_align")
+            get_resources().LoadPanel(self, parent, "pnl_tab_sparc_acqui")
+
+        # Define variables for the controls, bind event handlers
+        self.pnl_left = xrc.XRCCTRL(self, "pnl_left")
+        self.sparc_acq_toolbar = xrc.XRCCTRL(self, "sparc_acq_toolbar")
+        self.lbl_sparc_view_all = xrc.XRCCTRL(self, "lbl_sparc_view_all")
+        self.btn_sparc_view_all = xrc.XRCCTRL(self, "btn_sparc_view_all")
+        self.lbl_sparc_view_tl = xrc.XRCCTRL(self, "lbl_sparc_view_tl")
+        self.btn_sparc_view_tl = xrc.XRCCTRL(self, "btn_sparc_view_tl")
+        self.lbl_sparc_view_tr = xrc.XRCCTRL(self, "lbl_sparc_view_tr")
+        self.btn_sparc_view_tr = xrc.XRCCTRL(self, "btn_sparc_view_tr")
+        self.lbl_sparc_view_bl = xrc.XRCCTRL(self, "lbl_sparc_view_bl")
+        self.btn_sparc_view_bl = xrc.XRCCTRL(self, "btn_sparc_view_bl")
+        self.lbl_sparc_view_br = xrc.XRCCTRL(self, "lbl_sparc_view_br")
+        self.btn_sparc_view_br = xrc.XRCCTRL(self, "btn_sparc_view_br")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.pnl_sparc_grid = xrc.XRCCTRL(self, "pnl_sparc_grid")
+        self.vp_sparc_tl = xrc.XRCCTRL(self, "vp_sparc_tl")
+        self.vp_sparc_tr = xrc.XRCCTRL(self, "vp_sparc_tr")
+        self.vp_sparc_bl = xrc.XRCCTRL(self, "vp_sparc_bl")
+        self.vp_sparc_ts = xrc.XRCCTRL(self, "vp_sparc_ts")
+        self.vp_sparc_br = xrc.XRCCTRL(self, "vp_sparc_br")
+        self.vp_sparc_as = xrc.XRCCTRL(self, "vp_sparc_as")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
+        self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
+        self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
+        self.txt_destination = xrc.XRCCTRL(self, "txt_destination")
+        self.bmp_fold_acq_info = xrc.XRCCTRL(self, "bmp_fold_acq_info")
+        self.lbl_sparc_fold_acq = xrc.XRCCTRL(self, "lbl_sparc_fold_acq")
+        self.bmp_acq_status_info = xrc.XRCCTRL(self, "bmp_acq_status_info")
+        self.bmp_acq_status_warn = xrc.XRCCTRL(self, "bmp_acq_status_warn")
+        self.lbl_sparc_acq_estimate = xrc.XRCCTRL(self, "lbl_sparc_acq_estimate")
+        self.gauge_sparc_acq = xrc.XRCCTRL(self, "gauge_sparc_acq")
+        self.btn_sparc_cancel = xrc.XRCCTRL(self, "btn_sparc_cancel")
+        self.btn_sparc_acquire = xrc.XRCCTRL(self, "btn_sparc_acquire")
+
+
+
+
+class xrcpnl_tab_sparc_align(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_sparc_align.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_sparc_align.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_align")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_sparc_align")
 
         # Define variables for the controls, bind event handlers
         self.pnl_alignment_btns = xrc.XRCCTRL(self, "pnl_alignment_btns")
-        self.btn_align_z = xrc.XRCCTRL(self, "btn_align_z")
-        self.btn_align_sem = xrc.XRCCTRL(self, "btn_align_sem")
-        self.btn_align_flm = xrc.XRCCTRL(self, "btn_align_flm")
-        self.pnl_z_align_controls = xrc.XRCCTRL(self, "pnl_z_align_controls")
-        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
-        self.stage_align_btn_p_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_p_aligner_z")
-        self.stage_align_btn_m_aligner_z = xrc.XRCCTRL(self, "stage_align_btn_m_aligner_z")
-        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
-        self.pnl_sem_align_controls = xrc.XRCCTRL(self, "pnl_sem_align_controls")
-        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
-        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
-        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
-        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
-        self.beam_shift_btn_p_aligner_y = xrc.XRCCTRL(self, "beam_shift_btn_p_aligner_y")
-        self.beam_shift_btn_m_aligner_y = xrc.XRCCTRL(self, "beam_shift_btn_m_aligner_y")
-        self.beam_shift_btn_m_aligner_x = xrc.XRCCTRL(self, "beam_shift_btn_m_aligner_x")
-        self.beam_shift_btn_p_aligner_x = xrc.XRCCTRL(self, "beam_shift_btn_p_aligner_x")
-        self.pnl_flm_align_controls = xrc.XRCCTRL(self, "pnl_flm_align_controls")
-        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
-        self.lbl_y = xrc.XRCCTRL(self, "lbl_y")
-        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
-        self.lbl_x = xrc.XRCCTRL(self, "lbl_x")
-        self.flm_align_btn_p_aligner_y = xrc.XRCCTRL(self, "flm_align_btn_p_aligner_y")
-        self.flm_align_btn_m_aligner_y = xrc.XRCCTRL(self, "flm_align_btn_m_aligner_y")
-        self.flm_align_btn_m_aligner_x = xrc.XRCCTRL(self, "flm_align_btn_m_aligner_x")
-        self.flm_align_btn_p_aligner_x = xrc.XRCCTRL(self, "flm_align_btn_p_aligner_x")
-        self.lbl_pz = xrc.XRCCTRL(self, "lbl_pz")
-        self.lbl_mz = xrc.XRCCTRL(self, "lbl_mz")
-        self.flm_align_btn_p_aligner_z = xrc.XRCCTRL(self, "flm_align_btn_p_aligner_z")
-        self.flm_align_btn_m_aligner_z = xrc.XRCCTRL(self, "flm_align_btn_m_aligner_z")
-        self.controls_step_size_slider = xrc.XRCCTRL(self, "controls_step_size_slider")
-        self.html_alignment_doc = xrc.XRCCTRL(self, "html_alignment_doc")
-        self.btn_custom_alignment = xrc.XRCCTRL(self, "btn_custom_alignment")
+        self.btn_align_chamber = xrc.XRCCTRL(self, "btn_align_chamber")
+        self.btn_align_mirror = xrc.XRCCTRL(self, "btn_align_mirror")
+        self.btn_align_fiber = xrc.XRCCTRL(self, "btn_align_fiber")
+        self.pnl_sparc_trans = xrc.XRCCTRL(self, "pnl_sparc_trans")
+        self.mirror_align_slider_mirror_x = xrc.XRCCTRL(self, "mirror_align_slider_mirror_x")
+        self.mirror_align_slider_mirror_y = xrc.XRCCTRL(self, "mirror_align_slider_mirror_y")
+        self.lbl_my = xrc.XRCCTRL(self, "lbl_my")
+        self.lbl_py = xrc.XRCCTRL(self, "lbl_py")
+        self.lbl_px = xrc.XRCCTRL(self, "lbl_px")
+        self.lbl_mx = xrc.XRCCTRL(self, "lbl_mx")
+        self.mirror_align_btn_p_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_y")
+        self.mirror_align_btn_m_mirror_y = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_y")
+        self.mirror_align_btn_p_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_x")
+        self.mirror_align_btn_m_mirror_x = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_x")
+        self.pnl_sparc_rot = xrc.XRCCTRL(self, "pnl_sparc_rot")
+        self.mirror_align_slider_mirror_r = xrc.XRCCTRL(self, "mirror_align_slider_mirror_r")
+        self.lbl_pry = xrc.XRCCTRL(self, "lbl_pry")
+        self.lbl_mry = xrc.XRCCTRL(self, "lbl_mry")
+        self.lbl_prz = xrc.XRCCTRL(self, "lbl_prz")
+        self.lbl_mrz = xrc.XRCCTRL(self, "lbl_mrz")
+        self.mirror_align_btn_m_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_ry")
+        self.mirror_align_btn_p_mirror_ry = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_ry")
+        self.mirror_align_btn_m_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_m_mirror_rz")
+        self.mirror_align_btn_p_mirror_rz = xrc.XRCCTRL(self, "mirror_align_btn_p_mirror_rz")
+        self.pnl_fibaligner = xrc.XRCCTRL(self, "pnl_fibaligner")
+        self.mirror_align_slider_fibaligner = xrc.XRCCTRL(self, "mirror_align_slider_fibaligner")
+        self.lbl_pfy = xrc.XRCCTRL(self, "lbl_pfy")
+        self.lbl_mfy = xrc.XRCCTRL(self, "lbl_mfy")
+        self.lbl_pfx = xrc.XRCCTRL(self, "lbl_pfx")
+        self.lbl_mfx = xrc.XRCCTRL(self, "lbl_mfx")
+        self.mirror_align_btn_p_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_p_fibaligner_y")
+        self.mirror_align_btn_m_fibaligner_y = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_y")
+        self.mirror_align_btn_m_fibaligner_x = xrc.XRCCTRL(self, "mirror_align_btn_m_fibaligner_x")
+        self.mirror_align_btn_p_fibaligner_x = xrc.XRCCTRL(self, "mirror_align_btn_p_fibaligner_x")
         self.btn_log = xrc.XRCCTRL(self, "btn_log")
-        self.pnl_two_streams_grid = xrc.XRCCTRL(self, "pnl_two_streams_grid")
-        self.view_FIB = xrc.XRCCTRL(self, "view_FIB")
-        self.view_SEM = xrc.XRCCTRL(self, "view_SEM")
-        self.view_FLM = xrc.XRCCTRL(self, "view_FLM")
+        self.vp_sparc_align = xrc.XRCCTRL(self, "vp_sparc_align")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
-        self.top_settings = xrc.XRCCTRL(self, "top_settings")
-        self.bottom_settings = xrc.XRCCTRL(self, "bottom_settings")
+        self.fp_ma_settings_ar = xrc.XRCCTRL(self, "fp_ma_settings_ar")
+        self.pnl_sparc_align_streams = xrc.XRCCTRL(self, "pnl_sparc_align_streams")
+        self.fp_ma_settings_spectrum = xrc.XRCCTRL(self, "fp_ma_settings_spectrum")
+
+
+
+
+class xrcpnl_tab_sparc_chamber(wx.Panel):
+#!XRCED:begin-block:xrcpnl_tab_sparc_chamber.PreCreate
+    def PreCreate(self, *args):
+        """ This function is called during the class's initialization.
+
+        Override it for custom setup before the window is created usually to
+        set additional window styles using SetWindowStyle() and SetExtraStyle().
+        """
+        pass
+
+#!XRCED:end-block:xrcpnl_tab_sparc_chamber.PreCreate
+
+    def __init__(self, parent):
+        if wx.MAJOR_VERSION == 3:
+            # Two stage creation (see http://wiki.wxpython.org/index.cgi/TwoStageCreation)
+            pre = wx.PrePanel()
+            self.PreCreate(pre)
+            get_resources().LoadOnPanel(pre, parent, "pnl_tab_sparc_chamber")
+            self.PostCreate(pre)
+        else:
+            wx.Panel.__init__(self)
+            self.PreCreate()
+            get_resources().LoadPanel(self, parent, "pnl_tab_sparc_chamber")
+
+        # Define variables for the controls, bind event handlers
+        self.btn_switch_mirror = xrc.XRCCTRL(self, "btn_switch_mirror")
+        self.pnl_move = xrc.XRCCTRL(self, "pnl_move")
+        self.gauge_move = xrc.XRCCTRL(self, "gauge_move")
+        self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
+        self.pnl_ref_msg = xrc.XRCCTRL(self, "pnl_ref_msg")
+        self.txt_warning = xrc.XRCCTRL(self, "txt_warning")
+        self.btn_log = xrc.XRCCTRL(self, "btn_log")
+        self.vp_chamber = xrc.XRCCTRL(self, "vp_chamber")
+        self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
 
 
 
@@ -1214,7 +1214,7 @@ def __init_resources():
 
     wx.FileSystem.AddHandler(wx.MemoryFSHandler())
 
-    fr_acq_xrc = u'''\
+    dialog_acq_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxDialog" name="fr_acq">
     <object class="wxFlexGridSizer">
@@ -1559,446 +1559,43 @@ t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
 b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
 \xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    wx.MemoryFSHandler.AddFile('XRC/fr_acq/fr_acq_xrc', bytearray(fr_acq_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/fr_acq/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
-    __res.Load('memory:XRC/fr_acq/fr_acq_xrc')
+    wx.MemoryFSHandler.AddFile('XRC/dialog_acq/dialog_acq_xrc', bytearray(dialog_acq_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/dialog_acq/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
+    __res.Load('memory:XRC/dialog_acq/dialog_acq_xrc')
 
-    pnl_tab_localization_xrc = u'''\
+    dialog_overview_acq_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_localization">
-    <object class="wxBoxSizer">
+  <object class="wxDialog" name="fr_overview_acq">
+    <object class="wxFlexGridSizer">
+      <cols>2</cols>
+      <rows>2</rows>
+      <growablecols>0</growablecols>
+      <growablerows>0</growablerows>
       <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxBoxSizer">
-                <object class="spacer">
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                </object>
-                <object class="sizeritem">
-                  <object class="ToolBar" name="secom_toolbar">
-                    <style>wxVERTICAL</style>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxALIGN_RIGHT</flag>
-                </object>
-                <object class="spacer">
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_secom_view_all">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_all">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_secom_view_tl">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_tl">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_secom_view_tr">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_tr">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_secom_view_bl">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_bl">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_secom_view_br">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_secom_view_br">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxALIGN_RIGHT</flag>
-                </object>
-                <orient>wxVERTICAL</orient>
-              </object>
-              <option>1</option>
-              <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_up_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
-              <border>10</border>
-            </object>
-          </object>
-          <size>200,-1</size>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="ViewportGrid" name="pnl_secom_grid">
-          <object class="FeatureOverviewViewport" name="vp_secom_tl">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="MicroscopeViewport" name="vp_secom_tr">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="LiveViewport" name="vp_secom_bl">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="LiveViewport" name="vp_secom_br">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-
-
+        <object class="LiveViewport" name="pnl_view_acq">
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
         </object>
-        <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
-
+            <object class="sizeritem">
+              <object class="wxPanel" name="main_buttons">
+                <size>400,-1</size>
+                <fg>#DDDDDD</fg>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_feature_panel">
-                        <object class="wxPanel" name="pnl_features">
-                          <object class="wxBoxSizer">
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="ImageButton" name="btn_delete_feature">
-                                    <icon>______img_icon_ico_trash_png</icon>
-                                    <height>16</height>
-                                    <style>wxALIGN_CENTRE</style>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="OwnerDrawnComboBox" name="cmb_features">
-                                    <size>145,20</size>
-                                    <fg>#2FA7D4</fg>
-                                    <bg>#333333</bg>
-                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_create_move_feature">
-                                    <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Create/Move</label>
-                                    <style>wxALIGN_CENTRE</style>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>52</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <flag>wxLEFT|wxTOP</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>Status</label>
-                                    <fg>#DDDDDD</fg>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="OwnerDrawnComboBox" name="cmb_feature_status">
-                                    <size>122,16</size>
-                                    <fg>#2FA7D4</fg>
-                                    <bg>#333333</bg>
-                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_go_to_feature">
-                                    <height>24</height>
-                                    <label>Go to feature</label>
-                                    <style>wxALIGN_CENTRE</style>
-                                    <bg>#000000</bg>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>52</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <flag>wxLEFT|wxTOP</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>Feature Z</label>
-                                    <fg>#DDDDDD</fg>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="UnitFloatCtrl" name="ctrl_feature_z">
-                                    <size>-1,15</size>
-                                    <accuracy>5</accuracy>
-                                    <key_step>0.001</key_step>
-                                    <unit>m</unit>
-                                    <bg>#333333</bg>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_use_current_z">
-                                    <height>24</height>
-                                    <bg>#000000</bg>
-                                    <label>Use Current Z</label>
-                                    <tooltip>Save the current position of the focus as the feature Z position</tooltip>
-                                    <style>wxALIGN_CENTRE</style>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>65</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <flag>wxLEFT|wxTOP|wxBOTTOM</flag>
-                              <border>10</border>
-                            </object>
-                            <!-- TODO: put all in a single panel, to hide easily? -->
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_z_localization">
-                                    <height>24</height>
-                                    <label>Locate Z...</label>
-                                    <style>wxALIGN_CENTRE</style>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                    <bg>#000000</bg>
-                                  </object>
-                                  <flag>wxRIGHT</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText" name="lbl_z_localization">
-                                    <label>~ 4 seconds</label>
-                                    <style>wxALIGN_CENTRE</style>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                    <fg>#DDDDDD</fg>
-                                  </object>
-                                  <flag>wxTOP</flag>
-                                  <border>3</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxGauge" name="gauge_z_localization">
-                                    <size>-1,10</size>
-                                    <range>100</range>
-                                    <value>0</value>
-                                    <style>wxGA_HORIZONTAL|wxGA_SMOOTH</style>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                    <hidden>1</hidden>
-                                  </object>
-                                  <option>1</option>
-                                  <flag>wxTOP</flag>
-                                  <border>4</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <flag>wxLEFT|wxBOTTOM|wxRIGHT|wxEXPAND</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="wxStaticText" name="lbl_stigmator_angle">
-                                    <label>Stigmator angle</label>
-                                    <fg>#DDDDDD</fg>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="OwnerDrawnComboBox" name="cmb_stigmator_angle">
-                                    <size>110,16</size>
-                                    <fg>#2FA7D4</fg>
-                                    <bg>#333333</bg>
-                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER
-                                    </style>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <flag>wxLEFT|wxBOTTOM</flag>
-                              <border>10</border>
-                            </object>
-                            <flag>wxALIGN_RIGHT</flag>
-                            <orient>wxVERTICAL</orient>
-                          </object>
-                        </object>
-                        <label>FEATURES</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
                       <object class="FoldPanelItem" name="fp_settings_secom_optical">
                         <label>OPTICAL SETTINGS</label>
                         <fg>#1A1A1A</fg>
@@ -2007,10 +1604,21 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           <assign_var>1</assign_var>
                         </XRCED>
                       </object>
-                      <object class="FoldPanelItem" name="fp_secom_streams">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_opt_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <nocaption>1</nocaption>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_secom_streams">
                           <size>300,-1</size>
-                          <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
                           <XRCED>
@@ -2018,363 +1626,6 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                           </XRCED>
                         </object>
                         <label>STREAMS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem" name="fp_acquisitions">
-                        <object class="wxPanel">
-                          <object class="wxBoxSizer">
-                            <object class="sizeritem">
-                              <object class="wxCheckListBox" name="streams_chk_list">
-                                <content/>
-                                <font>
-                                  <size>10</size>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                              </object>
-                              <option>1</option>
-                              <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="wxCheckBox" name="z_stack_chkbox">
-                                    <label>Z-stack acquisition</label>
-                                    <fg>#E5E5E5</fg>
-                                  </object>
-                                  <option>0</option>
-                                  <flag>wxTOP</flag>
-                                  <border>10</border>
-                                </object>
-                                <orient>wxVERTICAL</orient>
-                              </object>
-                              <option>0</option>
-                              <flag>wxLEFT</flag>
-                              <border>5</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="wxFlexGridSizer">
-                                    <object class="sizeritem">
-                                      <object class="wxStaticText">
-                                        <label>Zmin =</label>
-                                        <fg>#E5E5E5</fg>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>3</border>
-                                    </object>
-                                    <object class="sizeritem">
-                                      <object class="UnitFloatCtrl" name="param_Zmin">
-                                        <size>-1,15</size>
-                                        <value>10</value>
-                                        <key_step>0.000001</key_step>
-                                        <min>-1000</min>
-                                        <max>0</max>
-                                        <unit>m</unit>
-                                        <scale>linear</scale>
-                                        <accuracy>4</accuracy>
-                                        <font>
-                                          <size>8</size>
-                                          <encoding>UTF-8</encoding>
-                                        </font>
-                                        <style>wxBORDER_NONE</style>
-                                        <XRCED>
-                                          <assign_var>1</assign_var>
-                                        </XRCED>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>3</border>
-                                    </object>
-                                    <cols>2</cols>
-                                    <rows>1</rows>
-                                    <vgap>3</vgap>
-                                    <hgap>6</hgap>
-                                    <growablecols>1</growablecols>
-                                  </object>
-                                  <option>0</option>
-                                  <flag>wxLEFT</flag>
-                                  <border>25</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxFlexGridSizer">
-                                    <object class="sizeritem">
-                                      <object class="wxStaticText">
-                                        <label>Zstep =</label>
-                                        <fg>#E5E5E5</fg>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>3</border>
-                                    </object>
-                                    <object class="sizeritem">
-                                      <object class="UnitFloatCtrl" name="param_Zstep">
-                                        <size>-1,15</size>
-                                        <value>10</value>
-                                        <key_step>0.000001</key_step>
-                                        <min>-100</min>
-                                        <max>100</max>
-                                        <unit>m</unit>
-                                        <scale>linear</scale>
-                                        <accuracy>4</accuracy>
-                                        <font>
-                                          <size>8</size>
-                                          <encoding>UTF-8</encoding>
-                                        </font>
-                                        <style>wxBORDER_NONE</style>
-                                        <XRCED>
-                                          <assign_var>1</assign_var>
-                                        </XRCED>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>3</border>
-                                    </object>
-                                    <cols>2</cols>
-                                    <rows>1</rows>
-                                    <vgap>3</vgap>
-                                    <hgap>6</hgap>
-                                    <growablecols>1</growablecols>
-                                  </object>
-                                  <option>0</option>
-                                  <flag>wxLEFT</flag>
-                                  <border>1</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxFlexGridSizer">
-                                    <object class="sizeritem">
-                                      <object class="wxStaticText">
-                                        <label>Zmax =</label>
-                                        <fg>#E5E5E5</fg>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>3</border>
-                                    </object>
-                                    <object class="sizeritem">
-                                      <object class="UnitFloatCtrl" name="param_Zmax">
-                                        <size>-1,15</size>
-                                        <value>1</value>
-                                        <key_step>0.000001</key_step>
-                                        <min>0</min>
-                                        <max>1000</max>
-                                        <unit>m</unit>
-                                        <scale>linear</scale>
-                                        <accuracy>4</accuracy>
-                                        <font>
-                                          <size>8</size>
-                                          <encoding>UTF-8</encoding>
-                                        </font>
-                                        <style>wxBORDER_NONE</style>
-                                        <XRCED>
-                                          <assign_var>1</assign_var>
-                                        </XRCED>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>3</border>
-                                    </object>
-                                    <cols>2</cols>
-                                    <rows>1</rows>
-                                    <vgap>3</vgap>
-                                    <hgap>6</hgap>
-                                    <growablecols>1</growablecols>
-                                  </object>
-                                  <option>0</option>
-                                  <flag>wxLEFT</flag>
-                                  <border>-5</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP</flag>
-                              <border>9</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="wxFlexGridSizer">
-                                    <object class="sizeritem">
-                                      <object class="wxStaticText">
-                                        <label>Filename</label>
-                                        <fg>#E5E5E5</fg>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>4</border>
-                                    </object>
-                                    <object class="sizeritem">
-                                      <object class="wxTextCtrl" name="txt_filename">
-                                        <size>150,20</size>
-                                        <value>Select a destination file</value>
-                                        <fg>#2FA7D4</fg>
-                                        <bg>#333333</bg>
-                                        <style>wxBORDER_NONE|wxTE_READONLY</style>
-                                        <XRCED>
-                                          <assign_var>1</assign_var>
-                                        </XRCED>
-                                      </object>
-                                      <flag>wxLEFT|wxEXPAND</flag>
-                                      <border>1</border>
-                                    </object>
-                                    <object class="sizeritem">
-                                      <object class="ImageTextButton" name="btn_cryosecom_change_file">
-                                        <height>24</height>
-                                        <face_colour>def</face_colour>
-                                        <label>change…</label>
-                                        <XRCED>
-                                          <assign_var>1</assign_var>
-                                        </XRCED>
-                                      </object>
-                                      <flag>wxLEFT</flag>
-                                      <border>85</border>
-                                    </object>
-                                    <cols>3</cols>
-                                    <rows>1</rows>
-                                    <vgap>5</vgap>
-                                    <hgap>10</hgap>
-                                    <growablecols>1</growablecols>
-                                  </object>
-                                  <flag>wxLEFT</flag>
-                                  <border>10</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxFlexGridSizer">
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_cryosecom_acquire">
-                                    <icon>______img_icon_ico_acqui_png</icon>
-                                    <height>48</height>
-                                    <face_colour>blue</face_colour>
-                                    <label>ACQUIRE</label>
-                                    <fg>#FFFFFF</fg>
-                                    <font>
-                                      <size>15</size>
-                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                    </font>
-                                    <style>wxALIGN_CENTRE</style>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <flag>wxALL|wxEXPAND</flag>
-                                  <border>2</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxBoxSizer">
-                                    <object class="sizeritem">
-                                      <object class="wxStaticText" name="txt_cryosecom_est_time">
-                                        <label>Estimated time ...</label>
-                                        <fg>#E5E5E5</fg>
-                                        <hidden>1</hidden>
-                                      </object>
-                                      <flag>wxLEFT</flag>
-                                      <border>-2</border>
-                                    </object>
-                                    <orient>wxHORIZONTAL</orient>
-                                  </object>
-                                  <flag>wxTOP</flag>
-                                  <border>17</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxBoxSizer">
-                                    <object class="sizeritem">
-                                      <object class="wxBoxSizer">
-                                        <object class="sizeritem">
-                                          <object class="wxGauge" name="gauge_cryosecom_acq">
-                                            <size>-1,10</size>
-                                            <range>100</range>
-                                            <value>0</value>
-                                            <style>wxGA_SMOOTH</style>
-                                            <XRCED>
-                                              <assign_var>1</assign_var>
-                                            </XRCED>
-                                          </object>
-                                          <option>1</option>
-                                          <flag>wxTOP</flag>
-                                          <border>10</border>
-                                        </object>
-                                        <object class="sizeritem">
-                                          <object class="wxStaticText" name="txt_cryosecom_left_time">
-                                            <label/>
-                                            <fg>#E5E5E5</fg>
-                                            <hidden>1</hidden>
-                                          </object>
-                                          <option>1</option>
-                                          <flag>wxTOP</flag>
-                                          <border>10</border>
-                                        </object>
-                                        <orient>wxVERTICAL</orient>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>-8</border>
-                                    </object>
-                                    <object class="sizeritem">
-                                      <object class="ImageTextButton" name="btn_cryosecom_acqui_cancel">
-                                        <height>24</height>
-                                        <face_colour>def</face_colour>
-                                        <label>cancel</label>
-                                        <XRCED>
-                                          <assign_var>1</assign_var>
-                                        </XRCED>
-                                      </object>
-                                      <flag>wxTOP</flag>
-                                      <border>12</border>
-                                      <option>0</option>
-                                    </object>
-                                    <orient>wxHORIZONTAL</orient>
-                                  </object>
-                                  <flag>wxEXPAND</flag>
-                                </object>
-                                <cols>3</cols>
-                                <rows>1</rows>
-                                <vgap>0</vgap>
-                                <hgap>5</hgap>
-                                <growablecols>1</growablecols>
-                              </object>
-                              <flag>wxALL|wxEXPAND</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_acquire_overview">
-                                <height>48</height>
-                                <face_colour>def</face_colour>
-                                <label>ACQUIRE OVERVIEW</label>
-                                <font>
-                                  <size>14</size>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                              <border>10</border>
-                            </object>
-                            <orient>wxVERTICAL</orient>
-                          </object>
-                          <size>400,-1</size>
-                          <bg>#333333</bg>
-                          <style>wxBORDER_NONE</style>
-                        </object>
-                        <label>ACQUISITIONS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_cryosecom_acquired">
-                          <size>300,-1</size>
-                          <add_button>0</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>ACQUIRED</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
@@ -2386,104 +1637,249 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxFlexGridSizer">
+                    <object class="wxGridBagSizer">
+                      <vgap>10</vgap>
+                      <hgap>50</hgap>
+                      <growablecols>1</growablecols>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="btn_mill_active_features">
-                          <hidden>1</hidden>
-                          <icon>______img_icon_ico_sem_png</icon>
-                          <height>48</height>
-                          <face_colour>blue</face_colour>
-                          <label>MILL</label>
-                          <fg>#FFFFFF</fg>
+                        <object class="wxStaticText">
+                          <label>ZStack steps</label>
+                          <fg>#DDDDDD</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                           <font>
-                            <size>15</size>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                            <size>9</size>
                           </font>
-                          <style>wxALIGN_CENTRE</style>
+                        </object>
+                        <cellpos>0,0</cellpos>
+                        <flag>wxLEFT</flag>
+                        <border>13</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitIntegerSlider" name="zstack_steps">
+                          <size>-1,20</size>
+                          <value>21</value>
+                          <min>1</min>
+                          <max>51</max>
+                          <fg>#E5E5E5</fg>
+                          <style>wxBORDER_NONE</style>
                           <XRCED>
                             <assign_var>1</assign_var>
                           </XRCED>
                         </object>
-                        <flag>wxALL|wxEXPAND</flag>
+                        <cellpos>0,1</cellpos>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxBoxSizer">
-                          <object class="sizeritem">
-                            <object class="wxStaticText" name="txt_milling_est_time">
-                              <hidden>1</hidden>
-                              <label>Estimated time ...</label>
-                              <fg>#E5E5E5</fg>
-                              <hidden>0</hidden>
-                            </object>
-                            <flag>wxLEFT</flag>
-                            <border>-2</border>
-                          </object>
-                          <orient>wxHORIZONTAL</orient>
+                        <object class="wxStaticText">
+                          <label>Zstep size</label>
+                          <fg>#DDDDDD</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                          </font>
                         </object>
-                        <flag>wxTOP</flag>
-                        <border>17</border>
+                        <cellpos>1,0</cellpos>
+                        <flag>wxLEFT</flag>
+                        <border>13</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxBoxSizer">
-                          <object class="sizeritem">
-                            <object class="wxBoxSizer">
-                              <object class="sizeritem">
-                                <object class="wxGauge" name="gauge_milling_series">
-                                  <hidden>1</hidden>
-                                  <size>-1,10</size>
-                                  <range>100</range>
-                                  <value>0</value>
-                                  <style>wxGA_SMOOTH</style>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <option>1</option>
-                                <flag>wxTOP</flag>
-                                <border>10</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText" name="txt_milling_series_left_time">
-                                  <hidden>1</hidden>
-                                  <label/>
-                                  <fg>#E5E5E5</fg>
-                                  <hidden>0</hidden>
-                                </object>
-                                <option>1</option>
-                                <flag>wxTOP</flag>
-                                <border>10</border>
-                              </object>
-                              <orient>wxVERTICAL</orient>
-                            </object>
-                            <flag>wxTOP</flag>
-                            <border>-8</border>
-                          </object>
-                          <object class="sizeritem">
-                            <object class="ImageTextButton" name="btn_milling_cancel">
-                              <hidden>1</hidden>
-                              <height>24</height>
-                              <face_colour>def</face_colour>
-                              <label>cancel</label>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <flag>wxTOP</flag>
-                            <border>12</border>
-                            <option>0</option>
-                          </object>
-                          <orient>wxHORIZONTAL</orient>
+                        <object class="UnitFloatCtrl" name="zstep_size_ctrl">
+                          <value>1</value>
+                          <key_step>0.000001</key_step>
+                          <min>0</min>
+                          <max>1</max>
+                          <unit>m</unit>
+                          <accuracy>3</accuracy>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                          </font>
                         </object>
-                        <flag>wxEXPAND</flag>
+                        <cellpos>1,1</cellpos>
+                        <flag>wxLEFT</flag>
+                        <border>10</border>
                       </object>
-                      <cols>3</cols>
-                      <rows>1</rows>
-                      <vgap>0</vgap>
-                      <hgap>5</hgap>
-                      <growablecols>1</growablecols>
                     </object>
-                    <flag>wxEXPAND</flag>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxCheckBox" name="whole_grid_chkbox">
+                      <label>Whole grid acquisition</label>
+                      <fg>#E5E5E5</fg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <vgap>10</vgap>
+                      <hgap>50</hgap>
+                      <growablecols>1</growablecols>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="tiles_number_x_lbl">
+                          <label>Tiles number x</label>
+                          <fg>#DDDDDD</fg>
+                          <font>
+                            <size>9</size>
+                            <sysfont> wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,0</cellpos>
+                        <flag>wxLEFT</flag>
+                        <border>13</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitIntegerCtrl" name="tiles_number_x">
+                          <size>-1,15</size>
+                          <value>10</value>
+                          <key_step>1</key_step>
+                          <min>1</min>
+                          <max>1000</max>
+                          <unit/>
+                          <scale>linear</scale>
+                          <accuracy>4</accuracy>
+                          <font>
+                            <size>9</size>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>0,1</cellpos>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="tiles_number_y_lbl">
+                          <label>Tiles number y</label>
+                          <fg>#DDDDDD</fg>
+                          <font>
+                            <size>9</size>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>1,0</cellpos>
+                        <flag>wxLEFT</flag>
+                        <border>13</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitIntegerCtrl" name="tiles_number_y">
+                          <size>-1,15</size>
+                          <value>10</value>
+                          <key_step>1</key_step>
+                          <min>1</min>
+                          <max>1000</max>
+                          <unit/>
+                          <scale>linear</scale>
+                          <accuracy>4</accuracy>
+                          <font>
+                            <size>9</size>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>1,1</cellpos>
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="selected_grid_lbl">
+                      <label>Selected grid areas</label>
+                      <fg>#DDDDDD</fg>
+                      <font>
+                        <size>9</size>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>13</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="selected_grid_pnl_holder">
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND|wxLEFT|wxRIGHT</flag>
+                    <border>13</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <vgap>10</vgap>
+                      <hgap>50</hgap>
+                      <growablecols>1</growablecols>
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Tiled area size</label>
+                          <fg>#DDDDDD</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                          </font>
+                        </object>
+                        <cellpos>0,0</cellpos>
+                        <flag>wxLEFT</flag>
+                        <border>13</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="area_size_txt">
+                          <label>...</label>
+                          <fg>#777777</fg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                          <font>
+                            <size>9</size>
+                          </font>
+                        </object>
+                        <cellpos>0,1</cellpos>
+                        <flag>wxLEFT</flag>
+                        <border>10</border>
+                      </object>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxCheckBox" name="autofocus_chkbox">
+                      <label>Run autofocus</label>
+                      <fg>#E5E5E5</fg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>10</border>
                   </object>
                 </object>
                 <size>400,-1</size>
@@ -2505,30 +1901,101 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
         </object>
         <flag>wxEXPAND</flag>
       </object>
-      <orient>wxHORIZONTAL</orient>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="wxGauge" name="gauge_acq">
+                <size>-1,10</size>
+                <range>100</range>
+                <value>50</value>
+                <hidden>1</hidden>
+                <style>wxGA_SMOOTH</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>30</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText" name="lbl_acqestimate">
+                <label>Estimated acquisition time is 9999 seconds</label>
+                <fg>#DDDDDD</fg>
+                <font>
+                  <size>14</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_RIGHT</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL</flag>
+              <border>23</border>
+            </object>
+          </object>
+          <size>-1,60</size>
+          <bg>#4D4D4D</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_cancel">
+                <height>48</height>
+                <face_colour>def</face_colour>
+                <label>Close</label>
+                <font>
+                  <size>14</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_secom_acquire">
+                <size>242,48</size>
+                <icon>______img_icon_ico_acqui_png</icon>
+                <height>48</height>
+                <face_colour>blue</face_colour>
+                <label>ACQUIRE OVERVIEW</label>
+                <fg>#FFFFFF</fg>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>2</option>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <bg>#444444</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
     </object>
-    <bg>#333333</bg>
+    <title>Overview Acquisition</title>
+    <bg>#000000</bg>
+    <font>
+      <size>9</size>
+      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+    </font>
+    <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
   </object>
 </resource>'''
-
-    ______img_icon_ico_chevron_up_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
-D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
-\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
- \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_trash_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\
-\x9a\x9c\x18\x00\x00\x00MIDATx\x9cc`\xa0\x11hc``\xf8\xc9\xc0\xc0\xf0\x1f\
-J\xb7\x90j\xc0O\x06\x06\x06!(\x1bD\xff F\xd3\x120^C(\x91g\xf8O$=j\xc0\xa0\
-\x0e\xc4\x9fH)\x10\x1d\x10\x95"Ai\x1e\x96\x07\xd01H\xbc\x99\x90\x01\xf4\
-\x07\x00\xd8]?\xea\xa3 \xa6\xc2\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     ______img_icon_ico_acqui_png = b'''\
 \x89PNG\x0d
@@ -2575,1271 +2042,11 @@ t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
 b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
 \xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    ______img_icon_ico_sem_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x04\x00\x00\x009\
-\xc62\xa5\x00\x00\x00\xb6IDAT8\xcb\xed\x94M
-\xc20\x10Fs\x03O\xd2\x0b\xd4\xfa\xb7\xb0E\x08\xd2.\x84\xc6n\xd5s\xe4\x8c\
-\x9e\xa47xfD\xa8\x84\x92\xa4\xa2\x0b\xa1|\x8b\x8f!<\x98\xc7@\x14jZ\xd4\x0c\
-L\x07
-\xb6\xac\xc8\xb3\x15\x1b\x96w\xfb\x9c\x0b\x02@\x8d\xa1\xe1\x905\xb4h\x07\
-\xc8\\\x87\x00\xc3\x8d\x8e&\xeb\xb8pr\x80\xcc&\x04\xd8\xd1\x04\x80\x12M\
-\x85U\x95\xeb\xbdk\x99\xcb\x98C\x8d\xf5:\xe2`\xb0^\xd3A\x9eK$CG\x01\xdf\
-#
-\xf8\x1eQ\xe0\x03\x07\xfdr\xd0\xeb\xf0~\x8bd`\xd8?\x11\x18\xf6\xff\x99\
-C/7\xc8\x17\xc9\xc0\xb1\x17\x87u:\xd0\xf6W\xce\xec\xe2\xc0\xfc\x19\x8f\xe6\
-\x01\xb8\x055\xdfN\x86\xe9\x00\x00\x00\x00IEND\xaeB`\x82'''
+    wx.MemoryFSHandler.AddFile('XRC/dialog_overview_acq/dialog_overview_acq_xrc', bytearray(dialog_overview_acq_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/dialog_overview_acq/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
+    __res.Load('memory:XRC/dialog_overview_acq/dialog_overview_acq_xrc')
 
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_localization/pnl_tab_localization_xrc', bytearray(pnl_tab_localization_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_localization/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_localization/______img_icon_ico_trash_png', bytearray(______img_icon_ico_trash_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_localization/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_localization/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
-    __res.Load('memory:XRC/pnl_tab_localization/pnl_tab_localization_xrc')
-
-    pnl_tab_inspection_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_inspection">
-    <object class="wxBoxSizer">
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_open_image">
-                <height>24</height>
-                <face_colour>def</face_colour>
-                <label>Select image...</label>
-                <fg>#1A1A1A</fg>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="ToolBar" name="ana_toolbar">
-                <style>wxVERTICAL|wxHORIZONTAL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALIGN_RIGHT</flag>
-            </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxBoxSizer">
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_inspection_view_all">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_all">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_inspection_view_tl">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_tl">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_inspection_view_tr">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_tr">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_inspection_view_bl">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_bl">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_inspection_view_br">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_inspection_view_br">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxALIGN_RIGHT</flag>
-                </object>
-                <orient>wxVERTICAL</orient>
-              </object>
-              <option>1</option>
-              <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_up_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
-              <border>10</border>
-            </object>
-          </object>
-          <size>200,-1</size>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="ViewportGrid" name="pnl_inspection_grid">
-          <object class="MicroscopeViewport" name="vp_inspection_tl">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="MicroscopeViewport" name="vp_inspection_tr">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="MicroscopeViewport" name="vp_inspection_bl">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="MicroscopeViewport" name="vp_inspection_br">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="AngularResolvedViewport" name="vp_angular">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="PointSpectrumViewport" name="vp_inspection_plot">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="LineSpectrumViewport" name="vp_linespec">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="TemporalSpectrumViewport" name="vp_temporalspec">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="ChronographViewport" name="vp_timespec">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="AngularResolvedViewport" name="vp_angular_pol">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="AngularSpectrumViewport" name="vp_angularspec">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="ThetaViewport" name="vp_thetaspec">
-            <hidden>1</hidden>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_fileinfo">
-                        <label>FILE INFO</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_inspection_streams">
-                          <size>300,-1</size>
-                          <add_button>1</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>STREAMS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_export">
-                      <size>382,-1</size>
-                      <icon>______img_icon_ico_export_png</icon>
-                      <height>48</height>
-                      <face_colour>blue</face_colour>
-                      <label>EXPORT IMAGE</label>
-                      <fg>#FFFFFF</fg>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
-                  </object>
-                </object>
-                <bg>#4D4D4D</bg>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            <orient>wxVERTICAL</orient>
-          </object>
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <orient>wxHORIZONTAL</orient>
-    </object>
-    <bg>#333333</bg>
-  </object>
-</resource>'''
-
-    ______img_icon_ico_chevron_up_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
-D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
-\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
- \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_export_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x1b\x00\x00\x00 \x08\x04\x00\x00\x00I\
-`\xcb\xb0\x00\x00\x02\x8aIDAT8\x11\x05\xc1\xbd\xaa\x27\xd4\x15\x07\xd0\xb5\
-\xf79\xd7\xeb\xcc0&0\x850\x1f\x85\xa6\xd5\xc2*\xa4\xc9\x10,\xec$\xe0\x0b\
-\xf8
-b-\x98\x04$E\xde$\x09\xe2W\x19\x92\x096\x926\x95ha\x13\xacR\x8d\xc8\xf5\
-\xfe\xcf\xfe\xb9\xd6\xce\xd2Jk\xadQ
-\x10\x11c\x8c\x11\x11\x11\xd8ZY\x96\xb6\xb4RJ!"\xe2\x18\xe38b@\xd8\xca\
-\xb2,\xdb\xd2Z)\x85 \xe28\x8eV\x0e\x06dk\xcbr\xe5\xca\xb2\x94\xd2
-\x041...\xda\xc5\x05\x03[k\xdb\xd5{\xff{\xe0\x0e\x00\x00y\xf0\xc1\xbb\
-u\xeb\xd6\xad\x02\x8clmY\xd6\x03\xbf\xf1\x04\x00\x80z\xfe\xc7\xf4\x9b\
-\xb34 \xb0\xb5\xd6\xfa\x8e\x27^\xfd\xfbO\xff\xbd\x91R
-\x9d\xd7^x{\xf5\xf7\x1f>\xcb\xd3\x8f\x15\x88\x11\xb5QJ\xc3\xcdW\xf7\xbe\
-\xb8K)\xad\xac\xafn\xae\xdf~\xd5\xa3\xf6\x87\xcfo?\x11\xe3\x18\x91\xad\
-\x94\x02~r/\xa2\x10\xad\xbf\xcd=\x0f\xbd\xe4Q\xe7O\xcf.O?s\\\x1cGo\x85R\
-0\x8c\x80\xd1<O;\xb8\xf6\xb8}\xf4\xec<\xfd\xcc\xad\x8be6
- \xe3\x88\xa0\x14\xe7\x02p\xed\xf1\xca\x9f\xffy\xfb\xbbO-\xad7  \xc6\x11\
-A\x99s\x00\xb8\xf6d\xe7/>\xd7ZoD\x04\xc4q1\x06\\\x1e\xff\xa7>\xfcq\xff\xbf\
-\xabT\xde\xb8z\xeb\xe1\x95\xd2Zm\x000\xc68\xc6\x88\xfe\xfd\xd7\xbes\xed\
-\xca\xd2_\xe6\xa5\xb7^\x81Rj\x03\x00"\xc61F)\x85\xb1\xad\xaf\xf3\xb2\x87\
-\xeeC\xb1\x01\x00@\x8c\xa3\xdcj\x85\xc8\xf3\xf9\x85C@m\x00\x00\x111F\xd0
-a\x06\x04\xd8\x00\x00 b\xc4q\xd1J\xa9\x0c\x88\xc0\x06\x00P\x80\x881\x8e\
-\xe5\xe8\x04@\xd8\x00\xa0\xb5\xd6\x96\xd1Fk\x85\xa2o\x02\x046J)P\x96\x08\
-\x82\xd1\xb6mY\xd6\xba\x0cP\x8a\x0d(P\x96\x00\xcah\xdb\xb6-]\x15C\x01\x1b\
-\x01\xa8\xd66\xa0\x8c\xb6l\xcb\xb2T\x00\xc2\x16D\x00\x8d\xad\x94\x12e[\x96\
-V\x80\x08\xb2E\x04@i\x85R\xa2,m)\x05 "\x1b\x11\x03\xf9\xf5\xbf\xee~\xe3\
-\x072\xc9$U\xd5]
-\xe6\xf5;\x16#\xc26\xc6\x18x\xe1\x9d_\xbe\xf3\xb2\x1b\x00\x00p\xed\x89\
-\x17\x19c\xcc6\x8ev\xe0\xae_yd\x00\x00@{\xd1\x1d\x8e\xe3\x98m\x8c\x8bz\xff\
-\xa1e\xdd\xaf\xfb\x05\x88(\x05\x888\x8e[\x17c\xb6q@,\xad\x15 \xa0\x001\xc6\
-qq\x1c\xb3\xc5\x011Z)\x05\x02
-D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
-\x19S\xec\xf0\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_inspection/pnl_tab_inspection_xrc', bytearray(pnl_tab_inspection_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_inspection/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_inspection/______img_icon_ico_export_png', bytearray(______img_icon_ico_export_png))
-    __res.Load('memory:XRC/pnl_tab_inspection/pnl_tab_inspection_xrc')
-
-    pnl_tab_secom_align_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_secom_align">
-    <object class="wxBoxSizer">
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxStaticText">
-                <label>Step size</label>
-              </object>
-              <flag>wxBOTTOM</flag>
-              <border>5</border>
-            </object>
-            <object class="sizeritem">
-              <object class="UnitFloatSlider" name="lens_align_slider_aligner">
-                <size>-1,20</size>
-                <value>0.000001</value>
-                <min>0.0000001</min>
-                <max>0.001</max>
-                <unit>m</unit>
-                <scale>log</scale>
-                <accuracy>2</accuracy>
-                <fg>#E5E5E5</fg>
-                <style>wxBORDER_NONE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_ab_align">
-                <object class="wxGridBagSizer">
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_mb">
-                      <label>-B</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <cellpos>0,0</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_pa">
-                      <label>+A</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <cellpos>0,3</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_ma">
-                      <label>-A</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <flag>wxALIGN_RIGHT</flag>
-                    <cellpos>3,0</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_pb">
-                      <label>+B</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <cellpos>3,3</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_b">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↖</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxBOTTOM|wxRIGHT</flag>
-                    <border>7</border>
-                    <cellpos>1,1</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_a">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↗</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxBOTTOM|wxLEFT</flag>
-                    <border>7</border>
-                    <cellpos>1,2</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_a">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↙</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxTOP|wxRIGHT</flag>
-                    <border>7</border>
-                    <cellpos>2,1</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_b">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↘</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxTOP|wxLEFT</flag>
-                    <border>7</border>
-                    <cellpos>2,2</cellpos>
-                  </object>
-                  <growablecols/>
-                  <growablerows/>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#333333</bg>
-                <hidden>1</hidden>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALIGN_CENTRE</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_xy_align">
-                <object class="wxGridBagSizer">
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_py">
-                      <label>+Y</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                    <border>5</border>
-                    <cellpos>0,2</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_my">
-                      <label>-Y</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                    <border>5</border>
-                    <cellpos>4,2</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_px">
-                      <label>+X</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_LEFT</style>
-                    </object>
-                    <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                    <border>5</border>
-                    <cellpos>2,4</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_mx">
-                      <label>-X</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                    <border>5</border>
-                    <cellpos>2,0</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_y">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↑</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT</flag>
-                    <border>7</border>
-                    <cellpos>1,2</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_y">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↓</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT</flag>
-                    <border>7</border>
-                    <cellpos>3,2</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_x">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>←</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <cellpos>2,1</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_x">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>→</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <cellpos>2,3</cellpos>
-                  </object>
-                  <vgap>0</vgap>
-                  <hgap>5</hgap>
-                  <growablecols/>
-                  <growablerows/>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#333333</bg>
-                <hidden>1</hidden>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALIGN_CENTRE</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxBoxSizer">
-                <object class="sizeritem">
-                  <object class="wxPanel" name="pnl_move_to_center">
-                    <object class="wxBoxSizer">
-                      <orient>wxVERTICAL</orient>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lens_align_lbl_approc_center">
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxEXPAND</flag>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="lens_align_btn_to_center">
-                          <height>24</height>
-                          <label>Move to center</label>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxALIGN_RIGHT</flag>
-                      </object>
-                    </object>
-                    <fg>#E5E5E5</fg>
-                    <bg>#333333</bg>
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxTOP|wxEXPAND</flag>
-                  <border>10</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxPanel" name="pnl_align_tools">
-                    <object class="wxBoxSizer">
-                      <object class="sizeritem">
-                        <object class="wxBoxSizer">
-                          <object class="sizeritem">
-                            <object class="ImageTextButton" name="btn_auto_center">
-                              <height>24</height>
-                              <label>Auto centering...</label>
-                              <style>wxALIGN_CENTRE</style>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <flag>wxRIGHT</flag>
-                            <border>10</border>
-                          </object>
-                          <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_auto_center">
-                              <label>~ 30 seconds</label>
-                              <style>wxALIGN_CENTRE</style>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <flag>wxTOP</flag>
-                            <border>3</border>
-                          </object>
-                          <object class="sizeritem">
-                            <object class="wxGauge" name="gauge_auto_center">
-                              <size>-1,10</size>
-                              <range>100</range>
-                              <value>0</value>
-                              <hidden>1</hidden>
-                              <style>wxGA_HORIZONTAL|wxGA_SMOOTH</style>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <option>1</option>
-                            <flag>wxTOP</flag>
-                            <border>7</border>
-                          </object>
-                          <orient>wxHORIZONTAL</orient>
-                        </object>
-                        <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>14</border>
-                      </object>
-                      <orient>wxVERTICAL</orient>
-                      <object class="sizeritem">
-                        <object class="wxBoxSizer">
-                          <object class="sizeritem">
-                            <object class="ImageTextButton" name="btn_fine_align">
-                              <height>24</height>
-                              <face_colour>def</face_colour>
-                              <label>Fine alignment...</label>
-                              <style>wxALIGN_CENTRE</style>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <flag>wxRIGHT</flag>
-                            <border>10</border>
-                          </object>
-                          <object class="sizeritem">
-                            <object class="wxStaticText" name="lbl_fine_align">
-                              <label>~ 30 seconds</label>
-                              <style>wxALIGN_CENTRE</style>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <flag>wxTOP</flag>
-                            <border>3</border>
-                          </object>
-                          <object class="sizeritem">
-                            <object class="wxGauge" name="gauge_fine_align">
-                              <size>-1,10</size>
-                              <range>100</range>
-                              <value>0</value>
-                              <hidden>1</hidden>
-                              <style>wxGA_SMOOTH</style>
-                              <XRCED>
-                                <assign_var>1</assign_var>
-                              </XRCED>
-                            </object>
-                            <option>1</option>
-                            <flag>wxTOP</flag>
-                            <border>7</border>
-                          </object>
-                          <orient>wxHORIZONTAL</orient>
-                        </object>
-                        <flag>wxBOTTOM|wxEXPAND</flag>
-                        <border>14</border>
-                      </object>
-                    </object>
-                    <fg>#E5E5E5</fg>
-                    <bg>#333333</bg>
-                    <hidden>1</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxTOP|wxEXPAND</flag>
-                  <border>10</border>
-                </object>
-                <orient>wxVERTICAL</orient>
-              </object>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>5</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxHtmlWindow" name="html_alignment_doc">
-                <fg>#BBBBBB</fg>
-                <bg>#333333</bg>
-                <style>wxHW_SCROLLBAR_AUTO|wxHW_NO_SELECTION</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
-              <border>5</border>
-            </object>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_up_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-            </object>
-          </object>
-          <size>300,-1</size>
-          <fg>#E5E5E5</fg>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxALL|wxEXPAND</flag>
-        <border>10</border>
-      </object>
-      <object class="sizeritem">
-        <object class="LiveViewport" name="vp_align_ccd">
-          <size>400,-1</size>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-        <ratio>1</ratio>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxPanel" name="main_buttons">
-                <object class="wxBoxSizer">
-                  <orient>wxHORIZONTAL</orient>
-                  <object class="sizeritem">
-                    <object class="ImageTextToggleButton" name="lens_align_btn_sem">
-                      <icon>______img_icon_ico_sem_png</icon>
-                      <icon_on>______img_icon_ico_sem_green_png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <label>SEM</label>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                    <border>10</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextToggleButton" name="lens_align_btn_opt">
-                      <icon>______img_icon_ico_optical_png</icon>
-                      <icon_on>______img_icon_ico_optical_green_png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <label>OPTICAL</label>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
-                    <border>10</border>
-                  </object>
-                  <orient>wxHORIZONTAL</orient>
-                  <object class="spacer">
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxBoxSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText">
-                          <label>Presets</label>
-                          <fg>#FFFFFF</fg>
-                          <hidden>1</hidden>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
-                        <border>6</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="OwnerDrawnComboBox" name="cmb_lens_align_presets">
-                          <size>-1,16</size>
-                          <fg>#2FA7D4</fg>
-                          <bg>#424242</bg>
-                          <hidden>1</hidden>
-                          <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxEXPAND</flag>
-                      </object>
-                      <orient>wxVERTICAL</orient>
-                    </object>
-                    <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
-                    <border>10</border>
-                  </object>
-                </object>
-                <size>512,-1</size>
-                <bg>#4D4D4D</bg>
-                <hidden>1</hidden>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_opt_streams">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>OPTICAL SETTINGS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_sem_streams">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>SEM SETTINGS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_sem_toolbar">
-                <object class="wxBoxSizer">
-                  <object class="sizeritem">
-                    <object class="ToolBar" name="lens_align_tb">
-                      <style>wxHORIZONTAL</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxRIGHT</flag>
-                    <border>10</border>
-                  </object>
-                  <object class="spacer">
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <orient>wxHORIZONTAL</orient>
-                </object>
-                <fg>#BBBBBB</fg>
-                <bg>#333333</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxTOP|wxEXPAND</flag>
-              <border>5</border>
-            </object>
-            <object class="sizeritem">
-              <object class="LiveViewport" name="vp_align_sem">
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <minsize>512,512</minsize>
-            </object>
-          </object>
-          <size>512,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <orient>wxHORIZONTAL</orient>
-    </object>
-    <bg>#333333</bg>
-    <style>wxWANTS_CHARS</style>
-  </object>
-</resource>'''
-
-    ______img_icon_ico_chevron_up_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
-D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
-\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
- \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_sem_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x04\x00\x00\x009\
-\xc62\xa5\x00\x00\x00\xb6IDAT8\xcb\xed\x94M
-\xc20\x10Fs\x03O\xd2\x0b\xd4\xfa\xb7\xb0E\x08\xd2.\x84\xc6n\xd5s\xe4\x8c\
-\x9e\xa47xfD\xa8\x84\x92\xa4\xa2\x0b\xa1|\x8b\x8f!<\x98\xc7@\x14jZ\xd4\x0c\
-L\x07
-\xb6\xac\xc8\xb3\x15\x1b\x96w\xfb\x9c\x0b\x02@\x8d\xa1\xe1\x905\xb4h\x07\
-\xc8\\\x87\x00\xc3\x8d\x8e&\xeb\xb8pr\x80\xcc&\x04\xd8\xd1\x04\x80\x12M\
-\x85U\x95\xeb\xbdk\x99\xcb\x98C\x8d\xf5:\xe2`\xb0^\xd3A\x9eK$CG\x01\xdf\
-#
-\xf8\x1eQ\xe0\x03\x07\xfdr\xd0\xeb\xf0~\x8bd`\xd8?\x11\x18\xf6\xff\x99\
-C/7\xc8\x17\xc9\xc0\xb1\x17\x87u:\xd0\xf6W\xce\xec\xe2\xc0\xfc\x19\x8f\xe6\
-\x01\xb8\x055\xdfN\x86\xe9\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_sem_green_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x06\x00\x00\x00\x93\
-\xcf\xfa.\x00\x00\x02\xd3IDATH\xc7\x9dVK\x8e\xd40\x10\xb5;N\x11\x0c\xbd\
-\x016p\x12\xc4\x06\xc40}\x949\x0f\xf7`3\xec\xb8\x0b\xec`1Qk\xa4A\xfdq\\\
-T\x1cW\xe6\xa5\xda\xe9\x0f\x91J\xeej\xc7\xf5\xaa^}bg\xc8\xe8\xc7\xaaU\xff\
-\xc6\x872\xbf{\x16\x9d22\x82\x15E\x83\x12\x18
- \x04k\x14\x07\x07\x0b\x90\xe6\xff2\xad\x85\x026`\xa8\x91:\xc9\x9e\xc5\
-\x83^#\xc0(\x19*\x93L\x92\x8c\x01T\xa2!\x00@\xe3[\x96]\x12\x83\x11X\x88\
-@\x8c\xcfX\xa6\xe9\xb7St\xc9\xe1:\x81\xf8\x040R\x14\xc6\x081\x02\x97<\x9e\
-&\x80Y\x06\xc0\x0eP\xb4\x03G\x0d\x00\x1b\x07\xdc:\xf0^d\xacr\xa0\x01d-\x94\
-\xf1\x0e\x14#(\x93\xc1\x8e\xff\xe5\xaf\xe5\x8fx\x94\x8f<^=\xde.\xd6\x8b\
-\xaf\x8d\x99@\xe1\xe7\xfa\xed\xfa\x96\xf7\xef\xe2>\x9b\xab\xdeU\xef\x93\
-a\xa1\xac@\x00\x8cB\xa4\xb0\xcfm\x0b\xc5\xaf\xdb\xd2\x1a\xfb\xc2\xc6\x1d\
-\xbbm\x9d\xed\xf6\xb7]\xc9;]y\x08p(|\xd8\xce\xad\xa1\x0d\xb5\xff4\xfa\x98\
-\x81(\xb1!\xfbmK\x8c2T\x1e4ZO\xee\xe7\xf7\xab\xb83m_\xd8\x98M\xab?k\xf5\
-n\x1ey7\xda8\x02`gv/-/\xef\x1aj\xc8\x93\xa9^U\xab\xe5\x1f\xe6\xdc\xb5\
-\xe9\xab\xde\xb0.\xfb{\xde]}\xcc\xcd\x12\x97);\xa9\x0ec\x27-\xc7\x1d\xe7\
-\xe3\xc4y\xea\x86nd\xd1\xc9\xde\xb8p\xaaq<4PP\x1c\x9b\x13z\x00\x1bb\x27\
-F@\xaa\xbc\xe4\x85\x929\xfe\x12\xfd\x9d\x1fp\x8e:\xb1\xeeUW{=\x8b\x08\x0c\
-{MU\xc3\xb5p\xca\\\xaf\x94~\x03N\xa2\xa3A\x00H\x85W\x03M\xbd\\\xa4z\xd7\
-\xba\x1e\x1b>7M)\xc3\xdf\xd3\\?\xcd}Pc\xba\x16\xe7t\x15\xf9\x1c\xc8\x00\
-\xf7\x8dN\x19\xe7\xf6x6W\xa6\x074\xa9z\xd7\xf5\xffi\x88\x1e\xdd\xc9\xa4\
-B\xec(R\xf5\xae\xeb?(\x9a\x02~\x97]\xe6#~\xe8\xc9\xd4\x0e \xd7\x0f\xd1\
-#\xe6\xfc:N\xc8~\x0e\x02\xeb5\x00\xf4\xea\xffX\x04C\xfd\xd0\xe4\xe2;\xd4\
-\xffu\xa6<\xfd1\x8aN\xf5\x03\x0d\xd4\xad\x9a\xec\xec\x1cx\x05d\x8f\xd4\
-\xbf.ms\x0c d\xe6R\xfcB1\xf7\x9f\xa1\xfe\xb5#\xfe\xdc*
-*d/7\x0b\xce\xc17[\x9a\x051\xf4\xc3\xcb\x87\x1b?\xf1\x8f\x19\xcf\x01\x0c\
-u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
-\x92\xed\x8cs`\xa3\x9d=\xdc\xe4|\xce\xfbS\x11\xc8uP\xae\x8b5\xe7\xe0C\xf4\
-}\xd6\xbb.\xca\x95\xf1\xe2\x08\xfc\xd3\x80\xeet\xb9\xa8\x05\xf0~\x07\x03\
-\xee\xec\x08\xa4\xe1F
-\xa0\x00\x80=\xc8E\x14i\x9a\x08\xf2Q\x0c\xcc,\xaf\xeb\xff\x1c\x80\x1a\xd6\
-\xdc\xe5W\xdfO/\x8e {WR\xef\xe4\xd6\xde\xf3\x0fC\x01\xf8T\xed+\x8e
-\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_optical_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x04\x00\x00\x00\x1d\
-X\x8a>\x00\x00\x01\x08IDAT8\xcb\xed\x95;\x8e\xc20\x10@\x1d\x96\x9f\x96K\
-p\x8a\x04$\xb8\x00\xe7\xe5\x00\xb1A\x14\x1444\x11B v\x11Z\xd1\xb0\xc5.\x10\
-\xdbc\x13
- 8\xfe\xc45Lg\xd9O3o\xfc\x0b$\xf2\x8d
-zi\xa4\x9a\x1fD\xcd\xfao\xb5\xa1.\x91\x086\xa3\xb6\x01\x19\x9cg\xd3\xcf\
-~\xa0 \x02\xfdcc\x16\x84j\xa4\xd5\xffP\x10\x86\xd2\xd8\xe2B\x09\x14j\x07\
-\x94b\x1b2\x01^@\xbe\xa2\x95\x05\xe9\xfe\xf1\x99TL\x18q4\x99\x11\xa1\x94\
-Ec\x07\xa2\xdad\x08v \xe9\x18\x9e\xd2\xc06\\:\x90\xee\x81\xcf\xa5\xc5D{\
-`\xf26E\x13-BG\xc2b\xa2G\xf0ck`\x17.J \x9d=$w\x13\\\xf2\xf0\xdfl\x84\xa6\
-,\x03r\xdb\x1b\xee\x8f\xc0O\x98\x94D\xa2o\xbe6\x99\x18/2\xcf\x1a\xad71"\
-\x14\xc3\xd5$\xf6@\xd2\xcc\x06\xf64\xf1@\xa2%\xdb\xb1\xb8\x27\x9d/\x8c\x92\
-g\\\xe2Q\xca\xc7\x89\x00\xf1D\x8eC\xb1\xd5\xcf\x04\xef\xcf\xc23.\x1eK\x8a\
-:p\x8a\xcb\x18\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_optical_green_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x06\x00\x00\x00\xb7\
-QB\xb5\x00\x00\x02\xf1IDATH\xc7\x9dW\xe1\x8a\xd40\x10\xfe\xd2v\xb7\xdd\x13\
-\xb9\x07\x10|\x81{\x1f_\xd3\xe7\x10\x84;nW\x04A9\xd0;\xd4S\xef\x10\xd1&\
-Mf\xfc\xb1Io:;\xedz\x06BB\xda\xcc7\x99/\xf3u\xea\xc0\xd0\xcd\xcd\x8cz\x0e\
-`\xdc\xad\xc7\xc9\xbcQ\x06*\xd5\xeb<:1J#\x0c\x80DOb^\x9es#\x00\xea\xdc\x9b\
-\xdcW\x00\xd6y^\x0b`\xa7\x00\x12\x80\x08`\x00\x10\xf2\x18\x05\xe0\x04\xa4\
-\x12\x86\xbb\xdc\xdb\xbc&\x81J+\x1e\x17\x00\x0f\xa0\xcf\xa3\xcf\x80\x0c\
-\xc05\x02\xa0\xce\x067\x00N\xf2\xd8ePy\x12\x19.\x09RN]\xe90\xca\x934\xe2\
-\x14\x27\xb9\xb7\xe2\x14\xce \x9e\xb2c+\xf1\x0e\xab\x10Bs\xd2\xaaP\xad\xc5\
-f\xabi\xae\x90\x01J\xf8\xaa\x12.\x09\xb2\xca\xc6\xdb*VON\xafO_\xba\xca\xad\
-f!D\xe0\x98\xf9\xeb\xdd\xf3\xbb\x17\xd91y2h\xe2\xcb\x0d\xab\xa9\xa1\x84\
-S\xbcskw\x06\x1c\x07\xa1@[q3\xe5\xd5\x1fAX\x819\x00\x8eV\xb4\xab\xbb\xfa\
-lB\xb7\xd5"\x90\x90\xb6zy\\\x19\xc95f\xf6\x80a\x87\x84\xe3\x8d\x00\xdf\
-\xf8\xedL\xb2r\xa5\x17\xe4^\xdf\xf9\xb7L|\x14\x86\x89oC\x1b>+;%\xeb\xc7\
-;]\xae]\x92\x0fS\x9d\xfe0\xf1{C\xdf&\xfe&J;\xa5_\xd2\xd6\x18.\x12\x0f\xe2\
-\x04\x88\xd2n\x11\x84\x80\xc4\xe9R\xd8\x89ZV*\x85\xaeu\x07\x11q\xb7\x9f\
-\xcd\xb4\x04\x84:\xec\x8c$\x8c2\\Xz\xc1\xb7\xfe\x0d\x27\xe6\x05>\xbe\xf9\
-\xce\xdf(\xb1,\x8e2\x0c\xc1;P\xd0\xd8\xc4_L|u\x84\x0f(\x1d\x1b4\xf1P\xb2\
-=hO\x88\xc8\x0e\xd9\x9e\x8f\xed\xb1\xfd:O\xa4\x27\xe3K\xb3\xbc\xec\xf9\xd8\
-\x1a\x9cF\x99\x0es\xd2=!\xbf_\xf7&\x08\x13\xff\xf0\x9d\xbf6>^i\x0e\x04\x06\
-\xf9{^V\xf1\x9e\x12}:\xd0+\xa2\xadJ\x81\x03>\xe6d%Z7\xe4\x80\x17\x02"\xc7\
-\xad\x11\x81\xb8\x04\x82\x19\xf2\xec|y\xe0\xc3
-\xd5$\xb8\x95Q\xe2$E>\x01\xe0\xd0\x84\x09\x08\x13\xdf\xf9\xce4B\x15\xb5\
-\x06V\xf6\xc5<\x08\x19\x856\xdc2\xf1\x17\xc5\x87\x05@\xc7@\xd8H\xaa\x11\
-h\xd4\xb1\x07>d\x86\x9b\xa4/\x9d$YuT\xe2tYdt\xa8\x86s\xe3\xbd\x03>\xe6@\
-Xm.5\xd4\x10\xeap\x01\x02\x98\xf8\xbe\xdf\xf4\x1f\xf2zP\xce\xf0\xbf\x80\
-H\x1d\x0b\xb2X\xf3\x9d\xbf\xe2\xc4\xdf\x89\xe8\\\xac\x97\x82\xce\x0c\x95\
-\xae\x85-^|.
-\xc6\x1a\x8b"\x9d\x27\xa4\x0ba\xfc\xbf@\xa4\x8e\x05\xf1\xf5L\x19\xe4Ul\
-\xe2k\x00\xbfU8\xa3\xc5\xc7\xbe`\xb0\xbf\x14N\xd4\xc5kQK5\x9b\x9f\x9bg\xfd\
-\xd3\xfe\x86\x1d\x0f\xe2FI^\xe81 \xb5\xaa\xa3d=\xc5\xe2j\x9b2\xf4/ 0\xfe\
-Qd\x27\xa3\xa7\xb9p5\xcbu\xc8H\xa4,\xd8\xdcL\xe93\xeb\xae[\xacD\x96\xed\
-\x96~\xe5\x1e\x052\x07\xbahT\xb7\xbf\xe8\xb1F\xdc\xe8\xe8\xaak\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_align/pnl_tab_secom_align_xrc', bytearray(pnl_tab_secom_align_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_align/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_align/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_align/______img_icon_ico_optical_png', bytearray(______img_icon_ico_optical_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_align/______img_icon_ico_optical_green_png', bytearray(______img_icon_ico_optical_green_png))
-    __res.Load('memory:XRC/pnl_tab_secom_align/pnl_tab_secom_align_xrc')
-
-    fr_plugin_xrc = u'''\
+    dialog_plugin_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxDialog" name="fr_plugin">
     <object class="wxBoxSizer">
@@ -4079,10 +2286,1151 @@ Qd\x27\xa3\xa7\xb9p5\xcbu\xc8H\xa4,\xd8\xdcL\xe93\xeb\xae[\xacD\x96\xed\
   </object>
 </resource>'''
 
-    wx.MemoryFSHandler.AddFile('XRC/fr_plugin/fr_plugin_xrc', bytearray(fr_plugin_xrc.encode('utf-8')))
-    __res.Load('memory:XRC/fr_plugin/fr_plugin_xrc')
+    wx.MemoryFSHandler.AddFile('XRC/dialog_plugin/dialog_plugin_xrc', bytearray(dialog_plugin_xrc.encode('utf-8')))
+    __res.Load('memory:XRC/dialog_plugin/dialog_plugin_xrc')
 
-    pnl_tab_cryosecom_chamber_xrc = u'''\
+    frame_main_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxFrame" name="fr_main">
+    <object class="wxMenuBar">
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_open">
+          <label>Open...</label>
+          <accel>Ctrl+O</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_snapshot">
+          <label>Save Snapshot</label>
+          <accel>Ctrl+S</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_snapshot_as">
+          <label>Save Snapshot as...</label>
+          <accel>Ctrl+Shift+S</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_export_as">
+          <label>Export as...</label>
+          <accel>Ctrl+E</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_reset_finealign">
+          <label>Reset Fine Alignment</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_reset_overview">
+          <label>Reset Overview Image</label>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_halt">
+          <label>Stop all Axes</label>
+          <accel>Pause</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_recalibrate">
+          <label>Recalibrate Sample Holder...</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="menu_item_quit">
+          <label>Quit</label>
+          <accel>Ctrl+Q</accel>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <label>File</label>
+      </object>
+      <object class="wxMenu" name="menu_view">
+        <object class="wxMenuItem" name="menu_item_22view">
+          <label>2x2 view</label>
+          <accel>F5</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="menu_item_play_stream">
+          <label>Play Stream</label>
+          <accel>F6</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_fit_content">
+          <label>Zoom to fit content</label>
+          <accel>F7</accel>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_auto_cont">
+          <label>Auto Brightness/Contrast</label>
+          <accel>F8</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_auto_focus">
+          <label>Auto Focus</label>
+          <accel>F4</accel>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="menu_item_cross">
+          <label>Show Cross Hair</label>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_interpolation">
+          <label>Interpolate Content</label>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_rawpixel">
+          <label>Show pixel value</label>
+          <accel>Ctrl+U</accel>
+          <checkable>1</checkable>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <label>View</label>
+      </object>
+      <object class="wxMenu">
+        <object class="wxMenuItem" name="menu_item_manual">
+          <label>User manual</label>
+          <accel>F1</accel>
+          <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenu">
+          <label>Development</label>
+          <object class="wxMenuItem" name="menu_item_devmanual">
+            <label>Developer documentation</label>
+            <enabled>0</enabled>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="wxMenuItem" name="menu_item_inspect">
+            <label>Inspect GUI</label>
+            <accel>Ctrl+I</accel>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="wxMenuItem" name="menu_item_debug">
+            <label>Show log panel</label>
+            <accel>Ctrl+D</accel>
+            <checkable>1</checkable>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+        </object>
+        <object class="wxMenuItem" name="menu_item_bugreport">
+          <label>Report a problem...</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="separator"/>
+        <object class="wxMenuItem" name="menu_item_update">
+          <label>Check for update</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <object class="wxMenuItem" name="menu_item_about">
+          <label>About...</label>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <label>Help</label>
+      </object>
+    </object>
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_tabbuttons">
+          <object class="wxBoxSizer">
+            <orient>wxHORIZONTAL</orient>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_cryosecom_chamber">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>CHAMBER</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_align_enzel">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>ALIGNMENT</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_secom_streams">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>STREAMS</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_localization">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>LOCALIZATION</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_correlation">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>CORRELATION</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_sparc_acqui">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>ACQUISITION</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_fastem_chamber">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>CHAMBER</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_fastem_overview">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>OVERVIEW</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_fastem_acqui">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>ACQUISITION</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_inspection">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>ANALYSIS</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_sparc_chamber">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>CHAMBER</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticText" name="temperature_display">
+                <size>160,30</size>
+                <hidden>1</hidden>
+                <face_colour>def</face_colour>
+                <label>20°C</label>
+                <fg>#353535</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="sizeritem">
+              <object class="TabButton" name="btn_tab_align">
+                <size>160,30</size>
+                <face_colour>def</face_colour>
+                <label>ALIGNMENT</label>
+                <fg>#E5E5E5</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+              <border>20</border>
+            </object>
+            <object class="spacer">
+              <size>32,-1</size>
+            </object>
+            <object class="sizeritem">
+              <object class="wxStaticBitmap" name="logo">
+                <bitmap>______img_logo_h30_png</bitmap>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxRIGHT|wxALIGN_CENTRE</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <bg>#BFBFBF</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+        <minsize>-1,40</minsize>
+      </object>
+      <orient>wxVERTICAL</orient>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_log">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_down_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Close log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxALIGN_BOTTOM</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxTextCtrl" name="txt_log">
+                <size>-1,200</size>
+                <value>Log message panel</value>
+                <bg>#1A1A1A</bg>
+                <font>
+                  <size>10</size>
+                  <face>Monospace</face>
+                </font>
+                <style>wxBORDER_NONE|wxTE_MULTILINE|wxTE_RICH</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxHORIZONTAL</orient>
+          </object>
+          <bg>#1A1A1A</bg>
+          <hidden>1</hidden>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <title>Odemis</title>
+    <centered>1</centered>
+    <bg>#000000</bg>
+    <font>
+      <size>9</size>
+      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+    </font>
+  </object>
+</resource>'''
+
+    ______img_logo_h30_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00n\x00\x00\x00\x1f\x08\x06\x00\x00\x00\x06\
+%\xf8\x9f\x00\x00\x05~IDATh\xde\xed\x9al\x14E\x14\xc7\xaf\x15\x14\xa8\xa8\
+%\xd6\x14)Ek!\xde]m\x8aBbE\x12\x14\xa2"\x10\xf5\x0f\xc4\xf8\xa3T\xa2\x8d\
+\x06\xee\xae\x15\xa9\x8d\x8a\xbf
+*\x8d&\xd0\xa8\x80\x08%\xbb\x07\x84B\x8d\xb1\x15AI\xce\x1f\xfdGS11\x1a\
+c\x8c\x12IS\xd4b\x94\x08\x82B9\xbf\x03\xef\x92ux\xb37{\xbb=\x8f\xeb\xbd\
+\xe4\x93Mn\xdf\xcd\xcc\xcdwg\xe6\xbd\xb7\xe7\xf3\xe5,\xed\x16\x8cD\xa7\x06\
+\xc2f\x1f\x88\xa7\xc0\xd1@\xc8x%7\x8bi6\xd8\xa8\xc0\xe4\x1fJA\xb0\xc3\x81\
+Ht\x8d\xbf\xde\x1c\x9b\x9b\xc5t\xaf\xb4\x06\xb3<\x85\x95v\x10<WV\xd7~qn\
+\x06\xcf\xd800\x13\x8c\x007\x83\x91t\x1d\x05n\x02\x05`\x06\x18\xedEg\x95\
+\xa1hI \x1c\xdd\xaf-X\xc8\xfc\xde\x1f6#W\xd4\xb6\x8d\xc8I\xf5_\x9b\x0e\xe2\
+`\x19]\x1b\xe9\xdaD\xd7\x27\xe9\xda\xe0\xb6\xa3\xf2\xd0\xa6\xa2@\xd8\xf8\
+VS\xb0/\xfc\x11\xb3\xc67\xbf\xfd\xbc\x9cD\xbc\x0d\x07w\x80\x0b\xe9*V\xd6\
+c\xe0R\x12\xeb2\x10\x01\xc5`2\xadD\xc7VU\xdfv\x09\x04\xd9\x97T\xb0\x88\xd9\
+\x1d\x0c\x19\xf3r\xb28\xb7k\x14+\xeeip\x8a>w\xb6=>n\x14\x08Al\x04\x1b@\xb0\
+\xd2Y\xb1\xc4\x98\x92\x8e\x1fx+\xe8\xb1\x10\x03\xf9\x83\xd8\xdf\x1c\xa9\
+\xbf\xceA\xeaGlM\xf7\x831\xe0>\xcb\xca\xbb\x9cV\xdexP\x06\xce\xd7i\xac\xa4\
+\xa1}\xa4?d\xc6\x14\x82\x1d\x0f\x86\xa3\x86?\xbceb:\x9f\xcc\xc5\xf4$Z\x19\
+6\x88\xfd5H}\xfd\x99\xa6\xdfYB\xfd=\x05\x06\xc0\xb3\xe0$]m\xed\xba\xba\xf5\
+\xc3\x83\x11\xb3+\xd3B\xfa\xa1"\\\x1ex\x14\x8c\x03u`\x02\x8d\xa5\x1c\x14\
+\xd1
+=\xdb\x10T\x04\xc3\xe6\xb6L\x0c\xe9\x87\x8ap\xb2\x89I\xff\x1b<\x0f\xfe\
+\x02+\xcev\x89\xe7A\xb4\x0d\x99\x1a\xd2\x0fU\xe1|\x14u\xfaA\x18TP\xae\x97\
+\x97\xb8)JQB0\x88\xd7\x93\x89!\xfdP\x16NN\x27~\x03/\x9d\xae\x8aD\xa2\xcd\
+"B\x0cF\x8c\x1b\xff\xb7r\x1ax\x06\xbc\x0d\xf6\x82\xed\xb4\xc7\x8fv!\x9c\
+8\x13\x1e\x02m`\x17x\x0fl\x045\xa0\xd0\x03\xe1*\xc5\xe9b\xe1Z\xcb\xbd\x00\
+mk\xe2\xf7\xec\x01o\x81\xdb\x99HXl\x85\x8b\x80\x01>\x04]`9E\x95*\x13)\xc2\
+\xf5\xa7\x27m\xf1\x96\x09\x1as{\x01\xb8\x13\xac\x06\xefP?\xdbi|\xd3\xad\
+\xab\xd7\x89\x89}x\x1dEPq\x86\x83`\xb6C\xe1D\xd2\xfa2\x9d\x09q\x05\x87\xc1\
+\x13\xca\xc3^O\xb8\x0e\xc9\xe7}zX\xb6\xd9\xf4\xbb\xd3\x12\xda\x8b\x07\xe8\
+\x90\xc2\xef\x0f\xe0\xc5*z\x18\xf4\xda\x8cG\xf0\x0d\x09\xe8h\xd9\xefM\xd2\
+\xa8\xe0\x1f\xca\xa5t\x84\x13\x95\x87\xcf4\xda\xe4&\xd2\xadp?\x81\x1f5\xfa\
+l\xb2$\xdav\x1c\xd0\xcd\xdf\x14\xf9\xa1\xe1`\x1eD\xca\xf1\x80n\xe3+\x1c\
+4\x1c\xd7\x10N<\x08\xdd
+\xdf_A\xbf\xe2\xde\xab\x1e\x09\xa7\xcb)\x07\xbe\xb3\x99~/\xa2\xad\xbe\xd0\
+f\xcboMa\\\xbbuD\x13+\xe3\x18\xf3\xe5\xef\xc0#\xa0\x9a\xaa%bR\x8fh
+\xd7\xc4\xf8\xb4Q.\x94\xb0R\xb0\x81\x99\xc8*\x8f\x84\x13mm\x05s}g\xaa\xfc\
+-\xf44s\xe3\xff\x9a\xce\xe0i`!\xadX\xd9\xa7Q\xea\xb3\x98\xf1\x99)\xf9LS\
+\xf4\x27\xce\xf8\x05`*\xb8\x0d\xbcA\xbbY\x9cv\xbe\x02\x1d\xe1\x962\x0dw\
++\xbe|%\xf8!\x89p\xa3\x98\xf3b\x87M\xff\xf26bz \xdcI\x9a\x18\xd961c\xef\
+\xa0\xa0\xc1j\xd5\x8c\xdfJ\xc9\xa7TcU\xeea|\x96)\xe6a\x16\x05N\xda9_\x97\
+\xd4\xf0\x09\xaa\xc9\xe9Fy\xb2ps\x99\xfbv59y\x02~\x97\x02\x95T\x84\xfbH\
+\xd1W\x0d3\xb6I\x8a\xaa\x89\xbc\x0b\xbd\xe8P\xb8B\xcb*J\xf0\x81\x97\xe1\
+\xff\x01\xa9\xf1\x98\xcb<n\x15\xf3 \xb4Pt\xc9\xb1\x8a*\x12\xd6\xefT\xba\
+\x14n\x97b\xecw1c/U\xf8\xf6\xbb\x14\xee\x16\xe6\xfe\xdd^
+\x27\x9f[\xaf\xb9\x14\xcet\x19\xe8\xc4i\xdf?\xd7\x85\xabe\xee\xfb\xbd\x14\
+\xee\xb8\xd4\xf8\x1a\x97\xc2m\xf5@\xb8{\xb3@\xb8E\x9a\xdbr\xca\xd6\x275\
+\xde\xe9R\xb8\xd5Lt\xf7&X\xaf\x89(\x02\\\x9d\x05\xc2\xcdc\xee\xcf\xf1R\xb8\
+O\xa5\xc6\x8f$)C-I"\xdc\x83\xcc\xfd\x1b\x06\xb9V\x99\x89\xc2\x8dc\xf2D\xc3\
+K\xe1V*r.\xaen&\xfe\x09\xf5q\x12\xe1\x8a\x99|)\x96\xa4\xf2\x90gS6;W\x85\
+\x13\xb6O\xba?`\xb3\xea&\xd1\xa2\xd0\xb6\x80\xa2\x82\xd0A\xc9p>U\x08\xe6\
+S-M\x27\x01\xdf\xcc\xf8\x88-x<#\xd8,*\x8d\xbd\x9b\x85\xc2-`|D\x04\xdd\x0c\
+\xae"\x9f1T\xc4O\xf4\xd7\xea\xa4\xd8\xbc\xd3eYH\x16N\xbc\xf6\xffEQ\x87\xfb\
+\x9c\x12\xf2\xdd\x8cOm\x96\x09\x97O\xbf\xd3ip\xb6NW\xb8"&\x9fS\xd1\xafY\
+d\xae\xa6d\xda\xc9\x80{\xb3L\xb8D"\xde\xe3p\x1eZ\x9cl\x99b _\xda4v\x82*\
+\xe9N^\xeb\x88\xffg|\xa29\xd8\x98\x14Mf\x8bp\x89\xd8`-\xcd\xa1\xdd\x1c\x1c\
+\x05\xf5\xa9\xbe\x82XH\xcb\xbb\x8fr\xbc\xfdTCKT3\xaa\xa4\xf0\xbdEcO\x16\
+\xe9~\x1d|Eo\x07\x8e\xd1\xea\x12\x81\x8ex\x83<\xd9\xe6\xbbS\xa4\xfe^`|\
+\xee\x91|T\xafE\xcah\x1bJ\xf8\xb5\xd2\xa4r\xb6\\js\x06#F\xab\xe5\xfeZ\xe6\
+\x0c\xe7\x02\x90f:.~\xa6\xf3\xae\x97"\xfbF\x8aD\xb5\xec_\xb2\x15\x0de\x9a\
+B\xccb\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_chevron_down_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00FIDAT\x08\xd7\x8d\xcc\xb1\
+\x0d\x800\x10C\xd1\x27\xdd\x10\xdc\x0e\x19\x92\xb0W`\x9a4\xd9\x82"
+J\xc9we\xc9\xfepX\x1cPt\x09RW\xa0jBh\xae9\x0c\xb7\xea\xf4\x88\xf5L\xc3\
+\x90\xbbc\xe6\xb7\xc3\xe7\xd8\xc8U_r\x94\x13[\xf2\xfb=i\x00\x00\x00\x00\
+IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/frame_main/frame_main_xrc', bytearray(frame_main_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/frame_main/______img_logo_h30_png', bytearray(______img_logo_h30_png))
+    wx.MemoryFSHandler.AddFile('XRC/frame_main/______img_icon_ico_chevron_down_png', bytearray(______img_icon_ico_chevron_down_png))
+    __res.Load('memory:XRC/frame_main/frame_main_xrc')
+
+    panel_tab_correlation_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxPanel" name="pnl_tab_correlation">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="ToolBar" name="correlation_toolbar">
+                    <style>wxVERTICAL</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_all">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_all">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_tl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_tl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_tr">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_tr">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_bl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_bl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_correlation_view_br">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_correlation_view_br">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <orient>wxVERTICAL</orient>
+              </object>
+              <option>1</option>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <size>200,-1</size>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_correlaton_grid">
+          <object class="MicroscopeViewport" name="vp_correlation_tl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_correlation_tr">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_correlation_bl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_correlation_br">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+
+
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_correlation_streams">
+                        <object class="StreamBar" name="pnl_correlation_streams">
+                          <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>STREAMS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_meteor_correlation">
+                        <object class="wxPanel" name="pnl_meteor_correlation">
+                          <object class="wxBoxSizer">
+                            <orient>wxVERTICAL</orient>
+                            <object class="sizeritem">
+                              <object class="wxStaticText">
+                                <label>Instructions: \n    Select a stream to move. \n    Shift + Left Click to Move the Stream.\n    Use the arrow keys to move Up/Down and Left/Right. \n    Shift + Arrow Keys to control Rotation and Scale. </label>
+                                <fg>#E5E5E5</fg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <flag>wxEXPAND</flag>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxCheckBox" name="ctrl_enable_correlation">
+                                <label>Correlaton Enabled</label>
+                                <fg>#E5E5E5</fg>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>0</option>
+                              <flag>wxTOP|wxLEFT</flag>
+                              <border>5</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxFlexGridSizer">
+                                <object class="sizeritem">
+                                  <object class="wxStaticText">
+                                    <label>Move Stream</label>
+                                    <fg>#E5E5E5</fg>
+                                  </object>
+                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                  <border>5</border>
+                                  <flag>wxEXPAND</flag>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="OwnerDrawnComboBox" name="cmb_correlation_stream">
+                                    <size>250,-1</size>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+                                    <tooltip>Select a stream to move. Shift + Left Click to Move the Stream, Use the arrow keys to move, Shift + Arrow Keys to control Rotation and Scale.</tooltip>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText">
+                                    <label>X Step Size</label>
+                                    <fg>#E5E5E5</fg>
+                                  </object>
+                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="UnitFloatCtrl" name="dx_step_cntrl">
+                                    <value>1e-6</value>
+                                    <key_step>0.000001</key_step>
+                                    <min>0</min>
+                                    <max>10</max>
+                                    <unit>m</unit>
+                                    <accuracy>3</accuracy>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                    <font>
+                                      <size>9</size>
+                                    </font>
+                                    <bg>#333333</bg>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText">
+                                    <label>Y Step Size</label>
+                                    <fg>#E5E5E5</fg>
+                                  </object>
+                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="UnitFloatCtrl" name="dy_step_cntrl">
+                                    <value>1e-6</value>
+                                    <key_step>0.000001</key_step>
+                                    <min>0</min>
+                                    <max>10</max>
+                                    <unit>m</unit>
+                                    <accuracy>3</accuracy>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                    <font>
+                                      <size>9</size>
+                                    </font>
+                                    <bg>#333333</bg>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText">
+                                    <label>Rotation Step Size</label>
+                                    <fg>#E5E5E5</fg>
+                                  </object>
+                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="UnitFloatCtrl" name="dr_step_cntrl">
+                                    <value>1</value>
+                                    <key_step>0.000001</key_step>
+                                    <min>0</min>
+                                    <max>180</max>
+                                    <unit>deg</unit>
+                                    <accuracy>3</accuracy>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                    <font>
+                                      <size>9</size>
+                                    </font>
+                                    <bg>#333333</bg>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText">
+                                    <label>Scale Step Size</label>
+                                    <fg>#E5E5E5</fg>
+                                  </object>
+                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="UnitFloatCtrl" name="dpx_step_cntrl">
+                                    <value>1</value>
+                                    <key_step>0.000001</key_step>
+                                    <min>0</min>
+                                    <max>10</max>
+                                    <unit>%</unit>
+                                    <accuracy>3</accuracy>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                    <font>
+                                      <size>9</size>
+                                    </font>
+                                    <bg>#333333</bg>
+                                  </object>
+                                </object>
+                                <cols>2</cols>
+                                <rows>5</rows>
+                                <vgap>10</vgap>
+                                <hgap>10</hgap>
+                                <growablecols>1</growablecols>
+                              </object>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_reset_correlation">
+                                <label>Reset Correlation Data</label>
+                                <height>24</height>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxTOP</flag>
+                              <border>12</border>
+                              <option>0</option>
+                            </object>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                        </object>
+                        <label>CORRELATION CONTROLS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_export">
+                      <size>382,-1</size>
+                      <icon>______img_icon_ico_export_png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
+                      <label>EXPORT IMAGE</label>
+                      <fg>#FFFFFF</fg>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+  </object>
+</resource>'''
+
+    ______img_icon_ico_chevron_up_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
+D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
+\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
+ \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_export_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x1b\x00\x00\x00 \x08\x04\x00\x00\x00I\
+`\xcb\xb0\x00\x00\x02\x8aIDAT8\x11\x05\xc1\xbd\xaa\x27\xd4\x15\x07\xd0\xb5\
+\xf79\xd7\xeb\xcc0&0\x850\x1f\x85\xa6\xd5\xc2*\xa4\xc9\x10,\xec$\xe0\x0b\
+\xf8
+b-\x98\x04$E\xde$\x09\xe2W\x19\x92\x096\x926\x95ha\x13\xacR\x8d\xc8\xf5\
+\xfe\xcf\xfe\xb9\xd6\xce\xd2Jk\xadQ
+\x10\x11c\x8c\x11\x11\x11\xd8ZY\x96\xb6\xb4RJ!"\xe2\x18\xe38b@\xd8\xca\
+\xb2,\xdb\xd2Z)\x85 \xe28\x8eV\x0e\x06dk\xcbr\xe5\xca\xb2\x94\xd2
+\x041...\xda\xc5\x05\x03[k\xdb\xd5{\xff{\xe0\x0e\x00\x00y\xf0\xc1\xbb\
+u\xeb\xd6\xad\x02\x8clmY\xd6\x03\xbf\xf1\x04\x00\x80z\xfe\xc7\xf4\x9b\
+\xb34 \xb0\xb5\xd6\xfa\x8e\x27^\xfd\xfbO\xff\xbd\x91R
+\x9d\xd7^x{\xf5\xf7\x1f>\xcb\xd3\x8f\x15\x88\x11\xb5QJ\xc3\xcdW\xf7\xbe\
+\xb8K)\xad\xac\xafn\xae\xdf~\xd5\xa3\xf6\x87\xcfo?\x11\xe3\x18\x91\xad\
+\x94\x02~r/\xa2\x10\xad\xbf\xcd=\x0f\xbd\xe4Q\xe7O\xcf.O?s\\\x1cGo\x85R\
+0\x8c\x80\xd1<O;\xb8\xf6\xb8}\xf4\xec<\xfd\xcc\xad\x8be6
+ \xe3\x88\xa0\x14\xe7\x02p\xed\xf1\xca\x9f\xffy\xfb\xbbO-\xad7  \xc6\x11\
+A\x99s\x00\xb8\xf6d\xe7/>\xd7ZoD\x04\xc4q1\x06\\\x1e\xff\xa7>\xfcq\xff\xbf\
+\xabT\xde\xb8z\xeb\xe1\x95\xd2Zm\x000\xc68\xc6\x88\xfe\xfd\xd7\xbes\xed\
+\xca\xd2_\xe6\xa5\xb7^\x81Rj\x03\x00"\xc61F)\x85\xb1\xad\xaf\xf3\xb2\x87\
+\xeeC\xb1\x01\x00@\x8c\xa3\xdcj\x85\xc8\xf3\xf9\x85C@m\x00\x00\x111F\xd0
+a\x06\x04\xd8\x00\x00 b\xc4q\xd1J\xa9\x0c\x88\xc0\x06\x00P\x80\x881\x8e\
+\xe5\xe8\x04@\xd8\x00\xa0\xb5\xd6\x96\xd1Fk\x85\xa2o\x02\x046J)P\x96\x08\
+\x82\xd1\xb6mY\xd6\xba\x0cP\x8a\x0d(P\x96\x00\xcah\xdb\xb6-]\x15C\x01\x1b\
+\x01\xa8\xd66\xa0\x8c\xb6l\xcb\xb2T\x00\xc2\x16D\x00\x8d\xad\x94\x12e[\x96\
+V\x80\x08\xb2E\x04@i\x85R\xa2,m)\x05 "\x1b\x11\x03\xf9\xf5\xbf\xee~\xe3\
+\x072\xc9$U\xd5]
+\xe6\xf5;\x16#\xc26\xc6\x18x\xe1\x9d_\xbe\xf3\xb2\x1b\x00\x00p\xed\x89\
+\x17\x19c\xcc6\x8ev\xe0\xae_yd\x00\x00@{\xd1\x1d\x8e\xe3\x98m\x8c\x8bz\xff\
+\xa1e\xdd\xaf\xfb\x05\x88(\x05\x888\x8e[\x17c\xb6q@,\xad\x15 \xa0\x001\xc6\
+qq\x1c\xb3\xc5\x011Z)\x05\x02
+D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
+\x19S\xec\xf0\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/panel_tab_correlation_xrc', bytearray(panel_tab_correlation_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_correlation/______img_icon_ico_export_png', bytearray(______img_icon_ico_export_png))
+    __res.Load('memory:XRC/panel_tab_correlation/panel_tab_correlation_xrc')
+
+    panel_tab_cryosecom_chamber_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
 	<object class="wxPanel" name="pnl_tab_cryosecom_chamber">
 		<object class="wxBoxSizer">
@@ -6106,387 +5454,55 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
 \x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
  \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/pnl_tab_cryosecom_chamber_xrc', bytearray(pnl_tab_cryosecom_chamber_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_sem_orange_png', bytearray(______img_icon_ico_sem_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_meteorimaging_png', bytearray(______img_icon_ico_meteorimaging_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_meteorimaging_orange_png', bytearray(______img_icon_ico_meteorimaging_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_meteorimaging_green_png', bytearray(______img_icon_ico_meteorimaging_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_meteorgrid_png', bytearray(______img_icon_ico_meteorgrid_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_meteorgrid_orange_png', bytearray(______img_icon_ico_meteorgrid_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_meteorgrid_green_png', bytearray(______img_icon_ico_meteorgrid_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_eject_png', bytearray(______img_icon_ico_eject_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_eject_orange_png', bytearray(______img_icon_ico_eject_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_eject_green_png', bytearray(______img_icon_ico_eject_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_imaging_png', bytearray(______img_icon_ico_imaging_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_imaging_orange_png', bytearray(______img_icon_ico_imaging_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_imaging_green_png', bytearray(______img_icon_ico_imaging_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_coating_png', bytearray(______img_icon_ico_coating_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_coating_orange_png', bytearray(______img_icon_ico_coating_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_coating_green_png', bytearray(______img_icon_ico_coating_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_optical_png', bytearray(______img_icon_ico_optical_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_optical_orange_png', bytearray(______img_icon_ico_optical_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_optical_green_png', bytearray(______img_icon_ico_optical_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_arr_down_s_png', bytearray(______img_icon_arr_down_s_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_lens_png', bytearray(______img_icon_ico_lens_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_lens_orange_png', bytearray(______img_icon_ico_lens_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_lens_green_png', bytearray(______img_icon_ico_lens_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_cryosecom_chamber/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    __res.Load('memory:XRC/pnl_tab_cryosecom_chamber/pnl_tab_cryosecom_chamber_xrc')
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/panel_tab_cryosecom_chamber_xrc', bytearray(panel_tab_cryosecom_chamber_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_sem_orange_png', bytearray(______img_icon_ico_sem_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_meteorimaging_png', bytearray(______img_icon_ico_meteorimaging_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_meteorimaging_orange_png', bytearray(______img_icon_ico_meteorimaging_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_meteorimaging_green_png', bytearray(______img_icon_ico_meteorimaging_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_meteorgrid_png', bytearray(______img_icon_ico_meteorgrid_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_meteorgrid_orange_png', bytearray(______img_icon_ico_meteorgrid_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_meteorgrid_green_png', bytearray(______img_icon_ico_meteorgrid_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_eject_png', bytearray(______img_icon_ico_eject_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_eject_orange_png', bytearray(______img_icon_ico_eject_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_eject_green_png', bytearray(______img_icon_ico_eject_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_imaging_png', bytearray(______img_icon_ico_imaging_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_imaging_orange_png', bytearray(______img_icon_ico_imaging_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_imaging_green_png', bytearray(______img_icon_ico_imaging_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_coating_png', bytearray(______img_icon_ico_coating_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_coating_orange_png', bytearray(______img_icon_ico_coating_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_coating_green_png', bytearray(______img_icon_ico_coating_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_optical_png', bytearray(______img_icon_ico_optical_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_optical_orange_png', bytearray(______img_icon_ico_optical_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_optical_green_png', bytearray(______img_icon_ico_optical_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_arr_down_s_png', bytearray(______img_icon_arr_down_s_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_lens_png', bytearray(______img_icon_ico_lens_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_lens_orange_png', bytearray(______img_icon_ico_lens_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_lens_green_png', bytearray(______img_icon_ico_lens_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_cryosecom_chamber/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    __res.Load('memory:XRC/panel_tab_cryosecom_chamber/panel_tab_cryosecom_chamber_xrc')
 
-    pnl_tab_fastem_chamber_xrc = u'''\
+    panel_tab_enzel_align_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_fastem_chamber">
+  <object class="wxPanel" name="pnl_tab_enzel_align">
     <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxGridBagSizer">
-                <object class="sizeritem">
-                  <object class="ImageToggleButton" name="btn_pressure">
-                    <icon>______img_icon_ico_press_png</icon>
-                    <icon_on>______img_icon_ico_press_green_png</icon_on>
-                    <height>48</height>
-                    <size>120,48</size>
-                    <face_colour>def</face_colour>
-                    <label>PUMP</label>
-                    <fg>#1A1A1A</fg>
-                    <font>
-                      <size>11</size>
-                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                    </font>
-                    <style>wxALIGN_CENTRE</style>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxEXPAND</flag>
-                  <cellpos>0,0</cellpos>
-                </object>
-                <object class="sizeritem">
-                  <object class="ImageToggleButton" name="btn_ebeam">
-                    <icon>______img_icon_ico_sem_png</icon>
-                    <icon_on>______img_icon_ico_sem_green_png</icon_on>
-                    <height>48</height>
-                    <size>120,48</size>
-                    <face_colour>def</face_colour>
-                    <label>E-BEAM</label>
-                    <fg>#1A1A1A</fg>
-                    <font>
-                      <size>11</size>
-                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                    </font>
-                    <style>wxALIGN_CENTRE</style>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxEXPAND</flag>
-                  <cellpos>0,1</cellpos>
-                </object>
-                <vgap>10</vgap>
-                <hgap>10</hgap>
-              </object>
-              <flag>wxALL</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxBoxSizer">
-                <orient>wxHORIZONTAL</orient>
-                <object class="sizeritem">
-                  <object class="wxStaticText">
-                    <label>Pressure: </label>
-                    <fg>#DDDDDD</fg>
-                    <font>
-                      <size>10</size>
-                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                    </font>
-                  </object>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxStaticText" name="pressure_label">
-                    <size>150,20</size>
-                    <value>...</value>
-                    <fg>#DDDDDD</fg>
-                    <bg>#333333</bg>
-                  </object>
-                </object>
-              </object>
-              <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxTextCtrl">
-                <size>150,20</size>
-                <value>SCINTILLATOR SELECTION</value>
-                <fg>#DDDDDD</fg>
-                <bg>#333333</bg>
-                <style>wxBORDER_NONE|wxTE_READONLY</style>
-              </object>
-              <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="FastEMSelectionPanel" name="selection_panel">
-                <tooltip>Select scintillators containing sample.</tooltip>
-                <bg>#333333</bg>
-                <fg>#999999</fg>
-                <size>400,-1</size>
-                <flag>wxTOP|wxEXPAND</flag>
-                <border>5</border>
-              </object>
-            </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_up_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-            </object>
-          </object>
-          <size>300,-1</size>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxALL|wxEXPAND</flag>
-        <border>10</border>
-      </object>
-      <object class="sizeritem">
-        <object class="ARAcquiViewport" name="vp_chamber">
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_streams">
-                          <size>300,-1</size>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>OPTICAL</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <orient>wxVERTICAL</orient>
-          </object>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <orient>wxHORIZONTAL</orient>
-    </object>
-    <bg>#333333</bg>
-  </object>
-</resource>'''
-
-    ______img_icon_ico_press_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00 \x00\x00\x00"\x08\x04\x00\x00\x00\x94\
-\xbb\x13t\x00\x00\x01KIDATH\xc7\xed\xd5?O\xc2@\x1c\xc6\xf1\x1f\xab\x0bo\
-\xc0\x84\xbe\x09\x92B\xda\xd4T\x81\xa26\x11\xe8\xd5\x1e\x9c\xc1\x84@\xe2\
-\xbb\xb8\xb8\xe8;@\xde\x82\x83o\xc4\xea\xc0+\xb0\x0e\xecvc\xb9\xc7\xa1Q\
-\xdaHZ\x90A\x07\xf2\x9d.\x97|\x92\xfb\x97#\xd0n\xd1\x1e\xf8\x80\\S\xb5\
-R\x9f\x9a\x91\xb54\xa3\xfa\xb4Z\x91$\xb7\x03t\xc7\x8e]\xe5\xbd\xf8\xf0\xe6\
-\xae\xb2c\xdd\xd9
-\xd0\xb5\xd6\x07C0\x91$\xd0/\x07\x13\x86V\xack[\x00\xf6\x8c)q\xdfy=-I:\
-?\xec\xbe\x89[\xa6\xeci\x0e`\xe0(\xd5\x09:\xe0\xa1\xa4\xd6\x81$\xb3\xdc\
-\x98\xbb7\x92\x82\xd0\x8dr\x80\x0b\xf0T\x03\x0c\xd1\xc7\x19$I\xb2\x9e\xda\
-w\x92\\px\xcb\x1c\x80c\x92i\x8c\xab\xe7d1\xc7Z\xa3$I\x92\x08\xfd\xa8\x00\
-\x18a\xb5\x07\xc3\x19WMs5n\x9a\x81\xf2f\x05\x80H\x01\x1d\xed2v\x165#\x19\
-\xd5\x0cg\xe1\xc7\xaeV\x00p\xa4\xcf\xa1\xe7\xb0\xd8QVh<Z\xa1\xa3\x18\xbc\
-\xfc{\xf0\x13\x90\xd4\xab\xf8\x0f\xbd\xf7\xee\x92A`\x80\x82\x9b\xb8\x0e\
-\xf8\xea\x1ac\xf4w\x01\xc4\xf7\xdc/\x01\xbe\x076\x07\x04\xda\x997\x99\xd4\
-\xc6\xc6\xa70\x82\xc8\xbc\xc9$\x81\xd1\xa6@^\x85\xc0\xfec\xf9\x13\xe0\x13\
-\xdb\xaf\x0d\x0c\xbf\xb2\xb0\xc6\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_press_green_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00 \x00\x00\x00"\x08\x06\x00\x00\x00>\xb2\
-\xdb\xff\x00\x00\x04.IDATX\xc3\xa5WO\x8b\xe4D\x14\xcf\xabJ\xd2\xa9\xee\xe9\
-a\xcc\x0e\xb8\xe0Aa\xbc\xedu\xd7\xaf 8ww?\x82\x17E/\xb2\x8a\x1e\x04\x11\
-<\x8a\xde<x\xd3\x15\xf6\xda,~\x01A\x97=z\xf2\x0fzX\x1c\xb5\xa7\x87\xa6\xa7\
-\xd3\x99$UeU\xb6*\xbc~]\x99\xe9\x9e-x$\xa9J\xf2\xfb\xbdW\xef_A\xa4\xa3\xe7\
-\x19\xd0s\xef\x87&\xd7\x8d\x11_\x13\x14\x0bs\x02\x84\x84r\xc0
-\xddkJ&\xbe\x06\xb8\x07\xe4\xee{/\xdc\xcd{\x8d\xa5\x93\x06\x89D\xa4v&\x00\
-\x088q20\x92\xba\xfb8@\xa06R!\xa9\x1d\x11o\xa1 \x01\x08\\=x\xec\xc0R\x07\
-\xee\xe52\x02\x17N\x18\xfag\xe3\xb7#\xee1/63#\xe0\x98@\xea$F\xefa\x02\x0d\
-"\xe7\x15\xc1\xbe c\x04\xce\xd1\xbe&Hb4\x17\xbaRp\xec\x84\x92X&BNi\xd7\xc0\
-\x13\xf0\xdaz\x8d2\x27\x03\x02\xc4\xd1\x0f;\xeb\xa4\xe7\xe9\x8bb.\xee2\xc5\
-\xee@\x04/\xe8H\x9f)P?\xaf\x0eV\x0f\xaa\xbd\xea)\xb2\x8a\xa2N\x09f\x1a\xdc\
-O=\xf0\xd0\x88p\xe2\x09p$\xd8\x27`8\x1d\xde\xce\xaa\xec\x03\x18@\xa6S\xfd\
-\x07\x00\x1ci\xad\xff\x84
-^\xd6\x17\xba,\xd3\xf2\xd3\xe2\xb0\xf8\xd1\xbc[\x1a)\x8c,\x9c,\xado0d\x81\
-\xc4\x11\xb0\xc0#Gd\x88\xac\x91R\xb3\xa7\xcb\xf4f&\xb3\xfb0\x06a4\xfdj6\
-\x9e\xbdc\xdf\x98\x8f\xe6\xef\xdbg;o\xd6?2\x16z\x89\xf8\x8fW
-\x18\xd2\x06\x13\xa0\xa0T\xfbv\x88\xa5x\x13\x86 \x9aA\xf30\xb9H\xde\xb0\
-k\xa7\x83\xd3c\xdepa\x9e\xef\x9a\xf9\xef\xccz&
-q\x8fX\xb1\xcb\x19\xde\x078\x8a\xeb.\xb4\xf2\xbf\xf2\x1f\xda\x95\xd00\xf3\
- \xcc\x0e\xc6\xfa\xb7y:\xff\x86q\xf6\xad\xddg^\xf3\xd1\xe8l\xf4I=\xac\x1f\
-.\xd2\xc5$o\xf2;<\xe6\xaf\x05\xa2\x0c\xbc\x13B \xccZ\x86\xb0\x0f\xcf\xa8\
-\x84\x86\xf9\x028XWz5\x9f\xe6\x93\xd9\xe1\xec\xd8N\x8f\xa7\xe3\xf7T\xa6\
-\x1e/\xc6\x8b\xc9\x8d\xd9\x8dIk\xcf\xb8u8\x08\xa4\xeb\x88F\x016\x0fXpc\xc2\
-\xfe\xdch\xfc\xda8\xdc\xaf\x06\xfc]?U\x1c\x14_W\xa2\xfa\xd7\xde\x9f\xe6\
-\xa7\xc7\xf9E\xfe\x85\xf9\xe3>)L]M\x08\xe5\x81\xcd\xc2b\x82g\xca\xa6\xc7\
-\x14\xff@\x1e\xbc\xcd%]\x9c\x8b[\xab\xbd\xd5/v\xce\x80\xff\xd3\xf9\x88\
-\x99\x07\x06G2\x92\x8f\x08xW\xa0X\xa0\xbam\x98I\xd7\xe1jZ\xe8\xe2{\xf3\x9b\
-R\xac\xc4}q&n\xe15\xfbl\xe7\xedz\x91\x14\x0f\x10\xb0/R*\x94\x8a\xc3\xf6\
-\x96\x1b3\xed\xc7UR\xfd]\xca\xf2\xb3,\xcb>4`\x9fgO\xb3\xdfU\xa4NX\xc4nB\
-\x02G\xc6I\xa1\x8c\xcb\x8f\xab\xb4:!\x04\x1aZ\x8c\xfa\xc17\x1b\x0c\x854\
-\x88\x96\xd9\xf2\xa7\x9a\xd7o\x0d\xf9\xf0\x1e\x93\xecv\xac\xe2W\xccF\xc6\
-\xad+\xebv\xfdI \x13z+\xe8]\xfb\x01\x85\xaa\x9c/\xab\x89\xb1\xc4\x89\x91\
-/\xbd\x12\x87\xcd\xe1\xc4\xaa\xa6W:\xea\xd9\xfb\x06\xfb\xc0\xb6C\x07\xac\
- C]\x8e\x96:\xd4\x88iT%\x15\x8d\x82]Z1\x1f\xb2
-\xd7\x84+|\xa6\xcf\x12\x1d\x01}Y\xe3\xb8\x9e~6\x1a\x978H\xe2r\x02\xfay\
-\x9aR\x86\x08\xe8\x9e^`+pj\x01\xda\xbd^E\xc2\x13\x80\x1d\x80\x83\x16\xd0\
-\x01\x02\xd1\x16$v\x0d],\x1b\x16\xc0^\xed\xbd\x94\xe3\xca\x97\xff\x97O\xda\
-\xd6\xf2\xaaa\x8b\xd7~o\xee\x90D\xc9\x0d\x025J\x14\x1d\x01\x93\xd5\x9e\xfd\
-TnA\x80\xbb\xf7\xd7c\xc2\xff\xbbF\xa1\xbb\xb6\x05\x8a\xf4\xf0\xeb\x8d\xa4\
--\xbd\x03\x88\xae9\x1ar.X#\xe0{\xc2\xd4\xb5a{\xee:B\x1d\x11\xdf!\xcch\xc2\
-iP/h{\xc0sw-\xbd=\xf1\x16\xd4n\x01{\xb8B\xddp\xa8R\xe2(\xd0\x81\xb6\xdb\
-j\xbdr\x04V\xee\xb9\xe9\xf3\x81\x9a\x80\xfb}KH\xb2\xc1\x07\x8c\xcb\x8a\x95\
-\xdf\xd2\xd2\x81\x97\xeeY\xf5\x85\xa1g\xac\x1dK\xac\xa2\x87\x0f\xd8"\xcd\
-b\xa7\xc3g\xc3\x86\x86!8.\xd0s\xf2\xe5\xe4xvU\xeck\xb2\x05\x92\xd4\x9a\
-k:\x02}g\xe89\xacnS1\xfb\xb2\xdf\x1a\xe2\xff\x897\xd9u\xe0\xeb\xaa\xbe\
-\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_sem_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x04\x00\x00\x009\
-\xc62\xa5\x00\x00\x00\xb6IDAT8\xcb\xed\x94M
-\xc20\x10Fs\x03O\xd2\x0b\xd4\xfa\xb7\xb0E\x08\xd2.\x84\xc6n\xd5s\xe4\x8c\
-\x9e\xa47xfD\xa8\x84\x92\xa4\xa2\x0b\xa1|\x8b\x8f!<\x98\xc7@\x14jZ\xd4\x0c\
-L\x07
-\xb6\xac\xc8\xb3\x15\x1b\x96w\xfb\x9c\x0b\x02@\x8d\xa1\xe1\x905\xb4h\x07\
-\xc8\\\x87\x00\xc3\x8d\x8e&\xeb\xb8pr\x80\xcc&\x04\xd8\xd1\x04\x80\x12M\
-\x85U\x95\xeb\xbdk\x99\xcb\x98C\x8d\xf5:\xe2`\xb0^\xd3A\x9eK$CG\x01\xdf\
-#
-\xf8\x1eQ\xe0\x03\x07\xfdr\xd0\xeb\xf0~\x8bd`\xd8?\x11\x18\xf6\xff\x99\
-C/7\xc8\x17\xc9\xc0\xb1\x17\x87u:\xd0\xf6W\xce\xec\xe2\xc0\xfc\x19\x8f\xe6\
-\x01\xb8\x055\xdfN\x86\xe9\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_sem_green_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x06\x00\x00\x00\x93\
-\xcf\xfa.\x00\x00\x02\xd3IDATH\xc7\x9dVK\x8e\xd40\x10\xb5;N\x11\x0c\xbd\
-\x016p\x12\xc4\x06\xc40}\x949\x0f\xf7`3\xec\xb8\x0b\xec`1Qk\xa4A\xfdq\\\
-T\x1cW\xe6\xa5\xda\xe9\x0f\x91J\xeej\xc7\xf5\xaa^}bg\xc8\xe8\xc7\xaaU\xff\
-\xc6\x872\xbf{\x16\x9d22\x82\x15E\x83\x12\x18
- \x04k\x14\x07\x07\x0b\x90\xe6\xff2\xad\x85\x026`\xa8\x91:\xc9\x9e\xc5\
-\x83^#\xc0(\x19*\x93L\x92\x8c\x01T\xa2!\x00@\xe3[\x96]\x12\x83\x11X\x88\
-@\x8c\xcfX\xa6\xe9\xb7St\xc9\xe1:\x81\xf8\x040R\x14\xc6\x081\x02\x97<\x9e\
-&\x80Y\x06\xc0\x0eP\xb4\x03G\x0d\x00\x1b\x07\xdc:\xf0^d\xacr\xa0\x01d-\x94\
-\xf1\x0e\x14#(\x93\xc1\x8e\xff\xe5\xaf\xe5\x8fx\x94\x8f<^=\xde.\xd6\x8b\
-\xaf\x8d\x99@\xe1\xe7\xfa\xed\xfa\x96\xf7\xef\xe2>\x9b\xab\xdeU\xef\x93\
-a\xa1\xac@\x00\x8cB\xa4\xb0\xcfm\x0b\xc5\xaf\xdb\xd2\x1a\xfb\xc2\xc6\x1d\
-\xbbm\x9d\xed\xf6\xb7]\xc9;]y\x08p(|\xd8\xce\xad\xa1\x0d\xb5\xff4\xfa\x98\
-\x81(\xb1!\xfbmK\x8c2T\x1e4ZO\xee\xe7\xf7\xab\xb83m_\xd8\x98M\xab?k\xf5\
-n\x1ey7\xda8\x02`gv/-/\xef\x1aj\xc8\x93\xa9^U\xab\xe5\x1f\xe6\xdc\xb5\
-\xe9\xab\xde\xb0.\xfb{\xde]}\xcc\xcd\x12\x97);\xa9\x0ec\x27-\xc7\x1d\xe7\
-\xe3\xc4y\xea\x86nd\xd1\xc9\xde\xb8p\xaaq<4PP\x1c\x9b\x13z\x00\x1bb\x27\
-F@\xaa\xbc\xe4\x85\x929\xfe\x12\xfd\x9d\x1fp\x8e:\xb1\xeeUW{=\x8b\x08\x0c\
-{MU\xc3\xb5p\xca\\\xaf\x94~\x03N\xa2\xa3A\x00H\x85W\x03M\xbd\\\xa4z\xd7\
-\xba\x1e\x1b>7M)\xc3\xdf\xd3\\?\xcd}Pc\xba\x16\xe7t\x15\xf9\x1c\xc8\x00\
-\xf7\x8dN\x19\xe7\xf6x6W\xa6\x074\xa9z\xd7\xf5\xffi\x88\x1e\xdd\xc9\xa4\
-B\xec(R\xf5\xae\xeb?(\x9a\x02~\x97]\xe6#~\xe8\xc9\xd4\x0e \xd7\x0f\xd1\
-#\xe6\xfc:N\xc8~\x0e\x02\xeb5\x00\xf4\xea\xffX\x04C\xfd\xd0\xe4\xe2;\xd4\
-\xffu\xa6<\xfd1\x8aN\xf5\x03\x0d\xd4\xad\x9a\xec\xec\x1cx\x05d\x8f\xd4\
-\xbf.ms\x0c d\xe6R\xfcB1\xf7\x9f\xa1\xfe\xb5#\xfe\xdc*
-*d/7\x0b\xce\xc17[\x9a\x051\xf4\xc3\xcb\x87\x1b?\xf1\x8f\x19\xcf\x01\x0c\
-u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
-\x92\xed\x8cs`\xa3\x9d=\xdc\xe4|\xce\xfbS\x11\xc8uP\xae\x8b5\xe7\xe0C\xf4\
-}\xd6\xbb.\xca\x95\xf1\xe2\x08\xfc\xd3\x80\xeet\xb9\xa8\x05\xf0~\x07\x03\
-\xee\xec\x08\xa4\xe1F
-\xa0\x00\x80=\xc8E\x14i\x9a\x08\xf2Q\x0c\xcc,\xaf\xeb\xff\x1c\x80\x1a\xd6\
-\xdc\xe5W\xdfO/\x8e {WR\xef\xe4\xd6\xde\xf3\x0fC\x01\xf8T\xed+\x8e
-\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_chevron_up_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
-D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
-\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
- \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_chamber/pnl_tab_fastem_chamber_xrc', bytearray(pnl_tab_fastem_chamber_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_chamber/______img_icon_ico_press_png', bytearray(______img_icon_ico_press_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_chamber/______img_icon_ico_press_green_png', bytearray(______img_icon_ico_press_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_chamber/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_chamber/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_chamber/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    __res.Load('memory:XRC/pnl_tab_fastem_chamber/pnl_tab_fastem_chamber_xrc')
-
-    pnl_tab_sparc_align_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_sparc_align">
-    <object class="wxBoxSizer">
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_alignment_btns">
                 <object class="wxBoxSizer">
-                  <orient>wxHORIZONTAL</orient>
                   <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_chamber">
-                      <icon>______img_icon_ico_cam_png</icon>
-                      <icon_on>______img_icon_ico_cam_green_png</icon_on>
+                    <object class="GraphicRadioButton" name="btn_align_z">
+                      <icon>______img_icon_ico_enzel_z_align_png</icon>
+                      <icon_on>______img_icon_ico_enzel_z_align_green_png</icon_on>
                       <height>48</height>
                       <face_colour>def</face_colour>
-                      <label>CHAMBER</label>
+                      <tooltip>Align the Z position of the stage</tooltip>
+                      <label>Z</label>
                       <fg>#1A1A1A</fg>
                       <font>
                         <size>11</size>
@@ -6495,16 +5511,20 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
+                      <flag>wxALL</flag>
                     </object>
                     <flag>wxALL</flag>
                     <border>10</border>
+                    <option>1</option>
                   </object>
                   <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_mirror">
-                      <icon>______img_icon_ico_ang_png</icon>
-                      <icon_on>______img_icon_ico_ang_green_png</icon_on>
+                    <object class="GraphicRadioButton" name="btn_align_sem">
+                      <icon>______img_icon_ico_enzel_sem_align_png</icon>
+                      <icon_on>______img_icon_ico_enzel_sem_align_green_png</icon_on>
                       <height>48</height>
-                      <label>MIRROR</label>
+                      <face_colour>def</face_colour>
+                      <tooltip>Align the SEM relative to the FIB</tooltip>
+                      <label>SEM</label>
                       <fg>#1A1A1A</fg>
                       <font>
                         <size>11</size>
@@ -6513,16 +5533,19 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
+                      <flag>wxALL</flag>
                     </object>
                     <flag>wxALL</flag>
                     <border>10</border>
+                    <option>1</option>
                   </object>
                   <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_fiber">
-                      <icon>______img_icon_ico_fib_png</icon>
-                      <icon_on>______img_icon_ico_fib_green_png</icon_on>
+                    <object class="GraphicRadioButton" name="btn_align_flm">
+                      <icon>______img_icon_ico_enzel_flm_align_png</icon>
+                      <icon_on>______img_icon_ico_enzel_flm_align_green_png</icon_on>
                       <height>48</height>
-                      <label>OPTICAL FIBER</label>
+                      <label>FLM</label>
+                      <tooltip>Align the FLM relative to the SEM</tooltip>
                       <fg>#1A1A1A</fg>
                       <font>
                         <size>11</size>
@@ -6531,10 +5554,13 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
+                      <flag>wxALL|wxEXPAND</flag>
                     </object>
                     <flag>wxALL</flag>
                     <border>10</border>
+                    <option>1</option>
                   </object>
+                  <orient>wxHORIZONTAL</orient>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#444444</bg>
@@ -6542,2195 +5568,482 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>5</border>
+              <flag>wxEXPAND</flag>
             </object>
+
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_sparc_trans">
+              <object class="wxPanel" name="pnl_z_align_controls">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Translation</label>
-                      <font>
-                        <size>16</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size X</label>
-                    </object>
-                    <flag>wxBOTTOM|wxLEFT</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_x">
-                      <size>-1,20</size>
-                      <value>0.000001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
-                      <fg>#E5E5E5</fg>
-                      <style>wxBORDER_NONE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size Y</label>
-                    </object>
-                    <flag>wxBOTTOM|wxLEFT</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_y">
-                      <size>-1,20</size>
-                      <value>0.000001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
-                      <fg>#E5E5E5</fg>
-                      <style>wxBORDER_NONE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_my">
-                          <label>-Y</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>0,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_py">
-                          <label>+Y</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>4,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_px">
-                          <label>+X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_LEFT</style>
-                        </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,4</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mx">
-                          <label>-X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_y">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>↑</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>1,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_y">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>↓</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>3,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_x">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>←</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,1</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_x">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>→</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,3</cellpos>
-                      </object>
-                      <vgap>0</vgap>
-                      <hgap>5</hgap>
-                      <growablecols/>
-                      <growablerows/>
-                    </object>
-                    <flag>wxALIGN_CENTRE</flag>
-                  </object>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#444444</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>5</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_sparc_rot">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Rotation</label>
+                    <object class="wxStaticText" name="lbl_pz">
+                      <label>+Z</label>
                       <fg>#E5E5E5</fg>
                       <font>
                         <size>16</size>
+                        <weight>bold</weight>
                         <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
-                    <flag>wxBOTTOM|wxALL</flag>
-                    <border>5</border>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>10</border>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size</label>
-                    </object>
-                    <flag>wxLEFT</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_r">
-                      <size>-1,20</size>
-                      <value>0.000001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
-                      <style>wxBORDER_NONE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pry">
-                          <label>+Pitch</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>0,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mry">
-                          <label>-Pitch</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>4,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_prz">
-                          <label>+Yaw</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_LEFT</style>
-                        </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,4</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mrz">
-                          <label>-Yaw</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>↑</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>1,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>↓</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>3,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>←</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,1</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>→</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,3</cellpos>
-                      </object>
-                      <vgap>0</vgap>
-                      <hgap>5</hgap>
-                      <growablecols/>
-                      <growablerows/>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
-                    <border>5</border>
-                  </object>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#444444</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>5</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_fibaligner">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Fiber</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <flag>wxBOTTOM|wxALL</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText">
-                      <label>Step size</label>
-                    </object>
-                    <flag>wxLEFT</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="UnitFloatSlider" name="mirror_align_slider_fibaligner">
-                      <size>-1,20</size>
-                      <value>0.00001</value>
-                      <min>0.0000001</min>
-                      <max>0.001</max>
-                      <unit>m</unit>
-                      <scale>log</scale>
-                      <accuracy>2</accuracy>
-                      <style>wxBORDER_NONE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pfy">
-                          <label>+Y</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>0,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mfy">
-                          <label>-Y</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                        <border>5</border>
-                        <cellpos>4,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pfx">
-                          <label>+X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_LEFT</style>
-                        </object>
-                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,4</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mfx">
-                          <label>-X</label>
-                          <fg>#E5E5E5</fg>
-                          <font>
-                            <size>16</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                        </object>
-                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
-                        <border>5</border>
-                        <cellpos>2,0</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_y">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>↑</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>1,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_y">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>↓</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <flag>wxLEFT|wxRIGHT</flag>
-                        <border>7</border>
-                        <cellpos>3,2</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_x">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>←</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,1</cellpos>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_x">
-                          <size>64,-1</size>
-                          <height>48</height>
-                          <label>→</label>
-                          <font>
-                            <size>24</size>
-                            <weight>bold</weight>
-                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <style>wxALIGN_CENTRE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>2,3</cellpos>
-                      </object>
-                      <vgap>0</vgap>
-                      <hgap>5</hgap>
-                      <growablecols/>
-                      <growablerows/>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
-                    <border>5</border>
-                  </object>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#444444</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            <orient>wxVERTICAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_up_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALL</flag>
-              <border>10</border>
-            </object>
-          </object>
-          <fg>#E5E5E5</fg>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="ARLiveViewport" name="vp_sparc_align">
-          <size>400,-1</size>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-        <ratio>1</ratio>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_ma_settings_ar">
-                        <label>ANGLE-RESOLVED</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_sparc_align_streams">
-                          <size>300,-1</size>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <nocaption>1</nocaption>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_ma_settings_spectrum">
-                        <label>SPECTROMETER</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <orient>wxVERTICAL</orient>
-          </object>
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <orient>wxHORIZONTAL</orient>
-    </object>
-    <bg>#333333</bg>
-    <style>wxWANTS_CHARS</style>
-  </object>
-</resource>'''
-
-    ______img_icon_ico_cam_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00)\x00\x00\x00\x1d\x08\x04\x00\x00\x00\x9d\
-\x82\x8d\xc6\x00\x00\x01\x16IDATH\xc7c\xf8\xcf@m\xc80j\xe4\xc86\xd2\x94\
-\xd3j\x8a\xdd\x07\xfb\xff\x0eX\xa1\xfd\xbb\xb7\x96]\xa6l$\x19i7\xd3\xe7\
-\xd8\xffH\x9c0\xf4\xbf\xf7\xdb\x0e4g\x98\x9a\x06\xe01\xd2\xe7[\xec\xff\
-\x94\xffi8a\xca\xff\x98\xff\xde\xcf\x90uX\x868|\xb3\xcb\xc4i\xa4\x1d\x18\
-^\x03!\x86\x86~@\xe8\xb0\xae\xf4\xfc\x17\xf8\xdf\x1d\xb7\x91\x8e\xfcQ\x04\
-\x0cL\xfb\x9f\xfa?\x1cj\xa4)\x9b\xed|\x9f\xff\xd1@w{Qjd\x04\xd8H3!\xfb\x03\
-\xfe\xffA\xc1\x14G\x1d#\xcdU\x9dn\x05\xfd\x8f\x07\xf2\xd2\xa8c\xa4\x8b\xb5\
-\xcb\xdb\xd0\xff\x89`\x03\xa9bd\xe4\x07o\x89\xe0\x93\x89p\x11\xaa\x18\xf9\
-\x9f!\x803~u*\xf5\x8c\x84DO\x00c\\[
-u\x8d\x04\xc1\x98\x84\x94\x9fT6\xf2?C\xa4}\xf2[\xfcF2F}#"\xa9?G\xd6\x13\
-\xae\x1au\x0b\x8f\x91\xff\x19\xc2f\x12\x91!;Q\xf5\xf8
-\xb9\x9a\xe3+68c\xa7\xa5|\xc0c\xe0\xdb\x98\x1eo\xb6\xd1\x8ab\xd4Hd\x08\
-\x00-\xed\x06\xb8\xdec\x12\xc5\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_cam_green_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00)\x00\x00\x00\x1d\x08\x06\x00\x00\x007\
-\x8bEM\x00\x00\x03\xb5IDATX\xc3\xbd\x98O\x8e\xdcD\x14\xc6\xbfW\xba\xdd\
-n;Q\x16HaE$\xae\x90\x1b\x84\x05\x9b n\x80\x90\xa2\xacr\x80\x086d\x8b\xc4\
-\x05P\xd8\x81\xb8\x00\x0b6\x01\xb1f\xc7\x01`\x87\x82&\xd2\xd0\x96\xbb\xc7\
-\xdd.We1\xcf\xcd\xeb7n\x8fg2CI\xa5r\xdb\xa5\xf2\xcf_\xbd\xaa\xf7U\x13\x12\
-\x86
-\x1di\xf5\xf5PI\x03\xd7i\xe0\xd9\xe4\xe2\x06\xe0\x8ch-\xb7F\xdc\xa7\x01\
-x\x0d\x96\x00D\xae\x9d\xb8\x8e\xe2y\xba\x0e\xa4\x11`\x0e\x80\x17\xd5)\xe0\
-!\x85\x93\x02\xec\x00\x04\xae-\xd7\xc0\xf7;\xd1\x97.\x99\x85=d\xaf\x9c\x03\
-0\x030\x07\x90q;g\xd01H9xT\x90;\x00[\x00\x0d_\xef\x84\xbaI\x8c\x93\x8eU\
-\x27T\xb4\x0c\xb8\x00\x90s\xbb\xe0{~`\xca\xc7b\xb2\x07\xedUlx\x8c\xbem\x19\
-T\x86\x99\x0e\x8f\xfd\x878\xf1R\xc7\xaa\xe5\x00\x96\\\xb5\x8at\xc9\xe2I\
-\x03q\x19x\xec>\x84v\x03\x90\x10\xca\xf7a\xd1\x8fCRI\xcfS\xbc`\xc0^E;aE\
-\x1f\xdb\x15\x8c\x8a\xf5\x1e2\x88\xe9\xee\xa7Z\x86\xc6V\xce\x88\x13\xf1\
-\xe8Y\xb9\x05\xb73\xea(+_\x97\x9f\xdbh\x1f\x11\xa8\x9c\x8c\xca\x1a$\xa4\
-ug\xba_\xea\xfb\xf5\xcbh\xa3\x8c\xf9N\xad\xf0\xc4
-n\xf9c\xa4\xb2{%\xad\x80\xecc\xd0\x96\x27\xe5gn\xee>\xa5\x8c\xce?\xe3\x8a\
-\x85"-\xa9\xa1\xc7\xc5I\xd1V\xf7\xab\x97bq\x1elC\xd9i\xf6\xc05\xee\x83\xfa\
-\xfd\xfa\x27\x16\xadc\xe8]\xbf\xba\xe5\xca\xf6"\x06\xc9y\xf7\x11\x15\x04\
-\x9a\x11\xae\xa4\xa2\x8cP\x0f\xb8\xda}\x0c\xe0;\x1e\xd7J\x05\xf37\xf9\xc3\
-\xac\xc9\xbe\x08>\xfc\xc0\xe1\x16\x85\xaaF\xc7\xa4U\xdb\x0chNw\xae\x0d\xc8\
-\x91I3\x02\xe6\xc8\x87b\xb7\xfc\xa7\xfc\xc4\x93J%\x19\xc4\xfdl\xce\xd4\
-b\xbd\xb0O\x1e\xee\x83\x06\xd7\x07\xd49L\xdeJd\xca\xd7\xe5S\xe7\xddcZr(\
-5 \x91H\x9c\\\xb0r\x0b27\x845Z\xec\xce.\xca7\xe5s\x9b\xd9\x87X\xb2\xd2a\
-0\xeb\x19\x09\x09\x95\x93\xe9\xb6@\xfd\xda\xbfW\xac\x8a\xafLn\x1ePN\xe7\
-\x93J\xa3\xde\x81dL\xden! [g\x1f.\xaa\xc5\x0bS\x98{\x94\xd3e\xbb\xef\xc1\
-\x13\xf3A\x86Y8\xc1\x12SN\xff\x05\xd94\xbbw\x00\x99\xde\xd5\xf7\x8d\xbd\
-2\xf8P\xad\xca\xd5\x97]\xea~\x1d\x19];\xa9\x04 \x99#\xce\xe3VJ\xa4\xd8\x9e\
-\xfa\xd3o\xda\xd0~\x8f4\xf8\x9e(\xac\xdc\xde%\x19e\xaf\xa2\xb2P7\xa6\xa4\
-\xfc\xb5\xf2\xab\x1f\x9b\xd0|\x8dx\x9eQD/\xe9A/@\xa6\xa1/\xb8\xc5\x92j_\
-\xff\xb6\xe96\xcfSL\xff
-\xa1Ze\x90c\x0f)-\x95\xfe\x8a\xea\x86\xa0\xce\x04\xc8\xde\xado\xfc\xe6\
-\x8f:\xd6\xcfb\x17\xff\xa2DA\x99\xe3=\x87Q\x8ec\x27\xfc^\x0c\x08\xaf\xde\
-Y\xd3\x04\x04\x84\x9f\x85W\xdc2\xf4\x06\xc0\xd9\xd6m\xff\xac\\\xf5$\x98\
-\xf0;\xdfk\xb8O\xdb+IH \xce\x97K\x00w\xb8\x16\x002\x8a\x94\xdf\x0dw\x9f\
-Xo\x1f\x11Qq\x0d\xc0uh\xc3\xab\xcaU\xdfF\x13\xd7Z\x04\xb5\x9bh?\xb9W\xb4\
-\x87t\xec@\x96\x0cX\xb0C\x9f\x8b\xa3\xc3U3Q\x1a8B\xf4*\xed\x84\xa7$\xd1\
-\xb7\x1d\x8aK\xa7:l\x05P\xbf\x98f*\xe1\xd3\x84\xe3\x83<\xafH\xc0\xb3\x01\
-Hy\xc6\xe9\xd46tp\x10\xeb\x81\xb6\xeaw\xab\xac\x93\x9d\x00\x99FN\x8b\xcd\
-\x91\xe9\xd6\xea\x1f\xec\xd9\x1aR\x036BI7\xc1)i\xc8V8\xec\x9d:{\x1fK\x1c\
-\x17\xb2\x1e\x89n\xda\xb2Y\xe1\xef\xb4}\xa2\x09i\xad\x131\xd9\x1d\xf9\x27\
-cb\xeaO\xa3\x27\xbec\x16n\xca\x91\x16#\x07\xfe+\x95\xb7\xf2\x89\xc9\x83\
-\x15\x1a,f\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_ang_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00)\x00\x00\x00\x1c\x08\x04\x00\x00\x00V\
-\xde^c\x00\x00\x01kIDATH\xc7\xed\xd4\xbdJ\xc3P\x14\x07\xf0\xa8XtQ\xfa\x00\
->D\xa1M\xbf{S\xa5\xa9\xa9\x14JC\x1a\x93\x86\x98&\xb9\xa2\x82\x08\xbe\x84\
-\x82 \xae}\x007\xa1\xbb\x9bC]\\\xab\x9b8\x08"\x0eE\xa7
-Z\xfe\x0e"H\x93\xdc~\xe0f\xf9ow\xf8q\xee9\x87\xc3\x81\xfb\xebpSrJ\xfeN\
-t\x8e\x17S\xa7\x99\xab\xdc\x13\xe9\xe6\xba\xd9N\xfa"\xb1\x1f[\x99\x98\x8c\
-\x86\x92\x07\xe4QD\x192jP\xa1BA\x05%\xac\xf53->2\x01\x19\x8f\x92\xdb\x0d\
-(0`\xc1\x81\x0b
-
-\x176Lh\xa8\xa0\xf0\x91>\x89\x85\xc6"\x93j\xe1]\x86\x09\x07\xdb\x9eP4\xa0\
-\xa3\x0c\xd2\xe6\xc3#\x93)]\xfa\xd4`\x83\xfa\x80\xdfqa\xa2\x8a\xfc\x0d\xbf\
-<\x12\x99\x8cH=\x1dn \xf7S\xab\x85*\x84Vlf(\x19\x9f/t4\x0f\xe8\xbeZ\x0d\
-k\xd7\xed\x0d\xa2\x15d\xb7\x86\x92dO\x86\xed\xf9f\xfd\x0c\x1c8\xe3\x9c\x0e\
-Tj@zN,2\xc9\xc4l\xe9\xc1\xf4\xf4\xd0\x86|-,\xe4\x97\x94\xbb\xc1q9\xa8A\xd8\
-a\x92\x84(>Sv\xa0\xa2\xd8-\xbem\xfat\xd8D\xa9\xcd$\xc5##`m\xea\xa8\xfb\xee\
-\x80\x03\xb9\x9f\x0d3\xc8\xf2\xa5\x158a\x1a\xf0\xae!\xbf\xca \xab\xf7\xf6\
-\x90\xe5\xf1\xc6\x80H\x19\xa4\xf2\xe2\x8eM\x9a\x90\x0e\x19\xa4|l5\x1bcF\
-o\xae\x0b\xd3\xab\xfe\x9f\xc9/\x86\x04\xceT\xdd\xad\x87\xbc\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_ang_green_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00)\x00\x00\x00\x1c\x08\x06\x00\x00\x00\xfc\
-\xd7\x96\xe8\x00\x00\x03\xefIDATX\xc3\xb5\x98\xbb\x8f\x1bU\x14\xc6\xbf\xef\
-\xdeyz\xc6\xf6\x16\x91\x02H@\xb1\x89\x08\x12\x05R\xaa4\x08EH\x14t\xf0\x1f\
-P\xd1!\x82\xe8)\xf8\x03\xa8\xe8#
-j
-\xaaPC\xfa\x14Tt\xe96\x0b\xd9u\xec\xf5</\xc5\x9ek\x8e\xef\x8e\x1f\x9b\xdd\
-\x1d\xe9\xe8\x8e<\xd7\xf6O\xdfy\xde!\x1c^\xf7b\xb0\xea\xfb\xf0W\xdd\x86\
-\xcf\xf7\xfc#wi0\x020j\xd5\xe6\xf78e}`\xfa\xd9\xb5Bj \x0b \x1a0\x0d
-\x01\xea\xc4Z\x00\x8d\xac\xfe3\x0d}%H\x0d\x17\x01\x88\x01$\x81\xc5; =`\
-\x1dX\xa3\x80\xb7*\xbb\x0d\x92\xa2\x9a\x15\x90\x14@\xa6\xccCF\xb2\xc7\x04\
-\xf1\xe9\x14h#V\x01X*\xab\x14\xecFU7Aj\xf5<\\\x0e`$k:\xa0 \x83\x98\x0cA\
-[\x05z\x06`!\xebR\x94m\x95\xaa;!\x19\xa8\x97\x03(\xc44\xe0\x90z\x9b.\x0d\
-[\x0b\xe8Bl.\xb0\xd5&\xd0\x10\xd2\xc7`,\xea\x8d\x00\x94b#\x01\xf4\xea\x91\
-\x8e&?\xce?\x8c\xaa\xe8\xbeq\xe6\x0e\x1d\xdf\x92\x10\x00\x80\xe3\x9e\xfd\
-\xf3\xcev\xcf\xaaI\xf5\xb4)\x9a#\x05\xdb\x88\x82\x1e\xf2\x95\xdc/\x05t\xcd\
-\xf5!\xa4\xcf\\\x0f8\x16\x1b)\x05\xc9\x8eQyT~\x16\xb5\xd1\xe7\x8cy\x8b1\
-\x15\xfaz\xda\xb8\xc6\x01\x0d\\\xd7wO\xab\xb2\xfaey\xb0\xfc[\x9e\xb6\x02\
-5\x070\x13\xd0\xb9R\xb4\x1f\x82\xa4\x8a\xc1B\xe0&r\x9f\xc93f/\xb3\xbb\xf9\
-<\xc4\x94\xef0%\x90\x00\xb4\x1cN\x1b\x27\xa0\xad\x03j\xc0-]\xd7\xf6\xed\
-\xaf\xb3\xdb\xb3\xc7\xce\xbaF)\xfa
-\xc0\xa9\xc0.\x04t\xe5v\x0di\xc5U^\xc1\xa9\xac\x99W\xb08*>J\xbb\xf4\x11\
-G\x8c\x99)\xf5\xf6\x89H\xaf\xea\x02\xe8\x96\xdd_\xb3[\xb3\xef\xbb\xb4\x9b\
-I\x8c\x9e\x09\xe0\x89\x02m\xbc\x9a&\x88E\xafd\x98\xc5,\x8e\x8a\x8fS\x97\
-~\xc7\x09c\x16\xe7
-\xee\x05\xa8|\xc4\x8c\xe0\x98\xb0\xa5}\xf2\xcf\xe4\x07[\xdb2HP\x1dV+\xdf\
-\x98 \xa3\x13\xd9\x9c\xa9$av\x92\x1d\xa6.\xfd\x9ac\x1af<\xdf\xf9\xba\xdd\
->\x06X\x10\xa60w\xc7\xc7\xe3oT%\xd15\xd8W\x8f\x0b\x90^\xc5Tm4\xec\x19\xe5\
-\xcb\xfc[\x96L\x98r\xbbz=\xe6UW\xfdXw\xf5O\xe8QoU5\x27lf\x1f\x94/\xca\x87\
-\x03\xa0i\x08\xa9]\x9d\x04u\x90\xe5q\xf9\xa9\xc9\xcd\xbb;\x01\x1d\xd0\xb6\
-\xed\xef3;{rjO\xeb\xda\xee\x8f\xad-7:wn\xe2\x92/Mk\xd2\xa06\xfbN\xb6\xa6\
-\xa4Q\x9b\xfe/\xd4\x0e\x8c\x19\xb1\x97\x8b{\x80\x15\xdf3\x9dIlcG\xacy\xb8\
-\x15\x92\x00c\x829\x0f\x8a\x97\xc5\x27\xc1|\xb0\xd1\xddV\x99\x01\x80\xfc\
-$\xff\x80)o#\xda/\xde\x8c1\xf7\x0e^\x1c\xfc<\xfdw\xfa\x98\x86o\xef\xfc\x8e\
-\x01\x98\x10\x11\xa3\x87\xca\xa3!\x07M0#\xae\xf5\xe0\xb8\x8b\xef\xaf\xf2\
-l\x0fH\xa6\x04\xa7,9\xe1hgx\xa8\xc2gbs/\xaa\xa3r`\xf2\xba\xa0d\xd8\x83\x9d\
-5\xf6\x0e-/_f.S\x01\xce\x9d\xcc\xe4,9\xdc0\xf9\xaf \x87&iG\xcb7\xf7\xae\
-\x85W9\x84X\xc0\xf6\xf6\x8d\x81\xe9}\x0d\x12\xaa\x9f\xfaI\xa4\xa7a~\xe3\
-\x90\x00H\x82d\xa6F\xba\x0b\xbd\x9b\x92\xf2\x85\xf4\xea\xb1L=\xd9t>\xfd\
-\x8a)\xc7$y\x83\x8c\xce\xb5\xce\xd5u\xfdd1^\xfc)C\x86\xef\xe3s\x00\x8d\x87\
-\xf4\x85\xb4\x10\xc0bh4\xdbpB\xbc4\xd4\xc5\x11d5\x11\x9d\xc9\xb0\xb16\xba\
-yH\xdf\x123\xd5\xb7G\xaa\xb0\xda\x81\xec\xc7\x15A{\x15bz\xbe\xd4\x13{\xe3\
-!\xa1\xeaR\xa2`\xb3\xe0\x98`\xaf\x11\xb2\x0f ku\xfe\xa9\xd4\xd9\xa7\x05\
-\xd0{\xc8\xb0\x98\xc7\xead\x18\xdd\xa0\x92\xe1\x91\xb7\x09\x8e\xbe\xe7U\
-&\x18z\x8d\x026\x81z\xe6\x06b2|q\xa0O\x8d\xfd\xd0\xd0;\xf4\xfad\xdb\xab\
-\x14\\\x03\xe8P"]x\x1d\xf3\x1f\xf9\xfd~\xd4\xe4\x17s \x00\x00\x00\x00IE\
-ND\xaeB`\x82'''
-
-    ______img_icon_ico_fib_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x04\x00\x00\x00\xbe\
-\xaa2\xfb\x00\x00\x02\x01IDATH\xc7\xed\xd6\xbfk\x13a\x1c\xc7\xf1\x8b\x19\
-t\xb2\xe9^\x02\xba\x17t\xd1\xd0\x1aI%?\x9a\xbb\xe6W\xb9\x84\\\x92\xfb\xfd\
-\xdc3\xeaZ\x1a\x84\xee:\xb9\xe5\x0f\xe8hf\x1d:\xe8\xbf\xa0\x83BE\xb1\x83\
-\x93.U(\x85\xe6\xed\x90\xd6`rQ\x92\xdc\xd6\xf2l\x0f\xf7y\xc1\x03\xcf\xf7\
-\xf3\x9c\x82\x12\xddR\xae\xb0\xcb\x85\xdd\xd7\xd6\x0f\xd2\x87\xeb/\xef\xdd\
-\x9d\x19\x1b\x8f\xae5\xf2\x83*:\x15\xb2\xbfRw\xfe\xcd\x8fQ\x93\xd1\xc2g\
-\x03\x0f\x1f\x97\x06\xd9\xfe4>\x14\x1b\x8f\xa6o\xea\xf8H$\x12\x97\xcaa8\
-\x1f\x8aMF3\xd7\x9a\xdf\x83\xf3\x1d\x1f\xfd \x9c\x0f\xc5&\xa3(\xf5]q\xbe\
-\xe3\x0d\xaaZ\xf87S\x8e9\x8a
-\xeaG\x0fWP\xd4\x98\xf9"@"hI\x14\x94\xccJ\xf3[\xf0\x17?\x15Sc\x9d\xa7\xe2\
-\xc7\x10k\x91\xfb\x98J\xa0\xd44\x17\x89M)\x89\x92J\xe4?\xb4\x19b\xfe\x17\
-\xa3\xfd\xdf{V\x8f\xb5\x96l!\x06.:\x1b\xaf\xd7\xe2E\xcdB\xd2!\x9bL\xc57\
-^\xe9x\x88\x81-[K3\\\xda\xce3\x81C\x8dG\xdd\xa2f"i\x93Mf\xba5\x1c\x04\x9d\
-\xe73N@9n\xbd\x11XTO+]\x0bI\x1b\xb5\\:\xb5\x10Xo\xcb\xf1\x99\xc7i\xfb\x96\
-{,01~:H,\xea\x9f\xda\x08\xdc\xe3\xed\xdbs\xcdfsG \xf0\x10H|\x1c|\x04\xcd\
-\x9d9\x07}\xeb\xba\xfdUr\xb1\x02\x02\xec\xa3\xad\x1bs\xb7F\xe3\xb1\xcf\x88\
-\xf3i<Y\xa0\x82\xb4\x84}2\xc2\xec\x13-\xb1P\x9f\x19\xfd\xe0\xcf1\x8d\xfe\
-\x82\xe5X\xd3\xbd\x8b\xe1\xa1\xa6/\x88\x15\x97\xad\xb3!f\x9d\x15\x97\x17\
-\xaem\xe3]\x80$\xa0\xf5>\x827\xa0\xbe/\x86-\xb2\x1f\x01V\xdd\xf3\x90xT\xf7\
-"\xc0J\xae\x83\xc4\xa1\xe4E\x80\xa9%\x0b\x89\x85Z\x8e\x00\xdb\xd4L$&\x9b\
-\xe9\x08\xb0\x82f"\xe9\x90\x10%\x96\x8d\x0c3\xc9k\x11b\x85(\xb0\xdc\xaa\
-\xd1s{F/\xb7z\xf5\xb3w\x99\xb0\xdf\xfa\x99\x84\xa3\xd2K\xca\xd8\x00\x00\
-\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_fib_green_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
-\xa3\xfap\x00\x00\x05xIDATX\xc3\xbdXK\x8f\x1c5\x10\xb6\xfb5===\x99\x1d\x11\
-\x09P8\xc0"\xe0\x88\x94\x0b\x0f\x09\xf1+\x12\xa1\xe5\x02\x17~\x03\x17\xc8\
-)+$ \x07\xe0L. A$XPr\x00\x01\x127\x0e$\x12\x87\xe4\x8c\x94\x04\x10\xbb\xac\
-vg\xa6{{\xfaa\x9br\x8f=[\xed\xb8w\xf65\xdb\xd2\x27w\xbb\xec\xaa\xcfU\xe5\
-\xb2g\x1c"\x089\x01\xe8\x02\x1c[\xb7C\xda\x1fj\x81\xa3\xe0\x02<\x05\x1f\
-\x10\x00:
-\x81\xea\xd3r\x17\xcd\xb3\xe9\xb4>\x8e\x85\x8c6\xec\xb6\x18\xd5\xef! \x02\
-\xf4\x001\xa0\x8f\x10+YW\x8d\xeb\x18\xc0\xe4]D\xdaJL\x93\xf2\xd4\xc4\xae\
-R\xae\x8d\x9e30PX\x01\x0cU\x8b10\xc6\xf7Q\x1b\xab\x05i\xd2\x98`\x83\x98\
-IJ\x13\x1a CC\x03+\x0b0\\0W\x93\x8c\x10\xb9\xb9\xe701\x17y\xaag\xf1
-n\x07\x86\x27b\x03}\xe4\xa1\x81e\xee
-"\xd7S6\x03\xec5\xa7%\x84q\x0bz
-\x91B\xd8\x92C\x1d\x94
-\x11\x9ag[@lx\xad\xde\x14\xd8c\x9e\x12F\x088y\x03\x0b\xea\x04\x8e\xb6\xa2\
-\x97W\x1e\xac|0|0\xfc|\xf0p\xf0~\xb8\x1b\xbe\x80\x16j\x02\x13\xc7\xe4;J\
-\x9f\x83C\xe9 b\x8d\x9d\x03F_AF\xdf\x03\xa3\xcf\xe1\xad\xdf\xdb\xea\xbd\
-\x16\xb2\xf0\x8a\xdbw_t\x06\xce\x93^\xcf{5\xca\xa2\x0f\xc3Q\xf8,.1\xa0\xe7\
-%\xa4\xe7\x8a"\x1f\x18\x1e\x9f\xe7\x19\xae-.\xaaK\xb5\x27\xc0\xe8\xeb-F\
-W\xf5\xee\x09D\xf06=G)\xedSBc@\xbfF\x27\x9c\x86kzL\x0b\xf9\x8fA\xcf\xf3\
-\xa6M\xd3cf\xfd\xaa\x09/2\xea\x96n\xe4\x84\xce\xe34\xa4\xfb\xb3@\xb5\xfc\
-v:\xce\xd3\x87 \xff&\xb2\xdb(\xc2\x8eQ\xe5\xf5\xbb4\xda[d\x94y,\x83\xbe\
-\xc9#e\x1a\xbe\x85\x276\x0fA\xfe\x99\xb6S@\xab\x94\x27\x14\xc7-\x18\xdd\
-[dT\x9e\x86%-7\xea\x19\xf8\x11D\x14n\xb1qH\xf2\xda\xa6\xb6_kp\xd0\xd1)\x05\
-\x95\x02\x03\xa3\xccj\xb4\xe6C/\xf8\x99^\xbe\x8f\xbb\xe3\x1bUU\xdd\xdc\
-WIH\xce\xf2\xcf\xd2n\xfa\xbb\xfc\xf4s\xff\xb1Z\xa7\xb0\x90w\x8aoj[\xda\xe6\
-\x0c\x1c{L\x93*\x01\x85j+0\xfaUY\x95_\x08!\x12|pQ\x97\x9e\x8f\xc7\xf1\xba\
-[\xb8\xb26\x89\x92\x95wj\x95d\xa6%\x27\xf9\x9d:\x8c \x8fG\xf1U\xb02lp\xe2\
-b\x13\xc8\x94F\xe9o\xc8f\xa18p3\x94\xb23\x07L\x01\x99z/F\xc1\xe8\xcbm\xba\
-\xfd\xc6\x0e\xdf\xb9\\T\xc5\x27r\xa54\x80\xfc\x88\x9c\x0b\xfd\xed\xfe\xbb\
-T@\x9e\xce\xd5\xc9\x1c\x10\xf5\xbb\xec\x97r\x18\xf7\x14\xf5\xe9\xccCU\xf1\
-\xa9\xd4\xb3\xedl\xbf5\x09&?)\x1b\x99\xb2\x99#b\xf3PrDl\x0f\x90\xaav\xaa\
-\xbd\xc7\x1c\x96\x8e\xbd\xf1\x8f\x10\xb6\x0d\xb9\x1c\xda\xa5\xc4\xed\xba\
-\x17\xc1\xf8\xa5\x9a\x90h\xc6\xaa\xbf\xd5\xbf$\xe5r\x9c\x1c/\xe7\xc1\xfc\
-\x1f@\xcfD\xe9\xd4\x0e\xd8S\xc8U\xbf0=\xc6\x94;3El\xa2\xda\x0c\xb9\x99\x8c\
-\xfc\xd1u^\xf1\xbbr\x87\xd1\x88\x12\xdf\xf5\xd7\\\xe2\xaeB1\x98\x93\xf2\
-+\xd5\xf3\xbc5)\x97\xe3`\xfc=9O9@\x93\xd26\x12D\xac\xe11\x9dc\xcc2i\xac\
-\xdaL\xc9\x98\xa0\x82\x27$\xb9\x06y\x92\xd5%1"\x1e\x90\xbb\xac\x97H\x1d
-%\xbc\xf3\x0e\x90\xf2\xa4\\\x8eKIz\x0d\xe6UH\x82\xf4\x27(2\xdc\xf4\x18\
-\xf6\x1a&7\xb6M.\xfc\xe2\xdf\xb2,\xbf\x963d\xfe\xd0\x0e\x0d\xeb\x1aEf5
-\xea\xd3\x132\x0f\xa5\\\x8e\xcb\xfd\xfc\x1f\xa5;7\x16\xad\xf5\xe2\xc4\xb7\
-\x12k\xf3\x9c\x0ek\xa1\xe4$\x09\x92\xef \xd1\xb7\xe6u\x9b\x1a\xa7.\xad7\
-\xc20\xee{\x14\xc2\x0cy\x0b\x93bF\x1d\xb3\xde\xf9M\x82\x19\xda\x0c\xf3\
-<\xe0\x0e/\xa1\x94|k\xabs5I\xe9-\x90\xc3\xb8\xdc\xc8_\x9d\xecVB\x07\x11\
-3C\x8b\xcb\x08\xce\x05\x92\xfa\xe9/\xe0\x95\xd2:\x19\xfaA\xfesK)*q1=\xcc\
-\x8f\x916r%\xaa5Z\xa9<\xb6R\xd8q\xb7-U]\xee\xc4\xdbRn\x94"\x1c:q\x90\xe1\
-E\xc4\xccR\x92\x9b\x8aKQ\xfe\xfa\xc8\xba\xb9\xeao.\xac0K\xc2i\x11\xab\xf0\
-q\xa5\xc30\x0d\xa6@\xd8\x84\x11F!\xfb-\xc4\x16\x86\xf0(\xc4\xcc\x90b\xe5\
-\xa2\xf2\xaa\x04\x88\xdc7\x88\xdd\x97\xfd\xc6\xa2\x1a\x0b:mb\xf8&07\xc0\
-9\xffs\xfe\xc5\xd5\xf7~\xe1n\xdeZ\x16\x84\xf0\xa8\xc4Lr\x0c]\x97\xe49\xf9\
-7\xbe\xf6\xd4\xdf\xfbr\xbc \xbe,b\xdc@m\x84\x0b\xbe\xd9\xf0\x98\xe0[\xc6\
-xv\x14RG%F,\xa4f\xc4\x08\x1fc\x8f\xc1\xf7\xc8\xf8\xff\x86/\x93\x98\xb0x\
-\x0d\xf5\xcdl\xca\xeb\x8f\xa0<i\x19K\x96\xe51a\x84\x86\xef\xe7Yc\x908h\xec\
-2\x895\x0d\x1a\xe6\xe0\xf6\xea\x19\xe3\xd8Yx\x8c\xa1\xed_!\x02&1v\x9c2q\
-\x92\x1c\xc3\x85\xb6\xc4\x87:z\xda\xaa\xbdX\xb6\xc7
-t\xa8\x17\xcce1\xc1n1\xc6nq\xc1n\xc2U\xe7\xa1\x92\xe5\x88\x1c_v(+D\xac\
-\xbe[M{\xd3{\xbb\xe1\xee\xfa\x8e\xbb\xb3\xbe\x13\xee^\xcd\xe2\xec\xae\x92\
-e\xe8\xe0\x16g\xe91}\x89L\xd5\x8d\x14\xb7&1~\x16\xe5\xa2B\x1e\xc3\xd7\xef\
-\x89A\xec\xd0\xf7\xaf\xd3$\x86\xea%\x16r{G\xb9\x9d\x94\x18\xb1\xdc\xb1\
-\xcc\x90\xee\x19\xb7\xdd3%\xc6-\xffw\x14\xc6.\xac\x8eS&\xf4\xf3?3\xf0\x9d\
-m\xd1v\xe0\xc4\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_chevron_up_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
-D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
-\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
- \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_align/pnl_tab_sparc_align_xrc', bytearray(pnl_tab_sparc_align_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_align/______img_icon_ico_cam_png', bytearray(______img_icon_ico_cam_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_align/______img_icon_ico_cam_green_png', bytearray(______img_icon_ico_cam_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_align/______img_icon_ico_ang_png', bytearray(______img_icon_ico_ang_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_align/______img_icon_ico_ang_green_png', bytearray(______img_icon_ico_ang_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_align/______img_icon_ico_fib_png', bytearray(______img_icon_ico_fib_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_align/______img_icon_ico_fib_green_png', bytearray(______img_icon_ico_fib_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    __res.Load('memory:XRC/pnl_tab_sparc_align/pnl_tab_sparc_align_xrc')
-
-    pnl_tab_correlation_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_correlation">
-    <object class="wxBoxSizer">
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxBoxSizer">
-                <object class="spacer">
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                </object>
-                <object class="sizeritem">
-                  <object class="ToolBar" name="correlation_toolbar">
-                    <style>wxVERTICAL</style>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxALIGN_RIGHT</flag>
-                </object>
-                <object class="spacer">
-                  <option>1</option>
-                  <flag>wxEXPAND</flag>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_correlation_view_all">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_correlation_view_all">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_correlation_view_tl">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_correlation_view_tl">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_correlation_view_tr">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_correlation_view_tr">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_correlation_view_bl">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_correlation_view_bl">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_correlation_view_br">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_correlation_view_br">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxALIGN_RIGHT</flag>
-                </object>
-                <orient>wxVERTICAL</orient>
-              </object>
-              <option>1</option>
-              <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_up_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
-              <border>10</border>
-            </object>
-          </object>
-          <size>200,-1</size>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="ViewportGrid" name="pnl_correlaton_grid">
-          <object class="MicroscopeViewport" name="vp_correlation_tl">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="MicroscopeViewport" name="vp_correlation_tr">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="MicroscopeViewport" name="vp_correlation_bl">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="MicroscopeViewport" name="vp_correlation_br">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-
-
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_correlation_streams">
-                        <object class="StreamBar" name="pnl_correlation_streams">
-                          <size>300,-1</size>
-                          <add_button>1</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>STREAMS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem" name="fp_meteor_correlation">
-                        <object class="wxPanel" name="pnl_meteor_correlation">
-                          <object class="wxBoxSizer">
-                            <orient>wxVERTICAL</orient>
-                            <object class="sizeritem">
-                              <object class="wxStaticText">
-                                <label>Instructions: \n    Select a stream to move. \n    Shift + Left Click to Move the Stream.\n    Use the arrow keys to move Up/Down and Left/Right. \n    Shift + Arrow Keys to control Rotation and Scale. </label>
-                                <fg>#E5E5E5</fg>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <flag>wxALIGN_CENTRE_VERTICAL</flag>
-                              <border>5</border>
-                              <flag>wxEXPAND</flag>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxCheckBox" name="ctrl_enable_correlation">
-                                <label>Correlaton Enabled</label>
-                                <fg>#E5E5E5</fg>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP|wxLEFT</flag>
-                              <border>5</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxFlexGridSizer">
-                                <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>Move Stream</label>
-                                    <fg>#E5E5E5</fg>
-                                  </object>
-                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
-                                  <border>5</border>
-                                  <flag>wxEXPAND</flag>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="OwnerDrawnComboBox" name="cmb_correlation_stream">
-                                    <size>250,-1</size>
-                                    <fg>#2FA7D4</fg>
-                                    <bg>#333333</bg>
-                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
-                                    <tooltip>Select a stream to move. Shift + Left Click to Move the Stream, Use the arrow keys to move, Shift + Arrow Keys to control Rotation and Scale.</tooltip>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>X Step Size</label>
-                                    <fg>#E5E5E5</fg>
-                                  </object>
-                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="UnitFloatCtrl" name="dx_step_cntrl">
-                                    <value>1e-6</value>
-                                    <key_step>0.000001</key_step>
-                                    <min>0</min>
-                                    <max>10</max>
-                                    <unit>m</unit>
-                                    <accuracy>3</accuracy>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                    <font>
-                                      <size>9</size>
-                                    </font>
-                                    <bg>#333333</bg>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>Y Step Size</label>
-                                    <fg>#E5E5E5</fg>
-                                  </object>
-                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="UnitFloatCtrl" name="dy_step_cntrl">
-                                    <value>1e-6</value>
-                                    <key_step>0.000001</key_step>
-                                    <min>0</min>
-                                    <max>10</max>
-                                    <unit>m</unit>
-                                    <accuracy>3</accuracy>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                    <font>
-                                      <size>9</size>
-                                    </font>
-                                    <bg>#333333</bg>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>Rotation Step Size</label>
-                                    <fg>#E5E5E5</fg>
-                                  </object>
-                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="UnitFloatCtrl" name="dr_step_cntrl">
-                                    <value>1</value>
-                                    <key_step>0.000001</key_step>
-                                    <min>0</min>
-                                    <max>180</max>
-                                    <unit>deg</unit>
-                                    <accuracy>3</accuracy>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                    <font>
-                                      <size>9</size>
-                                    </font>
-                                    <bg>#333333</bg>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>Scale Step Size</label>
-                                    <fg>#E5E5E5</fg>
-                                  </object>
-                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="UnitFloatCtrl" name="dpx_step_cntrl">
-                                    <value>1</value>
-                                    <key_step>0.000001</key_step>
-                                    <min>0</min>
-                                    <max>10</max>
-                                    <unit>%</unit>
-                                    <accuracy>3</accuracy>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                    <font>
-                                      <size>9</size>
-                                    </font>
-                                    <bg>#333333</bg>
-                                  </object>
-                                </object>
-                                <cols>2</cols>
-                                <rows>5</rows>
-                                <vgap>10</vgap>
-                                <hgap>10</hgap>
-                                <growablecols>1</growablecols>
-                              </object>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_reset_correlation">
-                                <label>Reset Correlation Data</label>
-                                <height>24</height>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <flag>wxTOP</flag>
-                              <border>12</border>
-                              <option>0</option>
-                            </object>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                        </object>
-                        <label>CORRELATION CONTROLS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_export">
-                      <size>382,-1</size>
-                      <icon>______img_icon_ico_export_png</icon>
+                    <object class="ImageTextButton" name="stage_align_btn_p_aligner_z">
+                      <size>64,-1</size>
                       <height>48</height>
-                      <face_colour>blue</face_colour>
-                      <label>EXPORT IMAGE</label>
-                      <fg>#FFFFFF</fg>
+                      <label>↑</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
                       <style>wxALIGN_CENTRE</style>
                       <XRCED>
                         <assign_var>1</assign_var>
                       </XRCED>
                     </object>
-                    <flag>wxALL</flag>
+                    <flag>wxBOTTOM</flag>
+                    <border>20</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="stage_align_btn_m_aligner_z">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↓</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP</flag>
+                    <border>20</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_mz">
+                      <label>-Z</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
                     <border>10</border>
                   </object>
                 </object>
-                <bg>#4D4D4D</bg>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            <orient>wxVERTICAL</orient>
-          </object>
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <orient>wxHORIZONTAL</orient>
-    </object>
-    <bg>#333333</bg>
-  </object>
-</resource>'''
-
-    ______img_icon_ico_chevron_up_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
-D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
-\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
- \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_export_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x1b\x00\x00\x00 \x08\x04\x00\x00\x00I\
-`\xcb\xb0\x00\x00\x02\x8aIDAT8\x11\x05\xc1\xbd\xaa\x27\xd4\x15\x07\xd0\xb5\
-\xf79\xd7\xeb\xcc0&0\x850\x1f\x85\xa6\xd5\xc2*\xa4\xc9\x10,\xec$\xe0\x0b\
-\xf8
-b-\x98\x04$E\xde$\x09\xe2W\x19\x92\x096\x926\x95ha\x13\xacR\x8d\xc8\xf5\
-\xfe\xcf\xfe\xb9\xd6\xce\xd2Jk\xadQ
-\x10\x11c\x8c\x11\x11\x11\xd8ZY\x96\xb6\xb4RJ!"\xe2\x18\xe38b@\xd8\xca\
-\xb2,\xdb\xd2Z)\x85 \xe28\x8eV\x0e\x06dk\xcbr\xe5\xca\xb2\x94\xd2
-\x041...\xda\xc5\x05\x03[k\xdb\xd5{\xff{\xe0\x0e\x00\x00y\xf0\xc1\xbb\
-u\xeb\xd6\xad\x02\x8clmY\xd6\x03\xbf\xf1\x04\x00\x80z\xfe\xc7\xf4\x9b\
-\xb34 \xb0\xb5\xd6\xfa\x8e\x27^\xfd\xfbO\xff\xbd\x91R
-\x9d\xd7^x{\xf5\xf7\x1f>\xcb\xd3\x8f\x15\x88\x11\xb5QJ\xc3\xcdW\xf7\xbe\
-\xb8K)\xad\xac\xafn\xae\xdf~\xd5\xa3\xf6\x87\xcfo?\x11\xe3\x18\x91\xad\
-\x94\x02~r/\xa2\x10\xad\xbf\xcd=\x0f\xbd\xe4Q\xe7O\xcf.O?s\\\x1cGo\x85R\
-0\x8c\x80\xd1<O;\xb8\xf6\xb8}\xf4\xec<\xfd\xcc\xad\x8be6
- \xe3\x88\xa0\x14\xe7\x02p\xed\xf1\xca\x9f\xffy\xfb\xbbO-\xad7  \xc6\x11\
-A\x99s\x00\xb8\xf6d\xe7/>\xd7ZoD\x04\xc4q1\x06\\\x1e\xff\xa7>\xfcq\xff\xbf\
-\xabT\xde\xb8z\xeb\xe1\x95\xd2Zm\x000\xc68\xc6\x88\xfe\xfd\xd7\xbes\xed\
-\xca\xd2_\xe6\xa5\xb7^\x81Rj\x03\x00"\xc61F)\x85\xb1\xad\xaf\xf3\xb2\x87\
-\xeeC\xb1\x01\x00@\x8c\xa3\xdcj\x85\xc8\xf3\xf9\x85C@m\x00\x00\x111F\xd0
-a\x06\x04\xd8\x00\x00 b\xc4q\xd1J\xa9\x0c\x88\xc0\x06\x00P\x80\x881\x8e\
-\xe5\xe8\x04@\xd8\x00\xa0\xb5\xd6\x96\xd1Fk\x85\xa2o\x02\x046J)P\x96\x08\
-\x82\xd1\xb6mY\xd6\xba\x0cP\x8a\x0d(P\x96\x00\xcah\xdb\xb6-]\x15C\x01\x1b\
-\x01\xa8\xd66\xa0\x8c\xb6l\xcb\xb2T\x00\xc2\x16D\x00\x8d\xad\x94\x12e[\x96\
-V\x80\x08\xb2E\x04@i\x85R\xa2,m)\x05 "\x1b\x11\x03\xf9\xf5\xbf\xee~\xe3\
-\x072\xc9$U\xd5]
-\xe6\xf5;\x16#\xc26\xc6\x18x\xe1\x9d_\xbe\xf3\xb2\x1b\x00\x00p\xed\x89\
-\x17\x19c\xcc6\x8ev\xe0\xae_yd\x00\x00@{\xd1\x1d\x8e\xe3\x98m\x8c\x8bz\xff\
-\xa1e\xdd\xaf\xfb\x05\x88(\x05\x888\x8e[\x17c\xb6q@,\xad\x15 \xa0\x001\xc6\
-qq\x1c\xb3\xc5\x011Z)\x05\x02
-D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
-\x19S\xec\xf0\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_correlation/pnl_tab_correlation_xrc', bytearray(pnl_tab_correlation_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_correlation/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_correlation/______img_icon_ico_export_png', bytearray(______img_icon_ico_export_png))
-    __res.Load('memory:XRC/pnl_tab_correlation/pnl_tab_correlation_xrc')
-
-    fr_main_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxFrame" name="fr_main">
-    <object class="wxMenuBar">
-      <object class="wxMenu">
-        <object class="wxMenuItem" name="menu_item_open">
-          <label>Open...</label>
-          <accel>Ctrl+O</accel>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_snapshot">
-          <label>Save Snapshot</label>
-          <accel>Ctrl+S</accel>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_snapshot_as">
-          <label>Save Snapshot as...</label>
-          <accel>Ctrl+Shift+S</accel>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_export_as">
-          <label>Export as...</label>
-          <accel>Ctrl+E</accel>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_reset_finealign">
-          <label>Reset Fine Alignment</label>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_reset_overview">
-          <label>Reset Overview Image</label>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_halt">
-          <label>Stop all Axes</label>
-          <accel>Pause</accel>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_recalibrate">
-          <label>Recalibrate Sample Holder...</label>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="separator"/>
-        <object class="wxMenuItem" name="menu_item_quit">
-          <label>Quit</label>
-          <accel>Ctrl+Q</accel>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <label>File</label>
-      </object>
-      <object class="wxMenu" name="menu_view">
-        <object class="wxMenuItem" name="menu_item_22view">
-          <label>2x2 view</label>
-          <accel>F5</accel>
-          <checkable>1</checkable>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="separator"/>
-        <object class="wxMenuItem" name="menu_item_play_stream">
-          <label>Play Stream</label>
-          <accel>F6</accel>
-          <checkable>1</checkable>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_fit_content">
-          <label>Zoom to fit content</label>
-          <accel>F7</accel>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_auto_cont">
-          <label>Auto Brightness/Contrast</label>
-          <accel>F8</accel>
-          <checkable>1</checkable>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_auto_focus">
-          <label>Auto Focus</label>
-          <accel>F4</accel>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="separator"/>
-        <object class="wxMenuItem" name="menu_item_cross">
-          <label>Show Cross Hair</label>
-          <checkable>1</checkable>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_interpolation">
-          <label>Interpolate Content</label>
-          <checkable>1</checkable>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_rawpixel">
-          <label>Show pixel value</label>
-          <accel>Ctrl+U</accel>
-          <checkable>1</checkable>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <label>View</label>
-      </object>
-      <object class="wxMenu">
-        <object class="wxMenuItem" name="menu_item_manual">
-          <label>User manual</label>
-          <accel>F1</accel>
-          <enabled>0</enabled>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenu">
-          <label>Development</label>
-          <object class="wxMenuItem" name="menu_item_devmanual">
-            <label>Developer documentation</label>
-            <enabled>0</enabled>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="wxMenuItem" name="menu_item_inspect">
-            <label>Inspect GUI</label>
-            <accel>Ctrl+I</accel>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="wxMenuItem" name="menu_item_debug">
-            <label>Show log panel</label>
-            <accel>Ctrl+D</accel>
-            <checkable>1</checkable>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-        </object>
-        <object class="wxMenuItem" name="menu_item_bugreport">
-          <label>Report a problem...</label>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="separator"/>
-        <object class="wxMenuItem" name="menu_item_update">
-          <label>Check for update</label>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <object class="wxMenuItem" name="menu_item_about">
-          <label>About...</label>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <label>Help</label>
-      </object>
-    </object>
-    <object class="wxBoxSizer">
-      <object class="sizeritem">
-        <object class="wxPanel" name="pnl_tabbuttons">
-          <object class="wxBoxSizer">
-            <orient>wxHORIZONTAL</orient>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_cryosecom_chamber">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>CHAMBER</label>
                 <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
+                <bg>#333333</bg>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
+              <flag>wxALIGN_CENTRE</flag>
             </object>
 
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_align_enzel">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>ALIGNMENT</label>
+              <object class="wxPanel" name="pnl_sem_align_controls">
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_y">
+                      <label>+Y</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>0,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_y">
+                      <label>-Y</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>4,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_x">
+                      <label>+X</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_LEFT</style>
+                    </object>
+                    <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>2,4</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_x">
+                      <label>-X</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>2,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="beam_shift_btn_p_aligner_y">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↑</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT</flag>
+                    <border>7</border>
+                    <cellpos>1,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="beam_shift_btn_m_aligner_y">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↓</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT</flag>
+                    <border>7</border>
+                    <cellpos>3,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="beam_shift_btn_m_aligner_x">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>←</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>2,1</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="beam_shift_btn_p_aligner_x">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>→</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>2,3</cellpos>
+                  </object>
+                  <vgap>0</vgap>
+                  <hgap>5</hgap>
+                  <growablecols/>
+                  <growablerows/>
+                </object>
                 <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
+                <bg>#333333</bg>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
+              <flag>wxALIGN_CENTRE</flag>
             </object>
 
             <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_secom_streams">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>STREAMS</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_localization">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>LOCALIZATION</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_correlation">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>CORRELATION</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_acqui">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>ACQUISITION</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_fastem_chamber">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>CHAMBER</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_fastem_overview">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>OVERVIEW</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_fastem_acqui">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>ACQUISITION</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_inspection">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>ANALYSIS</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_sparc_chamber">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>CHAMBER</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText" name="temperature_display">
-                <size>160,30</size>
-                <hidden>1</hidden>
-                <face_colour>def</face_colour>
-                <label>20°C</label>
-                <fg>#353535</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="sizeritem">
-              <object class="TabButton" name="btn_tab_align">
-                <size>160,30</size>
-                <face_colour>def</face_colour>
-                <label>ALIGNMENT</label>
-                <fg>#E5E5E5</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxLEFT|wxALIGN_BOTTOM</flag>
-              <border>20</border>
-            </object>
-            <object class="spacer">
-              <size>32,-1</size>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticBitmap" name="logo">
-                <bitmap>______img_logo_h30_png</bitmap>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxRIGHT|wxALIGN_CENTRE</flag>
-              <border>10</border>
-            </object>
-          </object>
-          <bg>#BFBFBF</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-        <minsize>-1,40</minsize>
-      </object>
-      <orient>wxVERTICAL</orient>
-      <object class="sizeritem">
-        <object class="wxPanel" name="pnl_log">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_down_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Close log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALL|wxALIGN_BOTTOM</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxTextCtrl" name="txt_log">
-                <size>-1,200</size>
-                <value>Log message panel</value>
-                <bg>#1A1A1A</bg>
-                <font>
-                  <size>10</size>
-                  <face>Monospace</face>
-                </font>
-                <style>wxBORDER_NONE|wxTE_MULTILINE|wxTE_RICH</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <orient>wxHORIZONTAL</orient>
-          </object>
-          <bg>#1A1A1A</bg>
-          <hidden>1</hidden>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-    </object>
-    <title>Odemis</title>
-    <centered>1</centered>
-    <bg>#000000</bg>
-    <font>
-      <size>9</size>
-      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-    </font>
-  </object>
-</resource>'''
-
-    ______img_logo_h30_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00n\x00\x00\x00\x1f\x08\x06\x00\x00\x00\x06\
-%\xf8\x9f\x00\x00\x05~IDATh\xde\xed\x9al\x14E\x14\xc7\xaf\x15\x14\xa8\xa8\
-%\xd6\x14)Ek!\xde]m\x8aBbE\x12\x14\xa2"\x10\xf5\x0f\xc4\xf8\xa3T\xa2\x8d\
-\x06\xee\xae\x15\xa9\x8d\x8a\xbf
-*\x8d&\xd0\xa8\x80\x08%\xbb\x07\x84B\x8d\xb1\x15AI\xce\x1f\xfdGS11\x1a\
-c\x8c\x12IS\xd4b\x94\x08\x82B9\xbf\x03\xef\x92ux\xb37{\xbb=\x8f\xeb\xbd\
-\xe4\x93Mn\xdf\xcd\xcc\xcdwg\xe6\xbd\xb7\xe7\xf3\xe5,\xed\x16\x8cD\xa7\x06\
-\xc2f\x1f\x88\xa7\xc0\xd1@\xc8x%7\x8bi6\xd8\xa8\xc0\xe4\x1fJA\xb0\xc3\x81\
-Ht\x8d\xbf\xde\x1c\x9b\x9b\xc5t\xaf\xb4\x06\xb3<\x85\x95v\x10<WV\xd7~qn\
-\x06\xcf\xd800\x13\x8c\x007\x83\x91t\x1d\x05n\x02\x05`\x06\x18\xedEg\x95\
-\xa1hI \x1c\xdd\xaf-X\xc8\xfc\xde\x1f6#W\xd4\xb6\x8d\xc8I\xf5_\x9b\x0e\xe2\
-`\x19]\x1b\xe9\xdaD\xd7\x27\xe9\xda\xe0\xb6\xa3\xf2\xd0\xa6\xa2@\xd8\xf8\
-VS\xb0/\xfc\x11\xb3\xc67\xbf\xfd\xbc\x9cD\xbc\x0d\x07w\x80\x0b\xe9*V\xd6\
-c\xe0R\x12\xeb2\x10\x01\xc5`2\xadD\xc7VU\xdfv\x09\x04\xd9\x97T\xb0\x88\xd9\
-\x1d\x0c\x19\xf3r\xb28\xb7k\x14+\xeeip\x8a>w\xb6=>n\x14\x08Al\x04\x1b@\xb0\
-\xd2Y\xb1\xc4\x98\x92\x8e\x1fx+\xe8\xb1\x10\x03\xf9\x83\xd8\xdf\x1c\xa9\
-\xbf\xceA\xeaGlM\xf7\x831\xe0>\xcb\xca\xbb\x9cV\xdexP\x06\xce\xd7i\xac\xa4\
-\xa1}\xa4?d\xc6\x14\x82\x1d\x0f\x86\xa3\x86?\xbceb:\x9f\xcc\xc5\xf4$Z\x19\
-6\x88\xfd5H}\xfd\x99\xa6\xdfYB\xfd=\x05\x06\xc0\xb3\xe0$]m\xed\xba\xba\xf5\
-\xc3\x83\x11\xb3+\xd3B\xfa\xa1"\\\x1ex\x14\x8c\x03u`\x02\x8d\xa5\x1c\x14\
-\xd1
-=\xdb\x10T\x04\xc3\xe6\xb6L\x0c\xe9\x87\x8ap\xb2\x89I\xff\x1b<\x0f\xfe\
-\x02+\xcev\x89\xe7A\xb4\x0d\x99\x1a\xd2\x0fU\xe1|\x14u\xfaA\x18TP\xae\x97\
-\x97\xb8)JQB0\x88\xd7\x93\x89!\xfdP\x16NN\x27~\x03/\x9d\xae\x8aD\xa2\xcd\
-"B\x0cF\x8c\x1b\xff\xb7r\x1ax\x06\xbc\x0d\xf6\x82\xed\xb4\xc7\x8fv!\x9c\
-8\x13\x1e\x02m`\x17x\x0fl\x045\xa0\xd0\x03\xe1*\xc5\xe9b\xe1Z\xcb\xbd\x00\
-mk\xe2\xf7\xec\x01o\x81\xdb\x99HXl\x85\x8b\x80\x01>\x04]`9E\x95*\x13)\xc2\
-\xf5\xa7\x27m\xf1\x96\x09\x1as{\x01\xb8\x13\xac\x06\xefP?\xdbi|\xd3\xad\
-\xab\xd7\x89\x89}x\x1dEPq\x86\x83`\xb6C\xe1D\xd2\xfa2\x9d\x09q\x05\x87\xc1\
-\x13\xca\xc3^O\xb8\x0e\xc9\xe7}zX\xb6\xd9\xf4\xbb\xd3\x12\xda\x8b\x07\xe8\
-\x90\xc2\xef\x0f\xe0\xc5*z\x18\xf4\xda\x8cG\xf0\x0d\x09\xe8h\xd9\xefM\xd2\
-\xa8\xe0\x1f\xca\xa5t\x84\x13\x95\x87\xcf4\xda\xe4&\xd2\xadp?\x81\x1f5\xfa\
-l\xb2$\xdav\x1c\xd0\xcd\xdf\x14\xf9\xa1\xe1`\x1eD\xca\xf1\x80n\xe3+\x1c\
-4\x1c\xd7\x10N<\x08\xdd
-\xdf_A\xbf\xe2\xde\xab\x1e\x09\xa7\xcb)\x07\xbe\xb3\x99~/\xa2\xad\xbe\xd0\
-f\xcboMa\\\xbbuD\x13+\xe3\x18\xf3\xe5\xef\xc0#\xa0\x9a\xaa%bR\x8fh
-\xd7\xc4\xf8\xb4Q.\x94\xb0R\xb0\x81\x99\xc8*\x8f\x84\x13mm\x05s}g\xaa\xfc\
--\xf44s\xe3\xff\x9a\xce\xe0i`!\xadX\xd9\xa7Q\xea\xb3\x98\xf1\x99)\xf9LS\
-\xf4\x27\xce\xf8\x05`*\xb8\x0d\xbcA\xbbY\x9cv\xbe\x02\x1d\xe1\x962\x0dw\
-+\xbe|%\xf8!\x89p\xa3\x98\xf3b\x87M\xff\xf26bz \xdcI\x9a\x18\xd961c\xef\
-\xa0\xa0\xc1j\xd5\x8c\xdfJ\xc9\xa7TcU\xeea|\x96)\xe6a\x16\x05N\xda9_\x97\
-\xd4\xf0\x09\xaa\xc9\xe9Fy\xb2ps\x99\xfbv59y\x02~\x97\x02\x95T\x84\xfbH\
-\xd1W\x0d3\xb6I\x8a\xaa\x89\xbc\x0b\xbd\xe8P\xb8B\xcb*J\xf0\x81\x97\xe1\
-\xff\x01\xa9\xf1\x98\xcb<n\x15\xf3 \xb4Pt\xc9\xb1\x8a*\x12\xd6\xefT\xba\
-\x14n\x97b\xecw1c/U\xf8\xf6\xbb\x14\xee\x16\xe6\xfe\xdd^
-\x27\x9f[\xaf\xb9\x14\xcet\x19\xe8\xc4i\xdf?\xd7\x85\xabe\xee\xfb\xbd\x14\
-\xee\xb8\xd4\xf8\x1a\x97\xc2m\xf5@\xb8{\xb3@\xb8E\x9a\xdbr\xca\xd6\x275\
-\xde\xe9R\xb8\xd5Lt\xf7&X\xaf\x89(\x02\\\x9d\x05\xc2\xcdc\xee\xcf\xf1R\xb8\
-O\xa5\xc6\x8f$)C-I"\xdc\x83\xcc\xfd\x1b\x06\xb9V\x99\x89\xc2\x8dc\xf2D\xc3\
-K\xe1V*r.\xaen&\xfe\x09\xf5q\x12\xe1\x8a\x99|)\x96\xa4\xf2\x90gS6;W\x85\
-\x13\xb6O\xba?`\xb3\xea&\xd1\xa2\xd0\xb6\x80\xa2\x82\xd0A\xc9p>U\x08\xe6\
-S-M\x27\x01\xdf\xcc\xf8\x88-x<#\xd8,*\x8d\xbd\x9b\x85\xc2-`|D\x04\xdd\x0c\
-\xae"\x9f1T\xc4O\xf4\xd7\xea\xa4\xd8\xbc\xd3eYH\x16N\xbc\xf6\xffEQ\x87\xfb\
-\x9c\x12\xf2\xdd\x8cOm\x96\x09\x97O\xbf\xd3ip\xb6NW\xb8"&\x9fS\xd1\xafY\
-d\xae\xa6d\xda\xc9\x80{\xb3L\xb8D"\xde\xe3p\x1eZ\x9cl\x99b _\xda4v\x82*\
-\xe9N^\xeb\x88\xffg|\xa29\xd8\x98\x14Mf\x8bp\x89\xd8`-\xcd\xa1\xdd\x1c\x1c\
-\x05\xf5\xa9\xbe\x82XH\xcb\xbb\x8fr\xbc\xfdTCKT3\xaa\xa4\xf0\xbdEcO\x16\
-\xe9~\x1d|Eo\x07\x8e\xd1\xea\x12\x81\x8ex\x83<\xd9\xe6\xbbS\xa4\xfe^`|\
-\xee\x91|T\xafE\xcah\x1bJ\xf8\xb5\xd2\xa4r\xb6\\js\x06#F\xab\xe5\xfeZ\xe6\
-\x0c\xe7\x02\x90f:.~\xa6\xf3\xae\x97"\xfbF\x8aD\xb5\xec_\xb2\x15\x0de\x9a\
-B\xccb\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_chevron_down_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00FIDAT\x08\xd7\x8d\xcc\xb1\
-\x0d\x800\x10C\xd1\x27\xdd\x10\xdc\x0e\x19\x92\xb0W`\x9a4\xd9\x82"
-J\xc9we\xc9\xfepX\x1cPt\x09RW\xa0jBh\xae9\x0c\xb7\xea\xf4\x88\xf5L\xc3\
-\x90\xbbc\xe6\xb7\xc3\xe7\xd8\xc8U_r\x94\x13[\xf2\xfb=i\x00\x00\x00\x00\
-IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/fr_main/fr_main_xrc', bytearray(fr_main_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/fr_main/______img_logo_h30_png', bytearray(______img_logo_h30_png))
-    wx.MemoryFSHandler.AddFile('XRC/fr_main/______img_icon_ico_chevron_down_png', bytearray(______img_icon_ico_chevron_down_png))
-    __res.Load('memory:XRC/fr_main/fr_main_xrc')
-
-    pnl_tab_mimas_align_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_mimas_align">
-    <object class="wxBoxSizer">
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_position_btns">
+              <object class="wxPanel" name="pnl_flm_align_controls">
                 <object class="wxBoxSizer">
-                  <object class="spacer">
-                    <option>1</option>
-                  </object>
+                  <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="ProgressRadioButton" name="btn_position_opt">
-                      <icon>______img_icon_ico_optical_png</icon>
-                      <icon_progress>______img_icon_ico_optical_orange_png</icon_progress>
-                      <icon_on>______img_icon_ico_optical_green_png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <tooltip>Engage the optical lens</tooltip>
-                      <label>OPTICAL</label>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                      <size>130,-1</size>
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_y">
+                          <label>+Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>0,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_y">
+                          <label>-Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_x">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_x">
+                          <label>-X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="flm_align_btn_p_aligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>↑</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>1,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="flm_align_btn_m_aligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>↓</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>3,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="flm_align_btn_m_aligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>←</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="flm_align_btn_p_aligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>→</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,3</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_pz">
+                          <label>+Z</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>0,5</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_mz">
+                          <label>-Z</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,5</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="flm_align_btn_p_aligner_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>↑</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>1,5</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="flm_align_btn_m_aligner_z">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>↓</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>3,5</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
                     </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
-                    <option>0</option>
+                    <fg>#E5E5E5</fg>
+                    <bg>#333333</bg>
+                    <hidden>0</hidden>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                    <flag>wxALIGN_CENTRE</flag>
                   </object>
-                  <object class="spacer">
-                    <option>1</option>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ProgressRadioButton" name="btn_position_fib">
-                      <icon>______img_icon_ico_sem_png</icon>
-                      <icon_progress>______img_icon_ico_sem_orange_png</icon_progress>
-                      <icon_on>______img_icon_ico_sem_green_png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <tooltip>Use the FIB for imaging and milling, with the optical lens retracted</tooltip>
-                      <label>FIB</label>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                      <size>130,-1</size>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
-                    <option>0</option>
-                  </object>
-                  <object class="spacer">
-                    <option>1</option>
-                  </object>
-                  <orient>wxHORIZONTAL</orient>
+                  <flag>wxALIGN_CENTRE</flag>
                 </object>
                 <fg>#E5E5E5</fg>
-                <bg>#444444</bg>
+                <bg>#333333</bg>
+                <hidden>0</hidden>
+                <XRCED>
+                  <assign_var>2</assign_var>
+                </XRCED>
+                <border>10</border>
+                <flag>wxALIGN_CENTRE</flag>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
+              <border>5</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>Step size</label>
+              </object>
+              <flag>wxBOTTOM</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="UnitFloatSlider" name="controls_step_size_slider">
+                <size>-1,20</size>
+                <value>0.000001</value>
+                <min>0.0000001</min>
+                <max>0.001</max>
+                <unit>m</unit>
+                <scale>log</scale>
+                <accuracy>2</accuracy>
+                <fg>#E5E5E5</fg>
+                <style>wxBORDER_NONE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
               <flag>wxEXPAND</flag>
-            </object>
-
-            <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_reset_alignment">
-                <height>24</height>
-                <label>Reset Z alignment</label>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxEXPAND|wxALL</flag>
-              <border>10</border>
             </object>
 
             <object class="sizeritem">
@@ -8748,6 +6061,19 @@ IEND\xaeB`\x82'''
             </object>
 
             <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_custom_alignment">
+                <height>24</height>
+                <label>Move to the latest custom alignment</label>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND|wxALL</flag>
+              <border>10</border>
+            </object>
+
+            <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>______img_icon_ico_chevron_up_png</icon>
                 <height>16</height>
@@ -8769,10 +6095,28 @@ IEND\xaeB`\x82'''
       </object>
 
       <object class="sizeritem">
-        <object class="ViewportGrid" name="pnl_viewport">
-          <object class="LiveViewport" name="vp_optical">
+        <object class="ViewportGrid" name="pnl_two_streams_grid">
+          <object class="RawLiveViewport" name="view_FIB">
+            <size>400,-1</size>
             <fg>#BFBFBF</fg>
             <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="view_SEM">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="view_FLM">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>0</assign_var>
+            </XRCED>
           </object>
           <XRCED>
             <assign_var>1</assign_var>
@@ -8792,18 +6136,30 @@ IEND\xaeB`\x82'''
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
                       <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_streams">
+                        <object class="StreamBar" name="top_settings">
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
                         </object>
-                        <nocaption>1</nocaption>
+                        <label>TOP VIEW SETTINGS</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
                       <bg>#333333</bg>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="bottom_settings">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                        </object>
+                        <label>BOTTOM VIEW SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
                     </object>
                     <option>1</option>
                     <flag>wxEXPAND</flag>
@@ -8833,190 +6189,369 @@ IEND\xaeB`\x82'''
   </object>
 </resource>'''
 
-    ______img_icon_ico_optical_png = b'''\
+    ______img_icon_ico_enzel_z_align_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x04\x00\x00\x00\x1d\
-X\x8a>\x00\x00\x01\x08IDAT8\xcb\xed\x95;\x8e\xc20\x10@\x1d\x96\x9f\x96K\
-p\x8a\x04$\xb8\x00\xe7\xe5\x00\xb1A\x14\x1444\x11B v\x11Z\xd1\xb0\xc5.\x10\
-\xdbc\x13
- 8\xfe\xc45Lg\xd9O3o\xfc\x0b$\xf2\x8d
-zi\xa4\x9a\x1fD\xcd\xfao\xb5\xa1.\x91\x086\xa3\xb6\x01\x19\x9cg\xd3\xcf\
-~\xa0 \x02\xfdcc\x16\x84j\xa4\xd5\xffP\x10\x86\xd2\xd8\xe2B\x09\x14j\x07\
-\x94b\x1b2\x01^@\xbe\xa2\x95\x05\xe9\xfe\xf1\x99TL\x18q4\x99\x11\xa1\x94\
-Ec\x07\xa2\xdad\x08v \xe9\x18\x9e\xd2\xc06\\:\x90\xee\x81\xcf\xa5\xc5D{\
-`\xf26E\x13-BG\xc2b\xa2G\xf0ck`\x17.J \x9d=$w\x13\\\xf2\xf0\xdfl\x84\xa6\
-,\x03r\xdb\x1b\xee\x8f\xc0O\x98\x94D\xa2o\xbe6\x99\x18/2\xcf\x1a\xad71"\
-\x14\xc3\xd5$\xf6@\xd2\xcc\x06\xf64\xf1@\xa2%\xdb\xb1\xb8\x27\x9d/\x8c\x92\
-g\\\xe2Q\xca\xc7\x89\x00\xf1D\x8eC\xb1\xd5\xcf\x04\xef\xcf\xc23.\x1eK\x8a\
-:p\x8a\xcb\x18\x00\x00\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x04\x00\x00\x00\xbe\
+\xaa2\xfb\x00\x00\x03iIDATH\xc7\xe5\xd5]HSa\x18\xc0\xf1\x07MTrJ\xa2\x81\
+&\x05eP\x17\x05EE~l\x13\xa5\xa9\x99f\xa1NM\xc5\x8f\xb9\xce\xe6\xfc@SWF\x9a\
+\x8520\x9b\x12Dn\x9a\xce%\xcdM\x05\x9ds\x92\xc7V\xcd\x8a\xa0\x84\x82\xe8\
+\xa2\x8b
+\xea\xa2\x1b\xa9\xc00\xac\xa7\xf7L\xf7U\xa1;\xda\x9d\xfc\xe1\x0c\xb6s~\
+\x9c\xf7e</ \xfc\xbf\xfe#\xb5q1\xa9\xbd\xc8:lp\xab\x0e\xa5\x11"\x10\x01\
+\x05b\x90\x90+\x93te\xec\xbc\xbd\x80n\x1crK\x8dr?\x91\xf7\xda00<\xb3\xe2\
+cGV4<\x91\x93\xf7\x12\xb3\xc14\xce\xaa,.\x98\x05\xfbd}\x84\x11s(\xa1x\xab\
+\x87X\x87\xb3p\xf3O\x276\xb1\xa8\xdc\xaa\x84j\xa8Nn\x9c\x97\x8fJ\x02\xd8\
+b0<eu,r\xc8\xac\x84\x1aRK\x87\x06U\xd8\xa0\xa3\xfc=\xc0n\xbbV|\x19\x9b\
+\xc6\x9e\x82\x1e\x06\xdb\xeb\xed$\x9a\x19N\xcfp\xab`\xd7]\x0b2-0\xd4\x0c\
+\x9a\xbe\xb7s\xda\xa1
+.W\xe9\xf0\x01y\xcf\x09\x863P\x01l00\x0c[m\x8b\xd4\xeb\x18\xaa*\xa2\xf3\
+\x91\x89\xd0\xcc7f\xf2W\xb98.\xdd\xb1"\xd6\xed^\x06M\x1e\xa5Q\x9d\xae\x06\
+\x194\xa4i\xd1\xe2\xd8\xc5\x89\xc5[/\xe4\xe9+b\xd7\xdc\xf3\x1b\xff2\x83\
+\xc6\xb96_\x19\xc8\xfc\xda\xf4ch\xb5-\xdb\xfa\xcd\xf2\xd4\xd8\xa4\xda)\x07\
+6\x18\xe8z-\xa8S\xb5A=\xd4G\xf5\xfc\xa0\x09\xf4\xe8\x13=8Z\xa0\xf57\x82
+V\xc1x\x10CnrI0\x86]\xf1]p\x05\xae\xe4\x1apzv\xb2u(\x81\x86Q\xd0\x82\x87\
+\x18\x17\x14\xce\xbc{\x9f+\xbc\x14p\x15\xae\x86i\xb3\x07\xf6p\x81O\xee\xe1\
+\xb1\xc1\xe2\xc85v\x99\xeb\xb5]\xf9\x84#\xbf\xf9sw\xf1\x1byI<\x1b\xc8
+\x8b%\x04\x1f\xa2Iq\xe4S\x00\xbc\xa3\x09\x9d)/\xd3\xe7\x92\xd5\xc9`\x8f\
+-\xb6)\xda\x8b`\xd9\x82W\x27\xbf\xe6`1\x96\xa2\xf0\xa9\x10\xec\xb1\xc3N\
+&\xcc\xc6\xf7\xc5\x05\xa6\xc4\xe4\xe1\xd9\x85\xb2\xcf\xb2a\xf1\xe9,N\x16\
+\xd8\xf3\x0c\xdb\x12{0v\xaf\x00RM\xb9\x98\x89I\xf1iA\xc5C\x92"Q\xb0\x8c\
+\x8c\xa1,\xf0\x1c\x0b\xe4\x1e\x88+\x12\x8c\xa4`\xe2\x94\xc0WxA\xfa\xb1\xe4\
+ujd\x1a\x14\x93\x91(\x02v\xd8\xa1c]\x27>g`\x01\x96\xa0p\xfa\xf8v!\x14\xc6\
+\x9f\xd9\xcd\x27\xefK\xb1\xc7\x92\xf2\xb2Q\x84\x92OR=U\x93\x13\x95\xc8I\
+$\x8b\xa6\x80\xef\x15\xc3\xa1\xa0\x0c*\xa1\x82\x0d\x96\xba\xad\xb0URS\x1a\
+\x93\xbf\x99\x82\x1c`(n\x10\x95R\xd9Y\xae\xa6\xc2\x970\xf7V\xc6\xa0\x90\
+,\xa7\x14\xf2a\x09#\x0f\x1cm~s\x03;\xf0\xd2L\xd9\x91uaML\xe7\xfaM\xa0\x09\
+5\xd8\xf2\xbe2w\x8dX\xcdr\xca\x01\x13\x19<V2\xd5\xee\xa2\xe2U\xc5\xbe\xf5\
+`>\xaa\x274.\x0d\xefi\xbc\x83\x8d\x92rp\xcd#Ln/L\xf3\xd29]\xc7\xf1\xba\xb6\
+\xdcg\xed\x18\xf4\x8f<p\x9c\x9e4v\xa8;\\\x07\xce<\xc0\xd4\xae\x95\xd0\xf3\
+3\xcb\xd8C\xd4c3\xc5j\xcf\xfe\x18\xdd\xa1\xc6w\xf6\xc3\x98\x1cz\xd8q\xaf\
+"d\xed\x18\xe8\xf4\x0f\x1d\x0b\x9dZP\xdd\xac\x0d\xad\x05{\xab`\xaa\xbf\xcb\
+\xa4m\xdb\xca\\n\x88R\x06;\xa9U0\xc5\xbf\xf2\x1b,5\x9e\x1a\xd9\xa7\x09\
+1\x83\x01\x94\xe01\xb6\x9e6\x08\xf6\x1b\xf7\x93\xa6&\x19:\x13\xc2\x00\x00\
+\x00\x00IEND\xaeB`\x82'''
 
-    ______img_icon_ico_optical_orange_png = b'''\
+    ______img_icon_ico_enzel_z_align_green_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x06\x00\x00\x00\xb7\
-QB\xb5\x00\x00\x02\xe7IDATH\xc7\x9dW]o\xd50\x0c=N\xfa\xb5\x81\xe0\x05^\xf9\
-\x03\xfb?\xfc\xcd\xbd\xf2\x17\x90\x906\xad\x17!M\x80&\xc1&`0\xf6\x80\x18\
-\xebml\x1e\x96\x14\xd77i7"E\xa9n\x1b\x9f\x1c\x1f\xdb\xf1%9|\x063\xa8\xb0\
-\xdag\x00\x90\xc2:{\xae\x8c\x01g\xa6\x8f+\xa9U\x1b\x11\x00\xacfP\xcf\xe9\
-\xbdT
-\xc0\xc7Y\xc5Y\x03h\xe2\xb3W\xc0d\x00\x02\x80\x11\xc0\x16\xc0\x10\xd7Q\
-\x01\xce@\x9c2\xdc\xc5\xd9\xc6\xdf4P\x1a\xe9\xc4\x09\xe0\x16\xc0\x9f\xb8\
-\xdeF@\x01@\x95\x02\xf0\xd1\xe0\x1e\x80\xfd\xb8v\x11T3\xd1\xee\xd2 \x89\
-\xb5\xb3n\xd4L*\xc5b?\xceV\xb1\xa0\x8c\xf0\x1c\x0fV\xabo\xc4\xb8\x10V\x93\
-\xd6\xb8\xaaQ\x9bs\xc3j\x85\x08\x90\xdc\xe7\x92\xbb4H\x1d\x8d\xb7c\xc0\xa3\
-\xf3+>t\x84\xba\x840\x0b3\xc1\xb7\x17\xcf\xdd\xcbx0\xcd\x0cV\xf8\x14a\xbe\
-\xf2\x08O\xf7\xe9\xb4\xa9p\x805\x10\x01\x86\x80^E\xa6\x0e\xfd\x09D\x0c\x18\
-\x01\xa0\xdac\xd3\xd5t\xe0\xdc2\xc8\xc8\x00\x06\xe9\xed\xfe\xf4\xdee\x92\
-\xeb_f\x136A\xb0:\x98\x81\xca\xa3/$\xab8\xfb\x83\xde\xdc\xd5\xf4\x8eY\xc2\
-:\x88\\\xb65}1vR\xd6O1\x9d\xc2.\xe8\x97\xde\xe1\x86\x05\x1fdE\x0f\x16lL\
-\xfd\xd2\xb6&w\xb1z1j fld\x01\x85\x05\x10\xc1\x89\xb23\xda\xb2\xe2\x0c\xba\
-\xad;\x00a\xc3\\\x06\x09\x0cx?1\xd1I8jwa\xe9\x83\xb6\xa2\xb7\x81\xcb\\\x98\
-\xe5{W\xd3\x85)\x96\xe9\xa0\x82L\xc1\xdb\xad\xa0\x1e\xbfXp\xb6\xa2\x07L\
-\x1d\xdbZ\xe1a\xca\xf6\xd6\x9e\x84\x05\x1b\x96\xa2\x1e\xfd\xda~\x9b\x27\
-\xfa$\xd3G\x90\xbc.Q\x8f>\xa3\xe9\xa8\xd3\xa1T\xbag\xe27\x15\xe5\x99\xb0\
-\\u5\x9dg.\xafP\x02AF|\x06 u\x85\xeb\xc0\xf29\xa3GoR`G\x8fRY\x19s\x11bu\
-\xc9\xe8\xa1\xf7\xf1\x12\x13.\xe6\x8b\xd1%0\xe0\x1d\xfa\x82\xabf
-\xba\xcc\xd5\x10\x8c\xf8)\x94\x0d\x13\xf9\xd95\xf4)\xe3\xaa\xd1\xd6\xc0\
-\\\x11\xe7\x8c\xcb\xb8\xad\xe9\x92Y\xbeNz\xf0\x8c\xc5\xd6\xea\xb8\xc6\xc4\
-&\xd5\x04\xc4rW\xc7\x94\x1e:\xc3\xb3\xa2/1\x09\xb9>J\x04\x27A\xee\xf4p\x0e\
-G\x99\xefv\xf4\xb0\x1ddN\x97A5\x04\xf0\x0e\xc7\xcc\x00\x8b\\\xef5\xf41\xbe\
-\x1f\xcca\xe4> \xba\x8e\xcd@\xba\x86\xcen\x06\xf9\x11K{j\xe0RC\x97u\xd5\
-\x12\x93\xa4\xcbml
-\xa6\x1ek\x0c8\x02p\xac\x8c\xff\x17\x88\xaec\x83\xba=C\x04y]y\xbc\x01\xf0\
-[1\x1dTd\xe1!\xee
-q\xb3\x0e\xeb\xca{\xbcz\xdc\xd1\x85\x8a\xa6\xe4\xd6\x90c\xb1\x04\xa2\x0d\
-\xeb\xae\xd0?\xd9\xa3\xf7\x8ai\xf6\x92z\x88\xbbXEK2\x96ZR.\xcc\x073\xd1\
-m\x8dn\xd8\xa8\xd0\xfa\x14\xaf\xe85\x90|\xd3\xb7\xfeW\xee\xde 9\x039\x90\
-\xd5\xf1\x17\xd4J \xcc\xefpSj\x00\x00\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
+\xa3\xfap\x00\x00\x06\xf1IDATX\xc3\xed\x98ml\x14E\x18\xc7gfwvoo\xefz\xd7\
+\xb7;O\xaf\xa5\xda\x12C\xa5*\xcaKL\x89F\x89\x09Q\xf9@$&bD1\xd1\x0f\x12A\
+\x8c\x021~\xd2\x98H\x0c""\x9f\x14\xaa($\x12\x88
+\x12C\x02\xc1\xc8\x9b
+I\x13D\x09R\xb5\x17\xd4ji\xef\xe8q{{\xb7\xaf>\xb3\xee\xd6\xe1\xda\xc2\xb5\
+\xa01\x86\xb9<\x99\xd9\xb9\x99\x9d\xdf\xfe\x9fgfv\x16\xbb\xae\x8b\xfe\x8b\
+\x89\xfc\x27\xa9\xae\x82\xfd\x9f\xc0\xc4\xa0\xb0d\xc9\x92j\xfb\xb4E"\x91\
+\xd3\x94\xd21\x1b\x98\xa6\x89
+\x85B\x13\x14a\xd7\x8e\xe3x&\x08\x02\xe2\x27\x1b!\xe9\xb2a\xc3\x86\xb1\
+\xc1b\xb1X\xb5`\xbf\xb7\xb5\xb5\xa1x<>f\x83\\.\x87zzz\x06X9\x9b\xcd\x0e\
+\x03LH\xb1q\xa4\x02<\xc4\xd1d29c\xb4\x01\x992\xa0\xcaWP,1\xa8\xcbv\xe5\x94\
+)S\xaa\xeeT,\x16\xb7Z\x965C\x92\xa4\x11\xffA=\xd24m\x0b\xbb\xdf\xa1C\x87\
+XU\x14\xec>\xb0\xfd`\xfd\xe3\x06[\xf4\xe8"/_\xf7\xd6\xbaj\xfamK$\x12k\x00\
+l\x84d\xba\xae\xdb\xe0\xcam\xac\x0c\xb1\xc8\xb2\xd9\xd1h\xb4\xab\\.\xef\
+\x1d\x1a\x1aZ\xc8\x14\x9f\x90+\x97-]6\\\xbe\x08\xe4o\xa0\xda~\x18x\x0e\xef\
+N\xe6F\xa8\xdf\xcb\x949s\xe6\x0c\xc2\x18\xa3\xfa\xfa\xfa\xb9\xe9tZ\x01\xb0\
+y\xbd\xbd\xbd\x1b\x07\x07\x07\x1fg\xfc\x97\x15c\x01d\xd7{]#\xfe\x83\xa7\
+\xdfZ[[;G\x96\xe5\xe1:\xc30\xbc\xfa\x9a\x9a\x9a\xa0\xeaf\x00\xbb\x1f\xe2\
+1\x98\x8d\x0f\xb1\xc9\x08p\x8b.\x05W\xd5tY\xfc\xf8bt\xee\xdc\xb9J\xdb\x01\
+n3\x826l\xe0\x12$\xa8\xff\xf8\x89\xc5O\xa0\xbc\x9aG\x00x\x0f\xcc\xde\xd6\
+P(\xe4\xb9\x15\x94C---\x0b\x00\xf6\x03\xe6\xe9+2+\x97?\xbb|\xb8\xbc\xf6\
+\xcd\xb5\x9eh\xe0\xb6\xdd0\xf8|\xe6N\x06V(\x16v>\xb7\xfc\xb9\x82\xff\xc0\
+M\xb1\xfa\xd8\x02\xb5FE\x84\xc2%FH\x8d\xaa(\xdd\x9cf\xe5\x071\xc1Jv0\xfb\
+4\xb4\xcb\\\xa9\xe5b\x18r\xe3\xa6\x8d\xcc\x9d\xf3CJ\x08\x95\x8c\x12:\xab\
+\x9deA\xcfV^\x12\x8a\x86fF\x1b\xa2\x9dBD@\x061\x80\x05#"\x12\x14\x8a\x84\
+P*\x9d\xb2m\xc7N\x99\xb6y\xdb\x15\x05\xf3\x13\xce\xd8\x99\xdd\x89r"/*bM\
+\xbe\x9c\x1f\xea\x9a\xde\xf5\x05\xd4\x87\xd3?\xa4\xd5h<\xba\x88\xd6Qd\xc8\
+\x06\xb2\xb0\x85\x88K\x10v\xb0\x06\xca\x9e\xd4\x90\xb6\x27[\x93\xdd\xbc\
+\xfa\xd5\xd5=\xecF\xaf\xc1\xefr\xc10o/?\xf9\xb2\xbd\xe9\xe3M\xbb\x88M\x1e\
+\xe9\xb3\xfav\x1ek?\xc6\xd4R\xdb\xbfk\x9f\x11\xa9\x8d\xccu\xa2\x0e\xd2E\
+\x1d\x81:guG?:`\x0d\xec\xf9\xa8\xe5\xa3\x1d\xdd\xd7u\xe7\xd9\xce\xc5\xdd\
+\xcb\x9d\x08\x18\xe6&
++\x0b~\x99\xe5\xe2I\xe9\xe4\xa7BIx\xa4;\xdc\xfd\xb9\xbf\x98Ja)<\x99\x86\
+\xa8\x98\x97\xf2\xa7zq\xef\xe1\x9f\xa4\x9f\x8el\xee\xd8|\x10\xfe+\xfb\x10\
+l\\\x9b\xbb\xf7\xc8A\x83M\x15_\xd8\x86W\x86p&r\xe6\x81\xa9EUY\xb5o\xd5\x27\
+\xaf\xcc}\xe5a\x83\x1a\xac\x0dm\xedmM\xce\xcc\xcd\xbc-S\x979}x\xd2\xe1^\
+\x1f\x82\xcd\xe0\x92\xbfL\x14\xfd\x9c\xd5\x99.\x1a\xf9\x1a]\x09\xc6\x03\
+\x09\x15\x10\xd4\xb7\xa0.\x00\xa5<\xa8\x9f3\xc3\xc4$2\xd5i\xad\x9c\x97\xef\
+\xb5\xa9}\\Kj\xfb}(\xcd\xcfK>\x98s)W\xe2\x8a\x01%\xdf(\x97\x8b\x9c\x82\x02\
+g\x84\xcb\x89\x92U\xda\x01\xea\x1e\x01\x0b\xb7`\x8a\x1b!\xf8\x1b\xa1\xfe\
+K\xae\x0d\xaev\x1d\xabT\x8a-\xe9!?\x97GQk\xd8\xd50\xdb(+\xb9\xd8E\xea\x1f\
+\xea\x1c\xc9\x94\x16b\x11\x27\xb1\x82\x15\xefq\xa05)\x91\xd6`-\xe6\xac\xea\
+\x05\x16sn\x93| \xa5B-\x81\x83Bj\xbf:\x9b\x96\xe8c\x00\xf5s!YX\xef*n?\x91\
+I\x0b\xf4\xb4\xb0\x80\x87\x1c\xe2\x1c7\x1ds\x8f^\xa3\x1ff/\x1f~\xbc1s.\x06\
+(\x8e\xb2E\x05\xae\x948\xb5\xa4\x00J,\x891\xb1(\xa6\\\xe2\x96\xcb\xf1r\x86\
+\xbat\x9e\x10\x15\xda\\\xdbm\x935y\x8f\x111~\x90M\xf9\x80%ZGt\xa2\x1f\xb4\
+\x04+\xe7/\x0d\x06\x97[\x1c\xd8\xb8]\x19\xc4\x19\x15\xcaB\x8c\x16i\xb3X\
+\x16\x27\x8b\xb6x\x07A\xa4\x13^\x96\xbb\xcd\xa8\xf9\xa2\x1br\xbf\x05k\x85\
+\xa1
+6\xb6\xfb,j\x0d\xe5h\xee%`\xdb\x870\xfd\xa5\xa2\xec\x97-N\xb5\xaa]yAP\
++\x83J\xbbT\x92\xe6\x0bD\x98\x0d\xad\xe3\x107^/l`\x0c\xa0\xb1\xa1\xd8\xd0\
+\x87jI=a\x8b\xf6\xefe\xb9\x9c\xe1\xdc\xe3pP<X\x007.W\xa2\x8a\x00uDGl\x86\
+-\xe7\x01o\x1a\x08h\x10\\\xf8\x9d\xe5Z\xdf[\xc4:a\x0b\xf696\x88\x16\xd2\
+\xd8\xab\xb4\x8d]\xec\x80\xba\xb2\x15\xb2\xf2\x15j\x8d\xe6J\xbbZW"\xeeI\
+\x83\x00\xb5\x0c\xd5\xf8Zp\x85\x0f\\\xea\xe6\x01\xe8dI(\x9d\xb6\x89\xad\
+\xf3mD]\x0c\xcd\xda=kZ\xaa/u\x07\xacI\xf2\xa9\xa9\xa7\xd6\x9c\xb8\xfb\xc4\
+o\x1c\x945\x9e\xc0\xaf\\`17\x1bC\xfelT\xfc2\xe5f#\xe2\xe0\xbdA\xef\xdaq\
+\xd7M\xd3\xfa\xa6\xadnT\x1bo`\xc3gs\xd9o2$\xb3j\xfb\xf3\xdb\xbf\xe6@\x9c\
+\xb1\x96
+w\x14\xbeJ\xc5\x1c.6\x0c?\xde\\\xffZ\xe06\\\x9b\xdbf\xcc\xf6\xfe\xf6\x8e\
+\x1b\x137^\x9f\xacK\xb27\x08\x94Ss3\xe3\xbf\xc4\xdf\xbf\xe6\x85k^|\xfb\xf5\
+\xb7\xb7p\xde\xa8:\x91Q\\is\xb1\xa0s{\x1b{\x01<\xcfY>(7\xe1\xa6)\xa9X
+\xd7\x85\xebP}\xa4\x1e5\xa7\x9aQ\xdb\xa4\xb6\xa6tcz\xe5\xd2eK\xa7\x8e\x17\
+\xaaR1\x97\x03C\x9cR\x86\xafV\xa5\xaa\x9ej\xd3\xbf\x98N\xea\xa4\xbafUR\x11\
+\xc5\x9d\xce\x15YA\xc9D\x129\xb63U/\xea\xb3\x9fY\xfa\xcc\xb7A\xe7\xf5o\
+\xad\x9f\xb0b\xbc+K\x9cZ\x1a\x97\x07\x1b\xb0\xd1y\xa03\xaeP%L\x09\xf5^\x04\
+\xbc\x1f\x84+;s\xb2\xd3:X\xa7\x1f\xa3^\x02H\xcf\xc6\xa3\x18\xaa\x08L|\x89\
+\xbeA\xbb_\x09&?\x02L\xc7\x05O\x0c\xe7\x00v\x08\x813\xc1\x9d\x8a\xa2\xdc
+UG\xf9\xffW\xac\\\xf1\xf7\xc5\xeaK+6\x1a\xe4X\xe6\xa5\x8ek;\x10\x9c\x19\
+?\x83\x13\xb8^\xf9u\x92}x\x01\xb0&8!\xdd\x0e\x07(4\x96U\xe3\xcaq\xa55o\xac\
+a\xe7Hf;\xe1(\xd7_\x09\xc6\xbe\xee\xa8\xaa\xca>\xd8<\x08\x97\x0d\x13\x0d\
+\xfe\xcbIg5M;
+\xeaL\xe2O\xe6~\xac\x19\xe1p\xb8\x07\x0e\xc6\xf8_\x01{\xe7\xddw\x10\xaa\
+\xf9\xfb:\x9f\xcfokhhX \x8a\xa2\xf7\xa9\xc04\xcd}\xe0\xe2O\x0b\x85\xc21\
+\x80>\x05M\xb2\xff
+\xd8(\x9f\x98v\x81\xcb\x9e\x02u\x06\x00\xaa\xe7\xfc\xf9\xf3}\x89Db`\xa2\
+\xf7\xc7W?\xa7_\x05\xfb\x87\xd3\x9f\xd3\xd4 \xcf\xef\xdabe\x00\x00\x00\x00\
+IEND\xaeB`\x82'''
 
-    ______img_icon_ico_optical_green_png = b'''\
+    ______img_icon_ico_enzel_sem_align_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x06\x00\x00\x00\xb7\
-QB\xb5\x00\x00\x02\xf1IDATH\xc7\x9dW\xe1\x8a\xd40\x10\xfe\xd2v\xb7\xdd\x13\
-\xb9\x07\x10|\x81{\x1f_\xd3\xe7\x10\x84;nW\x04A9\xd0;\xd4S\xef\x10\xd1&\
-Mf\xfc\xb1Io:;\xedz\x06BB\xda\xcc7\x99/\xf3u\xea\xc0\xd0\xcd\xcd\x8cz\x0e\
-`\xdc\xad\xc7\xc9\xbcQ\x06*\xd5\xeb<:1J#\x0c\x80DOb^\x9es#\x00\xea\xdc\x9b\
-\xdcW\x00\xd6y^\x0b`\xa7\x00\x12\x80\x08`\x00\x10\xf2\x18\x05\xe0\x04\xa4\
-\x12\x86\xbb\xdc\xdb\xbc&\x81J+\x1e\x17\x00\x0f\xa0\xcf\xa3\xcf\x80\x0c\
-\xc05\x02\xa0\xce\x067\x00N\xf2\xd8ePy\x12\x19.\x09RN]\xe90\xca\x934\xe2\
-\x14\x27\xb9\xb7\xe2\x14\xce \x9e\xb2c+\xf1\x0e\xab\x10Bs\xd2\xaaP\xad\xc5\
-f\xabi\xae\x90\x01J\xf8\xaa\x12.\x09\xb2\xca\xc6\xdb*VON\xafO_\xba\xca\xad\
-f!D\xe0\x98\xf9\xeb\xdd\xf3\xbb\x17\xd91y2h\xe2\xcb\x0d\xab\xa9\xa1\x84\
-S\xbcskw\x06\x1c\x07\xa1@[q3\xe5\xd5\x1fAX\x819\x00\x8eV\xb4\xab\xbb\xfa\
-lB\xb7\xd5"\x90\x90\xb6zy\\\x19\xc95f\xf6\x80a\x87\x84\xe3\x8d\x00\xdf\
-\xf8\xedL\xb2r\xa5\x17\xe4^\xdf\xf9\xb7L|\x14\x86\x89oC\x1b>+;%\xeb\xc7\
-;]\xae]\x92\x0fS\x9d\xfe0\xf1{C\xdf&\xfe&J;\xa5_\xd2\xd6\x18.\x12\x0f\xe2\
-\x04\x88\xd2n\x11\x84\x80\xc4\xe9R\xd8\x89ZV*\x85\xaeu\x07\x11q\xb7\x9f\
-\xcd\xb4\x04\x84:\xec\x8c$\x8c2\\Xz\xc1\xb7\xfe\x0d\x27\xe6\x05>\xbe\xf9\
-\xce\xdf(\xb1,\x8e2\x0c\xc1;P\xd0\xd8\xc4_L|u\x84\x0f(\x1d\x1b4\xf1P\xb2\
-=hO\x88\xc8\x0e\xd9\x9e\x8f\xed\xb1\xfd:O\xa4\x27\xe3K\xb3\xbc\xec\xf9\xd8\
-\x1a\x9cF\x99\x0es\xd2=!\xbf_\xf7&\x08\x13\xff\xf0\x9d\xbf6>^i\x0e\x04\x06\
-\xf9{^V\xf1\x9e\x12}:\xd0+\xa2\xadJ\x81\x03>\xe6d%Z7\xe4\x80\x17\x02"\xc7\
-\xad\x11\x81\xb8\x04\x82\x19\xf2\xec|y\xe0\xc3
-\xd5$\xb8\x95Q\xe2$E>\x01\xe0\xd0\x84\x09\x08\x13\xdf\xf9\xce4B\x15\xb5\
-\x06V\xf6\xc5<\x08\x19\x856\xdc2\xf1\x17\xc5\x87\x05@\xc7@\xd8H\xaa\x11\
-h\xd4\xb1\x07>d\x86\x9b\xa4/\x9d$YuT\xe2tYdt\xa8\x86s\xe3\xbd\x03>\xe6@\
-Xm.5\xd4\x10\xeap\x01\x02\x98\xf8\xbe\xdf\xf4\x1f\xf2zP\xce\xf0\xbf\x80\
-H\x1d\x0b\xb2X\xf3\x9d\xbf\xe2\xc4\xdf\x89\xe8\\\xac\x97\x82\xce\x0c\x95\
-\xae\x85-^|.
-\xc6\x1a\x8b"\x9d\x27\xa4\x0ba\xfc\xbf@\xa4\x8e\x05\xf1\xf5L\x19\xe4Ul\
-\xe2k\x00\xbfU8\xa3\xc5\xc7\xbe`\xb0\xbf\x14N\xd4\xc5kQK5\x9b\x9f\x9bg\xfd\
-\xd3\xfe\x86\x1d\x0f\xe2FI^\xe81 \xb5\xaa\xa3d=\xc5\xe2j\x9b2\xf4/ 0\xfe\
-Qd\x27\xa3\xa7\xb9p5\xcbu\xc8H\xa4,\xd8\xdcL\xe93\xeb\xae[\xacD\x96\xed\
-\x96~\xe5\x1e\x052\x07\xbahT\xb7\xbf\xe8\xb1F\xdc\xe8\xe8\xaak\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x04\x00\x00\x00\xbe\
+\xaa2\xfb\x00\x00\x03]IDATH\xc7\xed\xd6[HSq\x1c\xc0\xf1\x9f\x89\x94\x94\
+F\xa2\x81]\xe9\x06\xf5\xa0PT(\xf5TB7H\x0dr\xb6"\xbcm\xeevv;\xe9\x8e\x99\
+M\x9d\xac\x84"\x9d\x8a\x97\xad2\xdb\xc2\xb9\xd9`\x9bs\x9235\xb7|\xaa\xa8\
+\x88\x1e
+*(\xa8\x1e\x8a\x82\xa0\x08\xfd\xb767-\xdc\x8e\xf6\x18_8\x07\xce\xc3\x87\
+\xf3\xbf\x9c?\x07\x10\xfe]\xf0\x1f[8\x96\x13\xee\xf3A\x9cY\xce\x27\xffs\
+\x01\xf0AH\xae\xfeDsc\x9cp\xa62\xe4ET\x86\x9cn\x0e\x81X`\x27\xc3\x1d\x96\
+\xe1\x99\x88d\xc8=\xc0e\x87\xe5\x87K\x10}\x8c\xc4\x84\xef\xf3\xe3\xf9\xc0\
+O\x12p\xf8+\xd9cP\xd2\xae\x9c\xa6\x94X\xa2\xcb\x07%(\x0f\xa9\xbf1v\xe1\xb2\
+\x980nd{\xa5\xd3\x98\x14Od\x9d\x00\x1a\xb4\xcd=\xa8\xc7j\xb3 1\x06,/\xb2\
+8\xc1\xeb\x10&x\x99\x1bG\x03\x9d\xd9\xf9b\x08\xdd~\xce\xe2\xe7\xd8`P|Q\x11\
+\xa0\x14X\xdc\x90\x0br\xa8\x93\x9bq\x0c\x27p\xd0\xcfY\x05\xcb\xa2`\x853\
+\xcb\xa4\x02\x18\x85\x9cmr\x90\xaf\xd1\xdds\xa1\x17}\x84s\xa3\x01\xcf\x0d\
+\x88\xd6\xb3\xc1\xa0\xfc)\x8d4\x96?\xe2\x80\x04\xaa\x8f\x1aq\x94P\xbe\x00\
+7\xf8\xb3\xf3\x01\x937\x27V4\xbb*\x05\x19dQ\xa5\x04$\x89\x97,\x0e\x82\xf8\
+\xc8\xbbM|\x1d\x9dt\xd6\xea72s\x0f\xb3`v\x1b$(\x99*X\xab\x02U\xf6\xb5\x1f\
+\x1e\x02\xdd{\xe7\xe9\xb3\x9f6&:A\x0fQ0\x11\xf0\xc8\x92Gr<\x1fo\xbc\x00\
+4\xa0\xe1Zq\xe4\xe1\xd0\x85\xfe\xfd\x1e\xb0\x83\x11b\xc6(r\x9d\xfe\xac\xc4\
+\xdcr.4@C\xba\xb1\xf0\xd6V\x15\xd9\xb8b\x12K\x8c|:A\xce\xbf\x81%\x84\x93\
+Am\xa2j\x93R->(\x0e\x80,12\xedPJ\xa2\xc8\x9d\x01Y\x96JW\xff\xb8\xf1S\x8d\
+\xa1\x06B\xb1\xc5\xe2K\x17\x11\xac\x90y\xa2\xfd\xd2\x8e\xbdh\xc5\xd6\xc9\
+V\x08\xc5\x0e\xcb\xa5\x1f*nP\xc9\xea=W\xd1\xf6\xdd\xf5\xc1}\xdbv\xac%\xa9\
+\x05B\xc5\x86\xad\xe0\xef\xe0oc@\xe3\xea\xc2f\xac\xde\xa7]\xde\xdb\xef(\
+\xeeKq\x83\x0dZ v,Y\xb0\x9d*fljd\x86\x99\xc5mg\x9do\xcd\xcf4\x9b\xb5\xd0\
+\x0b\x0e\xe8\x03v\xd8\xce\x8a\xae\xfa\x0fM\xd8Mf\xa7m\xe4\xfc\xba60\xed\
+3l\x91@\x199]Yc\xd5\xa7\xda\xd1\x82\x8ew.\x8b\x9d\xee\xc8\xaeJ\xaa"\xef\
+J\xa6QY\x92\x90l\x06\x19H\xd9`\x9a\xd5\xa6\x0b\x0e\xda\xba\xe7\xfaR;t\x80\
+\x9f\x12-\xa7\x8e(tr\x83p\xd5olfsc`"\xc3\xb1\xc2u\xf8\x8d\x91\x83\x27\xab\
+\xe1y+\xeaP\xed\x15\xef^\x10V\xe7\xef\x8cq\xca\x8d.\xecA\xedk\x19w\x9e\x18\
+\x1d\xac\xe9\x96\x8b\x1c<\x13\xe8!K\xd2\xf8D\x9a\xb1\x10,A\xdf\x138\x0e\
+\xbd8\x82&T\x0b)\x88,&\x8c\x09\x95\xde\xf38|\xba\x0e\xe0\x15#\x950\x0c\
+n\xda\xc6\x82\x98\x8f\x0c\xf5\xea\x9b\xca]\x95\x10.\x06\xcc\x10Y\xa9\xe7\
+\x9b7\x88\x8d\x93=X/`5g\x97g\x96\xe6|5\x11\xc4\xbcdU\x9b\xefHS\xe7\x8f\x81\
+\xd92>=\xd0\xe1\xef\xfa\xf6\x8a\xb4
+\x08\x15\x05\xd3\xff\xd9qO`\xfa\xef\x0e\xbb)kvSJ\x98\x8a\x825\xfe\xad%\
+}<g\xbe-\xa3\x27\xd5M\x96\xa6\x09b\xc6\xfe\xffmG\xed\x17\x07x\xab\xb7\xe8\
+\xbc\x02\xe7\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    ______img_icon_ico_sem_png = b'''\
+    ______img_icon_ico_enzel_sem_align_green_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x04\x00\x00\x009\
-\xc62\xa5\x00\x00\x00\xb6IDAT8\xcb\xed\x94M
-\xc20\x10Fs\x03O\xd2\x0b\xd4\xfa\xb7\xb0E\x08\xd2.\x84\xc6n\xd5s\xe4\x8c\
-\x9e\xa47xfD\xa8\x84\x92\xa4\xa2\x0b\xa1|\x8b\x8f!<\x98\xc7@\x14jZ\xd4\x0c\
-L\x07
-\xb6\xac\xc8\xb3\x15\x1b\x96w\xfb\x9c\x0b\x02@\x8d\xa1\xe1\x905\xb4h\x07\
-\xc8\\\x87\x00\xc3\x8d\x8e&\xeb\xb8pr\x80\xcc&\x04\xd8\xd1\x04\x80\x12M\
-\x85U\x95\xeb\xbdk\x99\xcb\x98C\x8d\xf5:\xe2`\xb0^\xd3A\x9eK$CG\x01\xdf\
-#
-\xf8\x1eQ\xe0\x03\x07\xfdr\xd0\xeb\xf0~\x8bd`\xd8?\x11\x18\xf6\xff\x99\
-C/7\xc8\x17\xc9\xc0\xb1\x17\x87u:\xd0\xf6W\xce\xec\xe2\xc0\xfc\x19\x8f\xe6\
-\x01\xb8\x055\xdfN\x86\xe9\x00\x00\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
+\xa3\xfap\x00\x00\x06\x93IDATX\xc3\xed\x97kl\x14U\x14\xc7\xef<vwvg_\xdd\
+\xddvKv\x97v\xebR\x1e\x85f\x15\x13S-J?\x80(\x09A\xc1\x0f\x86\x04\xc5D\x02\
+\xd4/\x9a\x98@"\xfaES\x131&&&F4\xf8\xc1\x98(\x1aP\x9b \x10(\x95\xaa`!*\x90\
+\xc66m\xd8\x16\xfbJ\xb7K\xf7\xfd\x9a\x87\xe7\x0e3\xe5\xb2l\xcb\xd2n\xab\
+\x1f<\x9b\x93\x99\xb9s\xef\xcco\xfe\xe7\xdcs\xefR\xb2,\xa3bF\xc1O9 D\x83\
+3\xe0,\xb8\xae\xc0\x19\xf5>\xee\x27\xab.\x82\x0b\xe0y\xc2\x05\xd5%\xd5\xa7\
+MF\xc5\xdf\xcf\xa2\xd9\x8dR_\x8e!\xf4\xe0\x9c\xea\x06\xf5\x9a%\xc0\x90
+%\xaa0Y\xd53\xeaQ\x03\xd7>bV+\x05\x8cV\xc10\x90Iu\xae\x00\xec\xb6\x00\xb7\
+\xd5\xd2\xeek R1\xc5\xe6\x02F\x15(V\x08\xa6\x85\x92*\x00#\xc3\x8cT\x10\x0d\
+\x96B%Z\xa9\xa1$\xc3\xc8\x15\xa8Qh4\xa1\xa2\x96s95\x9ct9CI&>\x06\xd29\x06\
+\x1d\xc7\xe0\x15\xfc\x8c\xdf+p\x89HMd\xb36\xa6\x88\xba\xf3\x02#U`\xb4Y\
+(\xd9\xa4nF\xc7\xac\x9f\x0dL\xcc\x8b\x17\x881\xf7\x05U
+\x98\\$\xe7\xa8\xbc>\x8e\xd5\xb3\xebg\x1c\x0d\x19\x95\xa7\xf2\x9d\xc4\
+\x18\xf2yr\xa9J\xdc\x0bJ*|`\xca\x98\xfa]\x16\xe5\xd8\x8c\x03Ey
+\xf7\xc1\xe7\xf6q\xbbi\xc3g\x1b\x9eZ\xdb\xbe\xd6Q*\xd4\xbd\xc0\x101\xcd\
+E\x02\x10\xc9\x94,\x88\x92\xd8U\xf458\x8c\xa2x\x1e\xfa(e\xa1\xe1rC\xe3\x8a\
+\xe4\x8a\xb6\xa6+M\x1fl\xfct#_\xceP\x8a\x05\xae\xe0\xe4P\xee\x1c+\xb2O\xdf\
+\xf5\x04\xe8\x91\xa5\xb2\xe7\xb4\x8f
+$\x03\x8f\xf8\xbd~\x8eM\xb0\x9b\xcc\x03\xe6\x8f\xeb\xf6\xd6\xbd\x00\xed\
+iE\x15\x1at\xf9h\xee`\x92Z\x83rj=\xc2p\x0c\x84\xaa\x87\xcbp\x134KW\x92\x03\
+$A\x1aK\x1b\xd3\xbd\xf8t\xd5\xa5U5^\xc6\xdb\\\xed\xacF&\xab\x09\x19\xf2\
+\x86\xe7\x86\xc4!jrrr\xa7\x067_\xc5r\xaa\xe7\x89\xb0R\x10\xceNZ\xa2\xb7\
+O\x27\x04\xb4\xe26-\xfc\xcbF\x96\x05+\x8d\x95>\xb3\xde\x8c,z\x0b\xd2{\xf4\
+\x88\x96\xa1?\x8c\x05\xb8\x17\xe1\x98\x98o\x8e\x09E\xe0\xe4,\x0d!\x93
+\xc2Hg;\xf0\x18o\xbf\xb7\xc2\x9f\xf7\xaf\xb7\x1b\xed\xc8@\x1b\x10C1\xc8\
+b\xb1 \x9f\xcf\x87\xfc~\xff6\x97\xcb\xf5\x15\xf4\xab\x99O\x1d#\xc1\xb2\xea\
+Q)\x98\x19.s\xdd\x941\x0dB8\x95\x17H\x92t\x1d\xda\x06q\xff@(PWm\xa8\x0e\
+Z\x0c\x16\xe8\xac\x03\x05h%\xa7\xccf3\xf2x<0?\xc4%\x82 <\x08}\x07\xe7\xa2\
+\x18\x09\x97\x27\xc0\xb4\xed\x8c(HB\x87\xb64\x0b\xa2\x80\xd5\x12\xf8(O\xd7\
+O\xd5ot\xf0\x0e\xc4\xd1\x1cTWF\xb9\x0f\xe0\x09\x80\xb9\x08Po\x03$\x0e\xe9\
+\xf1\xf9(V8\x012\xaabJ\xe1\xcc2\xd9\xb3zQ\x8f\xf3E\xce0\x99\xd3\xb8O\xc3\
+\x95\x86z/\xeb}\xc2j\xb0*j\xc9\x82<\x9a\xc9e\xbaR\x89T{,\x16;j\xb7\xdb\xd3\
+\xe5Z\x92$b\x12d\x88qr\xd6\x90\x1d\xe23|\x0f\xe0\x0b9c\xeeo\xdc\xc7\x13\
+\xf5\xb8\x1c\x9c\x83\x85\xe0]\x8b\xa5b\x27s\xf1\xdc\xc9*K\xd5\xe9r.I\x05\
+\x15j\x1a\x8c&rO\x07\xeb\xe2\x09\xd8\x89\xe2\xf3\x14\xee\x13\xaa\x09u\x8e\
+\x8c\x8f\xb4\x86\x84P\xf7\xa1\x96Cb\xb5[_iU\x1e\xd2\xd4\xd4T\xd2\xcb\xa8\
+{l\xad\x0b\xf3\x91\xdc\xfe\xe8\xd1\x9d;\x07\x99\xc8=e\xe7\xba\xaek\x1d\xb5\
+\xe6\xa75Nn\x92{>\x9b\xcd^\x84\xb6\x1f\xb5\x87\x05\x83A400\x80\xda\xda\xda\
+\xe6\xad\x18Y\xd3\xc8\x9d\xaa\xb6\x8b%\xdb\x84\x1d\xef\xed\x08\xbac\xee\
+\xed6\x83m\x1d\xe7\xe6|\x89D\xe2[\x12lhh\x08\xe9t\xba\xb2\x84\x92,\x1d\x1a\
+$\x86\xa0\xad\x13V\x9d\xa0\x17\xa4\x94-\x95\xdf\xf9\xd6\xceg\\\xc8\xf5\xba\
+\x9d\xb7\xfb\x9c^\xa7\xc5aw \x1d\xabCccc\xab\xcb\x92c\xfbZ\xf7M\x9f\xe7\
+\xf3yt\xf8\x93\xc3\xda\xec$\x27\x03\xb5\xeb\xe0\xae-\x16\xc9\xf2\x86(\x8b\
+W\xfbV\xf6\xbdVi\xa9\x0c-w-_\xe5\xacp\xe68\x037\x01\x85\xb5+\x9dN\x01)\
+\xb30\xc9\xbfg\xef\x1e,=\xecub6Ff\xea`\xf7\x90>\xf2\xe1\x91\xbfj\x8d\xb5\
+/\xb9\xdd\xee\xc6t*\xdd\xc8_\xe7?GNt\xd9l2\x1fcY\xb6=\x19O\x1e\xb7Z\xad\
+\x114\x07+\x15\xcc
+\xfe\x00\xce\xd9%\xfc\x92-\x06\x83a+$\xf3\x99\xfd\x07\xf6ov.uvy\xaa=\x8d\
+\xc9d2\x9a\x88&Bq\x14\xbf\x09\xfd\x9eE\xf3\xb4R\xc0\x1e\x86\x82\xb8\x1b\
+\xd6\xb9\xad\xf0\xf5\x95p\x8e8\x8eC\xb0\x08\xd3\xe3\xe3\xe3n\xb8\xffN,\x1a\
+\xfb\x15\xc2u\x03\xae\xfb3\x83\x19t^w\x1em\xda\xbcia\xc0***\xb4\xd3\x15\
+^\xaf\xf7eXt1\xd0(\xc30?\xc3\xb2rajj\xea\x17\xc8\xbd\x9b\xc37\x86Q\xcf\xb5\
+\x9e\xb3\xd0\xae\x95\x14\xbc\x19\x8c\x9f:q
+A8\x11.G---\xe5\x03\xc3\xaa\xa8\xd6\x01J\xbd\x0b\xd7a\x08\xdf\x85x<\xfe\
+\x87\xd3\xe9Lj7\xa3\xd1(>\xd8\xc0\x9b!\x07\x9f\x04\x18\x13\xf4{\x13\xae\
+G\xa6\x1f\xd0\xd1\xb1 \xa1\x1c\x06?0\xd3M\xbd\x1e\xd7X\xb4\x12\x14}\x1f\
+\xc2\xbc\x1c\x16j\x1c\xe6\x95\xe1p\xf8Uh\xffm!s\x0c\xcd\xa6\xaa\xaalsmm\
+m=\x0e7\x06\x03\xc0Ga\x82\x1c\x85\x9c\xc3\x1f\xf4\xe5\xa2\x81uvv\xdeq\x0d\
+\x9b\xbf\x87\x1c\x0e\x07\x85\xf7Z\xd8\x00
++\xb9\x14\xf2\xee\xc0\xf0\xf0\xf0Uh\xba\xba\xa8\x8a\xa9\xa6\xe3y\xde\x8f\
+a\x94?\x17\xaa\x92UUU\xf8\xdf\xd2\xeaT*\xd5\x1c\x89D\xee\x1b\x8c\xbe\xdf\
+\x01\xbd\xbd\xbd\xca\x1aG\xb8\x0b\xa0xuV*FQ\x94\x92{\xb8\xb4\x80?\x86n-\
+\xf4\x8b\xae\xd8(\x80\x0c\x80\xaf\xb9\xe3\x8bA=\xac\x1c\xcc\xe8\xc7\x8d\
+Fc\x10\x9a\xba\x17\x0c\x0cj\x17
+\x04\x02w\xb5Cyh\x87\xda\x86K\x85\x11\xab5\x1dcP\x14\xc0|\x90{ka\x96.\x0c\
+X__\xdfl\xb7\xbf\x87\xca\x10BZC\x82\xe1\xf0B\xfe!\x9b\xcd\xb6\x0d\xc0\xbe\
+\x81\xa6\xf0b\x86\x12\xdb\x04\xac\x95\xdd\xa0N\x8d6\x01\x88\\\xcb\x99L\xa6\
+~\x80\xa6\xca\xae\x18\xcc,\x1c\x92Y\xfb\xc0\x9f\x8c\xaf\xa1\x8em\xc7\xcb\
+\x10\xaee\xb0\\\x9d\x81\x10\x07\x1b\xc4K\x00\x8d\xff\x99G\xca\x02\xa6V\
+t\xc5`\xba\x97\xf2\xac\x1f d\xbbA\x9d0@\xf5\xc3\xd25
+%#\x8c\xe6h3\xee\xf9\xffm\xa3\xff\x93T\xff\x83\xcd\xc1\xfe\x01\x98\xa2\
+\xb3\xdc\xc6\x0d\xdc\x17\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    ______img_icon_ico_sem_orange_png = b'''\
+    ______img_icon_ico_enzel_flm_align_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x06\x00\x00\x00\x93\
-\xcf\xfa.\x00\x00\x02\xddIDATH\xc7\x9dV\xcd\x8e\xd40\x0cN\xd2t~vW0+-\x02\
-.\xf0$\x88\x0b\x88e\xe7Q\xf6yx\x0e\xb8\xec\xdex\x17\xb8\x81\xb8\xec\x01\
-!f\x9a\xc68m\\\xbez\xd2\xf9\xd9JV\xea&\xf1g\xb1S{\xfa|e\xd4c\xd5\xa8\xdf\
-\xf1\xa1\xc2;~3^\x19q0\xa2hP\x02C\x11\x84`\xec\xc4\xc3\xc6
-$}\xaf\xf3X)`\x03\x86\x92\xb4Y\x1a\x96\x00z\x8b\x00.\x1b\xaa\xb3\xcc\xb3\
-\xcc\x00T\xa2!\x00@\xe3\x1b\x96m\x16\x83\x11X\x88@\x8c/Y\x16\xf9\xdd+\xba\
-ds\x9bAB\x06p\x8a\xc2.B\x8c\xc0g\x8f\x17\x19`Y\x00\xb0\x13\x14m\xc1Q\x03\
-\xc0\xc6\x03\xb7\x1e\xbc\x17\x99\xa93\xd0\x002V\xca\xf8\x00\x8a\x11\xd4\
-\xd9\xe0\xc0\xff\xf7_\xf1k\xc5\xdb"\x9bY]\xd8\xdb\x87\xdf\xf4\xc9\xda\xce\
-\xea\xb7WW\xee\x96\xe7\xef\xd2|\xcb\x1f^?so\xb2a\xa1\xacB\x00\x8cB\xa4z\
-rf\xcd\x9c\xdf\x1a\xdeR\xf3\xf2\xa7\xac{\xd67M\xbfI\xe67aHy\xaf3\x0f\x01\
-v$m>\x9b[\xf3\xd7Q\xf7a\xce\xf1\xcd\xbc5D}\x09\xc8|.\x09W\xa0r\xa7\xd0F\
-\xc2\x9b\xd7ibQ\x0f\xeb;\xfdb\xd1\xeb2\xcfcT6v*\x19+sX\xf4\xe3!\xde\xd5\
-Lr`\x92\x9f\xaf\xdc\xfa\x27\xeb\x9e\x83\xdf2%//\xddZ\xe6\x1b\x9e\xb1r\xef\
-Jw\x89/\xa4\x9dd\x87\x99\xd7\xc2q\xef\xd4,\xeb.W\x83\xcc\xbb~\x9eT\x11\x8e\
-\xae
-\x82\x0c\x90\x02\x8a\x8acs@\x8f`C\xect\x11\x90J/YP\xf3\xe6\x8f\xe9\xe0\
-z##\xceQ\x27\x1e\x83\xaa\xea\xa0\xef"\x02\xc3AS\x95\xb8\x16N\x99\xeb\xb5\
-\xd2o\xc0It4
-\x00\xa9\xf0Z\xa0I\x9d\xc5\x98\xfb\xac\xebk#\x94nS*\xf07\x1c\xd4\x11\xdc\
-GuM\xb72\xa9\xb3(\x94@&\xb8O#\x15\x9ckpo)MwhR\xf9\xae\xf3\xff\xfd\x14=\xba\
-\x92I\x85\xf8\x9f\xa2q\xbe\xeb\xfc\x8f\x8a\xa6\x88\xffe_\xf8\x89\xefx\xf2\
-\x98\xfc/\x01\x94\xea\xa1\xf3\x88\x8d]\xa7\x1bR\x9dA\xfa\xde\x02\xc0(\xff\
-\xf7E0U\x0f\xe9,\xee!\xff\xaf\x0b\xe9\x19\xf6Qt\xa8\x1eh"\xff[UdG\x9fAP\
-@vO\xfe\xeb\xd46\xfb\x00b\xe1^\xaa\xf2\x9d\xf4\x01\xf2_;\x12\x8e\xcd\xa2\
-\xa8B\x0e\xd2Y\xf0\x19|\xe1_\xe7y\xc33\x97\xe7\xf6\x86)\xfb\xb3\xcfx\x09\
-`\xaa\xaaCO\x11\x9f\x01\xb7\x06\x15k\xfc\xf3/QIS?\x1c\xfd`\xeam\xa5\xe1\
-J\xc6\x97|\x06\xb6c\xc86\xd0\xc9\x85\x92\xf7\x87"\x90vP\xda\xc5\x96\xb9\
-\x9b,/g\x16\xdbEi\x19O\x8e \xe4\xcd\xa8K\xa3\x16\xc1\xfb-\\pGG \x05\xe7\
-\x14@\x05\x00\x0d\xc8I\x14i\x9a\x08\xce\xa3\x9a\xb8\xb3\x82\xce\xffc\x00\
-Z\x18K\xcd\xaf\xeeOO\x8e\xa0\xd8+\xa95\xa5q\xf4\xfc\x03\xc7\x08\xe5@fC\x91\
-U\x00\x00\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x04\x00\x00\x00\xbe\
+\xaa2\xfb\x00\x00\x03[IDATH\x89\xe5\xd4[HSq\x1c\xc0\xf1\x9f\x96\x94\x95\
+EbAw\xbaA=(\x14\x15jZ\xb9\xb0\x8b\x95\xd9e\x15\x1a\xa9L\xd7\xdc\xa5\xcd\
+\x1ds\xc7Vi*^\xa2\x87\xd2-u\xda}\x93\xb9K\x93\xcd\xcc\xdb\xc4{=UTD\x0f\x05\
+\x19$d\x0fE\x81`D\xbf\xfeg\xcdmV\xe89\xea[|\xe1l\x0c\xf6\xe1\xf7\xff\xed\
+\x9c\x01\xc2\xd45\x85\xd4\xff\x8bey\xfb\xa2\xc6\xd1e}f>\x17\x81\x102\xc8\
+\x95I<6\xa6\xf1f0\xa1\xd5\x27\x13jnk\x08\xc4\x01\xab\xf6\x16\xe7\xc4>\x9f\
+\x9c\xa8\xdb\xad\xe3\x86]\xf6\x16\xd0\xf0\xa9\xd7C\xf5\xa2\xe3c\xe94!\x08\
+\x83D\xc7\x85\x0b\xb9c`\xac\xe8\xf2`]h,+\x05%(\xf7\xe6\x0e\xd1\xf6\x8c9\
+\xac\xb0*\xdf\xa2\xda<X+V\x86W\x02\x05E\xd7\xeeb5\xaa\xebD\x81,\xb0\x12\
+\xdf\xfc\xec\xfd\xbd\xeeC\xda\xdf\x16\xfbQ@\x85U\xbdi\xc6&\x8633\x1c\x17\
+\x0cjK:]X\x27\x1a
+\x8bA\x01\x97\x14u\xe4}\x0f>d8\x8bh\xce8\xd8\xf5\xd1\x85\xb5\xb8\xb0\x16\
+\xd4\xaeW\x80biYw#2\xb3\xf6\x90\xe9j\xf0\xfc\x03\xf1
+.\x18\xd4\xbf\xec!_\xad\xa6\x05\x19\xa8\xe3\xf5\xd8\xe1\xde!\x99\xeeG\
+\xd5\x13:aLL\xffg9\x9d\xe4`\xf7\xb2e \x9bu\xc5\xec \x08\xb3\xc1\x9eo\x1d\
+\x8f\x1b\xf2\xaaW\xd1c\x1fS\xf3g+\x9b\xb1\xf9g\xf92\x15\xa8"n~w\x12\xa8\
+{\xc0i\xb2\x9f\xd2\x076\x90\x1b{\x1cL\x0c\xe9\xe4\x27\xf7\xe5\xac}\xd6\xae\
+l(\x84\xc2D\x0b\xb6?m.\xb6\xeet\x82\x9d\xcc\xcc\x1a\x93\x91\xab\xe7\xb1\
+\x92\xe8Ng\xfb\x11l\x91\xfeD\xed:\x15\xb9q%$\x8e\x18yt\xdc\x9c\x0e\xb2A\
+Jf\x93C^\xa0j\xb52W\xb2G\xe2\x029bR\x92\x80$#\xaf4\xc8\xc3Ue\xf9\xcfK?_\
+\xa8\xb9\x00#q\xc5\xa6\x0b\xfc\x09v\x82~Q\xf4\xb5\x02\x8dhA\xcdc\xefF\xb9\
+a\x07\xa9\xa7\x99wdss\xb7\xde@\xdbp\xe3`\xd3}\xdb\xe1\xf2\xa0r\x18\x89\x1d\
+6_\xb8Q\xb8\x9e\x86\xc2F\x1d^C5\xafh\x9e\xd1\xeaH5\x057\x81\x0d\xca\x81\
+=6W\xb4A\x96J\xdbr\x91n\xa3gh\xcf5|\xa8{U\xb0\xa6\x08\x8c\xe0\x00\x13p\xc3\
+6\x9d\xd5\xe5\x0f^\xc5\xdbd;\xda\xf6\x8b\xcb\xb5`\xe0\xd5\xac\x8d\x84H\x88\
+\xe6\x8e\xa9OV\xa0\x19\x1d\x03\x8df;U\x19\x91\x13\x94\x03Q\xb0\x0d"\xfd\
+#\x83\xa2a;\xc4\x908`\x05K\x0c\xc5\x0e\xca\xb2\xf5\xd6l;T\x02CE\xcd\xdb\
+\xb6\x8fW\xc6\xab\x89^\xfc\x1b\x1b\xdd\xd8\x18\x18\xc8q,p\x0b~c<\xe0\x85\
+\x1fx}\x1c\x8fa\\\xef\xf6-\x93\xc2\xf63e\xa5\xfc\x94\xa2\x18\x931\xbe?&\
+q\x82\xd8Nw\xfcZ1R$9
+\xf0\xd0\x8b\x98\xd0\xc9`\x01I\x8f\xe4\x98\xe5J\x8e)\x18\x97\xb1\x03|c\
+\x85\xed\x1aiQ\xf2s\x85\x1b\xa3\xc8a\x8f\xeaw\x04L\x1c\x83\x14[\xa6\x1b\
+cf;\xf9>vs,xc\x81%\xf9&\x90\x0f\x8d`JL\xc3\xfd"N;;2\xba\x05\xe2w\x94g6\x09\
+\xf2[cB&\x8e\x81\xc0\xac\xf4`g\x86\x93*b\x17\xb0>f\xd2\xdf\xf1\xe5\xae\xf5\
++\xda\xa4\xb2\xf4\x08~0\xeb\x9d%\xfc\xab\x99i\xe9\xe2C\xc2\xd0\xe4\x10)\
+\xf9\x83\xe2\x03kl2\xfd\x27\xd8/\x030\xa4\xe8@3\xf8\x83\x00\x00\x00\x00\
+IEND\xaeB`\x82'''
 
-    ______img_icon_ico_sem_green_png = b'''\
+    ______img_icon_ico_enzel_flm_align_green_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x06\x00\x00\x00\x93\
-\xcf\xfa.\x00\x00\x02\xd3IDATH\xc7\x9dVK\x8e\xd40\x10\xb5;N\x11\x0c\xbd\
-\x016p\x12\xc4\x06\xc40}\x949\x0f\xf7`3\xec\xb8\x0b\xec`1Qk\xa4A\xfdq\\\
-T\x1cW\xe6\xa5\xda\xe9\x0f\x91J\xeej\xc7\xf5\xaa^}bg\xc8\xe8\xc7\xaaU\xff\
-\xc6\x872\xbf{\x16\x9d22\x82\x15E\x83\x12\x18
- \x04k\x14\x07\x07\x0b\x90\xe6\xff2\xad\x85\x026`\xa8\x91:\xc9\x9e\xc5\
-\x83^#\xc0(\x19*\x93L\x92\x8c\x01T\xa2!\x00@\xe3[\x96]\x12\x83\x11X\x88\
-@\x8c\xcfX\xa6\xe9\xb7St\xc9\xe1:\x81\xf8\x040R\x14\xc6\x081\x02\x97<\x9e\
-&\x80Y\x06\xc0\x0eP\xb4\x03G\x0d\x00\x1b\x07\xdc:\xf0^d\xacr\xa0\x01d-\x94\
-\xf1\x0e\x14#(\x93\xc1\x8e\xff\xe5\xaf\xe5\x8fx\x94\x8f<^=\xde.\xd6\x8b\
-\xaf\x8d\x99@\xe1\xe7\xfa\xed\xfa\x96\xf7\xef\xe2>\x9b\xab\xdeU\xef\x93\
-a\xa1\xac@\x00\x8cB\xa4\xb0\xcfm\x0b\xc5\xaf\xdb\xd2\x1a\xfb\xc2\xc6\x1d\
-\xbbm\x9d\xed\xf6\xb7]\xc9;]y\x08p(|\xd8\xce\xad\xa1\x0d\xb5\xff4\xfa\x98\
-\x81(\xb1!\xfbmK\x8c2T\x1e4ZO\xee\xe7\xf7\xab\xb83m_\xd8\x98M\xab?k\xf5\
-n\x1ey7\xda8\x02`gv/-/\xef\x1aj\xc8\x93\xa9^U\xab\xe5\x1f\xe6\xdc\xb5\
-\xe9\xab\xde\xb0.\xfb{\xde]}\xcc\xcd\x12\x97);\xa9\x0ec\x27-\xc7\x1d\xe7\
-\xe3\xc4y\xea\x86nd\xd1\xc9\xde\xb8p\xaaq<4PP\x1c\x9b\x13z\x00\x1bb\x27\
-F@\xaa\xbc\xe4\x85\x929\xfe\x12\xfd\x9d\x1fp\x8e:\xb1\xeeUW{=\x8b\x08\x0c\
-{MU\xc3\xb5p\xca\\\xaf\x94~\x03N\xa2\xa3A\x00H\x85W\x03M\xbd\\\xa4z\xd7\
-\xba\x1e\x1b>7M)\xc3\xdf\xd3\\?\xcd}Pc\xba\x16\xe7t\x15\xf9\x1c\xc8\x00\
-\xf7\x8dN\x19\xe7\xf6x6W\xa6\x074\xa9z\xd7\xf5\xffi\x88\x1e\xdd\xc9\xa4\
-B\xec(R\xf5\xae\xeb?(\x9a\x02~\x97]\xe6#~\xe8\xc9\xd4\x0e \xd7\x0f\xd1\
-#\xe6\xfc:N\xc8~\x0e\x02\xeb5\x00\xf4\xea\xffX\x04C\xfd\xd0\xe4\xe2;\xd4\
-\xffu\xa6<\xfd1\x8aN\xf5\x03\x0d\xd4\xad\x9a\xec\xec\x1cx\x05d\x8f\xd4\
-\xbf.ms\x0c d\xe6R\xfcB1\xf7\x9f\xa1\xfe\xb5#\xfe\xdc*
-*d/7\x0b\xce\xc17[\x9a\x051\xf4\xc3\xcb\x87\x1b?\xf1\x8f\x19\xcf\x01\x0c\
-u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
-\x92\xed\x8cs`\xa3\x9d=\xdc\xe4|\xce\xfbS\x11\xc8uP\xae\x8b5\xe7\xe0C\xf4\
-}\xd6\xbb.\xca\x95\xf1\xe2\x08\xfc\xd3\x80\xeet\xb9\xa8\x05\xf0~\x07\x03\
-\xee\xec\x08\xa4\xe1F
-\xa0\x00\x80=\xc8E\x14i\x9a\x08\xf2Q\x0c\xcc,\xaf\xeb\xff\x1c\x80\x1a\xd6\
-\xdc\xe5W\xdfO/\x8e {WR\xef\xe4\xd6\xde\xf3\x0fC\x01\xf8T\xed+\x8e
-\x00\x00\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
+\xa3\xfap\x00\x00\x06vIDATX\xc3\xed\x96{LSg\x18\x87OK+\xa5\xb4]o\xdeu\xcc\
+\xe9&N\xc7\x86\xd6\xa9C\xa3N\x27J6\xad\xcb\x86s\x9a\x99,\x8a\xc8%T\xe4\xe2\
+\x04\x06E\xa4@\x08A\xb0\x82P\xc9\xc2El\xc1YkE\x11$\xdcc\xf6\x87:gf\xb2\xe8\
+.qa\x01\xefL\xa6\\\xe4\xdb\xfb\xd5\xf7\x90\x0e\xaa&pp\xfb\xc3\x90\x27~\x9c\
+s\xe4<\xe7\xf7\xbe\xefw\x0eC\x08a\xfe\x8f0/\xc5^\x8a\xfd\xd7bQQQ\xae\xb8\
+\x17\x17\x17G\x9e\x05\\s\x97\xbd>88\x98\x09
+
+bv\xec\xd8\xe1X\xb3\x84\x84\x84\x0c_\xec\xc0\x81\x03\xae(\xb3X,\xe4\xd8\
+\xb1c.\xa1\xe7\xe0\x9ao\xe9\xb5ThT\xc4
+\x0b\x0b]\x11p\xee\xdc9\xd2\xda\xda\xea\x12z\xae\xa0\xa0\xc0\x1f\x18=\xb1\
+\x8c\x8c\x0cW\x08\xedv\xfb\xcd\x96\x96\x96!R\xf4\xd8\xc9\x93\x27\xdb\xd3\
+\xd3\xd3\xdd\xa8\x0c \x05\x89\x0d\xf0\xef\xb8\x17!\xc6\x1c=z4\xaf\xb1\xb1\
+q\x88\x18=\x06\xe7r@\x8c\x89\x8c\x8c\xa4\xacILL\xfc{\xf7\xee\xdd6\x10\x93\
+p&v\xe8\xd0\xa1\xa7\xb1\xb8\xb6\xb6v\x88XMM\x0d\xc9\xcf\xcf_\x080\xbbv\xed\
+bRSS\xf7\x17\x17\x17\x13(?\x1d
+3\x08yp"\x96\x96\x96\xf64x6\x9b\xedw\xe7r\xd25\x1c\xbbn0\x18xT
+\xf0\x81\x07\xb8V]]M\xce\x9c9\xc3\xcaU\xb0r\xa3%\xc6\x1c9r$\xad\xa1\xa1\
+a@\x8c\xae\xcb\xca\xcaR@\x8c\xd1\xe9t\x8c^\xaf\xd7\x99\xcdf\xc7\xf1\xe6\
+\xe6fr\xfa\xf4iV\xae\x12\xc4$#\x12;x\xf0\xe0\xb3\xf09{\xf6\xec\x80\x18]\
+\x1b\x8d\xc6YT
+\x98\x92\x93\x93\xd3TUUE\xd8T\xa9\x1cM\xced2\x91\xf8\xf8\xf8S \xe65Zb\x8c\
+\xd5j\xbdBoH\x81\xf5%\x10c\xc2\xc3\xc3\x19Hemii)\xa9\xaf\xaf\xffW\x0fbr\
+}P\xe2\x0b0\x10\xdaa\x8b\xc1\x1f\x1e_\xd3RQJJJb\xa8\x14 \xca\xcc\xcc\xac\
+\x80m\xc3!\xc2\xf6\x1f\xac\xff\x02\xd1\xf3\xb0\xd5$AI_\x071\xcew~g\xa6\xd1\
+\xe6\x06\xfasss\xa7\xc6\xc6\xc62\xc0\xa2\xa2\xa2\xa2\x1e\xba\xd1R\xa1\xa6\
+\xa6\xa66X[`0\xbe\x84\x07\xf1\x001\xc7F="1\xda\xa0\xdb\xb6ms\x8c7\x03\xd7\
+\xb38\xcb\xc1k\xa8\x15h\x041f\xef\xde\xbd\x94/*++I]]\xddE\x106\xc0\xb9\x15\
+ \xc6\x80\x98#\xe5Q\x15\xa38\xbd\xa2B\xe1\xf5\xb3\x9d\xbe\x82RRR(\x13A\xe0\
+s\x98Zo\x9a \xddhCCC\x1d\xbc\x10\xb1g\x11\x11\x11\xc1$%%y\x80\xd8t\x10K\
+\x04\xa9\xd5\xac\x1c\xe5E\x89\xf1\x06\x03b\x0bA*\x2799\xf92\xbc\x9e\xee\
+&$$\x98\x00f0\\\x8b\xd1\x9b\xf3\x017\x8a\xef\x09_\xd1\x94\xcbS\xdca-\x0c\
+\x8a
+\xda\x14\x13\x17s%\xc5\x90\xd2i\xcc7\x92rs9\xa9\xa8\xac\xa0\x9fA\xe7]\x0d\
+\x0f\x97b<\x14\x12\x02\xa2-\x09[\x02\xc3\xe2\xc3~\xd8\xfe\xcd\xf6r\xdf:\
+\xdf\xa9[\x0b\xb6\xfa\x1b\x8bA\xc8V\xdem\xad\xb6\xde\xb4\xd5\xd8\xacf\x9b\
+\xf9\xd3\xf4\xc2t\x99\xab\xb4\xb9\x12\xe3\x05\xc6\x07\xaa7\xc5nZ\xa0M\xd3\
+\xce\x85\xdf\xe5191\xb5\x19\xa5\x19D_\xa4\x27Z\xb3v\xa3\xf7\xcf\xde\xb3\
+\xb3NeUe6e\xea\xb4W\xb53\xe0\x1a)}\x00@\x80)s*&\x031\xdf\xb0\x88\xb0\xaf\
+\xa2\xe3\xa3O\xec\xd9\xb7\x87\x84\xef\x0bo\x18\xdf6\xfe\xb5\x9d\xc7wf\x1a\
+\x1b\x8c\xed\x86\x1a\xc3\xf5\xb9\x97\xe6~\x047\xf3\x01\xe6\x003\x81i\xc0\
+D@\x01\x881e>Wb\x9a\xe8\xe8\xe8\x02h\xe2\x8e\xac\xfdY\xa4\xb0\xa4\x90\x1c\
+\xfe\xee0\xd1\x97\xea[4\xdfk\x96R\x91\xf5?\xae\x0f\xd1\xfc\xa2\xd9\x00\xeb\
+\xc5\xc8\xfb\xc0|\xe0\x1d\xe0\x0d`2\xcay`r\xbc\x11\x8b\xc1;os^^\x1e\xb1\
+TX\x88\xd5nm\xb3\xd4X\x8eg\xd7g\x27\x056\x07\x06Bb~\xf0\xc7\x17\x01\xcb\
+\x80\x95L?\xb3\xca\xad\xdbm\xadc\xfd\xe4\x18=OK\xfe&0\x09x\x05pwNm\xd8b\
+\xb0\x8bO\x86O\x19\x83\xcdn\x8b2\xd9M\xcb\xfc\xae\xf9\xd1\xa7\xf7\x02\xde\
+F\xa9\x0f\xdc\x1e\xb9}"\xee\x10\x27\xca\xfe\x90\xd9d7d\xd5\xc2.\xe1f8\xee\
+\x8f\x824A_\x80\xf6\xdb8\xc0\xd39\xb5\x91\x881 \xc6N#m\xe2\xb1X\x1e\x0d\
+@K\xb9JtW\x14\xa9\xf8SqCuKE\x947\x95D\xd1\xa6\xf8ItG\xa4\x83skP\xce\x0f\
+{\xcf\x0bK:\x90\xda\x88\xc40v>\xf6\xc8\x04`\x16\xa6\xb5\x82\xde\\zKjRu\xaa\
+\xfa\xd5=j\xa2\xeeV\x13\xd5}\x15\x01\xd1\x0e\xcf\x0e\xcf\x0c8\xbf\x9a\xa6
+,\x00\xbc\xf1\xff{\xe2\x963|1\xa7\x09\xe2\xe3dM\xc2\xa9\xa3%\xfa\x10\x08\
+\x90\xdf\x91\xd7S!\xc7O?\xd0\x0br\x0f@\xae]\xf1\x9b\xfb}\xf7\x10\x9a*\xb0\
+\x04\x87\xe1U\xec5:\xa1<\xae\xc4<q\xc2|\xf0F\xabx\x8fyk\x95\xf7\x94W\xd5\
+}(\xc6\xfe\xc0\xef\x90"\x814\x8d\x98\xdar,\xfft@\x85\xe5\xe4q\x99\x98\xb3\
+\x98\xbf\xf0\xa1p\xb3\xb2S\xf9\xab\xfa\xf1 1\xf2\xa4\xac\xf2\xdb\xf2:\x90\
+\xff\x18\xcb\xbe\x00\xf7\xb7q\xd8\xaf\xfc\xd1*%-Q\x80\xe2\x81\xa2\xd5\xa5\
+\x18\xa4\x06ivx\xdc\xf3\x88\xc0!X\x84\xfd9\x01\xfb\x95\x131v*\xc7;5\xff\
+JG\xf3?\x90fC_u\x0f\x11\x83~SuA9oKs]\x88\x89\xb9\x14s\xc7\xfe\x98\x81;;\
+\xed\x9b\xd5\x82\x1e\xc1F\xe5#e\xbb\x8b\xcc\xd8r^\x10<\x14\xac\x1f4\x99\
+\x9c\x8a\x09q\xa2\xbcp\xc2\x16\xb3\xa9)\xba\x14M\x8e\x89\x1c\xfc\xd3\xab\
+\xee\x95w\xca\xed\xd0\x8b\xeb\xe0\xbay\xf8Pc\xb9,%\x83{\x8f\x27>\xf1LL\xcd\
+\xb1\xc9J\xba$\xa9\x03\x93\x09\x82\xca>\xe5EY\xaf,O\xdc#\xd6A\xa2\xeb\xb0\
+\x8csp\xbb\x18\xd8d\xb9\x12\xe3c\x9f)\xf1\x06\xb3\x81\xf7\xa8\x1c\xbf\x8f\
+\x1f }(\xcd\x96\xf4J\x92E\xbd\xa2`A\x9f\xe03\xdc\xe7\x96\xe3K\xfd]Lk\x02\
+~
+\x8d\xe1j\xbbp.\xa7\x04G~\x1a\xcai\xf0\xb5\xb3\x14E\x96\xe3K|\x09\xf6\xd5\
+S\xbf2\xb8\x12c\xcbI\xcb C9/,\xab\x0f~I\xccG\xe6aJo\xe1\xa6:\x09\x93\xf6\
+\xc4\xb48{%9\xa7&\xc0\x92JqJ\x27\xa2\xe0tLf\x06\xae\xbd0\xa5\xb184b\x27\
+)\x1e\xd7bl\xaf\x09091
+\xcaQ\x92E\x892\x12,\xdd\x18\xa7\xcf\xeb\xe7~(\xfe\x030 Dt\xd9kk\xda\x00\
+\x00\x00\x00IEND\xaeB`\x82'''
 
     ______img_icon_ico_chevron_up_png = b'''\
 \x89PNG\x0d
@@ -9027,1900 +6562,17 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
 \x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
  \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_mimas_align/pnl_tab_mimas_align_xrc', bytearray(pnl_tab_mimas_align_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_mimas_align/______img_icon_ico_optical_png', bytearray(______img_icon_ico_optical_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_mimas_align/______img_icon_ico_optical_orange_png', bytearray(______img_icon_ico_optical_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_mimas_align/______img_icon_ico_optical_green_png', bytearray(______img_icon_ico_optical_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_mimas_align/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_mimas_align/______img_icon_ico_sem_orange_png', bytearray(______img_icon_ico_sem_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_mimas_align/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_mimas_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    __res.Load('memory:XRC/pnl_tab_mimas_align/pnl_tab_mimas_align_xrc')
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_enzel_align/panel_tab_enzel_align_xrc', bytearray(panel_tab_enzel_align_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_enzel_align/______img_icon_ico_enzel_z_align_png', bytearray(______img_icon_ico_enzel_z_align_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_enzel_align/______img_icon_ico_enzel_z_align_green_png', bytearray(______img_icon_ico_enzel_z_align_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_enzel_align/______img_icon_ico_enzel_sem_align_png', bytearray(______img_icon_ico_enzel_sem_align_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_enzel_align/______img_icon_ico_enzel_sem_align_green_png', bytearray(______img_icon_ico_enzel_sem_align_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_enzel_align/______img_icon_ico_enzel_flm_align_png', bytearray(______img_icon_ico_enzel_flm_align_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_enzel_align/______img_icon_ico_enzel_flm_align_green_png', bytearray(______img_icon_ico_enzel_flm_align_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_enzel_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    __res.Load('memory:XRC/panel_tab_enzel_align/panel_tab_enzel_align_xrc')
 
-    pnl_tab_fastem_overview_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_fastem_overview">
-    <object class="wxBoxSizer">
-      <orient>wxHORIZONTAL</orient>
-      <object class="sizeritem">
-        <object class="wxPanel" name="pnl_left">
-          <object class="wxBoxSizer">
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="ToolBar" name="fastem_overview_toolbar">
-                <style>wxVERTICAL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALIGN_RIGHT</flag>
-            </object>
-            <orient>wxVERTICAL</orient>
-            <object class="spacer">
-              <option>8</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_up_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
-              <border>10</border>
-            </object>
-          </object>
-          <size>-1,-1</size>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="FastEMOverviewViewport" name="vp_fastem_overview">
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar" name="fpb_settings">
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_fastem_overview_streams">
-                          <size>300,-1</size>
-                          <add_button>0</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>SEM</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxPanel">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="CaptionBar">
-                      <label>CALIBRATION</label>
-                      <fg>#1A1A1A</fg>
-                    </object>
-                    <option>0</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxPanel">
-                      <bg>#333333</bg>
-                      <size>400,-1</size>
-                      <object class="wxBoxSizer">
-                        <orient>wxVERTICAL</orient>
-                        <object class="sizeritem">
-                          <object class="wxGridBagSizer">
-                            <cols>2</cols>
-                            <rows>3</rows>
-                            <hgap>160</hgap>
-                            <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_optical_autofocus">
-                                <label>Optical Autofocus</label>
-                                <font>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                              </object>
-                              <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
-                              <border>5</border>
-                              <cellpos>0,0</cellpos>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_optical_autofocus_run">
-                                <size>45,-1</size>
-                                <height>16</height>
-                                <face_colour>def</face_colour>
-                                <label>Run</label>
-                                <style>wxALIGN_CENTRE</style>
-                              </object>
-                              <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
-                              <border>5</border>
-                              <span>1,1</span>
-                              <cellpos>0,1</cellpos>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_sem_autofocus">
-                                <label>SEM Autofocus</label>
-                                <font>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                              </object>
-                              <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
-                              <border>5</border>
-                              <cellpos>1,0</cellpos>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_sem_autofocus_run">
-                                <size>45,-1</size>
-                                <height>16</height>
-                                <face_colour>def</face_colour>
-                                <label>Run</label>
-                                <style>wxALIGN_CENTRE</style>
-                              </object>
-                              <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
-                              <border>5</border>
-                              <span>1,1</span>
-                              <cellpos>1,1</cellpos>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText" name="lbl_autobrightness_contrast">
-                                <label>Auto-brigtness/contrast</label>
-                                <font>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
-                              </object>
-                              <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
-                              <border>5</border>
-                              <cellpos>2,0</cellpos>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_autobrigtness_contrast">
-                                <size>45,-1</size>
-                                <height>16</height>
-                                <face_colour>def</face_colour>
-                                <label>Run</label>
-                                <style>wxALIGN_CENTRE</style>
-                              </object>
-                              <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
-                              <border>5</border>
-                              <span>1,1</span>
-                              <cellpos>2,1</cellpos>
-                            </object>
-                          </object>
-                        </object>
-                      </object>
-                    </object>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="CaptionBar">
-                      <label>OVERVIEW ACQUISITION</label>
-                      <fg>#1A1A1A</fg>
-                    </object>
-                    <option>0</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="FastEMSelectionPanel" name="selection_panel">
-                      <bg>#333333</bg>
-                      <fg>#999999</fg>
-                      <size>400,-1</size>
-                      <flag>wxALL|wxEXPAND</flag>
-                    </object>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxPanel">
-                      <object class="wxBoxSizer">
-                        <orient>wxVERTICAL</orient>
-                        <object class="sizeritem">
-                          <object class="wxPanel">
-                            <object class="wxBoxSizer">
-                              <orient>wxHORIZONTAL</orient>
-                              <object class="sizeritem">
-                                <object class="wxStaticBitmap" name="bmp_acq_status_info">
-                                  <bitmap>______img_icon_dialog_info_png</bitmap>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxRIGHT</flag>
-                                <border>5</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticBitmap" name="bmp_acq_status_warn">
-                                  <bitmap>______img_icon_dialog_warning_png</bitmap>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxRIGHT</flag>
-                                <border>5</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
-                                  <label>No scintillator selected for overview acquisition.</label>
-                                  <fg>#DDDDDD</fg>
-                                  <font>
-                                    <size>10</size>
-                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                  </font>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                              </object>
-                            </object>
-                            <bg>#333333</bg>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
-                          <border>12</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxBoxSizer">
-                            <object class="sizeritem">
-                              <object class="wxGauge" name="gauge_sparc_acq">
-                                <size>-1,10</size>
-                                <range>100</range>
-                                <value>0</value>
-                                <style>wxGA_SMOOTH</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>1</option>
-                              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
-                              <border>16</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_sparc_cancel">
-                                <height>24</height>
-                                <face_colour>def</face_colour>
-                                <label>Cancel</label>
-                                <fg>#1A1A1A</fg>
-                                <hidden>1</hidden>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <flag>wxALL</flag>
-                              <border>10</border>
-                            </object>
-                            <orient>wxHORIZONTAL</orient>
-                          </object>
-                          <flag>wxEXPAND</flag>
-                        </object>
-                      </object>
-                      <bg>#333333</bg>
-                    </object>
-                    <option>0</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_sparc_acquire">
-                      <icon>______img_icon_ico_acqui_png</icon>
-                      <height>48</height>
-                      <face_colour>blue</face_colour>
-                      <label>START</label>
-                      <fg>#FFFFFF</fg>
-                      <font>
-                        <size>15</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxALL|wxEXPAND</flag>
-                    <border>10</border>
-                  </object>
-                </object>
-                <bg>#4D4D4D</bg>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-          </object>
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-    </object>
-    <bg>#333333</bg>
-  </object>
-</resource>'''
-
-    ______img_icon_ico_chevron_up_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
-D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
-\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
- \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_dialog_info_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x02\x87IDAT8Ou\x91]HSa\x18\xc7\x9f\xf9YI\x81y\x19\
-\x04ua%\x18D\xa5\xdb,3\x27\xa5\x93\xd0\x021,\xcbL\xcb2ts\x9a\xce\xa6S\x9c\
-\x14f\x17\xb9\x92\xcc\xb0\xd4\x15\x91\xc3\xd2\xd4l:\x8d\x98}\xe10\xa5\xf4\
-\xa2\xe5\xae\x8a]\x09]\x18\xd9:\xfe{\xcf9x\xb6&\x1d\xf8\x9d\xf79\xcf\xc7\
-\x8f\xe7\xe5\x10\x00
-@\xc6\x08cD\x8c8\xe7\xb7\xd8\xa7\xdc[Y\xbc\x9e\xb1\x86\x11\x14\xd8\x1f\
-8\x1c|\xa9eH\xae6X\x27N6\xdb~\xe8-\xef\x96MV\x27J\xdb\x1d\x8b\xb97lS\xc6\
-n\xc7\x01\xd6\x13\xf2?A\xd0\xce\xfcV\xc3\xae\xe2\xee_\xb7\x07g\xf1\xc2\xf9\
-\x0dc3\x1e\xd8\xa7=,\xfe\x8e\xce1\x17r\xae\xdb\xbd\xa9\x06k\x93\xbfD\x12\
-D\xa9\x1bt\xd1\xf9\x1d\xe8\x18u\xa1\xf9\xd9\x1cj\x1e\xce\xe0\xaa\xf5\xb3\
-\x00\x1f7\xf5\xce\xc1\xf2j\x1ei\x0d\xc3\x88>s\xb7\x16\xe2UE\x01\xed)\xd9\
-\x16r\xa8q\xb1\xba\xcb\x09\xed\xbdIh\xda\x27a\xb0|\xc4\x92\x97\x13\xe0c\
->\xc7\xd7\xea\x1eM#<\xd3\xfc3"\xad~\x87O \xd7\xf5$W\xf6\xa2\xd0\xfc\x16\
-\xf97\xdf\x08\x94\xb1\xe6?\xdc\xb2\x00\x1f\xaf\xe4\x0bX\x8f\xca0\x08:Xo\
-\xf5\x09\x14:\xb7\xaaz\x10Y\xd7\xc6\xff\xa1\xe8\xd6\x04\xce\x9b\x1d\xab\
-\xf2\xe9\xf56\x90\xaa\xd1-\xccR\xec\x85H&\xe0R\x0cCH5\xbe\x94\xf0\x0e\xd7\
-\x8d\xb0\x1c\x8fX\xcb0\xf1\x02\x13G\xb1\x17#\x89b\xb4\x1bI\xae\xe5\xe24\
-}PV\xf4\x8bT\x0dCq\xc5&\x09\x12j\xc6\xd9\xf7(bJ\xfa\xb1)\xcf\x82\xd0\x8c\
-vP\x92\x91\xa3\xed\xc5Q\xe2\x15\xe2\xb5\x1eJm\x81\xec\xc8\x1d\x84eY\xb0\
-.\xef)6\x14\x0c`aaA\x80N\x0f\x81r\x07@\xc7\xad\xa0c]\xa0\xf4VPB\x95G\x98\
-\x15^{5\x0eJi\x02ev\x80\xb2\x9f\x80N\xb1\x81\xbca\x9f\xe0\xac\x1dT0.\xe6\
-\xf9\xba\xda\x0c\x8a\xd3L\xf8\x04\xf1Z\x05\xc9\xcb\xbdt\xb4\x13t\xa2O\x18\
-X\x19\x96$\xc5\xefEQv\x0fH^\xe1e\x02\xa5$\x10\xb7(m\xa3\xc4ZPN/\xe8\xdc\
-k6\xf0\x01T\xf6\x09t\xd9%\x9e\xa5S\xc2V\x94h\x04\xdb\xb8M\x9a\x93\x02"\x19\
-+\xdcg\x9bp\xa4\xb4\xb0{?g\xb2Yv~\x05\x15\x8e\x82\xf6?F\x90\xa2\x82c=\x0f\
-\xf8\xdeU\x02)\xb1[\x93\x1c\xbe\xaf\xfcKxR\xe5\x92L\xa1\x03\xfb\xc5\x08\
-M\xd1\xff^\xab\xd2\xbb\x83\x95:\xd5\xaa\xfe\xc0\x84?\xb2\xd8\xa2\xcd\xc4\
-\x08\xcc\xfb\xf3\x17j\xeaha\x09cF\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_dialog_warning_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x01\xcfIDAT8\xcb\xa5\xd3?h\x13\x01\x14\xc7\xf1\x97\
-\x92\x8b\xd6\x10MZ$\xbb\x88 \x8e\x82\xd4\xad\x8b\xd4\xead@\x1dt\x13\x15\
-\x14Z\x10\xc4\xbf\x98\xe2V\xc4A\x05%\x8e\xd5\x8a\xa0j\xac\xa21\x18:IB\
-\xc0\xd8\xa6E#\x88\xb5\xd7\xe4L1M\xca\x9d\xb9K\xee\xebp\xa1"J\x9b\xea\xf0\
-[\xde\xe3\xf7\x817<\x01\xe4\xb2\xe4\xd2\x8c*\x87\xea\x8f={\xff\x09\xa8\
-\xc7\x94\xfdV\xac\xdb\xb6\x12!j/\x94\x83+\x06\xac\x27\xbeY&\x1f`\xbf\x1f\
-\xc6\x1c\xf1\x16W\x044bm\xc7\xeb\x89\x10|\x18\x81\xdc0\xf5W\xbb0\x9f)\xfd\
--\x03\xe6S_\x89\xeceR\xfd]\xa4\xfa\xb6a\xa7NS\x8b\xb6\xcf\xb5\x04X\xcf\xdd\
-\xe7\xac\xe4N\xc8\x0e\x10\xef\xe9 \xde\xd3\x01\xe9\xa3X\xaf\xbb\xa8\x8d\
-\xba/,\x0b\x18\xa3\x81y;{\x0c\xb2\x87\x19\xeb\xedd\xac\xb7\x132\xbb\xb1\
-S;0\x1e\xf9*K\x02F\xd45h&\xb7\xc2\xc4\x1e\xc8\x85H\xef\xdb@\xe6\xc0f\x98\
-\xe8\x86\xf1\xed\xd4\x92[\xd0\x1f\xba.\xfd\x1d\x88\x88\xb2p\xb5n\xbfU \
-#\xf0N\xf8tr=\xf9\x13\xeb \x270)\xd8\xe3\xab\xa8\xdc\xf3\xe8\xa4E\xf9\x03\
-\xa8\xderE\x8c\x97~\x98\x12\xc8\x0b|\x16\xf8"\xf0U`\xa6\x99i\xc1x\xe3\xa7\
-z\xdbu\xe3w`H\xbc\xe5\x9bkM;\xaf8\x85\x82\xc0\x9c\xa0\x86\xfd\xa8a?T\x05\
-\xe6\x9d\x99\xad\xb6S\x8e\xac1\x0bC\xe2]\x04\xcaW\xe5\xae\x1e\x0f:eM\xe0\
-\xbb\xc0\x82\xa0\x85\x03h\x03\x010\x04*\x0e@A\xd0\x13A\xcaW\xe4\xce"P<%\
-Zcj#\xa8AP\x05\x8a\x02\xa5f\xa1\xd4Dg\x9d\x13\x98\x0e\xd2\xf8\xb8\x09\xed\
-\xbc[\xfb\x05\x9cm\xbb\xfe\xed\xa2\xe7\xc7\xcc\x111Z\x89\xda\xe7\xd1\x0b\
-g\xe4\xda\xb2\xdf\xd8J~\x02\xf21\xd2V\x95\xc1N=\x00\x00\x00\x00IEND\xae\
-B`\x82'''
-
-    ______img_icon_ico_acqui_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00"\x08\x04\x00\x00\x00\x99\
-\xa5c3\x00\x00\x03\x90IDATH\xc7\x8d\x96\xcdk\\U\x18\x87\x9fs\xee93s\xd3\
-6\x99v\xd2Z\xab\xa3\x14\x9a\x04EJhI\xa5Y\x88n\xdc\xd5\x95[QW\x82\xbb\xda\
-\x85\xe0Np\xd1\x9dK\xa5\xf4\x1f\x10\xeaJp!\xd9\x08\x85\x10\xf1s\xa1\x0b\
-\x95Z\x93X\x8aL\xa7\xad\x85\xa4\x99{>\\\xdcs\xef=g&\x13z.Cf\x86\x9cg\xde\
-\xf7\xf7~
-\xcf\x94#\xf6y\xe7\xf7y\x17\x1d5\x15T\xbe\xc4\x04\xcc\xd7 \xff$\xb0
-#\x10\xc8\xf0\x97\x80\xf1\xb8\x80\xf3\x88q\xdc4\xcb\x04\x12\x89$\xabq\x15\
-\xca\xe2p\xb8\x83-\x13\x09H\x90\x85G\x05\\\x892\xd8\xf0\xb8\x80\x8f\x1c\
-V\x13\x1a\x89\x00\x92(4
-E\x86\x04\xc0a1\x14\x18\x0c2X\x98(\xa8&4\x92\xb5E\x8aV\xc0U0\x83aD\x81\
-\xa1\xc0bp\xd8XA5\xa1Q\x05\xd2h\xf4\xe5\xdfz\xe4\x89.W^\xa4`D\x16\xac\x13\
-\xb1\x82*\xb1H\x91\xa1\x83{-4\xba\xc7E\xfa\xa9\xca3\x8c\xc8P\x8c\x90\x14\
-\x08L\xb0:\xd2\xacDit\x09\xa9\x9e\x9c>\x8b),\x0f\xa8,D\x9a:m\x82f"\xc8\xdd\
-\xa2M\x9bV\x00\xaa}\x13\x27GQ$\x81\x01\x8f\xab4\x13A+M\xfb\xf2_\xa9F\xfd\
-1\xc5`\xeb\x9bu\xb6\x1a\x05O\xe3\x83j>vS\xa1i\x8fk\x94\xd3\xc3\x0f\xcc\xaf\
-\xc5\x03\xd3\x93g\xdb\xb3\x8a\x1e\x17Yn\xfe\xa1\x15\xb2N\x94\x9a\xc5\xf2\
-Oh\xe4\x87\xe6\xba\xd8\xd0h\xc0fw^k\xbd\xd3\xcd\x9f\x8d\x8a\x15MA\x86,\x13\
-[F\xa9\xa1\xd0\xa9K\xfe\xae\xfbPoT\x9f2\xdb_{\xfc\xd1\xed\x9d\xdd\xb8\x8e\
-t]pQ9UY\x96\xb0\xcc\xa7z\x08\xdf.\xdd|S\xcc\xcfm\xaf|y\xe1\xf6\xf3\x9b\xeb\
-\x9f\xb9+\xa7\xe9\xd4\xbf\x10\xec
-\x10\x92L\x8b\x8e\xfdA\xff\x097V\xd7>9y\xee\xc2s\xe7V\x1f^\xfdi\x09^^\xff\
-}{X\xa6UcD\xe8,2*t\x19\x8b\x01\xe6{\xb0\xe2\x97w\x97\xe4*+,\xb3\xa2[o\x81\
-\xf4\x8f~\xbcK\xd1\xc0Ds\xab)\xa7\xb4\xa7\x02\xc5\xbd6\xb7\x8e\xce\x1c[\
-\xa4t\xabC\xb6\x00 \x06\x03vi\x13\xdd\x0c\xf7%S\x8f\xe9@o\xe7\x90\xed\x86\
-\x8b\x82\xfc\x01\xc0N\xbe\x1bjh\xfc\xc8\xa6\x18\xc6\xdb\x9d]\x80c\x8f\x8f\
-\xdc\x1ca\xab\x88\xac\x01<<\xa3\x1b\x1b|\xdc\xcae\xd4\xdf]
-\xcb^\xd9\xed\xc0\xa5k\x83\xef\x86X\xf0\xf6ku\x03\xfe\xe8\xed-\xcfUN\x92\
-t4T\xd4\xdb]mB\xd9\x1e\xba\x9bo\x9f\xf9|\xfe\xd1\xab\x1f\xdfy\xfa\xde\xf1\
-#\xdb\xf9}2\xa3\xbfx\xff\xa4~*\x86\xb9\xa6\xe7\xaa\xe4\xcb\x04\xa69\xfa\
-\xfa\xc6\xde\xd9\xeb\xb9=\xb5\xc9\xdf\x08\xe4\xa0s\xed\x83|\xf9\x05N4\x1d\
-\xc0\x86\x8e\x1bE\xb3\xea\xefE:U\xe6\xe8_Z??\xfc\xaa\xfb\xf3\xec\xff\xce\
-\xdf:\xff\x8d\xe3\xdd\x97X\xe4p\x14\xf2z\x1a\x00*rq\x0c\x06\x8a\x13\xb4\
-Nm\xbf\xb7\xc5?\x8c\xe8\xb2@\x9fg\x98\x8dS\xa0\xc04\xd3@\xd5\xe2\x1b
-\xf6&\x87W\x8f\xc3\xf4\xd9\xc1\x91q\x88\x19Zi2\x96\x13!\x84N\xf8\xb2\x90\
-\xaa.\xdb\x0eC\xa4\xac\x06\x17\x8d\x0cB\xc9\x95c\xaf\xf4d\xc4\x1e#\x8a\x00\
-t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
-"\xc9B\x81\xf8h\xd0\xc6\xdbG\xa5\xb3\xc1\x06\xcd\xea\x00\xd4\xd3%\x98\x1f\
-\xef\x17\xe3K@\xbau4\xcb\x82\x8f\x03@p\xc8\x05GD\xaa\xf3\xd8\xf1\xf5\xe3\
-b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
-\xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_overview/pnl_tab_fastem_overview_xrc', bytearray(pnl_tab_fastem_overview_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_overview/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_overview/______img_icon_dialog_info_png', bytearray(______img_icon_dialog_info_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_overview/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_overview/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
-    __res.Load('memory:XRC/pnl_tab_fastem_overview/pnl_tab_fastem_overview_xrc')
-
-    pnl_tab_sparc_acqui_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_sparc_acqui">
-    <object class="wxBoxSizer">
-      <orient>wxHORIZONTAL</orient>
-      <object class="sizeritem">
-        <object class="wxPanel" name="pnl_left">
-          <object class="wxBoxSizer">
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="ToolBar" name="sparc_acq_toolbar">
-                <style>wxVERTICAL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALIGN_RIGHT</flag>
-            </object>
-            <orient>wxVERTICAL</orient>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxBoxSizer">
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_sparc_view_all">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_all">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_sparc_view_tl">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_tl">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_sparc_view_tr">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_tr">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_sparc_view_bl">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_bl">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
-                  <border>6</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="wxBoxSizer">
-                    <object class="sizeritem">
-                      <object class="wxStaticText" name="lbl_sparc_view_br">
-                        <label>view</label>
-                        <fg>#BFBFBF</fg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <flag>wxTOP|wxBOTTOM</flag>
-                      <border>2</border>
-                    </object>
-                    <orient>wxVERTICAL</orient>
-                  </object>
-                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
-                  <border>18</border>
-                </object>
-                <object class="sizeritem">
-                  <object class="ViewButton" name="btn_sparc_view_br">
-                    <face_colour>def</face_colour>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                  </object>
-                  <flag>wxALIGN_RIGHT</flag>
-                </object>
-                <orient>wxVERTICAL</orient>
-              </object>
-              <option>1</option>
-              <flag>wxBOTTOM|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_up_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
-              <border>10</border>
-            </object>
-          </object>
-          <size>200,-1</size>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="ViewportGrid" name="pnl_sparc_grid">
-          <object class="LiveViewport" name="vp_sparc_tl">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="ARAcquiViewport" name="vp_sparc_tr">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="PointSpectrumViewport" name="vp_sparc_bl">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="TemporalSpectrumViewport" name="vp_sparc_ts">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="ChronographViewport" name="vp_sparc_br">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="AngularSpectrumViewport" name="vp_sparc_as">
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar" name="fpb_settings">
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_sparc_streams">
-                          <size>300,-1</size>
-                          <add_button>1</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>STREAMS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="wxPanel">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="CaptionBar">
-                      <label>ACQUISITION</label>
-                      <fg>#1A1A1A</fg>
-                    </object>
-                    <option>0</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxPanel">
-                      <object class="wxBoxSizer">
-                        <orient>wxVERTICAL</orient>
-                        <object class="sizeritem">
-                          <object class="wxFlexGridSizer">
-                            <object class="sizeritem">
-                              <object class="wxStaticText">
-                                <label>Filename</label>
-                                <fg>#E5E5E5</fg>
-                              </object>
-                              <flag>wxTOP</flag>
-                              <border>4</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxBoxSizer">
-                                <object class="sizeritem">
-                                  <object class="wxTextCtrl" name="txt_filename">
-                                    <size>-1,20</size>
-                                    <value>Select a destination file</value>
-                                    <fg>#2FA7D4</fg>
-                                    <bg>#333333</bg>
-                                    <style>wxBORDER_NONE|wxTE_READONLY</style>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <option>1</option>
-                                  <flag>wxTOP|wxEXPAND</flag>
-                                  <border>2</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="ImageTextButton" name="btn_sparc_change_file">
-                                    <height>24</height>
-                                    <face_colour>def</face_colour>
-                                    <label>change…</label>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                  </object>
-                                  <flag>wxTOP</flag>
-                                  <border>2</border>
-                                </object>
-                                <orient>wxHORIZONTAL</orient>
-                              </object>
-                              <flag>wxEXPAND</flag>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText">
-                                <label>Destination</label>
-                                <fg>#E5E5E5</fg>
-                              </object>
-                              <flag>wxTOP</flag>
-                              <border>2</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxTextCtrl" name="txt_destination">
-                                <size>200,20</size>
-                                <value>...</value>
-                                <fg>#BFBFBF</fg>
-                                <bg>#333333</bg>
-                                <style>wxBORDER_NONE|wxTE_READONLY</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                            </object>
-                            <cols>2</cols>
-                            <rows>3</rows>
-                            <vgap>5</vgap>
-                            <hgap>10</hgap>
-                            <growablecols>1</growablecols>
-                          </object>
-                          <flag>wxALL|wxEXPAND</flag>
-                          <border>10</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxPanel">
-                            <object class="wxBoxSizer">
-                              <orient>wxHORIZONTAL</orient>
-                              <object class="sizeritem">
-                                <object class="wxStaticBitmap" name="bmp_fold_acq_info">
-                                  <bitmap>______img_icon_dialog_info_png</bitmap>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxRIGHT</flag>
-                                <border>5</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText" name="lbl_sparc_fold_acq">
-                                  <label>Some streams will be acquired simultaneously</label>
-                                  <fg>#DDDDDD</fg>
-                                  <font>
-                                    <size>10</size>
-                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                  </font>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                              </object>
-                            </object>
-                          </object>
-                          <flag>wxLEFT</flag>
-                          <border>12</border>
-                          <bg>#333333</bg>
-                          <object>
-                            <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
-                            <border>12</border>
-                          </object>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxPanel">
-                            <object class="wxBoxSizer">
-                              <orient>wxHORIZONTAL</orient>
-                              <object class="sizeritem">
-                                <object class="wxStaticBitmap" name="bmp_acq_status_info">
-                                  <bitmap>______img_icon_dialog_info_png</bitmap>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxRIGHT</flag>
-                                <border>5</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticBitmap" name="bmp_acq_status_warn">
-                                  <bitmap>______img_icon_dialog_warning_png</bitmap>
-                                  <hidden>1</hidden>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                                <flag>wxRIGHT</flag>
-                                <border>5</border>
-                              </object>
-                              <object class="sizeritem">
-                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
-                                  <label>No region of interest selected.</label>
-                                  <fg>#DDDDDD</fg>
-                                  <font>
-                                    <size>10</size>
-                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                  </font>
-                                  <XRCED>
-                                    <assign_var>1</assign_var>
-                                  </XRCED>
-                                </object>
-                              </object>
-                            </object>
-                            <bg>#333333</bg>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                          </object>
-                          <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
-                          <border>12</border>
-                        </object>
-                        <object class="sizeritem">
-                          <object class="wxBoxSizer">
-                            <object class="sizeritem">
-                              <object class="wxGauge" name="gauge_sparc_acq">
-                                <size>-1,10</size>
-                                <range>100</range>
-                                <value>0</value>
-                                <style>wxGA_SMOOTH</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>1</option>
-                              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
-                              <border>16</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_sparc_cancel">
-                                <height>24</height>
-                                <face_colour>def</face_colour>
-                                <label>Cancel</label>
-                                <fg>#1A1A1A</fg>
-                                <hidden>1</hidden>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <flag>wxALL</flag>
-                              <border>10</border>
-                            </object>
-                            <orient>wxHORIZONTAL</orient>
-                          </object>
-                          <flag>wxEXPAND</flag>
-                        </object>
-                      </object>
-                      <bg>#333333</bg>
-                    </object>
-                    <option>0</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_sparc_acquire">
-                      <icon>______img_icon_ico_acqui_png</icon>
-                      <height>48</height>
-                      <face_colour>blue</face_colour>
-                      <label>START</label>
-                      <fg>#FFFFFF</fg>
-                      <font>
-                        <size>15</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxALL|wxEXPAND</flag>
-                    <border>10</border>
-                  </object>
-                </object>
-                <bg>#4D4D4D</bg>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-          </object>
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-    </object>
-    <bg>#333333</bg>
-  </object>
-</resource>'''
-
-    ______img_icon_ico_chevron_up_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
-D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
-\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
- \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_dialog_info_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x02\x87IDAT8Ou\x91]HSa\x18\xc7\x9f\xf9YI\x81y\x19\
-\x04ua%\x18D\xa5\xdb,3\x27\xa5\x93\xd0\x021,\xcbL\xcb2ts\x9a\xce\xa6S\x9c\
-\x14f\x17\xb9\x92\xcc\xb0\xd4\x15\x91\xc3\xd2\xd4l:\x8d\x98}\xe10\xa5\xf4\
-\xa2\xe5\xae\x8a]\x09]\x18\xd9:\xfe{\xcf9x\xb6&\x1d\xf8\x9d\xf79\xcf\xc7\
-\x8f\xe7\xe5\x10\x00
-@\xc6\x08cD\x8c8\xe7\xb7\xd8\xa7\xdc[Y\xbc\x9e\xb1\x86\x11\x14\xd8\x1f\
-8\x1c|\xa9eH\xae6X\x27N6\xdb~\xe8-\xef\x96MV\x27J\xdb\x1d\x8b\xb97lS\xc6\
-n\xc7\x01\xd6\x13\xf2?A\xd0\xce\xfcV\xc3\xae\xe2\xee_\xb7\x07g\xf1\xc2\xf9\
-\x0dc3\x1e\xd8\xa7=,\xfe\x8e\xce1\x17r\xae\xdb\xbd\xa9\x06k\x93\xbfD\x12\
-D\xa9\x1bt\xd1\xf9\x1d\xe8\x18u\xa1\xf9\xd9\x1cj\x1e\xce\xe0\xaa\xf5\xb3\
-\x00\x1f7\xf5\xce\xc1\xf2j\x1ei\x0d\xc3\x88>s\xb7\x16\xe2UE\x01\xed)\xd9\
-\x16r\xa8q\xb1\xba\xcb\x09\xed\xbdIh\xda\x27a\xb0|\xc4\x92\x97\x13\xe0c\
->\xc7\xd7\xea\x1eM#<\xd3\xfc3"\xad~\x87O \xd7\xf5$W\xf6\xa2\xd0\xfc\x16\
-\xf97\xdf\x08\x94\xb1\xe6?\xdc\xb2\x00\x1f\xaf\xe4\x0bX\x8f\xca0\x08:Xo\
-\xf5\x09\x14:\xb7\xaaz\x10Y\xd7\xc6\xff\xa1\xe8\xd6\x04\xce\x9b\x1d\xab\
-\xf2\xe9\xf56\x90\xaa\xd1-\xccR\xec\x85H&\xe0R\x0cCH5\xbe\x94\xf0\x0e\xd7\
-\x8d\xb0\x1c\x8fX\xcb0\xf1\x02\x13G\xb1\x17#\x89b\xb4\x1bI\xae\xe5\xe24\
-}PV\xf4\x8bT\x0dCq\xc5&\x09\x12j\xc6\xd9\xf7(bJ\xfa\xb1)\xcf\x82\xd0\x8c\
-vP\x92\x91\xa3\xed\xc5Q\xe2\x15\xe2\xb5\x1eJm\x81\xec\xc8\x1d\x84eY\xb0\
-.\xef)6\x14\x0c`aaA\x80N\x0f\x81r\x07@\xc7\xad\xa0c]\xa0\xf4VPB\x95G\x98\
-\x15^{5\x0eJi\x02ev\x80\xb2\x9f\x80N\xb1\x81\xbca\x9f\xe0\xac\x1dT0.\xe6\
-\xf9\xba\xda\x0c\x8a\xd3L\xf8\x04\xf1Z\x05\xc9\xcb\xbdt\xb4\x13t\xa2O\x18\
-X\x19\x96$\xc5\xefEQv\x0fH^\xe1e\x02\xa5$\x10\xb7(m\xa3\xc4ZPN/\xe8\xdc\
-k6\xf0\x01T\xf6\x09t\xd9%\x9e\xa5S\xc2V\x94h\x04\xdb\xb8M\x9a\x93\x02"\x19\
-+\xdcg\x9bp\xa4\xb4\xb0{?g\xb2Yv~\x05\x15\x8e\x82\xf6?F\x90\xa2\x82c=\x0f\
-\xf8\xdeU\x02)\xb1[\x93\x1c\xbe\xaf\xfcKxR\xe5\x92L\xa1\x03\xfb\xc5\x08\
-M\xd1\xff^\xab\xd2\xbb\x83\x95:\xd5\xaa\xfe\xc0\x84?\xb2\xd8\xa2\xcd\xc4\
-\x08\xcc\xfb\xf3\x17j\xeaha\x09cF\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_dialog_warning_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x01\xcfIDAT8\xcb\xa5\xd3?h\x13\x01\x14\xc7\xf1\x97\
-\x92\x8b\xd6\x10MZ$\xbb\x88 \x8e\x82\xd4\xad\x8b\xd4\xead@\x1dt\x13\x15\
-\x14Z\x10\xc4\xbf\x98\xe2V\xc4A\x05%\x8e\xd5\x8a\xa0j\xac\xa21\x18:IB\
-\xc0\xd8\xa6E#\x88\xb5\xd7\xe4L1M\xca\x9d\xb9K\xee\xebp\xa1"J\x9b\xea\xf0\
-[\xde\xe3\xf7\x817<\x01\xe4\xb2\xe4\xd2\x8c*\x87\xea\x8f={\xff\x09\xa8\
-\xc7\x94\xfdV\xac\xdb\xb6\x12!j/\x94\x83+\x06\xac\x27\xbeY&\x1f`\xbf\x1f\
-\xc6\x1c\xf1\x16W\x044bm\xc7\xeb\x89\x10|\x18\x81\xdc0\xf5W\xbb0\x9f)\xfd\
--\x03\xe6S_\x89\xeceR\xfd]\xa4\xfa\xb6a\xa7NS\x8b\xb6\xcf\xb5\x04X\xcf\xdd\
-\xe7\xac\xe4N\xc8\x0e\x10\xef\xe9 \xde\xd3\x01\xe9\xa3X\xaf\xbb\xa8\x8d\
-\xba/,\x0b\x18\xa3\x81y;{\x0c\xb2\x87\x19\xeb\xedd\xac\xb7\x132\xbb\xb1\
-S;0\x1e\xf9*K\x02F\xd45h&\xb7\xc2\xc4\x1e\xc8\x85H\xef\xdb@\xe6\xc0f\x98\
-\xe8\x86\xf1\xed\xd4\x92[\xd0\x1f\xba.\xfd\x1d\x88\x88\xb2p\xb5n\xbfU \
-#\xf0N\xf8tr=\xf9\x13\xeb \x270)\xd8\xe3\xab\xa8\xdc\xf3\xe8\xa4E\xf9\x03\
-\xa8\xderE\x8c\x97~\x98\x12\xc8\x0b|\x16\xf8"\xf0U`\xa6\x99i\xc1x\xe3\xa7\
-z\xdbu\xe3w`H\xbc\xe5\x9bkM;\xaf8\x85\x82\xc0\x9c\xa0\x86\xfd\xa8a?T\x05\
-\xe6\x9d\x99\xad\xb6S\x8e\xac1\x0bC\xe2]\x04\xcaW\xe5\xae\x1e\x0f:eM\xe0\
-\xbb\xc0\x82\xa0\x85\x03h\x03\x010\x04*\x0e@A\xd0\x13A\xcaW\xe4\xce"P<%\
-Zcj#\xa8AP\x05\x8a\x02\xa5f\xa1\xd4Dg\x9d\x13\x98\x0e\xd2\xf8\xb8\x09\xed\
-\xbc[\xfb\x05\x9cm\xbb\xfe\xed\xa2\xe7\xc7\xcc\x111Z\x89\xda\xe7\xd1\x0b\
-g\xe4\xda\xb2\xdf\xd8J~\x02\xf21\xd2V\x95\xc1N=\x00\x00\x00\x00IEND\xae\
-B`\x82'''
-
-    ______img_icon_ico_acqui_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00"\x08\x04\x00\x00\x00\x99\
-\xa5c3\x00\x00\x03\x90IDATH\xc7\x8d\x96\xcdk\\U\x18\x87\x9fs\xee93s\xd3\
-6\x99v\xd2Z\xab\xa3\x14\x9a\x04EJhI\xa5Y\x88n\xdc\xd5\x95[QW\x82\xbb\xda\
-\x85\xe0Np\xd1\x9dK\xa5\xf4\x1f\x10\xeaJp!\xd9\x08\x85\x10\xf1s\xa1\x0b\
-\x95Z\x93X\x8aL\xa7\xad\x85\xa4\x99{>\\\xdcs\xef=g&\x13z.Cf\x86\x9cg\xde\
-\xf7\xf7~
-\xcf\x94#\xf6y\xe7\xf7y\x17\x1d5\x15T\xbe\xc4\x04\xcc\xd7 \xff$\xb0
-#\x10\xc8\xf0\x97\x80\xf1\xb8\x80\xf3\x88q\xdc4\xcb\x04\x12\x89$\xabq\x15\
-\xca\xe2p\xb8\x83-\x13\x09H\x90\x85G\x05\\\x892\xd8\xf0\xb8\x80\x8f\x1c\
-V\x13\x1a\x89\x00\x92(4
-E\x86\x04\xc0a1\x14\x18\x0c2X\x98(\xa8&4\x92\xb5E\x8aV\xc0U0\x83aD\x81\
-\xa1\xc0bp\xd8XA5\xa1Q\x05\xd2h\xf4\xe5\xdfz\xe4\x89.W^\xa4`D\x16\xac\x13\
-\xb1\x82*\xb1H\x91\xa1\x83{-4\xba\xc7E\xfa\xa9\xca3\x8c\xc8P\x8c\x90\x14\
-\x08L\xb0:\xd2\xacDit\x09\xa9\x9e\x9c>\x8b),\x0f\xa8,D\x9a:m\x82f"\xc8\xdd\
-\xa2M\x9bV\x00\xaa}\x13\x27GQ$\x81\x01\x8f\xab4\x13A+M\xfb\xf2_\xa9F\xfd\
-1\xc5`\xeb\x9bu\xb6\x1a\x05O\xe3\x83j>vS\xa1i\x8fk\x94\xd3\xc3\x0f\xcc\xaf\
-\xc5\x03\xd3\x93g\xdb\xb3\x8a\x1e\x17Yn\xfe\xa1\x15\xb2N\x94\x9a\xc5\xf2\
-Oh\xe4\x87\xe6\xba\xd8\xd0h\xc0fw^k\xbd\xd3\xcd\x9f\x8d\x8a\x15MA\x86,\x13\
-[F\xa9\xa1\xd0\xa9K\xfe\xae\xfbPoT\x9f2\xdb_{\xfc\xd1\xed\x9d\xdd\xb8\x8e\
-t]pQ9UY\x96\xb0\xcc\xa7z\x08\xdf.\xdd|S\xcc\xcfm\xaf|y\xe1\xf6\xf3\x9b\xeb\
-\x9f\xb9+\xa7\xe9\xd4\xbf\x10\xec
-\x10\x92L\x8b\x8e\xfdA\xff\x097V\xd7>9y\xee\xc2s\xe7V\x1f^\xfdi\x09^^\xff\
-}{X\xa6UcD\xe8,2*t\x19\x8b\x01\xe6{\xb0\xe2\x97w\x97\xe4*+,\xb3\xa2[o\x81\
-\xf4\x8f~\xbcK\xd1\xc0Ds\xab)\xa7\xb4\xa7\x02\xc5\xbd6\xb7\x8e\xce\x1c[\
-\xa4t\xabC\xb6\x00 \x06\x03vi\x13\xdd\x0c\xf7%S\x8f\xe9@o\xe7\x90\xed\x86\
-\x8b\x82\xfc\x01\xc0N\xbe\x1bjh\xfc\xc8\xa6\x18\xc6\xdb\x9d]\x80c\x8f\x8f\
-\xdc\x1ca\xab\x88\xac\x01<<\xa3\x1b\x1b|\xdc\xcae\xd4\xdf]
-\xcb^\xd9\xed\xc0\xa5k\x83\xef\x86X\xf0\xf6ku\x03\xfe\xe8\xed-\xcfUN\x92\
-t4T\xd4\xdb]mB\xd9\x1e\xba\x9bo\x9f\xf9|\xfe\xd1\xab\x1f\xdfy\xfa\xde\xf1\
-#\xdb\xf9}2\xa3\xbfx\xff\xa4~*\x86\xb9\xa6\xe7\xaa\xe4\xcb\x04\xa69\xfa\
-\xfa\xc6\xde\xd9\xeb\xb9=\xb5\xc9\xdf\x08\xe4\xa0s\xed\x83|\xf9\x05N4\x1d\
-\xc0\x86\x8e\x1bE\xb3\xea\xefE:U\xe6\xe8_Z??\xfc\xaa\xfb\xf3\xec\xff\xce\
-\xdf:\xff\x8d\xe3\xdd\x97X\xe4p\x14\xf2z\x1a\x00*rq\x0c\x06\x8a\x13\xb4\
-Nm\xbf\xb7\xc5?\x8c\xe8\xb2@\x9fg\x98\x8dS\xa0\xc04\xd3@\xd5\xe2\x1b
-\xf6&\x87W\x8f\xc3\xf4\xd9\xc1\x91q\x88\x19Zi2\x96\x13!\x84N\xf8\xb2\x90\
-\xaa.\xdb\x0eC\xa4\xac\x06\x17\x8d\x0cB\xc9\x95c\xaf\xf4d\xc4\x1e#\x8a\x00\
-t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
-"\xc9B\x81\xf8h\xd0\xc6\xdbG\xa5\xb3\xc1\x06\xcd\xea\x00\xd4\xd3%\x98\x1f\
-\xef\x17\xe3K@\xbau4\xcb\x82\x8f\x03@p\xc8\x05GD\xaa\xf3\xd8\xf1\xf5\xe3\
-b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
-\xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_acqui/pnl_tab_sparc_acqui_xrc', bytearray(pnl_tab_sparc_acqui_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_acqui/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_acqui/______img_icon_dialog_info_png', bytearray(______img_icon_dialog_info_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_acqui/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_acqui/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
-    __res.Load('memory:XRC/pnl_tab_sparc_acqui/pnl_tab_sparc_acqui_xrc')
-
-    fr_overview_acq_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxDialog" name="fr_overview_acq">
-    <object class="wxFlexGridSizer">
-      <cols>2</cols>
-      <rows>2</rows>
-      <growablecols>0</growablecols>
-      <growablerows>0</growablerows>
-      <object class="sizeritem">
-        <object class="LiveViewport" name="pnl_view_acq">
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxPanel" name="main_buttons">
-                <size>400,-1</size>
-                <fg>#DDDDDD</fg>
-                <bg>#4D4D4D</bg>
-              </object>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem" name="fp_settings_secom_optical">
-                        <label>OPTICAL SETTINGS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                        <XRCED>
-                          <assign_var>1</assign_var>
-                        </XRCED>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_opt_streams">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <nocaption>1</nocaption>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_secom_streams">
-                          <size>300,-1</size>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>STREAMS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <vgap>10</vgap>
-                      <hgap>50</hgap>
-                      <growablecols>1</growablecols>
-                      <object class="sizeritem">
-                        <object class="wxStaticText">
-                          <label>ZStack steps</label>
-                          <fg>#DDDDDD</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                          <font>
-                            <size>9</size>
-                          </font>
-                        </object>
-                        <cellpos>0,0</cellpos>
-                        <flag>wxLEFT</flag>
-                        <border>13</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="UnitIntegerSlider" name="zstack_steps">
-                          <size>-1,20</size>
-                          <value>21</value>
-                          <min>1</min>
-                          <max>51</max>
-                          <fg>#E5E5E5</fg>
-                          <style>wxBORDER_NONE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>0,1</cellpos>
-                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                        <border>10</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText">
-                          <label>Zstep size</label>
-                          <fg>#DDDDDD</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                          <font>
-                            <size>9</size>
-                          </font>
-                        </object>
-                        <cellpos>1,0</cellpos>
-                        <flag>wxLEFT</flag>
-                        <border>13</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="UnitFloatCtrl" name="zstep_size_ctrl">
-                          <value>1</value>
-                          <key_step>0.000001</key_step>
-                          <min>0</min>
-                          <max>1</max>
-                          <unit>m</unit>
-                          <accuracy>3</accuracy>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                          <font>
-                            <size>9</size>
-                          </font>
-                        </object>
-                        <cellpos>1,1</cellpos>
-                        <flag>wxLEFT</flag>
-                        <border>10</border>
-                      </object>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxCheckBox" name="whole_grid_chkbox">
-                      <label>Whole grid acquisition</label>
-                      <fg>#E5E5E5</fg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT</flag>
-                    <border>10</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <vgap>10</vgap>
-                      <hgap>50</hgap>
-                      <growablecols>1</growablecols>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="tiles_number_x_lbl">
-                          <label>Tiles number x</label>
-                          <fg>#DDDDDD</fg>
-                          <font>
-                            <size>9</size>
-                            <sysfont> wxSYS_DEFAULT_GUI_FONT</sysfont>
-                          </font>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>0,0</cellpos>
-                        <flag>wxLEFT</flag>
-                        <border>13</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="UnitIntegerCtrl" name="tiles_number_x">
-                          <size>-1,15</size>
-                          <value>10</value>
-                          <key_step>1</key_step>
-                          <min>1</min>
-                          <max>1000</max>
-                          <unit/>
-                          <scale>linear</scale>
-                          <accuracy>4</accuracy>
-                          <font>
-                            <size>9</size>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxBORDER_NONE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>0,1</cellpos>
-                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                        <border>10</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="tiles_number_y_lbl">
-                          <label>Tiles number y</label>
-                          <fg>#DDDDDD</fg>
-                          <font>
-                            <size>9</size>
-                          </font>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>1,0</cellpos>
-                        <flag>wxLEFT</flag>
-                        <border>13</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="UnitIntegerCtrl" name="tiles_number_y">
-                          <size>-1,15</size>
-                          <value>10</value>
-                          <key_step>1</key_step>
-                          <min>1</min>
-                          <max>1000</max>
-                          <unit/>
-                          <scale>linear</scale>
-                          <accuracy>4</accuracy>
-                          <font>
-                            <size>9</size>
-                            <encoding>UTF-8</encoding>
-                          </font>
-                          <style>wxBORDER_NONE</style>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <cellpos>1,1</cellpos>
-                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
-                        <border>10</border>
-                      </object>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="selected_grid_lbl">
-                      <label>Selected grid areas</label>
-                      <fg>#DDDDDD</fg>
-                      <font>
-                        <size>9</size>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT</flag>
-                    <border>13</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxPanel" name="selected_grid_pnl_holder">
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                      <bg>#333333</bg>
-                    </object>
-                    <flag>wxEXPAND|wxLEFT|wxRIGHT</flag>
-                    <border>13</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxGridBagSizer">
-                      <vgap>10</vgap>
-                      <hgap>50</hgap>
-                      <growablecols>1</growablecols>
-                      <object class="sizeritem">
-                        <object class="wxStaticText">
-                          <label>Tiled area size</label>
-                          <fg>#DDDDDD</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                          <font>
-                            <size>9</size>
-                          </font>
-                        </object>
-                        <cellpos>0,0</cellpos>
-                        <flag>wxLEFT</flag>
-                        <border>13</border>
-                      </object>
-                      <object class="sizeritem">
-                        <object class="wxStaticText" name="area_size_txt">
-                          <label>...</label>
-                          <fg>#777777</fg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                          <font>
-                            <size>9</size>
-                          </font>
-                        </object>
-                        <cellpos>0,1</cellpos>
-                        <flag>wxLEFT</flag>
-                        <border>10</border>
-                      </object>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxCheckBox" name="autofocus_chkbox">
-                      <label>Run autofocus</label>
-                      <fg>#E5E5E5</fg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT</flag>
-                    <border>10</border>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <orient>wxVERTICAL</orient>
-          </object>
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <orient>wxHORIZONTAL</orient>
-            <object class="sizeritem">
-              <object class="wxGauge" name="gauge_acq">
-                <size>-1,10</size>
-                <range>100</range>
-                <value>50</value>
-                <hidden>1</hidden>
-                <style>wxGA_SMOOTH</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>30</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxStaticText" name="lbl_acqestimate">
-                <label>Estimated acquisition time is 9999 seconds</label>
-                <fg>#DDDDDD</fg>
-                <font>
-                  <size>14</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_RIGHT</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALL</flag>
-              <border>23</border>
-            </object>
-          </object>
-          <size>-1,60</size>
-          <bg>#4D4D4D</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_cancel">
-                <height>48</height>
-                <face_colour>def</face_colour>
-                <label>Close</label>
-                <font>
-                  <size>14</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <orient>wxHORIZONTAL</orient>
-            <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_secom_acquire">
-                <size>242,48</size>
-                <icon>______img_icon_ico_acqui_png</icon>
-                <height>48</height>
-                <face_colour>blue</face_colour>
-                <label>ACQUIRE OVERVIEW</label>
-                <fg>#FFFFFF</fg>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>2</option>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-          </object>
-          <bg>#444444</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-    </object>
-    <title>Overview Acquisition</title>
-    <bg>#000000</bg>
-    <font>
-      <size>9</size>
-      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-    </font>
-    <style>wxDEFAULT_DIALOG_STYLE|wxRESIZE_BORDER</style>
-  </object>
-</resource>'''
-
-    ______img_icon_ico_acqui_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00"\x08\x04\x00\x00\x00\x99\
-\xa5c3\x00\x00\x03\x90IDATH\xc7\x8d\x96\xcdk\\U\x18\x87\x9fs\xee93s\xd3\
-6\x99v\xd2Z\xab\xa3\x14\x9a\x04EJhI\xa5Y\x88n\xdc\xd5\x95[QW\x82\xbb\xda\
-\x85\xe0Np\xd1\x9dK\xa5\xf4\x1f\x10\xeaJp!\xd9\x08\x85\x10\xf1s\xa1\x0b\
-\x95Z\x93X\x8aL\xa7\xad\x85\xa4\x99{>\\\xdcs\xef=g&\x13z.Cf\x86\x9cg\xde\
-\xf7\xf7~
-\xcf\x94#\xf6y\xe7\xf7y\x17\x1d5\x15T\xbe\xc4\x04\xcc\xd7 \xff$\xb0
-#\x10\xc8\xf0\x97\x80\xf1\xb8\x80\xf3\x88q\xdc4\xcb\x04\x12\x89$\xabq\x15\
-\xca\xe2p\xb8\x83-\x13\x09H\x90\x85G\x05\\\x892\xd8\xf0\xb8\x80\x8f\x1c\
-V\x13\x1a\x89\x00\x92(4
-E\x86\x04\xc0a1\x14\x18\x0c2X\x98(\xa8&4\x92\xb5E\x8aV\xc0U0\x83aD\x81\
-\xa1\xc0bp\xd8XA5\xa1Q\x05\xd2h\xf4\xe5\xdfz\xe4\x89.W^\xa4`D\x16\xac\x13\
-\xb1\x82*\xb1H\x91\xa1\x83{-4\xba\xc7E\xfa\xa9\xca3\x8c\xc8P\x8c\x90\x14\
-\x08L\xb0:\xd2\xacDit\x09\xa9\x9e\x9c>\x8b),\x0f\xa8,D\x9a:m\x82f"\xc8\xdd\
-\xa2M\x9bV\x00\xaa}\x13\x27GQ$\x81\x01\x8f\xab4\x13A+M\xfb\xf2_\xa9F\xfd\
-1\xc5`\xeb\x9bu\xb6\x1a\x05O\xe3\x83j>vS\xa1i\x8fk\x94\xd3\xc3\x0f\xcc\xaf\
-\xc5\x03\xd3\x93g\xdb\xb3\x8a\x1e\x17Yn\xfe\xa1\x15\xb2N\x94\x9a\xc5\xf2\
-Oh\xe4\x87\xe6\xba\xd8\xd0h\xc0fw^k\xbd\xd3\xcd\x9f\x8d\x8a\x15MA\x86,\x13\
-[F\xa9\xa1\xd0\xa9K\xfe\xae\xfbPoT\x9f2\xdb_{\xfc\xd1\xed\x9d\xdd\xb8\x8e\
-t]pQ9UY\x96\xb0\xcc\xa7z\x08\xdf.\xdd|S\xcc\xcfm\xaf|y\xe1\xf6\xf3\x9b\xeb\
-\x9f\xb9+\xa7\xe9\xd4\xbf\x10\xec
-\x10\x92L\x8b\x8e\xfdA\xff\x097V\xd7>9y\xee\xc2s\xe7V\x1f^\xfdi\x09^^\xff\
-}{X\xa6UcD\xe8,2*t\x19\x8b\x01\xe6{\xb0\xe2\x97w\x97\xe4*+,\xb3\xa2[o\x81\
-\xf4\x8f~\xbcK\xd1\xc0Ds\xab)\xa7\xb4\xa7\x02\xc5\xbd6\xb7\x8e\xce\x1c[\
-\xa4t\xabC\xb6\x00 \x06\x03vi\x13\xdd\x0c\xf7%S\x8f\xe9@o\xe7\x90\xed\x86\
-\x8b\x82\xfc\x01\xc0N\xbe\x1bjh\xfc\xc8\xa6\x18\xc6\xdb\x9d]\x80c\x8f\x8f\
-\xdc\x1ca\xab\x88\xac\x01<<\xa3\x1b\x1b|\xdc\xcae\xd4\xdf]
-\xcb^\xd9\xed\xc0\xa5k\x83\xef\x86X\xf0\xf6ku\x03\xfe\xe8\xed-\xcfUN\x92\
-t4T\xd4\xdb]mB\xd9\x1e\xba\x9bo\x9f\xf9|\xfe\xd1\xab\x1f\xdfy\xfa\xde\xf1\
-#\xdb\xf9}2\xa3\xbfx\xff\xa4~*\x86\xb9\xa6\xe7\xaa\xe4\xcb\x04\xa69\xfa\
-\xfa\xc6\xde\xd9\xeb\xb9=\xb5\xc9\xdf\x08\xe4\xa0s\xed\x83|\xf9\x05N4\x1d\
-\xc0\x86\x8e\x1bE\xb3\xea\xefE:U\xe6\xe8_Z??\xfc\xaa\xfb\xf3\xec\xff\xce\
-\xdf:\xff\x8d\xe3\xdd\x97X\xe4p\x14\xf2z\x1a\x00*rq\x0c\x06\x8a\x13\xb4\
-Nm\xbf\xb7\xc5?\x8c\xe8\xb2@\x9fg\x98\x8dS\xa0\xc04\xd3@\xd5\xe2\x1b
-\xf6&\x87W\x8f\xc3\xf4\xd9\xc1\x91q\x88\x19Zi2\x96\x13!\x84N\xf8\xb2\x90\
-\xaa.\xdb\x0eC\xa4\xac\x06\x17\x8d\x0cB\xc9\x95c\xaf\xf4d\xc4\x1e#\x8a\x00\
-t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
-"\xc9B\x81\xf8h\xd0\xc6\xdbG\xa5\xb3\xc1\x06\xcd\xea\x00\xd4\xd3%\x98\x1f\
-\xef\x17\xe3K@\xbau4\xcb\x82\x8f\x03@p\xc8\x05GD\xaa\xf3\xd8\xf1\xf5\xe3\
-b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
-\xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/fr_overview_acq/fr_overview_acq_xrc', bytearray(fr_overview_acq_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/fr_overview_acq/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
-    __res.Load('memory:XRC/fr_overview_acq/fr_overview_acq_xrc')
-
-    pnl_tab_sparc_chamber_xrc = u'''\
-<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_sparc_chamber">
-    <object class="wxBoxSizer">
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
-            <object class="sizeritem">
-              <object class="ImageTextToggleButton" name="btn_switch_mirror">
-                <icon>______img_icon_ico_eject_png</icon>
-                <icon_on>______img_icon_ico_eject_orange_png</icon_on>
-                <height>48</height>
-                <face_colour>def</face_colour>
-                <label>PARK MIRROR</label>
-                <fg>#1A1A1A</fg>
-                <font>
-                  <size>11</size>
-                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                </font>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_move">
-                <object class="wxBoxSizer">
-                  <object class="sizeritem">
-                    <object class="wxGauge" name="gauge_move">
-                      <size>-1,10</size>
-                      <range>100</range>
-                      <value>0</value>
-                      <style>wxGA_SMOOTH</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
-                    <border>7</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_cancel">
-                      <height>24</height>
-                      <face_colour>def</face_colour>
-                      <label>Cancel</label>
-                      <enabled>0</enabled>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT</flag>
-                    <border>10</border>
-                  </object>
-                  <orient>wxHORIZONTAL</orient>
-                </object>
-                <bg>#333333</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_ref_msg">
-                <object class="wxBoxSizer">
-                  <object class="sizeritem">
-                    <object class="wxStaticBitmap">
-                      <bitmap>______img_icon_dialog_warning_png</bitmap>
-                    </object>
-                    <flag>wxRIGHT</flag>
-                    <border>5</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="txt_warning">
-                      <size>-1,54</size>
-                      <fg>#E5E5E5</fg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <option>1</option>
-                    <flag>wxEXPAND|wxGROW</flag>
-                  </object>
-                  <orient>wxHORIZONTAL</orient>
-                </object>
-                <bg>#333333</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALL|wxEXPAND</flag>
-              <border>10</border>
-            </object>
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>______img_icon_ico_chevron_up_png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-            </object>
-          </object>
-          <size>300,-1</size>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxALL|wxEXPAND</flag>
-        <border>10</border>
-      </object>
-      <object class="sizeritem">
-        <object class="ARAcquiViewport" name="vp_chamber">
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="wxPanel">
-          <size>400,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
-          <object class="wxBoxSizer">
-            <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_streams">
-                          <size>300,-1</size>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>OPTICAL</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                    </object>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
-            </object>
-            <orient>wxVERTICAL</orient>
-          </object>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <orient>wxHORIZONTAL</orient>
-    </object>
-    <bg>#333333</bg>
-  </object>
-</resource>'''
-
-    ______img_icon_ico_eject_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x1d\x00\x00\x00\x1c\x08\x04\x00\x00\x00\
-7\xc6|!\x00\x00\x00\xf2IDAT8\xcbc\xf8\xcf@.d\x18\xd5J\xb1V\xb383\x1f\xb2\
-\xb4Z\xca8\xbfszn!L\xb2V3F\xe7\x1d!\xffC\xfe;\xad$Y\xab]z\xe0\xff\xc4\xff\
-\x09\xff\x03\xfe\xdb\x86\x91\xa4\xd5R\xc9\xebs\xec\xffT \x8c\xf9\xef\xf9\
-\xc6R\x82h\xadfL.\x07#\xfe\xa7\xfcO\x03\xc2\xe4\xff\xe1\xff\x9d7\x13\xad\
-\xd5\xae0\x08\xe8\xd84(L\xfc\x1f\xf8\xdf6\x91(\xadV\x9a\xde\xdf\xe2\x80\
-N\x85iM\xfd\x1f\xfb\xdf\xeb\x83\xa5\x1cA\xadf,\xae\x27#\xa1\x8e\x85\xc1\
-\x94\xff\x11\xff\x9d\xf7\x981\x12\xd0j_\x13\xfc?\x09E#\xcc\xd1v9x\xb5Z\xe9\
-\xfb\xfcDv,\xb2\xa3\xbd\xbfX\xaa\xe0\xd1\xea\xdc\x17\xb6;qw2\x16\x98\xb0\
-;t\xb7S\x13m\x92\xbf\xe3\x03\xf7w\x1e8\xa0\xfb;\xc7wx\xb4\xfa~\x08\xff\x8f\
-\x1b\xfa\xfd\xc7\xa35\xfcC
-8\xf9a\x87\x91\xffG\xcb&zj\x05\x00\x14\xe1H\x8a\xbf\xee\xaf|\x00\x00\x00\
-\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_eject_orange_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x1d\x00\x00\x00\x1c\x08\x06\x00\x00\x00\
-\x9d\xcf\xb4\xaa\x00\x00\x03\x16IDATH\xc7\xa5V\xcd\x8a\x141\x10N\xa5\xd3\
-3\xb3\xca\x8a+\xa2^\xbcx\xf2 \x1e<\x89\x97EA\x16\xf4\xe4\xc1\x93\xb0\xe0\
-A\x11Q|\x1d\xd1G\xf0%|\x04\x0f>\x81\x08\xbb\xec\xb2\xff=\xd33\x89\x95\xde\
-d\xfc\xa6\xa6\xa7\x9dY\x03\xd5\x1dBR_\xeaK\xfd\x91\xfbvU-9H\xfcq\xb8\x05\
-\xf3\xd6a\x96\x04\xf3\xa2aN\x00\xeeAl\xf8\xe3\xfc\xc2\xa0\x11,\x11\xa2\x83\
-D\x90I\x8b\xb8\xff\x01\xf5 \x19K\x1a\xfe&H\x04\xf5\x00u\x90Q\xf8wZ\xdc\x05\
-\x1a-\xf4`\x05H&@\xc7\x01\xa8
-\xfbI\xd0\xbd4h\xa4\xd5\x04\xa0\x1eK?\xcc\xf3\xb0N`\xe9(\\.\x09\xe7\x11\
-\xd4\xad\x02\x9a\x04\x80\x92e\x00\xa0\x8d\xf2\xdf\xfb\xf6\x89\xd6\xea\xf8\
-\xdae\xfd=\xacI\xca\x27\x01|\x8ef\xb3\x04\xad\xfd \xbd@mr:t\x1b\xd6\xa9\
-7v\xa2FU\xed~\x16)\xed\x0bj\xc7A,\xbc\xf1\x0c@\x1b\xad)\xd0\xda\x0b\xd6\
-\xc6\xb7L\x8e\xce\xdc\x87\xb5\x92\xfa\x83\x92\xd6\x0fN\xdc\xbb\xb0\x9e\x89\
-\xa7(\x81r\xea\x02\xd5\xe0\xad=aa\xf3\x8e;\x87\xf6)[v\xbf\xccH\xf5X\xf2\
-\x94\x1e\xee\x1e\xd9Gp\xae\x84\xcb\xe6@;\xb5\x81\xc6\xd8[t\x90N*w\x9dOn\
-\x17\xbc#a\x88\x84w\x97<wN\xbd=\x1b\xb9\xf5\x05\xc0\x198\xde\x0ch\xcc0H\
-\x13z\xaaf\xc5t\\\xb9\x8f\xbd\x9c\xca\xd4\xd0\xf9\x01\xfe\xf89[\xbcvx\xea\
-\xde\x83\x8e\xe8\x80E\x9b\xb5z\x01\xb59ln\xc2\x80i}^dt\x97\xe9T\x1a^\xc8\
-\xcf\xfd\x1a\xcb\x03\xde\xf3\x18B-\xfb\x17(:P.\x92\x00\xb1\xe3\xdcb\xe5\
-\xaf\xfc;j=\xef\xee\x9ejO3+y}\xc2\x9e\x0d\xde\x1f/?C1\x82\x1a\xb02\xa6=\
-\xcd\xa1\xe1C\xe4\x13\xd3\x9a\xa5I{\x89\xf1k\x9e\xe62\xa7\xfe1{\xb6\xb0\
-6\x97\xd6j\x91\xd43\x00l\x12\xfb\xee\xa1}\xc1\x16\xde\xf1\x14\x12u\xe4\xcc\
-@3{\xf6\xbd\x9d\x03\xbb\x15\xce\x1b\xd09\x03\x8a\x19\x08\x85\xd89n\xb3\x87\
-\xbe,\x16\xd0:G3\xef)\xf2\xc6\xc1\xb6\xd9\xe9n\x000\x16\x89iFBk\xa7\x0f\
->\x1c\xbbM\xa6\xf5\x87\x07tv\x89\xea\xec\x150\xa2\x0f)\x0e\xa1\xcdAA_ \x14\
-\xa3\x90\x11!\x83\xc5Ym\\\xd2\x9f\xd5\x8a\xc3k\x1d$\xa4\x18\xd0\xb64\x02\
-\xa4D\xd0\x92l9~\xed\xd9\xaf&i\x02|\xe5Qs\xba\xbfyE?kiwf\x12>v\x01Mu\xe0\
-\xb7\xec\xe7\x86S!\xad\x0e:\xac\xa7%n\xae\xb6\x1aX\x98@A\xf6br\xf6a\x9f\
-_/\x02J\xe7\x185H4fj)\x16\xe3a\xa4\xbd\x9f\xd3V\x8cW\x99\xb4[\x066fcv\xc0\
-:\xe8\xaa\x82\xdeX\xea\x9c\x81J\x8fm\x87\x16\x97\xc1fL\xb5\x80;\xf1<c\x00\
-\xac\xc2\xbcFK\x9d\xb0T\x8bV$\x85\x1c<\xe7\xe1\xc2\x1f"hl\xd2\xaa.K\x1d\
-Ty\xb4\x1c{\x9f\xa4\x83b\x27\xda\x94\xc8\xdaP\xfd\xed\x10\xa7m\xa9|S\x27\
-\x00e\x9fK\x1d\xef*\xad\xc5\x0bX\xf4d#n\xea\x04E\xd4\x12\xc7]\xa0R\x97\xec\
-\x08\x9b\xff\x1f\xcd\xae\x1b\xe7SD`&\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_dialog_warning_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x01\xcfIDAT8\xcb\xa5\xd3?h\x13\x01\x14\xc7\xf1\x97\
-\x92\x8b\xd6\x10MZ$\xbb\x88 \x8e\x82\xd4\xad\x8b\xd4\xead@\x1dt\x13\x15\
-\x14Z\x10\xc4\xbf\x98\xe2V\xc4A\x05%\x8e\xd5\x8a\xa0j\xac\xa21\x18:IB\
-\xc0\xd8\xa6E#\x88\xb5\xd7\xe4L1M\xca\x9d\xb9K\xee\xebp\xa1"J\x9b\xea\xf0\
-[\xde\xe3\xf7\x817<\x01\xe4\xb2\xe4\xd2\x8c*\x87\xea\x8f={\xff\x09\xa8\
-\xc7\x94\xfdV\xac\xdb\xb6\x12!j/\x94\x83+\x06\xac\x27\xbeY&\x1f`\xbf\x1f\
-\xc6\x1c\xf1\x16W\x044bm\xc7\xeb\x89\x10|\x18\x81\xdc0\xf5W\xbb0\x9f)\xfd\
--\x03\xe6S_\x89\xeceR\xfd]\xa4\xfa\xb6a\xa7NS\x8b\xb6\xcf\xb5\x04X\xcf\xdd\
-\xe7\xac\xe4N\xc8\x0e\x10\xef\xe9 \xde\xd3\x01\xe9\xa3X\xaf\xbb\xa8\x8d\
-\xba/,\x0b\x18\xa3\x81y;{\x0c\xb2\x87\x19\xeb\xedd\xac\xb7\x132\xbb\xb1\
-S;0\x1e\xf9*K\x02F\xd45h&\xb7\xc2\xc4\x1e\xc8\x85H\xef\xdb@\xe6\xc0f\x98\
-\xe8\x86\xf1\xed\xd4\x92[\xd0\x1f\xba.\xfd\x1d\x88\x88\xb2p\xb5n\xbfU \
-#\xf0N\xf8tr=\xf9\x13\xeb \x270)\xd8\xe3\xab\xa8\xdc\xf3\xe8\xa4E\xf9\x03\
-\xa8\xderE\x8c\x97~\x98\x12\xc8\x0b|\x16\xf8"\xf0U`\xa6\x99i\xc1x\xe3\xa7\
-z\xdbu\xe3w`H\xbc\xe5\x9bkM;\xaf8\x85\x82\xc0\x9c\xa0\x86\xfd\xa8a?T\x05\
-\xe6\x9d\x99\xad\xb6S\x8e\xac1\x0bC\xe2]\x04\xcaW\xe5\xae\x1e\x0f:eM\xe0\
-\xbb\xc0\x82\xa0\x85\x03h\x03\x010\x04*\x0e@A\xd0\x13A\xcaW\xe4\xce"P<%\
-Zcj#\xa8AP\x05\x8a\x02\xa5f\xa1\xd4Dg\x9d\x13\x98\x0e\xd2\xf8\xb8\x09\xed\
-\xbc[\xfb\x05\x9cm\xbb\xfe\xed\xa2\xe7\xc7\xcc\x111Z\x89\xda\xe7\xd1\x0b\
-g\xe4\xda\xb2\xdf\xd8J~\x02\xf21\xd2V\x95\xc1N=\x00\x00\x00\x00IEND\xae\
-B`\x82'''
-
-    ______img_icon_ico_chevron_up_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
-\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
-D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
-\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
- \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_chamber/pnl_tab_sparc_chamber_xrc', bytearray(pnl_tab_sparc_chamber_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_chamber/______img_icon_ico_eject_png', bytearray(______img_icon_ico_eject_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_chamber/______img_icon_ico_eject_orange_png', bytearray(______img_icon_ico_eject_orange_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_chamber/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc_chamber/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    __res.Load('memory:XRC/pnl_tab_sparc_chamber/pnl_tab_sparc_chamber_xrc')
-
-    pnl_tab_fastem_acqui_xrc = u'''\
+    panel_tab_fastem_acqui_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxPanel" name="pnl_tab_fastem_acqui">
     <object class="wxBoxSizer">
@@ -11528,14 +7180,3483 @@ t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
 b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
 \xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_acqui/pnl_tab_fastem_acqui_xrc', bytearray(pnl_tab_fastem_acqui_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_acqui/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_acqui/______img_icon_dialog_info_png', bytearray(______img_icon_dialog_info_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_acqui/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_fastem_acqui/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
-    __res.Load('memory:XRC/pnl_tab_fastem_acqui/pnl_tab_fastem_acqui_xrc')
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_acqui/panel_tab_fastem_acqui_xrc', bytearray(panel_tab_fastem_acqui_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_acqui/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_acqui/______img_icon_dialog_info_png', bytearray(______img_icon_dialog_info_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_acqui/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_acqui/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
+    __res.Load('memory:XRC/panel_tab_fastem_acqui/panel_tab_fastem_acqui_xrc')
 
-    pnl_tab_secom_streams_xrc = u'''\
+    panel_tab_fastem_chamber_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxPanel" name="pnl_tab_fastem_chamber">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxGridBagSizer">
+                <object class="sizeritem">
+                  <object class="ImageToggleButton" name="btn_pressure">
+                    <icon>______img_icon_ico_press_png</icon>
+                    <icon_on>______img_icon_ico_press_green_png</icon_on>
+                    <height>48</height>
+                    <size>120,48</size>
+                    <face_colour>def</face_colour>
+                    <label>PUMP</label>
+                    <fg>#1A1A1A</fg>
+                    <font>
+                      <size>11</size>
+                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                    </font>
+                    <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxEXPAND</flag>
+                  <cellpos>0,0</cellpos>
+                </object>
+                <object class="sizeritem">
+                  <object class="ImageToggleButton" name="btn_ebeam">
+                    <icon>______img_icon_ico_sem_png</icon>
+                    <icon_on>______img_icon_ico_sem_green_png</icon_on>
+                    <height>48</height>
+                    <size>120,48</size>
+                    <face_colour>def</face_colour>
+                    <label>E-BEAM</label>
+                    <fg>#1A1A1A</fg>
+                    <font>
+                      <size>11</size>
+                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                    </font>
+                    <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxEXPAND</flag>
+                  <cellpos>0,1</cellpos>
+                </object>
+                <vgap>10</vgap>
+                <hgap>10</hgap>
+              </object>
+              <flag>wxALL</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <orient>wxHORIZONTAL</orient>
+                <object class="sizeritem">
+                  <object class="wxStaticText">
+                    <label>Pressure: </label>
+                    <fg>#DDDDDD</fg>
+                    <font>
+                      <size>10</size>
+                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                    </font>
+                  </object>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxStaticText" name="pressure_label">
+                    <size>150,20</size>
+                    <value>...</value>
+                    <fg>#DDDDDD</fg>
+                    <bg>#333333</bg>
+                  </object>
+                </object>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxTextCtrl">
+                <size>150,20</size>
+                <value>SCINTILLATOR SELECTION</value>
+                <fg>#DDDDDD</fg>
+                <bg>#333333</bg>
+                <style>wxBORDER_NONE|wxTE_READONLY</style>
+              </object>
+              <flag>wxTOP|wxLEFT|wxRIGHT|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="FastEMSelectionPanel" name="selection_panel">
+                <tooltip>Select scintillators containing sample.</tooltip>
+                <bg>#333333</bg>
+                <fg>#999999</fg>
+                <size>400,-1</size>
+                <flag>wxTOP|wxEXPAND</flag>
+                <border>5</border>
+              </object>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+          </object>
+          <size>300,-1</size>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>10</border>
+      </object>
+      <object class="sizeritem">
+        <object class="ARAcquiViewport" name="vp_chamber">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_streams">
+                          <size>300,-1</size>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>OPTICAL</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+  </object>
+</resource>'''
+
+    ______img_icon_ico_press_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00 \x00\x00\x00"\x08\x04\x00\x00\x00\x94\
+\xbb\x13t\x00\x00\x01KIDATH\xc7\xed\xd5?O\xc2@\x1c\xc6\xf1\x1f\xab\x0bo\
+\xc0\x84\xbe\x09\x92B\xda\xd4T\x81\xa26\x11\xe8\xd5\x1e\x9c\xc1\x84@\xe2\
+\xbb\xb8\xb8\xe8;@\xde\x82\x83o\xc4\xea\xc0+\xb0\x0e\xecvc\xb9\xc7\xa1Q\
+\xdaHZ\x90A\x07\xf2\x9d.\x97|\x92\xfb\x97#\xd0n\xd1\x1e\xf8\x80\\S\xb5\
+R\x9f\x9a\x91\xb54\xa3\xfa\xb4Z\x91$\xb7\x03t\xc7\x8e]\xe5\xbd\xf8\xf0\xe6\
+\xae\xb2c\xdd\xd9
+\xd0\xb5\xd6\x07C0\x91$\xd0/\x07\x13\x86V\xack[\x00\xf6\x8c)q\xdfy=-I:\
+?\xec\xbe\x89[\xa6\xeci\x0e`\xe0(\xd5\x09:\xe0\xa1\xa4\xd6\x81$\xb3\xdc\
+\x98\xbb7\x92\x82\xd0\x8dr\x80\x0b\xf0T\x03\x0c\xd1\xc7\x19$I\xb2\x9e\xda\
+w\x92\\px\xcb\x1c\x80c\x92i\x8c\xab\xe7d1\xc7Z\xa3$I\x92\x08\xfd\xa8\x00\
+\x18a\xb5\x07\xc3\x19WMs5n\x9a\x81\xf2f\x05\x80H\x01\x1d\xed2v\x165#\x19\
+\xd5\x0cg\xe1\xc7\xaeV\x00p\xa4\xcf\xa1\xe7\xb0\xd8QVh<Z\xa1\xa3\x18\xbc\
+\xfc{\xf0\x13\x90\xd4\xab\xf8\x0f\xbd\xf7\xee\x92A`\x80\x82\x9b\xb8\x0e\
+\xf8\xea\x1ac\xf4w\x01\xc4\xf7\xdc/\x01\xbe\x076\x07\x04\xda\x997\x99\xd4\
+\xc6\xc6\xa70\x82\xc8\xbc\xc9$\x81\xd1\xa6@^\x85\xc0\xfec\xf9\x13\xe0\x13\
+\xdb\xaf\x0d\x0c\xbf\xb2\xb0\xc6\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_press_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00 \x00\x00\x00"\x08\x06\x00\x00\x00>\xb2\
+\xdb\xff\x00\x00\x04.IDATX\xc3\xa5WO\x8b\xe4D\x14\xcf\xabJ\xd2\xa9\xee\xe9\
+a\xcc\x0e\xb8\xe0Aa\xbc\xedu\xd7\xaf 8ww?\x82\x17E/\xb2\x8a\x1e\x04\x11\
+<\x8a\xde<x\xd3\x15\xf6\xda,~\x01A\x97=z\xf2\x0fzX\x1c\xb5\xa7\x87\xa6\xa7\
+\xd3\x99$UeU\xb6*\xbc~]\x99\xe9\x9e-x$\xa9J\xf2\xfb\xbdW\xef_A\xa4\xa3\xe7\
+\x19\xd0s\xef\x87&\xd7\x8d\x11_\x13\x14\x0bs\x02\x84\x84r\xc0
+\xddkJ&\xbe\x06\xb8\x07\xe4\xee{/\xdc\xcd{\x8d\xa5\x93\x06\x89D\xa4v&\x00\
+\x088q20\x92\xba\xfb8@\xa06R!\xa9\x1d\x11o\xa1 \x01\x08\\=x\xec\xc0R\x07\
+\xee\xe52\x02\x17N\x18\xfag\xe3\xb7#\xee1/63#\xe0\x98@\xea$F\xefa\x02\x0d\
+"\xe7\x15\xc1\xbe c\x04\xce\xd1\xbe&Hb4\x17\xbaRp\xec\x84\x92X&BNi\xd7\xc0\
+\x13\xf0\xdaz\x8d2\x27\x03\x02\xc4\xd1\x0f;\xeb\xa4\xe7\xe9\x8bb.\xee2\xc5\
+\xee@\x04/\xe8H\x9f)P?\xaf\x0eV\x0f\xaa\xbd\xea)\xb2\x8a\xa2N\x09f\x1a\xdc\
+O=\xf0\xd0\x88p\xe2\x09p$\xd8\x27`8\x1d\xde\xce\xaa\xec\x03\x18@\xa6S\xfd\
+\x07\x00\x1ci\xad\xff\x84
+^\xd6\x17\xba,\xd3\xf2\xd3\xe2\xb0\xf8\xd1\xbc[\x1a)\x8c,\x9c,\xado0d\x81\
+\xc4\x11\xb0\xc0#Gd\x88\xac\x91R\xb3\xa7\xcb\xf4f&\xb3\xfb0\x06a4\xfdj6\
+\x9e\xbdc\xdf\x98\x8f\xe6\xef\xdbg;o\xd6?2\x16z\x89\xf8\x8fW
+\x18\xd2\x06\x13\xa0\xa0T\xfbv\x88\xa5x\x13\x86 \x9aA\xf30\xb9H\xde\xb0\
+k\xa7\x83\xd3c\xdepa\x9e\xef\x9a\xf9\xef\xccz&
+q\x8fX\xb1\xcb\x19\xde\x078\x8a\xeb.\xb4\xf2\xbf\xf2\x1f\xda\x95\xd00\xf3\
+ \xcc\x0e\xc6\xfa\xb7y:\xff\x86q\xf6\xad\xddg^\xf3\xd1\xe8l\xf4I=\xac\x1f\
+.\xd2\xc5$o\xf2;<\xe6\xaf\x05\xa2\x0c\xbc\x13B \xccZ\x86\xb0\x0f\xcf\xa8\
+\x84\x86\xf9\x028XWz5\x9f\xe6\x93\xd9\xe1\xec\xd8N\x8f\xa7\xe3\xf7T\xa6\
+\x1e/\xc6\x8b\xc9\x8d\xd9\x8dIk\xcf\xb8u8\x08\xa4\xeb\x88F\x016\x0fXpc\xc2\
+\xfe\xdch\xfc\xda8\xdc\xaf\x06\xfc]?U\x1c\x14_W\xa2\xfa\xd7\xde\x9f\xe6\
+\xa7\xc7\xf9E\xfe\x85\xf9\xe3>)L]M\x08\xe5\x81\xcd\xc2b\x82g\xca\xa6\xc7\
+\x14\xff@\x1e\xbc\xcd%]\x9c\x8b[\xab\xbd\xd5/v\xce\x80\xff\xd3\xf9\x88\
+\x99\x07\x06G2\x92\x8f\x08xW\xa0X\xa0\xbam\x98I\xd7\xe1jZ\xe8\xe2{\xf3\x9b\
+R\xac\xc4}q&n\xe15\xfbl\xe7\xedz\x91\x14\x0f\x10\xb0/R*\x94\x8a\xc3\xf6\
+\x96\x1b3\xed\xc7UR\xfd]\xca\xf2\xb3,\xcb>4`\x9fgO\xb3\xdfU\xa4NX\xc4nB\
+\x02G\xc6I\xa1\x8c\xcb\x8f\xab\xb4:!\x04\x1aZ\x8c\xfa\xc17\x1b\x0c\x854\
+\x88\x96\xd9\xf2\xa7\x9a\xd7o\x0d\xf9\xf0\x1e\x93\xecv\xac\xe2W\xccF\xc6\
+\xad+\xebv\xfdI \x13z+\xe8]\xfb\x01\x85\xaa\x9c/\xab\x89\xb1\xc4\x89\x91\
+/\xbd\x12\x87\xcd\xe1\xc4\xaa\xa6W:\xea\xd9\xfb\x06\xfb\xc0\xb6C\x07\xac\
+ C]\x8e\x96:\xd4\x88iT%\x15\x8d\x82]Z1\x1f\xb2
+\xd7\x84+|\xa6\xcf\x12\x1d\x01}Y\xe3\xb8\x9e~6\x1a\x978H\xe2r\x02\xfay\
+\x9aR\x86\x08\xe8\x9e^`+pj\x01\xda\xbd^E\xc2\x13\x80\x1d\x80\x83\x16\xd0\
+\x01\x02\xd1\x16$v\x0d],\x1b\x16\xc0^\xed\xbd\x94\xe3\xca\x97\xff\x97O\xda\
+\xd6\xf2\xaaa\x8b\xd7~o\xee\x90D\xc9\x0d\x025J\x14\x1d\x01\x93\xd5\x9e\xfd\
+TnA\x80\xbb\xf7\xd7c\xc2\xff\xbbF\xa1\xbb\xb6\x05\x8a\xf4\xf0\xeb\x8d\xa4\
+-\xbd\x03\x88\xae9\x1ar.X#\xe0{\xc2\xd4\xb5a{\xee:B\x1d\x11\xdf!\xcch\xc2\
+iP/h{\xc0sw-\xbd=\xf1\x16\xd4n\x01{\xb8B\xddp\xa8R\xe2(\xd0\x81\xb6\xdb\
+j\xbdr\x04V\xee\xb9\xe9\xf3\x81\x9a\x80\xfb}KH\xb2\xc1\x07\x8c\xcb\x8a\x95\
+\xdf\xd2\xd2\x81\x97\xeeY\xf5\x85\xa1g\xac\x1dK\xac\xa2\x87\x0f\xd8"\xcd\
+b\xa7\xc3g\xc3\x86\x86!8.\xd0s\xf2\xe5\xe4xvU\xeck\xb2\x05\x92\xd4\x9a\
+k:\x02}g\xe89\xacnS1\xfb\xb2\xdf\x1a\xe2\xff\x897\xd9u\xe0\xeb\xaa\xbe\
+\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_sem_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x04\x00\x00\x009\
+\xc62\xa5\x00\x00\x00\xb6IDAT8\xcb\xed\x94M
+\xc20\x10Fs\x03O\xd2\x0b\xd4\xfa\xb7\xb0E\x08\xd2.\x84\xc6n\xd5s\xe4\x8c\
+\x9e\xa47xfD\xa8\x84\x92\xa4\xa2\x0b\xa1|\x8b\x8f!<\x98\xc7@\x14jZ\xd4\x0c\
+L\x07
+\xb6\xac\xc8\xb3\x15\x1b\x96w\xfb\x9c\x0b\x02@\x8d\xa1\xe1\x905\xb4h\x07\
+\xc8\\\x87\x00\xc3\x8d\x8e&\xeb\xb8pr\x80\xcc&\x04\xd8\xd1\x04\x80\x12M\
+\x85U\x95\xeb\xbdk\x99\xcb\x98C\x8d\xf5:\xe2`\xb0^\xd3A\x9eK$CG\x01\xdf\
+#
+\xf8\x1eQ\xe0\x03\x07\xfdr\xd0\xeb\xf0~\x8bd`\xd8?\x11\x18\xf6\xff\x99\
+C/7\xc8\x17\xc9\xc0\xb1\x17\x87u:\xd0\xf6W\xce\xec\xe2\xc0\xfc\x19\x8f\xe6\
+\x01\xb8\x055\xdfN\x86\xe9\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_sem_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x06\x00\x00\x00\x93\
+\xcf\xfa.\x00\x00\x02\xd3IDATH\xc7\x9dVK\x8e\xd40\x10\xb5;N\x11\x0c\xbd\
+\x016p\x12\xc4\x06\xc40}\x949\x0f\xf7`3\xec\xb8\x0b\xec`1Qk\xa4A\xfdq\\\
+T\x1cW\xe6\xa5\xda\xe9\x0f\x91J\xeej\xc7\xf5\xaa^}bg\xc8\xe8\xc7\xaaU\xff\
+\xc6\x872\xbf{\x16\x9d22\x82\x15E\x83\x12\x18
+ \x04k\x14\x07\x07\x0b\x90\xe6\xff2\xad\x85\x026`\xa8\x91:\xc9\x9e\xc5\
+\x83^#\xc0(\x19*\x93L\x92\x8c\x01T\xa2!\x00@\xe3[\x96]\x12\x83\x11X\x88\
+@\x8c\xcfX\xa6\xe9\xb7St\xc9\xe1:\x81\xf8\x040R\x14\xc6\x081\x02\x97<\x9e\
+&\x80Y\x06\xc0\x0eP\xb4\x03G\x0d\x00\x1b\x07\xdc:\xf0^d\xacr\xa0\x01d-\x94\
+\xf1\x0e\x14#(\x93\xc1\x8e\xff\xe5\xaf\xe5\x8fx\x94\x8f<^=\xde.\xd6\x8b\
+\xaf\x8d\x99@\xe1\xe7\xfa\xed\xfa\x96\xf7\xef\xe2>\x9b\xab\xdeU\xef\x93\
+a\xa1\xac@\x00\x8cB\xa4\xb0\xcfm\x0b\xc5\xaf\xdb\xd2\x1a\xfb\xc2\xc6\x1d\
+\xbbm\x9d\xed\xf6\xb7]\xc9;]y\x08p(|\xd8\xce\xad\xa1\x0d\xb5\xff4\xfa\x98\
+\x81(\xb1!\xfbmK\x8c2T\x1e4ZO\xee\xe7\xf7\xab\xb83m_\xd8\x98M\xab?k\xf5\
+n\x1ey7\xda8\x02`gv/-/\xef\x1aj\xc8\x93\xa9^U\xab\xe5\x1f\xe6\xdc\xb5\
+\xe9\xab\xde\xb0.\xfb{\xde]}\xcc\xcd\x12\x97);\xa9\x0ec\x27-\xc7\x1d\xe7\
+\xe3\xc4y\xea\x86nd\xd1\xc9\xde\xb8p\xaaq<4PP\x1c\x9b\x13z\x00\x1bb\x27\
+F@\xaa\xbc\xe4\x85\x929\xfe\x12\xfd\x9d\x1fp\x8e:\xb1\xeeUW{=\x8b\x08\x0c\
+{MU\xc3\xb5p\xca\\\xaf\x94~\x03N\xa2\xa3A\x00H\x85W\x03M\xbd\\\xa4z\xd7\
+\xba\x1e\x1b>7M)\xc3\xdf\xd3\\?\xcd}Pc\xba\x16\xe7t\x15\xf9\x1c\xc8\x00\
+\xf7\x8dN\x19\xe7\xf6x6W\xa6\x074\xa9z\xd7\xf5\xffi\x88\x1e\xdd\xc9\xa4\
+B\xec(R\xf5\xae\xeb?(\x9a\x02~\x97]\xe6#~\xe8\xc9\xd4\x0e \xd7\x0f\xd1\
+#\xe6\xfc:N\xc8~\x0e\x02\xeb5\x00\xf4\xea\xffX\x04C\xfd\xd0\xe4\xe2;\xd4\
+\xffu\xa6<\xfd1\x8aN\xf5\x03\x0d\xd4\xad\x9a\xec\xec\x1cx\x05d\x8f\xd4\
+\xbf.ms\x0c d\xe6R\xfcB1\xf7\x9f\xa1\xfe\xb5#\xfe\xdc*
+*d/7\x0b\xce\xc17[\x9a\x051\xf4\xc3\xcb\x87\x1b?\xf1\x8f\x19\xcf\x01\x0c\
+u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
+\x92\xed\x8cs`\xa3\x9d=\xdc\xe4|\xce\xfbS\x11\xc8uP\xae\x8b5\xe7\xe0C\xf4\
+}\xd6\xbb.\xca\x95\xf1\xe2\x08\xfc\xd3\x80\xeet\xb9\xa8\x05\xf0~\x07\x03\
+\xee\xec\x08\xa4\xe1F
+\xa0\x00\x80=\xc8E\x14i\x9a\x08\xf2Q\x0c\xcc,\xaf\xeb\xff\x1c\x80\x1a\xd6\
+\xdc\xe5W\xdfO/\x8e {WR\xef\xe4\xd6\xde\xf3\x0fC\x01\xf8T\xed+\x8e
+\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_chevron_up_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
+D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
+\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
+ \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_chamber/panel_tab_fastem_chamber_xrc', bytearray(panel_tab_fastem_chamber_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_chamber/______img_icon_ico_press_png', bytearray(______img_icon_ico_press_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_chamber/______img_icon_ico_press_green_png', bytearray(______img_icon_ico_press_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_chamber/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_chamber/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_chamber/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    __res.Load('memory:XRC/panel_tab_fastem_chamber/panel_tab_fastem_chamber_xrc')
+
+    panel_tab_fastem_overview_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxPanel" name="pnl_tab_fastem_overview">
+    <object class="wxBoxSizer">
+      <orient>wxHORIZONTAL</orient>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_left">
+          <object class="wxBoxSizer">
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ToolBar" name="fastem_overview_toolbar">
+                <style>wxVERTICAL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALIGN_RIGHT</flag>
+            </object>
+            <orient>wxVERTICAL</orient>
+            <object class="spacer">
+              <option>8</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <size>-1,-1</size>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="FastEMOverviewViewport" name="vp_fastem_overview">
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar" name="fpb_settings">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_fastem_overview_streams">
+                          <size>300,-1</size>
+                          <add_button>0</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>SEM</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="CaptionBar">
+                      <label>CALIBRATION</label>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <bg>#333333</bg>
+                      <size>400,-1</size>
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxGridBagSizer">
+                            <cols>2</cols>
+                            <rows>3</rows>
+                            <hgap>160</hgap>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_optical_autofocus">
+                                <label>Optical Autofocus</label>
+                                <font>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              </object>
+                              <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>0,0</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_optical_autofocus_run">
+                                <size>45,-1</size>
+                                <height>16</height>
+                                <face_colour>def</face_colour>
+                                <label>Run</label>
+                                <style>wxALIGN_CENTRE</style>
+                              </object>
+                              <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
+                              <border>5</border>
+                              <span>1,1</span>
+                              <cellpos>0,1</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_sem_autofocus">
+                                <label>SEM Autofocus</label>
+                                <font>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              </object>
+                              <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>1,0</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_sem_autofocus_run">
+                                <size>45,-1</size>
+                                <height>16</height>
+                                <face_colour>def</face_colour>
+                                <label>Run</label>
+                                <style>wxALIGN_CENTRE</style>
+                              </object>
+                              <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
+                              <border>5</border>
+                              <span>1,1</span>
+                              <cellpos>1,1</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText" name="lbl_autobrightness_contrast">
+                                <label>Auto-brigtness/contrast</label>
+                                <font>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              </object>
+                              <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
+                              <border>5</border>
+                              <cellpos>2,0</cellpos>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_autobrigtness_contrast">
+                                <size>45,-1</size>
+                                <height>16</height>
+                                <face_colour>def</face_colour>
+                                <label>Run</label>
+                                <style>wxALIGN_CENTRE</style>
+                              </object>
+                              <flag>wxALIGN_CENTRE_VERTICAL|wxEXPAND|wxTOP|wxBOTTOM</flag>
+                              <border>5</border>
+                              <span>1,1</span>
+                              <cellpos>2,1</cellpos>
+                            </object>
+                          </object>
+                        </object>
+                      </object>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="CaptionBar">
+                      <label>OVERVIEW ACQUISITION</label>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="FastEMSelectionPanel" name="selection_panel">
+                      <bg>#333333</bg>
+                      <fg>#999999</fg>
+                      <size>400,-1</size>
+                      <flag>wxALL|wxEXPAND</flag>
+                    </object>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_info">
+                                  <bitmap>______img_icon_dialog_info_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_warn">
+                                  <bitmap>______img_icon_dialog_warning_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                                  <label>No scintillator selected for overview acquisition.</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              </object>
+                            </object>
+                            <bg>#333333</bg>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
+                          <border>12</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="gauge_sparc_acq">
+                                <size>-1,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                              <border>16</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_sparc_cancel">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Cancel</label>
+                                <fg>#1A1A1A</fg>
+                                <hidden>1</hidden>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_sparc_acquire">
+                      <icon>______img_icon_ico_acqui_png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
+                      <label>START</label>
+                      <fg>#FFFFFF</fg>
+                      <font>
+                        <size>15</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <bg>#333333</bg>
+  </object>
+</resource>'''
+
+    ______img_icon_ico_chevron_up_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
+D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
+\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
+ \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_dialog_info_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x02\x87IDAT8Ou\x91]HSa\x18\xc7\x9f\xf9YI\x81y\x19\
+\x04ua%\x18D\xa5\xdb,3\x27\xa5\x93\xd0\x021,\xcbL\xcb2ts\x9a\xce\xa6S\x9c\
+\x14f\x17\xb9\x92\xcc\xb0\xd4\x15\x91\xc3\xd2\xd4l:\x8d\x98}\xe10\xa5\xf4\
+\xa2\xe5\xae\x8a]\x09]\x18\xd9:\xfe{\xcf9x\xb6&\x1d\xf8\x9d\xf79\xcf\xc7\
+\x8f\xe7\xe5\x10\x00
+@\xc6\x08cD\x8c8\xe7\xb7\xd8\xa7\xdc[Y\xbc\x9e\xb1\x86\x11\x14\xd8\x1f\
+8\x1c|\xa9eH\xae6X\x27N6\xdb~\xe8-\xef\x96MV\x27J\xdb\x1d\x8b\xb97lS\xc6\
+n\xc7\x01\xd6\x13\xf2?A\xd0\xce\xfcV\xc3\xae\xe2\xee_\xb7\x07g\xf1\xc2\xf9\
+\x0dc3\x1e\xd8\xa7=,\xfe\x8e\xce1\x17r\xae\xdb\xbd\xa9\x06k\x93\xbfD\x12\
+D\xa9\x1bt\xd1\xf9\x1d\xe8\x18u\xa1\xf9\xd9\x1cj\x1e\xce\xe0\xaa\xf5\xb3\
+\x00\x1f7\xf5\xce\xc1\xf2j\x1ei\x0d\xc3\x88>s\xb7\x16\xe2UE\x01\xed)\xd9\
+\x16r\xa8q\xb1\xba\xcb\x09\xed\xbdIh\xda\x27a\xb0|\xc4\x92\x97\x13\xe0c\
+>\xc7\xd7\xea\x1eM#<\xd3\xfc3"\xad~\x87O \xd7\xf5$W\xf6\xa2\xd0\xfc\x16\
+\xf97\xdf\x08\x94\xb1\xe6?\xdc\xb2\x00\x1f\xaf\xe4\x0bX\x8f\xca0\x08:Xo\
+\xf5\x09\x14:\xb7\xaaz\x10Y\xd7\xc6\xff\xa1\xe8\xd6\x04\xce\x9b\x1d\xab\
+\xf2\xe9\xf56\x90\xaa\xd1-\xccR\xec\x85H&\xe0R\x0cCH5\xbe\x94\xf0\x0e\xd7\
+\x8d\xb0\x1c\x8fX\xcb0\xf1\x02\x13G\xb1\x17#\x89b\xb4\x1bI\xae\xe5\xe24\
+}PV\xf4\x8bT\x0dCq\xc5&\x09\x12j\xc6\xd9\xf7(bJ\xfa\xb1)\xcf\x82\xd0\x8c\
+vP\x92\x91\xa3\xed\xc5Q\xe2\x15\xe2\xb5\x1eJm\x81\xec\xc8\x1d\x84eY\xb0\
+.\xef)6\x14\x0c`aaA\x80N\x0f\x81r\x07@\xc7\xad\xa0c]\xa0\xf4VPB\x95G\x98\
+\x15^{5\x0eJi\x02ev\x80\xb2\x9f\x80N\xb1\x81\xbca\x9f\xe0\xac\x1dT0.\xe6\
+\xf9\xba\xda\x0c\x8a\xd3L\xf8\x04\xf1Z\x05\xc9\xcb\xbdt\xb4\x13t\xa2O\x18\
+X\x19\x96$\xc5\xefEQv\x0fH^\xe1e\x02\xa5$\x10\xb7(m\xa3\xc4ZPN/\xe8\xdc\
+k6\xf0\x01T\xf6\x09t\xd9%\x9e\xa5S\xc2V\x94h\x04\xdb\xb8M\x9a\x93\x02"\x19\
++\xdcg\x9bp\xa4\xb4\xb0{?g\xb2Yv~\x05\x15\x8e\x82\xf6?F\x90\xa2\x82c=\x0f\
+\xf8\xdeU\x02)\xb1[\x93\x1c\xbe\xaf\xfcKxR\xe5\x92L\xa1\x03\xfb\xc5\x08\
+M\xd1\xff^\xab\xd2\xbb\x83\x95:\xd5\xaa\xfe\xc0\x84?\xb2\xd8\xa2\xcd\xc4\
+\x08\xcc\xfb\xf3\x17j\xeaha\x09cF\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_dialog_warning_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x01\xcfIDAT8\xcb\xa5\xd3?h\x13\x01\x14\xc7\xf1\x97\
+\x92\x8b\xd6\x10MZ$\xbb\x88 \x8e\x82\xd4\xad\x8b\xd4\xead@\x1dt\x13\x15\
+\x14Z\x10\xc4\xbf\x98\xe2V\xc4A\x05%\x8e\xd5\x8a\xa0j\xac\xa21\x18:IB\
+\xc0\xd8\xa6E#\x88\xb5\xd7\xe4L1M\xca\x9d\xb9K\xee\xebp\xa1"J\x9b\xea\xf0\
+[\xde\xe3\xf7\x817<\x01\xe4\xb2\xe4\xd2\x8c*\x87\xea\x8f={\xff\x09\xa8\
+\xc7\x94\xfdV\xac\xdb\xb6\x12!j/\x94\x83+\x06\xac\x27\xbeY&\x1f`\xbf\x1f\
+\xc6\x1c\xf1\x16W\x044bm\xc7\xeb\x89\x10|\x18\x81\xdc0\xf5W\xbb0\x9f)\xfd\
+-\x03\xe6S_\x89\xeceR\xfd]\xa4\xfa\xb6a\xa7NS\x8b\xb6\xcf\xb5\x04X\xcf\xdd\
+\xe7\xac\xe4N\xc8\x0e\x10\xef\xe9 \xde\xd3\x01\xe9\xa3X\xaf\xbb\xa8\x8d\
+\xba/,\x0b\x18\xa3\x81y;{\x0c\xb2\x87\x19\xeb\xedd\xac\xb7\x132\xbb\xb1\
+S;0\x1e\xf9*K\x02F\xd45h&\xb7\xc2\xc4\x1e\xc8\x85H\xef\xdb@\xe6\xc0f\x98\
+\xe8\x86\xf1\xed\xd4\x92[\xd0\x1f\xba.\xfd\x1d\x88\x88\xb2p\xb5n\xbfU \
+#\xf0N\xf8tr=\xf9\x13\xeb \x270)\xd8\xe3\xab\xa8\xdc\xf3\xe8\xa4E\xf9\x03\
+\xa8\xderE\x8c\x97~\x98\x12\xc8\x0b|\x16\xf8"\xf0U`\xa6\x99i\xc1x\xe3\xa7\
+z\xdbu\xe3w`H\xbc\xe5\x9bkM;\xaf8\x85\x82\xc0\x9c\xa0\x86\xfd\xa8a?T\x05\
+\xe6\x9d\x99\xad\xb6S\x8e\xac1\x0bC\xe2]\x04\xcaW\xe5\xae\x1e\x0f:eM\xe0\
+\xbb\xc0\x82\xa0\x85\x03h\x03\x010\x04*\x0e@A\xd0\x13A\xcaW\xe4\xce"P<%\
+Zcj#\xa8AP\x05\x8a\x02\xa5f\xa1\xd4Dg\x9d\x13\x98\x0e\xd2\xf8\xb8\x09\xed\
+\xbc[\xfb\x05\x9cm\xbb\xfe\xed\xa2\xe7\xc7\xcc\x111Z\x89\xda\xe7\xd1\x0b\
+g\xe4\xda\xb2\xdf\xd8J~\x02\xf21\xd2V\x95\xc1N=\x00\x00\x00\x00IEND\xae\
+B`\x82'''
+
+    ______img_icon_ico_acqui_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00"\x08\x04\x00\x00\x00\x99\
+\xa5c3\x00\x00\x03\x90IDATH\xc7\x8d\x96\xcdk\\U\x18\x87\x9fs\xee93s\xd3\
+6\x99v\xd2Z\xab\xa3\x14\x9a\x04EJhI\xa5Y\x88n\xdc\xd5\x95[QW\x82\xbb\xda\
+\x85\xe0Np\xd1\x9dK\xa5\xf4\x1f\x10\xeaJp!\xd9\x08\x85\x10\xf1s\xa1\x0b\
+\x95Z\x93X\x8aL\xa7\xad\x85\xa4\x99{>\\\xdcs\xef=g&\x13z.Cf\x86\x9cg\xde\
+\xf7\xf7~
+\xcf\x94#\xf6y\xe7\xf7y\x17\x1d5\x15T\xbe\xc4\x04\xcc\xd7 \xff$\xb0
+#\x10\xc8\xf0\x97\x80\xf1\xb8\x80\xf3\x88q\xdc4\xcb\x04\x12\x89$\xabq\x15\
+\xca\xe2p\xb8\x83-\x13\x09H\x90\x85G\x05\\\x892\xd8\xf0\xb8\x80\x8f\x1c\
+V\x13\x1a\x89\x00\x92(4
+E\x86\x04\xc0a1\x14\x18\x0c2X\x98(\xa8&4\x92\xb5E\x8aV\xc0U0\x83aD\x81\
+\xa1\xc0bp\xd8XA5\xa1Q\x05\xd2h\xf4\xe5\xdfz\xe4\x89.W^\xa4`D\x16\xac\x13\
+\xb1\x82*\xb1H\x91\xa1\x83{-4\xba\xc7E\xfa\xa9\xca3\x8c\xc8P\x8c\x90\x14\
+\x08L\xb0:\xd2\xacDit\x09\xa9\x9e\x9c>\x8b),\x0f\xa8,D\x9a:m\x82f"\xc8\xdd\
+\xa2M\x9bV\x00\xaa}\x13\x27GQ$\x81\x01\x8f\xab4\x13A+M\xfb\xf2_\xa9F\xfd\
+1\xc5`\xeb\x9bu\xb6\x1a\x05O\xe3\x83j>vS\xa1i\x8fk\x94\xd3\xc3\x0f\xcc\xaf\
+\xc5\x03\xd3\x93g\xdb\xb3\x8a\x1e\x17Yn\xfe\xa1\x15\xb2N\x94\x9a\xc5\xf2\
+Oh\xe4\x87\xe6\xba\xd8\xd0h\xc0fw^k\xbd\xd3\xcd\x9f\x8d\x8a\x15MA\x86,\x13\
+[F\xa9\xa1\xd0\xa9K\xfe\xae\xfbPoT\x9f2\xdb_{\xfc\xd1\xed\x9d\xdd\xb8\x8e\
+t]pQ9UY\x96\xb0\xcc\xa7z\x08\xdf.\xdd|S\xcc\xcfm\xaf|y\xe1\xf6\xf3\x9b\xeb\
+\x9f\xb9+\xa7\xe9\xd4\xbf\x10\xec
+\x10\x92L\x8b\x8e\xfdA\xff\x097V\xd7>9y\xee\xc2s\xe7V\x1f^\xfdi\x09^^\xff\
+}{X\xa6UcD\xe8,2*t\x19\x8b\x01\xe6{\xb0\xe2\x97w\x97\xe4*+,\xb3\xa2[o\x81\
+\xf4\x8f~\xbcK\xd1\xc0Ds\xab)\xa7\xb4\xa7\x02\xc5\xbd6\xb7\x8e\xce\x1c[\
+\xa4t\xabC\xb6\x00 \x06\x03vi\x13\xdd\x0c\xf7%S\x8f\xe9@o\xe7\x90\xed\x86\
+\x8b\x82\xfc\x01\xc0N\xbe\x1bjh\xfc\xc8\xa6\x18\xc6\xdb\x9d]\x80c\x8f\x8f\
+\xdc\x1ca\xab\x88\xac\x01<<\xa3\x1b\x1b|\xdc\xcae\xd4\xdf]
+\xcb^\xd9\xed\xc0\xa5k\x83\xef\x86X\xf0\xf6ku\x03\xfe\xe8\xed-\xcfUN\x92\
+t4T\xd4\xdb]mB\xd9\x1e\xba\x9bo\x9f\xf9|\xfe\xd1\xab\x1f\xdfy\xfa\xde\xf1\
+#\xdb\xf9}2\xa3\xbfx\xff\xa4~*\x86\xb9\xa6\xe7\xaa\xe4\xcb\x04\xa69\xfa\
+\xfa\xc6\xde\xd9\xeb\xb9=\xb5\xc9\xdf\x08\xe4\xa0s\xed\x83|\xf9\x05N4\x1d\
+\xc0\x86\x8e\x1bE\xb3\xea\xefE:U\xe6\xe8_Z??\xfc\xaa\xfb\xf3\xec\xff\xce\
+\xdf:\xff\x8d\xe3\xdd\x97X\xe4p\x14\xf2z\x1a\x00*rq\x0c\x06\x8a\x13\xb4\
+Nm\xbf\xb7\xc5?\x8c\xe8\xb2@\x9fg\x98\x8dS\xa0\xc04\xd3@\xd5\xe2\x1b
+\xf6&\x87W\x8f\xc3\xf4\xd9\xc1\x91q\x88\x19Zi2\x96\x13!\x84N\xf8\xb2\x90\
+\xaa.\xdb\x0eC\xa4\xac\x06\x17\x8d\x0cB\xc9\x95c\xaf\xf4d\xc4\x1e#\x8a\x00\
+t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
+"\xc9B\x81\xf8h\xd0\xc6\xdbG\xa5\xb3\xc1\x06\xcd\xea\x00\xd4\xd3%\x98\x1f\
+\xef\x17\xe3K@\xbau4\xcb\x82\x8f\x03@p\xc8\x05GD\xaa\xf3\xd8\xf1\xf5\xe3\
+b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
+\xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_overview/panel_tab_fastem_overview_xrc', bytearray(panel_tab_fastem_overview_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_overview/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_overview/______img_icon_dialog_info_png', bytearray(______img_icon_dialog_info_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_overview/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_overview/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
+    __res.Load('memory:XRC/panel_tab_fastem_overview/panel_tab_fastem_overview_xrc')
+
+    panel_tab_inspection_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxPanel" name="pnl_tab_inspection">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_open_image">
+                <height>24</height>
+                <face_colour>def</face_colour>
+                <label>Select image...</label>
+                <fg>#1A1A1A</fg>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ToolBar" name="ana_toolbar">
+                <style>wxVERTICAL|wxHORIZONTAL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALIGN_RIGHT</flag>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_inspection_view_all">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_inspection_view_all">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_inspection_view_tl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_inspection_view_tl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_inspection_view_tr">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_inspection_view_tr">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_inspection_view_bl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_inspection_view_bl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_inspection_view_br">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_inspection_view_br">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <orient>wxVERTICAL</orient>
+              </object>
+              <option>1</option>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <size>200,-1</size>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_inspection_grid">
+          <object class="MicroscopeViewport" name="vp_inspection_tl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_inspection_tr">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_inspection_bl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_inspection_br">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="AngularResolvedViewport" name="vp_angular">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="PointSpectrumViewport" name="vp_inspection_plot">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LineSpectrumViewport" name="vp_linespec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TemporalSpectrumViewport" name="vp_temporalspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ChronographViewport" name="vp_timespec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="AngularResolvedViewport" name="vp_angular_pol">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="AngularSpectrumViewport" name="vp_angularspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ThetaViewport" name="vp_thetaspec">
+            <hidden>1</hidden>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_fileinfo">
+                        <label>FILE INFO</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_inspection_streams">
+                          <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>STREAMS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_export">
+                      <size>382,-1</size>
+                      <icon>______img_icon_ico_export_png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
+                      <label>EXPORT IMAGE</label>
+                      <fg>#FFFFFF</fg>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+  </object>
+</resource>'''
+
+    ______img_icon_ico_chevron_up_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
+D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
+\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
+ \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_export_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x1b\x00\x00\x00 \x08\x04\x00\x00\x00I\
+`\xcb\xb0\x00\x00\x02\x8aIDAT8\x11\x05\xc1\xbd\xaa\x27\xd4\x15\x07\xd0\xb5\
+\xf79\xd7\xeb\xcc0&0\x850\x1f\x85\xa6\xd5\xc2*\xa4\xc9\x10,\xec$\xe0\x0b\
+\xf8
+b-\x98\x04$E\xde$\x09\xe2W\x19\x92\x096\x926\x95ha\x13\xacR\x8d\xc8\xf5\
+\xfe\xcf\xfe\xb9\xd6\xce\xd2Jk\xadQ
+\x10\x11c\x8c\x11\x11\x11\xd8ZY\x96\xb6\xb4RJ!"\xe2\x18\xe38b@\xd8\xca\
+\xb2,\xdb\xd2Z)\x85 \xe28\x8eV\x0e\x06dk\xcbr\xe5\xca\xb2\x94\xd2
+\x041...\xda\xc5\x05\x03[k\xdb\xd5{\xff{\xe0\x0e\x00\x00y\xf0\xc1\xbb\
+u\xeb\xd6\xad\x02\x8clmY\xd6\x03\xbf\xf1\x04\x00\x80z\xfe\xc7\xf4\x9b\
+\xb34 \xb0\xb5\xd6\xfa\x8e\x27^\xfd\xfbO\xff\xbd\x91R
+\x9d\xd7^x{\xf5\xf7\x1f>\xcb\xd3\x8f\x15\x88\x11\xb5QJ\xc3\xcdW\xf7\xbe\
+\xb8K)\xad\xac\xafn\xae\xdf~\xd5\xa3\xf6\x87\xcfo?\x11\xe3\x18\x91\xad\
+\x94\x02~r/\xa2\x10\xad\xbf\xcd=\x0f\xbd\xe4Q\xe7O\xcf.O?s\\\x1cGo\x85R\
+0\x8c\x80\xd1<O;\xb8\xf6\xb8}\xf4\xec<\xfd\xcc\xad\x8be6
+ \xe3\x88\xa0\x14\xe7\x02p\xed\xf1\xca\x9f\xffy\xfb\xbbO-\xad7  \xc6\x11\
+A\x99s\x00\xb8\xf6d\xe7/>\xd7ZoD\x04\xc4q1\x06\\\x1e\xff\xa7>\xfcq\xff\xbf\
+\xabT\xde\xb8z\xeb\xe1\x95\xd2Zm\x000\xc68\xc6\x88\xfe\xfd\xd7\xbes\xed\
+\xca\xd2_\xe6\xa5\xb7^\x81Rj\x03\x00"\xc61F)\x85\xb1\xad\xaf\xf3\xb2\x87\
+\xeeC\xb1\x01\x00@\x8c\xa3\xdcj\x85\xc8\xf3\xf9\x85C@m\x00\x00\x111F\xd0
+a\x06\x04\xd8\x00\x00 b\xc4q\xd1J\xa9\x0c\x88\xc0\x06\x00P\x80\x881\x8e\
+\xe5\xe8\x04@\xd8\x00\xa0\xb5\xd6\x96\xd1Fk\x85\xa2o\x02\x046J)P\x96\x08\
+\x82\xd1\xb6mY\xd6\xba\x0cP\x8a\x0d(P\x96\x00\xcah\xdb\xb6-]\x15C\x01\x1b\
+\x01\xa8\xd66\xa0\x8c\xb6l\xcb\xb2T\x00\xc2\x16D\x00\x8d\xad\x94\x12e[\x96\
+V\x80\x08\xb2E\x04@i\x85R\xa2,m)\x05 "\x1b\x11\x03\xf9\xf5\xbf\xee~\xe3\
+\x072\xc9$U\xd5]
+\xe6\xf5;\x16#\xc26\xc6\x18x\xe1\x9d_\xbe\xf3\xb2\x1b\x00\x00p\xed\x89\
+\x17\x19c\xcc6\x8ev\xe0\xae_yd\x00\x00@{\xd1\x1d\x8e\xe3\x98m\x8c\x8bz\xff\
+\xa1e\xdd\xaf\xfb\x05\x88(\x05\x888\x8e[\x17c\xb6q@,\xad\x15 \xa0\x001\xc6\
+qq\x1c\xb3\xc5\x011Z)\x05\x02
+D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
+\x19S\xec\xf0\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_inspection/panel_tab_inspection_xrc', bytearray(panel_tab_inspection_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_inspection/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_inspection/______img_icon_ico_export_png', bytearray(______img_icon_ico_export_png))
+    __res.Load('memory:XRC/panel_tab_inspection/panel_tab_inspection_xrc')
+
+    panel_tab_localization_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxPanel" name="pnl_tab_localization">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="ToolBar" name="secom_toolbar">
+                    <style>wxVERTICAL</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <object class="spacer">
+                  <option>1</option>
+                  <flag>wxEXPAND</flag>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_secom_view_all">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_secom_view_all">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_secom_view_tl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_secom_view_tl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_secom_view_tr">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_secom_view_tr">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_secom_view_bl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_secom_view_bl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_secom_view_br">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_secom_view_br">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <orient>wxVERTICAL</orient>
+              </object>
+              <option>1</option>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <size>200,-1</size>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_secom_grid">
+          <object class="FeatureOverviewViewport" name="vp_secom_tl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="MicroscopeViewport" name="vp_secom_tr">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="vp_secom_bl">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="LiveViewport" name="vp_secom_br">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+
+
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_feature_panel">
+                        <object class="wxPanel" name="pnl_features">
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="ImageButton" name="btn_delete_feature">
+                                    <icon>______img_icon_ico_trash_png</icon>
+                                    <height>16</height>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="OwnerDrawnComboBox" name="cmb_features">
+                                    <size>145,20</size>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxTE_PROCESS_ENTER</style>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_create_move_feature">
+                                    <height>24</height>
+                                    <bg>#000000</bg>
+                                    <label>Create/Move</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>52</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxTOP</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxStaticText">
+                                    <label>Status</label>
+                                    <fg>#DDDDDD</fg>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="OwnerDrawnComboBox" name="cmb_feature_status">
+                                    <size>122,16</size>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_go_to_feature">
+                                    <height>24</height>
+                                    <label>Go to feature</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <bg>#000000</bg>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>52</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxTOP</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxStaticText">
+                                    <label>Feature Z</label>
+                                    <fg>#DDDDDD</fg>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="UnitFloatCtrl" name="ctrl_feature_z">
+                                    <size>-1,15</size>
+                                    <accuracy>5</accuracy>
+                                    <key_step>0.001</key_step>
+                                    <unit>m</unit>
+                                    <bg>#333333</bg>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_use_current_z">
+                                    <height>24</height>
+                                    <bg>#000000</bg>
+                                    <label>Use Current Z</label>
+                                    <tooltip>Save the current position of the focus as the feature Z position</tooltip>
+                                    <style>wxALIGN_CENTRE</style>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>65</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+                              <border>10</border>
+                            </object>
+                            <!-- TODO: put all in a single panel, to hide easily? -->
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_z_localization">
+                                    <height>24</height>
+                                    <label>Locate Z...</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                    <bg>#000000</bg>
+                                  </object>
+                                  <flag>wxRIGHT</flag>
+                                  <border>10</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="lbl_z_localization">
+                                    <label>~ 4 seconds</label>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                    <fg>#DDDDDD</fg>
+                                  </object>
+                                  <flag>wxTOP</flag>
+                                  <border>3</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxGauge" name="gauge_z_localization">
+                                    <size>-1,10</size>
+                                    <range>100</range>
+                                    <value>0</value>
+                                    <style>wxGA_HORIZONTAL|wxGA_SMOOTH</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                    <hidden>1</hidden>
+                                  </object>
+                                  <option>1</option>
+                                  <flag>wxTOP</flag>
+                                  <border>4</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxBOTTOM|wxRIGHT|wxEXPAND</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxStaticText" name="lbl_stigmator_angle">
+                                    <label>Stigmator angle</label>
+                                    <fg>#DDDDDD</fg>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="OwnerDrawnComboBox" name="cmb_stigmator_angle">
+                                    <size>110,16</size>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER
+                                    </style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxLEFT|wxBOTTOM</flag>
+                              <border>10</border>
+                            </object>
+                            <flag>wxALIGN_RIGHT</flag>
+                            <orient>wxVERTICAL</orient>
+                          </object>
+                        </object>
+                        <label>FEATURES</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_settings_secom_optical">
+                        <label>OPTICAL SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_secom_streams">
+                        <object class="StreamBar" name="pnl_secom_streams">
+                          <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>STREAMS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem" name="fp_acquisitions">
+                        <object class="wxPanel">
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxCheckListBox" name="streams_chk_list">
+                                <content/>
+                                <font>
+                                  <size>10</size>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                              </object>
+                              <option>1</option>
+                              <flag>wxRIGHT|wxLEFT|wxEXPAND</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxCheckBox" name="z_stack_chkbox">
+                                    <label>Z-stack acquisition</label>
+                                    <fg>#E5E5E5</fg>
+                                  </object>
+                                  <option>0</option>
+                                  <flag>wxTOP</flag>
+                                  <border>10</border>
+                                </object>
+                                <orient>wxVERTICAL</orient>
+                              </object>
+                              <option>0</option>
+                              <flag>wxLEFT</flag>
+                              <border>5</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxFlexGridSizer">
+                                    <object class="sizeritem">
+                                      <object class="wxStaticText">
+                                        <label>Zmin =</label>
+                                        <fg>#E5E5E5</fg>
+                                      </object>
+                                      <flag>wxTOP</flag>
+                                      <border>3</border>
+                                    </object>
+                                    <object class="sizeritem">
+                                      <object class="UnitFloatCtrl" name="param_Zmin">
+                                        <size>-1,15</size>
+                                        <value>10</value>
+                                        <key_step>0.000001</key_step>
+                                        <min>-1000</min>
+                                        <max>0</max>
+                                        <unit>m</unit>
+                                        <scale>linear</scale>
+                                        <accuracy>4</accuracy>
+                                        <font>
+                                          <size>8</size>
+                                          <encoding>UTF-8</encoding>
+                                        </font>
+                                        <style>wxBORDER_NONE</style>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxTOP</flag>
+                                      <border>3</border>
+                                    </object>
+                                    <cols>2</cols>
+                                    <rows>1</rows>
+                                    <vgap>3</vgap>
+                                    <hgap>6</hgap>
+                                    <growablecols>1</growablecols>
+                                  </object>
+                                  <option>0</option>
+                                  <flag>wxLEFT</flag>
+                                  <border>25</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxFlexGridSizer">
+                                    <object class="sizeritem">
+                                      <object class="wxStaticText">
+                                        <label>Zstep =</label>
+                                        <fg>#E5E5E5</fg>
+                                      </object>
+                                      <flag>wxTOP</flag>
+                                      <border>3</border>
+                                    </object>
+                                    <object class="sizeritem">
+                                      <object class="UnitFloatCtrl" name="param_Zstep">
+                                        <size>-1,15</size>
+                                        <value>10</value>
+                                        <key_step>0.000001</key_step>
+                                        <min>-100</min>
+                                        <max>100</max>
+                                        <unit>m</unit>
+                                        <scale>linear</scale>
+                                        <accuracy>4</accuracy>
+                                        <font>
+                                          <size>8</size>
+                                          <encoding>UTF-8</encoding>
+                                        </font>
+                                        <style>wxBORDER_NONE</style>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxTOP</flag>
+                                      <border>3</border>
+                                    </object>
+                                    <cols>2</cols>
+                                    <rows>1</rows>
+                                    <vgap>3</vgap>
+                                    <hgap>6</hgap>
+                                    <growablecols>1</growablecols>
+                                  </object>
+                                  <option>0</option>
+                                  <flag>wxLEFT</flag>
+                                  <border>1</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxFlexGridSizer">
+                                    <object class="sizeritem">
+                                      <object class="wxStaticText">
+                                        <label>Zmax =</label>
+                                        <fg>#E5E5E5</fg>
+                                      </object>
+                                      <flag>wxTOP</flag>
+                                      <border>3</border>
+                                    </object>
+                                    <object class="sizeritem">
+                                      <object class="UnitFloatCtrl" name="param_Zmax">
+                                        <size>-1,15</size>
+                                        <value>1</value>
+                                        <key_step>0.000001</key_step>
+                                        <min>0</min>
+                                        <max>1000</max>
+                                        <unit>m</unit>
+                                        <scale>linear</scale>
+                                        <accuracy>4</accuracy>
+                                        <font>
+                                          <size>8</size>
+                                          <encoding>UTF-8</encoding>
+                                        </font>
+                                        <style>wxBORDER_NONE</style>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxTOP</flag>
+                                      <border>3</border>
+                                    </object>
+                                    <cols>2</cols>
+                                    <rows>1</rows>
+                                    <vgap>3</vgap>
+                                    <hgap>6</hgap>
+                                    <growablecols>1</growablecols>
+                                  </object>
+                                  <option>0</option>
+                                  <flag>wxLEFT</flag>
+                                  <border>-5</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <option>0</option>
+                              <flag>wxTOP</flag>
+                              <border>9</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxFlexGridSizer">
+                                    <object class="sizeritem">
+                                      <object class="wxStaticText">
+                                        <label>Filename</label>
+                                        <fg>#E5E5E5</fg>
+                                      </object>
+                                      <flag>wxTOP</flag>
+                                      <border>4</border>
+                                    </object>
+                                    <object class="sizeritem">
+                                      <object class="wxTextCtrl" name="txt_filename">
+                                        <size>150,20</size>
+                                        <value>Select a destination file</value>
+                                        <fg>#2FA7D4</fg>
+                                        <bg>#333333</bg>
+                                        <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxLEFT|wxEXPAND</flag>
+                                      <border>1</border>
+                                    </object>
+                                    <object class="sizeritem">
+                                      <object class="ImageTextButton" name="btn_cryosecom_change_file">
+                                        <height>24</height>
+                                        <face_colour>def</face_colour>
+                                        <label>change…</label>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxLEFT</flag>
+                                      <border>85</border>
+                                    </object>
+                                    <cols>3</cols>
+                                    <rows>1</rows>
+                                    <vgap>5</vgap>
+                                    <hgap>10</hgap>
+                                    <growablecols>1</growablecols>
+                                  </object>
+                                  <flag>wxLEFT</flag>
+                                  <border>10</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <option>0</option>
+                              <flag>wxTOP</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxFlexGridSizer">
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_cryosecom_acquire">
+                                    <icon>______img_icon_ico_acqui_png</icon>
+                                    <height>48</height>
+                                    <face_colour>blue</face_colour>
+                                    <label>ACQUIRE</label>
+                                    <fg>#FFFFFF</fg>
+                                    <font>
+                                      <size>15</size>
+                                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                    </font>
+                                    <style>wxALIGN_CENTRE</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxALL|wxEXPAND</flag>
+                                  <border>2</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxBoxSizer">
+                                    <object class="sizeritem">
+                                      <object class="wxStaticText" name="txt_cryosecom_est_time">
+                                        <label>Estimated time ...</label>
+                                        <fg>#E5E5E5</fg>
+                                        <hidden>1</hidden>
+                                      </object>
+                                      <flag>wxLEFT</flag>
+                                      <border>-2</border>
+                                    </object>
+                                    <orient>wxHORIZONTAL</orient>
+                                  </object>
+                                  <flag>wxTOP</flag>
+                                  <border>17</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="wxBoxSizer">
+                                    <object class="sizeritem">
+                                      <object class="wxBoxSizer">
+                                        <object class="sizeritem">
+                                          <object class="wxGauge" name="gauge_cryosecom_acq">
+                                            <size>-1,10</size>
+                                            <range>100</range>
+                                            <value>0</value>
+                                            <style>wxGA_SMOOTH</style>
+                                            <XRCED>
+                                              <assign_var>1</assign_var>
+                                            </XRCED>
+                                          </object>
+                                          <option>1</option>
+                                          <flag>wxTOP</flag>
+                                          <border>10</border>
+                                        </object>
+                                        <object class="sizeritem">
+                                          <object class="wxStaticText" name="txt_cryosecom_left_time">
+                                            <label/>
+                                            <fg>#E5E5E5</fg>
+                                            <hidden>1</hidden>
+                                          </object>
+                                          <option>1</option>
+                                          <flag>wxTOP</flag>
+                                          <border>10</border>
+                                        </object>
+                                        <orient>wxVERTICAL</orient>
+                                      </object>
+                                      <flag>wxTOP</flag>
+                                      <border>-8</border>
+                                    </object>
+                                    <object class="sizeritem">
+                                      <object class="ImageTextButton" name="btn_cryosecom_acqui_cancel">
+                                        <height>24</height>
+                                        <face_colour>def</face_colour>
+                                        <label>cancel</label>
+                                        <XRCED>
+                                          <assign_var>1</assign_var>
+                                        </XRCED>
+                                      </object>
+                                      <flag>wxTOP</flag>
+                                      <border>12</border>
+                                      <option>0</option>
+                                    </object>
+                                    <orient>wxHORIZONTAL</orient>
+                                  </object>
+                                  <flag>wxEXPAND</flag>
+                                </object>
+                                <cols>3</cols>
+                                <rows>1</rows>
+                                <vgap>0</vgap>
+                                <hgap>5</hgap>
+                                <growablecols>1</growablecols>
+                              </object>
+                              <flag>wxALL|wxEXPAND</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_acquire_overview">
+                                <height>48</height>
+                                <face_colour>def</face_colour>
+                                <label>ACQUIRE OVERVIEW</label>
+                                <font>
+                                  <size>14</size>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                              <border>10</border>
+                            </object>
+                            <orient>wxVERTICAL</orient>
+                          </object>
+                          <size>400,-1</size>
+                          <bg>#333333</bg>
+                          <style>wxBORDER_NONE</style>
+                        </object>
+                        <label>ACQUISITIONS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_cryosecom_acquired">
+                          <size>300,-1</size>
+                          <add_button>0</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>ACQUIRED</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxFlexGridSizer">
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="btn_mill_active_features">
+                          <hidden>1</hidden>
+                          <icon>______img_icon_ico_sem_png</icon>
+                          <height>48</height>
+                          <face_colour>blue</face_colour>
+                          <label>MILL</label>
+                          <fg>#FFFFFF</fg>
+                          <font>
+                            <size>15</size>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALL|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="txt_milling_est_time">
+                              <hidden>1</hidden>
+                              <label>Estimated time ...</label>
+                              <fg>#E5E5E5</fg>
+                              <hidden>0</hidden>
+                            </object>
+                            <flag>wxLEFT</flag>
+                            <border>-2</border>
+                          </object>
+                          <orient>wxHORIZONTAL</orient>
+                        </object>
+                        <flag>wxTOP</flag>
+                        <border>17</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="wxBoxSizer">
+                              <object class="sizeritem">
+                                <object class="wxGauge" name="gauge_milling_series">
+                                  <hidden>1</hidden>
+                                  <size>-1,10</size>
+                                  <range>100</range>
+                                  <value>0</value>
+                                  <style>wxGA_SMOOTH</style>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <option>1</option>
+                                <flag>wxTOP</flag>
+                                <border>10</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="txt_milling_series_left_time">
+                                  <hidden>1</hidden>
+                                  <label/>
+                                  <fg>#E5E5E5</fg>
+                                  <hidden>0</hidden>
+                                </object>
+                                <option>1</option>
+                                <flag>wxTOP</flag>
+                                <border>10</border>
+                              </object>
+                              <orient>wxVERTICAL</orient>
+                            </object>
+                            <flag>wxTOP</flag>
+                            <border>-8</border>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="ImageTextButton" name="btn_milling_cancel">
+                              <hidden>1</hidden>
+                              <height>24</height>
+                              <face_colour>def</face_colour>
+                              <label>cancel</label>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP</flag>
+                            <border>12</border>
+                            <option>0</option>
+                          </object>
+                          <orient>wxHORIZONTAL</orient>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <cols>3</cols>
+                      <rows>1</rows>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols>1</growablecols>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+  </object>
+</resource>'''
+
+    ______img_icon_ico_chevron_up_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
+D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
+\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
+ \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_trash_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\
+\x9a\x9c\x18\x00\x00\x00MIDATx\x9cc`\xa0\x11hc``\xf8\xc9\xc0\xc0\xf0\x1f\
+J\xb7\x90j\xc0O\x06\x06\x06!(\x1bD\xff F\xd3\x120^C(\x91g\xf8O$=j\xc0\xa0\
+\x0e\xc4\x9fH)\x10\x1d\x10\x95"Ai\x1e\x96\x07\xd01H\xbc\x99\x90\x01\xf4\
+\x07\x00\xd8]?\xea\xa3 \xa6\xc2\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_acqui_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00"\x08\x04\x00\x00\x00\x99\
+\xa5c3\x00\x00\x03\x90IDATH\xc7\x8d\x96\xcdk\\U\x18\x87\x9fs\xee93s\xd3\
+6\x99v\xd2Z\xab\xa3\x14\x9a\x04EJhI\xa5Y\x88n\xdc\xd5\x95[QW\x82\xbb\xda\
+\x85\xe0Np\xd1\x9dK\xa5\xf4\x1f\x10\xeaJp!\xd9\x08\x85\x10\xf1s\xa1\x0b\
+\x95Z\x93X\x8aL\xa7\xad\x85\xa4\x99{>\\\xdcs\xef=g&\x13z.Cf\x86\x9cg\xde\
+\xf7\xf7~
+\xcf\x94#\xf6y\xe7\xf7y\x17\x1d5\x15T\xbe\xc4\x04\xcc\xd7 \xff$\xb0
+#\x10\xc8\xf0\x97\x80\xf1\xb8\x80\xf3\x88q\xdc4\xcb\x04\x12\x89$\xabq\x15\
+\xca\xe2p\xb8\x83-\x13\x09H\x90\x85G\x05\\\x892\xd8\xf0\xb8\x80\x8f\x1c\
+V\x13\x1a\x89\x00\x92(4
+E\x86\x04\xc0a1\x14\x18\x0c2X\x98(\xa8&4\x92\xb5E\x8aV\xc0U0\x83aD\x81\
+\xa1\xc0bp\xd8XA5\xa1Q\x05\xd2h\xf4\xe5\xdfz\xe4\x89.W^\xa4`D\x16\xac\x13\
+\xb1\x82*\xb1H\x91\xa1\x83{-4\xba\xc7E\xfa\xa9\xca3\x8c\xc8P\x8c\x90\x14\
+\x08L\xb0:\xd2\xacDit\x09\xa9\x9e\x9c>\x8b),\x0f\xa8,D\x9a:m\x82f"\xc8\xdd\
+\xa2M\x9bV\x00\xaa}\x13\x27GQ$\x81\x01\x8f\xab4\x13A+M\xfb\xf2_\xa9F\xfd\
+1\xc5`\xeb\x9bu\xb6\x1a\x05O\xe3\x83j>vS\xa1i\x8fk\x94\xd3\xc3\x0f\xcc\xaf\
+\xc5\x03\xd3\x93g\xdb\xb3\x8a\x1e\x17Yn\xfe\xa1\x15\xb2N\x94\x9a\xc5\xf2\
+Oh\xe4\x87\xe6\xba\xd8\xd0h\xc0fw^k\xbd\xd3\xcd\x9f\x8d\x8a\x15MA\x86,\x13\
+[F\xa9\xa1\xd0\xa9K\xfe\xae\xfbPoT\x9f2\xdb_{\xfc\xd1\xed\x9d\xdd\xb8\x8e\
+t]pQ9UY\x96\xb0\xcc\xa7z\x08\xdf.\xdd|S\xcc\xcfm\xaf|y\xe1\xf6\xf3\x9b\xeb\
+\x9f\xb9+\xa7\xe9\xd4\xbf\x10\xec
+\x10\x92L\x8b\x8e\xfdA\xff\x097V\xd7>9y\xee\xc2s\xe7V\x1f^\xfdi\x09^^\xff\
+}{X\xa6UcD\xe8,2*t\x19\x8b\x01\xe6{\xb0\xe2\x97w\x97\xe4*+,\xb3\xa2[o\x81\
+\xf4\x8f~\xbcK\xd1\xc0Ds\xab)\xa7\xb4\xa7\x02\xc5\xbd6\xb7\x8e\xce\x1c[\
+\xa4t\xabC\xb6\x00 \x06\x03vi\x13\xdd\x0c\xf7%S\x8f\xe9@o\xe7\x90\xed\x86\
+\x8b\x82\xfc\x01\xc0N\xbe\x1bjh\xfc\xc8\xa6\x18\xc6\xdb\x9d]\x80c\x8f\x8f\
+\xdc\x1ca\xab\x88\xac\x01<<\xa3\x1b\x1b|\xdc\xcae\xd4\xdf]
+\xcb^\xd9\xed\xc0\xa5k\x83\xef\x86X\xf0\xf6ku\x03\xfe\xe8\xed-\xcfUN\x92\
+t4T\xd4\xdb]mB\xd9\x1e\xba\x9bo\x9f\xf9|\xfe\xd1\xab\x1f\xdfy\xfa\xde\xf1\
+#\xdb\xf9}2\xa3\xbfx\xff\xa4~*\x86\xb9\xa6\xe7\xaa\xe4\xcb\x04\xa69\xfa\
+\xfa\xc6\xde\xd9\xeb\xb9=\xb5\xc9\xdf\x08\xe4\xa0s\xed\x83|\xf9\x05N4\x1d\
+\xc0\x86\x8e\x1bE\xb3\xea\xefE:U\xe6\xe8_Z??\xfc\xaa\xfb\xf3\xec\xff\xce\
+\xdf:\xff\x8d\xe3\xdd\x97X\xe4p\x14\xf2z\x1a\x00*rq\x0c\x06\x8a\x13\xb4\
+Nm\xbf\xb7\xc5?\x8c\xe8\xb2@\x9fg\x98\x8dS\xa0\xc04\xd3@\xd5\xe2\x1b
+\xf6&\x87W\x8f\xc3\xf4\xd9\xc1\x91q\x88\x19Zi2\x96\x13!\x84N\xf8\xb2\x90\
+\xaa.\xdb\x0eC\xa4\xac\x06\x17\x8d\x0cB\xc9\x95c\xaf\xf4d\xc4\x1e#\x8a\x00\
+t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
+"\xc9B\x81\xf8h\xd0\xc6\xdbG\xa5\xb3\xc1\x06\xcd\xea\x00\xd4\xd3%\x98\x1f\
+\xef\x17\xe3K@\xbau4\xcb\x82\x8f\x03@p\xc8\x05GD\xaa\xf3\xd8\xf1\xf5\xe3\
+b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
+\xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_sem_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x04\x00\x00\x009\
+\xc62\xa5\x00\x00\x00\xb6IDAT8\xcb\xed\x94M
+\xc20\x10Fs\x03O\xd2\x0b\xd4\xfa\xb7\xb0E\x08\xd2.\x84\xc6n\xd5s\xe4\x8c\
+\x9e\xa47xfD\xa8\x84\x92\xa4\xa2\x0b\xa1|\x8b\x8f!<\x98\xc7@\x14jZ\xd4\x0c\
+L\x07
+\xb6\xac\xc8\xb3\x15\x1b\x96w\xfb\x9c\x0b\x02@\x8d\xa1\xe1\x905\xb4h\x07\
+\xc8\\\x87\x00\xc3\x8d\x8e&\xeb\xb8pr\x80\xcc&\x04\xd8\xd1\x04\x80\x12M\
+\x85U\x95\xeb\xbdk\x99\xcb\x98C\x8d\xf5:\xe2`\xb0^\xd3A\x9eK$CG\x01\xdf\
+#
+\xf8\x1eQ\xe0\x03\x07\xfdr\xd0\xeb\xf0~\x8bd`\xd8?\x11\x18\xf6\xff\x99\
+C/7\xc8\x17\xc9\xc0\xb1\x17\x87u:\xd0\xf6W\xce\xec\xe2\xc0\xfc\x19\x8f\xe6\
+\x01\xb8\x055\xdfN\x86\xe9\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/panel_tab_localization_xrc', bytearray(panel_tab_localization_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/______img_icon_ico_trash_png', bytearray(______img_icon_ico_trash_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
+    __res.Load('memory:XRC/panel_tab_localization/panel_tab_localization_xrc')
+
+    panel_tab_mimas_align_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxPanel" name="pnl_tab_mimas_align">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_position_btns">
+                <object class="wxBoxSizer">
+                  <object class="spacer">
+                    <option>1</option>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ProgressRadioButton" name="btn_position_opt">
+                      <icon>______img_icon_ico_optical_png</icon>
+                      <icon_progress>______img_icon_ico_optical_orange_png</icon_progress>
+                      <icon_on>______img_icon_ico_optical_green_png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <tooltip>Engage the optical lens</tooltip>
+                      <label>OPTICAL</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                      <size>130,-1</size>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                    <option>0</option>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ProgressRadioButton" name="btn_position_fib">
+                      <icon>______img_icon_ico_sem_png</icon>
+                      <icon_progress>______img_icon_ico_sem_orange_png</icon_progress>
+                      <icon_on>______img_icon_ico_sem_green_png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <tooltip>Use the FIB for imaging and milling, with the optical lens retracted</tooltip>
+                      <label>FIB</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                      <size>130,-1</size>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                    <option>0</option>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+
+            <object class="sizeritem">
+              <object class="ImageTextButton" name="btn_reset_alignment">
+                <height>24</height>
+                <label>Reset Z alignment</label>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND|wxALL</flag>
+              <border>10</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="wxHtmlWindow" name="html_alignment_doc">
+                <fg>#BBBBBB</fg>
+                <bg>#333333</bg>
+                <style>wxHW_SCROLLBAR_AUTO|wxHW_NO_SELECTION</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxTOP|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+          </object>
+          <size>400,-1</size>
+          <fg>#E5E5E5</fg>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>10</border>
+      </object>
+
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_viewport">
+          <object class="LiveViewport" name="vp_optical">
+            <fg>#BFBFBF</fg>
+            <bg>#000000</bg>
+          </object>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <nocaption>1</nocaption>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <flag>wxEXPAND</flag>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>512,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+    <style>wxWANTS_CHARS</style>
+  </object>
+</resource>'''
+
+    ______img_icon_ico_optical_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x04\x00\x00\x00\x1d\
+X\x8a>\x00\x00\x01\x08IDAT8\xcb\xed\x95;\x8e\xc20\x10@\x1d\x96\x9f\x96K\
+p\x8a\x04$\xb8\x00\xe7\xe5\x00\xb1A\x14\x1444\x11B v\x11Z\xd1\xb0\xc5.\x10\
+\xdbc\x13
+ 8\xfe\xc45Lg\xd9O3o\xfc\x0b$\xf2\x8d
+zi\xa4\x9a\x1fD\xcd\xfao\xb5\xa1.\x91\x086\xa3\xb6\x01\x19\x9cg\xd3\xcf\
+~\xa0 \x02\xfdcc\x16\x84j\xa4\xd5\xffP\x10\x86\xd2\xd8\xe2B\x09\x14j\x07\
+\x94b\x1b2\x01^@\xbe\xa2\x95\x05\xe9\xfe\xf1\x99TL\x18q4\x99\x11\xa1\x94\
+Ec\x07\xa2\xdad\x08v \xe9\x18\x9e\xd2\xc06\\:\x90\xee\x81\xcf\xa5\xc5D{\
+`\xf26E\x13-BG\xc2b\xa2G\xf0ck`\x17.J \x9d=$w\x13\\\xf2\xf0\xdfl\x84\xa6\
+,\x03r\xdb\x1b\xee\x8f\xc0O\x98\x94D\xa2o\xbe6\x99\x18/2\xcf\x1a\xad71"\
+\x14\xc3\xd5$\xf6@\xd2\xcc\x06\xf64\xf1@\xa2%\xdb\xb1\xb8\x27\x9d/\x8c\x92\
+g\\\xe2Q\xca\xc7\x89\x00\xf1D\x8eC\xb1\xd5\xcf\x04\xef\xcf\xc23.\x1eK\x8a\
+:p\x8a\xcb\x18\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_optical_orange_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x06\x00\x00\x00\xb7\
+QB\xb5\x00\x00\x02\xe7IDATH\xc7\x9dW]o\xd50\x0c=N\xfa\xb5\x81\xe0\x05^\xf9\
+\x03\xfb?\xfc\xcd\xbd\xf2\x17\x90\x906\xad\x17!M\x80&\xc1&`0\xf6\x80\x18\
+\xebml\x1e\x96\x14\xd77i7"E\xa9n\x1b\x9f\x1c\x1f\xdb\xf1%9|\x063\xa8\xb0\
+\xdag\x00\x90\xc2:{\xae\x8c\x01g\xa6\x8f+\xa9U\x1b\x11\x00\xacfP\xcf\xe9\
+\xbdT
+\xc0\xc7Y\xc5Y\x03h\xe2\xb3W\xc0d\x00\x02\x80\x11\xc0\x16\xc0\x10\xd7Q\
+\x01\xce@\x9c2\xdc\xc5\xd9\xc6\xdf4P\x1a\xe9\xc4\x09\xe0\x16\xc0\x9f\xb8\
+\xdeF@\x01@\x95\x02\xf0\xd1\xe0\x1e\x80\xfd\xb8v\x11T3\xd1\xee\xd2 \x89\
+\xb5\xb3n\xd4L*\xc5b?\xceV\xb1\xa0\x8c\xf0\x1c\x0fV\xabo\xc4\xb8\x10V\x93\
+\xd6\xb8\xaaQ\x9bs\xc3j\x85\x08\x90\xdc\xe7\x92\xbb4H\x1d\x8d\xb7c\xc0\xa3\
+\xf3+>t\x84\xba\x840\x0b3\xc1\xb7\x17\xcf\xdd\xcbx0\xcd\x0cV\xf8\x14a\xbe\
+\xf2\x08O\xf7\xe9\xb4\xa9p\x805\x10\x01\x86\x80^E\xa6\x0e\xfd\x09D\x0c\x18\
+\x01\xa0\xdac\xd3\xd5t\xe0\xdc2\xc8\xc8\x00\x06\xe9\xed\xfe\xf4\xdee\x92\
+\xeb_f\x136A\xb0:\x98\x81\xca\xa3/$\xab8\xfb\x83\xde\xdc\xd5\xf4\x8eY\xc2\
+:\x88\\\xb65}1vR\xd6O1\x9d\xc2.\xe8\x97\xde\xe1\x86\x05\x1fdE\x0f\x16lL\
+\xfd\xd2\xb6&w\xb1z1j fld\x01\x85\x05\x10\xc1\x89\xb23\xda\xb2\xe2\x0c\xba\
+\xad;\x00a\xc3\\\x06\x09\x0cx?1\xd1I8jwa\xe9\x83\xb6\xa2\xb7\x81\xcb\\\x98\
+\xe5{W\xd3\x85)\x96\xe9\xa0\x82L\xc1\xdb\xad\xa0\x1e\xbfXp\xb6\xa2\x07L\
+\x1d\xdbZ\xe1a\xca\xf6\xd6\x9e\x84\x05\x1b\x96\xa2\x1e\xfd\xda~\x9b\x27\
+\xfa$\xd3G\x90\xbc.Q\x8f>\xa3\xe9\xa8\xd3\xa1T\xbag\xe27\x15\xe5\x99\xb0\
+\\u5\x9dg.\xafP\x02AF|\x06 u\x85\xeb\xc0\xf29\xa3GoR`G\x8fRY\x19s\x11bu\
+\xc9\xe8\xa1\xf7\xf1\x12\x13.\xe6\x8b\xd1%0\xe0\x1d\xfa\x82\xabf
+\xba\xcc\xd5\x10\x8c\xf8)\x94\x0d\x13\xf9\xd95\xf4)\xe3\xaa\xd1\xd6\xc0\
+\\\x11\xe7\x8c\xcb\xb8\xad\xe9\x92Y\xbeNz\xf0\x8c\xc5\xd6\xea\xb8\xc6\xc4\
+&\xd5\x04\xc4rW\xc7\x94\x1e:\xc3\xb3\xa2/1\x09\xb9>J\x04\x27A\xee\xf4p\x0e\
+G\x99\xefv\xf4\xb0\x1ddN\x97A5\x04\xf0\x0e\xc7\xcc\x00\x8b\\\xef5\xf41\xbe\
+\x1f\xcca\xe4> \xba\x8e\xcd@\xba\x86\xcen\x06\xf9\x11K{j\xe0RC\x97u\xd5\
+\x12\x93\xa4\xcbml
+\xa6\x1ek\x0c8\x02p\xac\x8c\xff\x17\x88\xaec\x83\xba=C\x04y]y\xbc\x01\xf0\
+[1\x1dTd\xe1!\xee
+q\xb3\x0e\xeb\xca{\xbcz\xdc\xd1\x85\x8a\xa6\xe4\xd6\x90c\xb1\x04\xa2\x0d\
+\xeb\xae\xd0?\xd9\xa3\xf7\x8ai\xf6\x92z\x88\xbbXEK2\x96ZR.\xcc\x073\xd1\
+m\x8dn\xd8\xa8\xd0\xfa\x14\xaf\xe85\x90|\xd3\xb7\xfeW\xee\xde 9\x039\x90\
+\xd5\xf1\x17\xd4J \xcc\xefpSj\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_optical_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x06\x00\x00\x00\xb7\
+QB\xb5\x00\x00\x02\xf1IDATH\xc7\x9dW\xe1\x8a\xd40\x10\xfe\xd2v\xb7\xdd\x13\
+\xb9\x07\x10|\x81{\x1f_\xd3\xe7\x10\x84;nW\x04A9\xd0;\xd4S\xef\x10\xd1&\
+Mf\xfc\xb1Io:;\xedz\x06BB\xda\xcc7\x99/\xf3u\xea\xc0\xd0\xcd\xcd\x8cz\x0e\
+`\xdc\xad\xc7\xc9\xbcQ\x06*\xd5\xeb<:1J#\x0c\x80DOb^\x9es#\x00\xea\xdc\x9b\
+\xdcW\x00\xd6y^\x0b`\xa7\x00\x12\x80\x08`\x00\x10\xf2\x18\x05\xe0\x04\xa4\
+\x12\x86\xbb\xdc\xdb\xbc&\x81J+\x1e\x17\x00\x0f\xa0\xcf\xa3\xcf\x80\x0c\
+\xc05\x02\xa0\xce\x067\x00N\xf2\xd8ePy\x12\x19.\x09RN]\xe90\xca\x934\xe2\
+\x14\x27\xb9\xb7\xe2\x14\xce \x9e\xb2c+\xf1\x0e\xab\x10Bs\xd2\xaaP\xad\xc5\
+f\xabi\xae\x90\x01J\xf8\xaa\x12.\x09\xb2\xca\xc6\xdb*VON\xafO_\xba\xca\xad\
+f!D\xe0\x98\xf9\xeb\xdd\xf3\xbb\x17\xd91y2h\xe2\xcb\x0d\xab\xa9\xa1\x84\
+S\xbcskw\x06\x1c\x07\xa1@[q3\xe5\xd5\x1fAX\x819\x00\x8eV\xb4\xab\xbb\xfa\
+lB\xb7\xd5"\x90\x90\xb6zy\\\x19\xc95f\xf6\x80a\x87\x84\xe3\x8d\x00\xdf\
+\xf8\xedL\xb2r\xa5\x17\xe4^\xdf\xf9\xb7L|\x14\x86\x89oC\x1b>+;%\xeb\xc7\
+;]\xae]\x92\x0fS\x9d\xfe0\xf1{C\xdf&\xfe&J;\xa5_\xd2\xd6\x18.\x12\x0f\xe2\
+\x04\x88\xd2n\x11\x84\x80\xc4\xe9R\xd8\x89ZV*\x85\xaeu\x07\x11q\xb7\x9f\
+\xcd\xb4\x04\x84:\xec\x8c$\x8c2\\Xz\xc1\xb7\xfe\x0d\x27\xe6\x05>\xbe\xf9\
+\xce\xdf(\xb1,\x8e2\x0c\xc1;P\xd0\xd8\xc4_L|u\x84\x0f(\x1d\x1b4\xf1P\xb2\
+=hO\x88\xc8\x0e\xd9\x9e\x8f\xed\xb1\xfd:O\xa4\x27\xe3K\xb3\xbc\xec\xf9\xd8\
+\x1a\x9cF\x99\x0es\xd2=!\xbf_\xf7&\x08\x13\xff\xf0\x9d\xbf6>^i\x0e\x04\x06\
+\xf9{^V\xf1\x9e\x12}:\xd0+\xa2\xadJ\x81\x03>\xe6d%Z7\xe4\x80\x17\x02"\xc7\
+\xad\x11\x81\xb8\x04\x82\x19\xf2\xec|y\xe0\xc3
+\xd5$\xb8\x95Q\xe2$E>\x01\xe0\xd0\x84\x09\x08\x13\xdf\xf9\xce4B\x15\xb5\
+\x06V\xf6\xc5<\x08\x19\x856\xdc2\xf1\x17\xc5\x87\x05@\xc7@\xd8H\xaa\x11\
+h\xd4\xb1\x07>d\x86\x9b\xa4/\x9d$YuT\xe2tYdt\xa8\x86s\xe3\xbd\x03>\xe6@\
+Xm.5\xd4\x10\xeap\x01\x02\x98\xf8\xbe\xdf\xf4\x1f\xf2zP\xce\xf0\xbf\x80\
+H\x1d\x0b\xb2X\xf3\x9d\xbf\xe2\xc4\xdf\x89\xe8\\\xac\x97\x82\xce\x0c\x95\
+\xae\x85-^|.
+\xc6\x1a\x8b"\x9d\x27\xa4\x0ba\xfc\xbf@\xa4\x8e\x05\xf1\xf5L\x19\xe4Ul\
+\xe2k\x00\xbfU8\xa3\xc5\xc7\xbe`\xb0\xbf\x14N\xd4\xc5kQK5\x9b\x9f\x9bg\xfd\
+\xd3\xfe\x86\x1d\x0f\xe2FI^\xe81 \xb5\xaa\xa3d=\xc5\xe2j\x9b2\xf4/ 0\xfe\
+Qd\x27\xa3\xa7\xb9p5\xcbu\xc8H\xa4,\xd8\xdcL\xe93\xeb\xae[\xacD\x96\xed\
+\x96~\xe5\x1e\x052\x07\xbahT\xb7\xbf\xe8\xb1F\xdc\xe8\xe8\xaak\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_sem_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x04\x00\x00\x009\
+\xc62\xa5\x00\x00\x00\xb6IDAT8\xcb\xed\x94M
+\xc20\x10Fs\x03O\xd2\x0b\xd4\xfa\xb7\xb0E\x08\xd2.\x84\xc6n\xd5s\xe4\x8c\
+\x9e\xa47xfD\xa8\x84\x92\xa4\xa2\x0b\xa1|\x8b\x8f!<\x98\xc7@\x14jZ\xd4\x0c\
+L\x07
+\xb6\xac\xc8\xb3\x15\x1b\x96w\xfb\x9c\x0b\x02@\x8d\xa1\xe1\x905\xb4h\x07\
+\xc8\\\x87\x00\xc3\x8d\x8e&\xeb\xb8pr\x80\xcc&\x04\xd8\xd1\x04\x80\x12M\
+\x85U\x95\xeb\xbdk\x99\xcb\x98C\x8d\xf5:\xe2`\xb0^\xd3A\x9eK$CG\x01\xdf\
+#
+\xf8\x1eQ\xe0\x03\x07\xfdr\xd0\xeb\xf0~\x8bd`\xd8?\x11\x18\xf6\xff\x99\
+C/7\xc8\x17\xc9\xc0\xb1\x17\x87u:\xd0\xf6W\xce\xec\xe2\xc0\xfc\x19\x8f\xe6\
+\x01\xb8\x055\xdfN\x86\xe9\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_sem_orange_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x06\x00\x00\x00\x93\
+\xcf\xfa.\x00\x00\x02\xddIDATH\xc7\x9dV\xcd\x8e\xd40\x0cN\xd2t~vW0+-\x02\
+.\xf0$\x88\x0b\x88e\xe7Q\xf6yx\x0e\xb8\xec\xdex\x17\xb8\x81\xb8\xec\x01\
+!f\x9a\xc68m\\\xbez\xd2\xf9\xd9JV\xea&\xf1g\xb1S{\xfa|e\xd4c\xd5\xa8\xdf\
+\xf1\xa1\xc2;~3^\x19q0\xa2hP\x02C\x11\x84`\xec\xc4\xc3\xc6
+$}\xaf\xf3X)`\x03\x86\x92\xb4Y\x1a\x96\x00z\x8b\x00.\x1b\xaa\xb3\xcc\xb3\
+\xcc\x00T\xa2!\x00@\xe3\x1b\x96m\x16\x83\x11X\x88@\x8c/Y\x16\xf9\xdd+\xba\
+ds\x9bAB\x06p\x8a\xc2.B\x8c\xc0g\x8f\x17\x19`Y\x00\xb0\x13\x14m\xc1Q\x03\
+\xc0\xc6\x03\xb7\x1e\xbc\x17\x99\xa93\xd0\x002V\xca\xf8\x00\x8a\x11\xd4\
+\xd9\xe0\xc0\xff\xf7_\xf1k\xc5\xdb"\x9bY]\xd8\xdb\x87\xdf\xf4\xc9\xda\xce\
+\xea\xb7WW\xee\x96\xe7\xef\xd2|\xcb\x1f^?so\xb2a\xa1\xacB\x00\x8cB\xa4z\
+rf\xcd\x9c\xdf\x1a\xdeR\xf3\xf2\xa7\xac{\xd67M\xbfI\xe67aHy\xaf3\x0f\x01\
+v$m>\x9b[\xf3\xd7Q\xf7a\xce\xf1\xcd\xbc5D}\x09\xc8|.\x09W\xa0r\xa7\xd0F\
+\xc2\x9b\xd7ibQ\x0f\xeb;\xfdb\xd1\xeb2\xcfcT6v*\x19+sX\xf4\xe3!\xde\xd5\
+Lr`\x92\x9f\xaf\xdc\xfa\x27\xeb\x9e\x83\xdf2%//\xddZ\xe6\x1b\x9e\xb1r\xef\
+Jw\x89/\xa4\x9dd\x87\x99\xd7\xc2q\xef\xd4,\xeb.W\x83\xcc\xbb~\x9eT\x11\x8e\
+\xae
+\x82\x0c\x90\x02\x8a\x8acs@\x8f`C\xect\x11\x90J/YP\xf3\xe6\x8f\xe9\xe0\
+z##\xceQ\x27\x1e\x83\xaa\xea\xa0\xef"\x02\xc3AS\x95\xb8\x16N\x99\xeb\xb5\
+\xd2o\xc0It4
+\x00\xa9\xf0Z\xa0I\x9d\xc5\x98\xfb\xac\xebk#\x94nS*\xf07\x1c\xd4\x11\xdc\
+GuM\xb72\xa9\xb3(\x94@&\xb8O#\x15\x9ckpo)MwhR\xf9\xae\xf3\xff\xfd\x14=\xba\
+\x92I\x85\xf8\x9f\xa2q\xbe\xeb\xfc\x8f\x8a\xa6\x88\xffe_\xf8\x89\xefx\xf2\
+\x98\xfc/\x01\x94\xea\xa1\xf3\x88\x8d]\xa7\x1bR\x9dA\xfa\xde\x02\xc0(\xff\
+\xf7E0U\x0f\xe9,\xee!\xff\xaf\x0b\xe9\x19\xf6Qt\xa8\x1eh"\xff[UdG\x9fAP\
+@vO\xfe\xeb\xd46\xfb\x00b\xe1^\xaa\xf2\x9d\xf4\x01\xf2_;\x12\x8e\xcd\xa2\
+\xa8B\x0e\xd2Y\xf0\x19|\xe1_\xe7y\xc33\x97\xe7\xf6\x86)\xfb\xb3\xcfx\x09\
+`\xaa\xaaCO\x11\x9f\x01\xb7\x06\x15k\xfc\xf3/QIS?\x1c\xfd`\xeam\xa5\xe1\
+J\xc6\x97|\x06\xb6c\xc86\xd0\xc9\x85\x92\xf7\x87"\x90vP\xda\xc5\x96\xb9\
+\x9b,/g\x16\xdbEi\x19O\x8e \xe4\xcd\xa8K\xa3\x16\xc1\xfb-\\pGG \x05\xe7\
+\x14@\x05\x00\x0d\xc8I\x14i\x9a\x08\xce\xa3\x9a\xb8\xb3\x82\xce\xffc\x00\
+Z\x18K\xcd\xaf\xeeOO\x8e\xa0\xd8+\xa95\xa5q\xf4\xfc\x03\xc7\x08\xe5@fC\x91\
+U\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_sem_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x06\x00\x00\x00\x93\
+\xcf\xfa.\x00\x00\x02\xd3IDATH\xc7\x9dVK\x8e\xd40\x10\xb5;N\x11\x0c\xbd\
+\x016p\x12\xc4\x06\xc40}\x949\x0f\xf7`3\xec\xb8\x0b\xec`1Qk\xa4A\xfdq\\\
+T\x1cW\xe6\xa5\xda\xe9\x0f\x91J\xeej\xc7\xf5\xaa^}bg\xc8\xe8\xc7\xaaU\xff\
+\xc6\x872\xbf{\x16\x9d22\x82\x15E\x83\x12\x18
+ \x04k\x14\x07\x07\x0b\x90\xe6\xff2\xad\x85\x026`\xa8\x91:\xc9\x9e\xc5\
+\x83^#\xc0(\x19*\x93L\x92\x8c\x01T\xa2!\x00@\xe3[\x96]\x12\x83\x11X\x88\
+@\x8c\xcfX\xa6\xe9\xb7St\xc9\xe1:\x81\xf8\x040R\x14\xc6\x081\x02\x97<\x9e\
+&\x80Y\x06\xc0\x0eP\xb4\x03G\x0d\x00\x1b\x07\xdc:\xf0^d\xacr\xa0\x01d-\x94\
+\xf1\x0e\x14#(\x93\xc1\x8e\xff\xe5\xaf\xe5\x8fx\x94\x8f<^=\xde.\xd6\x8b\
+\xaf\x8d\x99@\xe1\xe7\xfa\xed\xfa\x96\xf7\xef\xe2>\x9b\xab\xdeU\xef\x93\
+a\xa1\xac@\x00\x8cB\xa4\xb0\xcfm\x0b\xc5\xaf\xdb\xd2\x1a\xfb\xc2\xc6\x1d\
+\xbbm\x9d\xed\xf6\xb7]\xc9;]y\x08p(|\xd8\xce\xad\xa1\x0d\xb5\xff4\xfa\x98\
+\x81(\xb1!\xfbmK\x8c2T\x1e4ZO\xee\xe7\xf7\xab\xb83m_\xd8\x98M\xab?k\xf5\
+n\x1ey7\xda8\x02`gv/-/\xef\x1aj\xc8\x93\xa9^U\xab\xe5\x1f\xe6\xdc\xb5\
+\xe9\xab\xde\xb0.\xfb{\xde]}\xcc\xcd\x12\x97);\xa9\x0ec\x27-\xc7\x1d\xe7\
+\xe3\xc4y\xea\x86nd\xd1\xc9\xde\xb8p\xaaq<4PP\x1c\x9b\x13z\x00\x1bb\x27\
+F@\xaa\xbc\xe4\x85\x929\xfe\x12\xfd\x9d\x1fp\x8e:\xb1\xeeUW{=\x8b\x08\x0c\
+{MU\xc3\xb5p\xca\\\xaf\x94~\x03N\xa2\xa3A\x00H\x85W\x03M\xbd\\\xa4z\xd7\
+\xba\x1e\x1b>7M)\xc3\xdf\xd3\\?\xcd}Pc\xba\x16\xe7t\x15\xf9\x1c\xc8\x00\
+\xf7\x8dN\x19\xe7\xf6x6W\xa6\x074\xa9z\xd7\xf5\xffi\x88\x1e\xdd\xc9\xa4\
+B\xec(R\xf5\xae\xeb?(\x9a\x02~\x97]\xe6#~\xe8\xc9\xd4\x0e \xd7\x0f\xd1\
+#\xe6\xfc:N\xc8~\x0e\x02\xeb5\x00\xf4\xea\xffX\x04C\xfd\xd0\xe4\xe2;\xd4\
+\xffu\xa6<\xfd1\x8aN\xf5\x03\x0d\xd4\xad\x9a\xec\xec\x1cx\x05d\x8f\xd4\
+\xbf.ms\x0c d\xe6R\xfcB1\xf7\x9f\xa1\xfe\xb5#\xfe\xdc*
+*d/7\x0b\xce\xc17[\x9a\x051\xf4\xc3\xcb\x87\x1b?\xf1\x8f\x19\xcf\x01\x0c\
+u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
+\x92\xed\x8cs`\xa3\x9d=\xdc\xe4|\xce\xfbS\x11\xc8uP\xae\x8b5\xe7\xe0C\xf4\
+}\xd6\xbb.\xca\x95\xf1\xe2\x08\xfc\xd3\x80\xeet\xb9\xa8\x05\xf0~\x07\x03\
+\xee\xec\x08\xa4\xe1F
+\xa0\x00\x80=\xc8E\x14i\x9a\x08\xf2Q\x0c\xcc,\xaf\xeb\xff\x1c\x80\x1a\xd6\
+\xdc\xe5W\xdfO/\x8e {WR\xef\xe4\xd6\xde\xf3\x0fC\x01\xf8T\xed+\x8e
+\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_chevron_up_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
+D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
+\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
+ \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_mimas_align/panel_tab_mimas_align_xrc', bytearray(panel_tab_mimas_align_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_mimas_align/______img_icon_ico_optical_png', bytearray(______img_icon_ico_optical_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_mimas_align/______img_icon_ico_optical_orange_png', bytearray(______img_icon_ico_optical_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_mimas_align/______img_icon_ico_optical_green_png', bytearray(______img_icon_ico_optical_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_mimas_align/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_mimas_align/______img_icon_ico_sem_orange_png', bytearray(______img_icon_ico_sem_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_mimas_align/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_mimas_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    __res.Load('memory:XRC/panel_tab_mimas_align/panel_tab_mimas_align_xrc')
+
+    panel_tab_secom_align_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxPanel" name="pnl_tab_secom_align">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxStaticText">
+                <label>Step size</label>
+              </object>
+              <flag>wxBOTTOM</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="UnitFloatSlider" name="lens_align_slider_aligner">
+                <size>-1,20</size>
+                <value>0.000001</value>
+                <min>0.0000001</min>
+                <max>0.001</max>
+                <unit>m</unit>
+                <scale>log</scale>
+                <accuracy>2</accuracy>
+                <fg>#E5E5E5</fg>
+                <style>wxBORDER_NONE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_ab_align">
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_mb">
+                      <label>-B</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <cellpos>0,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_pa">
+                      <label>+A</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <cellpos>0,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_ma">
+                      <label>-A</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxALIGN_RIGHT</flag>
+                    <cellpos>3,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_pb">
+                      <label>+B</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <cellpos>3,3</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_b">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↖</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxBOTTOM|wxRIGHT</flag>
+                    <border>7</border>
+                    <cellpos>1,1</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_a">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↗</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxBOTTOM|wxLEFT</flag>
+                    <border>7</border>
+                    <cellpos>1,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_a">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↙</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP|wxRIGHT</flag>
+                    <border>7</border>
+                    <cellpos>2,1</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_b">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↘</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP|wxLEFT</flag>
+                    <border>7</border>
+                    <cellpos>2,2</cellpos>
+                  </object>
+                  <growablecols/>
+                  <growablerows/>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#333333</bg>
+                <hidden>1</hidden>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALIGN_CENTRE</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_xy_align">
+                <object class="wxGridBagSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_py">
+                      <label>+Y</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>0,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_my">
+                      <label>-Y</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                    <cellpos>4,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_px">
+                      <label>+X</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_LEFT</style>
+                    </object>
+                    <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>2,4</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="lbl_mx">
+                      <label>-X</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <border>5</border>
+                    <cellpos>2,0</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_y">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↑</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT</flag>
+                    <border>7</border>
+                    <cellpos>1,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_y">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>↓</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT</flag>
+                    <border>7</border>
+                    <cellpos>3,2</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="lens_align_btn_m_aligner_x">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>←</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>2,1</cellpos>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="lens_align_btn_p_aligner_x">
+                      <size>64,-1</size>
+                      <height>48</height>
+                      <label>→</label>
+                      <font>
+                        <size>24</size>
+                        <weight>bold</weight>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <cellpos>2,3</cellpos>
+                  </object>
+                  <vgap>0</vgap>
+                  <hgap>5</hgap>
+                  <growablecols/>
+                  <growablerows/>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#333333</bg>
+                <hidden>1</hidden>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALIGN_CENTRE</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <object class="sizeritem">
+                  <object class="wxPanel" name="pnl_move_to_center">
+                    <object class="wxBoxSizer">
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lens_align_lbl_approc_center">
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="lens_align_btn_to_center">
+                          <height>24</height>
+                          <label>Move to center</label>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxALIGN_RIGHT</flag>
+                      </object>
+                    </object>
+                    <fg>#E5E5E5</fg>
+                    <bg>#333333</bg>
+                    <hidden>1</hidden>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxTOP|wxEXPAND</flag>
+                  <border>10</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxPanel" name="pnl_align_tools">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="ImageTextButton" name="btn_auto_center">
+                              <height>24</height>
+                              <label>Auto centering...</label>
+                              <style>wxALIGN_CENTRE</style>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxRIGHT</flag>
+                            <border>10</border>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_auto_center">
+                              <label>~ 30 seconds</label>
+                              <style>wxALIGN_CENTRE</style>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP</flag>
+                            <border>3</border>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="wxGauge" name="gauge_auto_center">
+                              <size>-1,10</size>
+                              <range>100</range>
+                              <value>0</value>
+                              <hidden>1</hidden>
+                              <style>wxGA_HORIZONTAL|wxGA_SMOOTH</style>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <option>1</option>
+                            <flag>wxTOP</flag>
+                            <border>7</border>
+                          </object>
+                          <orient>wxHORIZONTAL</orient>
+                        </object>
+                        <flag>wxBOTTOM|wxEXPAND</flag>
+                        <border>14</border>
+                      </object>
+                      <orient>wxVERTICAL</orient>
+                      <object class="sizeritem">
+                        <object class="wxBoxSizer">
+                          <object class="sizeritem">
+                            <object class="ImageTextButton" name="btn_fine_align">
+                              <height>24</height>
+                              <face_colour>def</face_colour>
+                              <label>Fine alignment...</label>
+                              <style>wxALIGN_CENTRE</style>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxRIGHT</flag>
+                            <border>10</border>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="wxStaticText" name="lbl_fine_align">
+                              <label>~ 30 seconds</label>
+                              <style>wxALIGN_CENTRE</style>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <flag>wxTOP</flag>
+                            <border>3</border>
+                          </object>
+                          <object class="sizeritem">
+                            <object class="wxGauge" name="gauge_fine_align">
+                              <size>-1,10</size>
+                              <range>100</range>
+                              <value>0</value>
+                              <hidden>1</hidden>
+                              <style>wxGA_SMOOTH</style>
+                              <XRCED>
+                                <assign_var>1</assign_var>
+                              </XRCED>
+                            </object>
+                            <option>1</option>
+                            <flag>wxTOP</flag>
+                            <border>7</border>
+                          </object>
+                          <orient>wxHORIZONTAL</orient>
+                        </object>
+                        <flag>wxBOTTOM|wxEXPAND</flag>
+                        <border>14</border>
+                      </object>
+                    </object>
+                    <fg>#E5E5E5</fg>
+                    <bg>#333333</bg>
+                    <hidden>1</hidden>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxTOP|wxEXPAND</flag>
+                  <border>10</border>
+                </object>
+                <orient>wxVERTICAL</orient>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxHtmlWindow" name="html_alignment_doc">
+                <fg>#BBBBBB</fg>
+                <bg>#333333</bg>
+                <style>wxHW_SCROLLBAR_AUTO|wxHW_NO_SELECTION</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxTOP|wxEXPAND|wxALIGN_BOTTOM|wxALIGN_CENTRE_VERTICAL</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+            </object>
+          </object>
+          <size>300,-1</size>
+          <fg>#E5E5E5</fg>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxALL|wxEXPAND</flag>
+        <border>10</border>
+      </object>
+      <object class="sizeritem">
+        <object class="LiveViewport" name="vp_align_ccd">
+          <size>400,-1</size>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+        <ratio>1</ratio>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxPanel" name="main_buttons">
+                <object class="wxBoxSizer">
+                  <orient>wxHORIZONTAL</orient>
+                  <object class="sizeritem">
+                    <object class="ImageTextToggleButton" name="lens_align_btn_sem">
+                      <icon>______img_icon_ico_sem_png</icon>
+                      <icon_on>______img_icon_ico_sem_green_png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <label>SEM</label>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextToggleButton" name="lens_align_btn_opt">
+                      <icon>______img_icon_ico_optical_png</icon>
+                      <icon_on>______img_icon_ico_optical_green_png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <label>OPTICAL</label>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                    <border>10</border>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText">
+                          <label>Presets</label>
+                          <fg>#FFFFFF</fg>
+                          <hidden>1</hidden>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                        <border>6</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="OwnerDrawnComboBox" name="cmb_lens_align_presets">
+                          <size>-1,16</size>
+                          <fg>#2FA7D4</fg>
+                          <bg>#424242</bg>
+                          <hidden>1</hidden>
+                          <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxEXPAND</flag>
+                      </object>
+                      <orient>wxVERTICAL</orient>
+                    </object>
+                    <flag>wxTOP|wxRIGHT|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <size>512,-1</size>
+                <bg>#4D4D4D</bg>
+                <hidden>1</hidden>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_opt_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>OPTICAL SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_sem_streams">
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>SEM SETTINGS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_sem_toolbar">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="ToolBar" name="lens_align_tb">
+                      <style>wxHORIZONTAL</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxRIGHT</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="spacer">
+                    <option>1</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <fg>#BBBBBB</fg>
+                <bg>#333333</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxTOP|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="LiveViewport" name="vp_align_sem">
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <minsize>512,512</minsize>
+            </object>
+          </object>
+          <size>512,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+    <style>wxWANTS_CHARS</style>
+  </object>
+</resource>'''
+
+    ______img_icon_ico_chevron_up_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
+D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
+\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
+ \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_sem_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x04\x00\x00\x009\
+\xc62\xa5\x00\x00\x00\xb6IDAT8\xcb\xed\x94M
+\xc20\x10Fs\x03O\xd2\x0b\xd4\xfa\xb7\xb0E\x08\xd2.\x84\xc6n\xd5s\xe4\x8c\
+\x9e\xa47xfD\xa8\x84\x92\xa4\xa2\x0b\xa1|\x8b\x8f!<\x98\xc7@\x14jZ\xd4\x0c\
+L\x07
+\xb6\xac\xc8\xb3\x15\x1b\x96w\xfb\x9c\x0b\x02@\x8d\xa1\xe1\x905\xb4h\x07\
+\xc8\\\x87\x00\xc3\x8d\x8e&\xeb\xb8pr\x80\xcc&\x04\xd8\xd1\x04\x80\x12M\
+\x85U\x95\xeb\xbdk\x99\xcb\x98C\x8d\xf5:\xe2`\xb0^\xd3A\x9eK$CG\x01\xdf\
+#
+\xf8\x1eQ\xe0\x03\x07\xfdr\xd0\xeb\xf0~\x8bd`\xd8?\x11\x18\xf6\xff\x99\
+C/7\xc8\x17\xc9\xc0\xb1\x17\x87u:\xd0\xf6W\xce\xec\xe2\xc0\xfc\x19\x8f\xe6\
+\x01\xb8\x055\xdfN\x86\xe9\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_sem_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x18\x00\x00\x00$\x08\x06\x00\x00\x00\x93\
+\xcf\xfa.\x00\x00\x02\xd3IDATH\xc7\x9dVK\x8e\xd40\x10\xb5;N\x11\x0c\xbd\
+\x016p\x12\xc4\x06\xc40}\x949\x0f\xf7`3\xec\xb8\x0b\xec`1Qk\xa4A\xfdq\\\
+T\x1cW\xe6\xa5\xda\xe9\x0f\x91J\xeej\xc7\xf5\xaa^}bg\xc8\xe8\xc7\xaaU\xff\
+\xc6\x872\xbf{\x16\x9d22\x82\x15E\x83\x12\x18
+ \x04k\x14\x07\x07\x0b\x90\xe6\xff2\xad\x85\x026`\xa8\x91:\xc9\x9e\xc5\
+\x83^#\xc0(\x19*\x93L\x92\x8c\x01T\xa2!\x00@\xe3[\x96]\x12\x83\x11X\x88\
+@\x8c\xcfX\xa6\xe9\xb7St\xc9\xe1:\x81\xf8\x040R\x14\xc6\x081\x02\x97<\x9e\
+&\x80Y\x06\xc0\x0eP\xb4\x03G\x0d\x00\x1b\x07\xdc:\xf0^d\xacr\xa0\x01d-\x94\
+\xf1\x0e\x14#(\x93\xc1\x8e\xff\xe5\xaf\xe5\x8fx\x94\x8f<^=\xde.\xd6\x8b\
+\xaf\x8d\x99@\xe1\xe7\xfa\xed\xfa\x96\xf7\xef\xe2>\x9b\xab\xdeU\xef\x93\
+a\xa1\xac@\x00\x8cB\xa4\xb0\xcfm\x0b\xc5\xaf\xdb\xd2\x1a\xfb\xc2\xc6\x1d\
+\xbbm\x9d\xed\xf6\xb7]\xc9;]y\x08p(|\xd8\xce\xad\xa1\x0d\xb5\xff4\xfa\x98\
+\x81(\xb1!\xfbmK\x8c2T\x1e4ZO\xee\xe7\xf7\xab\xb83m_\xd8\x98M\xab?k\xf5\
+n\x1ey7\xda8\x02`gv/-/\xef\x1aj\xc8\x93\xa9^U\xab\xe5\x1f\xe6\xdc\xb5\
+\xe9\xab\xde\xb0.\xfb{\xde]}\xcc\xcd\x12\x97);\xa9\x0ec\x27-\xc7\x1d\xe7\
+\xe3\xc4y\xea\x86nd\xd1\xc9\xde\xb8p\xaaq<4PP\x1c\x9b\x13z\x00\x1bb\x27\
+F@\xaa\xbc\xe4\x85\x929\xfe\x12\xfd\x9d\x1fp\x8e:\xb1\xeeUW{=\x8b\x08\x0c\
+{MU\xc3\xb5p\xca\\\xaf\x94~\x03N\xa2\xa3A\x00H\x85W\x03M\xbd\\\xa4z\xd7\
+\xba\x1e\x1b>7M)\xc3\xdf\xd3\\?\xcd}Pc\xba\x16\xe7t\x15\xf9\x1c\xc8\x00\
+\xf7\x8dN\x19\xe7\xf6x6W\xa6\x074\xa9z\xd7\xf5\xffi\x88\x1e\xdd\xc9\xa4\
+B\xec(R\xf5\xae\xeb?(\x9a\x02~\x97]\xe6#~\xe8\xc9\xd4\x0e \xd7\x0f\xd1\
+#\xe6\xfc:N\xc8~\x0e\x02\xeb5\x00\xf4\xea\xffX\x04C\xfd\xd0\xe4\xe2;\xd4\
+\xffu\xa6<\xfd1\x8aN\xf5\x03\x0d\xd4\xad\x9a\xec\xec\x1cx\x05d\x8f\xd4\
+\xbf.ms\x0c d\xe6R\xfcB1\xf7\x9f\xa1\xfe\xb5#\xfe\xdc*
+*d/7\x0b\xce\xc17[\x9a\x051\xf4\xc3\xcb\x87\x1b?\xf1\x8f\x19\xcf\x01\x0c\
+u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
+\x92\xed\x8cs`\xa3\x9d=\xdc\xe4|\xce\xfbS\x11\xc8uP\xae\x8b5\xe7\xe0C\xf4\
+}\xd6\xbb.\xca\x95\xf1\xe2\x08\xfc\xd3\x80\xeet\xb9\xa8\x05\xf0~\x07\x03\
+\xee\xec\x08\xa4\xe1F
+\xa0\x00\x80=\xc8E\x14i\x9a\x08\xf2Q\x0c\xcc,\xaf\xeb\xff\x1c\x80\x1a\xd6\
+\xdc\xe5W\xdfO/\x8e {WR\xef\xe4\xd6\xde\xf3\x0fC\x01\xf8T\xed+\x8e
+\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_optical_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x04\x00\x00\x00\x1d\
+X\x8a>\x00\x00\x01\x08IDAT8\xcb\xed\x95;\x8e\xc20\x10@\x1d\x96\x9f\x96K\
+p\x8a\x04$\xb8\x00\xe7\xe5\x00\xb1A\x14\x1444\x11B v\x11Z\xd1\xb0\xc5.\x10\
+\xdbc\x13
+ 8\xfe\xc45Lg\xd9O3o\xfc\x0b$\xf2\x8d
+zi\xa4\x9a\x1fD\xcd\xfao\xb5\xa1.\x91\x086\xa3\xb6\x01\x19\x9cg\xd3\xcf\
+~\xa0 \x02\xfdcc\x16\x84j\xa4\xd5\xffP\x10\x86\xd2\xd8\xe2B\x09\x14j\x07\
+\x94b\x1b2\x01^@\xbe\xa2\x95\x05\xe9\xfe\xf1\x99TL\x18q4\x99\x11\xa1\x94\
+Ec\x07\xa2\xdad\x08v \xe9\x18\x9e\xd2\xc06\\:\x90\xee\x81\xcf\xa5\xc5D{\
+`\xf26E\x13-BG\xc2b\xa2G\xf0ck`\x17.J \x9d=$w\x13\\\xf2\xf0\xdfl\x84\xa6\
+,\x03r\xdb\x1b\xee\x8f\xc0O\x98\x94D\xa2o\xbe6\x99\x18/2\xcf\x1a\xad71"\
+\x14\xc3\xd5$\xf6@\xd2\xcc\x06\xf64\xf1@\xa2%\xdb\xb1\xb8\x27\x9d/\x8c\x92\
+g\\\xe2Q\xca\xc7\x89\x00\xf1D\x8eC\xb1\xd5\xcf\x04\xef\xcf\xc23.\x1eK\x8a\
+:p\x8a\xcb\x18\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_optical_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x19\x00\x00\x00%\x08\x06\x00\x00\x00\xb7\
+QB\xb5\x00\x00\x02\xf1IDATH\xc7\x9dW\xe1\x8a\xd40\x10\xfe\xd2v\xb7\xdd\x13\
+\xb9\x07\x10|\x81{\x1f_\xd3\xe7\x10\x84;nW\x04A9\xd0;\xd4S\xef\x10\xd1&\
+Mf\xfc\xb1Io:;\xedz\x06BB\xda\xcc7\x99/\xf3u\xea\xc0\xd0\xcd\xcd\x8cz\x0e\
+`\xdc\xad\xc7\xc9\xbcQ\x06*\xd5\xeb<:1J#\x0c\x80DOb^\x9es#\x00\xea\xdc\x9b\
+\xdcW\x00\xd6y^\x0b`\xa7\x00\x12\x80\x08`\x00\x10\xf2\x18\x05\xe0\x04\xa4\
+\x12\x86\xbb\xdc\xdb\xbc&\x81J+\x1e\x17\x00\x0f\xa0\xcf\xa3\xcf\x80\x0c\
+\xc05\x02\xa0\xce\x067\x00N\xf2\xd8ePy\x12\x19.\x09RN]\xe90\xca\x934\xe2\
+\x14\x27\xb9\xb7\xe2\x14\xce \x9e\xb2c+\xf1\x0e\xab\x10Bs\xd2\xaaP\xad\xc5\
+f\xabi\xae\x90\x01J\xf8\xaa\x12.\x09\xb2\xca\xc6\xdb*VON\xafO_\xba\xca\xad\
+f!D\xe0\x98\xf9\xeb\xdd\xf3\xbb\x17\xd91y2h\xe2\xcb\x0d\xab\xa9\xa1\x84\
+S\xbcskw\x06\x1c\x07\xa1@[q3\xe5\xd5\x1fAX\x819\x00\x8eV\xb4\xab\xbb\xfa\
+lB\xb7\xd5"\x90\x90\xb6zy\\\x19\xc95f\xf6\x80a\x87\x84\xe3\x8d\x00\xdf\
+\xf8\xedL\xb2r\xa5\x17\xe4^\xdf\xf9\xb7L|\x14\x86\x89oC\x1b>+;%\xeb\xc7\
+;]\xae]\x92\x0fS\x9d\xfe0\xf1{C\xdf&\xfe&J;\xa5_\xd2\xd6\x18.\x12\x0f\xe2\
+\x04\x88\xd2n\x11\x84\x80\xc4\xe9R\xd8\x89ZV*\x85\xaeu\x07\x11q\xb7\x9f\
+\xcd\xb4\x04\x84:\xec\x8c$\x8c2\\Xz\xc1\xb7\xfe\x0d\x27\xe6\x05>\xbe\xf9\
+\xce\xdf(\xb1,\x8e2\x0c\xc1;P\xd0\xd8\xc4_L|u\x84\x0f(\x1d\x1b4\xf1P\xb2\
+=hO\x88\xc8\x0e\xd9\x9e\x8f\xed\xb1\xfd:O\xa4\x27\xe3K\xb3\xbc\xec\xf9\xd8\
+\x1a\x9cF\x99\x0es\xd2=!\xbf_\xf7&\x08\x13\xff\xf0\x9d\xbf6>^i\x0e\x04\x06\
+\xf9{^V\xf1\x9e\x12}:\xd0+\xa2\xadJ\x81\x03>\xe6d%Z7\xe4\x80\x17\x02"\xc7\
+\xad\x11\x81\xb8\x04\x82\x19\xf2\xec|y\xe0\xc3
+\xd5$\xb8\x95Q\xe2$E>\x01\xe0\xd0\x84\x09\x08\x13\xdf\xf9\xce4B\x15\xb5\
+\x06V\xf6\xc5<\x08\x19\x856\xdc2\xf1\x17\xc5\x87\x05@\xc7@\xd8H\xaa\x11\
+h\xd4\xb1\x07>d\x86\x9b\xa4/\x9d$YuT\xe2tYdt\xa8\x86s\xe3\xbd\x03>\xe6@\
+Xm.5\xd4\x10\xeap\x01\x02\x98\xf8\xbe\xdf\xf4\x1f\xf2zP\xce\xf0\xbf\x80\
+H\x1d\x0b\xb2X\xf3\x9d\xbf\xe2\xc4\xdf\x89\xe8\\\xac\x97\x82\xce\x0c\x95\
+\xae\x85-^|.
+\xc6\x1a\x8b"\x9d\x27\xa4\x0ba\xfc\xbf@\xa4\x8e\x05\xf1\xf5L\x19\xe4Ul\
+\xe2k\x00\xbfU8\xa3\xc5\xc7\xbe`\xb0\xbf\x14N\xd4\xc5kQK5\x9b\x9f\x9bg\xfd\
+\xd3\xfe\x86\x1d\x0f\xe2FI^\xe81 \xb5\xaa\xa3d=\xc5\xe2j\x9b2\xf4/ 0\xfe\
+Qd\x27\xa3\xa7\xb9p5\xcbu\xc8H\xa4,\xd8\xdcL\xe93\xeb\xae[\xacD\x96\xed\
+\x96~\xe5\x1e\x052\x07\xbahT\xb7\xbf\xe8\xb1F\xdc\xe8\xe8\xaak\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_align/panel_tab_secom_align_xrc', bytearray(panel_tab_secom_align_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_align/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_align/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_align/______img_icon_ico_optical_png', bytearray(______img_icon_ico_optical_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_align/______img_icon_ico_optical_green_png', bytearray(______img_icon_ico_optical_green_png))
+    __res.Load('memory:XRC/panel_tab_secom_align/panel_tab_secom_align_xrc')
+
+    panel_tab_secom_streams_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxPanel" name="pnl_tab_secom_streams">
     <object class="wxBoxSizer">
@@ -12375,20 +11496,20 @@ t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
 b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
 \xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/pnl_tab_secom_streams_xrc', bytearray(pnl_tab_secom_streams_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_ico_press_png', bytearray(______img_icon_ico_press_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_ico_optical_png', bytearray(______img_icon_ico_optical_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_ico_optical_green_png', bytearray(______img_icon_ico_optical_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_dialog_info_png', bytearray(______img_icon_dialog_info_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_dialog_error_png', bytearray(______img_icon_dialog_error_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_secom_streams/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
-    __res.Load('memory:XRC/pnl_tab_secom_streams/pnl_tab_secom_streams_xrc')
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/panel_tab_secom_streams_xrc', bytearray(panel_tab_secom_streams_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_ico_press_png', bytearray(______img_icon_ico_press_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_ico_optical_png', bytearray(______img_icon_ico_optical_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_ico_optical_green_png', bytearray(______img_icon_ico_optical_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_ico_sem_green_png', bytearray(______img_icon_ico_sem_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_dialog_info_png', bytearray(______img_icon_dialog_info_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_dialog_error_png', bytearray(______img_icon_dialog_error_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_secom_streams/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
+    __res.Load('memory:XRC/panel_tab_secom_streams/panel_tab_secom_streams_xrc')
 
-    pnl_tab_sparc2_align_xrc = u'''\
+    panel_tab_sparc2_align_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxPanel" name="pnl_tab_sparc2_align">
     <object class="wxBoxSizer">
@@ -14521,99 +13642,738 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
 \x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
  \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/pnl_tab_sparc2_align_xrc', bytearray(pnl_tab_sparc2_align_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_lens_png', bytearray(______img_icon_ico_lens_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_lens_green_png', bytearray(______img_icon_ico_lens_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_mirror_png', bytearray(______img_icon_ico_mirror_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_mirror_green_png', bytearray(______img_icon_ico_mirror_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_ang_png', bytearray(______img_icon_ico_ang_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_ang_green_png', bytearray(______img_icon_ico_ang_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_lens_ek_png', bytearray(______img_icon_ico_lens_ek_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_lens_green_ek_png', bytearray(______img_icon_ico_lens_green_ek_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_ang_ek_png', bytearray(______img_icon_ico_ang_ek_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_ang_green_ek_png', bytearray(______img_icon_ico_ang_green_ek_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_fib_png', bytearray(______img_icon_ico_fib_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_fib_green_png', bytearray(______img_icon_ico_fib_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_sparc2_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    __res.Load('memory:XRC/pnl_tab_sparc2_align/pnl_tab_sparc2_align_xrc')
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/panel_tab_sparc2_align_xrc', bytearray(panel_tab_sparc2_align_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_lens_png', bytearray(______img_icon_ico_lens_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_lens_green_png', bytearray(______img_icon_ico_lens_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_mirror_png', bytearray(______img_icon_ico_mirror_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_mirror_green_png', bytearray(______img_icon_ico_mirror_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_ang_png', bytearray(______img_icon_ico_ang_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_ang_green_png', bytearray(______img_icon_ico_ang_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_lens_ek_png', bytearray(______img_icon_ico_lens_ek_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_lens_green_ek_png', bytearray(______img_icon_ico_lens_green_ek_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_ang_ek_png', bytearray(______img_icon_ico_ang_ek_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_ang_green_ek_png', bytearray(______img_icon_ico_ang_green_ek_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_fib_png', bytearray(______img_icon_ico_fib_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_fib_green_png', bytearray(______img_icon_ico_fib_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc2_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    __res.Load('memory:XRC/panel_tab_sparc2_align/panel_tab_sparc2_align_xrc')
 
-    pnl_tab_enzel_align_xrc = u'''\
+    panel_tab_sparc_acqui_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
-  <object class="wxPanel" name="pnl_tab_enzel_align">
+  <object class="wxPanel" name="pnl_tab_sparc_acqui">
+    <object class="wxBoxSizer">
+      <orient>wxHORIZONTAL</orient>
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_left">
+          <object class="wxBoxSizer">
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="ToolBar" name="sparc_acq_toolbar">
+                <style>wxVERTICAL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALIGN_RIGHT</flag>
+            </object>
+            <orient>wxVERTICAL</orient>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxBoxSizer">
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_sparc_view_all">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_sparc_view_all">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_sparc_view_tl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_sparc_view_tl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_sparc_view_tr">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_sparc_view_tr">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_sparc_view_bl">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_sparc_view_bl">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxBOTTOM|wxALIGN_RIGHT</flag>
+                  <border>6</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="wxBoxSizer">
+                    <object class="sizeritem">
+                      <object class="wxStaticText" name="lbl_sparc_view_br">
+                        <label>view</label>
+                        <fg>#BFBFBF</fg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <flag>wxTOP|wxBOTTOM</flag>
+                      <border>2</border>
+                    </object>
+                    <orient>wxVERTICAL</orient>
+                  </object>
+                  <flag>wxRIGHT|wxALIGN_RIGHT</flag>
+                  <border>18</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="ViewButton" name="btn_sparc_view_br">
+                    <face_colour>def</face_colour>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxALIGN_RIGHT</flag>
+                </object>
+                <orient>wxVERTICAL</orient>
+              </object>
+              <option>1</option>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
+              <border>10</border>
+            </object>
+          </object>
+          <size>200,-1</size>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ViewportGrid" name="pnl_sparc_grid">
+          <object class="LiveViewport" name="vp_sparc_tl">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ARAcquiViewport" name="vp_sparc_tr">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="PointSpectrumViewport" name="vp_sparc_bl">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="TemporalSpectrumViewport" name="vp_sparc_ts">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="ChronographViewport" name="vp_sparc_br">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <object class="AngularSpectrumViewport" name="vp_sparc_as">
+            <XRCED>
+              <assign_var>1</assign_var>
+            </XRCED>
+          </object>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar" name="fpb_settings">
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_sparc_streams">
+                          <size>300,-1</size>
+                          <add_button>1</add_button>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <label>STREAMS</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="CaptionBar">
+                      <label>ACQUISITION</label>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel">
+                      <object class="wxBoxSizer">
+                        <orient>wxVERTICAL</orient>
+                        <object class="sizeritem">
+                          <object class="wxFlexGridSizer">
+                            <object class="sizeritem">
+                              <object class="wxStaticText">
+                                <label>Filename</label>
+                                <fg>#E5E5E5</fg>
+                              </object>
+                              <flag>wxTOP</flag>
+                              <border>4</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxBoxSizer">
+                                <object class="sizeritem">
+                                  <object class="wxTextCtrl" name="txt_filename">
+                                    <size>-1,20</size>
+                                    <value>Select a destination file</value>
+                                    <fg>#2FA7D4</fg>
+                                    <bg>#333333</bg>
+                                    <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <option>1</option>
+                                  <flag>wxTOP|wxEXPAND</flag>
+                                  <border>2</border>
+                                </object>
+                                <object class="sizeritem">
+                                  <object class="ImageTextButton" name="btn_sparc_change_file">
+                                    <height>24</height>
+                                    <face_colour>def</face_colour>
+                                    <label>change…</label>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxTOP</flag>
+                                  <border>2</border>
+                                </object>
+                                <orient>wxHORIZONTAL</orient>
+                              </object>
+                              <flag>wxEXPAND</flag>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxStaticText">
+                                <label>Destination</label>
+                                <fg>#E5E5E5</fg>
+                              </object>
+                              <flag>wxTOP</flag>
+                              <border>2</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="wxTextCtrl" name="txt_destination">
+                                <size>200,20</size>
+                                <value>...</value>
+                                <fg>#BFBFBF</fg>
+                                <bg>#333333</bg>
+                                <style>wxBORDER_NONE|wxTE_READONLY</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                            </object>
+                            <cols>2</cols>
+                            <rows>3</rows>
+                            <vgap>5</vgap>
+                            <hgap>10</hgap>
+                            <growablecols>1</growablecols>
+                          </object>
+                          <flag>wxALL|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_fold_acq_info">
+                                  <bitmap>______img_icon_dialog_info_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_sparc_fold_acq">
+                                  <label>Some streams will be acquired simultaneously</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              </object>
+                            </object>
+                          </object>
+                          <flag>wxLEFT</flag>
+                          <border>12</border>
+                          <bg>#333333</bg>
+                          <object>
+                            <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
+                            <border>12</border>
+                          </object>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxPanel">
+                            <object class="wxBoxSizer">
+                              <orient>wxHORIZONTAL</orient>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_info">
+                                  <bitmap>______img_icon_dialog_info_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticBitmap" name="bmp_acq_status_warn">
+                                  <bitmap>______img_icon_dialog_warning_png</bitmap>
+                                  <hidden>1</hidden>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <flag>wxRIGHT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
+                                  <label>No region of interest selected.</label>
+                                  <fg>#DDDDDD</fg>
+                                  <font>
+                                    <size>10</size>
+                                    <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                  </font>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                              </object>
+                            </object>
+                            <bg>#333333</bg>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
+                          </object>
+                          <flag>wxLEFT|wxTOP|wxBOTTOM|wxEXPAND</flag>
+                          <border>12</border>
+                        </object>
+                        <object class="sizeritem">
+                          <object class="wxBoxSizer">
+                            <object class="sizeritem">
+                              <object class="wxGauge" name="gauge_sparc_acq">
+                                <size>-1,10</size>
+                                <range>100</range>
+                                <value>0</value>
+                                <style>wxGA_SMOOTH</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>1</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT|wxEXPAND</flag>
+                              <border>16</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_sparc_cancel">
+                                <height>24</height>
+                                <face_colour>def</face_colour>
+                                <label>Cancel</label>
+                                <fg>#1A1A1A</fg>
+                                <hidden>1</hidden>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <flag>wxALL</flag>
+                              <border>10</border>
+                            </object>
+                            <orient>wxHORIZONTAL</orient>
+                          </object>
+                          <flag>wxEXPAND</flag>
+                        </object>
+                      </object>
+                      <bg>#333333</bg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_sparc_acquire">
+                      <icon>______img_icon_ico_acqui_png</icon>
+                      <height>48</height>
+                      <face_colour>blue</face_colour>
+                      <label>START</label>
+                      <fg>#FFFFFF</fg>
+                      <font>
+                        <size>15</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL|wxEXPAND</flag>
+                    <border>10</border>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <bg>#333333</bg>
+  </object>
+</resource>'''
+
+    ______img_icon_ico_chevron_up_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
+D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
+\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
+ \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_dialog_info_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x02\x87IDAT8Ou\x91]HSa\x18\xc7\x9f\xf9YI\x81y\x19\
+\x04ua%\x18D\xa5\xdb,3\x27\xa5\x93\xd0\x021,\xcbL\xcb2ts\x9a\xce\xa6S\x9c\
+\x14f\x17\xb9\x92\xcc\xb0\xd4\x15\x91\xc3\xd2\xd4l:\x8d\x98}\xe10\xa5\xf4\
+\xa2\xe5\xae\x8a]\x09]\x18\xd9:\xfe{\xcf9x\xb6&\x1d\xf8\x9d\xf79\xcf\xc7\
+\x8f\xe7\xe5\x10\x00
+@\xc6\x08cD\x8c8\xe7\xb7\xd8\xa7\xdc[Y\xbc\x9e\xb1\x86\x11\x14\xd8\x1f\
+8\x1c|\xa9eH\xae6X\x27N6\xdb~\xe8-\xef\x96MV\x27J\xdb\x1d\x8b\xb97lS\xc6\
+n\xc7\x01\xd6\x13\xf2?A\xd0\xce\xfcV\xc3\xae\xe2\xee_\xb7\x07g\xf1\xc2\xf9\
+\x0dc3\x1e\xd8\xa7=,\xfe\x8e\xce1\x17r\xae\xdb\xbd\xa9\x06k\x93\xbfD\x12\
+D\xa9\x1bt\xd1\xf9\x1d\xe8\x18u\xa1\xf9\xd9\x1cj\x1e\xce\xe0\xaa\xf5\xb3\
+\x00\x1f7\xf5\xce\xc1\xf2j\x1ei\x0d\xc3\x88>s\xb7\x16\xe2UE\x01\xed)\xd9\
+\x16r\xa8q\xb1\xba\xcb\x09\xed\xbdIh\xda\x27a\xb0|\xc4\x92\x97\x13\xe0c\
+>\xc7\xd7\xea\x1eM#<\xd3\xfc3"\xad~\x87O \xd7\xf5$W\xf6\xa2\xd0\xfc\x16\
+\xf97\xdf\x08\x94\xb1\xe6?\xdc\xb2\x00\x1f\xaf\xe4\x0bX\x8f\xca0\x08:Xo\
+\xf5\x09\x14:\xb7\xaaz\x10Y\xd7\xc6\xff\xa1\xe8\xd6\x04\xce\x9b\x1d\xab\
+\xf2\xe9\xf56\x90\xaa\xd1-\xccR\xec\x85H&\xe0R\x0cCH5\xbe\x94\xf0\x0e\xd7\
+\x8d\xb0\x1c\x8fX\xcb0\xf1\x02\x13G\xb1\x17#\x89b\xb4\x1bI\xae\xe5\xe24\
+}PV\xf4\x8bT\x0dCq\xc5&\x09\x12j\xc6\xd9\xf7(bJ\xfa\xb1)\xcf\x82\xd0\x8c\
+vP\x92\x91\xa3\xed\xc5Q\xe2\x15\xe2\xb5\x1eJm\x81\xec\xc8\x1d\x84eY\xb0\
+.\xef)6\x14\x0c`aaA\x80N\x0f\x81r\x07@\xc7\xad\xa0c]\xa0\xf4VPB\x95G\x98\
+\x15^{5\x0eJi\x02ev\x80\xb2\x9f\x80N\xb1\x81\xbca\x9f\xe0\xac\x1dT0.\xe6\
+\xf9\xba\xda\x0c\x8a\xd3L\xf8\x04\xf1Z\x05\xc9\xcb\xbdt\xb4\x13t\xa2O\x18\
+X\x19\x96$\xc5\xefEQv\x0fH^\xe1e\x02\xa5$\x10\xb7(m\xa3\xc4ZPN/\xe8\xdc\
+k6\xf0\x01T\xf6\x09t\xd9%\x9e\xa5S\xc2V\x94h\x04\xdb\xb8M\x9a\x93\x02"\x19\
++\xdcg\x9bp\xa4\xb4\xb0{?g\xb2Yv~\x05\x15\x8e\x82\xf6?F\x90\xa2\x82c=\x0f\
+\xf8\xdeU\x02)\xb1[\x93\x1c\xbe\xaf\xfcKxR\xe5\x92L\xa1\x03\xfb\xc5\x08\
+M\xd1\xff^\xab\xd2\xbb\x83\x95:\xd5\xaa\xfe\xc0\x84?\xb2\xd8\xa2\xcd\xc4\
+\x08\xcc\xfb\xf3\x17j\xeaha\x09cF\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_dialog_warning_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x01\xcfIDAT8\xcb\xa5\xd3?h\x13\x01\x14\xc7\xf1\x97\
+\x92\x8b\xd6\x10MZ$\xbb\x88 \x8e\x82\xd4\xad\x8b\xd4\xead@\x1dt\x13\x15\
+\x14Z\x10\xc4\xbf\x98\xe2V\xc4A\x05%\x8e\xd5\x8a\xa0j\xac\xa21\x18:IB\
+\xc0\xd8\xa6E#\x88\xb5\xd7\xe4L1M\xca\x9d\xb9K\xee\xebp\xa1"J\x9b\xea\xf0\
+[\xde\xe3\xf7\x817<\x01\xe4\xb2\xe4\xd2\x8c*\x87\xea\x8f={\xff\x09\xa8\
+\xc7\x94\xfdV\xac\xdb\xb6\x12!j/\x94\x83+\x06\xac\x27\xbeY&\x1f`\xbf\x1f\
+\xc6\x1c\xf1\x16W\x044bm\xc7\xeb\x89\x10|\x18\x81\xdc0\xf5W\xbb0\x9f)\xfd\
+-\x03\xe6S_\x89\xeceR\xfd]\xa4\xfa\xb6a\xa7NS\x8b\xb6\xcf\xb5\x04X\xcf\xdd\
+\xe7\xac\xe4N\xc8\x0e\x10\xef\xe9 \xde\xd3\x01\xe9\xa3X\xaf\xbb\xa8\x8d\
+\xba/,\x0b\x18\xa3\x81y;{\x0c\xb2\x87\x19\xeb\xedd\xac\xb7\x132\xbb\xb1\
+S;0\x1e\xf9*K\x02F\xd45h&\xb7\xc2\xc4\x1e\xc8\x85H\xef\xdb@\xe6\xc0f\x98\
+\xe8\x86\xf1\xed\xd4\x92[\xd0\x1f\xba.\xfd\x1d\x88\x88\xb2p\xb5n\xbfU \
+#\xf0N\xf8tr=\xf9\x13\xeb \x270)\xd8\xe3\xab\xa8\xdc\xf3\xe8\xa4E\xf9\x03\
+\xa8\xderE\x8c\x97~\x98\x12\xc8\x0b|\x16\xf8"\xf0U`\xa6\x99i\xc1x\xe3\xa7\
+z\xdbu\xe3w`H\xbc\xe5\x9bkM;\xaf8\x85\x82\xc0\x9c\xa0\x86\xfd\xa8a?T\x05\
+\xe6\x9d\x99\xad\xb6S\x8e\xac1\x0bC\xe2]\x04\xcaW\xe5\xae\x1e\x0f:eM\xe0\
+\xbb\xc0\x82\xa0\x85\x03h\x03\x010\x04*\x0e@A\xd0\x13A\xcaW\xe4\xce"P<%\
+Zcj#\xa8AP\x05\x8a\x02\xa5f\xa1\xd4Dg\x9d\x13\x98\x0e\xd2\xf8\xb8\x09\xed\
+\xbc[\xfb\x05\x9cm\xbb\xfe\xed\xa2\xe7\xc7\xcc\x111Z\x89\xda\xe7\xd1\x0b\
+g\xe4\xda\xb2\xdf\xd8J~\x02\xf21\xd2V\x95\xc1N=\x00\x00\x00\x00IEND\xae\
+B`\x82'''
+
+    ______img_icon_ico_acqui_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00"\x08\x04\x00\x00\x00\x99\
+\xa5c3\x00\x00\x03\x90IDATH\xc7\x8d\x96\xcdk\\U\x18\x87\x9fs\xee93s\xd3\
+6\x99v\xd2Z\xab\xa3\x14\x9a\x04EJhI\xa5Y\x88n\xdc\xd5\x95[QW\x82\xbb\xda\
+\x85\xe0Np\xd1\x9dK\xa5\xf4\x1f\x10\xeaJp!\xd9\x08\x85\x10\xf1s\xa1\x0b\
+\x95Z\x93X\x8aL\xa7\xad\x85\xa4\x99{>\\\xdcs\xef=g&\x13z.Cf\x86\x9cg\xde\
+\xf7\xf7~
+\xcf\x94#\xf6y\xe7\xf7y\x17\x1d5\x15T\xbe\xc4\x04\xcc\xd7 \xff$\xb0
+#\x10\xc8\xf0\x97\x80\xf1\xb8\x80\xf3\x88q\xdc4\xcb\x04\x12\x89$\xabq\x15\
+\xca\xe2p\xb8\x83-\x13\x09H\x90\x85G\x05\\\x892\xd8\xf0\xb8\x80\x8f\x1c\
+V\x13\x1a\x89\x00\x92(4
+E\x86\x04\xc0a1\x14\x18\x0c2X\x98(\xa8&4\x92\xb5E\x8aV\xc0U0\x83aD\x81\
+\xa1\xc0bp\xd8XA5\xa1Q\x05\xd2h\xf4\xe5\xdfz\xe4\x89.W^\xa4`D\x16\xac\x13\
+\xb1\x82*\xb1H\x91\xa1\x83{-4\xba\xc7E\xfa\xa9\xca3\x8c\xc8P\x8c\x90\x14\
+\x08L\xb0:\xd2\xacDit\x09\xa9\x9e\x9c>\x8b),\x0f\xa8,D\x9a:m\x82f"\xc8\xdd\
+\xa2M\x9bV\x00\xaa}\x13\x27GQ$\x81\x01\x8f\xab4\x13A+M\xfb\xf2_\xa9F\xfd\
+1\xc5`\xeb\x9bu\xb6\x1a\x05O\xe3\x83j>vS\xa1i\x8fk\x94\xd3\xc3\x0f\xcc\xaf\
+\xc5\x03\xd3\x93g\xdb\xb3\x8a\x1e\x17Yn\xfe\xa1\x15\xb2N\x94\x9a\xc5\xf2\
+Oh\xe4\x87\xe6\xba\xd8\xd0h\xc0fw^k\xbd\xd3\xcd\x9f\x8d\x8a\x15MA\x86,\x13\
+[F\xa9\xa1\xd0\xa9K\xfe\xae\xfbPoT\x9f2\xdb_{\xfc\xd1\xed\x9d\xdd\xb8\x8e\
+t]pQ9UY\x96\xb0\xcc\xa7z\x08\xdf.\xdd|S\xcc\xcfm\xaf|y\xe1\xf6\xf3\x9b\xeb\
+\x9f\xb9+\xa7\xe9\xd4\xbf\x10\xec
+\x10\x92L\x8b\x8e\xfdA\xff\x097V\xd7>9y\xee\xc2s\xe7V\x1f^\xfdi\x09^^\xff\
+}{X\xa6UcD\xe8,2*t\x19\x8b\x01\xe6{\xb0\xe2\x97w\x97\xe4*+,\xb3\xa2[o\x81\
+\xf4\x8f~\xbcK\xd1\xc0Ds\xab)\xa7\xb4\xa7\x02\xc5\xbd6\xb7\x8e\xce\x1c[\
+\xa4t\xabC\xb6\x00 \x06\x03vi\x13\xdd\x0c\xf7%S\x8f\xe9@o\xe7\x90\xed\x86\
+\x8b\x82\xfc\x01\xc0N\xbe\x1bjh\xfc\xc8\xa6\x18\xc6\xdb\x9d]\x80c\x8f\x8f\
+\xdc\x1ca\xab\x88\xac\x01<<\xa3\x1b\x1b|\xdc\xcae\xd4\xdf]
+\xcb^\xd9\xed\xc0\xa5k\x83\xef\x86X\xf0\xf6ku\x03\xfe\xe8\xed-\xcfUN\x92\
+t4T\xd4\xdb]mB\xd9\x1e\xba\x9bo\x9f\xf9|\xfe\xd1\xab\x1f\xdfy\xfa\xde\xf1\
+#\xdb\xf9}2\xa3\xbfx\xff\xa4~*\x86\xb9\xa6\xe7\xaa\xe4\xcb\x04\xa69\xfa\
+\xfa\xc6\xde\xd9\xeb\xb9=\xb5\xc9\xdf\x08\xe4\xa0s\xed\x83|\xf9\x05N4\x1d\
+\xc0\x86\x8e\x1bE\xb3\xea\xefE:U\xe6\xe8_Z??\xfc\xaa\xfb\xf3\xec\xff\xce\
+\xdf:\xff\x8d\xe3\xdd\x97X\xe4p\x14\xf2z\x1a\x00*rq\x0c\x06\x8a\x13\xb4\
+Nm\xbf\xb7\xc5?\x8c\xe8\xb2@\x9fg\x98\x8dS\xa0\xc04\xd3@\xd5\xe2\x1b
+\xf6&\x87W\x8f\xc3\xf4\xd9\xc1\x91q\x88\x19Zi2\x96\x13!\x84N\xf8\xb2\x90\
+\xaa.\xdb\x0eC\xa4\xac\x06\x17\x8d\x0cB\xc9\x95c\xaf\xf4d\xc4\x1e#\x8a\x00\
+t*R\xac\xb4\xd12\xaa\x1br\x99.\x8e\xb8xd\xf8\xdea)jP\x14\xcd\xe6\x82\xc3\
+"\xc9B\x81\xf8h\xd0\xc6\xdbG\xa5\xb3\xc1\x06\xcd\xea\x00\xd4\xd3%\x98\x1f\
+\xef\x17\xe3K@\xbau4\xcb\x82\x8f\x03@p\xc8\x05GD\xaa\xf3\xd8\xf1\xf5\xe3\
+b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
+\xfd\x0fw\x1e\x8e\xedP\x81\x83V\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_acqui/panel_tab_sparc_acqui_xrc', bytearray(panel_tab_sparc_acqui_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_acqui/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_acqui/______img_icon_dialog_info_png', bytearray(______img_icon_dialog_info_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_acqui/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_acqui/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
+    __res.Load('memory:XRC/panel_tab_sparc_acqui/panel_tab_sparc_acqui_xrc')
+
+    panel_tab_sparc_align_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxPanel" name="pnl_tab_sparc_align">
     <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
-            <orient>wxVERTICAL</orient>
             <object class="sizeritem">
               <object class="wxPanel" name="pnl_alignment_btns">
                 <object class="wxBoxSizer">
-                  <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_z">
-                      <icon>______img_icon_ico_enzel_z_align_png</icon>
-                      <icon_on>______img_icon_ico_enzel_z_align_green_png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <tooltip>Align the Z position of the stage</tooltip>
-                      <label>Z</label>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                      <flag>wxALL</flag>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
-                    <option>1</option>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_sem">
-                      <icon>______img_icon_ico_enzel_sem_align_png</icon>
-                      <icon_on>______img_icon_ico_enzel_sem_align_green_png</icon_on>
-                      <height>48</height>
-                      <face_colour>def</face_colour>
-                      <tooltip>Align the SEM relative to the FIB</tooltip>
-                      <label>SEM</label>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                      <flag>wxALL</flag>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
-                    <option>1</option>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="GraphicRadioButton" name="btn_align_flm">
-                      <icon>______img_icon_ico_enzel_flm_align_png</icon>
-                      <icon_on>______img_icon_ico_enzel_flm_align_green_png</icon_on>
-                      <height>48</height>
-                      <label>FLM</label>
-                      <tooltip>Align the FLM relative to the SEM</tooltip>
-                      <fg>#1A1A1A</fg>
-                      <font>
-                        <size>11</size>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                      <flag>wxALL|wxEXPAND</flag>
-                    </object>
-                    <flag>wxALL</flag>
-                    <border>10</border>
-                    <option>1</option>
-                  </object>
                   <orient>wxHORIZONTAL</orient>
+                  <object class="sizeritem">
+                    <object class="GraphicRadioButton" name="btn_align_chamber">
+                      <icon>______img_icon_ico_cam_png</icon>
+                      <icon_on>______img_icon_ico_cam_green_png</icon_on>
+                      <height>48</height>
+                      <face_colour>def</face_colour>
+                      <label>CHAMBER</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="GraphicRadioButton" name="btn_align_mirror">
+                      <icon>______img_icon_ico_ang_png</icon>
+                      <icon_on>______img_icon_ico_ang_green_png</icon_on>
+                      <height>48</height>
+                      <label>MIRROR</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="GraphicRadioButton" name="btn_align_fiber">
+                      <icon>______img_icon_ico_fib_png</icon>
+                      <icon_on>______img_icon_ico_fib_green_png</icon_on>
+                      <height>48</height>
+                      <label>OPTICAL FIBER</label>
+                      <fg>#1A1A1A</fg>
+                      <font>
+                        <size>11</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxALL</flag>
+                    <border>10</border>
+                  </object>
                 </object>
                 <fg>#E5E5E5</fg>
                 <bg>#444444</bg>
@@ -14621,240 +14381,79 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxEXPAND</flag>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
             </object>
-
             <object class="sizeritem">
-              <object class="wxPanel" name="pnl_z_align_controls">
+              <object class="wxPanel" name="pnl_sparc_trans">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_pz">
-                      <label>+Z</label>
-                      <fg>#E5E5E5</fg>
+                    <object class="wxStaticText">
+                      <label>Translation</label>
                       <font>
                         <size>16</size>
-                        <weight>bold</weight>
                         <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
                       </font>
                     </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                    <border>10</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="stage_align_btn_p_aligner_z">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↑</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxBOTTOM</flag>
-                    <border>20</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="stage_align_btn_m_aligner_z">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↓</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxTOP</flag>
-                    <border>20</border>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_mz">
-                      <label>-Z</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
-                    <border>10</border>
-                  </object>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#333333</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALIGN_CENTRE</flag>
-            </object>
-
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_sem_align_controls">
-                <object class="wxGridBagSizer">
-                  <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_y">
-                      <label>+Y</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                    </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <flag>wxALL</flag>
                     <border>5</border>
-                    <cellpos>0,2</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_y">
-                      <label>-Y</label>
-                      <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
+                    <object class="wxStaticText">
+                      <label>Step size X</label>
                     </object>
-                    <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                    <flag>wxBOTTOM|wxLEFT</flag>
                     <border>5</border>
-                    <cellpos>4,2</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_x">
-                      <label>+X</label>
+                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_x">
+                      <size>-1,20</size>
+                      <value>0.000001</value>
+                      <min>0.0000001</min>
+                      <max>0.001</max>
+                      <unit>m</unit>
+                      <scale>log</scale>
+                      <accuracy>2</accuracy>
                       <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_LEFT</style>
+                      <style>wxBORDER_NONE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                     <border>5</border>
-                    <cellpos>2,4</cellpos>
                   </object>
                   <object class="sizeritem">
-                    <object class="wxStaticText" name="lbl_x">
-                      <label>-X</label>
+                    <object class="wxStaticText">
+                      <label>Step size Y</label>
+                    </object>
+                    <flag>wxBOTTOM|wxLEFT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_y">
+                      <size>-1,20</size>
+                      <value>0.000001</value>
+                      <min>0.0000001</min>
+                      <max>0.001</max>
+                      <unit>m</unit>
+                      <scale>log</scale>
+                      <accuracy>2</accuracy>
                       <fg>#E5E5E5</fg>
-                      <font>
-                        <size>16</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
+                      <style>wxBORDER_NONE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
                     </object>
-                    <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
                     <border>5</border>
-                    <cellpos>2,0</cellpos>
                   </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="beam_shift_btn_p_aligner_y">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↑</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT</flag>
-                    <border>7</border>
-                    <cellpos>1,2</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="beam_shift_btn_m_aligner_y">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>↓</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <flag>wxLEFT|wxRIGHT</flag>
-                    <border>7</border>
-                    <cellpos>3,2</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="beam_shift_btn_m_aligner_x">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>←</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <cellpos>2,1</cellpos>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="ImageTextButton" name="beam_shift_btn_p_aligner_x">
-                      <size>64,-1</size>
-                      <height>48</height>
-                      <label>→</label>
-                      <font>
-                        <size>24</size>
-                        <weight>bold</weight>
-                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                      </font>
-                      <style>wxALIGN_CENTRE</style>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
-                    </object>
-                    <cellpos>2,3</cellpos>
-                  </object>
-                  <vgap>0</vgap>
-                  <hgap>5</hgap>
-                  <growablecols/>
-                  <growablerows/>
-                </object>
-                <fg>#E5E5E5</fg>
-                <bg>#333333</bg>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALIGN_CENTRE</flag>
-            </object>
-
-            <object class="sizeritem">
-              <object class="wxPanel" name="pnl_flm_align_controls">
-                <object class="wxBoxSizer">
-                  <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_y">
-                          <label>+Y</label>
+                        <object class="wxStaticText" name="lbl_my">
+                          <label>-Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -14867,8 +14466,8 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_y">
-                          <label>-Y</label>
+                        <object class="wxStaticText" name="lbl_py">
+                          <label>+Y</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -14881,7 +14480,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         <cellpos>4,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_x">
+                        <object class="wxStaticText" name="lbl_px">
                           <label>+X</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -14896,7 +14495,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         <cellpos>2,4</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_x">
+                        <object class="wxStaticText" name="lbl_mx">
                           <label>-X</label>
                           <fg>#E5E5E5</fg>
                           <font>
@@ -14910,7 +14509,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         <cellpos>2,0</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="flm_align_btn_p_aligner_y">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↑</label>
@@ -14929,7 +14528,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="flm_align_btn_m_aligner_y">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_y">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↓</label>
@@ -14948,7 +14547,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         <cellpos>3,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="flm_align_btn_m_aligner_x">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>←</label>
@@ -14965,7 +14564,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         <cellpos>2,1</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="flm_align_btn_p_aligner_x">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_x">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>→</label>
@@ -14981,9 +14580,68 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         </object>
                         <cellpos>2,3</cellpos>
                       </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxALIGN_CENTRE</flag>
+                  </object>
+                </object>
+                <fg>#E5E5E5</fg>
+                <bg>#444444</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxBOTTOM|wxEXPAND</flag>
+              <border>5</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_sparc_rot">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Rotation</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxBOTTOM|wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Step size</label>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="UnitFloatSlider" name="mirror_align_slider_mirror_r">
+                      <size>-1,20</size>
+                      <value>0.000001</value>
+                      <min>0.0000001</min>
+                      <max>0.001</max>
+                      <unit>m</unit>
+                      <scale>log</scale>
+                      <accuracy>2</accuracy>
+                      <style>wxBORDER_NONE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_pz">
-                          <label>+Z</label>
+                        <object class="wxStaticText" name="lbl_pry">
+                          <label>+Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -14993,11 +14651,11 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
                         <border>5</border>
-                        <cellpos>0,5</cellpos>
+                        <cellpos>0,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText" name="lbl_mz">
-                          <label>-Z</label>
+                        <object class="wxStaticText" name="lbl_mry">
+                          <label>-Pitch</label>
                           <fg>#E5E5E5</fg>
                           <font>
                             <size>16</size>
@@ -15007,10 +14665,39 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         </object>
                         <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
                         <border>5</border>
-                        <cellpos>4,5</cellpos>
+                        <cellpos>4,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="flm_align_btn_p_aligner_z">
+                        <object class="wxStaticText" name="lbl_prz">
+                          <label>+Yaw</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_mrz">
+                          <label>-Yaw</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_ry">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↑</label>
@@ -15026,10 +14713,10 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         </object>
                         <flag>wxLEFT|wxRIGHT</flag>
                         <border>7</border>
-                        <cellpos>1,5</cellpos>
+                        <cellpos>1,2</cellpos>
                       </object>
                       <object class="sizeritem">
-                        <object class="ImageTextButton" name="flm_align_btn_m_aligner_z">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_ry">
                           <size>64,-1</size>
                           <height>48</height>
                           <label>↓</label>
@@ -15045,87 +14732,719 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                         </object>
                         <flag>wxLEFT|wxRIGHT</flag>
                         <border>7</border>
-                        <cellpos>3,5</cellpos>
+                        <cellpos>3,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_mirror_rz">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>←</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_mirror_rz">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>→</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,3</cellpos>
                       </object>
                       <vgap>0</vgap>
                       <hgap>5</hgap>
-                      <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
+                      <growablecols/>
+                      <growablerows/>
                     </object>
-                    <fg>#E5E5E5</fg>
-                    <bg>#333333</bg>
-                    <hidden>0</hidden>
-                    <XRCED>
-                      <assign_var>1</assign_var>
-                    </XRCED>
-                    <flag>wxALIGN_CENTRE</flag>
+                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
+                    <border>5</border>
                   </object>
-                  <flag>wxALIGN_CENTRE</flag>
                 </object>
                 <fg>#E5E5E5</fg>
-                <bg>#333333</bg>
-                <hidden>0</hidden>
+                <bg>#444444</bg>
                 <XRCED>
-                  <assign_var>2</assign_var>
+                  <assign_var>1</assign_var>
                 </XRCED>
-                <border>10</border>
-                <flag>wxALIGN_CENTRE</flag>
               </object>
-              <flag>wxBOTTOM|wxEXPAND|wxALIGN_CENTRE</flag>
-              <border>5</border>
-            </object>
-
-            <object class="sizeritem">
-              <object class="wxStaticText">
-                <label>Step size</label>
-              </object>
-              <flag>wxBOTTOM</flag>
+              <flag>wxBOTTOM|wxEXPAND</flag>
               <border>5</border>
             </object>
             <object class="sizeritem">
-              <object class="UnitFloatSlider" name="controls_step_size_slider">
-                <size>-1,20</size>
-                <value>0.000001</value>
-                <min>0.0000001</min>
-                <max>0.001</max>
-                <unit>m</unit>
-                <scale>log</scale>
-                <accuracy>2</accuracy>
+              <object class="wxPanel" name="pnl_fibaligner">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Fiber</label>
+                      <fg>#E5E5E5</fg>
+                      <font>
+                        <size>16</size>
+                        <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                      </font>
+                    </object>
+                    <flag>wxBOTTOM|wxALL</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText">
+                      <label>Step size</label>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="UnitFloatSlider" name="mirror_align_slider_fibaligner">
+                      <size>-1,20</size>
+                      <value>0.00001</value>
+                      <min>0.0000001</min>
+                      <max>0.001</max>
+                      <unit>m</unit>
+                      <scale>log</scale>
+                      <accuracy>2</accuracy>
+                      <style>wxBORDER_NONE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxGridBagSizer">
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_pfy">
+                          <label>+Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>0,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_mfy">
+                          <label>-Y</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxTOP|wxBOTTOM|wxALIGN_CENTRE</flag>
+                        <border>5</border>
+                        <cellpos>4,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_pfx">
+                          <label>+X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_LEFT</style>
+                        </object>
+                        <flag>wxLEFT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,4</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="lbl_mfx">
+                          <label>-X</label>
+                          <fg>#E5E5E5</fg>
+                          <font>
+                            <size>16</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                        </object>
+                        <flag>wxRIGHT|wxALIGN_RIGHT|wxALIGN_CENTRE_VERTICAL</flag>
+                        <border>5</border>
+                        <cellpos>2,0</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>↑</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>1,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_y">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>↓</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <flag>wxLEFT|wxRIGHT</flag>
+                        <border>7</border>
+                        <cellpos>3,2</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="mirror_align_btn_m_fibaligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>←</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,1</cellpos>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="ImageTextButton" name="mirror_align_btn_p_fibaligner_x">
+                          <size>64,-1</size>
+                          <height>48</height>
+                          <label>→</label>
+                          <font>
+                            <size>24</size>
+                            <weight>bold</weight>
+                            <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                          </font>
+                          <style>wxALIGN_CENTRE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <cellpos>2,3</cellpos>
+                      </object>
+                      <vgap>0</vgap>
+                      <hgap>5</hgap>
+                      <growablecols/>
+                      <growablerows/>
+                    </object>
+                    <flag>wxLEFT|wxRIGHT|wxALIGN_CENTRE</flag>
+                    <border>5</border>
+                  </object>
+                </object>
                 <fg>#E5E5E5</fg>
-                <style>wxBORDER_NONE</style>
+                <bg>#444444</bg>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
               <flag>wxEXPAND</flag>
             </object>
-
-            <object class="sizeritem">
-              <object class="wxHtmlWindow" name="html_alignment_doc">
-                <fg>#BBBBBB</fg>
-                <bg>#333333</bg>
-                <style>wxHW_SCROLLBAR_AUTO|wxHW_NO_SELECTION</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
+            <orient>wxVERTICAL</orient>
+            <object class="spacer">
               <option>1</option>
-              <flag>wxTOP|wxEXPAND</flag>
-              <border>5</border>
+              <flag>wxEXPAND</flag>
             </object>
-
             <object class="sizeritem">
-              <object class="ImageTextButton" name="btn_custom_alignment">
-                <height>24</height>
-                <label>Move to the latest custom alignment</label>
+              <object class="ImageButton" name="btn_log">
+                <icon>______img_icon_ico_chevron_up_png</icon>
+                <height>16</height>
+                <face_colour>def</face_colour>
+                <tooltip>Open log panel</tooltip>
                 <style>wxALIGN_CENTRE</style>
                 <XRCED>
                   <assign_var>1</assign_var>
                 </XRCED>
               </object>
-              <flag>wxEXPAND|wxALL</flag>
+              <flag>wxALL</flag>
               <border>10</border>
             </object>
+          </object>
+          <fg>#E5E5E5</fg>
+          <bg>#333333</bg>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <object class="sizeritem">
+        <object class="ARLiveViewport" name="vp_sparc_align">
+          <size>400,-1</size>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+        <ratio>1</ratio>
+      </object>
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <object class="sizeritem">
+              <object class="wxScrolledWindow" name="scr_win_right">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_ma_settings_ar">
+                        <label>ANGLE-RESOLVED</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                      <object class="FoldPanelItem">
+                        <object class="StreamBar" name="pnl_sparc_align_streams">
+                          <size>300,-1</size>
+                          <fg>#7F7F7F</fg>
+                          <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <nocaption>1</nocaption>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                      </object>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_ma_settings_spectrum">
+                        <label>SPECTROMETER</label>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
+                      <bg>#333333</bg>
+                    </object>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                </object>
+                <size>400,-1</size>
+                <bg>#333333</bg>
+                <style>wxVSCROLL</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+              <minsize>400,400</minsize>
+            </object>
+            <orient>wxVERTICAL</orient>
+          </object>
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
+        </object>
+        <flag>wxEXPAND</flag>
+      </object>
+      <orient>wxHORIZONTAL</orient>
+    </object>
+    <bg>#333333</bg>
+    <style>wxWANTS_CHARS</style>
+  </object>
+</resource>'''
 
+    ______img_icon_ico_cam_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00)\x00\x00\x00\x1d\x08\x04\x00\x00\x00\x9d\
+\x82\x8d\xc6\x00\x00\x01\x16IDATH\xc7c\xf8\xcf@m\xc80j\xe4\xc86\xd2\x94\
+\xd3j\x8a\xdd\x07\xfb\xff\x0eX\xa1\xfd\xbb\xb7\x96]\xa6l$\x19i7\xd3\xe7\
+\xd8\xffH\x9c0\xf4\xbf\xf7\xdb\x0e4g\x98\x9a\x06\xe01\xd2\xe7[\xec\xff\
+\x94\xffi8a\xca\xff\x98\xff\xde\xcf\x90uX\x868|\xb3\xcb\xc4i\xa4\x1d\x18\
+^\x03!\x86\x86~@\xe8\xb0\xae\xf4\xfc\x17\xf8\xdf\x1d\xb7\x91\x8e\xfcQ\x04\
+\x0cL\xfb\x9f\xfa?\x1cj\xa4)\x9b\xed|\x9f\xff\xd1@w{Qjd\x04\xd8H3!\xfb\x03\
+\xfe\xffA\xc1\x14G\x1d#\xcdU\x9dn\x05\xfd\x8f\x07\xf2\xd2\xa8c\xa4\x8b\xb5\
+\xcb\xdb\xd0\xff\x89`\x03\xa9bd\xe4\x07o\x89\xe0\x93\x89p\x11\xaa\x18\xf9\
+\x9f!\x803~u*\xf5\x8c\x84DO\x00c\\[
+u\x8d\x04\xc1\x98\x84\x94\x9fT6\xf2?C\xa4}\xf2[\xfcF2F}#"\xa9?G\xd6\x13\
+\xae\x1au\x0b\x8f\x91\xff\x19\xc2f\x12\x91!;Q\xf5\xf8
+\xb9\x9a\xe3+68c\xa7\xa5|\xc0c\xe0\xdb\x98\x1eo\xb6\xd1\x8ab\xd4Hd\x08\
+\x00-\xed\x06\xb8\xdec\x12\xc5\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_cam_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00)\x00\x00\x00\x1d\x08\x06\x00\x00\x007\
+\x8bEM\x00\x00\x03\xb5IDATX\xc3\xbd\x98O\x8e\xdcD\x14\xc6\xbfW\xba\xdd\
+n;Q\x16HaE$\xae\x90\x1b\x84\x05\x9b n\x80\x90\xa2\xacr\x80\x086d\x8b\xc4\
+\x05P\xd8\x81\xb8\x00\x0b6\x01\xb1f\xc7\x01`\x87\x82&\xd2\xd0\x96\xbb\xc7\
+\xdd.We1\xcf\xcd\xeb7n\x8fg2CI\xa5r\xdb\xa5\xf2\xcf_\xbd\xaa\xf7U\x13\x12\
+\x86
+\x1di\xf5\xf5PI\x03\xd7i\xe0\xd9\xe4\xe2\x06\xe0\x8ch-\xb7F\xdc\xa7\x01\
+x\x0d\x96\x00D\xae\x9d\xb8\x8e\xe2y\xba\x0e\xa4\x11`\x0e\x80\x17\xd5)\xe0\
+!\x85\x93\x02\xec\x00\x04\xae-\xd7\xc0\xf7;\xd1\x97.\x99\x85=d\xaf\x9c\x03\
+0\x030\x07\x90q;g\xd01H9xT\x90;\x00[\x00\x0d_\xef\x84\xbaI\x8c\x93\x8eU\
+\x27T\xb4\x0c\xb8\x00\x90s\xbb\xe0{~`\xca\xc7b\xb2\x07\xedUlx\x8c\xbem\x19\
+T\x86\x99\x0e\x8f\xfd\x878\xf1R\xc7\xaa\xe5\x00\x96\\\xb5\x8at\xc9\xe2I\
+\x03q\x19x\xec>\x84v\x03\x90\x10\xca\xf7a\xd1\x8fCRI\xcfS\xbc`\xc0^E;aE\
+\x1f\xdb\x15\x8c\x8a\xf5\x1e2\x88\xe9\xee\xa7Z\x86\xc6V\xce\x88\x13\xf1\
+\xe8Y\xb9\x05\xb73\xea(+_\x97\x9f\xdbh\x1f\x11\xa8\x9c\x8c\xca\x1a$\xa4\
+ug\xba_\xea\xfb\xf5\xcbh\xa3\x8c\xf9N\xad\xf0\xc4
+n\xf9c\xa4\xb2{%\xad\x80\xecc\xd0\x96\x27\xe5gn\xee>\xa5\x8c\xce?\xe3\x8a\
+\x85"-\xa9\xa1\xc7\xc5I\xd1V\xf7\xab\x97bq\x1elC\xd9i\xf6\xc05\xee\x83\xfa\
+\xfd\xfa\x27\x16\xadc\xe8]\xbf\xba\xe5\xca\xf6"\x06\xc9y\xf7\x11\x15\x04\
+\x9a\x11\xae\xa4\xa2\x8cP\x0f\xb8\xda}\x0c\xe0;\x1e\xd7J\x05\xf37\xf9\xc3\
+\xac\xc9\xbe\x08>\xfc\xc0\xe1\x16\x85\xaaF\xc7\xa4U\xdb\x0chNw\xae\x0d\xc8\
+\x91I3\x02\xe6\xc8\x87b\xb7\xfc\xa7\xfc\xc4\x93J%\x19\xc4\xfdl\xce\xd4\
+b\xbd\xb0O\x1e\xee\x83\x06\xd7\x07\xd49L\xdeJd\xca\xd7\xe5S\xe7\xddcZr(\
+5 \x91H\x9c\\\xb0r\x0b27\x845Z\xec\xce.\xca7\xe5s\x9b\xd9\x87X\xb2\xd2a\
+0\xeb\x19\x09\x09\x95\x93\xe9\xb6@\xfd\xda\xbfW\xac\x8a\xafLn\x1ePN\xe7\
+\x93J\xa3\xde\x81dL\xden! [g\x1f.\xaa\xc5\x0bS\x98{\x94\xd3e\xbb\xef\xc1\
+\x13\xf3A\x86Y8\xc1\x12SN\xff\x05\xd94\xbbw\x00\x99\xde\xd5\xf7\x8d\xbd\
+2\xf8P\xad\xca\xd5\x97]\xea~\x1d\x19];\xa9\x04 \x99#\xce\xe3VJ\xa4\xd8\x9e\
+\xfa\xd3o\xda\xd0~\x8f4\xf8\x9e(\xac\xdc\xde%\x19e\xaf\xa2\xb2P7\xa6\xa4\
+\xfc\xb5\xf2\xab\x1f\x9b\xd0|\x8dx\x9eQD/\xe9A/@\xa6\xa1/\xb8\xc5\x92j_\
+\xff\xb6\xe96\xcfSL\xff
+\xa1Ze\x90c\x0f)-\x95\xfe\x8a\xea\x86\xa0\xce\x04\xc8\xde\xado\xfc\xe6\
+\x8f:\xd6\xcfb\x17\xff\xa2DA\x99\xe3=\x87Q\x8ec\x27\xfc^\x0c\x08\xaf\xde\
+Y\xd3\x04\x04\x84\x9f\x85W\xdc2\xf4\x06\xc0\xd9\xd6m\xff\xac\\\xf5$\x98\
+\xf0;\xdfk\xb8O\xdb+IH \xce\x97K\x00w\xb8\x16\x002\x8a\x94\xdf\x0dw\x9f\
+Xo\x1f\x11Qq\x0d\xc0uh\xc3\xab\xcaU\xdfF\x13\xd7Z\x04\xb5\x9bh?\xb9W\xb4\
+\x87t\xec@\x96\x0cX\xb0C\x9f\x8b\xa3\xc3U3Q\x1a8B\xf4*\xed\x84\xa7$\xd1\
+\xb7\x1d\x8aK\xa7:l\x05P\xbf\x98f*\xe1\xd3\x84\xe3\x83<\xafH\xc0\xb3\x01\
+Hy\xc6\xe9\xd46tp\x10\xeb\x81\xb6\xeaw\xab\xac\x93\x9d\x00\x99FN\x8b\xcd\
+\x91\xe9\xd6\xea\x1f\xec\xd9\x1aR\x036BI7\xc1)i\xc8V8\xec\x9d:{\x1fK\x1c\
+\x17\xb2\x1e\x89n\xda\xb2Y\xe1\xef\xb4}\xa2\x09i\xad\x131\xd9\x1d\xf9\x27\
+cb\xeaO\xa3\x27\xbec\x16n\xca\x91\x16#\x07\xfe+\x95\xb7\xf2\x89\xc9\x83\
+\x15\x1a,f\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_ang_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00)\x00\x00\x00\x1c\x08\x04\x00\x00\x00V\
+\xde^c\x00\x00\x01kIDATH\xc7\xed\xd4\xbdJ\xc3P\x14\x07\xf0\xa8XtQ\xfa\x00\
+>D\xa1M\xbf{S\xa5\xa9\xa9\x14JC\x1a\x93\x86\x98&\xb9\xa2\x82\x08\xbe\x84\
+\x82 \xae}\x007\xa1\xbb\x9bC]\\\xab\x9b8\x08"\x0eE\xa7
+Z\xfe\x0e"H\x93\xdc~\xe0f\xf9ow\xf8q\xee9\x87\xc3\x81\xfb\xebpSrJ\xfeN\
+t\x8e\x17S\xa7\x99\xab\xdc\x13\xe9\xe6\xba\xd9N\xfa"\xb1\x1f[\x99\x98\x8c\
+\x86\x92\x07\xe4QD\x192jP\xa1BA\x05%\xac\xf53->2\x01\x19\x8f\x92\xdb\x0d\
+(0`\xc1\x81\x0b
+
+\x176Lh\xa8\xa0\xf0\x91>\x89\x85\xc6"\x93j\xe1]\x86\x09\x07\xdb\x9eP4\xa0\
+\xa3\x0c\xd2\xe6\xc3#\x93)]\xfa\xd4`\x83\xfa\x80\xdfqa\xa2\x8a\xfc\x0d\xbf\
+<\x12\x99\x8cH=\x1dn \xf7S\xab\x85*\x84Vlf(\x19\x9f/t4\x0f\xe8\xbeZ\x0d\
+k\xd7\xed\x0d\xa2\x15d\xb7\x86\x92dO\x86\xed\xf9f\xfd\x0c\x1c8\xe3\x9c\x0e\
+Tj@zN,2\xc9\xc4l\xe9\xc1\xf4\xf4\xd0\x86|-,\xe4\x97\x94\xbb\xc1q9\xa8A\xd8\
+a\x92\x84(>Sv\xa0\xa2\xd8-\xbem\xfat\xd8D\xa9\xcd$\xc5##`m\xea\xa8\xfb\xee\
+\x80\x03\xb9\x9f\x0d3\xc8\xf2\xa5\x158a\x1a\xf0\xae!\xbf\xca \xab\xf7\xf6\
+\x90\xe5\xf1\xc6\x80H\x19\xa4\xf2\xe2\x8eM\x9a\x90\x0e\x19\xa4|l5\x1bcF\
+o\xae\x0b\xd3\xab\xfe\x9f\xc9/\x86\x04\xceT\xdd\xad\x87\xbc\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_ang_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00)\x00\x00\x00\x1c\x08\x06\x00\x00\x00\xfc\
+\xd7\x96\xe8\x00\x00\x03\xefIDATX\xc3\xb5\x98\xbb\x8f\x1bU\x14\xc6\xbf\xef\
+\xdeyz\xc6\xf6\x16\x91\x02H@\xb1\x89\x08\x12\x05R\xaa4\x08EH\x14t\xf0\x1f\
+P\xd1!\x82\xe8)\xf8\x03\xa8\xe8#
+j
+\xaaPC\xfa\x14Tt\xe96\x0b\xd9u\xec\xf5</\xc5\x9ek\x8e\xef\x8e\x1f\x9b\xdd\
+\x1d\xe9\xe8\x8e<\xd7\xf6O\xdfy\xde!\x1c^\xf7b\xb0\xea\xfb\xf0W\xdd\x86\
+\xcf\xf7\xfc#wi0\x020j\xd5\xe6\xf78e}`\xfa\xd9\xb5Bj \x0b \x1a0\x0d
+\x01\xea\xc4Z\x00\x8d\xac\xfe3\x0d}%H\x0d\x17\x01\x88\x01$\x81\xc5; =`\
+\x1dX\xa3\x80\xb7*\xbb\x0d\x92\xa2\x9a\x15\x90\x14@\xa6\xccCF\xb2\xc7\x04\
+\xf1\xe9\x14h#V\x01X*\xab\x14\xecFU7Aj\xf5<\\\x0e`$k:\xa0 \x83\x98\x0cA\
+[\x05z\x06`!\xebR\x94m\x95\xaa;!\x19\xa8\x97\x03(\xc44\xe0\x90z\x9b.\x0d\
+[\x0b\xe8Bl.\xb0\xd5&\xd0\x10\xd2\xc7`,\xea\x8d\x00\x94b#\x01\xf4\xea\x91\
+\x8e&?\xce?\x8c\xaa\xe8\xbeq\xe6\x0e\x1d\xdf\x92\x10\x00\x80\xe3\x9e\xfd\
+\xf3\xcev\xcf\xaaI\xf5\xb4)\x9a#\x05\xdb\x88\x82\x1e\xf2\x95\xdc/\x05t\xcd\
+\xf5!\xa4\xcf\\\x0f8\x16\x1b)\x05\xc9\x8eQyT~\x16\xb5\xd1\xe7\x8cy\x8b1\
+\x15\xfaz\xda\xb8\xc6\x01\x0d\\\xd7wO\xab\xb2\xfaey\xb0\xfc[\x9e\xb6\x02\
+5\x070\x13\xd0\xb9R\xb4\x1f\x82\xa4\x8a\xc1B\xe0&r\x9f\xc93f/\xb3\xbb\xf9\
+<\xc4\x94\xef0%\x90\x00\xb4\x1cN\x1b\x27\xa0\xad\x03j\xc0-]\xd7\xf6\xed\
+\xaf\xb3\xdb\xb3\xc7\xce\xbaF)\xfa
+\xc0\xa9\xc0.\x04t\xe5v\x0di\xc5U^\xc1\xa9\xac\x99W\xb08*>J\xbb\xf4\x11\
+G\x8c\x99)\xf5\xf6\x89H\xaf\xea\x02\xe8\x96\xdd_\xb3[\xb3\xef\xbb\xb4\x9b\
+I\x8c\x9e\x09\xe0\x89\x02m\xbc\x9a&\x88E\xafd\x98\xc5,\x8e\x8a\x8fS\x97\
+~\xc7\x09c\x16\xe7
+\xee\x05\xa8|\xc4\x8c\xe0\x98\xb0\xa5}\xf2\xcf\xe4\x07[\xdb2HP\x1dV+\xdf\
+\x98 \xa3\x13\xd9\x9c\xa9$av\x92\x1d\xa6.\xfd\x9ac\x1af<\xdf\xf9\xba\xdd\
+>\x06X\x10\xa60w\xc7\xc7\xe3oT%\xd15\xd8W\x8f\x0b\x90^\xc5Tm4\xec\x19\xe5\
+\xcb\xfc[\x96L\x98r\xbbz=\xe6UW\xfdXw\xf5O\xe8QoU5\x27lf\x1f\x94/\xca\x87\
+\x03\xa0i\x08\xa9]\x9d\x04u\x90\xe5q\xf9\xa9\xc9\xcd\xbb;\x01\x1d\xd0\xb6\
+\xed\xef3;{rjO\xeb\xda\xee\x8f\xad-7:wn\xe2\x92/Mk\xd2\xa06\xfbN\xb6\xa6\
+\xa4Q\x9b\xfe/\xd4\x0e\x8c\x19\xb1\x97\x8b{\x80\x15\xdf3\x9dIlcG\xacy\xb8\
+\x15\x92\x00c\x829\x0f\x8a\x97\xc5\x27\xc1|\xb0\xd1\xddV\x99\x01\x80\xfc\
+$\xff\x80)o#\xda/\xde\x8c1\xf7\x0e^\x1c\xfc<\xfdw\xfa\x98\x86o\xef\xfc\x8e\
+\x01\x98\x10\x11\xa3\x87\xca\xa3!\x07M0#\xae\xf5\xe0\xb8\x8b\xef\xaf\xf2\
+l\x0fH\xa6\x04\xa7,9\xe1hgx\xa8\xc2gbs/\xaa\xa3r`\xf2\xba\xa0d\xd8\x83\x9d\
+5\xf6\x0e-/_f.S\x01\xce\x9d\xcc\xe4,9\xdc0\xf9\xaf \x87&iG\xcb7\xf7\xae\
+\x85W9\x84X\xc0\xf6\xf6\x8d\x81\xe9}\x0d\x12\xaa\x9f\xfaI\xa4\xa7a~\xe3\
+\x90\x00H\x82d\xa6F\xba\x0b\xbd\x9b\x92\xf2\x85\xf4\xea\xb1L=\xd9t>\xfd\
+\x8a)\xc7$y\x83\x8c\xce\xb5\xce\xd5u\xfdd1^\xfc)C\x86\xef\xe3s\x00\x8d\x87\
+\xf4\x85\xb4\x10\xc0bh4\xdbpB\xbc4\xd4\xc5\x11d5\x11\x9d\xc9\xb0\xb16\xba\
+yH\xdf\x123\xd5\xb7G\xaa\xb0\xda\x81\xec\xc7\x15A{\x15bz\xbe\xd4\x13{\xe3\
+!\xa1\xeaR\xa2`\xb3\xe0\x98`\xaf\x11\xb2\x0f ku\xfe\xa9\xd4\xd9\xa7\x05\
+\xd0{\xc8\xb0\x98\xc7\xead\x18\xdd\xa0\x92\xe1\x91\xb7\x09\x8e\xbe\xe7U\
+&\x18z\x8d\x026\x81z\xe6\x06b2|q\xa0O\x8d\xfd\xd0\xd0;\xf4\xfad\xdb\xab\
+\x14\\\x03\xe8P"]x\x1d\xf3\x1f\xf9\xfd~\xd4\xe4\x17s \x00\x00\x00\x00IE\
+ND\xaeB`\x82'''
+
+    ______img_icon_ico_fib_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x04\x00\x00\x00\xbe\
+\xaa2\xfb\x00\x00\x02\x01IDATH\xc7\xed\xd6\xbfk\x13a\x1c\xc7\xf1\x8b\x19\
+t\xb2\xe9^\x02\xba\x17t\xd1\xd0\x1aI%?\x9a\xbb\xe6W\xb9\x84\\\x92\xfb\xfd\
+\xdc3\xeaZ\x1a\x84\xee:\xb9\xe5\x0f\xe8hf\x1d:\xe8\xbf\xa0\x83BE\xb1\x83\
+\x93.U(\x85\xe6\xed\x90\xd6`rQ\x92\xdc\xd6\xf2l\x0f\xf7y\xc1\x03\xcf\xf7\
+\xf3\x9c\x82\x12\xddR\xae\xb0\xcb\x85\xdd\xd7\xd6\x0f\xd2\x87\xeb/\xef\xdd\
+\x9d\x19\x1b\x8f\xae5\xf2\x83*:\x15\xb2\xbfRw\xfe\xcd\x8fQ\x93\xd1\xc2g\
+\x03\x0f\x1f\x97\x06\xd9\xfe4>\x14\x1b\x8f\xa6o\xea\xf8H$\x12\x97\xcaa8\
+\x1f\x8aMF3\xd7\x9a\xdf\x83\xf3\x1d\x1f\xfd \x9c\x0f\xc5&\xa3(\xf5]q\xbe\
+\xe3\x0d\xaaZ\xf87S\x8e9\x8a
+\xeaG\x0fWP\xd4\x98\xf9"@"hI\x14\x94\xccJ\xf3[\xf0\x17?\x15Sc\x9d\xa7\xe2\
+\xc7\x10k\x91\xfb\x98J\xa0\xd44\x17\x89M)\x89\x92J\xe4?\xb4\x19b\xfe\x17\
+\xa3\xfd\xdf{V\x8f\xb5\x96l!\x06.:\x1b\xaf\xd7\xe2E\xcdB\xd2!\x9bL\xc57\
+^\xe9x\x88\x81-[K3\\\xda\xce3\x81C\x8dG\xdd\xa2f"i\x93Mf\xba5\x1c\x04\x9d\
+\xe73N@9n\xbd\x11XTO+]\x0bI\x1b\xb5\\:\xb5\x10Xo\xcb\xf1\x99\xc7i\xfb\x96\
+{,01~:H,\xea\x9f\xda\x08\xdc\xe3\xed\xdbs\xcdfsG \xf0\x10H|\x1c|\x04\xcd\
+\x9d9\x07}\xeb\xba\xfdUr\xb1\x02\x02\xec\xa3\xad\x1bs\xb7F\xe3\xb1\xcf\x88\
+\xf3i<Y\xa0\x82\xb4\x84}2\xc2\xec\x13-\xb1P\x9f\x19\xfd\xe0\xcf1\x8d\xfe\
+\x82\xe5X\xd3\xbd\x8b\xe1\xa1\xa6/\x88\x15\x97\xad\xb3!f\x9d\x15\x97\x17\
+\xaem\xe3]\x80$\xa0\xf5>\x827\xa0\xbe/\x86-\xb2\x1f\x01V\xdd\xf3\x90xT\xf7\
+"\xc0J\xae\x83\xc4\xa1\xe4E\x80\xa9%\x0b\x89\x85Z\x8e\x00\xdb\xd4L$&\x9b\
+\xe9\x08\xb0\x82f"\xe9\x90\x10%\x96\x8d\x0c3\xc9k\x11b\x85(\xb0\xdc\xaa\
+\xd1s{F/\xb7z\xf5\xb3w\x99\xb0\xdf\xfa\x99\x84\xa3\xd2K\xca\xd8\x00\x00\
+\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_fib_green_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
+\xa3\xfap\x00\x00\x05xIDATX\xc3\xbdXK\x8f\x1c5\x10\xb6\xfb5===\x99\x1d\x11\
+\x09P8\xc0"\xe0\x88\x94\x0b\x0f\x09\xf1+\x12\xa1\xe5\x02\x17~\x03\x17\xc8\
+)+$ \x07\xe0L. A$XPr\x00\x01\x127\x0e$\x12\x87\xe4\x8c\x94\x04\x10\xbb\xac\
+vg\xa6{{\xfaa\x9br\x8f=[\xed\xb8w\xf65\xdb\xd2\x27w\xbb\xec\xaa\xcfU\xe5\
+\xb2g\x1c"\x089\x01\xe8\x02\x1c[\xb7C\xda\x1fj\x81\xa3\xe0\x02<\x05\x1f\
+\x10\x00:
+\x81\xea\xd3r\x17\xcd\xb3\xe9\xb4>\x8e\x85\x8c6\xec\xb6\x18\xd5\xef! \x02\
+\xf4\x001\xa0\x8f\x10+YW\x8d\xeb\x18\xc0\xe4]D\xdaJL\x93\xf2\xd4\xc4\xae\
+R\xae\x8d\x9e30PX\x01\x0cU\x8b10\xc6\xf7Q\x1b\xab\x05i\xd2\x98`\x83\x98\
+IJ\x13\x1a CC\x03+\x0b0\\0W\x93\x8c\x10\xb9\xb9\xe701\x17y\xaag\xf1
+n\x07\x86\x27b\x03}\xe4\xa1\x81e\xee
+"\xd7S6\x03\xec5\xa7%\x84q\x0bz
+\x91B\xd8\x92C\x1d\x94
+\x11\x9ag[@lx\xad\xde\x14\xd8c\x9e\x12F\x088y\x03\x0b\xea\x04\x8e\xb6\xa2\
+\x97W\x1e\xac|0|0\xfc|\xf0p\xf0~\xb8\x1b\xbe\x80\x16j\x02\x13\xc7\xe4;J\
+\x9f\x83C\xe9 b\x8d\x9d\x03F_AF\xdf\x03\xa3\xcf\xe1\xad\xdf\xdb\xea\xbd\
+\x16\xb2\xf0\x8a\xdbw_t\x06\xce\x93^\xcf{5\xca\xa2\x0f\xc3Q\xf8,.1\xa0\xe7\
+%\xa4\xe7\x8a"\x1f\x18\x1e\x9f\xe7\x19\xae-.\xaaK\xb5\x27\xc0\xe8\xeb-F\
+W\xf5\xee\x09D\xf06=G)\xedSBc@\xbfF\x27\x9c\x86kzL\x0b\xf9\x8fA\xcf\xf3\
+\xa6M\xd3cf\xfd\xaa\x09/2\xea\x96n\xe4\x84\xce\xe34\xa4\xfb\xb3@\xb5\xfc\
+v:\xce\xd3\x87 \xff&\xb2\xdb(\xc2\x8eQ\xe5\xf5\xbb4\xda[d\x94y,\x83\xbe\
+\xc9#e\x1a\xbe\x85\x276\x0fA\xfe\x99\xb6S@\xab\x94\x27\x14\xc7-\x18\xdd\
+[dT\x9e\x86%-7\xea\x19\xf8\x11D\x14n\xb1qH\xf2\xda\xa6\xb6_kp\xd0\xd1)\x05\
+\x95\x02\x03\xa3\xccj\xb4\xe6C/\xf8\x99^\xbe\x8f\xbb\xe3\x1bUU\xdd\xdc\
+WIH\xce\xf2\xcf\xd2n\xfa\xbb\xfc\xf4s\xff\xb1Z\xa7\xb0\x90w\x8aoj[\xda\xe6\
+\x0c\x1c{L\x93*\x01\x85j+0\xfaUY\x95_\x08!\x12|pQ\x97\x9e\x8f\xc7\xf1\xba\
+[\xb8\xb26\x89\x92\x95wj\x95d\xa6%\x27\xf9\x9d:\x8c \x8fG\xf1U\xb02lp\xe2\
+b\x13\xc8\x94F\xe9o\xc8f\xa18p3\x94\xb23\x07L\x01\x99z/F\xc1\xe8\xcbm\xba\
+\xfd\xc6\x0e\xdf\xb9\\T\xc5\x27r\xa54\x80\xfc\x88\x9c\x0b\xfd\xed\xfe\xbb\
+T@\x9e\xce\xd5\xc9\x1c\x10\xf5\xbb\xec\x97r\x18\xf7\x14\xf5\xe9\xccCU\xf1\
+\xa9\xd4\xb3\xedl\xbf5\x09&?)\x1b\x99\xb2\x99#b\xf3PrDl\x0f\x90\xaav\xaa\
+\xbd\xc7\x1c\x96\x8e\xbd\xf1\x8f\x10\xb6\x0d\xb9\x1c\xda\xa5\xc4\xed\xba\
+\x17\xc1\xf8\xa5\x9a\x90h\xc6\xaa\xbf\xd5\xbf$\xe5r\x9c\x1c/\xe7\xc1\xfc\
+\x1f@\xcfD\xe9\xd4\x0e\xd8S\xc8U\xbf0=\xc6\x94;3El\xa2\xda\x0c\xb9\x99\x8c\
+\xfc\xd1u^\xf1\xbbr\x87\xd1\x88\x12\xdf\xf5\xd7\\\xe2\xaeB1\x98\x93\xf2\
++\xd5\xf3\xbc5)\x97\xe3`\xfc=9O9@\x93\xd26\x12D\xac\xe11\x9dc\xcc2i\xac\
+\xdaL\xc9\x98\xa0\x82\x27$\xb9\x06y\x92\xd5%1"\x1e\x90\xbb\xac\x97H\x1d
+%\xbc\xf3\x0e\x90\xf2\xa4\\\x8eKIz\x0d\xe6UH\x82\xf4\x27(2\xdc\xf4\x18\
+\xf6\x1a&7\xb6M.\xfc\xe2\xdf\xb2,\xbf\x963d\xfe\xd0\x0e\x0d\xeb\x1aEf5
+\xea\xd3\x132\x0f\xa5\\\x8e\xcb\xfd\xfc\x1f\xa5;7\x16\xad\xf5\xe2\xc4\xb7\
+\x12k\xf3\x9c\x0ek\xa1\xe4$\x09\x92\xef \xd1\xb7\xe6u\x9b\x1a\xa7.\xad7\
+\xc20\xee{\x14\xc2\x0cy\x0b\x93bF\x1d\xb3\xde\xf9M\x82\x19\xda\x0c\xf3\
+<\xe0\x0e/\xa1\x94|k\xabs5I\xe9-\x90\xc3\xb8\xdc\xc8_\x9d\xecVB\x07\x11\
+3C\x8b\xcb\x08\xce\x05\x92\xfa\xe9/\xe0\x95\xd2:\x19\xfaA\xfesK)*q1=\xcc\
+\x8f\x916r%\xaa5Z\xa9<\xb6R\xd8q\xb7-U]\xee\xc4\xdbRn\x94"\x1c:q\x90\xe1\
+E\xc4\xccR\x92\x9b\x8aKQ\xfe\xfa\xc8\xba\xb9\xeao.\xac0K\xc2i\x11\xab\xf0\
+q\xa5\xc30\x0d\xa6@\xd8\x84\x11F!\xfb-\xc4\x16\x86\xf0(\xc4\xcc\x90b\xe5\
+\xa2\xf2\xaa\x04\x88\xdc7\x88\xdd\x97\xfd\xc6\xa2\x1a\x0b:mb\xf8&07\xc0\
+9\xffs\xfe\xc5\xd5\xf7~\xe1n\xdeZ\x16\x84\xf0\xa8\xc4Lr\x0c]\x97\xe49\xf9\
+7\xbe\xf6\xd4\xdf\xfbr\xbc \xbe,b\xdc@m\x84\x0b\xbe\xd9\xf0\x98\xe0[\xc6\
+xv\x14RG%F,\xa4f\xc4\x08\x1fc\x8f\xc1\xf7\xc8\xf8\xff\x86/\x93\x98\xb0x\
+\x0d\xf5\xcdl\xca\xeb\x8f\xa0<i\x19K\x96\xe51a\x84\x86\xef\xe7Yc\x908h\xec\
+2\x895\x0d\x1a\xe6\xe0\xf6\xea\x19\xe3\xd8Yx\x8c\xa1\xed_!\x02&1v\x9c2q\
+\x92\x1c\xc3\x85\xb6\xc4\x87:z\xda\xaa\xbdX\xb6\xc7
+t\xa8\x17\xcce1\xc1n1\xc6nq\xc1n\xc2U\xe7\xa1\x92\xe5\x88\x1c_v(+D\xac\
+\xbe[M{\xd3{\xbb\xe1\xee\xfa\x8e\xbb\xb3\xbe\x13\xee^\xcd\xe2\xec\xae\x92\
+e\xe8\xe0\x16g\xe91}\x89L\xd5\x8d\x14\xb7&1~\x16\xe5\xa2B\x1e\xc3\xd7\xef\
+\x89A\xec\xd0\xf7\xaf\xd3$\x86\xea%\x16r{G\xb9\x9d\x94\x18\xb1\xdc\xb1\
+\xcc\x90\xee\x19\xb7\xdd3%\xc6-\xffw\x14\xc6.\xac\x8eS&\xf4\xf3?3\xf0\x9d\
+m\xd1v\xe0\xc4\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    ______img_icon_ico_chevron_up_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x08\x00\x00\x00
+\x08\x04\x00\x00\x00#\xce\xd7\x0b\x00\x00\x00EIDAT\x08[c`\x80\x00\x09 \
+D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
+\x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
+ \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
+
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_align/panel_tab_sparc_align_xrc', bytearray(panel_tab_sparc_align_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_align/______img_icon_ico_cam_png', bytearray(______img_icon_ico_cam_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_align/______img_icon_ico_cam_green_png', bytearray(______img_icon_ico_cam_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_align/______img_icon_ico_ang_png', bytearray(______img_icon_ico_ang_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_align/______img_icon_ico_ang_green_png', bytearray(______img_icon_ico_ang_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_align/______img_icon_ico_fib_png', bytearray(______img_icon_ico_fib_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_align/______img_icon_ico_fib_green_png', bytearray(______img_icon_ico_fib_green_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    __res.Load('memory:XRC/panel_tab_sparc_align/panel_tab_sparc_align_xrc')
+
+    panel_tab_sparc_chamber_xrc = u'''\
+<?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
+  <object class="wxPanel" name="pnl_tab_sparc_chamber">
+    <object class="wxBoxSizer">
+      <object class="sizeritem">
+        <object class="wxPanel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="ImageTextToggleButton" name="btn_switch_mirror">
+                <icon>______img_icon_ico_eject_png</icon>
+                <icon_on>______img_icon_ico_eject_orange_png</icon_on>
+                <height>48</height>
+                <face_colour>def</face_colour>
+                <label>PARK MIRROR</label>
+                <fg>#1A1A1A</fg>
+                <font>
+                  <size>11</size>
+                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                </font>
+                <style>wxALIGN_CENTRE</style>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_move">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxGauge" name="gauge_move">
+                      <size>-1,10</size>
+                      <range>100</range>
+                      <value>0</value>
+                      <style>wxGA_SMOOTH</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxTOP|wxBOTTOM|wxEXPAND</flag>
+                    <border>7</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageTextButton" name="btn_cancel">
+                      <height>24</height>
+                      <face_colour>def</face_colour>
+                      <label>Cancel</label>
+                      <enabled>0</enabled>
+                      <style>wxALIGN_CENTRE</style>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <flag>wxLEFT</flag>
+                    <border>10</border>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <bg>#333333</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="pnl_ref_msg">
+                <object class="wxBoxSizer">
+                  <object class="sizeritem">
+                    <object class="wxStaticBitmap">
+                      <bitmap>______img_icon_dialog_warning_png</bitmap>
+                    </object>
+                    <flag>wxRIGHT</flag>
+                    <border>5</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxStaticText" name="txt_warning">
+                      <size>-1,54</size>
+                      <fg>#E5E5E5</fg>
+                      <XRCED>
+                        <assign_var>1</assign_var>
+                      </XRCED>
+                    </object>
+                    <option>1</option>
+                    <flag>wxEXPAND|wxGROW</flag>
+                  </object>
+                  <orient>wxHORIZONTAL</orient>
+                </object>
+                <bg>#333333</bg>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
+              </object>
+              <flag>wxALL|wxEXPAND</flag>
+              <border>10</border>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
+            </object>
             <object class="sizeritem">
               <object class="ImageButton" name="btn_log">
                 <icon>______img_icon_ico_chevron_up_png</icon>
@@ -15139,38 +15458,14 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
               </object>
             </object>
           </object>
-          <size>400,-1</size>
-          <fg>#E5E5E5</fg>
+          <size>300,-1</size>
           <bg>#333333</bg>
         </object>
         <flag>wxALL|wxEXPAND</flag>
         <border>10</border>
       </object>
-
       <object class="sizeritem">
-        <object class="ViewportGrid" name="pnl_two_streams_grid">
-          <object class="RawLiveViewport" name="view_FIB">
-            <size>400,-1</size>
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="LiveViewport" name="view_SEM">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>1</assign_var>
-            </XRCED>
-          </object>
-          <object class="LiveViewport" name="view_FLM">
-            <fg>#BFBFBF</fg>
-            <bg>#000000</bg>
-            <XRCED>
-              <assign_var>0</assign_var>
-            </XRCED>
-          </object>
+        <object class="ARAcquiViewport" name="vp_chamber">
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>
@@ -15178,9 +15473,11 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
         <option>1</option>
         <flag>wxEXPAND</flag>
       </object>
-
       <object class="sizeritem">
         <object class="wxPanel">
+          <size>400,-1</size>
+          <bg>#333333</bg>
+          <style>wxBORDER_NONE</style>
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
@@ -15189,39 +15486,32 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
                       <object class="FoldPanelItem">
-                        <object class="StreamBar" name="top_settings">
+                        <object class="StreamBar" name="pnl_streams">
+                          <size>300,-1</size>
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
                         </object>
-                        <label>TOP VIEW SETTINGS</label>
+                        <label>OPTICAL</label>
                         <fg>#1A1A1A</fg>
                         <bg>#555555</bg>
                       </object>
+                      <spacing>0</spacing>
+                      <leftspacing>0</leftspacing>
+                      <rightspacing>0</rightspacing>
                       <bg>#333333</bg>
                     </object>
-                    <option>1</option>
-                    <flag>wxEXPAND</flag>
-                  </object>
-                  <object class="sizeritem">
-                    <object class="FoldPanelBar">
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="bottom_settings">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                        </object>
-                        <label>BOTTOM VIEW SETTINGS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                    </object>
-                    <option>1</option>
                     <flag>wxEXPAND</flag>
                   </object>
                 </object>
                 <size>400,-1</size>
                 <bg>#333333</bg>
                 <style>wxVSCROLL</style>
-                <flag>wxEXPAND</flag>
+                <XRCED>
+                  <assign_var>1</assign_var>
+                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
@@ -15229,382 +15519,95 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
             </object>
             <orient>wxVERTICAL</orient>
           </object>
-          <size>512,-1</size>
-          <bg>#333333</bg>
-          <style>wxBORDER_NONE</style>
         </object>
         <flag>wxEXPAND</flag>
       </object>
       <orient>wxHORIZONTAL</orient>
     </object>
     <bg>#333333</bg>
-    <style>wxWANTS_CHARS</style>
   </object>
 </resource>'''
 
-    ______img_icon_ico_enzel_z_align_png = b'''\
+    ______img_icon_ico_eject_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x04\x00\x00\x00\xbe\
-\xaa2\xfb\x00\x00\x03iIDATH\xc7\xe5\xd5]HSa\x18\xc0\xf1\x07MTrJ\xa2\x81\
-&\x05eP\x17\x05EE~l\x13\xa5\xa9\x99f\xa1NM\xc5\x8f\xb9\xce\xe6\xfc@SWF\x9a\
-\x8520\x9b\x12Dn\x9a\xce%\xcdM\x05\x9ds\x92\xc7V\xcd\x8a\xa0\x84\x82\xe8\
-\xa2\x8b
-\xea\xa2\x1b\xa9\xc00\xac\xa7\xf7L\xf7U\xa1;\xda\x9d\xfc\xe1\x0c\xb6s~\
-\x9c\xf7e</ \xfc\xbf\xfe#\xb5q1\xa9\xbd\xc8:lp\xab\x0e\xa5\x11"\x10\x01\
-\x05b\x90\x90+\x93te\xec\xbc\xbd\x80n\x1crK\x8dr?\x91\xf7\xda00<\xb3\xe2\
-cGV4<\x91\x93\xf7\x12\xb3\xc14\xce\xaa,.\x98\x05\xfbd}\x84\x11s(\xa1x\xab\
-\x87X\x87\xb3p\xf3O\x276\xb1\xa8\xdc\xaa\x84j\xa8Nn\x9c\x97\x8fJ\x02\xd8\
-b0<eu,r\xc8\xac\x84\x1aRK\x87\x06U\xd8\xa0\xa3\xfc=\xc0n\xbbV|\x19\x9b\
-\xc6\x9e\x82\x1e\x06\xdb\xeb\xed$\x9a\x19N\xcfp\xab`\xd7]\x0b2-0\xd4\x0c\
-\x9a\xbe\xb7s\xda\xa1
-.W\xe9\xf0\x01y\xcf\x09\x863P\x01l00\x0c[m\x8b\xd4\xeb\x18\xaa*\xa2\xf3\
-\x91\x89\xd0\xcc7f\xf2W\xb98.\xdd\xb1"\xd6\xed^\x06M\x1e\xa5Q\x9d\xae\x06\
-\x194\xa4i\xd1\xe2\xd8\xc5\x89\xc5[/\xe4\xe9+b\xd7\xdc\xf3\x1b\xff2\x83\
-\xc6\xb96_\x19\xc8\xfc\xda\xf4ch\xb5-\xdb\xfa\xcd\xf2\xd4\xd8\xa4\xda)\x07\
-6\x18\xe8z-\xa8S\xb5A=\xd4G\xf5\xfc\xa0\x09\xf4\xe8\x13=8Z\xa0\xf57\x82
-V\xc1x\x10CnrI0\x86]\xf1]p\x05\xae\xe4\x1apzv\xb2u(\x81\x86Q\xd0\x82\x87\
-\x18\x17\x14\xce\xbc{\x9f+\xbc\x14p\x15\xae\x86i\xb3\x07\xf6p\x81O\xee\xe1\
-\xb1\xc1\xe2\xc85v\x99\xeb\xb5]\xf9\x84#\xbf\xf9sw\xf1\x1byI<\x1b\xc8
-\x8b%\x04\x1f\xa2Iq\xe4S\x00\xbc\xa3\x09\x9d)/\xd3\xe7\x92\xd5\xc9`\x8f\
--\xb6)\xda\x8b`\xd9\x82W\x27\xbf\xe6`1\x96\xa2\xf0\xa9\x10\xec\xb1\xc3N\
-&\xcc\xc6\xf7\xc5\x05\xa6\xc4\xe4\xe1\xd9\x85\xb2\xcf\xb2a\xf1\xe9,N\x16\
-\xd8\xf3\x0c\xdb\x12{0v\xaf\x00RM\xb9\x98\x89I\xf1iA\xc5C\x92"Q\xb0\x8c\
-\x8c\xa1,\xf0\x1c\x0b\xe4\x1e\x88+\x12\x8c\xa4`\xe2\x94\xc0WxA\xfa\xb1\xe4\
-ujd\x1a\x14\x93\x91(\x02v\xd8\xa1c]\x27>g`\x01\x96\xa0p\xfa\xf8v!\x14\xc6\
-\x9f\xd9\xcd\x27\xefK\xb1\xc7\x92\xf2\xb2Q\x84\x92OR=U\x93\x13\x95\xc8I\
-$\x8b\xa6\x80\xef\x15\xc3\xa1\xa0\x0c*\xa1\x82\x0d\x96\xba\xad\xb0URS\x1a\
-\x93\xbf\x99\x82\x1c`(n\x10\x95R\xd9Y\xae\xa6\xc2\x970\xf7V\xc6\xa0\x90\
-,\xa7\x14\xf2a\x09#\x0f\x1cm~s\x03;\xf0\xd2L\xd9\x91uaML\xe7\xfaM\xa0\x09\
-5\xd8\xf2\xbe2w\x8dX\xcdr\xca\x01\x13\x19<V2\xd5\xee\xa2\xe2U\xc5\xbe\xf5\
-`>\xaa\x274.\x0d\xefi\xbc\x83\x8d\x92rp\xcd#Ln/L\xf3\xd29]\xc7\xf1\xba\xb6\
-\xdcg\xed\x18\xf4\x8f<p\x9c\x9e4v\xa8;\\\x07\xce<\xc0\xd4\xae\x95\xd0\xf3\
-3\xcb\xd8C\xd4c3\xc5j\xcf\xfe\x18\xdd\xa1\xc6w\xf6\xc3\x98\x1cz\xd8q\xaf\
-"d\xed\x18\xe8\xf4\x0f\x1d\x0b\x9dZP\xdd\xac\x0d\xad\x05{\xab`\xaa\xbf\xcb\
-\xa4m\xdb\xca\\n\x88R\x06;\xa9U0\xc5\xbf\xf2\x1b,5\x9e\x1a\xd9\xa7\x09\
-1\x83\x01\x94\xe01\xb6\x9e6\x08\xf6\x1b\xf7\x93\xa6&\x19:\x13\xc2\x00\x00\
-\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x1d\x00\x00\x00\x1c\x08\x04\x00\x00\x00\
+7\xc6|!\x00\x00\x00\xf2IDAT8\xcbc\xf8\xcf@.d\x18\xd5J\xb1V\xb383\x1f\xb2\
+\xb4Z\xca8\xbfszn!L\xb2V3F\xe7\x1d!\xffC\xfe;\xad$Y\xab]z\xe0\xff\xc4\xff\
+\x09\xff\x03\xfe\xdb\x86\x91\xa4\xd5R\xc9\xebs\xec\xffT \x8c\xf9\xef\xf9\
+\xc6R\x82h\xadfL.\x07#\xfe\xa7\xfcO\x03\xc2\xe4\xff\xe1\xff\x9d7\x13\xad\
+\xd5\xae0\x08\xe8\xd84(L\xfc\x1f\xf8\xdf6\x91(\xadV\x9a\xde\xdf\xe2\x80\
+N\x85iM\xfd\x1f\xfb\xdf\xeb\x83\xa5\x1cA\xadf,\xae\x27#\xa1\x8e\x85\xc1\
+\x94\xff\x11\xff\x9d\xf7\x981\x12\xd0j_\x13\xfc?\x09E#\xcc\xd1v9x\xb5Z\xe9\
+\xfb\xfcDv,\xb2\xa3\xbd\xbfX\xaa\xe0\xd1\xea\xdc\x17\xb6;qw2\x16\x98\xb0\
+;t\xb7S\x13m\x92\xbf\xe3\x03\xf7w\x1e8\xa0\xfb;\xc7wx\xb4\xfa~\x08\xff\x8f\
+\x1b\xfa\xfd\xc7\xa35\xfcC
+8\xf9a\x87\x91\xffG\xcb&zj\x05\x00\x14\xe1H\x8a\xbf\xee\xaf|\x00\x00\x00\
+\x00IEND\xaeB`\x82'''
 
-    ______img_icon_ico_enzel_z_align_green_png = b'''\
+    ______img_icon_ico_eject_orange_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
-\xa3\xfap\x00\x00\x06\xf1IDATX\xc3\xed\x98ml\x14E\x18\xc7gfwvoo\xefz\xd7\
-\xb7;O\xaf\xa5\xda\x12C\xa5*\xcaKL\x89F\x89\x09Q\xf9@$&bD1\xd1\x0f\x12A\
-\x8c\x021~\xd2\x98H\x0c""\x9f\x14\xaa($\x12\x88
-\x12C\x02\xc1\xc8\x9b
-I\x13D\x09R\xb5\x17\xd4ji\xef\xe8q{{\xb7\xaf>\xb3\xee\xd6\xe1\xda\xc2\xb5\
-\xa01\x86\xb9<\x99\xd9\xb9\x99\x9d\xdf\xfe\x9fgfv\x16\xbb\xae\x8b\xfe\x8b\
-\x89\xfc\x27\xa9\xae\x82\xfd\x9f\xc0\xc4\xa0\xb0d\xc9\x92j\xfb\xb4E"\x91\
-\xd3\x94\xd21\x1b\x98\xa6\x89
-\x85B\x13\x14a\xd7\x8e\xe3x&\x08\x02\xe2\x27\x1b!\xe9\xb2a\xc3\x86\xb1\
-\xc1b\xb1X\xb5`\xbf\xb7\xb5\xb5\xa1x<>f\x83\\.\x87zzz\x06X9\x9b\xcd\x0e\
-\x03LH\xb1q\xa4\x02<\xc4\xd1d29c\xb4\x01\x992\xa0\xcaWP,1\xa8\xcbv\xe5\x94\
-)S\xaa\xeeT,\x16\xb7Z\x965C\x92\xa4\x11\xffA=\xd24m\x0b\xbb\xdf\xa1C\x87\
-XU\x14\xec>\xb0\xfd`\xfd\xe3\x06[\xf4\xe8"/_\xf7\xd6\xbaj\xfamK$\x12k\x00\
-l\x84d\xba\xae\xdb\xe0\xcam\xac\x0c\xb1\xc8\xb2\xd9\xd1h\xb4\xab\\.\xef\
-\x1d\x1a\x1aZ\xc8\x14\x9f\x90+\x97-]6\\\xbe\x08\xe4o\xa0\xda~\x18x\x0e\xef\
-N\xe6F\xa8\xdf\xcb\x949s\xe6\x0c\xc2\x18\xa3\xfa\xfa\xfa\xb9\xe9tZ\x01\xb0\
-y\xbd\xbd\xbd\x1b\x07\x07\x07\x1fg\xfc\x97\x15c\x01d\xd7{]#\xfe\x83\xa7\
-\xdfZ[[;G\x96\xe5\xe1:\xc30\xbc\xfa\x9a\x9a\x9a\xa0\xeaf\x00\xbb\x1f\xe2\
-1\x98\x8d\x0f\xb1\xc9\x08p\x8b.\x05W\xd5tY\xfc\xf8bt\xee\xdc\xb9J\xdb\x01\
-n3\x826l\xe0\x12$\xa8\xff\xf8\x89\xc5O\xa0\xbc\x9aG\x00x\x0f\xcc\xde\xd6\
-P(\xe4\xb9\x15\x94C---\x0b\x00\xf6\x03\xe6\xe9+2+\x97?\xbb|\xb8\xbc\xf6\
-\xcd\xb5\x9eh\xe0\xb6\xdd0\xf8|\xe6N\x06V(\x16v>\xb7\xfc\xb9\x82\xff\xc0\
-M\xb1\xfa\xd8\x02\xb5FE\x84\xc2%FH\x8d\xaa(\xdd\x9cf\xe5\x071\xc1Jv0\xfb\
-4\xb4\xcb\\\xa9\xe5b\x18r\xe3\xa6\x8d\xcc\x9d\xf3CJ\x08\x95\x8c\x12:\xab\
-\x9deA\xcfV^\x12\x8a\x86fF\x1b\xa2\x9dBD@\x061\x80\x05#"\x12\x14\x8a\x84\
-P*\x9d\xb2m\xc7N\x99\xb6y\xdb\x15\x05\xf3\x13\xce\xd8\x99\xdd\x89r"/*bM\
-\xbe\x9c\x1f\xea\x9a\xde\xf5\x05\xd4\x87\xd3?\xa4\xd5h<\xba\x88\xd6Qd\xc8\
-\x06\xb2\xb0\x85\x88K\x10v\xb0\x06\xca\x9e\xd4\x90\xb6\x27[\x93\xdd\xbc\
-\xfa\xd5\xd5=\xecF\xaf\xc1\xefr\xc10o/?\xf9\xb2\xbd\xe9\xe3M\xbb\x88M\x1e\
-\xe9\xb3\xfav\x1ek?\xc6\xd4R\xdb\xbfk\x9f\x11\xa9\x8d\xccu\xa2\x0e\xd2E\
-\x1d\x81:guG?:`\x0d\xec\xf9\xa8\xe5\xa3\x1d\xdd\xd7u\xe7\xd9\xce\xc5\xdd\
-\xcb\x9d\x08\x18\xe6&
-+\x0b~\x99\xe5\xe2I\xe9\xe4\xa7BIx\xa4;\xdc\xfd\xb9\xbf\x98Ja)<\x99\x86\
-\xa8\x98\x97\xf2\xa7zq\xef\xe1\x9f\xa4\x9f\x8el\xee\xd8|\x10\xfe+\xfb\x10\
-l\\\x9b\xbb\xf7\xc8A\x83M\x15_\xd8\x86W\x86p&r\xe6\x81\xa9EUY\xb5o\xd5\x27\
-\xaf\xcc}\xe5a\x83\x1a\xac\x0dm\xedmM\xce\xcc\xcd\xbc-S\x979}x\xd2\xe1^\
-\x1f\x82\xcd\xe0\x92\xbfL\x14\xfd\x9c\xd5\x99.\x1a\xf9\x1a]\x09\xc6\x03\
-\x09\x15\x10\xd4\xb7\xa0.\x00\xa5<\xa8\x9f3\xc3\xc4$2\xd5i\xad\x9c\x97\xef\
-\xb5\xa9}\\Kj\xfb}(\xcd\xcfK>\x98s)W\xe2\x8a\x01%\xdf(\x97\x8b\x9c\x82\x02\
-g\x84\xcb\x89\x92U\xda\x01\xea\x1e\x01\x0b\xb7`\x8a\x1b!\xf8\x1b\xa1\xfe\
-K\xae\x0d\xaev\x1d\xabT\x8a-\xe9!?\x97GQk\xd8\xd50\xdb(+\xb9\xd8E\xea\x1f\
-\xea\x1c\xc9\x94\x16b\x11\x27\xb1\x82\x15\xefq\xa05)\x91\xd6`-\xe6\xac\xea\
-\x05\x16sn\x93| \xa5B-\x81\x83Bj\xbf:\x9b\x96\xe8c\x00\xf5s!YX\xef*n?\x91\
-I\x0b\xf4\xb4\xb0\x80\x87\x1c\xe2\x1c7\x1ds\x8f^\xa3\x1ff/\x1f~\xbc1s.\x06\
-(\x8e\xb2E\x05\xae\x948\xb5\xa4\x00J,\x891\xb1(\xa6\\\xe2\x96\xcb\xf1r\x86\
-\xbat\x9e\x10\x15\xda\\\xdbm\x935y\x8f\x111~\x90M\xf9\x80%ZGt\xa2\x1f\xb4\
-\x04+\xe7/\x0d\x06\x97[\x1c\xd8\xb8]\x19\xc4\x19\x15\xcaB\x8c\x16i\xb3X\
-\x16\x27\x8b\xb6x\x07A\xa4\x13^\x96\xbb\xcd\xa8\xf9\xa2\x1br\xbf\x05k\x85\
-\xa1
-6\xb6\xfb,j\x0d\xe5h\xee%`\xdb\x870\xfd\xa5\xa2\xec\x97-N\xb5\xaa]yAP\
-+\x83J\xbbT\x92\xe6\x0bD\x98\x0d\xad\xe3\x107^/l`\x0c\xa0\xb1\xa1\xd8\xd0\
-\x87jI=a\x8b\xf6\xefe\xb9\x9c\xe1\xdc\xe3pP<X\x007.W\xa2\x8a\x00uDGl\x86\
--\xe7\x01o\x1a\x08h\x10\\\xf8\x9d\xe5Z\xdf[\xc4:a\x0b\xf696\x88\x16\xd2\
-\xd8\xab\xb4\x8d]\xec\x80\xba\xb2\x15\xb2\xf2\x15j\x8d\xe6J\xbbZW"\xeeI\
-\x83\x00\xb5\x0c\xd5\xf8Zp\x85\x0f\\\xea\xe6\x01\xe8dI(\x9d\xb6\x89\xad\
-\xf3mD]\x0c\xcd\xda=kZ\xaa/u\x07\xacI\xf2\xa9\xa9\xa7\xd6\x9c\xb8\xfb\xc4\
-o\x1c\x945\x9e\xc0\xaf\\`17\x1bC\xfelT\xfc2\xe5f#\xe2\xe0\xbdA\xef\xdaq\
-\xd7M\xd3\xfa\xa6\xadnT\x1bo`\xc3gs\xd9o2$\xb3j\xfb\xf3\xdb\xbf\xe6@\x9c\
-\xb1\x96
-w\x14\xbeJ\xc5\x1c.6\x0c?\xde\\\xffZ\xe06\\\x9b\xdbf\xcc\xf6\xfe\xf6\x8e\
-\x1b\x137^\x9f\xacK\xb27\x08\x94Ss3\xe3\xbf\xc4\xdf\xbf\xe6\x85k^|\xfb\xf5\
-\xb7\xb7p\xde\xa8:\x91Q\\is\xb1\xa0s{\x1b{\x01<\xcfY>(7\xe1\xa6)\xa9X
-\xd7\x85\xebP}\xa4\x1e5\xa7\x9aQ\xdb\xa4\xb6\xa6tcz\xe5\xd2eK\xa7\x8e\x17\
-\xaaR1\x97\x03C\x9cR\x86\xafV\xa5\xaa\x9ej\xd3\xbf\x98N\xea\xa4\xbafUR\x11\
-\xc5\x9d\xce\x15YA\xc9D\x129\xb63U/\xea\xb3\x9fY\xfa\xcc\xb7A\xe7\xf5o\
-\xad\x9f\xb0b\xbc+K\x9cZ\x1a\x97\x07\x1b\xb0\xd1y\xa03\xaeP%L\x09\xf5^\x04\
-\xbc\x1f\x84+;s\xb2\xd3:X\xa7\x1f\xa3^\x02H\xcf\xc6\xa3\x18\xaa\x08L|\x89\
-\xbeA\xbb_\x09&?\x02L\xc7\x05O\x0c\xe7\x00v\x08\x813\xc1\x9d\x8a\xa2\xdc
-UG\xf9\xffW\xac\\\xf1\xf7\xc5\xeaK+6\x1a\xe4X\xe6\xa5\x8ek;\x10\x9c\x19\
-?\x83\x13\xb8^\xf9u\x92}x\x01\xb0&8!\xdd\x0e\x07(4\x96U\xe3\xcaq\xa55o\xac\
-a\xe7Hf;\xe1(\xd7_\x09\xc6\xbe\xee\xa8\xaa\xca>\xd8<\x08\x97\x0d\x13\x0d\
-\xfe\xcbIg5M;
-\xeaL\xe2O\xe6~\xac\x19\xe1p\xb8\x07\x0e\xc6\xf8_\x01{\xe7\xddw\x10\xaa\
-\xf9\xfb:\x9f\xcfokhhX \x8a\xa2\xf7\xa9\xc04\xcd}\xe0\xe2O\x0b\x85\xc21\
-\x80>\x05M\xb2\xff
-\xd8(\x9f\x98v\x81\xcb\x9e\x02u\x06\x00\xaa\xe7\xfc\xf9\xf3}\x89Db`\xa2\
-\xf7\xc7W?\xa7_\x05\xfb\x87\xd3\x9f\xd3\xd4 \xcf\xef\xdabe\x00\x00\x00\x00\
-IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x1d\x00\x00\x00\x1c\x08\x06\x00\x00\x00\
+\x9d\xcf\xb4\xaa\x00\x00\x03\x16IDATH\xc7\xa5V\xcd\x8a\x141\x10N\xa5\xd3\
+3\xb3\xca\x8a+\xa2^\xbcx\xf2 \x1e<\x89\x97EA\x16\xf4\xe4\xc1\x93\xb0\xe0\
+A\x11Q|\x1d\xd1G\xf0%|\x04\x0f>\x81\x08\xbb\xec\xb2\xff=\xd33\x89\x95\xde\
+d\xfc\xa6\xa6\xa7\x9dY\x03\xd5\x1dBR_\xeaK\xfd\x91\xfbvU-9H\xfcq\xb8\x05\
+\xf3\xd6a\x96\x04\xf3\xa2aN\x00\xeeAl\xf8\xe3\xfc\xc2\xa0\x11,\x11\xa2\x83\
+D\x90I\x8b\xb8\xff\x01\xf5 \x19K\x1a\xfe&H\x04\xf5\x00u\x90Q\xf8wZ\xdc\x05\
+\x1a-\xf4`\x05H&@\xc7\x01\xa8
+\xfbI\xd0\xbd4h\xa4\xd5\x04\xa0\x1eK?\xcc\xf3\xb0N`\xe9(\\.\x09\xe7\x11\
+\xd4\xad\x02\x9a\x04\x80\x92e\x00\xa0\x8d\xf2\xdf\xfb\xf6\x89\xd6\xea\xf8\
+\xdae\xfd=\xacI\xca\x27\x01|\x8ef\xb3\x04\xad\xfd \xbd@mr:t\x1b\xd6\xa9\
+7v\xa2FU\xed~\x16)\xed\x0bj\xc7A,\xbc\xf1\x0c@\x1b\xad)\xd0\xda\x0b\xd6\
+\xc6\xb7L\x8e\xce\xdc\x87\xb5\x92\xfa\x83\x92\xd6\x0fN\xdc\xbb\xb0\x9e\x89\
+\xa7(\x81r\xea\x02\xd5\xe0\xad=aa\xf3\x8e;\x87\xf6)[v\xbf\xccH\xf5X\xf2\
+\x94\x1e\xee\x1e\xd9Gp\xae\x84\xcb\xe6@;\xb5\x81\xc6\xd8[t\x90N*w\x9dOn\
+\x17\xbc#a\x88\x84w\x97<wN\xbd=\x1b\xb9\xf5\x05\xc0\x198\xde\x0ch\xcc0H\
+\x13z\xaaf\xc5t\\\xb9\x8f\xbd\x9c\xca\xd4\xd0\xf9\x01\xfe\xf89[\xbcvx\xea\
+\xde\x83\x8e\xe8\x80E\x9b\xb5z\x01\xb59ln\xc2\x80i}^dt\x97\xe9T\x1a^\xc8\
+\xcf\xfd\x1a\xcb\x03\xde\xf3\x18B-\xfb\x17(:P.\x92\x00\xb1\xe3\xdcb\xe5\
+\xaf\xfc;j=\xef\xee\x9ejO3+y}\xc2\x9e\x0d\xde\x1f/?C1\x82\x1a\xb02\xa6=\
+\xcd\xa1\xe1C\xe4\x13\xd3\x9a\xa5I{\x89\xf1k\x9e\xe62\xa7\xfe1{\xb6\xb0\
+6\x97\xd6j\x91\xd43\x00l\x12\xfb\xee\xa1}\xc1\x16\xde\xf1\x14\x12u\xe4\xcc\
+@3{\xf6\xbd\x9d\x03\xbb\x15\xce\x1b\xd09\x03\x8a\x19\x08\x85\xd89n\xb3\x87\
+\xbe,\x16\xd0:G3\xef)\xf2\xc6\xc1\xb6\xd9\xe9n\x000\x16\x89iFBk\xa7\x0f\
+>\x1c\xbbM\xa6\xf5\x87\x07tv\x89\xea\xec\x150\xa2\x0f)\x0e\xa1\xcdAA_ \x14\
+\xa3\x90\x11!\x83\xc5Ym\\\xd2\x9f\xd5\x8a\xc3k\x1d$\xa4\x18\xd0\xb64\x02\
+\xa4D\xd0\x92l9~\xed\xd9\xaf&i\x02|\xe5Qs\xba\xbfyE?kiwf\x12>v\x01Mu\xe0\
+\xb7\xec\xe7\x86S!\xad\x0e:\xac\xa7%n\xae\xb6\x1aX\x98@A\xf6br\xf6a\x9f\
+_/\x02J\xe7\x185H4fj)\x16\xe3a\xa4\xbd\x9f\xd3V\x8cW\x99\xb4[\x066fcv\xc0\
+:\xe8\xaa\x82\xdeX\xea\x9c\x81J\x8fm\x87\x16\x97\xc1fL\xb5\x80;\xf1<c\x00\
+\xac\xc2\xbcFK\x9d\xb0T\x8bV$\x85\x1c<\xe7\xe1\xc2\x1f"hl\xd2\xaa.K\x1d\
+Ty\xb4\x1c{\x9f\xa4\x83b\x27\xda\x94\xc8\xdaP\xfd\xed\x10\xa7m\xa9|S\x27\
+\x00e\x9fK\x1d\xef*\xad\xc5\x0bX\xf4d#n\xea\x04E\xd4\x12\xc7]\xa0R\x97\xec\
+\x08\x9b\xff\x1f\xcd\xae\x1b\xe7SD`&\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    ______img_icon_ico_enzel_sem_align_png = b'''\
+    ______img_icon_dialog_warning_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x04\x00\x00\x00\xbe\
-\xaa2\xfb\x00\x00\x03]IDATH\xc7\xed\xd6[HSq\x1c\xc0\xf1\x9f\x89\x94\x94\
-F\xa2\x81]\xe9\x06\xf5\xa0PT(\xf5TB7H\x0dr\xb6"\xbcm\xeevv;\xe9\x8e\x99\
-M\x9d\xac\x84"\x9d\x8a\x97\xad2\xdb\xc2\xb9\xd9`\x9bs\x9235\xb7|\xaa\xa8\
-\x88\x1e
-*(\xa8\x1e\x8a\x82\xa0\x08\xfd\xb767-\xdc\x8e\xf6\x18_8\x07\xce\xc3\x87\
-\xf3\xbf\x9c?\x07\x10\xfe]\xf0\x1f[8\x96\x13\xee\xf3A\x9cY\xce\x27\xffs\
-\x01\xf0AH\xae\xfeDsc\x9cp\xa62\xe4ET\x86\x9cn\x0e\x81X`\x27\xc3\x1d\x96\
-\xe1\x99\x88d\xc8=\xc0e\x87\xe5\x87K\x10}\x8c\xc4\x84\xef\xf3\xe3\xf9\xc0\
-O\x12p\xf8+\xd9cP\xd2\xae\x9c\xa6\x94X\xa2\xcb\x07%(\x0f\xa9\xbf1v\xe1\xb2\
-\x980nd{\xa5\xd3\x98\x14Od\x9d\x00\x1a\xb4\xcd=\xa8\xc7j\xb3 1\x06,/\xb2\
-8\xc1\xeb\x10&x\x99\x1bG\x03\x9d\xd9\xf9b\x08\xdd~\xce\xe2\xe7\xd8`P|Q\x11\
-\xa0\x14X\xdc\x90\x0br\xa8\x93\x9bq\x0c\x27p\xd0\xcfY\x05\xcb\xa2`\x853\
-\xcb\xa4\x02\x18\x85\x9cmr\x90\xaf\xd1\xdds\xa1\x17}\x84s\xa3\x01\xcf\x0d\
-\x88\xd6\xb3\xc1\xa0\xfc)\x8d4\x96?\xe2\x80\x04\xaa\x8f\x1aq\x94P\xbe\x00\
-7\xf8\xb3\xf3\x01\x937\x27V4\xbb*\x05\x19dQ\xa5\x04$\x89\x97,\x0e\x82\xf8\
-\xc8\xbbM|\x1d\x9dt\xd6\xea72s\x0f\xb3`v\x1b$(\x99*X\xab\x02U\xf6\xb5\x1f\
-\x1e\x02\xdd{\xe7\xe9\xb3\x9f6&:A\x0fQ0\x11\xf0\xc8\x92Gr<\x1fo\xbc\x00\
-4\xa0\xe1Zq\xe4\xe1\xd0\x85\xfe\xfd\x1e\xb0\x83\x11b\xc6(r\x9d\xfe\xac\xc4\
-\xdcr.4@C\xba\xb1\xf0\xd6V\x15\xd9\xb8b\x12K\x8c|:A\xce\xbf\x81%\x84\x93\
-Am\xa2j\x93R->(\x0e\x80,12\xedPJ\xa2\xc8\x9d\x01Y\x96JW\xff\xb8\xf1S\x8d\
-\xa1\x06B\xb1\xc5\xe2K\x17\x11\xac\x90y\xa2\xfd\xd2\x8e\xbdh\xc5\xd6\xc9\
-V\x08\xc5\x0e\xcb\xa5\x1f*nP\xc9\xea=W\xd1\xf6\xdd\xf5\xc1}\xdbv\xac%\xa9\
-\x05B\xc5\x86\xad\xe0\xef\xe0oc@\xe3\xea\xc2f\xac\xde\xa7]\xde\xdb\xef(\
-\xeeKq\x83\x0dZ v,Y\xb0\x9d*fljd\x86\x99\xc5mg\x9do\xcd\xcf4\x9b\xb5\xd0\
-\x0b\x0e\xe8\x03v\xd8\xce\x8a\xae\xfa\x0fM\xd8Mf\xa7m\xe4\xfc\xba60\xed\
-3l\x91@\x199]Yc\xd5\xa7\xda\xd1\x82\x8ew.\x8b\x9d\xee\xc8\xaeJ\xaa"\xef\
-J\xa6QY\x92\x90l\x06\x19H\xd9`\x9a\xd5\xa6\x0b\x0e\xda\xba\xe7\xfaR;t\x80\
-\x9f\x12-\xa7\x8e(tr\x83p\xd5olfsc`"\xc3\xb1\xc2u\xf8\x8d\x91\x83\x27\xab\
-\xe1y+\xeaP\xed\x15\xef^\x10V\xe7\xef\x8cq\xca\x8d.\xecA\xedk\x19w\x9e\x18\
-\x1d\xac\xe9\x96\x8b\x1c<\x13\xe8!K\xd2\xf8D\x9a\xb1\x10,A\xdf\x138\x0e\
-\xbd8\x82&T\x0b)\x88,&\x8c\x09\x95\xde\xf38|\xba\x0e\xe0\x15#\x950\x0c\
-n\xda\xc6\x82\x98\x8f\x0c\xf5\xea\x9b\xca]\x95\x10.\x06\xcc\x10Y\xa9\xe7\
-\x9b7\x88\x8d\x93=X/`5g\x97g\x96\xe6|5\x11\xc4\xbcdU\x9b\xefHS\xe7\x8f\x81\
-\xd92>=\xd0\xe1\xef\xfa\xf6\x8a\xb4
-\x08\x15\x05\xd3\xff\xd9qO`\xfa\xef\x0e\xbb)kvSJ\x98\x8a\x825\xfe\xad%\
-}<g\xbe-\xa3\x27\xd5M\x96\xa6\x09b\xc6\xfe\xffmG\xed\x17\x07x\xab\xb7\xe8\
-\xbc\x02\xe7\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_enzel_sem_align_green_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
-\xa3\xfap\x00\x00\x06\x93IDATX\xc3\xed\x97kl\x14U\x14\xc7\xef<vwvg_\xdd\
-\xddvKv\x97v\xebR\x1e\x85f\x15\x13S-J?\x80(\x09A\xc1\x0f\x86\x04\xc5D\x02\
-\xd4/\x9a\x98@"\xfaES\x131&&&F4\xf8\xc1\x98(\x1aP\x9b \x10(\x95\xaa`!*\x90\
-\xc66m\xd8\x16\xfbJ\xb7K\xf7\xfd\x9a\x87\xe7\x0e3\xe5\xb2l\xcb\xd2n\xab\
-\x1f<\x9b\x93\x99\xb9s\xef\xcco\xfe\xe7\xdcs\xefR\xb2,\xa3bF\xc1O9 D\x83\
-3\xe0,\xb8\xae\xc0\x19\xf5>\xee\x27\xab.\x82\x0b\xe0y\xc2\x05\xd5%\xd5\xa7\
-MF\xc5\xdf\xcf\xa2\xd9\x8dR_\x8e!\xf4\xe0\x9c\xea\x06\xf5\x9a%\xc0\x90
-%\xaa0Y\xd53\xeaQ\x03\xd7>bV+\x05\x8cV\xc10\x90Iu\xae\x00\xec\xb6\x00\xb7\
-\xd5\xd2\xeek R1\xc5\xe6\x02F\x15(V\x08\xa6\x85\x92*\x00#\xc3\x8cT\x10\x0d\
-\x96B%Z\xa9\xa1$\xc3\xc8\x15\xa8Qh4\xa1\xa2\x96s95\x9ct9CI&>\x06\xd29\x06\
-\x1d\xc7\xe0\x15\xfc\x8c\xdf+p\x89HMd\xb36\xa6\x88\xba\xf3\x02#U`\xb4Y\
-(\xd9\xa4nF\xc7\xac\x9f\x0dL\xcc\x8b\x17\x881\xf7\x05U
-\x98\\$\xe7\xa8\xbc>\x8e\xd5\xb3\xebg\x1c\x0d\x19\x95\xa7\xf2\x9d\xc4\
-\x18\xf2yr\xa9J\xdc\x0bJ*|`\xca\x98\xfa]\x16\xe5\xd8\x8c\x03Ey
-\xf7\xc1\xe7\xf6q\xbbi\xc3g\x1b\x9eZ\xdb\xbe\xd6Q*\xd4\xbd\xc0\x101\xcd\
-E\x02\x10\xc9\x94,\x88\x92\xd8U\xf458\x8c\xa2x\x1e\xfa(e\xa1\xe1rC\xe3\x8a\
-\xe4\x8a\xb6\xa6+M\x1fl\xfct#_\xceP\x8a\x05\xae\xe0\xe4P\xee\x1c+\xb2O\xdf\
-\xf5\x04\xe8\x91\xa5\xb2\xe7\xb4\x8f
-$\x03\x8f\xf8\xbd~\x8eM\xb0\x9b\xcc\x03\xe6\x8f\xeb\xf6\xd6\xbd\x00\xed\
-iE\x15\x1at\xf9h\xee`\x92Z\x83rj=\xc2p\x0c\x84\xaa\x87\xcbp\x134KW\x92\x03\
-$A\x1aK\x1b\xd3\xbd\xf8t\xd5\xa5U5^\xc6\xdb\\\xed\xacF&\xab\x09\x19\xf2\
-\x86\xe7\x86\xc4!jrrr\xa7\x067_\xc5r\xaa\xe7\x89\xb0R\x10\xceNZ\xa2\xb7\
-O\x27\x04\xb4\xe26-\xfc\xcbF\x96\x05+\x8d\x95>\xb3\xde\x8c,z\x0b\xd2{\xf4\
-\x88\x96\xa1?\x8c\x05\xb8\x17\xe1\x98\x98o\x8e\x09E\xe0\xe4,\x0d!\x93
-\xc2Hg;\xf0\x18o\xbf\xb7\xc2\x9f\xf7\xaf\xb7\x1b\xed\xc8@\x1b\x10C1\xc8\
-b\xb1 \x9f\xcf\x87\xfc~\xff6\x97\xcb\xf5\x15\xf4\xab\x99O\x1d#\xc1\xb2\xea\
-Q)\x98\x19.s\xdd\x941\x0dB8\x95\x17H\x92t\x1d\xda\x06q\xff@(PWm\xa8\x0e\
-Z\x0c\x16\xe8\xac\x03\x05h%\xa7\xccf3\xf2x<0?\xc4%\x82 <\x08}\x07\xe7\xa2\
-\x18\x09\x97\x27\xc0\xb4\xed\x8c(HB\x87\xb64\x0b\xa2\x80\xd5\x12\xf8(O\xd7\
-O\xd5ot\xf0\x0e\xc4\xd1\x1cTWF\xb9\x0f\xe0\x09\x80\xb9\x08Po\x03$\x0e\xe9\
-\xf1\xf9(V8\x012\xaabJ\xe1\xcc2\xd9\xb3zQ\x8f\xf3E\xce0\x99\xd3\xb8O\xc3\
-\x95\x86z/\xeb}\xc2j\xb0*j\xc9\x82<\x9a\xc9e\xbaR\x89T{,\x16;j\xb7\xdb\xd3\
-\xe5Z\x92$b\x12d\x88qr\xd6\x90\x1d\xe23|\x0f\xe0\x0b9c\xeeo\xdc\xc7\x13\
-\xf5\xb8\x1c\x9c\x83\x85\xe0]\x8b\xa5b\x27s\xf1\xdc\xc9*K\xd5\xe9r.I\x05\
-\x15j\x1a\x8c&rO\x07\xeb\xe2\x09\xd8\x89\xe2\xf3\x14\xee\x13\xaa\x09u\x8e\
-\x8c\x8f\xb4\x86\x84P\xf7\xa1\x96Cb\xb5[_iU\x1e\xd2\xd4\xd4T\xd2\xcb\xa8\
-{l\xad\x0b\xf3\x91\xdc\xfe\xe8\xd1\x9d;\x07\x99\xc8=e\xe7\xba\xaek\x1d\xb5\
-\xe6\xa75Nn\x92{>\x9b\xcd^\x84\xb6\x1f\xb5\x87\x05\x83A400\x80\xda\xda\xda\
-\xe6\xad\x18Y\xd3\xc8\x9d\xaa\xb6\x8b%\xdb\x84\x1d\xef\xed\x08\xbac\xee\
-\xed6\x83m\x1d\xe7\xe6|\x89D\xe2[\x12lhh\x08\xe9t\xba\xb2\x84\x92,\x1d\x1a\
-$\x86\xa0\xad\x13V\x9d\xa0\x17\xa4\x94-\x95\xdf\xf9\xd6\xceg\\\xc8\xf5\xba\
-\x9d\xb7\xfb\x9c^\xa7\xc5aw \x1d\xabCccc\xab\xcb\x92c\xfbZ\xf7M\x9f\xe7\
-\xf3yt\xf8\x93\xc3\xda\xec$\x27\x03\xb5\xeb\xe0\xae-\x16\xc9\xf2\x86(\x8b\
-W\xfbV\xf6\xbdVi\xa9\x0c-w-_\xe5\xacp\xe68\x037\x01\x85\xb5+\x9dN\x01)\
-\xb30\xc9\xbfg\xef\x1e,=\xecub6Ff\xea`\xf7\x90>\xf2\xe1\x91\xbfj\x8d\xb5\
-/\xb9\xdd\xee\xc6t*\xdd\xc8_\xe7?GNt\xd9l2\x1fcY\xb6=\x19O\x1e\xb7Z\xad\
-\x114\x07+\x15\xcc
-\xfe\x00\xce\xd9%\xfc\x92-\x06\x83a+$\xf3\x99\xfd\x07\xf6ov.uvy\xaa=\x8d\
-\xc9d2\x9a\x88&Bq\x14\xbf\x09\xfd\x9eE\xf3\xb4R\xc0\x1e\x86\x82\xb8\x1b\
-\xd6\xb9\xad\xf0\xf5\x95p\x8e8\x8eC\xb0\x08\xd3\xe3\xe3\xe3n\xb8\xffN,\x1a\
-\xfb\x15\xc2u\x03\xae\xfb3\x83\x19t^w\x1em\xda\xbcia\xc0***\xb4\xd3\x15\
-^\xaf\xf7eXt1\xd0(\xc30?\xc3\xb2rajj\xea\x17\xc8\xbd\x9b\xc37\x86Q\xcf\xb5\
-\x9e\xb3\xd0\xae\x95\x14\xbc\x19\x8c\x9f:q
-A8\x11.G---\xe5\x03\xc3\xaa\xa8\xd6\x01J\xbd\x0b\xd7a\x08\xdf\x85x<\xfe\
-\x87\xd3\xe9Lj7\xa3\xd1(>\xd8\xc0\x9b!\x07\x9f\x04\x18\x13\xf4{\x13\xae\
-G\xa6\x1f\xd0\xd1\xb1 \xa1\x1c\x06?0\xd3M\xbd\x1e\xd7X\xb4\x12\x14}\x1f\
-\xc2\xbc\x1c\x16j\x1c\xe6\x95\xe1p\xf8Uh\xffm!s\x0c\xcd\xa6\xaa\xaalsmm\
-m=\x0e7\x06\x03\xc0Ga\x82\x1c\x85\x9c\xc3\x1f\xf4\xe5\xa2\x81uvv\xdeq\x0d\
-\x9b\xbf\x87\x1c\x0e\x07\x85\xf7Z\xd8\x00
-+\xb9\x14\xf2\xee\xc0\xf0\xf0\xf0Uh\xba\xba\xa8\x8a\xa9\xa6\xe3y\xde\x8f\
-a\x94?\x17\xaa\x92UUU\xf8\xdf\xd2\xeaT*\xd5\x1c\x89D\xee\x1b\x8c\xbe\xdf\
-\x01\xbd\xbd\xbd\xca\x1aG\xb8\x0b\xa0xuV*FQ\x94\x92{\xb8\xb4\x80?\x86n-\
-\xf4\x8b\xae\xd8(\x80\x0c\x80\xaf\xb9\xe3\x8bA=\xac\x1c\xcc\xe8\xc7\x8d\
-Fc\x10\x9a\xba\x17\x0c\x0cj\x17
-\x04\x02w\xb5Cyh\x87\xda\x86K\x85\x11\xab5\x1dcP\x14\xc0|\x90{ka\x96.\x0c\
-X__\xdfl\xb7\xbf\x87\xca\x10BZC\x82\xe1\xf0B\xfe!\x9b\xcd\xb6\x0d\xc0\xbe\
-\x81\xa6\xf0b\x86\x12\xdb\x04\xac\x95\xdd\xa0N\x8d6\x01\x88\\\xcb\x99L\xa6\
-~\x80\xa6\xca\xae\x18\xcc,\x1c\x92Y\xfb\xc0\x9f\x8c\xaf\xa1\x8em\xc7\xcb\
-\x10\xaee\xb0\\\x9d\x81\x10\x07\x1b\xc4K\x00\x8d\xff\x99G\xca\x02\xa6V\
-t\xc5`\xba\x97\xf2\xac\x1f d\xbbA\x9d0@\xf5\xc3\xd25
-%#\x8c\xe6h3\xee\xf9\xffm\xa3\xff\x93T\xff\x83\xcd\xc1\xfe\x01\x98\xa2\
-\xb3\xdc\xc6\x0d\xdc\x17\x00\x00\x00\x00IEND\xaeB`\x82'''
-
-    ______img_icon_ico_enzel_flm_align_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x04\x00\x00\x00\xbe\
-\xaa2\xfb\x00\x00\x03[IDATH\x89\xe5\xd4[HSq\x1c\xc0\xf1\x9f\x96\x94\x95\
-EbAw\xbaA=(\x14\x15jZ\xb9\xb0\x8b\x95\xd9e\x15\x1a\xa9L\xd7\xdc\xa5\xcd\
-\x1ds\xc7Vi*^\xa2\x87\xd2-u\xda}\x93\xb9K\x93\xcd\xcc\xdb\xc4{=UTD\x0f\x05\
-\x19$d\x0fE\x81`D\xbf\xfeg\xcdmV\xe89\xea[|\xe1l\x0c\xf6\xe1\xf7\xff\xed\
-\x9c\x01\xc2\xd45\x85\xd4\xff\x8bey\xfb\xa2\xc6\xd1e}f>\x17\x81\x102\xc8\
-\x95I<6\xa6\xf1f0\xa1\xd5\x27\x13jnk\x08\xc4\x01\xab\xf6\x16\xe7\xc4>\x9f\
-\x9c\xa8\xdb\xad\xe3\x86]\xf6\x16\xd0\xf0\xa9\xd7C\xf5\xa2\xe3c\xe94!\x08\
-\x83D\xc7\x85\x0b\xb9c`\xac\xe8\xf2`]h,+\x05%(\xf7\xe6\x0e\xd1\xf6\x8c9\
-\xac\xb0*\xdf\xa2\xda<X+V\x86W\x02\x05E\xd7\xeeb5\xaa\xebD\x81,\xb0\x12\
-\xdf\xfc\xec\xfd\xbd\xeeC\xda\xdf\x16\xfbQ@\x85U\xbdi\xc6&\x8633\x1c\x17\
-\x0cjK:]X\x27\x1a
-\x8bA\x01\x97\x14u\xe4}\x0f>d8\x8bh\xce8\xd8\xf5\xd1\x85\xb5\xb8\xb0\x16\
-\xd4\xaeW\x80biYw#2\xb3\xf6\x90\xe9j\xf0\xfc\x03\xf1
-.\x18\xd4\xbf\xec!_\xad\xa6\x05\x19\xa8\xe3\xf5\xd8\xe1\xde!\x99\xeeG\
-\xd5\x13:aLL\xffg9\x9d\xe4`\xf7\xb2e \x9bu\xc5\xec \x08\xb3\xc1\x9eo\x1d\
-\x8f\x1b\xf2\xaaW\xd1c\x1fS\xf3g+\x9b\xb1\xf9g\xf92\x15\xa8"n~w\x12\xa8\
-{\xc0i\xb2\x9f\xd2\x076\x90\x1b{\x1cL\x0c\xe9\xe4\x27\xf7\xe5\xac}\xd6\xae\
-l(\x84\xc2D\x0b\xb6?m.\xb6\xeet\x82\x9d\xcc\xcc\x1a\x93\x91\xab\xe7\xb1\
-\x92\xe8Ng\xfb\x11l\x91\xfeD\xed:\x15\xb9q%$\x8e\x18yt\xdc\x9c\x0e\xb2A\
-Jf\x93C^\xa0j\xb52W\xb2G\xe2\x029bR\x92\x80$#\xaf4\xc8\xc3Ue\xf9\xcfK?_\
-\xa8\xb9\x00#q\xc5\xa6\x0b\xfc\x09v\x82~Q\xf4\xb5\x02\x8dhA\xcdc\xefF\xb9\
-a\x07\xa9\xa7\x99wdss\xb7\xde@\xdbp\xe3`\xd3}\xdb\xe1\xf2\xa0r\x18\x89\x1d\
-6_\xb8Q\xb8\x9e\x86\xc2F\x1d^C5\xafh\x9e\xd1\xeaH5\x057\x81\x0d\xca\x81\
-=6W\xb4A\x96J\xdbr\x91n\xa3gh\xcf5|\xa8{U\xb0\xa6\x08\x8c\xe0\x00\x13p\xc3\
-6\x9d\xd5\xe5\x0f^\xc5\xdbd;\xda\xf6\x8b\xcb\xb5`\xe0\xd5\xac\x8d\x84H\x88\
-\xe6\x8e\xa9OV\xa0\x19\x1d\x03\x8df;U\x19\x91\x13\x94\x03Q\xb0\x0d"\xfd\
-#\x83\xa2a;\xc4\x908`\x05K\x0c\xc5\x0e\xca\xb2\xf5\xd6l;T\x02CE\xcd\xdb\
-\xb6\x8fW\xc6\xab\x89^\xfc\x1b\x1b\xdd\xd8\x18\x18\xc8q,p\x0b~c<\xe0\x85\
-\x1fx}\x1c\x8fa\\\xef\xf6-\x93\xc2\xf63e\xa5\xfc\x94\xa2\x18\x931\xbe?&\
-q\x82\xd8Nw\xfcZ1R$9
-\xf0\xd0\x8b\x98\xd0\xc9`\x01I\x8f\xe4\x98\xe5J\x8e)\x18\x97\xb1\x03|c\
-\x85\xed\x1aiQ\xf2s\x85\x1b\xa3\xc8a\x8f\xeaw\x04L\x1c\x83\x14[\xa6\x1b\
-cf;\xf9>vs,xc\x81%\xf9&\x90\x0f\x8d`JL\xc3\xfd"N;;2\xba\x05\xe2w\x94g6\x09\
-\xf2[cB&\x8e\x81\xc0\xac\xf4`g\x86\x93*b\x17\xb0>f\xd2\xdf\xf1\xe5\xae\xf5\
-+\xda\xa4\xb2\xf4\x08~0\xeb\x9d%\xfc\xab\x99i\xe9\xe2C\xc2\xd0\xe4\x10)\
-\xf9\x83\xe2\x03kl2\xfd\x27\xd8/\x030\xa4\xe8@3\xf8\x83\x00\x00\x00\x00\
-IEND\xaeB`\x82'''
-
-    ______img_icon_ico_enzel_flm_align_green_png = b'''\
-\x89PNG\x0d
-\x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00&\x00\x00\x00+\x08\x06\x00\x00\x00\x14\
-\xa3\xfap\x00\x00\x06vIDATX\xc3\xed\x96{LSg\x18\x87OK+\xa5\xb4]o\xdeu\xcc\
-\xe9&N\xc7\x86\xd6\xa9C\xa3N\x27J6\xad\xcb\x86s\x9a\x99,\x8a\xc8%T\xe4\xe2\
-\x04\x06E\xa4@\x08A\xb0\x82P\xc9\xc2El\xc1YkE\x11$\xdcc\xf6\x87:gf\xb2\xe8\
-.qa\x01\xefL\xa6\\\xe4\xdb\xfb\xd5\xf7\x90\x0e\xaa&pp\xfb\xc3\x90\x27~\x9c\
-s\xe4<\xe7\xf7\xbe\xefw\x0eC\x08a\xfe\x8f0/\xc5^\x8a\xfd\xd7bQQQ\xae\xb8\
-\x17\x17\x17G\x9e\x05\\s\x97\xbd>88\x98\x09
-
-bv\xec\xd8\xe1X\xb3\x84\x84\x84\x0c_\xec\xc0\x81\x03\xae(\xb3X,\xe4\xd8\
-\xb1c.\xa1\xe7\xe0\x9ao\xe9\xb5ThT\xc4
-\x0b\x0b]\x11p\xee\xdc9\xd2\xda\xda\xea\x12z\xae\xa0\xa0\xc0\x1f\x18=\xb1\
-\x8c\x8c\x0cW\x08\xedv\xfb\xcd\x96\x96\x96!R\xf4\xd8\xc9\x93\x27\xdb\xd3\
-\xd3\xd3\xdd\xa8\x0c \x05\x89\x0d\xf0\xef\xb8\x17!\xc6\x1c=z4\xaf\xb1\xb1\
-q\x88\x18=\x06\xe7r@\x8c\x89\x8c\x8c\xa4\xacILL\xfc{\xf7\xee\xdd6\x10\x93\
-p&v\xe8\xd0\xa1\xa7\xb1\xb8\xb6\xb6v\x88XMM\x0d\xc9\xcf\xcf_\x080\xbbv\xed\
-bRSS\xf7\x17\x17\x17\x13(?\x1d
-3\x08yp"\x96\x96\x96\xf64x6\x9b\xedw\xe7r\xd25\x1c\xbbn0\x18xT
-\xf0\x81\x07\xb8V]]M\xce\x9c9\xc3\xcaU\xb0r\xa3%\xc6\x1c9r$\xad\xa1\xa1\
-a@\x8c\xae\xcb\xca\xcaR@\x8c\xd1\xe9t\x8c^\xaf\xd7\x99\xcdf\xc7\xf1\xe6\
-\xe6fr\xfa\xf4iV\xae\x12\xc4$#\x12;x\xf0\xe0\xb3\xf09{\xf6\xec\x80\x18]\
-\x1b\x8d\xc6YT
-\x98\x92\x93\x93\xd3TUUE\xd8T\xa9\x1cM\xced2\x91\xf8\xf8\xf8S \xe65Zb\x8c\
-\xd5j\xbdBoH\x81\xf5%\x10c\xc2\xc3\xc3\x19Hemii)\xa9\xaf\xaf\xffW\x0fbr\
-}P\xe2\x0b0\x10\xdaa\x8b\xc1\x1f\x1e_\xd3RQJJJb\xa8\x14 \xca\xcc\xcc\xac\
-\x80m\xc3!\xc2\xf6\x1f\xac\xff\x02\xd1\xf3\xb0\xd5$AI_\x071\xcew~g\xa6\xd1\
-\xe6\x06\xfasss\xa7\xc6\xc6\xc62\xc0\xa2\xa2\xa2\xa2\x1e\xba\xd1R\xa1\xa6\
-\xa6\xa66X[`0\xbe\x84\x07\xf1\x001\xc7F="1\xda\xa0\xdb\xb6ms\x8c7\x03\xd7\
-\xb38\xcb\xc1k\xa8\x15h\x041f\xef\xde\xbd\x94/*++I]]\xddE\x106\xc0\xb9\x15\
- \xc6\x80\x98#\xe5Q\x15\xa38\xbd\xa2B\xe1\xf5\xb3\x9d\xbe\x82RRR(\x13A\xe0\
-s\x98Zo\x9a \xddhCCC\x1d\xbc\x10\xb1g\x11\x11\x11\xc1$%%y\x80\xd8t\x10K\
-\x04\xa9\xd5\xac\x1c\xe5E\x89\xf1\x06\x03b\x0bA*\x2799\xf92\xbc\x9e\xee\
-&$$\x98\x00f0\\\x8b\xd1\x9b\xf3\x017\x8a\xef\x09_\xd1\x94\xcbS\xdca-\x0c\
-\x8a
-\xda\x14\x13\x17s%\xc5\x90\xd2i\xcc7\x92rs9\xa9\xa8\xac\xa0\x9fA\xe7]\x0d\
-\x0f\x97b<\x14\x12\x02\xa2-\x09[\x02\xc3\xe2\xc3~\xd8\xfe\xcd\xf6r\xdf:\
-\xdf\xa9[\x0b\xb6\xfa\x1b\x8bA\xc8V\xdem\xad\xb6\xde\xb4\xd5\xd8\xacf\x9b\
-\xf9\xd3\xf4\xc2t\x99\xab\xb4\xb9\x12\xe3\x05\xc6\x07\xaa7\xc5nZ\xa0M\xd3\
-\xce\x85\xdf\xe5191\xb5\x19\xa5\x19D_\xa4\x27Z\xb3v\xa3\xf7\xcf\xde\xb3\
-\xb3NeUe6e\xea\xb4W\xb53\xe0\x1a)}\x00@\x80)s*&\x031\xdf\xb0\x88\xb0\xaf\
-\xa2\xe3\xa3O\xec\xd9\xb7\x87\x84\xef\x0bo\x18\xdf6\xfe\xb5\x9d\xc7wf\x1a\
-\x1b\x8c\xed\x86\x1a\xc3\xf5\xb9\x97\xe6~\x047\xf3\x01\xe6\x003\x81i\xc0\
-D@\x01\x881e>Wb\x9a\xe8\xe8\xe8\x02h\xe2\x8e\xac\xfdY\xa4\xb0\xa4\x90\x1c\
-\xfe\xee0\xd1\x97\xea[4\xdfk\x96R\x91\xf5?\xae\x0f\xd1\xfc\xa2\xd9\x00\xeb\
-\xc5\xc8\xfb\xc0|\xe0\x1d\xe0\x0d`2\xcay`r\xbc\x11\x8b\xc1;os^^\x1e\xb1\
-TX\x88\xd5nm\xb3\xd4X\x8eg\xd7g\x27\x056\x07\x06Bb~\xf0\xc7\x17\x01\xcb\
-\x80\x95L?\xb3\xca\xad\xdbm\xadc\xfd\xe4\x18=OK\xfe&0\x09x\x05pwNm\xd8b\
-\xb0\x8bO\x86O\x19\x83\xcdn\x8b2\xd9M\xcb\xfc\xae\xf9\xd1\xa7\xf7\x02\xde\
-F\xa9\x0f\xdc\x1e\xb9}"\xee\x10\x27\xca\xfe\x90\xd9d7d\xd5\xc2.\xe1f8\xee\
-\x8f\x824A_\x80\xf6\xdb8\xc0\xd39\xb5\x91\x881 \xc6N#m\xe2\xb1X\x1e\x0d\
-@K\xb9JtW\x14\xa9\xf8SqCuKE\x947\x95D\xd1\xa6\xf8ItG\xa4\x83skP\xce\x0f\
-{\xcf\x0bK:\x90\xda\x88\xc40v>\xf6\xc8\x04`\x16\xa6\xb5\x82\xde\\zKjRu\xaa\
-\xfa\xd5=j\xa2\xeeV\x13\xd5}\x15\x01\xd1\x0e\xcf\x0e\xcf\x0c8\xbf\x9a\xa6
-,\x00\xbc\xf1\xff{\xe2\x963|1\xa7\x09\xe2\xe3dM\xc2\xa9\xa3%\xfa\x10\x08\
-\x90\xdf\x91\xd7S!\xc7O?\xd0\x0br\x0f@\xae]\xf1\x9b\xfb}\xf7\x10\x9a*\xb0\
-\x04\x87\xe1U\xec5:\xa1<\xae\xc4<q\xc2|\xf0F\xabx\x8fyk\x95\xf7\x94W\xd5\
-}(\xc6\xfe\xc0\xef\x90"\x814\x8d\x98\xdar,\xfft@\x85\xe5\xe4q\x99\x98\xb3\
-\x98\xbf\xf0\xa1p\xb3\xb2S\xf9\xab\xfa\xf1 1\xf2\xa4\xac\xf2\xdb\xf2:\x90\
-\xff\x18\xcb\xbe\x00\xf7\xb7q\xd8\xaf\xfc\xd1*%-Q\x80\xe2\x81\xa2\xd5\xa5\
-\x18\xa4\x06ivx\xdc\xf3\x88\xc0!X\x84\xfd9\x01\xfb\x95\x131v*\xc7;5\xff\
-JG\xf3?\x90fC_u\x0f\x11\x83~SuA9oKs]\x88\x89\xb9\x14s\xc7\xfe\x98\x81;;\
-\xed\x9b\xd5\x82\x1e\xc1F\xe5#e\xbb\x8b\xcc\xd8r^\x10<\x14\xac\x1f4\x99\
-\x9c\x8a\x09q\xa2\xbcp\xc2\x16\xb3\xa9)\xba\x14M\x8e\x89\x1c\xfc\xd3\xab\
-\xee\x95w\xca\xed\xd0\x8b\xeb\xe0\xbay\xf8Pc\xb9,%\x83{\x8f\x27>\xf1LL\xcd\
-\xb1\xc9J\xba$\xa9\x03\x93\x09\x82\xca>\xe5EY\xaf,O\xdc#\xd6A\xa2\xeb\xb0\
-\x8csp\xbb\x18\xd8d\xb9\x12\xe3c\x9f)\xf1\x06\xb3\x81\xf7\xa8\x1c\xbf\x8f\
-\x1f }(\xcd\x96\xf4J\x92E\xbd\xa2`A\x9f\xe03\xdc\xe7\x96\xe3K\xfd]Lk\x02\
-~
-\x8d\xe1j\xbbp.\xa7\x04G~\x1a\xcai\xf0\xb5\xb3\x14E\x96\xe3K|\x09\xf6\xd5\
-S\xbf2\xb8\x12c\xcbI\xcb C9/,\xab\x0f~I\xccG\xe6aJo\xe1\xa6:\x09\x93\xf6\
-\xc4\xb48{%9\xa7&\xc0\x92JqJ\x27\xa2\xe0tLf\x06\xae\xbd0\xa5\xb184b\x27\
-)\x1e\xd7bl\xaf\x09091
-\xcaQ\x92E\x892\x12,\xdd\x18\xa7\xcf\xeb\xe7~(\xfe\x030 Dt\xd9kk\xda\x00\
-\x00\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
+\x1f\xf3\xffa\x00\x00\x01\xcfIDAT8\xcb\xa5\xd3?h\x13\x01\x14\xc7\xf1\x97\
+\x92\x8b\xd6\x10MZ$\xbb\x88 \x8e\x82\xd4\xad\x8b\xd4\xead@\x1dt\x13\x15\
+\x14Z\x10\xc4\xbf\x98\xe2V\xc4A\x05%\x8e\xd5\x8a\xa0j\xac\xa21\x18:IB\
+\xc0\xd8\xa6E#\x88\xb5\xd7\xe4L1M\xca\x9d\xb9K\xee\xebp\xa1"J\x9b\xea\xf0\
+[\xde\xe3\xf7\x817<\x01\xe4\xb2\xe4\xd2\x8c*\x87\xea\x8f={\xff\x09\xa8\
+\xc7\x94\xfdV\xac\xdb\xb6\x12!j/\x94\x83+\x06\xac\x27\xbeY&\x1f`\xbf\x1f\
+\xc6\x1c\xf1\x16W\x044bm\xc7\xeb\x89\x10|\x18\x81\xdc0\xf5W\xbb0\x9f)\xfd\
+-\x03\xe6S_\x89\xeceR\xfd]\xa4\xfa\xb6a\xa7NS\x8b\xb6\xcf\xb5\x04X\xcf\xdd\
+\xe7\xac\xe4N\xc8\x0e\x10\xef\xe9 \xde\xd3\x01\xe9\xa3X\xaf\xbb\xa8\x8d\
+\xba/,\x0b\x18\xa3\x81y;{\x0c\xb2\x87\x19\xeb\xedd\xac\xb7\x132\xbb\xb1\
+S;0\x1e\xf9*K\x02F\xd45h&\xb7\xc2\xc4\x1e\xc8\x85H\xef\xdb@\xe6\xc0f\x98\
+\xe8\x86\xf1\xed\xd4\x92[\xd0\x1f\xba.\xfd\x1d\x88\x88\xb2p\xb5n\xbfU \
+#\xf0N\xf8tr=\xf9\x13\xeb \x270)\xd8\xe3\xab\xa8\xdc\xf3\xe8\xa4E\xf9\x03\
+\xa8\xderE\x8c\x97~\x98\x12\xc8\x0b|\x16\xf8"\xf0U`\xa6\x99i\xc1x\xe3\xa7\
+z\xdbu\xe3w`H\xbc\xe5\x9bkM;\xaf8\x85\x82\xc0\x9c\xa0\x86\xfd\xa8a?T\x05\
+\xe6\x9d\x99\xad\xb6S\x8e\xac1\x0bC\xe2]\x04\xcaW\xe5\xae\x1e\x0f:eM\xe0\
+\xbb\xc0\x82\xa0\x85\x03h\x03\x010\x04*\x0e@A\xd0\x13A\xcaW\xe4\xce"P<%\
+Zcj#\xa8AP\x05\x8a\x02\xa5f\xa1\xd4Dg\x9d\x13\x98\x0e\xd2\xf8\xb8\x09\xed\
+\xbc[\xfb\x05\x9cm\xbb\xfe\xed\xa2\xe7\xc7\xcc\x111Z\x89\xda\xe7\xd1\x0b\
+g\xe4\xda\xb2\xdf\xd8J~\x02\xf21\xd2V\x95\xc1N=\x00\x00\x00\x00IEND\xae\
+B`\x82'''
 
     ______img_icon_ico_chevron_up_png = b'''\
 \x89PNG\x0d
@@ -15615,13 +15618,10 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
 \x0c{\x80Lf \xd9\x00\xe2j3<\x01\x9b\x00\x82O\x80< \x10\x87\x9b!N\x8a\x19\
  \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
 
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_enzel_align/pnl_tab_enzel_align_xrc', bytearray(pnl_tab_enzel_align_xrc.encode('utf-8')))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_enzel_align/______img_icon_ico_enzel_z_align_png', bytearray(______img_icon_ico_enzel_z_align_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_enzel_align/______img_icon_ico_enzel_z_align_green_png', bytearray(______img_icon_ico_enzel_z_align_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_enzel_align/______img_icon_ico_enzel_sem_align_png', bytearray(______img_icon_ico_enzel_sem_align_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_enzel_align/______img_icon_ico_enzel_sem_align_green_png', bytearray(______img_icon_ico_enzel_sem_align_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_enzel_align/______img_icon_ico_enzel_flm_align_png', bytearray(______img_icon_ico_enzel_flm_align_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_enzel_align/______img_icon_ico_enzel_flm_align_green_png', bytearray(______img_icon_ico_enzel_flm_align_green_png))
-    wx.MemoryFSHandler.AddFile('XRC/pnl_tab_enzel_align/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
-    __res.Load('memory:XRC/pnl_tab_enzel_align/pnl_tab_enzel_align_xrc')
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_chamber/panel_tab_sparc_chamber_xrc', bytearray(panel_tab_sparc_chamber_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_chamber/______img_icon_ico_eject_png', bytearray(______img_icon_ico_eject_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_chamber/______img_icon_ico_eject_orange_png', bytearray(______img_icon_ico_eject_orange_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_chamber/______img_icon_dialog_warning_png', bytearray(______img_icon_dialog_warning_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_sparc_chamber/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
+    __res.Load('memory:XRC/panel_tab_sparc_chamber/panel_tab_sparc_chamber_xrc')
 
