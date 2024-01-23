@@ -27,13 +27,11 @@ of microscope images.
 
 """
 
-from .auto_center import AutoCenterController
 from .cryo_acq import CryoAcquiController
 from .cryo_z_localization import CryoZLocalizationController
 from .fastem_acq import (FastEMAcquiController, FastEMCalibrationController,
                          FastEMOverviewAcquiController, FastEMScintillatorCalibrationController)
-from .fine_align import FineAlignController
 from .overview_stream_acq import OverviewStreamAcquiController
 from .secom_acq import SecomAcquiController
-from .snap_shot import SnapshotController
+from .snapshot import SnapshotController
 from .sparc_acq import SparcAcquiController

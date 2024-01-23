@@ -33,8 +33,8 @@ from concurrent.futures._base import CancelledError
 
 import wx
 
-from odemis import model
 import odemis.gui.model as guimod
+from odemis import model
 from odemis.acq import align
 from odemis.gui.comp import popup
 from odemis.gui.comp.canvas import CAN_DRAG, CAN_FOCUS

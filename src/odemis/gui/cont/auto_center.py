@@ -46,9 +46,6 @@ class AutoCenterController(object):
     """
     Takes care of the auto centering button and process on the SECOM lens
     alignment tab.
-    Not an "acquisition" process per-se but actually very similar, the main
-    difference being that the result is not saved as a file, but directly
-    applied to the microscope
     """
 
     def __init__(self, tab_data, aligner_xy, tab_panel):
