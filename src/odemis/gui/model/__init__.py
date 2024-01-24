@@ -32,4 +32,4 @@ from .tab_gui_data import (MicroscopyGUIData, AcquisitionWindowData,
                            AnalysisGUIData, ActuatorGUIData, SecomAlignGUIData,
                            EnzelAlignGUIData, SparcAlignGUIData, Sparc2AlignGUIData,
                            FastEMAcquisitionGUIData, FastEMOverviewGUIData,
-                           FastEMProject)
+                           FastEMProject, CryoCorrelationGUIData)
