@@ -34,6 +34,7 @@ import msgpack_numpy
 import notify2
 import numpy
 import Pyro5.api
+import pkg_resources
 from Pyro5.errors import CommunicationError
 
 from odemis import model
@@ -1247,6 +1248,40 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.start_autostigmating_flash()
+
+    def start_autostig(self, n_images=17, sweep_range=0.015, dwell_time=3e-6, resolution=(1536, 1024),
+                       reduced_area_size=0.5, save_results=False, results_fp=None):
+        """
+        Preform the autostig routine for determining the optimal stigmator setting.
+        NOTE: will be available from xtadapter version 1.11.5 and higher.
+
+        Parameters
+        ----------
+        n_images : int, optional
+            Determines the number of images taken per stigmator axis, n_images+floor(n_images/2) images are taken
+            per axis. The default is 17.
+        sweep_range : float, optional
+            Sweep range, sweep is preformed from -sweep_range to sweep_range. The default is 0.015.
+        dwell_time : float, optional
+            Dwell time to use in seconds. The default is 3e-6.
+        resolution : Union[Size, Tuple[int, int]], optional
+            Resolution to use. The default is Size(width=1536, height=1024).
+        reduced_area_size : float, optional
+            Reduced area size to use. The default is 0.5.
+        save_results : bool, optional
+            Whether to save the results. The default is False.
+        results_fp : Optional[Union[Path, str]], optional
+            Folder to save the results in. If None, results will not be saved. The default is None.
+
+        Returns
+        -------
+        Position
+            Optimal stigmator setting.
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.start_autostig(n_images, sweep_range, dwell_time, resolution,
+                                              reduced_area_size, save_results, results_fp)
 
     def start_auto_lens_centering_flash(self):
         """
@@ -2679,12 +2714,19 @@ class MultiBeamScanner(Scanner):
     @isasync
     def applyAutoStigmator(self):
         """
-        Wrapper for autostigmation flash function, non-blocking.
+        Wrapper for autostigmation function, non-blocking.
         """
         est_start = time.time() + 0.1
         f = ProgressiveFuture(start=est_start,
-                              end=est_start + 20)  # Rough time estimation
-        f = self._executor.submitf(f, self.parent.start_autostigmating_flash)
+                              end=est_start + 90)  # Rough time estimation
+        adapter_version = re.search(r"xtadapter:\s*([\d.]+)", self.parent._swVersion)
+        adapter_version = adapter_version.group(1)
+        # The new autostig is only supported in xtadapter v1.11.5 and higher
+        if pkg_resources.parse_version(adapter_version) < pkg_resources.parse_version("1.11.5"):
+            logging.debug(f"Xtadapter version is {adapter_version}, therefore using an old autostigmation version.")
+            f = self._executor.submitf(f, self.parent.start_autostigmating_flash)
+        else:
+            f = self._executor.submitf(f, self.parent.start_autostig)
         return f
 
     def _updateSettings(self):
