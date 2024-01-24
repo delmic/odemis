@@ -171,12 +171,16 @@ def estimateMoveDuration(distance, speed, accel):
         return t1 + t2
 
 
-def isNearPosition(current_pos, target_position, axes):
+def isNearPosition(current_pos, target_position, axes, 
+                   atol_linear: float = None, 
+                   atol_rotation: float = None):
     """
     Check whether given axis is near stage target position
     :param current_pos: (dict) current position dict (axis -> value)
     :param target_position: (dict) target position dict (axis -> value)
     :param axes: (set) axes to compare values
+    :param atol_linear (float) tolerance for linear axes (optional)
+    :param atol_rotation (float) tolerance for rotation axes (optional)
     :return: True if the axis is near position, False otherwise
     :raises ValueError if axis is unknown
     """
@@ -184,15 +188,21 @@ def isNearPosition(current_pos, target_position, axes):
         logging.warning("Empty axes given.")
         return False
 
+    # use default tolerances if not given
+    if atol_linear is None:
+        atol_linear = ATOL_LINEAR_POS
+    if atol_rotation is None:
+        atol_rotation = ATOL_ROTATION_POS
+
     rot_axes = {axis for axis in axes if axis[0] == 'r'}
     linear_axes = {axis for axis in axes if axis not in rot_axes}
     for axis in axes:
         current_value = current_pos[axis]
         target_value = target_position[axis]
         if axis in linear_axes:
-            is_near = abs(target_value - current_value) < ATOL_LINEAR_POS
+            is_near = abs(target_value - current_value) < atol_linear
         elif axis in rot_axes:
-            is_near = util.rot_almost_equal(current_value, target_value, atol=ATOL_ROTATION_POS)
+            is_near = util.rot_almost_equal(current_value, target_value, atol=atol_rotation)
         else:
             raise ValueError("Unknown axis value %s." % axis)
         if not is_near:

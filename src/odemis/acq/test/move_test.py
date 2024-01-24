@@ -30,12 +30,13 @@ from odemis import model
 from odemis import util
 from odemis.acq.move import (FM_IMAGING, GRID_1, GRID_2,
                              LOADING, ALIGNMENT, COATING, MILLING, LOADING_PATH,
-                             RTOL_PROGRESS, SEM_IMAGING, UNKNOWN,
+                             RTOL_PROGRESS, SEM_IMAGING, UNKNOWN, POSITION_NAMES,
                              SAFETY_MARGIN_5DOF, SAFETY_MARGIN_3DOF, THREE_BEAMS, ROT_DIST_SCALING_FACTOR,
+                             ATOL_LINEAR_TRANSFORM, ATOL_ROTATION_TRANSFORM,
                              MimasPostureManager, MeteorPostureManager, EnzelPostureManager)
 from odemis.acq.move import MicroscopePostureManager
 from odemis.util import testing
-from odemis.util.driver import ATOL_LINEAR_POS
+from odemis.util.driver import ATOL_LINEAR_POS, isNearPosition
 
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
@@ -562,6 +563,36 @@ class TestMeteorTFS1Move(unittest.TestCase):
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(current_grid, None)
 
+    def test_transformFromSEMToMeteor(self):
+        
+        # previously, the transformFromSEMToMeteor function accepted positions without rz axes. 
+        # now, it checks compares the current and target rz axes for the required transformation.
+        # the function will now raise an error if both positions don't have rz axes.
+        # 
+        # the grid positions in the metadata of the stage component are defined without rz axes.
+        # and were previously used to check which grid the stage is in (in the flm) (_get_CurrentGridLabel). 
+        # if these are passed without adding the rz axes from the active sem pos, it should raise 
+        # an error
+
+        # assert that raises value error when no rz
+        stage_md = self.stage.getMetadata()
+        grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+        grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+        with self.assertRaises(ValueError):
+            self.posture_manager._transformFromSEMToMeteor(grid1_pos)
+        with self.assertRaises(ValueError):
+            self.posture_manager._transformFromSEMToMeteor(grid2_pos)
+
+        # assert that it doesn't raise error when rz is added
+        grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+        grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+
+        # check if no error is raised (test fails if error is raised)
+        try:
+            self.posture_manager._transformFromSEMToMeteor(grid1_pos)
+            self.posture_manager._transformFromSEMToMeteor(grid2_pos)
+        except Exception as e:
+            self.fail(f"_transformFromSEMToMeteor raised error when it shouldn't: {e}")
 
 class TestMeteorZeiss1Move(TestMeteorTFS1Move):
     """
@@ -938,6 +969,51 @@ class TestGetDifferenceFunction(unittest.TestCase):
         self.assertAlmostEqual(progress_end, 1)
 
         assert progress_0 < progress_1 < progress_2 < progress_3 < progress_end
+
+class TestMoveUtil(unittest.TestCase):
+    """
+    This class is to test movement utilities in the move module
+    """
+
+    def test_isNearPosition(self):
+        """
+        Test isNearPosition function behaves as expected
+        """
+
+
+        # negative tests (not near)
+        start = {'x': 0.023, 'y': 0.032, 'z': 0.01, "rx": 0, "rz": 0}
+        end = {'x': 0.024, 'y': 0.033, 'z': 0.015, "rx": 0.12213888553625313  , "rz":  5.06145}
+    
+        self.assertFalse(isNearPosition(start, end, {'x'}))
+        self.assertFalse(isNearPosition(start, end, {'y'}))    
+        self.assertFalse(isNearPosition(start, end, {'z'}))
+        self.assertFalse(isNearPosition(start, end, {'rx'}))
+        self.assertFalse(isNearPosition(start, end, {'rz'}))
+        
+        # positive tests (is near)
+        start = {'x': 0.023, 'y': 0.32, 'z': 0.01, "rx": 0, "rz": 0}
+        end = {'x': 0.023+0.09e-6, 'y': 0.32+0.09e-6, 'z': 0.01, "rx": 0+0.5e-3, "rz": 0+0.5e-3}
+        
+        self.assertTrue(isNearPosition(start, end, {'x'}))
+        self.assertTrue(isNearPosition(start, end, {'y'}))    
+        self.assertTrue(isNearPosition(start, end, {'z'}))
+        self.assertTrue(isNearPosition(start, end, {'rx'}))
+        self.assertTrue(isNearPosition(start, end, {'rz'}))
+
+        # test user defined tolerance
+        start = {'x': 20e-6, 'y': 0.032, 'z': 0.01, "rx": 0, "rz": 5.043996}
+        end = {'x': 22e-6, 'y': 0.06, 'z': 0.015, "rx": 0.12213888553625313  , "rz": 5.06145}
+        
+        # true
+        self.assertTrue(isNearPosition(start, end, {'x', 'rz'}, 
+                                       atol_linear=ATOL_LINEAR_TRANSFORM,
+                                       atol_rotation=ATOL_ROTATION_TRANSFORM))
+
+        # false
+        self.assertFalse(isNearPosition(start, end, {'y', 'rx'}, 
+                                        atol_linear=ATOL_LINEAR_TRANSFORM,
+                                        atol_rotation=ATOL_ROTATION_TRANSFORM))
 
 
 if __name__ == "__main__":
