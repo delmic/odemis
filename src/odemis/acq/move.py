@@ -61,6 +61,10 @@ ROT_DIST_SCALING_FACTOR = 0.06  # m/rad, 1° ~ 1mm
 SAFETY_MARGIN_5DOF = 100e-6  # m
 SAFETY_MARGIN_3DOF = 200e-6  # m
 
+# Tolerance for the difference between the current position and the target position
+# these should only be used for TFS1MeteorPostureManager _transformFromSEMToMeteor / _transformFromMeteorToSEM
+ATOL_ROTATION_TRANSFORM = 0.04   # rad ~2.5 deg
+ATOL_LINEAR_TRANSFORM = 5e-6    # 5 um
 
 class MicroscopePostureManager:
     def __new__(cls, microscope):
@@ -404,6 +408,13 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             distance_to_grid2 = self._getDistance(current_pos, grid2_pos)
             return GRID_2 if distance_to_grid1 > distance_to_grid2 else GRID_1
         elif current_pos_label == FM_IMAGING:
+            # add rx, rz from sem fav position, as grid positions do not have rx, rz
+            # rz is now required to calculate transform in _transformFromSEMToMeteor
+            # TODO: add this outside the if statement, after confirming behaviour is the same @patrick
+            sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE] # only rx, rz
+            grid1_pos.update(sem_pos_active)   # x, y, z, rx, rz
+            grid2_pos.update(sem_pos_active)   # x, y, z, rx, rz
+
             distance_to_grid1 = self._getDistance(current_pos, self._transformFromSEMToMeteor(grid1_pos))
             distance_to_grid2 = self._getDistance(current_pos, self._transformFromSEMToMeteor(grid2_pos))
             return GRID_1 if distance_to_grid2 > distance_to_grid1 else GRID_2
@@ -429,9 +440,35 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
         fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
-        transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
-        transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
+
+        # check if the stage positions have rz axes
+        if not ("rz" in pos and"rz" in fm_pos_active):
+            raise ValueError(f"The stage position does not have rz axis pos={pos}, fm_pos_active={fm_pos_active}")
+        
+        # whether we need to rotate around the z axis (180deg)
+        has_rz = not isNearPosition(pos, fm_pos_active, {"rz"}, 
+                                    atol_rotation=ATOL_ROTATION_TRANSFORM) 
+
+        # NOTE: 
+        # if we are rotating around the z axis (180deg), we need to flip the x and y axes
+        # if we are not rotating around the z axis, we we only need to translate the x and y axes
+        # For the rotation case: pos_cor calibration data is multipled by 2x due to historical reasons
+        # it is the radius of rotation -> we need the diameter, therefore 2x
+        # TODO: remove the 2x multiplication when the calibration data is updated
+        if has_rz:
+            transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
+            transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
+        else:
+            transformed_pos["x"] = pos["x"] + pos_cor[0]
+            transformed_pos["y"] = pos["y"] + pos_cor[1]
+        
         transformed_pos.update(fm_pos_active)
+
+        # check if the transformed position is within the FM imaging range
+        if not isInRange(transformed_pos, stage_md[model.MD_FM_IMAGING_RANGE], {'x', 'y'}):
+            # only log warning, because transforms are used to get current position too
+            logging.warning(f"Transformed position {transformed_pos} is outside FM imaging range")
+        
         return transformed_pos
 
     # Note: this transformation also consists of translation and rotation.
@@ -451,9 +488,35 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
         sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
-        transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
-        transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
+
+        # check if the stage positions have rz axes
+        if not ("rz" in pos and"rz" in sem_pos_active):
+            raise ValueError(f"The stage position does not have rz axis. pos={pos}, sem_pos_active={sem_pos_active}")
+        
+        # whether we need to rotate around the z axis (180deg)
+        has_rz = not isNearPosition(pos, sem_pos_active, {"rz"}, 
+                                    atol_rotation=ATOL_ROTATION_TRANSFORM)   
+
+        # NOTE: 
+        # if we are rotating around the z axis (180deg), we need to flip the x and y axes
+        # if we are not rotating around the z axis, we we only need to translate the x and y axes
+        # For the rotation case: pos_cor calibration data is multipled by 2x due to historical reasons
+        # it is the radius of rotation -> we need the diameter, therefore 2x
+        # TODO: remove the 2x multiplication when the calibration data is updated
+        if has_rz:
+            transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
+            transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
+        else:
+            transformed_pos["x"] = pos["x"] - pos_cor[0]
+            transformed_pos["y"] = pos["y"] - pos_cor[1]
+
         transformed_pos.update(sem_pos_active)
+
+        # check if the transformed position is within the SEM imaging range
+        if not isInRange(transformed_pos, stage_md[model.MD_SEM_IMAGING_RANGE], {'x', 'y'}):
+            # only log warning, because transforms are used to get current position too
+            logging.warning(f"Transformed position {transformed_pos} is outside SEM imaging range")
+
         return transformed_pos
 
     def _doCryoSwitchSamplePosition(self, future, target):
