@@ -38,7 +38,7 @@ import odemis.gui.model as guimod
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.stream import EMStream
 from odemis.gui.comp.viewport import FastEMOverviewViewport
-from odemis.gui.cont import fastem_acq
+from odemis.gui.cont.acquisition import FastEMOverviewAcquiController
 from odemis.gui.model import TOOL_ACT_ZOOM_FIT
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.cont.tabs.tab import Tab
@@ -133,7 +133,7 @@ class FastEMOverviewTab(Tab):
         self.tab_data.is_calibrating.subscribe(self._on_is_acquiring)  # enable/disable button if calibrating
 
         # Acquisition controller
-        self._acquisition_controller = fastem_acq.FastEMOverviewAcquiController(
+        self._acquisition_controller = FastEMOverviewAcquiController(
             self.tab_data,
             panel,
         )

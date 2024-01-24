@@ -32,7 +32,6 @@ import wx
 
 from odemis import model
 import odemis.acq.stream as acqstream
-import odemis.gui.cont.acquisition as acqcont
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
@@ -42,6 +41,8 @@ from odemis.gui.comp.canvas import CAN_ZOOM
 from odemis.gui.comp.scalewindow import ScaleWindow
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.actuators import ActuatorController
+from odemis.gui.cont.auto_center import AutoCenterController
+from odemis.gui.cont.fine_align import FineAlignController
 from odemis.gui.cont.streams import StreamController
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.model import TOOL_SPOT, TOOL_NONE, TOOL_DICHO
@@ -260,13 +261,13 @@ class SecomAlignTab(Tab):
             # For Fine alignment, the procedure might need to be completely reviewed
             # For auto centering, it's mostly a matter of updating align.AlignSpot()
             # to know about scanners.
-            self._fa_controller = acqcont.FineAlignController(self.tab_data_model,
+            self._fa_controller = FineAlignController(self.tab_data_model,
                                                               panel,
                                                               main_frame)
 
-            self._ac_controller = acqcont.AutoCenterController(self.tab_data_model,
-                                                               self._aligner_xy,
-                                                               panel)
+            self._ac_controller = AutoCenterController(self.tab_data_model,
+                                                       self._aligner_xy,
+                                                       panel)
 
         # Documentation text on the left panel
         # TODO: need different instructions in case of confocal microscope

@@ -36,7 +36,9 @@ import odemis.gui.model as guimod
 from odemis.acq.stream import EMStream
 from odemis.gui.comp.viewport import FastEMAcquisitionViewport
 from odemis.gui.conf.data import get_hw_config
-from odemis.gui.cont import settings, fastem_acq, project
+from odemis.gui.cont import settings, project
+from odemis.gui.cont.acquisition import (FastEMAcquiController, FastEMCalibrationController,
+                                         FastEMScintillatorCalibrationController)
 from odemis.gui.cont.tabs.tab import Tab
 
 
@@ -132,15 +134,15 @@ class FastEMAcquisitionTab(Tab):
 
         for name, calibration in self.tab_data_model.calibrations.items():
             if name == CALIBRATION_1:
-                calibration.controller = fastem_acq.FastEMCalibrationController(
+                calibration.controller = FastEMCalibrationController(
                                             self.tab_data_model,
                                             calibration
                                             )
             elif name in (CALIBRATION_2, CALIBRATION_3):
                 calibration.regions_controller = project \
                     .FastEMCalibrationRegionsController(self.tab_data_model, vp, calibration)
-                calibration.controller = fastem_acq \
-                    .FastEMScintillatorCalibrationController(self.tab_data_model, calibration)
+                calibration.controller = FastEMScintillatorCalibrationController(self.tab_data_model,
+                                                                                 calibration)
 
         # Controller for acquisition settings panel
         self._acq_settings_controller = settings.SettingsController(
@@ -159,7 +161,7 @@ class FastEMAcquisitionTab(Tab):
         )
 
         # Acquisition controller
-        self._acquisition_controller = fastem_acq.FastEMAcquiController(
+        self._acquisition_controller = FastEMAcquiController(
             tab_data,
             panel,
         )
