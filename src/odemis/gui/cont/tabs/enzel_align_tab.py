@@ -36,13 +36,13 @@ from odemis.gui.util.wx_adapter import fix_static_text_clipping
 
 from odemis import model
 import odemis.acq.stream as acqstream
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import EnzelAlignmentStreamsBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
 from odemis.acq.move import ALIGNMENT, THREE_BEAMS
 from odemis.gui.conf.data import get_local_vas
-from odemis.gui.cont.streams import StreamController
+from odemis.gui.cont.stream import StreamController
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import VigilantAttributeConnector
@@ -149,7 +149,7 @@ class EnzelAlignTab(Tab):
                                       "stream"  : self._opt_stream}
 
         # Create scheduler/stream bar controller
-        self.stream_bar_controller = streamcont.EnzelAlignmentStreamsBarController(self.tab_data_model)
+        self.stream_bar_controller = EnzelAlignmentStreamsBarController(self.tab_data_model)
 
         self._z_move_future = None  # Future attribute for the alignment stage moves
         self._flm_move_future = None  # Future attirbute for the alignment stage moves

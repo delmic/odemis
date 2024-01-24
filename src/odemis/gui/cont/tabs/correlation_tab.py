@@ -35,7 +35,7 @@ from odemis import dataio
 from odemis import model
 import odemis.gui
 import odemis.gui.cont.export as exportcont
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
@@ -88,7 +88,7 @@ class CorrelationTab(Tab):
         )
 
         # stream bar controller 
-        self._streambar_controller = streamcont.StreamBarController(
+        self._streambar_controller = StreamBarController(
             tab_data,
             panel.pnl_correlation_streams,
             static=True,

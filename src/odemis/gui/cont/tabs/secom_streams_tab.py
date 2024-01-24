@@ -32,7 +32,7 @@ import wx
 from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import SecomStreamsController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.acq.align import AutoFocus
@@ -176,7 +176,7 @@ class SecomStreamsTab(Tab):
             tab_data
         )
 
-        self._streambar_controller = streamcont.SecomStreamsController(
+        self._streambar_controller = SecomStreamsController(
             tab_data,
             panel.pnl_secom_streams,
             view_ctrl=self.view_controller

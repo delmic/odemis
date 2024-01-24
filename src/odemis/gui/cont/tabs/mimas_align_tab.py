@@ -34,7 +34,7 @@ from odemis.model import BAND_PASS_THROUGH, InstantaneousFuture
 
 from odemis import model
 import odemis.acq.stream as acqstream
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 import odemis.gui.util as guiutil
@@ -118,7 +118,7 @@ class MimasAlignTab(Tab):
         self._opt_stream.emission.value = em
 
         # Create scheduler/stream bar controller
-        self._streambar_controller = streamcont.StreamBarController(self.tab_data_model, panel.pnl_streams)
+        self._streambar_controller = StreamBarController(self.tab_data_model, panel.pnl_streams)
 
         self._opt_spe = self._streambar_controller.addStream(self._opt_stream)
         # remove the "remove" button and "eye" button

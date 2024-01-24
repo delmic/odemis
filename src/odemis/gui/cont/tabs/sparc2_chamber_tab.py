@@ -31,7 +31,7 @@ import wx
 
 from odemis import model
 import odemis.acq.stream as acqstream
-import odemis.gui.cont.streams as streamcont
+from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.gui.conf.data import get_local_vas
@@ -68,7 +68,7 @@ class ChamberTab(Tab):
         self._update_mirror_status()
 
         # Create stream & view
-        self._stream_controller = streamcont.StreamBarController(
+        self._stream_controller = StreamBarController(
             tab_data,
             panel.pnl_streams,
             locked=True

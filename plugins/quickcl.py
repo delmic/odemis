@@ -33,7 +33,7 @@ from odemis.gui.comp import canvas
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.conf.data import get_local_vas, get_stream_settings_config
 from odemis.gui.cont.settings import SettingsController
-from odemis.gui.cont.streams import StreamBarController
+from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.model import ContentView, MicroscopyGUIData
 from odemis.gui.plugin import Plugin, AcquisitionDialog
