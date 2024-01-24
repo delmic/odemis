@@ -23,13 +23,14 @@ This file is part of Odemis.
 
 from ._constants import *
 from .file_info import FileInfo
-from .main_gui_data import MainGUIData, CryoMainGUIData, FastEMMainGUIData
-from .stream_view import (View, StreamView, MicroscopeView, ContentView,
-                          FixedOverviewView, FeatureView, FeatureOverviewView)
-from .tab_gui_data import (MicroscopyGUIData, AcquisitionWindowData,
-                           LiveViewGUIData, CryoGUIData, CryoLocalizationGUIData,
-                           SparcAcquisitionGUIData, ChamberGUIData, CryoChamberGUIData,
-                           AnalysisGUIData, ActuatorGUIData, SecomAlignGUIData,
-                           EnzelAlignGUIData, SparcAlignGUIData, Sparc2AlignGUIData,
+from .main_gui_data import CryoMainGUIData, FastEMMainGUIData, MainGUIData
+from .stream_view import (ContentView, FeatureOverviewView, FeatureView,
+                          FixedOverviewView, MicroscopeView, StreamView, View)
+from .tab_gui_data import (AcquisitionWindowData, ActuatorGUIData,
+                           AnalysisGUIData, ChamberGUIData, CryoChamberGUIData,
+                           CryoCorrelationGUIData, CryoGUIData,
+                           CryoLocalizationGUIData, EnzelAlignGUIData,
                            FastEMAcquisitionGUIData, FastEMOverviewGUIData,
-                           FastEMProject, CryoCorrelationGUIData)
+                           FastEMProject, LiveViewGUIData, MicroscopyGUIData,
+                           SecomAlignGUIData, Sparc2AlignGUIData,
+                           SparcAcquisitionGUIData, SparcAlignGUIData)
