@@ -123,9 +123,10 @@ class CorrelationController(object):
     def _reset_stream_correlation_data(self, s: StaticStream) -> None:
         """reset the stream position to the original position / rotation / scale
         :param s: (StaticStream) the stream to reset"""
-        s.raw[0].metadata[model.MD_POS_COR] = (0, 0)
-        s.raw[0].metadata[model.MD_ROTATION_COR] = 0
-        s.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = (1, 1)       
+        if s.raw:
+            s.raw[0].metadata[model.MD_POS_COR] = (0, 0)
+            s.raw[0].metadata[model.MD_ROTATION_COR] = 0
+            s.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = (1, 1)
 
     def add_streams(self, streams: list) -> None:
         """add streams to the correlation tab
