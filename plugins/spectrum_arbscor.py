@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 16 Jan 2024
 
 @author: Éric Piel
@@ -20,43 +20,39 @@ Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not,
 see http://www.gnu.org/licenses/.
-'''
+"""
 import functools
 import logging
-from collections import OrderedDict
-from typing import Any, Dict, Tuple, List
+from typing import Tuple, List
 
 import numpy
 
-import odemis
-import odemis.gui.conf.util as confutil
-import odemis.gui.conf.data as confdata
-import odemis.gui.model
-from odemis import model
-from odemis.acq.stream import SEMCCDMDStream, PolarizedCCDSettingsStream, TemporalSpectrumStream, SEMSpectrumMDStream, \
-    SpectrumSettingsStream
+from odemis.acq.stream import SEMSpectrumMDStream, SpectrumSettingsStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.plugin import Plugin
-from odemis.model import MD_DESCRIPTION, MD_DIMS, MD_PIXEL_SIZE, MD_POS, MD_ROTATION, MD_ROTATION_COR, MD_WL_LIST
 
+# This plugin provides a new type of SpectrumStream. The implementation actually uses the
+# standard SpectrumSettingsStream, and only needs to provide a dedicated MDStream that overrides
+# the standard SEMSpectrumMDStream. It changes the e-beam position for each pixel.
 
-# Use a normal settings stream for the spectrum, but a dedicated MDStream that changes the e-beam
-# scan order.
 
 class SEMSpectrumArbitraryOrderMDStream(SEMSpectrumMDStream):
     """
-    Same as Spectrum stream, but different scan order.
+    Same as Spectrum stream, but different scan order. The idea is that for some samples it might
+    be better to not immediately scan the pixel adjacent to each other as there can be physical
+    interaction. So instead, scan pixels in a different time order.
+    The actual scan order is to be selected by modifying ._get_scan_order() (and making it
+    call a different function that one of the two examples).
     """
 
-    def _checkboard_scan_order(self, rep: Tuple[int, int]) -> List[Tuple[int, int]]:
+    def _checkerboard_scan_order(self, rep: Tuple[int, int]) -> List[Tuple[int, int]]:
         """
         First scan every odd pixel, and then every even pixel. Like first scanning the white
-        squares of a checkboard, and then the black squares.
+        squares of a checkerboard, and then the black squares.
         Example:
         192.3.4.
         .5.6.7.8
-        :param rep:
-        :return:
+        See _get_scan_order() for the parameter documentation
         """
         order = []
         # Add odd pixels
@@ -73,7 +69,7 @@ class SEMSpectrumArbitraryOrderMDStream(SEMSpectrumMDStream):
 
         return order
 
-    def _33_scan_order(self, rep: Tuple[int, int]) -> List[Tuple[int, int]]:
+    def _3x3_scan_order(self, rep: Tuple[int, int]) -> List[Tuple[int, int]]:
         """
         Scan every 3 pixels, and then restart, but from a shift in the 3x3 initial point:
         Example:
@@ -81,8 +77,7 @@ class SEMSpectrumArbitraryOrderMDStream(SEMSpectrumMDStream):
         ......
         ......
         37.48.
-        :param rep:
-        :return:
+        See _get_scan_order() for the parameter documentation
         """
         order = []
         # 3x3 base
@@ -101,8 +96,10 @@ class SEMSpectrumArbitraryOrderMDStream(SEMSpectrumMDStream):
         :param rep: x,y number of pixels to scan
         :return: list of positions (x, y) as indices to scan, in the scan order
         """
-        #return self._checkboard_scan_order(rep)
-        return self._33_scan_order(rep)
+        # Modify this function to call whichever function computes the scan order of your liking
+
+        # return self._checkerboard_scan_order(rep)
+        return self._3x3_scan_order(rep)
 
     def _getSpotPositions(self):
         """
@@ -118,15 +115,16 @@ class SEMSpectrumArbitraryOrderMDStream(SEMSpectrumMDStream):
         width = (roi[2] - roi[0], roi[3] - roi[1])
 
         # Take into account the "border" around each pixel
-        pxs = (width[0] / rep[0], width[1] / rep[1])
-        lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2)
+        pxs_rel = (width[0] / rep[0], width[1] / rep[1])
+        lim = (roi[0] + pxs_rel[0] / 2, roi[1] + pxs_rel[1] / 2)
 
         shape = self._emitter.shape
         # convert into SEM translation coordinates: distance in px from center
         # (situated at 0.5, 0.5), can be floats
         pos00 = (shape[0] * (lim[0] - 0.5), shape[1] * (lim[1] - 0.5))
+        pxs_sem = shape[0] * pxs_rel[0], shape[1] * pxs_rel[1]
         logging.debug("Generating points from %s with pxs %s, from rep %s and roi %s",
-                      pos00, pxs, rep, roi)
+                      pos00, pxs_sem, rep, roi)
 
         pos = numpy.empty((rep[1], rep[0], 2), dtype=float)
         order = self._get_scan_order(rep)
@@ -135,28 +133,29 @@ class SEMSpectrumArbitraryOrderMDStream(SEMSpectrumMDStream):
 
         raw_order = numpy.ndindex(*rep[::-1])
         for raw_idx, px_idx in zip(raw_order, order):
-            beam_pos = (pos00[0] + px_idx[0] * pxs[0],
-                        pos00[1] + px_idx[1] * pxs[1],)
+            beam_pos = (pos00[0] + px_idx[0] * pxs_sem[0],
+                        pos00[1] + px_idx[1] * pxs_sem[1],)
             pos[raw_idx] = beam_pos
 
         logging.debug("Will acquire at beam pos: %s", pos)
         return pos
 
-    def _assembleLiveData(self, n, raw_data, px_idx, rep, pol_idx):
+    def _assembleLiveData(self, n: int, raw_data: "DataArray",
+                          px_idx: Tuple[int, int], rep: Tuple[int, int], pol_idx: int):
         """
+        Wrapper for _assembleLiveData() to convert back the standard px_idx (eg, (0,0), (0,1), (0,2)...)
+        into the index that was actually scanned at that moment.
         :param px_idx: y, x position
-        :param rep: x, y number of points in teh scan
+        :param rep: x, y number of points in the scan
+        For other parameters, see MultipleDetectorStream._assembleLiveData()
         """
-        # px_idx
         px_idx_flat = px_idx[0] * rep[0] + px_idx[1]
         act_px_idx = self._px_order[px_idx_flat][::-1]
         logging.debug("Converted back idx %s to %s", px_idx, act_px_idx)
         return super()._assembleLiveData(n, raw_data, act_px_idx, rep, pol_idx)
 
 
-
-
-class SpectrumArbScOrPlugin(Plugin):
+class SpectrumArbitraryScanOrderPlugin(Plugin):
     name = "Spectrum acquisition in arbitrary scan order"
     __version__ = "1.0"
     __author__ = u"Éric Piel"
@@ -164,7 +163,7 @@ class SpectrumArbScOrPlugin(Plugin):
 
     def __init__(self, microscope, main_app):
         super().__init__(microscope, main_app)
-        # Can only be used with a SPARC with spetrometer and CCD camera
+        # Can only be used with a SPARC with spectrometer and CCD camera
         main_data = self.main_app.main_data
         if not (microscope and main_data.role.startswith("sparc") and main_data.spectrometers):
             logging.info("%s plugin cannot load as the microscope is not a SPARC with spectrometer",
@@ -184,8 +183,8 @@ class SpectrumArbScOrPlugin(Plugin):
     def add_stream(self, name: str, detector: "Detector"):
         """
         Create a new spectrum stream and MDStream.
-        :param name:
-        :param detector: the spectrometer () to use
+        :param name: Name of the new stream to be created
+        :param detector: The spectrometer to use
         """
         # Mostly a copy of odemis.gui.cont.streams.SparcStreamsController.addSpectrum()
         main_data = self.main_app.main_data
