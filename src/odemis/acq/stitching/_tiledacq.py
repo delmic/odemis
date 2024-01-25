@@ -33,7 +33,8 @@ from scipy.spatial import Delaunay
 
 from odemis import model, dataio
 from odemis.acq import acqmng
-from odemis.acq.align.autofocus import MeasureOpticalFocus, AutoFocus, MeasureSpotsFocus, MTD_EXHAUSTIVE
+from odemis.acq.align.autofocus import AutoFocus, MTD_EXHAUSTIVE
+from odemis.util.focus import MeasureOpticalFocus
 from odemis.acq.align.roi_autofocus import autofocus_in_roi, estimate_autofocus_in_roi_time
 from odemis.acq.stitching._constants import WEAVER_MEAN, REGISTER_IDENTITY, REGISTER_GLOBAL_SHIFT
 from odemis.acq.stitching._simple import register, weave
