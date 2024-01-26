@@ -3,6 +3,7 @@ import logging
 import wx
 
 from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_DEACTIVE, save_features, FEATURE_POLISHED
+from odemis.acq.move import UNKNOWN, SEM_IMAGING, FM_IMAGING, POSITION_NAMES
 from odemis.gui.model import TOOL_FEATURE
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.gui.util import call_in_wx_main
@@ -87,9 +88,29 @@ class CryoFeatureController(object):
         if not feature:
             return
         pos = feature.pos.value
+
+        # get current position
+        pm = self._tab_data_model.main.posture_manager
+        current_label = pm.getCurrentPostureLabel()
+        logging.debug(f"Current posture: {POSITION_NAMES[current_label]}")
+
+        if current_label != FM_IMAGING: # TODO: @patrick remove this once SEM move is supported 
+            self._display_go_to_feature_warning()
+            logging.warning(f"Currently under {POSITION_NAMES[current_label]}, moving to feature position is not yet supported.")
+            return 
+        
+        # move to feature position
         logging.info(f"Moving to position: {pos}")
         self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1]})
         self._main_data_model.focus.moveAbs({'z': pos[2]})
+    
+    def _display_go_to_feature_warning(self) -> bool:
+        box = wx.MessageDialog(self._tab.main_frame, 
+                            message="The stage is currently in the SEM imaging position. Please move to the FM imaging position first.",
+                            caption="Unable to Move", style=wx.OK | wx.ICON_WARNING| wx.CENTER)
+        box.SetOKLabel("OK")
+        ans = box.ShowModal()  # Waits for the window to be closed
+        return ans == wx.ID_OK    
 
     def _enable_feature_ctrls(self, enable: bool):
         """
