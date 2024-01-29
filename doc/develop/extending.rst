@@ -633,18 +633,22 @@ libraries.
 To edit the interface, you could use XRCed (but it only works with wxPython3).
 Launch it by typing this (from ``~/development/odemis``)::
 
-    PYTHONPATH=./src/ ./util/launch_xrced.py src/odemis/gui/main.xrc
+    PYTHONPATH=./src/ ./util/launch_xrced.py [path_to_xrc_file]
 
-When saving the file, main_xrc.py will automatically be updated too.
-Alternatively, you can just regenerate the ``.py`` file from a ``.xrc`` file with
-this command::
+Alternatively, you can just regenerate the ``.py`` file from a ``.xrc``.To 
+generate ``main_xrc.py`` from all ``.xrc`` files under ``src/odemis/gui/xmlh/
+resources`` use the following command::
 
-    ./util/generate_xrc.py src/odemis/gui/main.xrc
+    ./src/odemis/gui/xmlh/generate_xrc.py
+
+To generate a specific ``.py`` from a ``.xrc`` use the following command::
+
+    ./src/odemis/gui/xmlh/generate_xrc.py [path_to_xrc_file]
 
 Note that on Ubuntu 18.04 this call does not work with python3, therefore you
 will need to explicitly call this with python2::
 
-    python2 ./util/generate_xrc.py src/odemis/gui/main.xrc
+    python2 ./src/odemis/gui/xmlh/generate_xrc.py
 
 
 If you add/modify an image (used as a GUI element, not a microscope acquisition),
