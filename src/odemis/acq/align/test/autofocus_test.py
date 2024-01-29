@@ -23,11 +23,12 @@ from concurrent.futures._base import CancelledError
 import logging
 
 import numpy
+
+import odemis.util.focus
 from odemis.dataio import tiff
 from odemis import model, acq
 import odemis
 from odemis.acq import align, stream
-from odemis.acq.align import autofocus
 from odemis.acq.align.autofocus import Sparc2AutoFocus, MTD_BINARY
 from odemis.dataio import hdf5
 from odemis.util import testing, timeout, img
@@ -103,10 +104,10 @@ class TestAutofocus(unittest.TestCase):
         data[0].shape = Y, X
         input = data[0]
 
-        prev_res = autofocus.MeasureSEMFocus(input)
+        prev_res = odemis.util.focus.MeasureSEMFocus(input)
         for i in range(1, 10, 1):
             blur = ndimage.gaussian_filter(input, sigma=i)
-            res = autofocus.MeasureSEMFocus(blur)
+            res = odemis.util.focus.MeasureSEMFocus(blur)
             self.assertGreater(prev_res, res)
             prev_res = res
 
