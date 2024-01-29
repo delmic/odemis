@@ -1,7 +1,7 @@
 import logging
 
 import wx
-
+from odemis import model 
 from odemis.acq.feature import FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_DEACTIVE, save_features, FEATURE_POLISHED
 from odemis.acq.move import UNKNOWN, SEM_IMAGING, FM_IMAGING, POSITION_NAMES
 from odemis.gui.model import TOOL_FEATURE
@@ -94,15 +94,40 @@ class CryoFeatureController(object):
         current_label = pm.getCurrentPostureLabel()
         logging.debug(f"Current posture: {POSITION_NAMES[current_label]}")
 
-        if current_label != FM_IMAGING: # TODO: @patrick remove this once SEM move is supported 
+        if current_label not in  [SEM_IMAGING, FM_IMAGING]:
             self._display_go_to_feature_warning()
             logging.warning(f"Currently under {POSITION_NAMES[current_label]}, moving to feature position is not yet supported.")
             return 
         
-        # move to feature position
-        logging.info(f"Moving to position: {pos}")
-        self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1]})
-        self._main_data_model.focus.moveAbs({'z': pos[2]})
+        if current_label == SEM_IMAGING:
+            logging.warning("Currently under SEM, moving to feature position anyway.")
+            
+            # get flm position
+            stage_md = pm.stage.getMetadata()
+            fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
+
+            ## TODO: this needs a z position? -> wait until raw z u
+            pos = {'x': pos[0], 'y': pos[1], "z": pos[2],  "rx": fm_pos_active["rx"], 
+                   "rz": fm_pos_active["rz"]}
+
+            # move:
+            # SEM -> METEOR
+            # METEOR -> FEATURE
+            # FEATURE -> SEM (if under SEM)
+            # if under sem move to translated position
+            sem_pos = pm._transformFromMeteorToSEM(pos)
+            logging.info(f"Moving to position: {sem_pos}")
+
+            # move to feature position
+            pm.cryoSwitchSamplePosition(target=current_label, target_pos=sem_pos)
+        elif current_label == FM_IMAGING:
+            # move to feature position # TODO: update this once SEM move is supported
+            logging.info(f"Moving to position: {pos}")
+            self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1]})
+            self._main_data_model.focus.moveAbs({'z': pos[2]})
+        else:
+            logging.error(f"Unknown position: {current_label}")
+
     
     def _display_go_to_feature_warning(self) -> bool:
         box = wx.MessageDialog(self._tab.main_frame, 
