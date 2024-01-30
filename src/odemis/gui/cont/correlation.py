@@ -32,8 +32,9 @@ import wx.html
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.stream import StaticStream
+from odemis.acq.stream import StaticStream, StaticFluoStream, StaticSEMStream
 from odemis.gui.util import call_in_wx_main
+from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 
 # TODO: move to more approprate location
 def update_image_in_views(s: StaticStream, views: list) -> None:
@@ -70,9 +71,22 @@ class CorrelationController(object):
         # disable if no streams are present
         self._tab_data_model.streams.subscribe(self._on_correlation_streams_change, init=True)
         self._tab_data_model.streams.subscribe(self._update_correlation_cmb, init=True)
+        self._tab_data_model.streams.subscribe(self.add_to_localization_tab, init=False)
 
         # connect the correlation streams to the tab data
         self._panel.cmb_correlation_stream.Bind(wx.EVT_COMBOBOX, self._on_selected_stream_change)
+
+        # reference frames
+        self.ref_frame_names = ["METEOR", "FIBSEM", "No Reference"] # for display purposes
+        self.ref_stream_map = {0: StaticFluoStream,  # METEOR
+                               1: StaticSEMStream,  # FIBSEM
+                               2: type(None)} # match everything except None (No reference type)
+        self.ref_stream = self.ref_stream_map[0]
+
+        # connect the reference stream to the tab data
+        self._panel.cmb_correlation_reference.Append(self.ref_frame_names)
+        self._panel.cmb_correlation_reference.SetSelection(0)
+        self._panel.cmb_correlation_reference.Bind(wx.EVT_COMBOBOX, self._on_reference_stream_change)
 
         # reset correlation data
         self._panel.btn_reset_correlation.Bind(wx.EVT_BUTTON, self.reset_correlation_pressed)
@@ -85,6 +99,9 @@ class CorrelationController(object):
             vp.canvas.Bind(wx.EVT_CHAR, self.on_char)
             vp.canvas.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down)
     
+        # localization tab 
+        self.localization_tab: LocalizationTab = None
+
     @call_in_wx_main
     def _update_correlation_cmb(self, streams: list) -> None:
         """update the correlation combo box with the available streams
@@ -92,6 +109,8 @@ class CorrelationController(object):
         # keep the combobox in sync with streams
         self._panel.cmb_correlation_stream.Clear()
         for s in streams:
+            if isinstance(s, self.ref_stream):
+                continue # cant move fluo streams
             self._panel.cmb_correlation_stream.Append(s.name.value, s)
         
         # select the first stream, if available
@@ -113,6 +132,17 @@ class CorrelationController(object):
         self._tab_data_model.selected_stream.value = self._panel.cmb_correlation_stream.GetClientData(idx)
         logging.debug(f"Selected Stream Changed to {idx}: {self._tab_data_model.selected_stream.value.name.value}")
     
+    @call_in_wx_main
+    def _on_reference_stream_change(self, evt: wx.Event) -> None:
+        """change the reference stream to the one selected in the combo box
+        :param evt: (wx.Event) the event"""
+        idx = self._panel.cmb_correlation_reference.GetSelection()
+        self.ref_stream = self.ref_stream_map[idx]
+        logging.debug(f"Reference Frame: {self.ref_frame_names[idx]} - Fixed stream: {idx}, {self.ref_stream}")
+
+        # refresh combobox
+        self._update_correlation_cmb(self._tab_data_model.streams.value)
+
     def reset_correlation_pressed(self, evt: wx.Event) -> None:
         """"Reset the correlation data for the selected stream, and re-draw
         :param evt: (wx.Event) the event"""
@@ -137,11 +167,11 @@ class CorrelationController(object):
         # even if they have been removed from another tab, e.g. 'localization'
 
         # add streams to correlation tab
-        logging.debug(f"Adding {len(streams)} streams to correlation tab")
+        logging.debug(f"Adding {len(streams)} streams to correlation tab {streams}")
         for s in streams:
-            
-            # skip existing streams
-            if s in self._tab_data_model.streams.value:
+
+            # skip existing streams, live streams
+            if s in self._tab_data_model.streams.value or not isinstance(s, StaticStream):
                 continue 
 
             # reset the stream correlation data, and add to correlation streams
@@ -151,6 +181,25 @@ class CorrelationController(object):
             # add stream to streambar
             sc = self._tab.streambar_controller.addStream(s, add_to_view=True, play=False)
             sc.stream_panel.show_remove_btn(True)  
+
+    def add_to_localization_tab(self, streams: list) -> None:
+        """add streams to the localization tab
+        :param streams: (list[StaticStream]) the streams to add"""
+        # NOTE: we only add streams if they are not already in the localization tab
+        # we will not remove streams from the localization tab from outside it, 
+        # as the user may still want to localize them, 
+        # even if they have been removed from another tab, e.g. 'correlation'
+        if self.localization_tab is None:
+            self.localization_tab: LocalizationTab  = self._main_data_model.getTabByName("cryosecom-localization")
+
+        logging.debug(f"Adding {len(streams)} streams to localization tab {streams}")
+        for s in streams:
+            # add stream to localizations tab 
+            if s not in self.localization_tab.tab_data_model.streams.value:
+                self.localization_tab.tab_data_model.overviewStreams.value.append(s)
+                self.localization_tab.tab_data_model.streams.value.insert(0, s)
+                self.localization_tab._acquired_stream_controller.showOverviewStream(s)
+
 
     def clear_streams(self) -> None:
         """clears streams from the correlation tab"""
@@ -265,7 +314,29 @@ class CorrelationController(object):
         # fit the source viewports to the content, as the image may have moved
         self._panel.vp_correlation_tl.canvas.fit_view_to_content()
         self._panel.vp_correlation_tr.canvas.fit_view_to_content()
+        self._panel.vp_correlation_bl.canvas.fit_view_to_content()
+        self._panel.vp_correlation_br.canvas.fit_view_to_content()
 
+        # update the localization tab
+        self.update_localization_tab(s)
+
+    def update_localization_tab(self, s: StaticStream) -> None:
+        # TODO: change this to callback?
+        # also update the localization tab
+        if s in self.localization_tab.tab_data_model.streams.value:
+
+            logging.debug(f"Updating localisation stream: {s.name.value}")
+
+            # get stream in localization tab
+            idx = self.localization_tab.tab_data_model.streams.value.index(s)
+            sl = self.localization_tab.tab_data_model.streams.value[idx]
+
+            # match cor metadata
+            sl.raw[0].metadata[model.MD_POS_COR] = s.raw[0].metadata[model.MD_POS_COR]
+            sl.raw[0].metadata[model.MD_ROTATION_COR] = s.raw[0].metadata[model.MD_ROTATION_COR]
+            sl.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = s.raw[0].metadata[model.MD_PIXEL_SIZE_COR]
+
+            update_image_in_views(s, self.localization_tab.tab_data_model.views.value)
     
     def _move_stream_to_pos(self, pos: tuple) -> None:
         """move the selected stream to the position pos

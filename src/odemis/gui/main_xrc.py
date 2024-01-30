@@ -297,6 +297,7 @@ class xrcpnl_tab_correlation(wx.Panel):
         self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
         self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
         self.ctrl_enable_correlation = xrc.XRCCTRL(self, "ctrl_enable_correlation")
+        self.cmb_correlation_reference = xrc.XRCCTRL(self, "cmb_correlation_reference")
         self.cmb_correlation_stream = xrc.XRCCTRL(self, "cmb_correlation_stream")
         self.dx_step_cntrl = xrc.XRCCTRL(self, "dx_step_cntrl")
         self.dy_step_cntrl = xrc.XRCCTRL(self, "dy_step_cntrl")
@@ -3174,6 +3175,24 @@ IEND\xaeB`\x82'''
                             <object class="sizeritem">
                               <object class="wxFlexGridSizer">
                                 <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Reference Frame</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                    <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                    <border>5</border>
+                                    <flag>wxEXPAND</flag>
+                                  </object>
+                                  <object class="sizeritem"> 
+                                    <object class="OwnerDrawnComboBox" name="cmb_correlation_reference">
+                                        <size>250,-1</size>
+                                        <fg>#2FA7D4</fg>
+                                        <bg>#333333</bg>
+                                        <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+                                        <tooltip>The reference frame defines the base images that others will be correlated to. This allows selecting positions from the correlated images. Images in the reference frame cannot be moved.</tooltip>
+                                      </object>
+                                  </object>
+                                <object class="sizeritem">
                                   <object class="wxStaticText">
                                     <label>Move Stream</label>
                                     <fg>#E5E5E5</fg>
@@ -3292,7 +3311,7 @@ IEND\xaeB`\x82'''
                                   </object>
                                 </object>
                                 <cols>2</cols>
-                                <rows>5</rows>
+                                <rows>6</rows>
                                 <vgap>10</vgap>
                                 <hgap>10</hgap>
                                 <growablecols>1</growablecols>

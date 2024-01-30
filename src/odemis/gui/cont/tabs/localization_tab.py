@@ -216,6 +216,9 @@ class LocalizationTab(Tab):
         Apply the visibility status of overview streams in the Localisation tab to
         the overview streams in the Chamber tab.
         """
+        # prevent circular import
+        from odemis.gui.cont.tabs.cryo_chamber_tab import CryoChamberTab
+
         # All the overview streams
         ov_streams = set(self.tab_data_model.overviewStreams.value)
         # Visible overview streams
@@ -223,7 +226,7 @@ class LocalizationTab(Tab):
         # Invisible overview streams
         invisible_ov_streams = ov_streams.difference(visible_ov_streams)
         # Hide the invisible overview streams
-        chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
+        chamber_tab: CryoChamberTab = self.main_data.getTabByName("cryosecom_chamber")
         chamber_tab.remove_overview_streams(invisible_ov_streams)
         # Show the visible overview streams
         chamber_tab.load_overview_streams(visible_ov_streams)
@@ -313,6 +316,11 @@ class LocalizationTab(Tab):
             # Display the same acquired data in the chamber tab view
             chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
             chamber_tab.load_overview_streams(streams)
+
+        # sync overview streams with correlation tab
+        if len(streams) > 0:
+            correlation_tab = self.main_data.getTabByName("meteor-correlation")
+            correlation_tab.correlation_controller.add_streams(streams)
 
     def reset_live_streams(self):
         """
@@ -414,10 +422,6 @@ class LocalizationTab(Tab):
                 chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
                 chamber_tab.remove_overview_streams([st])
 
-        # sync streams with correlation tab
-        if len(streams) > 0:
-            correlation_tab = self.main_data.getTabByName("meteor-correlation")
-            correlation_tab.correlation_controller.add_streams(streams)
 
     @call_in_wx_main
     def display_acquired_data(self, data):
