@@ -38,8 +38,14 @@ CONFIG_STREAKUNIT = {"name": "StreakUnit", "role": "streakunit"}
 CONFIG_DELAYBOX = {"name": "Delaybox", "role": "delaybox"}
 
 STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
+STREAK_CHILDREN_NO_DELAYBOX = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT}
+STREAK_CHILDREN_NO_READOUT_CAM = {"streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
 
 KWARGS_STREAKCAM = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001, children=STREAK_CHILDREN)
+KWARGS_STREAKCAM_NO_DELAYBOX = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001,
+                                    children=STREAK_CHILDREN_NO_DELAYBOX)
+KWARGS_STREAKCAM_NO_READOUT_CAM = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001,
+                                       children=STREAK_CHILDREN_NO_READOUT_CAM)
 
 # test with spectrograph
 CLASS_SPECTROGRAPH = andorshrk.Shamrock
@@ -107,6 +113,158 @@ class TestHamamatsurxCamGenericCamSynchronized(VirtualTestSynchronized, unittest
         super(TestHamamatsurxCamGenericCamSynchronized, cls).tearDownClass()
         cls.streakcam.terminate()
 
+
+class TestHamamatsurxNoReadoutCamera(unittest.TestCase):
+    """Test the Hamamatsu streak camera class with no streak camera HW."""
+
+    @classmethod
+    def setUpClass(cls):
+
+        if TEST_NOHW:
+            raise unittest.SkipTest('No streak camera HW present. Skipping tests.')
+
+        cls.streakcam = CLASS_STREAKCAM(**KWARGS_STREAKCAM_NO_READOUT_CAM)
+
+        for child in cls.streakcam.children.value:
+            if child.name == CONFIG_STREAKUNIT["name"]:
+                cls.streakunit = child
+            if child.name == CONFIG_DELAYBOX["name"]:
+                cls.delaybox = child
+
+        # cls.delaybox.updateMetadata({model.MD_TIME_RANGE_TO_DELAY:
+        #     {
+        #         1.e-9: 7.99e-9,
+        #         2.e-9: 9.63e-9,
+        #         5.e-9: 33.2e-9,
+        #         10.e-9: 45.9e-9,
+        #         20.e-9: 66.4e-9,
+        #         50.e-9: 102e-9,
+        #         100.e-9: 169e-9,
+        #         200.e-9: 302e-9,
+        #         500.e-9: 731e-9,
+        #         1.e-6: 1.39e-6,
+        #         2.e-6: 2.69e-6,
+        #         5.e-6: 7.02e-6,
+        #         10.e-6: 13.8e-6,
+        #         20.e-6: 26.7e-6,
+        #         50.e-6: 81.6e-6,
+        #         100.e-6: 161e-6,
+        #         200.e-6: 320e-6,
+        #         500.e-6: 798e-6,
+        #         1.e-3: 1.62e-3,
+        #         2.e-3: 3.18e-3,
+        #         5.e-3: 7.88e-3,
+        #         10.e-3: 15.4e-3,
+        #     }
+        # })
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.streakcam.terminate()
+
+    def test_error(self):  # TODO more testcases
+        """Test the different RemoteEx errors possible."""
+        # send wrong command, will timeout
+        with self.assertRaises(util.TimeoutError):
+            self.streakcam.sendCommand("Appinfoo", "type")
+
+    ### Delay generator #####################################################
+    def test_TriggerDelay(self):
+        """Test Acquisition Mode VA for delay generator."""
+        self.delaybox.triggerDelay.value = 0
+        prev_triggerDelay = self.delaybox.triggerDelay.value
+        # change trigger delay VA
+        self.delaybox.triggerDelay.value = 0.000001  # 1us
+        cur_triggerDelay = self.delaybox.triggerDelay.value
+        # check previous and current value are not the same
+        self.assertNotEqual(prev_triggerDelay, cur_triggerDelay)
+        # get trigger delay from hardware
+        remoteEx_triggerDelay = self.delaybox.GetDelayByName("Delay A")
+        self.assertEqual(cur_triggerDelay, remoteEx_triggerDelay)
+
+        # request value, which is not in range of VA
+        with self.assertRaises(IndexError):
+            self.delaybox.triggerDelay.value = -1
+
+    def test_DelayB(self):
+        """Test Acquisition Mode VA for delay generator."""
+
+        if not model.hasVA(self.delaybox, "delayB"):
+            self.skipTest("Delay box measurement mode is synchro scan. Skipping the test")
+
+        self.delaybox.delayB.value = 0
+        prev_delay = self.delaybox.delayB.value
+        # change the delay VA
+        self.delaybox.delayB.value = 0.000001  # 1us
+        cur_delay = self.delaybox.delayB.value
+        # check previous and current value are not the same
+        self.assertNotEqual(prev_delay, cur_delay)
+        # get trigger delay from hardware
+        remoteEx_delay = self.delaybox.GetDelayByName("Delay B")
+        self.assertEqual(cur_delay, remoteEx_delay)
+
+        # request value, which is not in range of VA
+        with self.assertRaises(IndexError):
+            self.delaybox.delayB.value = -1
+
+    def test_DelayC(self):
+        """Test Acquisition Mode VA for delay generator."""
+
+        if not model.hasVA(self.delaybox, "delayC"):
+            self.skipTest("Delay box measurement mode is synchro scan. Skipping the test")
+
+        self.delaybox.delayC.value = 0
+        prev_delay = self.delaybox.delayC.value
+        # change the delay VA
+        self.delaybox.delayC.value = 0.000001  # 1us
+        cur_delay = self.delaybox.delayC.value
+        # check previous and current value are not the same
+        self.assertNotEqual(prev_delay, cur_delay)
+        # get trigger delay from hardware
+        remoteEx_delay = self.delaybox.GetDelayByName("Delay C")
+        self.assertEqual(cur_delay, remoteEx_delay)
+
+        # request value, which is not in range of VA
+        with self.assertRaises(IndexError):
+            self.delaybox.delayC.value = -1
+
+    def test_PLLMode(self):
+        """Test PLL mode VA for the phase lock status"""
+        if not model.hasVA(self.delaybox, "phaseLocked"):
+            self.skipTest("Delay box measurement mode is synchro scan. Skipping the test")
+
+        # set PLL VA
+        self.delaybox.phaseLocked.value = False
+        time.sleep(0.5)  # give it some time to actually change the value
+        prev_pll = self.delaybox.phaseLocked.value
+        # change pll VA
+        self.delaybox.phaseLocked.value = True
+        time.sleep(0.5)  # give it some time to actually change the value
+        cur_pll = self.delaybox.phaseLocked.value
+        # compare previous and current gain
+        self.assertNotEqual(prev_pll, self.delaybox.phaseLocked.value)
+        # check pll-VA reports the same value as RemoteEx
+        remoteEx_pll = self.delaybox.GetPLLMode()
+        self.assertEqual(cur_pll, remoteEx_pll)
+
+
+    def test_TimeRange(self):
+        """Test time range VA for sweeping of streak unit."""
+        for timeRange in self.streakunit.timeRange.choices:  # values different from yaml due to floating point issues
+            # change timeRange VA to value in range
+            self.streakunit.timeRange.value = timeRange
+            self.assertAlmostEqual(self.streakunit.timeRange.value, timeRange)
+
+            tr2d = self.delaybox._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
+            if tr2d:
+                key = util.find_closest(timeRange, tr2d.keys())
+                # check that the corresponding trigger delay is set when changing the .timeRange VA
+                md_triggerDelay = tr2d[key]
+                self.assertAlmostEqual(self.delaybox.triggerDelay.value, md_triggerDelay)
+
+        # request value, which is not in choices of VA
+        with self.assertRaises(IndexError):
+            self.streakunit.timeRange.value = 0.000004  # 4us
 
 class TestHamamatsurxCam(unittest.TestCase):
     """Test the Hamamatsu streak camera class with real streak camera HW."""
@@ -258,6 +416,21 @@ class TestHamamatsurxCam(unittest.TestCase):
         # request value, which is not in range of VA
         with self.assertRaises(IndexError):
             self.delaybox.triggerDelay.value = -1
+
+    def test_Shutter(self):
+        """Test Shutter state VA of streak unit."""
+        # set shutter VA
+        self.streakunit.shutter.value = False
+        prev_shutter = self.streakunit.shutter.value
+        # change shutter VA
+        self.streakunit.shutter.value = True
+        time.sleep(0.5)  # give it some time to actually change the value
+        cur_shutter = self.streakunit.shutter.value
+        # compare previous and current gain
+        self.assertNotEqual(prev_shutter, self.streakunit.shutter.value)
+        # check shutter-VA reports the same value as RemoteEx
+        remoteEx_shutter = self.streakunit.GetShutter()
+        self.assertEqual(cur_shutter, remoteEx_shutter)
 
     ### Streakunit #####################################################
     def test_StreakMode(self):
