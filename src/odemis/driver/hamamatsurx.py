@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on Aug 2018
 
 @author: Sabrina Rossberger, Delmic
@@ -13,20 +13,21 @@ Odemis is free software: you can redistribute it and/or modify it under the term
 Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
-'''
-
-import queue
+"""
+import collections
+import functools
+import threading
 import logging
 import math
+import numbers
+import queue
+import socket
+import time
+
+import numpy
 
 from odemis import model, util
 from odemis.model import oneway
-import threading
-import time
-import socket
-import numpy
-import collections
-import numbers
 from odemis.util import to_str_escape
 
 #  0= Boolean: Can have the values true or false. Valid entries are „true“ (true), „false“
@@ -83,9 +84,9 @@ class ReadoutCamera(model.DigitalCamera):
 
     def __init__(self, name, role, parent, spectrograph=None, **kwargs):
         """ Initializes the Hamamatsu OrcaFlash readout camera.
-        :parameter name: (str) as in Odemis
-        :parameter role: (str) as in Odemis
-        :parameter parent: class streakcamera
+        :param name: (str) as in Odemis
+        :param role: (str) as in Odemis
+        :param parent: class streakcamera
         """
         self.parent = parent
 
@@ -234,7 +235,7 @@ class ReadoutCamera(model.DigitalCamera):
     def _setBinning(self, value):
         """
         Called when .binning VA is modified. It actually modifies the camera binning.
-        :parameter value: (2-tuple int) binning value to set
+        :param value: (2-tuple int) binning value to set
         :return: current binning value
         """
 
@@ -323,7 +324,7 @@ class ReadoutCamera(model.DigitalCamera):
         """
         Set the camera exposure time.
         Converts the time range in sec into a for RemoteEx readable format.
-        :parameter value: (float) exposure time to be set
+        :param value: (float) exposure time to be set
         :return: (float) current exposure time
         """
         try:
@@ -625,15 +626,55 @@ class StreakUnit(model.HwComponent):
         timeRange = util.find_closest(timeRange, choices)  # make sure value is in choices
         self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange, unit="s")
 
+        pllMode = self.GetPLLMode()
+        if pllMode is not None:
+            self.phaseLocked = model.BooleanVA(pllMode, setter=self._setPLLMode)
+
         # a variable that stores the current timeRange conversion for e.g. the scaling table conversion
         # is set in the setter of the timeRange VA
         self.timeRangeFactor = None
 
         # read-only VAs TODO: Trig. Mode, Trig. level, Trig. slope?
 
+    def GetPLLMode(self):
+        """
+        Get the current value from the streak unit HW.
+        :return: (bool) current streak mode value
+        """
+        pllMode_raw = self.parent.DevParamGet(self.location, "PLL Status")  # returns a list
+        if pllMode_raw[0] == "Locked":
+            pllMode = True
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        elif pllMode_raw[0] == "Unlocked":
+            pllMode = False
+        elif pllMode_raw[0] == "Initial":
+            pllMode = None
+        elif pllMode_raw[0] == "Error 0" or pllMode_raw[0] == "Error 1":
+            pllMode = None
+            self.state._set_value("Error in the phase lock loop (PLL Mode)", force_write=True)
+        else:
+            logging.warning("Unexpected phase-locked loop mode %s.", pllMode_raw)
+            pllMode = None
+
+        return pllMode
+
+    def _setPLLMode(self, value: bool):
+        """
+        Updates the PLL Mode VA.
+        :param value: value to be set
+        :return: (bool) current PLL mode
+        """
+        if value:
+            self.parent.DevParamSet(self.location, "PLL Mode", "Locked")
+        else:
+            self.parent.DevParamSet(self.location, "PLL Mode", "Unlocked")
+        logging.debug("Phase-locked loop mode is set to: %s", value)
+
+        return value
+
     def GetStreakMode(self):
         """
-        Get the current value from the the streak unit HW.
+        Get the current value from the streak unit HW.
         :return: (bool) current streak mode value
         """
         streakMode_raw = self.parent.DevParamGet(self.location, "Mode")  # returns a list
@@ -650,7 +691,7 @@ class StreakUnit(model.HwComponent):
     def _setStreakMode(self, value):
         """
         Updates the streakMode VA.
-        :parameter value: (bool) value to be set
+        :param value: (bool) value to be set
         :return: (bool) current streak mode
         """
         if not value:
@@ -665,7 +706,7 @@ class StreakUnit(model.HwComponent):
 
     def GetMCPGain(self):
         """
-        Get the current value from the the streak unit HW.
+        Get the current value from the streak unit HW.
         :return: (int) current MCPGain value
         """
         MCPGain_raw = self.parent.DevParamGet(self.location, "MCP Gain")  # returns a list
@@ -676,7 +717,7 @@ class StreakUnit(model.HwComponent):
     def _setMCPGain(self, value):
         """
         Updates the MCPGain VA.
-        :parameter value: (int) value to be set
+        :param value: (int) value to be set
         :return: (int) current MCPGain
         """
         self.parent.DevParamSet(self.location, "MCP Gain", value)
@@ -699,7 +740,7 @@ class StreakUnit(model.HwComponent):
 
     def GetTimeRange(self):
         """
-        Get the current value from the the streak unit HW.
+        Get the current value from the streak unit HW.
         :return: (float) current time range value
         """
         timeRange = self._getStreakUnitTimeRange()
@@ -709,7 +750,7 @@ class StreakUnit(model.HwComponent):
     def _setTimeRange(self, value):
         """
         Updates the timeRange VA.
-        :parameter value: (float) value to be set
+        :param value: (float) value to be set
         :return: (float) current time range
         """
         self._setStreakUnitTimeRange(self.location, value)
@@ -732,8 +773,8 @@ class StreakUnit(model.HwComponent):
         """
         Sets the time range for the streak unit.
         Converts the value in sec into a for RemoteEx readable format.
-        :parameter location: (str) see DevParamGet
-        :parameter time_range: (float) time range for one sweep in sec
+        :param location: (str) see DevParamGet
+        :param time_range: (float) time range for one sweep in sec
         """
         try:
             time_range_raw = self.parent.convertTime2Unit(time_range)
@@ -773,7 +814,7 @@ class StreakUnit(model.HwComponent):
         Sets the time range factor needed for conversion of RemoteEx values to sec.
         This method maps the values and units obtained from the
         scaling table (correlating of px positions with corresponding time values) to values only.
-        :parameter value: (float) conversion factor
+        :param value: (float) conversion factor
         """
         if 1e-9 <= value < 1:
             self.timeRangeFactor = 10 ** (math.log10(abs(value)) // 3 * 3)
@@ -808,15 +849,29 @@ class DelayGenerator(model.HwComponent):
         parent.DevParamSet(self.location, "Delay B", 0.00000002)
         parent.DevParamSet(self.location, "Burst Mode", "Off")
 
-        self._metadata[model.MD_TRIGGER_DELAY] = self.GetTriggerDelay()
         # Note: trigger rate (repetition rate) corresponds to the ebeam blanking frequency (read only in RemoteEx)
         self._metadata[model.MD_TRIGGER_RATE] = int(self.parent.DevParamGet(self.location, "Repetition Rate")[0])
 
-        triggerDelay = self.GetTriggerDelay()
-        range_trigDelay = self._getTriggerDelayRange()
-        self.triggerDelay = model.FloatContinuous(triggerDelay, range_trigDelay, setter=self._setTriggerDelay, unit="s")
+        # VAs
+        self._subscribers = []
+        devparamslist = parent.DevParamsList()
+        delaynameremoteex = ["Delay A", "Delay B", "Delay C", "Delay D", "Delay E", "Delay F", "Delay G", "Delay H"]
+        delayvas = ["triggerDelay", "delayB", "delayC", "delayD", "delayE", "delayF", "delayG", "delayH"]
 
-        # read only VAs TODO Burst Mode, Setting, Trig. Mode, delay B?
+        for i in range(0,7):
+            if delaynameremoteex[i] not in devparamslist:
+                continue  # do not assign VA if RemoteEx param does not exist
+            else:
+                delay = self.GetDelayByName(delaynameremoteex[i])
+                range_delay = self.GetDelayRangeByName(delaynameremoteex[i])
+
+                delay_setter = functools.partial(self._setDelayByName, delaynameremoteex[i])
+                self._subscribers.append(delay_setter)  # keep a ref to delay_setter so that it's not garbage collected
+                delay_va = model.FloatContinuous(delay, range_delay, setter=delay_setter, unit="s")
+                setattr(self, delayvas[i], delay_va)
+
+        if hasattr(self, "triggerDelay"):
+            self.triggerDelay.subscribe(self._onTriggerDelay, init=True)
 
     # override HwComponent.updateMetadata
     def updateMetadata(self, md):
@@ -833,40 +888,13 @@ class DelayGenerator(model.HwComponent):
 
         super(DelayGenerator, self).updateMetadata(md)
 
-    def GetTriggerDelay(self):
+    def _onTriggerDelay(self, value: float):
         """
-        Get the current value from the the trigger delay HW (RemoteEx: delay A).
-        :return: (float) current trigger delay value
+        Called when the trigger delay VA changes, to update the metaadata
+        :param value: value to be set
         """
-        triggerDelay_raw = self.parent.DevParamGet(self.location, "Delay A")  # returns a list
-        triggerDelay = float(triggerDelay_raw[0])
-
-        return triggerDelay
-
-    def _setTriggerDelay(self, value):
-        """
-        Updates the trigger delay VA.
-        :parameter value: (float) value to be set
-        :return: (float) current trigger delay value
-        """
-        self.parent.DevParamSet(self.location, "Delay A", value)
         logging.debug("Reporting trigger delay %s for delay generator.", value)
         self._metadata[model.MD_TRIGGER_DELAY] = value
-
-        return self.GetTriggerDelay()
-
-    def _getTriggerDelayRange(self):
-        """
-        Get the range allowed for delay A. RemoteEx provides a negative minimum,
-        which is internally set to zero whenever a negative delay is requested.
-        :return: (tuple) the trigger delay range
-        """
-        min_time = 0
-        max_time = float(self.parent.DevParamInfoEx(self.location, "Delay A")[-1])
-        max_time = min(max_time, 10)  # don't report too high range
-        range_time = (min_time, max_time)
-
-        return range_time
 
     def _updateTriggerRate(self):
         """
@@ -879,6 +907,42 @@ class DelayGenerator(model.HwComponent):
         triggerRate = float(triggerRate_raw[0])
         self._metadata[model.MD_TRIGGER_RATE] = triggerRate
 
+    def GetDelayByName(self, delay_name: str):
+        """
+        Get the current value from the trigger delay HW (RemoteEx: delay D).
+        :param delay_name: name of the delay e.g. (Delay H)
+        :return: (float) current trigger delay value
+        """
+        delay_raw = self.parent.DevParamGet(self.location, delay_name)  # returns a list
+        delay = float(delay_raw[0])
+
+        return delay
+
+    def _setDelayByName(self, delay_name: str, value: float):
+        """
+        Updates the trigger delay VA.
+        :param delay_name: name of the delay e.g. (Delay A)
+        :param value: value to be set
+        :return: (float) current trigger delay value
+        """
+        self.parent.DevParamSet(self.location, delay_name, value)
+        logging.debug("Reporting trigger delay %s for delay generator.", value)
+
+        return self.GetDelayByName(delay_name)
+
+    def GetDelayRangeByName(self, delay_name: str):
+        """
+        Get the range allowed for delay A. RemoteEx provides a negative minimum,
+        which is internally set to zero whenever a negative delay is requested.
+        :return: (tuple) the trigger delay range
+        """
+        min_time = 0
+        max_time = float(self.parent.DevParamInfoEx(self.location, delay_name)[-1])
+        max_time = min(max_time, 10)  # don't report too high range
+        range_time = (min_time, max_time)
+
+        return range_time
+
 
 class StreakCamera(model.HwComponent):
     """
@@ -889,8 +953,8 @@ class StreakCamera(model.HwComponent):
     def __init__(self, name, role, port, host, children=None, dependencies=None, daemon=None, **kwargs):
         """
         Initializes the device.
-        :parameter host: (str) IP-adress or hostname
-        :parameter port: (int) port for sending/receiving commands
+        :param host: (str) IP-adress or hostname
+        :param port: (int) port for sending/receiving commands
         """
         super(StreakCamera, self).__init__(name, role, dependencies=dependencies, daemon=daemon, **kwargs)
 
@@ -938,26 +1002,25 @@ class StreakCamera(model.HwComponent):
             children = children or {}
             dependencies = dependencies or {}
 
-            try:
+            if "readoutcam" in children.keys():
                 ckwargs = children["readoutcam"]
-            except Exception:
-                raise ValueError("Required child readoutcam not provided")
-
-            self._readoutcam = ReadoutCamera(parent=self, spectrograph=dependencies.get("spectrograph"),
-                                             daemon=daemon, **ckwargs)
-            self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
+                self._readoutcam = ReadoutCamera(parent=self, spectrograph=dependencies.get("spectrograph"),
+                                                 daemon=daemon, **ckwargs)
+                self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
+            else:
+                logging.info("No readout camera provided.")
             try:
                 ckwargs = children["streakunit"]
             except Exception:
                 raise ValueError("Required child streakunit not provided")
             self._streakunit = StreakUnit(parent=self, daemon=daemon, **ckwargs)
             self.children.value.add(self._streakunit)  # add streakunit to children-VA
-            try:
+            if "delaybox" in children.keys():
                 ckwargs = children["delaybox"]
-            except Exception:
-                raise ValueError("Required child delaybox not provided")
-            self._delaybox = DelayGenerator(parent=self, daemon=daemon, **ckwargs)
-            self.children.value.add(self._delaybox)  # add delaybox to children-VA
+                self._delaybox = DelayGenerator(parent=self, daemon=daemon, **ckwargs)
+                self.children.value.add(self._delaybox)  # add delaybox to children-VA
+            else:
+                logging.info("No delaybox provided.")
         except Exception:
             try:
                 # Close back the app, so that we have some chance it can be started
@@ -1045,9 +1108,9 @@ class StreakCamera(model.HwComponent):
     def sendCommand(self, func, *args, **kwargs):
         """
         Sends a command to RemoteEx.
-        :parameter func: (str) command or function, which should be send to RemoteEx
-        :parameter args: (str) optional parameters allowed for function
-        :parameter kwargs: optional arguments not defined in advance
+        :param func: (str) command or function, which should be send to RemoteEx
+        :param args: (str) optional parameters allowed for function
+        :param kwargs: optional arguments not defined in advance
            kwargs timeout: (int) timeout while waiting for command response [sec]
         :return: (list of str) values returned by the function
         :raise:
@@ -1212,7 +1275,7 @@ class StreakCamera(model.HwComponent):
     def StartAcquisition(self, AcqMode):
         """
         Start an acquisition.
-        :parameter AcqMode: (str) see AcqStart
+        :param AcqMode: (str) see AcqStart
         """
         # Note: sync acquisition calls directly AcqStart
 
@@ -1266,6 +1329,8 @@ class StreakCamera(model.HwComponent):
         logging.debug("Starting RemoteEx App.")
         # Note: "1": App starts visible (use 0 for invisible)
         # returnValue = self.sendCommand("AppStart", "1", "C:\ProgramData\Hamamatsu\HPDTA\HPDTA8.ini")
+        # returnValue = self.sendCommand("AppStart", "1", "C:\ProgramData\Hamamatsu\HPDTA\SynchroScan.ini")
+        # returnValue = self.sendCommand("AppStart", "1", "C:\ProgramData\Hamamatsu\HPDTA\SingleSweep.ini")
         # need ~15 s when starting App -> use larger timeout
         self.sendCommand("AppStart", timeout=30)
 
@@ -1276,7 +1341,7 @@ class StreakCamera(model.HwComponent):
 
     def AppInfo(self, parameter):
         """Returns information about the application.
-        :parameter parameter: (str) Date, Version, Directory, Title, Titlelong, ProgDataDir.
+        :param parameter: (str) Date, Version, Directory, Title, Titlelong, ProgDataDir.
         :return (str): message"""
         return self.sendCommand("AppInfo", parameter)
 
@@ -1298,13 +1363,13 @@ class StreakCamera(model.HwComponent):
 
     def MainParamGet(self, parameter):
         """Returns the values of parameters visible in the main window.
-        :parameter parameter: (str) ImageSize, Message, Temperature, GateMode, MCPGain, Mode, Plugin, Shutter, StreakCamera, TimeRange.
+        :param parameter: (str) ImageSize, Message, Temperature, GateMode, MCPGain, Mode, Plugin, Shutter, StreakCamera, TimeRange.
         :returns: Current value of parameter."""
         return self.sendCommand("MainParamGet", parameter)
 
     def MainParamInfo(self, parameter):
         """Returns information about parameters visible in the main window.
-        :parameter parameter: (str) ImageSize, Message, Temperature, GateMode, MCPGain, Mode, Plugin, Shutter,
+        :param parameter: (str) ImageSize, Message, Temperature, GateMode, MCPGain, Mode, Plugin, Shutter,
                                     StreakCamera,TimeRange
         :returns: Label, Current value, Param type (PARAM_TYPE_DISPLAY)
         """
@@ -1313,7 +1378,7 @@ class StreakCamera(model.HwComponent):
     def MainParamInfoEx(self, parameter):
         """Returns information about parameters visible in the main window. Returns more detailed information in
         case of a PARAM_TYPE_LIST than MainParamInfo.
-        :parameter parameter: (str) see _mainParamInfo
+        :param parameter: (str) see _mainParamInfo
         :returns: Label, Current value, Param type (PARAM_TYPE_DISPLAY)"""
         return self.sendCommand("MainParamInfoEx", parameter)
 
@@ -1336,12 +1401,12 @@ class StreakCamera(model.HwComponent):
 
     def MainSyncSet(self, iSwitch):
         """Allows to switch the sync parameter which is available on the HPD-TA main window.
-        :parameter iSwitch: (int) 0 to switch sync off, 1 to switch sync on."""
+        :param iSwitch: (int) 0 to switch sync off, 1 to switch sync on."""
         self.sendCommand("MainSyncSet", iSwitch)
 
     def GenParamGet(self, parameter):
         """Returns the values of parameters in the general options.
-        :parameter parameter: (str) RestoreWindowPos: Restore window positions
+        :param parameter: (str) RestoreWindowPos: Restore window positions
                     UserFunctions: Call user functions
                     ShowStreakControl: Shows or hides the Streak status/control dialog
                     ShowDelay1Control: Shows or hides the Delay1 status/control dialog
@@ -1351,19 +1416,19 @@ class StreakCamera(model.HwComponent):
 
     def GenParamSet(self, parameter, value):
         """Returns the setting of the sync parameter which is available on the HPD-TA main window.
-        :parameter parameter: (str) RestoreWindowPos: Restore window positions
+        :param parameter: (str) RestoreWindowPos: Restore window positions
                     UserFunctions: Call user functions
                     ShowStreakControl: Shows or hides the Streak status/control dialog
                     ShowDelay1Control: Shows or hides the Delay1 status/control dialog
                     ShowDelay2Control: Shows or hides the Delay2 status/control dialog
                     ShowSpectrControl: Shows or hides the Spectrograph status/control dialog
-        :parameter value: (str) PARAM_TYPE_BOOL."""
+        :param value: (str) PARAM_TYPE_BOOL."""
         value = str(value)
         self.sendCommand("GenParamSet", parameter, value)
 
     def GenParamInfo(self, parameter):
         """Returns information about the specified parameter.
-        :parameter parameter: (str) RestoreWindowPos: Restore window positions
+        :param parameter: (str) RestoreWindowPos: Restore window positions
                     UserFunctions: Call user functions
                     ShowStreakControl: Shows or hides the Streak status/control dialog
                     ShowDelay1Control: Shows or hides the Delay1 status/control dialog
@@ -1381,7 +1446,7 @@ class StreakCamera(model.HwComponent):
     def GenParamInfoEx(self, parameter):
         """Returns the information about the specified parameter. Returns more detailed information
         in case of a PARAM_TYPE_LIST than GenParamInfo.
-        :parameter parameter: (str) see GenParamInfo
+        :param parameter: (str) see GenParamInfo
         :returns: Label, Current value (bool), Param Type (PARAM_TYPE_BOOL)"""
         try:
             label, val, typ = self.sendCommand("GenParamInfoEx", parameter)
@@ -1400,7 +1465,7 @@ class StreakCamera(model.HwComponent):
 
     def AcqStart(self, AcqMode):
         """Start an acquisition.
-        :parameter AcqMode: (str) Live: Live mode
+        :param AcqMode: (str) Live: Live mode
                       SingleLive: Live mode (single exposure)
                       Acquire: Acquire mode
                       AI: Analog integration
@@ -1414,7 +1479,7 @@ class StreakCamera(model.HwComponent):
 
     def AcqStop(self, timeout=1):
         """Stops the currently running acquisition.
-        :parameter timeout: (0.001<= float <=60) The timeout value (in s)
+        :param timeout: (0.001<= float <=60) The timeout value (in s)
         until this command should wait for an acquisition to end.
         :return: (float) timeout (in s)"""
         # Note: RemoteEx needs timeout in ms
@@ -1423,7 +1488,7 @@ class StreakCamera(model.HwComponent):
 
     def AcqParamGet(self, parameter):
         """Returns the values of the acquisition options.
-        :parameter parameter: (str)
+        :param parameter: (str)
             DisplayInterval: Display interval in Live mode
             32BitInAI: Creates 32 bit images in Analog integration mode
             WriteDPCFile: Writes dynamic photon counting file
@@ -1438,13 +1503,13 @@ class StreakCamera(model.HwComponent):
 
     def AcqparameterSet(self, parameter, value):
         """Set the values of the acquisition options.
-        :parameter parameter: (str) see AcqParamGet
-        :parameter value: (str) value to set for parameter"""
+        :param parameter: (str) see AcqParamGet
+        :param value: (str) value to set for parameter"""
         self.sendCommand("AcqParamSet", parameter, value)
 
     def AcqParamInfo(self, parameter):
         """Returns information about the specified parameter.
-        :parameter parameter: (str) see AcqParamGet
+        :param parameter: (str) see AcqParamGet
         :return: Label, current value, param type, min (num type only), max (num type only)
             param type: PARAM_TYPE_BOOL, PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
                 PARAM_TYPE_STRING, PARAM_TYPE_EXPTIME, PARAM_TYPE_DISPLAY
@@ -1455,7 +1520,7 @@ class StreakCamera(model.HwComponent):
         """Returns information about the specified parameter. Returns more detailed information in case of a list
         parameter (Parameter type = 2) than AcqParamInfo. In case of a numeric parameter (Parameter
         type = 1) it additionally returns the step width
-        :parameter parameter: (str) see AcqParamGet
+        :param parameter: (str) see AcqParamGet
         :return: Label, current value, param type, min (num type only), max (num type only)
             param type: PARAM_TYPE_BOOL, PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
                 PARAM_TYPE_STRING, PARAM_TYPE_EXPTIME, PARAM_TYPE_DISPLAY
@@ -1474,7 +1539,7 @@ class StreakCamera(model.HwComponent):
     def AcqLiveMonitor(self, monitorType, nbBuffers=None, *args):
         """Starts a mode which returns information on every new image acquired in live mode.
         Once this command is activated, for every new live image a message is returned.
-        :parameter monitorType: (str)
+        :param monitorType: (str)
             Off: No messages are output. This setting can be used to stop live monitoring.
             Notify: A message is sent with every new live image. No other information is
                     attached. The message can then be used to observe activity or to get
@@ -1492,7 +1557,7 @@ class StreakCamera(model.HwComponent):
             Maximum: Returns the maximum value within the full image or a specified area.
             Profile: Returns a profile extracted within the full image or a specified area in text form.
             PCMode: Photon counting mode
-        :parameter args: (str)
+        :param args: (str)
             NumberOfBuffers (MonitorType=RingBuffer): Specifies the number of buffers allocated inside the RemoteEx.
             FullArea (MonitorType=Average/Minimum/Maximum): The specified calculation algorithm is performed
                         on the full image area.
@@ -1520,7 +1585,7 @@ class StreakCamera(model.HwComponent):
 
     def AcqLiveMonitorTSFormat(self, format):
         """Sets the format of the time stamp.
-        :parameter format: (str) Timestamp (default): In msec from start of pc.
+        :param format: (str) Timestamp (default): In msec from start of pc.
                         DateTime: yyyy/mm:dd-hh-ss
                         Unix or Linux: Seconds and μseconds since 01.01.1970"""
         self.sendCommand("AcqLiveMonitorTSFormat", format)
@@ -1528,7 +1593,7 @@ class StreakCamera(model.HwComponent):
     def AcqAcqMonitor(self, type):
         """Starts a mode which returns information on every new image or part image acquired in
         Acquire/Analog Integration or Photon counting mode (Acquisition monitoring).
-        :parameter type: (str)
+        :param type: (str)
                     Off: No messages are output. This setting can be used to stop acquisition monitoring.
                     EndAcq: For every new part image a message is output. A part is a single image which
                             contributes to a full image. For example in Analog Integration or Photon counting
@@ -1541,13 +1606,13 @@ class StreakCamera(model.HwComponent):
 
     def CamParamGet(self, location, parameter):
         """Returns the values of the camera options.
-        :parameter location: (str)
+        :param location: (str)
                     Setup: Parameters on the options dialog.
                     Live: Parameters on the Live tab of the acquisition dialog.
                     Acquire: Parameters on the Acquire tab of the acquisition dialog.
                     AI: Parameters on the Analog Integration tab of the acquisition dialog.
                     PC: Parameters on the Photon counting tab of the acquisition dialog.
-        :parameter parameter: (str) (Which of these parameters are relevant is dependent on
+        :param parameter: (str) (Which of these parameters are relevant is dependent on
                                 the camera type. Please refer to the camera options dialog)
                     === Setup (options) parameter===  (Settings to be found in "Options" and not GUI
                     TimingMode: Timing mode (Internal / External) # Note: exists for OrcaFlash 4.0
@@ -1721,17 +1786,17 @@ class StreakCamera(model.HwComponent):
 
     def CamParamSet(self, location, parameter, value):
         """Sets the specified parameter of the acquisition options.
-        :parameter location: (str) see CamParamGet
-        :parameter parameter: (str) see CamParamGet
-        :parameter value: (str) value for param"""
+        :param location: (str) see CamParamGet
+        :param parameter: (str) see CamParamGet
+        :param value: (str) value for param"""
         # Note: When using self.acqMode = "SingleLive" parameters regarding the readout camera
         # need to be changed via location = "Live"!!!
         self.sendCommand("CamParamSet", location, parameter, value)
 
     def CamParamInfo(self, location, parameter):
         """Returns information about the specified parameter.
-        :parameter location: (str) see CamParamGet
-        :parameter parameter: (str) see CamParamGet
+        :param location: (str) see CamParamGet
+        :param parameter: (str) see CamParamGet
         :return: Label, current value, param type, min (num type only), max (num type only)
             param type: PARAM_TYPE_BOOL, PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
                 PARAM_TYPE_STRING, PARAM_TYPE_EXPTIME, PARAM_TYPE_DISPLAY"""
@@ -1740,8 +1805,8 @@ class StreakCamera(model.HwComponent):
     def CamParamInfoEx(self, location, parameter):
         """Returns information about the specified parameter.
         Returns more detailed information in case of a list parameter (Parameter type = 2) than CamParamInfo.
-        :parameter location: (str) see CamParamGet
-        :parameter parameter: (str) see CamParamGet
+        :param location: (str) see CamParamGet
+        :param parameter: (str) see CamParamGet
         :return: Label, current value, param type, min (num type only), max (num type only)
             param type: PARAM_TYPE_BOOL, PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
                 PARAM_TYPE_STRING, PARAM_TYPE_EXPTIME, PARAM_TYPE_DISPLAY"""
@@ -1750,7 +1815,7 @@ class StreakCamera(model.HwComponent):
     def CamParamsList(self, location):
         """Returns a list of all camera parameters of the specified location.
         This command can be used to build up a complete parameter list for the corresponding camera at runtime.
-        :parameter location: (str) see CamParamGet
+        :param location: (str) see CamParamGet
         :return: NumberOfParameters,Parameter1,..., ParameterN"""
         return self.sendCommand("CamParamsList", location)
 
@@ -1770,10 +1835,10 @@ class StreakCamera(model.HwComponent):
 
     def DevParamGet(self, location, parameter):
         """Returns the values of the streak camera parameters and the delay generator.
-        :parameter location: (str)
+        :param location: (str)
                 Streakcamera/Streak/TD: streak camera
                 Del/Delay/Delaybox/Del1: delay box 1
-        :parameter parameter: (str) Can be every parameter which appears in the external devices status/control box.
+        :param parameter: (str) Can be every parameter which appears in the external devices status/control box.
                                 The parameter should be written as indicated in the Parameter name field.
                                 This function also allows to get information about the device name, plugin name and
                                 option name of these devices. The following keywords are available:
@@ -1790,9 +1855,9 @@ class StreakCamera(model.HwComponent):
 
     def DevParamSet(self, location, parameter, value):
         """Sets the specified parameter of the acquisition options.
-        :parameter location: (str) see DevParamGet
-        :parameter parameter: (str) see DevParamGet
-        :parameter value: (str) The value has to be written as it appears in the corresponding control."""
+        :param location: (str) see DevParamGet
+        :param parameter: (str) see DevParamGet
+        :param value: (str) The value has to be written as it appears in the corresponding control."""
 
         # convert any input to a string as requested by RemoteEx
         if not isinstance(value, str):
@@ -1813,8 +1878,8 @@ class StreakCamera(model.HwComponent):
 
     def DevParamInfo(self, location, parameter):
         """Return information about the specified parameter.
-        :parameter location: (str) see DevParamGet
-        :parameter parameter: (str) see DevParamGet
+        :param location: (str) see DevParamGet
+        :param parameter: (str) see DevParamGet
         :return: Label, current value, param type, min (numerical only), max (numerical only).
             param type: PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST,
             Note: In case of a list the number of entries and all list entries are returned in the response of the
@@ -1824,15 +1889,15 @@ class StreakCamera(model.HwComponent):
     def DevParamInfoEx(self, location, parameter):
         """Return information about the specified parameter.
         Returns more detailed information in case of a list parameter (param type=2) than DevParamInfo.
-        :parameter location: (str) see DevParamGet
-        :parameter parameter: (str) see DevParamGet
+        :param location: (str) see DevParamGet
+        :param parameter: (str) see DevParamGet
         :return: Control available, status available, label, current value, param type, number of entries, entries.
             param type: PARAM_TYPE_NUMERIC, PARAM_TYPE_LIST"""
         return self.sendCommand("DevParamInfoEx", location, parameter)
 
     def DevParamsList(self, device):
         """Return list of all parameters of a specified device.
-        :parameter device: (str) see location in DevParamGet
+        :param device: (str) see location in DevParamGet
         :return: number of parameters, parameters"""
         return self.sendCommand("DevParamsList", device)
 
@@ -1840,7 +1905,7 @@ class StreakCamera(model.HwComponent):
 
     def SeqParamGet(self, parameter):
         """Returns the values of the sequence options or parameters.
-        :parameter parameter: (str)
+        :param parameter: (str)
             === From options: ==================
             AutoCorrectAfterSeq: Do auto corrections after sequence
             DisplayImgDuringSequence: Always display image during acquisition
@@ -1883,13 +1948,13 @@ class StreakCamera(model.HwComponent):
 
     def SeqParamSet(self, parameter, value):
         """Sets the specified parameter of the sequence options or parameters.
-        :parameter parameter: (str) see SeqParamGet
-        :parameter value: (str) The value for the sequence option or parameter."""
+        :param parameter: (str) see SeqParamGet
+        :param value: (str) The value for the sequence option or parameter."""
         self.sendCommand("SeqParamSet", parameter, value)
 
     def SeqParamInfo(self, parameter):
         """Return information about the specified parameter.
-        :parameter parameter: (str) see SeqParamGet
+        :param parameter: (str) see SeqParamGet
         :return: label, current value, param type"""
         return self.sendCommand("SeqParamInfo", parameter)
 
@@ -1897,7 +1962,7 @@ class StreakCamera(model.HwComponent):
         """Return information about the specified parameter.
         Returns more detailed information in case of a list parameter (param type=2) than SeqParamInfo.
         In case of a numeric parameter (Parameter type = 1) it additionally returns the step width.
-        :parameter parameter: (str) see SeqParamGet
+        :param parameter: (str) see SeqParamGet
         :return: label, current value, param type"""
         return self.sendCommand("SeqParamInfoEx", parameter)
 
@@ -1911,7 +1976,7 @@ class StreakCamera(model.HwComponent):
         """This command starts a mode which returns information on every new image or part image acquired in Sequence
         mode (Sequence monitoring). Its behavior is similar to AcqLiveMonitor or AcqAcqMonitor, which returns
         information on every new live or acquisition image.
-        :parameter type: (str)
+        :param type: (str)
                 Off: No messages are output. This setting can be used to stop acquisition monitoring.
                 EndAcq: Whenever a complete new image is acquired in sequence mode a message is output.
                 EndPart: For every new part image in sequence mode a message is output. A part is a single
@@ -1945,7 +2010,7 @@ class StreakCamera(model.HwComponent):
 
     def SeqSave(self, imageType, fileName, overwrite=False):
         """Save a sequence.
-        :parameter imageType: (str)
+        :param imageType: (str)
                 IMG: ITEX image
                 TIF: TIFF image
                 TIFF: TIFF image
@@ -1957,17 +2022,17 @@ class StreakCamera(model.HwComponent):
                 display2tif: Display to tiff
                 HIS: HIS sequence (Hamamatsu image sequence)
                 DISPLAY2HIS: HIS sequence (Hamamatsu image sequence) containing only display data (8 bit)
-        :parameter fileName: (str) can be any valid filename. This function can also save images on a network device, so
+        :param fileName: (str) can be any valid filename. This function can also save images on a network device, so
                             it can transfer image data from one computer to another computer.
-        :parameter overwrite: (bool) If this is set to true
+        :param overwrite: (bool) If this is set to true
                             the file is also saved if it exists. If set to false
                             the file is not saved if it already exists and an error is returned."""
         self.sendCommand("SeqSave", imageType, fileName, str(overwrite))
 
     def SeqLoad(self, imageType, fileName):
         """Save a sequence.
-        :parameter imageType: (str) see SeqSave
-        :parameter fileName: (str) see SeqSave"""
+        :param imageType: (str) see SeqSave
+        :param fileName: (str) see SeqSave"""
         self.sendCommand("SeqLoad", imageType, fileName)
 
     def SeqCopyToSeparateImg(self):
@@ -1990,7 +2055,7 @@ class StreakCamera(model.HwComponent):
 
     def ImgParamGet(self, parameter):
         """Returns the values of the image options.
-        :parameter parameter: (str)
+        :param parameter: (str)
             AcquireToSameWindow: Acquire always to the same window
             DefaultZoomFactor: Default zooming factor
             WarnWhenUnsaved: Warn when unsaved images are closed
@@ -2011,8 +2076,8 @@ class StreakCamera(model.HwComponent):
 
     def ImgParamSet(self, parameter, value):
         """Sets the values of the image options.
-        :parameter parameter: (str) see ImgParamGet
-        :parameter value: (str) TODO"""
+        :param parameter: (str) see ImgParamGet
+        :param value: (str) TODO"""
         self.sendCommand("ImgParamSet", parameter, value)
 
     def ImgRingBufferGet(self, type, seqNumber, filename=None):
@@ -2025,11 +2090,11 @@ class StreakCamera(model.HwComponent):
         image in the sequence buffer, the oldest live image is returned together with its sequence number. If
         SeqNumber is higher than the most recent live image in the buffer an error is returned.
         Note: The data is transferred by the second TCP-IP port. If this is not opened an error will be issued.
-        :parameter type: (str)
+        :param type: (str)
             Data: The image raw data (1,2 or 4 BBP)
             Profile: A profile is returned (4 bytes floating point values)
-        :parameter seqNumber: (str) sequence number of the image to return
-        :parameter filename: (str) location to write the data to. Raw data is written to the file without any header.
+        :param seqNumber: (str) sequence number of the image to return
+        :param filename: (str) location to write the data to. Raw data is written to the file without any header.
             If a file name is specified the date is written to this file (same as with ImgDataDump). If no file
             name is written the image data is transferred by the optional second TCP-IP channel. If this channel
             is not available an error is issued.
