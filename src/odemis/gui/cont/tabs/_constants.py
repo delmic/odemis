@@ -28,3 +28,9 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Used in Sparc2AlignTab, ChamberTab
 MIRROR_POS_PARKED = {"l": 0, "s": 0}  # (Hopefully) constant, and same as reference position
 MIRROR_ONPOS_RADIUS = 2e-3  # m, distance from a position that is still considered that position
+
+# Different states of the mirror stage positions
+MIRROR_NOT_REFD = 0
+MIRROR_PARKED = 1
+MIRROR_BAD = 2  # not parked, but not fully engaged either
+MIRROR_ENGAGED = 3
