@@ -20,9 +20,10 @@ run as:
 import argparse
 import glob
 import logging
+
+import odemis.util.focus
 from odemis import dataio, model
 from odemis.acq.align.shift import MeasureShift
-from odemis.acq.align import autofocus
 import os
 import sys
 
@@ -62,13 +63,13 @@ def read_timelapse(infn, emfn, fmfn):
                     fmdate = da.metadata[model.MD_ACQ_DATE]
                     fmda = da
                     fmpxs = da.metadata[model.MD_PIXEL_SIZE]
-                    fmfoc = autofocus.MeasureOpticalFocus(da)
+                    fmfoc = odemis.util.focus.MeasureOpticalFocus(da)
                 else: # SEM
                     empos = da.metadata[model.MD_POS]
                     emdate = da.metadata[model.MD_ACQ_DATE]
                     emda = da
                     empxs = da.metadata[model.MD_PIXEL_SIZE]
-                    emfoc = autofocus.MeasureSEMFocus(da)
+                    emfoc = odemis.util.focus.MeasureSEMFocus(da)
             
             # Overlay translation
             ovlpos = fmpos[0] - empos[0], fmpos[1] - empos[1]
