@@ -26,26 +26,28 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import wx
 
+from odemis import model
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 
 from odemis.gui.util import call_in_wx_main
 
 
-class TabBarController(object):
-    def __init__(self, tab_defs, main_frame, main_data):
+class TabController(object):
+    def __init__(self, tab_list, main_frame, main_data, default_tab, use_main_data_tab=False):
         """
-        tab_defs (dict of four entries string -> value):
-           name -> string: internal name
-           controller -> Tab class: class controlling the tab
-           button -> Button: tab btn
-           panel -> Panel: tab panel
+        :param: tab_list: (List[Tab]) list of odemis.gui.cont.tabs.tab.Tab objects.
+        :param: main_frame: odemis.gui.main_xrc.xrcfr_main
+        :param: main_data: (MainGUIData) the main GUI data.
+        :param: default_tab: (Tab) the default_tab to be shown.
+        :param: use_main_data_tab: (bool) flag to use the MainGUIData tab VAEnumerated.
         """
         self.main_frame = main_frame
-        self._tabs = main_data.tab  # VA that we take care of
         self.main_data = main_data
-
-        # create all the tabs that fit the microscope role
-        tab_list, default_tab = self._create_needed_tabs(tab_defs, main_frame, main_data)
+        if use_main_data_tab:
+            self._tab = main_data.tab
+        else:
+            # Current tab (+ all available tabs in choices as a dict tab -> name)
+            self._tab = model.VAEnumerated(None, choices={None: ""})
 
         if not tab_list:
             msg = "No interface known for microscope %s" % main_data.role
@@ -59,27 +61,27 @@ class TabBarController(object):
         # one of them. Therefore, we first set the current tab using the
         # `._value` attribute, so that the check will fail. We can then set the
         # `choices` normally.
-        self._tabs._value = default_tab
+        self._tab._value = default_tab
         # Choices is a dict of Tab -> str: Tab controller -> name of the tab
-        self._tabs.choices = {t: t.name for t in tab_list}
+        self._tab.choices = {t: t.name for t in tab_list}
         # Indicate the value has changed
-        self._tabs.notify(self._tabs.value)
-        self._tabs.subscribe(self._on_tab_change, init=True)
+        self._tab.notify(self._tab.value)
+        self._tab.subscribe(self._on_tab_change, init=True)
 
         self._enabled_tabs = set()  # tabs which were enabled before starting acquisition
         self.main_data.is_acquiring.subscribe(self.on_acquisition)
 
-        self._tabs_fixed_big_text = set()  # {str}: set of tab names which have been fixed
+        self._tab_fixed_big_text = set()  # {str}: set of tab names which have been fixed
 
     def get_tabs(self):
-        return self._tabs.choices
+        return self._tab.choices
 
     @call_in_wx_main
     def on_acquisition(self, is_acquiring):
         if is_acquiring:
             # Remember which tab is already disabled, to not enable those afterwards
             self._enabled_tabs = set()
-            for tab in self._tabs.choices:
+            for tab in self._tab.choices:
                 if tab.button.Enabled:
                     self._enabled_tabs.add(tab)
                     tab.button.Enable(False)
@@ -88,13 +90,72 @@ class TabBarController(object):
                 # It should never happen, but just to protect in case it was
                 # called twice in a row acquiring
                 logging.warning("No tab to enable => will enable them all")
-                self._enabled_tabs = set(self._tabs.choices)
+                self._enabled_tabs = set(self._tab.choices)
 
             for tab in self._enabled_tabs:
                 tab.button.Enable(True)
 
+    @call_in_wx_main
+    def _on_tab_change(self, tab):
+        """ This method is called when the current tab has changed """
+        logging.debug("Switch to tab %s", tab.name)
+        for t in self._tab.choices:
+            if t.IsShown():
+                t.Hide()
+        tab.Show()
+        self.main_frame.Layout()
+
+        # Force resize, on the first time the tab is shown
+        if tab.name not in self._tab_fixed_big_text:
+            fix_static_text_clipping(tab.panel)
+            self._tab_fixed_big_text.add(tab.name)
+
+    def query_terminate(self):
+        """
+        Call each tab query_terminate to perform any action prior to termination
+        :return: (bool) True to proceed with termination, False for canceling
+        """
+        for t in self._tab.choices:
+            if not t.query_terminate():
+                logging.debug("Window closure vetoed by tab %s" % t.name)
+                return False
+        return True
+
+    def terminate(self):
+        """ Terminate each tab (i.e., indicate they are not used anymore) """
+
+        for t in self._tab.choices:
+            t.terminate()
+
+    def on_click(self, evt):
+        evt_btn = evt.GetEventObject()
+        for t in self._tab.choices:
+            if evt_btn == t.button:
+                self._tab.value = t
+                break
+        else:
+            logging.warning("Couldn't find the tab associated to the button %s", evt_btn)
+
+        evt.Skip()
+
+
+class TabBarController(TabController):
+    def __init__(self, tab_defs, main_frame, main_data):
+        """
+        tab_defs (dict of four entries string -> value):
+           name -> string: internal name
+           controller -> Tab class: class controlling the tab
+           button -> Button: tab btn
+           panel -> Panel: tab panel
+        """
+
+        # create all the tabs that fit the microscope role
+        tab_list, default_tab = self._create_needed_tabs(tab_defs, main_frame, main_data)
+        super().__init__(tab_list, main_frame, main_data, default_tab=default_tab,
+                         use_main_data_tab=True)
+
     def _create_needed_tabs(self, tab_defs, main_frame, main_data):
-        """ Create the tabs needed by the current microscope
+        """ Create the tabs needed by the current microscope. The tab's parent is the main_frame.
 
         Tabs that are not wanted or needed will be removed from the list and the associated
         buttons will be hidden in the user interface.
@@ -116,7 +177,7 @@ class TabBarController(object):
             priority = tab_def["controller"].get_display_priority(main_data)
             if priority is not None:
                 assert priority >= 0
-                tpnl = tab_def["panel"](self.main_frame)
+                tpnl = tab_def["panel"](main_frame)
                 # Insert as "second" item, to be just below the buttons.
                 # As only one tab is shown at a time, the exact order isn't important.
                 main_sizer.Insert(1, tpnl, flag=wx.EXPAND, proportion=1)
@@ -139,46 +200,3 @@ class TabBarController(object):
             main_frame.pnl_tabbuttons.Hide()
 
         return tabs, default_tab
-
-    @call_in_wx_main
-    def _on_tab_change(self, tab):
-        """ This method is called when the current tab has changed """
-        logging.debug("Switch to tab %s", tab.name)
-        for t in self._tabs.choices:
-            if t.IsShown():
-                t.Hide()
-        tab.Show()
-        self.main_frame.Layout()
-
-        # Force resize, on the first time the tab is shown
-        if tab.name not in self._tabs_fixed_big_text:
-            fix_static_text_clipping(tab.panel)
-            self._tabs_fixed_big_text.add(tab.name)
-
-    def query_terminate(self):
-        """
-        Call each tab query_terminate to perform any action prior to termination
-        :return: (bool) True to proceed with termination, False for canceling
-        """
-        for t in self._tabs.choices:
-            if not t.query_terminate():
-                logging.debug("Window closure vetoed by tab %s" % t.name)
-                return False
-        return True
-
-    def terminate(self):
-        """ Terminate each tab (i.e., indicate they are not used anymore) """
-
-        for t in self._tabs.choices:
-            t.terminate()
-
-    def on_click(self, evt):
-        evt_btn = evt.GetEventObject()
-        for t in self._tabs.choices:
-            if evt_btn == t.button:
-                self._tabs.value = t
-                break
-        else:
-            logging.warning("Couldn't find the tab associated to the button %s", evt_btn)
-
-        evt.Skip()
