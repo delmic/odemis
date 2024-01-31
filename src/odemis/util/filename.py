@@ -102,21 +102,7 @@ def guess_pattern(fn):
                 # That's a real match => change the pattern
                 fn_ptn = fn_ptn[0:m.start()] + name_ptn + fn_ptn[m.end():]
 
-    # Detect count
-    cnt_ptn = r'\d{1,5}'
-    cnt_m = None
-    for m in re.finditer(cnt_ptn, fn_ptn):
-        cnt_m = m
-    # if multiple numbers are present, use last
-    if cnt_m:
-        cnt = cnt_m.group()
-        fn_ptn = fn_ptn[:cnt_m.start()] + "{cnt}" + fn_ptn[cnt_m.end():]
-    else:
-        cnt = "001"  # will be used in case cnt pattern is added afterwards
-
-    # If neither time, nor count are specified, add count, if only short time (h, min)
-    # specified and no count, add seconds to make filename unique
-    # Doesn't behave properly if user enters terms with curly braces like {{cnt}}.
+    cnt = "001"
     if '{cnt}' not in fn_ptn:
         if '{timeshrt_colon}' in fn_ptn:
             fn_ptn = re.sub('{timeshrt_colon}', '{timelng_colon}', fn_ptn)

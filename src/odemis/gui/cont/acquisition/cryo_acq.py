@@ -33,6 +33,7 @@ import os
 from builtins import str
 from concurrent import futures
 from concurrent.futures._base import CancelledError
+import re
 
 import wx
 
@@ -47,8 +48,7 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttribut
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
 from odemis.util import units
 from odemis.util.comp import generate_zlevels
-from odemis.util.filename import guess_pattern, create_filename, update_counter
-
+from odemis.util.filename import guess_pattern, create_filename, update_counter, make_unique_name
 
 # constants for the acquisition future state of the cryo-secom
 ST_FINISHED = "FINISHED"
@@ -201,6 +201,8 @@ class CryoAcquiController(object):
         Called when the acquisition process is
         done, failed or canceled
         """
+        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
+        local_tab.tab_data_model.select_current_position_feature()
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
@@ -274,6 +276,7 @@ class CryoAcquiController(object):
         """
         # get the localization tab
         local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
+        # local_tab.tab_data_model.select_current_position_feature()
         local_tab.display_acquired_data(data)
 
     @call_in_wx_main
@@ -286,6 +289,29 @@ class CryoAcquiController(object):
         data = future.result()
         self._display_acquired_data(data)
 
+    def _add_feature_info_filename(self):
+        """
+        Add feature name, feature status and the counter at the end of the filename.
+        """
+        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
+        feature_name = local_tab.tab_data_model.main.currentFeature.value.name.value
+        feature_status = local_tab.tab_data_model.main.currentFeature.value.status.value
+        feature_pattern = f"{feature_name}-{feature_status}"
+
+        if 'Feature' in self._config.fn_ptn:
+            # If feature pattern is present in filename
+            # Replace Feature and everything after with the current feature pattern and the updated count
+            base_name = re.sub(r'(Feature).*', f'{feature_pattern}-0', self._config.fn_ptn)
+        else:
+            # If feature pattern not present in filename add it
+            # Add the feature pattern and count at the end of the given filename
+            base_name = re.sub('{cnt}', f'-{feature_pattern}-0', self._config.fn_ptn)
+
+        # update the filename for the current acquisition
+        list_names = os.listdir(self._config.pj_last_path)
+        name = make_unique_name(f'{base_name}{self._config.last_extension}', list_names)
+        self._filename.value = os.path.join(self._config.pj_last_path, name)
+
     def _export_data(self, data, thumb_nail):
         """
         Called to export the acquired data.
@@ -294,6 +320,8 @@ class CryoAcquiController(object):
         """
         filename = self._filename.value
         if data:
+            self._add_feature_info_filename()
+            filename = self._filename.value
             exporter = dataio.get_converter(self._config.last_format)
             exporter.export(filename, data, thumb_nail)
             logging.info(u"Acquisition saved as file '%s'.", filename)
@@ -510,6 +538,17 @@ class CryoAcquiController(object):
         """
         called when the .filename VA changes
         """
+        # For the first feature acquisition, reset the counter to zero
+        if self.overview_acqui_controller._tab_data_model.main.currentFeature.value is None:
+            self._config.fn_count = '0'
+            self._filename.value = create_filename(
+                self._config.pj_last_path,
+                self._config.fn_ptn,
+                self._config.last_extension,
+                self._config.fn_count,
+            )
+            name = self._filename.value
+
         path, base = os.path.split(name)
         self._panel.txt_filename.SetValue(str(path))
         self._panel.txt_filename.SetInsertionPointEnd()
