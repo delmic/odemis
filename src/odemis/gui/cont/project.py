@@ -52,7 +52,7 @@ class FastEMProjectListController(object):
         """
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param project_list: (FastEMProjectList) The top-level panel containing all project panels.
-        :param viewport: (FastEMAcquisitionViewport) The acquisition view.
+        :param viewport: (FastEMMainViewport) The acquisition view.
         """
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
@@ -130,7 +130,7 @@ class FastEMProjectController(object):
         :param colour: (str) Hexadecimal colour code for the bounding box of the roas in the viewport
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param project_list: (FastEMProjectList) The top-level panel containing all project panels.
-        :param viewport: (FastEMAcquisitionViewport) The acquisition view.
+        :param viewport: (FastEMMainViewport) The acquisition view.
         """
         self._tab_data = tab_data
         self._project_bar = project_list
@@ -274,7 +274,7 @@ class FastEMROAController(object):
         :param colour: (str) Hexadecimal colour code for the bounding box of the roas in the viewport.
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param project_panel: (FastEMProjectPanel) The corresponding project panel.
-        :param viewport: (FastEMAcquisitionViewport) The acquisition view.
+        :param viewport: (FastEMMainViewport) The acquisition view.
         """
         self._tab_data = tab_data
         self._project_panel = project_panel
@@ -374,7 +374,7 @@ class FastEMROCController(object):
         """
         :param number: (int) The number of the calibration region.
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
-        :param viewport (FastEMAcquisitionViewport) The acquisition view.
+        :param viewport (FastEMMainViewport) The acquisition view.
         param calib_prefix: (str) A prefix, which can indicate the order/type of the calibration (e.g. "calib_1").
         """
         self._viewport = viewport
@@ -436,7 +436,7 @@ class FastEMCalibrationRegionsController(object):
     def __init__(self, tab_data, viewport, calibration):
         """
         :param tab_data (FastEMAcquisitionGUIData): The tab data model.
-        :param viewport (FastEMAcquisitionViewport): The acquisition view.
+        :param viewport (FastEMMainViewport): The acquisition view.
         :param calibration: (FastEMCalibration) The object containing FastEM calibration related attributes.
         """
         self._main_data_model = tab_data.main

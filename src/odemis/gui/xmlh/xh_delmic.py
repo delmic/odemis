@@ -281,33 +281,6 @@ class FastEMCalibrationBarXmlHandler(xrc.XmlResourceHandler):
 HANDLER_CLASS_LIST.append(FastEMCalibrationBarXmlHandler)
 
 
-class FastEMAlignmentBarXmlHandler(xrc.XmlResourceHandler):
-    def __init__(self):
-        xrc.XmlResourceHandler.__init__(self)
-        # Standard styles
-        self.AddWindowStyles()
-        # Custom styles
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, 'FastEMAlignmentBar')
-
-    # Process XML parameters and create the object
-    def DoCreateResource(self):
-
-        if self.GetClass() == 'FastEMAlignmentBar':
-            parent = self.GetParentAsWindow()
-            w = FastEMAlignmentBar(parent,
-                                        self.GetID(),
-                                        self.GetPosition(),
-                                        self.GetSize(),
-                                        self.GetStyle(),
-                                        add_button=self.GetBool('add_button'))
-            self.SetupWindow(w)
-            parent.add_item(w)
-            return w
-HANDLER_CLASS_LIST.append(FastEMAlignmentBarXmlHandler)
-
-
 class FastEMSelectionPanelXmlHandler(xrc.XmlResourceHandler):
     def __init__(self):
         xrc.XmlResourceHandler.__init__(self)
@@ -728,21 +701,13 @@ class TemporalSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 
 HANDLER_CLASS_LIST.append(TemporalSpectrumViewportXmlHandler)
 
-class FastEMAcquisitionViewportXmlHandler(MicroscopeViewportXmlHandler):
+class FastEMMainViewportXmlHandler(MicroscopeViewportXmlHandler):
 
-    klass = vport.FastEMAcquisitionViewport
-
-    def CanHandle(self, node):
-        return self.IsOfClass(node, "FastEMAcquisitionViewport")
-HANDLER_CLASS_LIST.append(FastEMAcquisitionViewportXmlHandler)
-
-class FastEMOverviewViewportXmlHandler(MicroscopeViewportXmlHandler):
-
-    klass = vport.FastEMOverviewViewport
+    klass = vport.FastEMMainViewport
 
     def CanHandle(self, node):
-        return self.IsOfClass(node, "FastEMOverviewViewport")
-HANDLER_CLASS_LIST.append(FastEMOverviewViewportXmlHandler)
+        return self.IsOfClass(node, "FastEMMainViewport")
+HANDLER_CLASS_LIST.append(FastEMMainViewportXmlHandler)
 
 class AngularSpectrumViewportXmlHandler(MicroscopeViewportXmlHandler):
 
