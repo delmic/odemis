@@ -59,7 +59,7 @@ class FastEMOverviewTab(Tab):
         self._stream_controller = FastEMStreamsController(
             view_controller._data_model,
             panel.pnl_overview_streams,
-            ignore_view=False,  # Show all stream panels, independent of any selected viewport
+            ignore_view=True,  # Show all stream panels, independent of any selected viewport
             view_ctrl=view_controller,
         )
         self.sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
