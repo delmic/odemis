@@ -6,8 +6,6 @@
 
 Copyright © 2012-2022 Rinze de Laat, Éric Piel, Delmic
 
-Handles the switch of the content of the main GUI tabs.
-
 This file is part of Odemis.
 
 Odemis is free software: you can redistribute it and/or modify it under the
@@ -37,6 +35,7 @@ from odemis.gui.cont.tabs.fastem_acquisition_tab import FastEMAcquisitionTab
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.gui.util import call_in_wx_main
+from odemis import model
 from odemis.model import getVAs
 
 
@@ -65,7 +64,6 @@ class FastEMMainTab(Tab):
         """
         tab_data = guimod.MicroscopyGUIData(main_data)
         super(FastEMMainTab, self).__init__(name, button, panel, main_frame, tab_data)
-        self.set_label("MAIN")
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
         # need to wait for the tab to be shown on the first time.
         self._initialized_after_show = False
@@ -90,7 +88,7 @@ class FastEMMainTab(Tab):
 
         # Single-beam SEM stream
         hwemt_vanames = ("resolution", "scale", "horizontalFoV")
-        emt_vanames = "dwellTime"
+        emt_vanames = ("dwellTime",)
         hwdet_vanames = ("brightness", "contrast")
         hwemtvas = set()
         emtvas = set()
@@ -116,7 +114,6 @@ class FastEMMainTab(Tab):
         )
         tab_data.streams.value.append(sem_stream)  # it should also be saved
         tab_data.semStream = sem_stream
-
 
         user_settings_panel = main_xrc.xrcpnl_fastem_user_settings(panel.pnl_user_settings)
         self.user_settings_panel = FastEMUserSettingsPanel(user_settings_panel, main_data)
@@ -144,11 +141,20 @@ class FastEMMainTab(Tab):
             self.view_controller,
             sem_stream,
         )
+
+        self._tab = model.VAEnumerated(None, choices={None: ""})
         self.tab_controller = TabController(
-            [self.overview_tab, self.acquisition_tab], main_frame, main_data, self.overview_tab
+            [self.overview_tab, self.acquisition_tab],
+            self._tab,
+            main_frame,
+            main_data,
+            self.overview_tab,
         )
 
         panel.btn_pnl_user_settings.Bind(wx.EVT_BUTTON, self._toggle_user_settings_panel)
+        user_settings_panel.Layout()
+        overview_panel.Layout()
+        acquisition_panel.Layout()
 
     @call_in_wx_main
     def _toggle_user_settings_panel(self, evt):

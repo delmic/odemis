@@ -6821,6 +6821,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
       <orient>wxHORIZONTAL</orient>
       <object class="sizeritem">
         <object class="wxPanel">
+          <size>400,1000</size>
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
@@ -7248,7 +7249,6 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
               <flag>wxEXPAND</flag>
             </object>
           </object>
-          <size>400,1000</size>
           <bg>#333333</bg>
           <style>wxBORDER_NONE</style>
         </object>
@@ -7806,7 +7806,6 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
               <flag>wxEXPAND</flag>
             </object>
           </object>
-          <size>400,-1</size>
           <bg>#333333</bg>
           <style>wxBORDER_NONE</style>
         </object>

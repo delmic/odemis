@@ -26,16 +26,17 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import logging
 import wx
 
-from odemis import model
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 
 from odemis.gui.util import call_in_wx_main
 
 
 class TabController(object):
-    def __init__(self, tab_list, main_frame, main_data, default_tab, use_main_data_tab=False):
+    def __init__(self, tab_list, tab_va, main_frame, main_data, default_tab):
         """
         :param: tab_list: (List[Tab]) list of odemis.gui.cont.tabs.tab.Tab objects.
+        :param: tab_va: (VAEnumerated) va which stores the current tab and all
+            available tabs in choices.
         :param: main_frame: odemis.gui.main_xrc.xrcfr_main
         :param: main_data: (MainGUIData) the main GUI data.
         :param: default_tab: (Tab) the default_tab to be shown.
@@ -43,11 +44,7 @@ class TabController(object):
         """
         self.main_frame = main_frame
         self.main_data = main_data
-        if use_main_data_tab:
-            self._tab = main_data.tab
-        else:
-            # Current tab (+ all available tabs in choices as a dict tab -> name)
-            self._tab = model.VAEnumerated(None, choices={None: ""})
+        self._tab = tab_va
 
         if not tab_list:
             msg = "No interface known for microscope %s" % main_data.role
@@ -151,8 +148,7 @@ class TabBarController(TabController):
 
         # create all the tabs that fit the microscope role
         tab_list, default_tab = self._create_needed_tabs(tab_defs, main_frame, main_data)
-        super().__init__(tab_list, main_frame, main_data, default_tab=default_tab,
-                         use_main_data_tab=True)
+        super().__init__(tab_list, main_data.tab, main_frame, main_data, default_tab=default_tab)
 
     def _create_needed_tabs(self, tab_defs, main_frame, main_data):
         """ Create the tabs needed by the current microscope. The tab's parent is the main_frame.

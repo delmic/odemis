@@ -1,10 +1,9 @@
 # -*- coding: utf-8 -*-
 
 """
-@author: Rinze de Laat, Éric Piel, Philip Winkler, Victoria Mavrikopoulou,
-         Anders Muskens, Bassim Lazem, Nandish Patel
+@author: Nandish Patel
 
-Copyright © 2012-2022 Rinze de Laat, Éric Piel, Delmic
+Copyright © 2024 Nandish Patel, Delmic
 
 Handles the switch of the content of the main GUI tabs.
 
@@ -32,7 +31,17 @@ from odemis.gui.cont.microscope import FastEMStateController
 
 class FastEMUserSettingsPanel(object):
     def __init__(self, panel, main_data):
-        """FastEM user settings panel"""
+        """
+        FastEM user settings panel contains pressure button, e-beam button and
+        panel to select the scintillators.
+
+        During creation, the following controllers are created:
+
+        FastEMStateController
+          Binds the 'hardware' buttons (pressure and ebeam) to their appropriate
+          Vigilant Attributes in the tab and GUI models.
+
+        """
         self.main_data = main_data
         self.panel = panel
 
@@ -42,8 +51,7 @@ class FastEMUserSettingsPanel(object):
 
         # Pump and ebeam state controller
         self._state_controller = FastEMStateController(main_data, panel)
-        panel.btn_pressure.Refresh()
-        panel.pressure_label.Refresh()
+        self.panel.Layout()
 
     def _on_selection_button(self, evt):
         # update main_data.active_scintillators and toggle colour for better visibility

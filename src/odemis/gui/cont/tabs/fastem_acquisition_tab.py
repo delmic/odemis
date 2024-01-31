@@ -6,8 +6,6 @@
 
 Copyright © 2012-2022 Rinze de Laat, Éric Piel, Delmic
 
-Handles the switch of the content of the main GUI tabs.
-
 This file is part of Odemis.
 
 Odemis is free software: you can redistribute it and/or modify it under the
