@@ -290,11 +290,13 @@ class SparcAcquisitionTab(Tab):
         # add "Use scan stage" check box if scan_stage is present
         sstage = main_data.scan_stage
         if sstage:
-            # Move the scan stage to the center (so that scan has maximum range)
             ssaxes = sstage.axes
             posc = {"x": sum(ssaxes["x"].range) / 2,
                     "y": sum(ssaxes["y"].range) / 2}
-            sstage.moveAbs(posc)
+            # In case of a 'real' scan stage, move the scan stage
+            # to the center (so that scan has maximum range)
+            if main_data.stage.name not in sstage.affects.value:
+                sstage.moveAbs(posc)
 
             self.scan_stage_ent = sem_stream_cont.add_setting_entry(
                 "useScanStage",
@@ -303,8 +305,9 @@ class SparcAcquisitionTab(Tab):
                 get_stream_settings_config()[acqstream.SEMStream]["useScanStage"]
             )
 
-            # Draw the limits on the SEM view
             tab_data.useScanStage.subscribe(self._on_use_scan_stage, init=True)
+
+            # In case of a 'real' scan stage, draw the limits on the SEM view
             roi = (ssaxes["x"].range[0] - posc["x"],
                    ssaxes["y"].range[0] - posc["y"],
                    ssaxes["x"].range[1] - posc["x"],

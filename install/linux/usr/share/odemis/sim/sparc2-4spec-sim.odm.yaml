@@ -136,15 +136,15 @@ SPARC2-4Spec: {
 #    properties: {
 #        speed: {"x": 100.e-6, "y": 100.e-6},
 #    },
-    metadata: {
-        POS_ACTIVE_RANGE: {"x": [-5.0e-3, 5.0e-3], "y": [-5.0e-3, 5.0e-3]},
-    },
+#    metadata: {
+#        POS_ACTIVE_RANGE: {"x": [-5.0e-3, 5.0e-3], "y": [-5.0e-3, 5.0e-3]},
+#    },
     affects: ["Sample Stage"],
 }
 
 "Sample Stage": {
     class: simulated.Stage,
-    role: sem-stage,
+    role: stage,
     init: {
         axes: ["x", "y"],
         ranges: {"x": [-0.014, 0.014], "y": [-0.028, 0.028]},

@@ -2236,7 +2236,7 @@ class SPARC2TestCaseStageWrapper(unittest.TestCase):
         cls.ebeam = model.getComponent(role="e-beam")
         cls.sed = model.getComponent(role="se-detector")
         cls.scan_stage = model.getComponent(role="scan-stage")
-        cls.sem_stage = model.getComponent(role="sem-stage")
+        cls.sem_stage = model.getComponent(role="stage")
         cls.ebic = model.getComponent(role="ebic-detector")
 
     @classmethod
