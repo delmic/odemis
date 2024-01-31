@@ -30,18 +30,13 @@ through mill button on localization tab.
 import logging
 import math
 import os
-from concurrent import futures
-from concurrent.futures._base import CancelledError
-from datetime import time
+from concurrent.futures import CancelledError
 
 import wx
 
 import odemis.gui.conf.file as conffile
-import odemis.gui.model as guimod
-from odemis import model, gui
 from odemis.acq import millmng
-from odemis.acq.feature import CryoFeature, FEATURE_ROUGH_MILLED, FEATURE_ACTIVE
-from odemis.gui import conf
+from odemis.acq.feature import FEATURE_ROUGH_MILLED, FEATURE_ACTIVE
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector
 from odemis.util import units
