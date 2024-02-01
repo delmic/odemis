@@ -2,11 +2,11 @@
 <resource class="wxFrame" version="2.5.3.0"
   xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxPanel" name="pnl_tab_fastem_overview">
+    <size>400,-1</size>
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
         <object class="wxPanel">
-          <size>400,1000</size>
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
@@ -49,6 +49,10 @@
               <option>1</option>
               <flag>wxEXPAND</flag>
               <minsize>400,400</minsize>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
             </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">

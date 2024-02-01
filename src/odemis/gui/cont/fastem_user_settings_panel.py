@@ -51,7 +51,6 @@ class FastEMUserSettingsPanel(object):
 
         # Pump and ebeam state controller
         self._state_controller = FastEMStateController(main_data, panel)
-        self.panel.Layout()
 
     def _on_selection_button(self, evt):
         # update main_data.active_scintillators and toggle colour for better visibility

@@ -115,6 +115,10 @@ class FastEMMainTab(Tab):
         tab_data.streams.value.append(sem_stream)  # it should also be saved
         tab_data.semStream = sem_stream
 
+        # Handle the parent panel's size event and set the size of children panel accordingly
+        panel.pnl_user_settings.Bind(wx.EVT_SIZE, self.on_pnl_user_settings_size)
+        panel.pnl_tabs.Bind(wx.EVT_SIZE, self.on_pnl_tabs_size)
+
         user_settings_panel = main_xrc.xrcpnl_fastem_user_settings(panel.pnl_user_settings)
         self.user_settings_panel = FastEMUserSettingsPanel(user_settings_panel, main_data)
 
@@ -152,9 +156,25 @@ class FastEMMainTab(Tab):
         )
 
         panel.btn_pnl_user_settings.Bind(wx.EVT_BUTTON, self._toggle_user_settings_panel)
-        user_settings_panel.Layout()
-        overview_panel.Layout()
-        acquisition_panel.Layout()
+
+    def on_pnl_user_settings_size(self, evt):
+        """Handle the wx.EVT_SIZE event for pnl_user_settings"""
+        self.user_settings_panel.panel.SetSize(
+            (-1, self.user_settings_panel.panel.Parent.GetSize().y)
+        )
+        self.user_settings_panel.panel.Layout()
+        self.user_settings_panel.panel.Refresh()
+        evt.Skip()
+
+    def on_pnl_tabs_size(self, evt):
+        """Handle the wx.EVT_SIZE event for pnl_tabs"""
+        self.overview_tab.panel.SetSize((-1, self.overview_tab.panel.Parent.GetSize().y))
+        self.acquisition_tab.panel.SetSize((-1, self.acquisition_tab.panel.Parent.GetSize().y))
+        self.overview_tab.panel.Layout()
+        self.acquisition_tab.panel.Layout()
+        self.overview_tab.panel.Refresh()
+        self.acquisition_tab.panel.Refresh()
+        evt.Skip()
 
     @call_in_wx_main
     def _toggle_user_settings_panel(self, evt):

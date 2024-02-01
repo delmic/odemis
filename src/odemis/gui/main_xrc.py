@@ -2882,6 +2882,7 @@ IEND\xaeB`\x82'''
     panel_fastem_user_settings_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxPanel" name="pnl_fastem_user_settings">
+    <size>300,-1</size>
     <object class="wxBoxSizer">
       <object class="sizeritem">
         <object class="wxPanel">
@@ -2995,7 +2996,6 @@ IEND\xaeB`\x82'''
       </object>
     </object>
     <bg>#333333</bg>
-    <size>300,600</size>
   </object>
 </resource>'''
 
@@ -6817,11 +6817,11 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
     panel_tab_fastem_acqui_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxPanel" name="pnl_tab_fastem_acqui">
+    <size>400,-1</size>
     <object class="wxBoxSizer">
       <orient>wxHORIZONTAL</orient>
       <object class="sizeritem">
         <object class="wxPanel">
-          <size>400,1000</size>
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
@@ -7377,6 +7377,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
         <object class="wxPanel" name="pnl_user_settings">
           <flag>wxEXPAND</flag>
           <bg>#333333</bg>
+          <size>300,600</size>
         </object>
       </object>
       <orient>wxHORIZONTAL</orient>
@@ -7496,6 +7497,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             <object class="wxPanel" name="pnl_tabs">
               <flag>wxEXPAND</flag>
               <bg>#333333</bg>
+              <size>400,1500</size>
             </object>
           </object>
         </object>
@@ -7523,11 +7525,11 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
     panel_tab_fastem_overview_xrc = u'''\
 <?xml version="1.0" ?><resource xmlns="http://www.wxwidgets.org/wxxrc" class="wxFrame" version="2.5.3.0">
   <object class="wxPanel" name="pnl_tab_fastem_overview">
+    <size>400,-1</size>
     <object class="wxBoxSizer">
       <orient>wxVERTICAL</orient>
       <object class="sizeritem">
         <object class="wxPanel">
-          <size>400,1000</size>
           <object class="wxBoxSizer">
             <object class="sizeritem">
               <object class="wxScrolledWindow" name="scr_win_right">
@@ -7570,6 +7572,10 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
               <option>1</option>
               <flag>wxEXPAND</flag>
               <minsize>400,400</minsize>
+            </object>
+            <object class="spacer">
+              <option>1</option>
+              <flag>wxEXPAND</flag>
             </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
