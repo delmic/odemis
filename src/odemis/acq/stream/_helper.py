@@ -697,15 +697,11 @@ class CCDSettingsStream(RepetitionStream):
 
 
 class SpectrumSettingsStream(CCDSettingsStream):
-    """ A Spectrum stream.
-
-    The live view is just the current raw spectrum (wherever the ebeam is).
-
-    """
-
-    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+    """ A Spectrum stream. The live view is just the current raw spectrum (wherever the e-beam is)."""
+    def __init__(self, name, detector, dataflow, emitter, light=None, **kwargs):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_SPECTRUM
+        self._light = light
         super(SpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
@@ -721,7 +717,47 @@ class SpectrumSettingsStream(CCDSettingsStream):
 
         # TODO: grating/cw as VAs (from the spectrometer)
 
+        if self.light:
+            # FIXME: part for getting power on the spectrum stream
+            # Current channel index to be used for channel's power update
+            # current_exc = self._get_current_excitation()
+            # self._channel_idx = emitter.spectra.value.index(current_exc)
+            self._channel_idx = 0
+
+            # Current power VA representing power for one 'currently selected' channel only
+            cp_range = tuple(r[self._channel_idx] for r in self.light.power.range)
+            # TODO: put the power on 1% at default instead of the current value
+            self.power = model.FloatContinuous(self.light.power.value[self._channel_idx], range=cp_range,
+                                               unit=self.light.power.unit)
+            self.power.clip_on_range = True
+            self.power.subscribe(self._onPower)
+            #TODO: disable the power slider on default, if onActive is triggered enable it
+
     # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
+
+    def _get_current_excitation(self):
+        """
+        Determine the current excitation based on hardware settings
+        return (None or 5 floats): tuple of the current excitation, or None if
+        the light is completely off.
+        """
+        # The current excitation is the band which has the highest intensity
+        intens = self._emitter.power.value
+        m = max(intens)
+        if m == 0:
+            return None
+        i = intens.index(m)
+        return self._emitter.spectra.value[i]
+
+    def _onPower(self, value):
+        """
+        Update the emitter power with the current channel value
+        :param value: current channel value
+        """
+        if self.is_active.value:
+            pwr = list(self.light.power.range[0])
+            pwr[self._channel_idx] = value
+            self.light.power.value = pwr
 
     def _updateImage(self):
         if not self.raw:
