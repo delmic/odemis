@@ -62,7 +62,7 @@ class FastEMMainTab(Tab):
           Handles FastEMOverviewTab and FastEMAcquisitionTab.
 
         """
-        tab_data = guimod.MicroscopyGUIData(main_data)
+        tab_data = guimod.FastEMMainTabGUIData(main_data)
         super(FastEMMainTab, self).__init__(name, button, panel, main_frame, tab_data)
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
         # need to wait for the tab to be shown on the first time.
@@ -146,10 +146,9 @@ class FastEMMainTab(Tab):
             sem_stream,
         )
 
-        self._tab = model.VAEnumerated(None, choices={None: ""})
         self.tab_controller = TabController(
             [self.overview_tab, self.acquisition_tab],
-            self._tab,
+            tab_data.active_tab,
             main_frame,
             main_data,
             self.overview_tab,
@@ -157,16 +156,15 @@ class FastEMMainTab(Tab):
 
         panel.btn_pnl_user_settings.Bind(wx.EVT_BUTTON, self._toggle_user_settings_panel)
 
-    def on_pnl_user_settings_size(self, evt):
+    def on_pnl_user_settings_size(self, _):
         """Handle the wx.EVT_SIZE event for pnl_user_settings"""
         self.user_settings_panel.panel.SetSize(
             (-1, self.user_settings_panel.panel.Parent.GetSize().y)
         )
         self.user_settings_panel.panel.Layout()
         self.user_settings_panel.panel.Refresh()
-        evt.Skip()
 
-    def on_pnl_tabs_size(self, evt):
+    def on_pnl_tabs_size(self, _):
         """Handle the wx.EVT_SIZE event for pnl_tabs"""
         self.overview_tab.panel.SetSize((-1, self.overview_tab.panel.Parent.GetSize().y))
         self.acquisition_tab.panel.SetSize((-1, self.acquisition_tab.panel.Parent.GetSize().y))
@@ -174,13 +172,10 @@ class FastEMMainTab(Tab):
         self.acquisition_tab.panel.Layout()
         self.overview_tab.panel.Refresh()
         self.acquisition_tab.panel.Refresh()
-        evt.Skip()
 
-    @call_in_wx_main
-    def _toggle_user_settings_panel(self, evt):
+    def _toggle_user_settings_panel(self, _):
         self.panel.pnl_user_settings.Show(not self.panel.pnl_user_settings.IsShown())
         self.main_frame.Layout()
-        evt.Skip()
 
     @classmethod
     def get_display_priority(cls, main_data):

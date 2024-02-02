@@ -5,8 +5,6 @@
 
 Copyright © 2024 Nandish Patel, Delmic
 
-Handles the switch of the content of the main GUI tabs.
-
 This file is part of Odemis.
 
 Odemis is free software: you can redistribute it and/or modify it under the
