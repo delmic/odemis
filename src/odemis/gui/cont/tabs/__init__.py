@@ -23,6 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from ._constants import *
 from .analysis_tab import AnalysisTab
 from .correlation_tab import CorrelationTab
 from .cryo_chamber_tab import CryoChamberTab

@@ -35,15 +35,10 @@ from odemis.gui.cont.stream_bar import StreamBarController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.gui.conf.data import get_local_vas
-from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
+from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED, MIRROR_ENGAGED, \
+    MIRROR_PARKED, MIRROR_BAD, MIRROR_NOT_REFD
 from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.util import call_in_wx_main
-
-# Different states of the mirror stage positions
-MIRROR_NOT_REFD = 0
-MIRROR_PARKED = 1
-MIRROR_BAD = 2  # not parked, but not fully engaged either
-MIRROR_ENGAGED = 3
 
 
 class ChamberTab(Tab):
