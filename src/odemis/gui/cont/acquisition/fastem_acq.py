@@ -43,7 +43,7 @@ from odemis.acq.align import fastem as align_fastem
 from odemis.acq.align.fastem import Calibrations
 from odemis.acq.fastem import estimate_acquisition_time
 from odemis.acq.stream import FastEMOverviewStream
-from odemis.gui import FG_COLOUR_BUTTON
+from odemis.gui import FG_COLOUR_BUTTON, conf
 from odemis.gui.conf.data import get_hw_config
 from odemis.gui.conf.util import process_setting_metadata
 from odemis.gui.util import (call_in_wx_main, get_picture_folder,
@@ -512,14 +512,24 @@ class FastEMAcquiController(object):
         # Acquire ROAs for all projects
         fs = {}
         pre_calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
+        pre_calib_plus = [Calibrations.OPTICAL_AUTOFOCUS,
+                          Calibrations.AUTOSTIGMATION,
+                          Calibrations.IMAGE_TRANSLATION_PREALIGN]
+
+        # Read the period with which to run autostigmation, if the value is 5 it should run for
+        # ROAs with index 0, 5, 10, etc., if the value is 0 it should never run autostigmation
+        acqui_conf = conf.get_acqui_conf()
+        autostig_period = math.inf if acqui_conf.autostig_period == 0 else acqui_conf.autostig_period
+
         for p in self._tab_data_model.projects.value:
-            for roa in p.roas.value:
+            for idx, roa in enumerate(p.roas.value):
+                pre_calib = pre_calib_plus if idx % autostig_period == 0 else pre_calibrations
                 f = fastem.acquire(roa, p.name.value, self._main_data_model.ebeam,
                                    self._main_data_model.multibeam, self._main_data_model.descanner,
                                    self._main_data_model.mppc, self._main_data_model.stage,
                                    self._main_data_model.scan_stage, self._main_data_model.ccd,
                                    self._main_data_model.beamshift, self._main_data_model.lens,
-                                   pre_calibrations=pre_calibrations, settings_obs=self._main_data_model.settings_obs)
+                                   pre_calibrations=pre_calib, settings_obs=self._main_data_model.settings_obs)
                 t = estimate_acquisition_time(roa, pre_calibrations)
                 fs[f] = t
 
