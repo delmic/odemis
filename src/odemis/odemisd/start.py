@@ -588,7 +588,14 @@ def find_window(wm_class):
     """
     # Ask xprop for the window (but without actually reading the properties)
     try:
-        found = subprocess.call(["/usr/bin/xprop", "-name", wm_class],
+        # FIXME: this actually looks for a window with the given *name* wm_class
+        # This sort-of works because the Odemis window also has the name Odemis
+        # however, if another window has the name Odemis (eg, the file explorer), that will match it too
+        # => use wmctrl -x -a wm_class (it will automatically show the window if present and return an error if no window found)
+        # or see this script to lookup a window ID with wmctrl: https://github.com/computefoundation/gnu-linux-shell-scripting/blob/master/scripts/x11_management-output_only/window_property_information/getwindclassbyname
+        # => or xdotool search --classname wm_class
+        # it can also bring the window up with windowactivate
+        found = subprocess.call(["/usr/bin/xprop", "-name", wm_class, "WM_CLASS"],
                                 stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except OSError as ex:
         # In case xprop is not installed (unlikely)
