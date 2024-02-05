@@ -62,7 +62,7 @@ class BackendContainer(model.Container):
     """
 
     def __init__(self, model_file, settings_file, create_sub_containers=False,
-                 dry_run=False, name=model.BACKEND_NAME):
+                 dry_run=False, strict_children: bool = False, name=model.BACKEND_NAME):
         """
         inst_file (file): opened file that contains the yaml
         settings_file (file): opened file that contains the persistent data
@@ -71,6 +71,8 @@ class BackendContainer(model.Container):
            have no children created separately) are running in isolated containers
         dry_run (bool): if True, it will check the semantic and try to instantiate the
           model without actually any driver contacting the hardware.
+        strict_children: If True, make the microscope file syntax check stricter, and explicitly
+        distinguish between children and dependencies.
         """
         model.Container.__init__(self, name)
 
@@ -86,7 +88,7 @@ class BackendContainer(model.Container):
         logging.debug("model instantiation file is: %s", self._model.name)
         try:
             self._instantiator = modelgen.Instantiator(model_file, settings_file, self,
-                                                       create_sub_containers, dry_run)
+                                                       create_sub_containers, dry_run, strict_children)
             # save the model
             logging.info("model has been successfully parsed")
         except modelgen.ParseError as exp:
@@ -485,6 +487,7 @@ class BackendRunner(object):
     CONTAINER_SEPARATED = "+" # each component is started in a separate container
 
     def __init__(self, model_file, settings_file, daemon=False, dry_run=False,
+                 strict_children: bool = False,
                  containement=CONTAINER_SEPARATED):
         """
         containement (CONTAINER_*): the type of container policy to use
@@ -493,6 +496,7 @@ class BackendRunner(object):
         self.settings = settings_file
         self.daemon = daemon
         self.dry_run = dry_run
+        self.strict_children = strict_children
         self.containement = containement
 
         self._container = None
@@ -597,7 +601,7 @@ class BackendRunner(object):
             create_sub_containers = False
 
         self._container = BackendContainer(self.model, self.settings, create_sub_containers,
-                                        dry_run=self.dry_run)
+                                        dry_run=self.dry_run, strict_children=self.strict_children)
 
         try:
             self._container.run()
@@ -659,7 +663,9 @@ def main(args):
     opt_grp = parser.add_argument_group('Options')
     opt_grp.add_argument('--validate', dest="validate", action="store_true", default=False,
                          help="Validate the microscope description file and exit")
-    dm_grpe.add_argument("--debug", action="store_true", dest="debug",
+    opt_grp.add_argument("--strict-children", dest="strict_children", action="store_true", default=False,
+                         help="Stricter microscope file check forbidding using children as dependencies")
+    opt_grp.add_argument("--debug", action="store_true", dest="debug",
                          default=False, help="Activate debug mode, where everything runs in one process")
     opt_grp.add_argument("--log-level", dest="loglev", metavar="LEVEL", type=int,
                          default=0, help="Set verbosity level (0-2, default = 0)")
@@ -771,7 +777,8 @@ def main(args):
 
         # let's become the back-end for real
         runner = BackendRunner(options.model, settings_file, options.daemon,
-                               dry_run=options.validate, containement=cont_pol)
+                               dry_run=options.validate, strict_children=options.strict_children,
+                               containement=cont_pol)
         runner.run()
     except ValueError as exp:
         logging.error("%s", exp)

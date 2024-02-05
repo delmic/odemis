@@ -354,6 +354,9 @@ class BackendStarter(object):
                  "--log-level", self._config["LOGLEVEL"],
                  "--log-target", self._config["LOGFILE"],
                  modelfile]
+        if self._config.get("MODEL_STRICT_SYNTAX", "").lower() in ("true", "1"):
+            odemisd_cmd.append("--strict-children")
+
         logging.debug("Running: %s", " ".join(odemisd_cmd))
 
         # odemisd likes to start as root to be able to create /var/run files, but then

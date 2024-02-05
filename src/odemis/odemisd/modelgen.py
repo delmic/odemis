@@ -223,8 +223,8 @@ def get_class(name):
 #  * A child is a component which is created by another one (provided/creation)
 # It used to be the case that 'children' and 'dependencies' were provided in the same attribute
 # called 'children'. Therefore we need to provide compatibility with both ways of defining references.
-# The microscope class is special. It only has a .children attribute and no .dependencies
-# attribute because we want to be able to list all the components.
+# The microscope class was special. It has a .children attribute to list all the components in the
+# system. Now, all components listed as considered part of the system.
 
 
 class Instantiator(object):
@@ -233,7 +233,7 @@ class Instantiator(object):
     """
 
     def __init__(self, inst_file, settings_file=None, container=None, create_sub_containers=False,
-                 dry_run=False):
+                 dry_run=False, strict_children: bool = True):
         """
         inst_file (file): opened file that contains the YAML
         settings_file (file or None): opened settings file in YAML format.
@@ -245,6 +245,9 @@ class Instantiator(object):
           model without actually any driver contacting the hardware. It will also
           be stricter, and some issues which are normally just warnings will be
           considered errors.
+        strict_children: If True, only can use "children" for components whithout class and created
+        by delegation by one other component. Otherwise, children is allowed as synonym for
+        "dependencies" (for backward-compatibility).
         """
         self.ast = self._parse_instantiation_model(inst_file)  # AST of the model to instantiate
         self._can_persist = settings_file is not None
@@ -259,6 +262,7 @@ class Instantiator(object):
         self._comp_container = {}  # comp name -> container: the container that runs the given component
         self.create_sub_containers = create_sub_containers # flag for creating sub-containers
         self.dry_run = dry_run # flag for instantiating mock version of the components
+        self.strict_children = strict_children  # Flag to indicate
 
         self._check_structure()
         self._preparate_microscope()
@@ -340,21 +344,41 @@ class Instantiator(object):
         Add the "parents" field (= reverse of children) and update the creator
          field for the components that don't have it explicitly set.
         """
-        # update the children by adding a "parents" attribute
         for name, comp in self.ast.items():
-            references = list(comp.get("children", {}).values()) + list(comp.get("dependencies", {}).values())
-            for ref in references:
+            # Check the dependencies seem correct (ie, not referencing itself or non-existing components)
+            for ref in comp.get("dependencies", {}).values():
                 # detect direct loop
                 if ref == name:
                     raise SemanticError("Error in microscope file: "
-                                        "component %s is child/dependency of itself." % ref)
+                                        f"component {ref} is dependency of itself.")
                 if ref not in self.ast:
+                    raise SemanticError(f"Error in microscope file: "
+                                        f"component {name} references unknown dependency {ref}.")
+
+            children = comp.get("children", {}).values()
+            # Earlier versions used to require that all the components with a role were added as
+            # "children" of the microscope but we don't need this anymore.
+            if children and comp.get("class") == "Microscope":
+                if self.strict_children:
                     raise SemanticError("Error in microscope file: "
-                                        "component %s references unknown child/dependency %s." %
-                                        (name, ref))
+                                        f"Microscope component {name} should not have children (anymore).")
+                continue
+
+            # update the children by adding a "parents" attribute
+            for ref in children:
+                # detect direct loop
+                if ref == name:
+                    raise SemanticError("Error in microscope file: "
+                                        f"component {ref} is child of itself.")
+                if ref not in self.ast:
+                    raise SemanticError(f"Error in microscope file: "
+                                        f"component {name} references unknown child {ref}.")
 
                 if "parents" not in self.ast[ref].keys():
                     self.ast[ref]["parents"] = []
+                elif self.strict_children:  # Already a parent? That's too many!
+                    raise SemanticError(f"Error in microscope file: component \"{ref}\" "
+                                        "is specified as child of multiple components.")
                 self.ast[ref]["parents"].append(name)
 
         # For each component which is created by delegation (= no class):
@@ -365,16 +389,15 @@ class Instantiator(object):
                 continue
             parents = comp.get("parents", [])  # If empty, will raise an error just later
             if "creator" in comp:
+                if self.strict_children:
+                    raise SyntaxError(f"creator option is not allowed anymore, but found on component {name}")
+
                 creator_name = comp["creator"]
                 if creator_name not in parents:
                     raise SemanticError("Error in microscope file: component %s "
                             "is creator of component %s but doesn't have it as a child."
                             % (creator_name, name))
             else:
-                # If one parent is Microscope, it's dropped for the "creator"
-                # guess because Microscope is known to create no component.
-                parents = [p for p in parents if self.ast[p].get("class") != "Microscope"]
-
                 if len(parents) == 0:
                     raise SemanticError("Error in microscope file: component \"%s\" "
                             "has no class specified and is not child of any component." % name)
@@ -391,6 +414,9 @@ class Instantiator(object):
                         comp["creator"] = creator
                         logging.debug("Identified %s as creator of %s",
                                       creator, name)
+                    elif self.strict_children:
+                        raise SemanticError("Error in microscope file: component \"%s\" "
+                                            "is specified as child of multiple components." % name)
 
     def _check_cyclic(self):
 
@@ -608,6 +634,9 @@ class Instantiator(object):
         children_names = attr.get("children", {})
         for child_name in children_names.values():
             if "class" in self.ast[child_name]:
+                if self.strict_children:
+                    raise SemanticError(f"Error in microscope file: Component {child_name} is marked "
+                                        f"as child of {name}, but appears to be a dependency")
                 try:
                     cont = self._comp_container[child_name]
                 except KeyError:
