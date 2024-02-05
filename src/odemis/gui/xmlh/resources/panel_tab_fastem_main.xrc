@@ -20,7 +20,7 @@
             </object>
             <object class="sizeritem">
               <object class="ImageButton" name="btn_pnl_user_settings">
-                <icon>../../img/icon/ico_chevron_up.png</icon>
+                <icon>../../img/icon/ico_chevron_left.png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
                 <style>wxALIGN_CENTRE</style>

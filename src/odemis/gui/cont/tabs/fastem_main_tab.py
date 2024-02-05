@@ -25,7 +25,7 @@ import collections
 import wx
 
 from odemis.acq.stream import EMStream, FastEMSEMStream
-from odemis.gui import main_xrc
+from odemis.gui import img, main_xrc
 from odemis.gui.comp.viewport import FastEMMainViewport
 from odemis.gui.cont.fastem_user_settings_panel import FastEMUserSettingsPanel
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
@@ -34,8 +34,6 @@ from odemis.gui.cont.tabs.fastem_overview_tab import FastEMOverviewTab
 from odemis.gui.cont.tabs.fastem_acquisition_tab import FastEMAcquisitionTab
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
-from odemis.gui.util import call_in_wx_main
-from odemis import model
 from odemis.model import getVAs
 
 
@@ -174,7 +172,12 @@ class FastEMMainTab(Tab):
         self.acquisition_tab.panel.Refresh()
 
     def _toggle_user_settings_panel(self, _):
-        self.panel.pnl_user_settings.Show(not self.panel.pnl_user_settings.IsShown())
+        shown = not self.panel.pnl_user_settings.IsShown()
+        self.panel.pnl_user_settings.Show(shown)
+        icon_direction = "left" if shown else "right"
+        self.panel.btn_pnl_user_settings.SetIcon(
+            img.getBitmap(f"icon/ico_chevron_{icon_direction}.png")
+        )
         self.main_frame.Layout()
 
     @classmethod

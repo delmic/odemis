@@ -7390,7 +7390,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
             </object>
             <object class="sizeritem">
               <object class="ImageButton" name="btn_pnl_user_settings">
-                <icon>______img_icon_ico_chevron_up_png</icon>
+                <icon>______img_icon_ico_chevron_left_png</icon>
                 <height>16</height>
                 <face_colour>def</face_colour>
                 <style>wxALIGN_CENTRE</style>
@@ -7509,6 +7509,79 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
   </object>
 </resource>'''
 
+    ______img_icon_ico_chevron_left_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00
+\x00\x00\x00\x08\x08\x06\x00\x00\x00\xc0\xfan\xb6\x00\x00\x00\x88zTXtR\
+aw profile type exif\x00\x00x\xda]\x8eI\x0e\x85@\x08D\xf7\x9c\xc2#05\xc3\
+q\x8c\xd1\xe4\xdf\xe0\x1f_\xda\xd68\xbcEQ\x10R\x00\xeb\xff\xb7\xc1\xd4!\
+T\xd0\xe6ai\x86\x85\xa6&\xcfe\x02\x07\x82H\x8c\xd4k\xe9\xe0\xacB\xe5\xb8\
+\xda\xb3\x07\xe1a,\xc3Q\xefEU|\xd1\xc4\xc26Wwk\xb6\xd8\xc2\x95\xce\xab\xc8\
+\xa1$\x08\xc7V\x0f\xeb\xaf\xe4\xe3\xf2|}\xf5\x99\xc7\xfb\x00\xec\xfb\x86\
+-\x0c\x9d]\x0eM\x00\x00
+\x00iTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpacket begin="\xef\xbb\
+\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?>
+<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0-Exiv2">
+ <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
+  <rdf:Description rdf:about=""
+    xmlns:exif="http://ns.adobe.com/exif/1.0/"
+    xmlns:tiff="http://ns.adobe.com/tiff/1.0/"
+   exif:PixelXDimension="10"
+   exif:PixelYDimension="8"
+   tiff:ImageWidth="10"
+   tiff:ImageHeight="8"
+   tiff:Orientation="1"/>
+ </rdf:RDF>
+</x:xmpmeta>
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                                                                      \
+                              
+                           
+<?xpacket end="w"?>)Q\xeb\x1e\x00\x00\x00\x04sBIT\x08\x08\x08\x08|\x08\
+d\x88\x00\x00\x00\\IDAT\x18\xd3\x8d\xd0\xcb\x09\x800\x10\x84\xe1\xcfG\x0f\
+\xda\x83W\x0b\xd4blB\xc4j\xbcXE\xbcD\x08I@\xf7\xb4?\xcc\xb23C9\xd3\x07\xeb\
+\xb0\xe0\xc2\x90s\x1fE#6\x04\xcch\xb0\x27|\xbf\xa2;^w\x15\x06m\xf2:dVB\xc5\
+\xbf\x11\x27\x8e\xb8\xe7\\\x84Y\xb30)\xff\xab\xe7\x01\xe0\xfc\x13\xce\x00\
+\xb5\x09R\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     ______img_icon_ico_chevron_up_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -7519,6 +7592,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
  \x80d\x06\x0c\x00Y\x00U\xde\x13[A\x1e\xde}\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_main/panel_tab_fastem_main_xrc', bytearray(panel_tab_fastem_main_xrc.encode('utf-8')))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_main/______img_icon_ico_chevron_left_png', bytearray(______img_icon_ico_chevron_left_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_fastem_main/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
     __res.Load('memory:XRC/panel_tab_fastem_main/panel_tab_fastem_main_xrc')
 
