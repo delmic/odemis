@@ -7513,74 +7513,10 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
 \x89PNG\x0d
 \x1a
 \x00\x00\x00\x0dIHDR\x00\x00\x00
-\x00\x00\x00\x08\x08\x06\x00\x00\x00\xc0\xfan\xb6\x00\x00\x00\x88zTXtR\
-aw profile type exif\x00\x00x\xda]\x8eI\x0e\x85@\x08D\xf7\x9c\xc2#05\xc3\
-q\x8c\xd1\xe4\xdf\xe0\x1f_\xda\xd68\xbcEQ\x10R\x00\xeb\xff\xb7\xc1\xd4!\
-T\xd0\xe6ai\x86\x85\xa6&\xcfe\x02\x07\x82H\x8c\xd4k\xe9\xe0\xacB\xe5\xb8\
-\xda\xb3\x07\xe1a,\xc3Q\xefEU|\xd1\xc4\xc26Wwk\xb6\xd8\xc2\x95\xce\xab\xc8\
-\xa1$\x08\xc7V\x0f\xeb\xaf\xe4\xe3\xf2|}\xf5\x99\xc7\xfb\x00\xec\xfb\x86\
--\x0c\x9d]\x0eM\x00\x00
-\x00iTXtXML:com.adobe.xmp\x00\x00\x00\x00\x00<?xpacket begin="\xef\xbb\
-\xbf" id="W5M0MpCehiHzreSzNTczkc9d"?>
-<x:xmpmeta xmlns:x="adobe:ns:meta/" x:xmptk="XMP Core 4.4.0-Exiv2">
- <rdf:RDF xmlns:rdf="http://www.w3.org/1999/02/22-rdf-syntax-ns#">
-  <rdf:Description rdf:about=""
-    xmlns:exif="http://ns.adobe.com/exif/1.0/"
-    xmlns:tiff="http://ns.adobe.com/tiff/1.0/"
-   exif:PixelXDimension="10"
-   exif:PixelYDimension="8"
-   tiff:ImageWidth="10"
-   tiff:ImageHeight="8"
-   tiff:Orientation="1"/>
- </rdf:RDF>
-</x:xmpmeta>
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                                                                      \
-                              
-                           
-<?xpacket end="w"?>)Q\xeb\x1e\x00\x00\x00\x04sBIT\x08\x08\x08\x08|\x08\
-d\x88\x00\x00\x00\\IDAT\x18\xd3\x8d\xd0\xcb\x09\x800\x10\x84\xe1\xcfG\x0f\
-\xda\x83W\x0b\xd4blB\xc4j\xbcXE\xbcD\x08I@\xf7\xb4?\xcc\xb23C9\xd3\x07\xeb\
-\xb0\xe0\xc2\x90s\x1fE#6\x04\xcch\xb0\x27|\xbf\xa2;^w\x15\x06m\xf2:dVB\xc5\
-\xbf\x11\x27\x8e\xb8\xe7\\\x84Y\xb30)\xff\xab\xe7\x01\xe0\xfc\x13\xce\x00\
-\xb5\x09R\x00\x00\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x08\x08\x04\x00\x00\x00j\xf3\xa6=\x00\x00\x00DIDAT\x08[]\xce\
+\xbb\x0d\x800\x0c@\xc1\x13\x19\x02\xef\xc0\x92\xb0\x170\x0d\x0dS@\x11\xc7\
+B\xbc\xe6*\x18-?5\xab\xcb\\"\x1cvQ"\xdcV\xad\xc4\x04\x9e\\3D8s\xbc\x9b\
+5[\x1e\xeaV\x9f\x97^\xfe\x89\x12U\xd2\x1fwJ\x00\x00\x00\x00IEND\xaeB`\x82'''
 
     ______img_icon_ico_chevron_up_png = b'''\
 \x89PNG\x0d
@@ -9396,12 +9332,11 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
     ______img_icon_ico_trash_png = b'''\
 \x89PNG\x0d
 \x1a
-\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x06\x00\x00\x00\
-\x1f\xf3\xffa\x00\x00\x00\x09pHYs\x00\x00\x0b\x13\x00\x00\x0b\x13\x01\x00\
-\x9a\x9c\x18\x00\x00\x00MIDATx\x9cc`\xa0\x11hc``\xf8\xc9\xc0\xc0\xf0\x1f\
-J\xb7\x90j\xc0O\x06\x06\x06!(\x1bD\xff F\xd3\x120^C(\x91g\xf8O$=j\xc0\xa0\
-\x0e\xc4\x9fH)\x10\x1d\x10\x95"Ai\x1e\x96\x07\xd01H\xbc\x99\x90\x01\xf4\
-\x07\x00\xd8]?\xea\xa3 \xa6\xc2\x00\x00\x00\x00IEND\xaeB`\x82'''
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x04\x00\x00\x00\
+\xb5\xfa7\xea\x00\x00\x00>IDAT(\xcfc` \x01\xb41\xfcd\xf8\x0f\xc4-\xb8\x14\
+\xfcd\x10\x02\x92B\x0c?0\xa5\xfec\x85hJ\xf0\xf3\xc1\x02\xe8x\x18*\x80\x84\
+"\x0c`\x09\xcd\x16p<\xc0\xe0O\x86f\x06\xaa\x01\x00\x07s?\xea["x\xa5\x00\
+\x00\x00\x00IEND\xaeB`\x82'''
 
     ______img_icon_ico_acqui_png = b'''\
 \x89PNG\x0d
