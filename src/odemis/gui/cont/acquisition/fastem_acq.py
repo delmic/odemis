@@ -342,6 +342,8 @@ class FastEMAcquiController(object):
         self.bmp_acq_status_info = self._tab_panel.bmp_acq_status_info
         self.acq_future = None  # ProgressiveBatchFuture
         self._fs_connector = None  # ProgressiveFutureConnector
+        self.save_full_cells = model.BooleanVA(False)  # Set to True if full cells should be saved
+        self.save_full_cells.subscribe(self._on_va_change)
 
         # Link buttons
         self.btn_acquire.Bind(wx.EVT_BUTTON, self.on_acquisition)
@@ -397,11 +399,24 @@ class FastEMAcquiController(object):
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def check_acquire_button(self):
-        self.btn_acquire.Enable(all(calibration.is_done.value for calibration in self._tab_data_model.calibrations.values())
-                                and self.roa_count
-                                and not self._get_undefined_calibrations_2()
-                                and not self._get_undefined_calibrations_3() and
-                                not self._main_data_model.is_acquiring.value)
+        if not self.save_full_cells.value:
+            self.btn_acquire.Enable(
+                all(calibration.is_done.value for calibration in self._tab_data_model.calibrations.values())
+                and self.roa_count
+                and not self._get_undefined_calibrations_2()
+                and not self._get_undefined_calibrations_3() and
+                not self._main_data_model.is_acquiring.value
+            )
+        else:
+            # if we are saving the full cell images, it is not necessary to run calibration 3
+            calibrations = self._tab_data_model.calibrations
+            self.btn_acquire.Enable(
+                calibrations[fastem.CALIBRATION_1].is_done.value
+                and calibrations[fastem.CALIBRATION_2].is_done.value
+                and self.roa_count
+                and not self._get_undefined_calibrations_2()
+                and not self._main_data_model.is_acquiring.value
+            )
 
     @wxlimit_invocation(1)  # max 1/s; called in main GUI thread
     def update_acquisition_time(self):
@@ -529,7 +544,8 @@ class FastEMAcquiController(object):
                                    self._main_data_model.mppc, self._main_data_model.stage,
                                    self._main_data_model.scan_stage, self._main_data_model.ccd,
                                    self._main_data_model.beamshift, self._main_data_model.lens,
-                                   pre_calibrations=pre_calib, settings_obs=self._main_data_model.settings_obs)
+                                   pre_calibrations=pre_calib, save_full_cells=self.save_full_cells.value,
+                                   settings_obs=self._main_data_model.settings_obs)
                 t = estimate_acquisition_time(roa, pre_calibrations)
                 fs[f] = t
 
