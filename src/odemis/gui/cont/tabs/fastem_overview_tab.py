@@ -6,8 +6,6 @@
 
 Copyright © 2012-2022 Rinze de Laat, Éric Piel, Delmic
 
-Handles the switch of the content of the main GUI tabs.
-
 This file is part of Odemis.
 
 Odemis is free software: you can redistribute it and/or modify it under the
@@ -23,34 +21,23 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import collections
 from concurrent.futures import CancelledError
 import logging
 import wx
 
-from odemis.model import getVAs
-
 from odemis.acq.align import fastem
-import odemis.acq.stream as acqstream
-from odemis.gui.cont.stream_bar import FastEMStreamsController
-import odemis.gui.cont.views as viewcont
-import odemis.gui.model as guimod
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.stream import EMStream
-from odemis.gui.comp.viewport import FastEMOverviewViewport
 from odemis.gui.cont.acquisition import FastEMOverviewAcquiController
-from odemis.gui.model import TOOL_ACT_ZOOM_FIT
-from odemis.gui.util import call_in_wx_main, wxlimit_invocation
+from odemis.gui.cont.stream_bar import FastEMStreamsController
 from odemis.gui.cont.tabs.tab import Tab
+from odemis.gui.util import call_in_wx_main, wxlimit_invocation
+import odemis.gui.model as guimod
 
 
 class FastEMOverviewTab(Tab):
-    def __init__(self, name, button, panel, main_frame, main_data):
+    def __init__(self, name, button, panel, main_frame, main_data, vp, view_controller, sem_stream):
 
         # During creation, the following controllers are created:
-        #
-        # ViewPortController
-        #   Processes given viewport.
         #
         # StreamController
         #   Manages the single beam stream.
@@ -58,61 +45,20 @@ class FastEMOverviewTab(Tab):
         # Acquisition Controller
         #   Takes care of the acquisition and acquisition selection buttons.
 
-        self.tab_data = guimod.FastEMOverviewGUIData(main_data)
 
-        super(FastEMOverviewTab, self).__init__(name, button, panel, main_frame, self.tab_data)
-        self.set_label("OVERVIEW")
+        self.tab_data = guimod.FastEMOverviewGUIData(main_data)
+        super().__init__(name, button, panel, main_frame, self.tab_data)
 
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
         # need to wait for the tab to be shown on the first time.
         self._initialized_after_show = False
 
-        # View Controller
-        vp = panel.vp_fastem_overview
-        assert(isinstance(vp, FastEMOverviewViewport))
-        vpv = collections.OrderedDict([
-            (vp,
-             {"name": "Overview",
-              "stage": main_data.stage,
-              "cls": guimod.StreamView,
-              "stream_classes": EMStream,
-              }),
-        ])
-        self.view_controller = viewcont.ViewPortController(self.tab_data, panel, vpv)
-
-        # Single-beam SEM stream
-        hwemt_vanames = ("resolution", "scale", "horizontalFoV")
-        emt_vanames = ("dwellTime")
-        hwdet_vanames = ("brightness", "contrast")
-        hwemtvas = set()
-        emtvas = set()
-        hwdetvas = set()
-        for vaname in getVAs(main_data.ebeam):
-            if vaname in hwemt_vanames:
-                hwemtvas.add(vaname)
-            if vaname in emt_vanames:
-                emtvas.add(vaname)
-        for vaname in getVAs(main_data.sed):
-            if vaname in hwdet_vanames:
-                hwdetvas.add(vaname)
-        sem_stream = acqstream.FastEMSEMStream(
-            "Single Beam",
-            main_data.sed,
-            main_data.sed.data,
-            main_data.ebeam,
-            focuser=main_data.ebeam_focus,
-            hwemtvas=hwemtvas,
-            hwdetvas=hwdetvas,
-            emtvas=emtvas,
-        )
-        sem_stream.should_update.subscribe(self._is_stream_live)
-        self.tab_data.streams.value.append(sem_stream)  # it should also be saved
-        self.tab_data.semStream = sem_stream
+        self.vp = vp
         self._stream_controller = FastEMStreamsController(
-            self.tab_data,
-            panel.pnl_fastem_overview_streams,
+            view_controller._data_model,
+            panel.pnl_overview_streams,
             ignore_view=True,  # Show all stream panels, independent of any selected viewport
-            view_ctrl=self.view_controller,
+            view_ctrl=view_controller,
         )
         self.sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         self.sem_stream_cont.stream_panel.show_remove_btn(False)
@@ -138,12 +84,6 @@ class FastEMOverviewTab(Tab):
             panel,
         )
         main_data.is_acquiring.subscribe(self.on_acquisition)
-
-        # Toolbar
-        self.tb = panel.fastem_overview_toolbar
-        # Add fit view to content to toolbar
-        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
-        # TODO: add tool to zoom out (ie, all the scintillators, calling canvas.zoom_out())
 
     def _on_btn_optical_autofocus(self, _):
         """
@@ -307,7 +247,7 @@ class FastEMOverviewTab(Tab):
             # At init the canvas has sometimes a weird size (eg, 1000x1 px), which
             # prevents the fitting to work properly. We need to wait until the
             # canvas has been resized to the final size. That's quite late...
-            wx.CallAfter(self.panel.vp_fastem_overview.canvas.zoom_out)
+            wx.CallAfter(self.vp.canvas.zoom_out)
             self._initialized_after_show = True
 
         if not show:
@@ -315,8 +255,3 @@ class FastEMOverviewTab(Tab):
 
     def terminate(self):
         self._stream_controller.pauseStreams()
-
-    def _is_stream_live(self, flag):
-        # Disable chamber and acquisition tab buttons when playing live stream
-        self.main_frame.btn_tab_fastem_chamber.Enable(not flag)
-        self.main_frame.btn_tab_fastem_acqui.Enable(not flag)

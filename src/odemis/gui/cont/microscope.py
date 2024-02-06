@@ -1450,15 +1450,14 @@ class FastEMStateController(object):
     Manages the chamber pressure and ebeam power states.
     """
 
-    def __init__(self, tab_data, tab_panel):
+    def __init__(self, main_data, tab_panel):
         """ Binds the 'hardware' buttons (pressure and ebeam) to their appropriate
         Vigilant Attributes in the tab and GUI models
 
         tab_data (MicroscopyGUIData): ebeam, chamber
         tab_panel: (wx.Panel): the microscope tab
         """
-        self._main_data = tab_data.main
-        self._tab_data = tab_data
+        self._main_data = main_data
         self._tab_panel = tab_panel
 
         # E-beam management

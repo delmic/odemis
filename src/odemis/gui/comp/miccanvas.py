@@ -1791,7 +1791,7 @@ class AngularResolvedCanvas(canvas.DraggableCanvas):
                 self.view.thumbnail.value = img
 
 
-class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
+class FastEMMainCanvas(DblMicroscopeCanvas):
     """
     Canvas for FastEM acquisition tab, inherits from DblMicroscopeCanvas. Unlike DblMicroscopeCanvas,
     it can contain multiple ROA overlays and calibration overlays specific to FastEM. It also allows to
@@ -1799,7 +1799,7 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
     """
 
     def __init__(self, *args, **kwargs):
-        super(FastEMAcquisitionCanvas, self).__init__(*args, **kwargs)
+        super().__init__(*args, **kwargs)
 
     def add_background_overlay(self, rectangles):
         """
@@ -1874,5 +1874,5 @@ class FastEMAcquisitionCanvas(DblMicroscopeCanvas):
         evt.Skip()
 
     def setView(self, view, tab_data):
-        super(FastEMAcquisitionCanvas, self).setView(view, tab_data)
+        super().setView(view, tab_data)
         view.show_crosshair.value = False

@@ -1024,3 +1024,15 @@ class FastEMProject(object):
     def __init__(self, name):
         self.name = model.StringVA(name)
         self.roas = model.ListVA([])  # list of acq.fastem.FastEMROA
+
+
+class FastEMMainTabGUIData(MicroscopyGUIData):
+    """
+    GUI model for the FastEM main tab.
+    """
+
+    def __init__(self, main):
+        assert main.microscope is not None
+        super().__init__(main)
+
+        self.active_tab = model.VAEnumerated(None, choices={None: ""})

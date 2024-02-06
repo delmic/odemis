@@ -2,58 +2,9 @@
 <resource class="wxFrame" version="2.5.3.0"
   xmlns="http://www.wxwidgets.org/wxxrc">
   <object class="wxPanel" name="pnl_tab_fastem_acqui">
+    <size>400,-1</size>
     <object class="wxBoxSizer">
       <orient>wxHORIZONTAL</orient>
-      <object class="sizeritem">
-        <object class="wxPanel" name="pnl_left">
-          <object class="wxBoxSizer">
-            <object class="spacer">
-              <option>1</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="ToolBar" name="fastem_acq_toolbar">
-                <style>wxVERTICAL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxALIGN_RIGHT</flag>
-            </object>
-            <orient>wxVERTICAL</orient>
-            <object class="spacer">
-              <option>8</option>
-              <flag>wxEXPAND</flag>
-            </object>
-            <object class="sizeritem">
-              <object class="ImageButton" name="btn_log">
-                <icon>../../img/icon/ico_chevron_up.png</icon>
-                <height>16</height>
-                <face_colour>def</face_colour>
-                <tooltip>Open log panel</tooltip>
-                <style>wxALIGN_CENTRE</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
-              </object>
-              <flag>wxBOTTOM|wxLEFT|wxRIGHT</flag>
-              <border>10</border>
-            </object>
-          </object>
-          <size>-1,-1</size>
-          <bg>#333333</bg>
-        </object>
-        <flag>wxEXPAND</flag>
-      </object>
-      <object class="sizeritem">
-        <object class="FastEMAcquisitionViewport" name="vp_fastem_acqui">
-          <XRCED>
-            <assign_var>1</assign_var>
-          </XRCED>
-        </object>
-        <option>1</option>
-        <flag>wxEXPAND</flag>
-      </object>
       <object class="sizeritem">
         <object class="wxPanel">
           <object class="wxBoxSizer">
@@ -64,7 +15,7 @@
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
                       <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_fastem_acquisition_streams">
+                        <object class="StreamBar" name="pnl_acquisition_streams">
                           <size>300,-1</size>
                           <add_button>0</add_button>
                           <fg>#7F7F7F</fg>
@@ -83,9 +34,9 @@
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
                           <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
+                            <XRCED>
+                              <assign_var>1</assign_var>
+                            </XRCED>
                         </object>
                         <label>ACQUISITION SETTINGS</label>
                         <fg>#1A1A1A</fg>
@@ -266,7 +217,7 @@
                         <bg>#555555</bg>
                       </object>
                       <object class="FoldPanelItem">
-                        <object class="FastEMProjectList" name="pnl_fastem_projects">
+                        <object class="FastEMProjectList" name="pnl_projects">
                           <size>300,-1</size>
                           <add_button>1</add_button>
                           <fg>#7F7F7F</fg>
@@ -483,7 +434,6 @@
               <flag>wxEXPAND</flag>
             </object>
           </object>
-          <size>400,-1</size>
           <bg>#333333</bg>
           <style>wxBORDER_NONE</style>
         </object>
