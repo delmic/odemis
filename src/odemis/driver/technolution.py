@@ -848,13 +848,14 @@ class MirrorDescanner(model.Emitter):
     the collected signal always hits the center of each mppc cell on the detector.
     """
 
-    def __init__(self, name, role, parent, **kwargs):
+    def __init__(self, name, role, parent, physical_flyback=None, **kwargs):
         """
         Initialize the mirror descanner.
 
         :param name(str): Name of the component
         :param role(str): Role of the component
         :param parent (AcquisitionServer object): Parent object of the component
+        :param physical_flyback (float): physical time for the mirror descanner to perform a flyback in seconds
         """
         super(MirrorDescanner, self).__init__(name, role, parent=parent, **kwargs)
 
@@ -871,7 +872,8 @@ class MirrorDescanner(model.Emitter):
         self.clockPeriod = model.FloatVA(1 / clockFrequencyData['frequency'], unit='s', readonly=True)
 
         # physical time for the mirror descanner to perform a flyback (moving back to start of a line scan)
-        self.physicalFlybackTime = model.FloatContinuous(150e-6, range=(0, 1e-3), unit='s')
+        flyback = 150e-6 if not physical_flyback else physical_flyback
+        self.physicalFlybackTime = model.FloatContinuous(flyback, range=(0, 1e-3), unit='s')
 
     def getXAcqSetpoints(self):
         """
