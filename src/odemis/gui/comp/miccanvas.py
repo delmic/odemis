@@ -1058,7 +1058,7 @@ class OverviewCanvas(DblMicroscopeCanvas):
         self.default_margin = 0
         self.margins = (self.default_margin, self.default_margin)
 
-        self.abilities = set()  # Cannot move, zoom...
+        self.abilities = {CAN_MOVE_STAGE}  # Cannot zoom, but allowed to move (if there is a stage)
 
         self.background_brush = wx.BRUSHSTYLE_SOLID
 
