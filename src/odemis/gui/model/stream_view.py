@@ -469,7 +469,7 @@ class StreamView(View):
         if hasattr(self._stage.axes["x"], "range"):
             stage_limits["x"] = list(self._stage.axes["x"].range)
         if hasattr(self._stage.axes["y"], "range"):
-            stage_limits["y"] = list(self._stage.axes["x"].range)
+            stage_limits["y"] = list(self._stage.axes["y"].range)
 
         # Area which can be used for imaging
         pos_active_range = self._stage.getMetadata().get(model.MD_POS_ACTIVE_RANGE, {})
