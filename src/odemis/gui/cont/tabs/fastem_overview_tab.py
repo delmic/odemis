@@ -62,11 +62,16 @@ class FastEMOverviewTab(Tab):
         )
         self.sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         self.sem_stream_cont.stream_panel.show_remove_btn(False)
+        self.tab_data.streams.value.append(sem_stream)  # it should also be saved
+        self.tab_data.semStream = sem_stream
 
         # Buttons of the calibration panel
         self.btn_optical_autofocus = panel.btn_optical_autofocus_run
         self.btn_sem_autofocus = panel.btn_sem_autofocus_run
         self.btn_autobc = panel.btn_autobrigtness_contrast
+
+        # Selection panel
+        self.selection_panel = panel.selection_panel
 
         self.btn_optical_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_optical_autofocus)
         self.btn_sem_autofocus.Bind(wx.EVT_BUTTON, self._on_btn_sem_autofocus)
@@ -131,6 +136,7 @@ class FastEMOverviewTab(Tab):
         self.btn_optical_autofocus.Enable(not mode)
         self.btn_sem_autofocus.Enable(not mode)
         self.btn_autobc.Enable(not mode)
+        self.selection_panel.Enable(not mode)
 
     @call_in_wx_main
     def _on_optical_autofocus_done(self, future, _=None):

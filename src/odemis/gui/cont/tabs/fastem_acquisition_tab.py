@@ -81,6 +81,8 @@ class FastEMAcquisitionTab(Tab):
         )
         self.acq_sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         self.acq_sem_stream_cont.stream_panel.show_remove_btn(False)
+        tab_data.streams.value.append(sem_stream)  # it should also be saved
+        tab_data.semStream = sem_stream
 
         for name, calibration in self.tab_data_model.calibrations.items():
             if name == CALIBRATION_1:
