@@ -25,6 +25,7 @@ import wx
 
 import odemis.gui
 from odemis.gui.cont.microscope import FastEMStateController
+from odemis.gui.util import call_in_wx_main
 
 
 class FastEMUserSettingsPanel(object):
@@ -50,6 +51,8 @@ class FastEMUserSettingsPanel(object):
         # Pump and ebeam state controller
         self._state_controller = FastEMStateController(main_data, panel)
 
+        main_data.is_acquiring.subscribe(self._on_is_acquiring)
+
     def _on_selection_button(self, evt):
         # update main_data.active_scintillators and toggle colour for better visibility
         btn = evt.GetEventObject()
@@ -66,3 +69,7 @@ class FastEMUserSettingsPanel(object):
                 self.main_data.active_scintillators.value.remove(num)
             else:
                 logging.warning("Scintillator %s not found in list of active scintillators.", num)
+
+    @call_in_wx_main
+    def _on_is_acquiring(self, is_acquiring):
+        self.panel.Enable(not is_acquiring)
