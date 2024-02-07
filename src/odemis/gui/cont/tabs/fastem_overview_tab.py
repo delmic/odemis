@@ -62,6 +62,8 @@ class FastEMOverviewTab(Tab):
         )
         self.sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
         self.sem_stream_cont.stream_panel.show_remove_btn(False)
+        self.tab_data.streams.value.append(sem_stream)  # it should also be saved
+        self.tab_data.semStream = sem_stream
 
         # Buttons of the calibration panel
         self.btn_optical_autofocus = panel.btn_optical_autofocus_run
