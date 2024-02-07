@@ -114,7 +114,7 @@ class CorrelationController(object):
             self._panel.cmb_correlation_stream.Append(s.name.value, s)
         
         # select the first stream, if available
-        if len(streams) > 0:
+        if self._panel.cmb_correlation_stream.GetCount() > 0:
             self._panel.cmb_correlation_stream.SetSelection(0)
     
     @call_in_wx_main
@@ -153,7 +153,7 @@ class CorrelationController(object):
     def _reset_stream_correlation_data(self, s: StaticStream) -> None:
         """reset the stream position to the original position / rotation / scale
         :param s: (StaticStream) the stream to reset"""
-        if s.raw:
+        if s is not None and s.raw:
             s.raw[0].metadata[model.MD_POS_COR] = (0, 0)
             s.raw[0].metadata[model.MD_ROTATION_COR] = 0
             s.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = (1, 1)
