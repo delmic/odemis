@@ -168,7 +168,7 @@ class ExternalAcquisition:
         """
         Set filename from pattern in conf file.
         """
-        fn = create_filename(self.conf.last_path, self.conf.fn_ptn, '.hdf5', self.conf.fn_count)
+        fn = create_filename(self.conf.last_path, self.conf.fn_ptn, '.h5', self.conf.fn_count)
         self.conf.fn_count = update_counter(self.conf.fn_count)
 
         # Update the widget, without updating the pattern and counter again
@@ -325,8 +325,18 @@ class ExternalAcquisition:
                 fn = self.filename.value
                 exporter = dataio.find_fittest_converter(fn)
 
+                # Add two fake SEM streams, to make the file exactly the same
+                # as the standard spectrum acquisition (with 3 streams)
+                fakemd = {
+                    model.MD_DESCRIPTION: "Fake SEM data",
+                    model.MD_PIXEL_SIZE: (1e-9, 1e-9),  # m
+                    model.MD_DWELL_TIME: 1e-6,  # s
+                    model.MD_POS: da.metadata.get(model.MD_POS, (0, 0))
+                }
+                sem0 = model.DataArray(numpy.zeros((1, 1)), fakemd)
+                sem1 = model.DataArray(numpy.zeros(da.shape[-2:]), fakemd)
                 try:
-                    exporter.export(fn, [da])
+                    exporter.export(fn, [sem0, sem1, da])
                 except Exception:
                     logging.exception("Failed to store data in %s", fn)
 
