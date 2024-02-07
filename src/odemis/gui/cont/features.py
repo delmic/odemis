@@ -94,11 +94,13 @@ class CryoFeatureController(object):
         current_label = pm.getCurrentPostureLabel()
         logging.debug(f"Current posture: {POSITION_NAMES[current_label]}")
 
-        if current_label != FM_IMAGING: # TODO: @patrick remove this once SEM move is supported 
-            logging.info(f"Currently under {POSITION_NAMES[current_label]}, moving to feature position is not yet supported.")
+        # TODO: @patrick remove this once SEM move is supported
+        if current_label != FM_IMAGING and self._main_data_model.microscope.role == "meteor":
+            logging.info(f"Currently under {POSITION_NAMES[current_label]}, "
+                         f"moving to feature position is not yet supported.")
             self._display_go_to_feature_warning()
-            return 
-        
+            return
+
         # move to feature position
         logging.info(f"Moving to position: {pos}")
         self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1]})
@@ -106,8 +108,9 @@ class CryoFeatureController(object):
     
     def _display_go_to_feature_warning(self) -> bool:
         box = wx.MessageDialog(self._tab.main_frame, 
-                            message="The stage is currently in the SEM imaging position. Please move to the FM imaging position first.",
-                            caption="Unable to Move", style=wx.OK | wx.ICON_WARNING| wx.CENTER)
+                               message="The stage is currently in the SEM imaging position. "
+                                       "Please move to the FM imaging position first.",
+                               caption="Unable to Move", style=wx.OK | wx.ICON_WARNING | wx.CENTER)
         box.SetOKLabel("OK")
         ans = box.ShowModal()  # Waits for the window to be closed
         return ans == wx.ID_OK    
