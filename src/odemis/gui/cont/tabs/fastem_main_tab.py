@@ -33,7 +33,14 @@ from odemis.gui.cont.tabs.tab import Tab
 from odemis.gui.cont.tabs.fastem_overview_tab import FastEMOverviewTab
 from odemis.gui.cont.tabs.fastem_acquisition_tab import FastEMAcquisitionTab
 import odemis.gui.cont.views as viewcont
-import odemis.gui.model as guimod
+from odemis.gui.model import (
+    TOOL_NONE,
+    TOOL_ACT_ZOOM_FIT,
+    TOOL_RULER,
+    TOOL_LINE,
+    FastEMMainTabGUIData,
+    StreamView
+)
 from odemis.model import getVAs
 
 
@@ -60,7 +67,13 @@ class FastEMMainTab(Tab):
           Handles FastEMOverviewTab and FastEMAcquisitionTab.
 
         """
-        tab_data = guimod.FastEMMainTabGUIData(main_data)
+        tab_data = FastEMMainTabGUIData(main_data)
+        tab_data.tool.choices = {
+            TOOL_NONE,
+            TOOL_ACT_ZOOM_FIT,
+            TOOL_RULER,
+            TOOL_LINE,
+        }
         super(FastEMMainTab, self).__init__(name, button, panel, main_frame, tab_data)
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
         # need to wait for the tab to be shown on the first time.
@@ -76,7 +89,7 @@ class FastEMMainTab(Tab):
                     {
                         "name": "Acquisition",
                         "stage": main_data.stage,  # add to show crosshair
-                        "cls": guimod.StreamView,
+                        "cls": StreamView,
                         "stream_classes": EMStream,
                     },
                 ),
@@ -153,6 +166,19 @@ class FastEMMainTab(Tab):
         )
 
         panel.btn_pnl_user_settings.Bind(wx.EVT_BUTTON, self._toggle_user_settings_panel)
+
+        # Toolbar
+        self.tb = panel.toolbar
+        self.tab_data_model.tool.subscribe(self._on_tool_va)
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+        self.tb.add_tool(TOOL_RULER, self.tab_data_model.tool)
+        self.tb.add_tool(TOOL_LINE, self.tab_data_model.tool)
+
+    def _on_tool_va(self, selected_tool):
+        if selected_tool == TOOL_NONE:
+            self.vp.canvas.enable_drag()
+            return
+        self.vp.canvas.disable_drag()
 
     def on_pnl_user_settings_size(self, _):
         """Handle the wx.EVT_SIZE event for pnl_user_settings"""
