@@ -34,6 +34,11 @@ fi
 
 cd ~/development/odemis
 
+if ! git remote get-url upstream > /dev/null ; then
+    echo "Need to have a upstream remote (typically pointing to git@github.com:delmic/odemis.git)"
+    exit 1
+fi
+
 # Uncomment this line to run line-per-line
 # trap 'read -p "run: $BASH_COMMAND"' DEBUG
 
@@ -70,6 +75,16 @@ if ! grep -q "VERSION = \"$RELVER\"$" setup.py; then
     exit 1
 fi
 
+# Typically, the first version of a branch (VM.N.0) is released on the "beta"
+# channel (-proposed PPA)
+if [[ "$RELVER" =~ [2-9]\.[0-9]+\.0$ ]] ; then
+    PPA_NAME=ppa:delmic-soft/odemis-proposed
+    IS_PATCH_RELEASE="false"
+else
+    PPA_NAME=ppa:delmic-soft/odemis
+    IS_PATCH_RELEASE="true"
+fi
+
 # Use the change log to annotate the tag
 echo "==================================================================="
 dpkg-parsechangelog -S Changes | tail -n +4
@@ -80,8 +95,7 @@ if [[ $answer =~ ^[nN].* ]]; then
 fi
 dpkg-parsechangelog -S Changes | tail -n +4 | git tag -a v$RELVER -F -
 
-# TODO: for a minor release, this is sufficient:
-#git push upstream
+# Always force the upstream, to be sure we don't push to the personal repo
 git push --set-upstream upstream $VBRANCH
 git push --tags upstream
 
@@ -97,15 +111,14 @@ if [[ "$BPVERSION" != "$PVERSION" ]]; then
     exit 1
 fi
 
-read -p "Build odemis $RELVER and upload it? [Yn] " answer
+read -p "Build odemis $RELVER and upload it to $PPA_NAME? [Yn] " answer
 if [[ $answer =~ ^[nN].* ]]; then
     exit 2
 fi
 git archive --prefix=odemis/ -o ../odemis_${RELVER}.orig.tar.gz HEAD || exit 1
 debuild -S || exit 1
 
-# TODO: if the version ends by ".0", push to proposed
-dput ppa:delmic-soft/odemis ../odemis_${PVERSION}_source.changes
+dput ${PPA_NAME} ../odemis_${PVERSION}_source.changes
 
 # Also rebuild the package to "focal" (Ubuntu 20.04)
 # Just add to debian changelog
@@ -115,7 +128,7 @@ debuild -S || exit 1
 # Immediately drop the changes
 git reset --hard HEAD
 
-dput ppa:delmic-soft/odemis ../odemis_${PVERSION}focal1_source.changes
+dput ${PPA_NAME} ../odemis_${PVERSION}focal1_source.changes
 
 # Also rebuild the package to "jammy" (Ubuntu 22.04)
 # Just add to debian changelog
@@ -125,6 +138,6 @@ debuild -S || exit 1
 # Immediately drop the changes
 git reset --hard HEAD
 
-dput ppa:delmic-soft/odemis ../odemis_${PVERSION}jammy1_source.changes
+dput ${PPA_NAME} ../odemis_${PVERSION}jammy1_source.changes
 
 # TODO: also compile for Windows
