@@ -1,3 +1,14 @@
+odemis (3.3.3-1) bionic; urgency=medium
+
+  * New version: 3.3.3
+  * Main bug fixes:
+   - Andor spectrograph driver detects if a flipper failed to move
+   - Temporal spectrum 2D image incorrectly rotated when width > 1 (SPARC)
+   - GUI can start even if xrandr doesn't work
+   - Update the power slider range when excitation is changed (METEOR/SECOM)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 08 Feb 2024 15:44:06 +0100
+
 odemis (3.3.2-1) bionic; urgency=medium
 
   * New version: 3.3.2
