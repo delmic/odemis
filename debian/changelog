@@ -1,3 +1,71 @@
+odemis (3.4.0-1) bionic; urgency=medium
+
+  * New version 3.4
+  * Main new changes and features:
+    - Add support for FSLM, FPLM, and ELIM SPARC modules
+    - Compensate chromatic aberration of angular spectrum data (SPARC)
+    - New plugin for SPARC spectrum acquisition with arbitrary scan order
+    - Import SEM images (METEOR)
+    - Manual overlay for CLEM map in correlation tab (METEOR)
+    - Support for METEOR on Tescan
+    - Single main tab layout (FASTEM)
+    - Import / export ROA plugin (FASTEM)
+  * Other improvements and bug fixes:
+    - Implemented Picoscale driver using Python SDK (FASTEM)
+    - Add autostigmation (FASTEM)
+    - Reduce the xy-offset between fields (FASTEM)
+    - Correct scintillator metadata value (FASTEM)
+    - Add fastem calibration data and image to odemis bug reporter (FASTEM)
+    - Add SEM stream and stage movement to acquisition tab (FASTEM)
+    - Dwell time slider works properly for overview image (FASTEM)
+    - ROC boxes' movement is bound by the respective scintillator bounding box (FASTEM)
+    - Show relevant static streams in stream panel based on the view selected  (METEOR)
+    - Hide the overview images in chamber tab when overview images are made invisible (METEOR)
+    - SEM mode restores to used rx, rz value after switching from FM mode (METEOR)
+    - Update the power slider range when excitation is changed (METEOR)
+    - Button to delete feature (METEOR)
+    - Fixed cropped panels in the alignment tab now only the appropriate panels will show with
+      selected mode (SPARC)
+    - EBIC stream uses RoA (SPARC)
+    - Add folding of the CL Intensity and EBIC streams
+    - SPARC alignment tab only shows axes which are can be moved
+    - Andor spectrograph driver detects if a flipper failed to move
+    - Detect better end of move of TFS SEM stage
+    - Fix display of spectrum linec-ut when "Fit-to-RGB" is selected (SPARC)
+    - Detect ENZEL position based on the stage but also lens actuators
+    - Histrogram computation adjusted to give margin on the left side too
+    - Angular Spectrum acquisition could be run with old binning (SPARC)
+    - Temporal spectrum 2D image incorrectly rotated when width > 1 (SPARC)
+    - SECOM overview didn't allow to move the stage anymore
+    - SEM scan control could fail to indicate end of scan when stopping Odemis
+  * Improvements and bug fixes already present in the v3.3 branch:
+    - New odemis-start-turret script to force the spectrograph turret number
+      before starting Odemis (SPARC)
+    - Bash autocompletion also works for "odemis" (in addition to "odemis-cli")
+    - Improve stitching registration when shift is large
+    - Adjust gedit when editing odemis.conf so that the preferences can be changed
+    - Spectrum plots cursor displays value without rounding it
+    - Improve large overview acquisition on METEOR on TFS SEM which could have
+      small areas missing
+    - TIFF reader loads data even if the metadata for wavelength is incorrect
+    - HDF5 reader had issues reading metadata on Ubuntu 22.04
+    - Fix snapshot of spectrum data when saved as TIFF (SPARC)
+    - Fix SPARC autofocus when no grating mirror is present, which could
+      sometimes fail
+    - Fix Andor camera error handler which incorrectly always gave up
+    - Fix xtclient error message which could itself fail
+    - spike removal tool fixed
+    - add tabs enabler plugin
+    - add focus points on the edges of bounding box in overview acquisition
+    - fixes for future support of Ubuntu 22.04
+    - driver scanner: support multiple detectors
+    - acq calibration: if multiple background data, average should be the same dtype as raw data
+    - gui PlotCanvas: handle corner cases when data changes outside of the range
+    - sparc chamber tab: don't keep focus on mirror switching button
+    - Adjust Makefile for developer manual to support new version of Inksape
+
+ -- Thera Pals <pals@delmic.com>  Thu, 08 Feb 2024 09:10:07 +0100
+
 odemis (3.3.0-1) bionic; urgency=medium
 
   * New version 3.3
