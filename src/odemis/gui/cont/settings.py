@@ -25,7 +25,6 @@ user interface.
 
 """
 
-from past.builtins import long
 from abc import ABCMeta
 from collections.abc import Iterable
 import locale
@@ -212,11 +211,11 @@ class SettingsController(metaclass=ABCMeta):
             else:
                 # Still try to beautify a bit if it's a number
                 if (
-                    isinstance(value, (int, long, float)) or
+                    isinstance(value, (int, float)) or
                     (
                         isinstance(value, Iterable) and
                         len(value) > 0 and
-                        isinstance(value[0], (int, long, float))
+                        isinstance(value[0], (int, float))
                     )
                 ):
                     nice_str = readable_str(value, sig=3)

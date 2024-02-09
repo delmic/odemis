@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # Fake component for testing purpose
 
-from past.builtins import long
 import logging
 import time
 
@@ -92,7 +91,7 @@ class FakeCCD(model.HwComponent):
         depth = 2 ** (fake_img.dtype.itemsize * 8)
         self.shape = (res[0], res[1], depth)
         self.binning = model.TupleContinuous((1, 1), [(1, 1), (8, 8)],
-                                       cls=(int, long, float), unit="")
+                                       cls=(int, float), unit="")
         self.resolution = model.ResolutionVA(res, [(1, 1), res])
         self.readoutRate = model.FloatVA(1e9, unit="Hz", readonly=True)
 

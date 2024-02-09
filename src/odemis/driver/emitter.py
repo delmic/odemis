@@ -16,7 +16,6 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 import logging
 from odemis import model
-from past.builtins import long
 import copy
 
 class MultiplexLight(model.Emitter):
@@ -56,7 +55,7 @@ class MultiplexLight(model.Emitter):
         # Child with the maximum power range
         self.power = model.ListContinuous(value=[0] * len(spectra),
                                           range=(tuple(min_power), tuple(max_power)),
-                                          unit="W", cls=(int, long, float))
+                                          unit="W", cls=(int, float))
         self.power.subscribe(self._setChildPower)
         self._updateMultiplexPower(None)
         # info on which source is which wavelength

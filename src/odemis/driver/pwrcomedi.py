@@ -28,7 +28,6 @@ from odemis import model
 import odemis
 from odemis.util import driver
 import odemis.driver.comedi_simple as comedi
-from past.builtins import long
 
 class Light(model.Emitter):
 
@@ -126,7 +125,7 @@ class Light(model.Emitter):
         # Power value for each channel of the device
         self.power = model.ListContinuous(value=[0.] * len(self._channels),
                                           range=(tuple([0.] * len(self._channels)), max_power,),
-                                          unit="W", cls=(int, long, float),)
+                                          unit="W", cls=(int, float),)
         self.power.subscribe(self._updatePower)
 
         # info on which channel is which wavelength

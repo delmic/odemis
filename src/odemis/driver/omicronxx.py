@@ -39,7 +39,6 @@ import os
 import re
 import serial
 import time
-from past.builtins import long
 
 class OXXError(Exception):
     """
@@ -644,7 +643,7 @@ class GenericxX(model.Emitter, metaclass=ABCMeta):
         # power of the whole device (=> max power of the device with max power)
         self.power = model.ListContinuous(value=[0.0] * len(self._devices),
                                           range=(tuple([0.0] * len(self._devices)), tuple(max_power),),
-                                          unit="W", cls=(int, long, float),)
+                                          unit="W", cls=(int, float),)
         self.power.subscribe(self._updatePower)
 
         # info on what device is which wavelength
