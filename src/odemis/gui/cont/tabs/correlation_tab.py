@@ -26,7 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import collections
 import logging
 import os.path
-from typing import List
+from typing import List, Optional
 import wx
 
 from odemis.gui import conf
@@ -241,7 +241,7 @@ class CorrelationTab(Tab):
         self.correlation_controller.clear_streams()
 
     @classmethod
-    def get_display_priority(cls, main_data) -> int:
+    def get_display_priority(cls, main_data) -> Optional[int]:
         if main_data.role == "meteor":
             return 1
         else:
