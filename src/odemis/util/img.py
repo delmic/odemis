@@ -466,9 +466,12 @@ def DataArray2RGB(data, irange=None, tint=(255, 255, 255)):
     # Tint (colouration)
     if tint == (255, 255, 255):
         # fast path when no tint
-        # Note: it seems numpy.repeat() is 10x slower ?!
-        # a = numpy.repeat(drescaled, 3)
-        # a.shape = data.shape + (3,)
+        # Note: it seems numpy.repeat() is about 30% slower:
+        # rgb = numpy.repeat(drescaled, 3)
+        # rgb.shape = data.shape + (3,)
+        # Using a view to do the copy is also 30% slower:
+        # rgb_inverted = numpy.moveaxis(rgb, 2, 0)
+        # rgb_inverted[:] = drescaled
         rgb[:, :, 0] = drescaled # 1 copy
         rgb[:, :, 1] = drescaled # 1 copy
         rgb[:, :, 2] = drescaled # 1 copy

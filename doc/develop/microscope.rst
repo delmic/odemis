@@ -93,6 +93,18 @@ Detectors:
 System:
  * lens: Defines the optical parameters (e.g magnification) of the optical path.
 
+.. figure:: secom-roles.*
+    :width: 50 %
+    :align: center
+
+    Schema of a SECOM and the roles of the components
+
+.. figure:: secom-confocal-roles.*
+    :width: 70 %
+    :align: center
+
+    Schema of a SECOM confocal with fluorescence life-time imaging (FLIM) and the roles of the components
+
 Roles of components found in the ENZEL system:
 ----------------------------------------------
 The role of the microscope is *enzel*.
@@ -140,6 +152,12 @@ System:
  * cooler: Controls the starting and stopping of the cooling process by changing the temperature setpoint of the cryo-stage.
  * lens: Defines the optical parameters (e.g magnification) of the optical path. 
 
+.. figure:: enzel-roles.*
+    :width: 50 %
+    :align: center
+
+    Schema of an ENZEL system and the roles of the components
+
 Roles of components found in the METEOR system:
 -----------------------------------------------
 The role of the microscope is *meteor*.
@@ -165,6 +183,13 @@ Actuators:
 Detectors:
  * ccd: The main optical pixelated detector.
  * lens: Defines the optical parameters (e.g magnification) of the optical path.
+
+.. figure:: meteor-roles.*
+    :width: 50 %
+    :align: center
+
+    Schema of an METEOR system and the roles of the components
+
 
 Roles of components found in the SPARCv1/SPARCv2 system:
 --------------------------------------------------------
@@ -266,28 +291,6 @@ System:
  * power-control: Power supply for the hardware components (e.g., ccd, sp-ccd,
    polarization filters, lens actuators, spectrograph).
 
-
-Overview schemas
-----------------
-
-
-.. figure:: secom-roles.*
-    :width: 50 %
-    :align: center
-
-    Schema of a SECOM and the roles of the components
-
-.. figure:: secom-confocal-roles.*
-    :width: 70 %
-    :align: center
-
-    Schema of a SECOM confocal with fluorescence life-time imaging (FLIM) and the roles of the components
-
-.. figure:: enzel-roles.*
-    :width: 50 %
-    :align: center    
-
-    Schema of an ENZEL system and the roles of the components 
 
 .. figure:: sparc2-roles.*
     :width: 100 %

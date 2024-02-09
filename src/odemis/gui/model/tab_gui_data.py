@@ -32,7 +32,8 @@ from odemis.gui.model._constants import (TOOL_NONE, VIEW_LAYOUT_ONE, VIEW_LAYOUT
                                          VIEW_LAYOUT_FULLSCREEN, TOOL_RULER, TOOL_ROA,
                                          TOOL_SPOT, STATE_OFF, STATE_ON, STATE_DISABLED,
                                          TOOL_FEATURE, TOOL_RO_ANCHOR, TOOL_POINT, TOOL_LINE,
-                                         TOOL_LABEL, TOOL_DICHO, VIEW_LAYOUT_VERTICAL)
+                                         TOOL_LABEL, TOOL_DICHO, VIEW_LAYOUT_VERTICAL,
+                                         Z_ALIGN, SEM_ALIGN, FLM_ALIGN)
 from odemis.util.filename import create_filename, make_unique_name
 from odemis import model
 from odemis.acq import fastem
@@ -661,9 +662,6 @@ class SecomAlignGUIData(ActuatorGUIData):
         self.dicho_seq = model.ListVA()  # list of 4 enumerated for each corner
 
 
-Z_ALIGN = "Z alignment"
-SEM_ALIGN = "SEM alignment"
-FLM_ALIGN = "FLM alignment"
 class EnzelAlignGUIData(ActuatorGUIData):
     def __init__(self, main):
         ActuatorGUIData.__init__(self, main)
@@ -1024,3 +1022,15 @@ class FastEMProject(object):
     def __init__(self, name):
         self.name = model.StringVA(name)
         self.roas = model.ListVA([])  # list of acq.fastem.FastEMROA
+
+
+class FastEMMainTabGUIData(MicroscopyGUIData):
+    """
+    GUI model for the FastEM main tab.
+    """
+
+    def __init__(self, main):
+        assert main.microscope is not None
+        super().__init__(main)
+
+        self.active_tab = model.VAEnumerated(None, choices={None: ""})

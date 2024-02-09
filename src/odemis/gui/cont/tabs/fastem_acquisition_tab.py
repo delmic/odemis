@@ -6,8 +6,6 @@
 
 Copyright © 2012-2022 Rinze de Laat, Éric Piel, Delmic
 
-Handles the switch of the content of the main GUI tabs.
-
 This file is part of Odemis.
 
 Odemis is free software: you can redistribute it and/or modify it under the
@@ -23,36 +21,29 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import collections
 import wx
 
-from odemis.model import getVAs
-
 from odemis.acq.fastem import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3
-import odemis.acq.stream as acqstream
 from odemis.gui.cont.stream_bar import FastEMStreamsController
-import odemis.gui.cont.views as viewcont
-import odemis.gui.model as guimod
-from odemis.acq.stream import EMStream
-from odemis.gui.comp.viewport import FastEMAcquisitionViewport
 from odemis.gui.conf.data import get_hw_config
 from odemis.gui.cont import settings, project
 from odemis.gui.cont.acquisition import (FastEMAcquiController, FastEMCalibrationController,
                                          FastEMScintillatorCalibrationController)
 from odemis.gui.cont.tabs.tab import Tab
+from odemis.gui.util import call_in_wx_main
+import odemis.gui.model as guimod
 
 
 class FastEMAcquisitionTab(Tab):
-    def __init__(self, name, button, panel, main_frame, main_data):
+    def __init__(self, name, button, panel, main_frame, main_data, vp, view_controller, sem_stream):
         """
         FASTEM acquisition tab for calibrating the system and acquiring regions of
         acquisition (ROAs), which are organized in projects.
 
         During creation, the following controllers are created:
-
-        ViewPortController
-          Processes the given viewports by creating views for them, and
-          assigning them to their viewport.
+        
+        StreamController
+          Manages the single beam stream.
 
         CalibrationController
           Manages the calibration step 1 for all scintillators.
@@ -75,62 +66,23 @@ class FastEMAcquisitionTab(Tab):
         """
 
         tab_data = guimod.FastEMAcquisitionGUIData(main_data, panel)
-        super(FastEMAcquisitionTab, self).__init__(name, button, panel, main_frame, tab_data)
-        self.set_label("ACQUISITION")
+        super().__init__(name, button, panel, main_frame, tab_data)
 
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
         # need to wait for the tab to be shown on the first time.
         self._initialized_after_show = False
 
-        # View Controller
-        vp = panel.vp_fastem_acqui
-        assert(isinstance(vp, FastEMAcquisitionViewport))
-        vpv = collections.OrderedDict([
-            (vp,
-             {"name": "Acquisition",
-              "stage": main_data.stage,  # add to show crosshair
-              "cls": guimod.StreamView,
-              "stream_classes": EMStream,
-              }),
-        ])
-        self.view_controller = viewcont.ViewPortController(tab_data, panel, vpv)
-
-        # Streams controller
-        # Single-beam SEM stream
-        hwemt_vanames = ("resolution", "scale", "horizontalFoV")
-        emt_vanames = ("dwellTime")
-        hwdet_vanames = ("brightness", "contrast")
-        hwemtvas = set()
-        emtvas = set()
-        hwdetvas = set()
-        for vaname in getVAs(main_data.ebeam):
-            if vaname in hwemt_vanames:
-                hwemtvas.add(vaname)
-            if vaname in emt_vanames:
-                emtvas.add(vaname)
-        for vaname in getVAs(main_data.sed):
-            if vaname in hwdet_vanames:
-                hwdetvas.add(vaname)
-        sem_stream = acqstream.FastEMSEMStream(
-            "Single Beam",
-            main_data.sed,
-            main_data.sed.data,
-            main_data.ebeam,
-            focuser=main_data.ebeam_focus,
-            hwemtvas=hwemtvas,
-            hwdetvas=hwdetvas,
-            emtvas=emtvas,
+        self.vp = vp
+        self._stream_controller = FastEMStreamsController(
+            view_controller._data_model,
+            panel.pnl_acquisition_streams,
+            ignore_view=True,  # Show all stream panels, independent of any selected viewport
+            view_ctrl=view_controller,
         )
-        sem_stream.should_update.subscribe(self._is_stream_live)
+        self.acq_sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
+        self.acq_sem_stream_cont.stream_panel.show_remove_btn(False)
         tab_data.streams.value.append(sem_stream)  # it should also be saved
         tab_data.semStream = sem_stream
-        self._streams_controller = FastEMStreamsController(tab_data,
-                                                           panel.pnl_fastem_acquisition_streams,
-                                                           ignore_view=True,
-                                                           view_ctrl=self.view_controller,
-                                                           )
-        self.sem_stream_cont = self._streams_controller.addStream(sem_stream, add_to_view=True)
-        self.sem_stream_cont.stream_panel.show_remove_btn(False)
 
         for name, calibration in self.tab_data_model.calibrations.items():
             if name == CALIBRATION_1:
@@ -156,7 +108,7 @@ class FastEMAcquisitionTab(Tab):
         # Controller for the list of projects
         self._project_list_controller = project.FastEMProjectListController(
             tab_data,
-            panel.pnl_fastem_projects,
+            panel.pnl_projects,
             viewport=vp,
         )
 
@@ -165,15 +117,16 @@ class FastEMAcquisitionTab(Tab):
             tab_data,
             panel,
         )
+        main_data.is_acquiring.subscribe(self.on_acquisition)
 
     def Show(self, show=True):
-        super(FastEMAcquisitionTab, self).Show(show)
+        super().Show(show)
 
         if show and not self._initialized_after_show:
             # At init the canvas has sometimes a weird size (eg, 1000x1 px), which
             # prevents the fitting to work properly. We need to wait until the
             # canvas has been resized to the final size. That's quite late...
-            wx.CallAfter(self.panel.vp_fastem_acqui.canvas.zoom_out)
+            wx.CallAfter(self.vp.canvas.zoom_out)
             self._initialized_after_show = True
 
     @classmethod
@@ -184,7 +137,14 @@ class FastEMAcquisitionTab(Tab):
         else:
             return None
 
-    def _is_stream_live(self, flag):
-        # Disable chamber and overview tab buttons when playing live stream
-        self.main_frame.btn_tab_fastem_chamber.Enable(not flag)
-        self.main_frame.btn_tab_fastem_overview.Enable(not flag)
+    @call_in_wx_main
+    def on_acquisition(self, is_acquiring):
+        # Don't allow changes to acquisition/calibration ROIs during acquisition
+        if is_acquiring:
+            self._stream_controller.enable(False)
+            self._stream_controller.pause()
+            self._stream_controller.pauseStreams()
+        else:
+            self._stream_controller.resume()
+            # don't automatically resume streams
+            self._stream_controller.enable(True)

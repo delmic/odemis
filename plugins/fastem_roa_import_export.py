@@ -65,7 +65,8 @@ class ImportExportROAPlugin(Plugin):
 
         # It only makes sense if the FASTEM acquisition tab is present
         try:
-            self._acquisition_tab = main_app.main_data.getTabByName("fastem_acqui")
+            fastem_main_tab = main_app.main_data.getTabByName("fastem_main")
+            self._acquisition_tab = fastem_main_tab.acquisition_tab
         except LookupError:
             logging.debug(
                 "Not loading Import Export ROAs tool since acquisition tab is not present."

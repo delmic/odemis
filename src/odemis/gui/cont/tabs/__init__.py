@@ -23,13 +23,14 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
+from ._constants import *
 from .analysis_tab import AnalysisTab
 from .correlation_tab import CorrelationTab
 from .cryo_chamber_tab import CryoChamberTab
 from .enzel_align_tab import EnzelAlignTab
 from .fastem_acquisition_tab import FastEMAcquisitionTab
-from .fastem_chamber_tab import FastEMChamberTab
 from .fastem_overview_tab import FastEMOverviewTab
+from .fastem_main_tab import FastEMMainTab
 from .localization_tab import LocalizationTab
 from .mimas_align_tab import MimasAlignTab
 from .secom_align_tab import SecomAlignTab

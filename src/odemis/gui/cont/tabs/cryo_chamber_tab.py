@@ -44,6 +44,8 @@ from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, 
 from odemis.acq.stream import StaticStream
 from odemis.gui.comp.buttons import BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS, BTN_TOGGLE_COMPLETE
 from odemis.gui.cont.tabs.tab import Tab
+from odemis.gui.cont.tabs.correlation_tab import CorrelationTab
+from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.util.widgets import AxisConnector, VigilantAttributeConnector
 from odemis.util import almost_equal
@@ -348,12 +350,13 @@ class CryoChamberTab(Tab):
         try:
             streams = self._get_overview_view().getStreams()
             self.remove_overview_streams(streams)
-            localization_tab = self.tab_data_model.main.getTabByName("cryosecom-localization")
+            localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName("cryosecom-localization")
             localization_tab.clear_acquired_streams()
             localization_tab.reset_live_streams()
             self.tab_data_model.main.features.value = []
             self.tab_data_model.main.currentFeature.value = None
-            correlation_tab = self.tab_data_model.main.getTabByName("meteor-correlation")
+
+            correlation_tab: CorrelationTab = self.tab_data_model.main.getTabByName("meteor-correlation")
             correlation_tab.clear_streams()
         except LookupError:
             logging.warning("Unable to find localization tab.")

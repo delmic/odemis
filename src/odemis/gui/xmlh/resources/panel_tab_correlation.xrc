@@ -284,6 +284,24 @@
                             <object class="sizeritem">
                               <object class="wxFlexGridSizer">
                                 <object class="sizeritem">
+                                    <object class="wxStaticText">
+                                      <label>Reference Frame</label>
+                                      <fg>#E5E5E5</fg>
+                                    </object>
+                                    <flag>wxALIGN_CENTRE_VERTICAL</flag>
+                                    <border>5</border>
+                                    <flag>wxEXPAND</flag>
+                                  </object>
+                                  <object class="sizeritem"> 
+                                    <object class="OwnerDrawnComboBox" name="cmb_correlation_reference">
+                                        <size>250,-1</size>
+                                        <fg>#2FA7D4</fg>
+                                        <bg>#333333</bg>
+                                        <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
+                                        <tooltip>The reference frame defines the base images that others will be correlated to. This allows selecting positions from the correlated images. Images in the reference frame cannot be moved.</tooltip>
+                                      </object>
+                                  </object>
+                                <object class="sizeritem">
                                   <object class="wxStaticText">
                                     <label>Move Stream</label>
                                     <fg>#E5E5E5</fg>
@@ -402,7 +420,7 @@
                                   </object>
                                 </object>
                                 <cols>2</cols>
-                                <rows>5</rows>
+                                <rows>6</rows>
                                 <vgap>10</vgap>
                                 <hgap>10</hgap>
                                 <growablecols>1</growablecols>

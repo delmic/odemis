@@ -246,7 +246,8 @@ class AcquisitionConfig(Config):
         # is completed.
         self.default.set("acquisition", "fn_ptn", u"{datelng}-{timelng}")
         self.default.set("acquisition", "fn_count", "0")
-        self.default.set("acquisition", "overlap", "0.0")
+        self.default.set("acquisition", "overlap", "0.06")
+        self.default.set("acquisition", "autostig_period", "5")
 
         self.default.add_section("export")
         self.default.set("export", "last_path", ACQUI_PATH)
@@ -334,6 +335,14 @@ class AcquisitionConfig(Config):
     @overlap.setter
     def overlap(self, value):
         self.set("acquisition", "overlap", value)
+
+    @property
+    def autostig_period(self):
+        return int(self.get("acquisition", "autostig_period"))
+
+    @autostig_period.setter
+    def autostig_period(self, value):
+        self.set("acquisition", "autostig_period", value)
 
     @property
     def pj_last_path(self):
