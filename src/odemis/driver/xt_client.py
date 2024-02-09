@@ -1711,7 +1711,7 @@ class Scanner(model.Emitter):
             if self.dwellTime.value != self.parent.get_dwell_time():
                 # Set the VA value again to reflect changes on the parent
                 self.dwellTime.value = self.dwellTime.value
-            if self.resolution.value != tuple(self.parent.get_resolution()):
+            if hasattr(self, "resolution") and self.resolution.value != tuple(self.parent.get_resolution()):
                 # Set the VA value again to reflect changes on the parent
                 self.scale.value = self.scale.value
         return external
