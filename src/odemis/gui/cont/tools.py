@@ -156,6 +156,13 @@ TOOLS = {
             model.TOOL_NONE,
             "Create/Move feature"
         ),
+    model.TOOL_RECTANGLE:
+        ModeTool(
+            "btn_rectangle",
+            model.TOOL_RECTANGLE,
+            model.TOOL_NONE,
+            "Create/Move rectangle"
+        ),
 }
 
 

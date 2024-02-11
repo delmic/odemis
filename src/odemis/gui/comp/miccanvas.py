@@ -47,7 +47,7 @@ import odemis.gui.comp.canvas as canvas
 from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
 from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
 from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
-from odemis.gui.comp.overlay.fastem import FastEMROAOverlay, FastEMROCOverlay, FastEMBackgroundOverlay
+from odemis.gui.comp.overlay.fastem import FastEMROCOverlay, FastEMBackgroundOverlay
 from odemis.gui.comp.overlay.focus import FocusOverlay
 from odemis.gui.comp.overlay.gadget import GadgetOverlay
 from odemis.gui.comp.overlay.history import HistoryOverlay
@@ -58,6 +58,7 @@ from odemis.gui.comp.overlay.play_icon import PlayIconOverlay
 from odemis.gui.comp.overlay.point_select import PointSelectOverlay
 from odemis.gui.comp.overlay.points import PointsOverlay
 from odemis.gui.comp.overlay.polar import PolarOverlay
+from odemis.gui.comp.overlay.rectangle import RectangleOverlay, RectanglesOverlay
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.comp.overlay.spectrum_line_select import SpectrumLineSelectOverlay
 from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
@@ -1800,6 +1801,7 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        self.rectangles_overlay = None
 
     def add_background_overlay(self, rectangles):
         """
@@ -1809,34 +1811,35 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         self.add_world_overlay(bg_overlay)
         return bg_overlay
 
-    def add_roa_overlay(self, coordinates, colour=gui.SELECTION_COLOUR):
+    def add_rectangle_overlay(self):
         """
         coordinates (TupleContinuousVA): VA of 4 floats representing region of acquisition coordinates
         colour (str): border colour of ROA overlay, given as string of hex code
         """
-        roa_overlay = FastEMROAOverlay(self, coordinates, colour=colour)
-        self.add_world_overlay(roa_overlay)
-        # Always activate after creating, otherwise the code to select the region in
+        rectangle_overlay = RectangleOverlay(self)
+        self.add_world_overlay(rectangle_overlay)
+        # Always activate and unlock after creating, otherwise the code to select the region in
         # FastEMROAOverlay.on_left_down will never be called.
-        roa_overlay.active.value = True
-        return roa_overlay
+        rectangle_overlay.active.value = True
+        rectangle_overlay.locked.value = False
+        return rectangle_overlay
 
     def remove_overlay(self, overlay):
         """
-        overlay (FastEMROAOverlay or FastEMROAOverlay): overlay to be deleted
+        overlay (RectangleOverlay or RectangleOverlay): overlay to be deleted
         """
-        overlay.active.value = False  # deactivating the overlay avoids weird behaviour
-        self.remove_world_overlay(overlay)
+        if self.rectangles_overlay and isinstance(overlay, RectangleOverlay):
+            self.rectangles_overlay.remove_overlay(overlay)
         wx.CallAfter(self.request_drawing_update)
 
-    def add_calibration_overlay(self, coordinates, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
+    def add_calibration_overlay(self, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
         """
         coordinates (TupleContinuousVA): VA of 4 floats representing region of calibration coordinates
         label (str): label for the overlay (typically a number 1-9)
         sample_bbox (tuple): bounding box coordinates of the sample holder (minx, miny, maxx, maxy) [m]
         colour (str): border colour of ROA overlay, given as string of hex code
         """
-        roc_overlay = FastEMROCOverlay(self, coordinates, label, sample_bbox, colour=colour)
+        roc_overlay = FastEMROCOverlay(self, label, sample_bbox, colour=colour)
         self.add_world_overlay(roc_overlay)
         # Always activate after creating, otherwise the code to select the region in
         # FastEMROCOverlay.on_left_up will never be called.
@@ -1876,3 +1879,7 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
     def setView(self, view, tab_data):
         super().setView(view, tab_data)
         view.show_crosshair.value = False
+
+        if guimodel.TOOL_RECTANGLE in tab_data.tool.choices:
+            self.rectangles_overlay = RectanglesOverlay(self, tool_va=tab_data.tool)
+            self.add_world_overlay(self.rectangles_overlay)

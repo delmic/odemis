@@ -39,6 +39,7 @@ from odemis.gui.model import (
     TOOL_ACT_ZOOM_FIT,
     TOOL_RULER,
     TOOL_LINE,
+    TOOL_RECTANGLE,
     FastEMMainTabGUIData,
     StreamView
 )
@@ -74,6 +75,7 @@ class FastEMMainTab(Tab):
             TOOL_ACT_ZOOM_FIT,
             TOOL_RULER,
             TOOL_LINE,
+            TOOL_RECTANGLE,
         }
         super(FastEMMainTab, self).__init__(name, button, panel, main_frame, tab_data)
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
@@ -174,6 +176,7 @@ class FastEMMainTab(Tab):
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
         self.tb.add_tool(TOOL_RULER, self.tab_data_model.tool)
         self.tb.add_tool(TOOL_LINE, self.tab_data_model.tool)
+        self.tb.add_tool(TOOL_RECTANGLE, self.tab_data_model.tool)
 
     def _on_tool_va(self, selected_tool):
         if selected_tool == TOOL_NONE:
