@@ -37,6 +37,7 @@ import odemis.gui.model as guimodel
 from odemis.gui import conf, FG_COLOUR_RADIO_INACTIVE, FG_COLOUR_BUTTON
 from odemis.gui.comp.fastem import FastEMProjectPanel, FastEMROAPanel, FastEMCalibrationPanel
 from odemis.gui.util import call_in_wx_main
+import odemis.util.conversion as conversion
 from odemis.util.filename import make_unique_name
 
 # Blue, cyan, yellow, purple, magenta, red
@@ -58,17 +59,19 @@ class FastEMProjectListController(object):
         self._main_data_model = tab_data.main
         self._project_list = project_list
         self._viewport = viewport
+        # New rectangle overlay creation
+        self._viewport.canvas.rectangles_overlay.rectangle.subscribe(self._on_rectangle)
 
         self.project_ctrls = {}  # dict FastEMProjectController --> int
         self._project_list.btn_add_project.Bind(wx.EVT_BUTTON, self._add_project)
 
         # Always show one project by default
-        self._add_project(None)
+        self._add_project(None, collapse=False)
 
         tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable project panel
 
     # already running in main GUI thread as it receives event from GUI
-    def _add_project(self, _, name=None):
+    def _add_project(self, _, name=None, collapse=True):
         # Get the smallest number that is not already in use. It's a bit challenging because projects can be
         # deleted, so we might have project 2 in colour red, but project 1 in blue has been deleted, so the
         # next project (which is now again the second project) should not use red again.
@@ -79,6 +82,8 @@ class FastEMProjectListController(object):
         logging.debug("Creating new project %s.", name)
         colour = FASTEM_PROJECT_COLOURS[(num - 1) % len(FASTEM_PROJECT_COLOURS)]
         project_ctrl = FastEMProjectController(name, colour, self._tab_data_model, self._project_list, self._viewport)
+        project_ctrl.panel._header.Bind(wx.EVT_LEFT_UP, self._on_project_panel_header)
+        project_ctrl.panel.collapse(collapse)
 
         # Add the project model to tab_data
         self.project_ctrls[project_ctrl] = num
@@ -88,6 +93,13 @@ class FastEMProjectListController(object):
         project_ctrl.panel.btn_remove.Bind(wx.EVT_BUTTON, lambda evt: self._remove_project(evt, project_ctrl))
 
         return project_ctrl
+
+    def _on_project_panel_header(self, event):
+        for project_ctrl in self.project_ctrls.keys():
+            if event.GetEventObject() == project_ctrl.panel._header:
+                project_ctrl.panel.collapse(False)
+            else:
+                project_ctrl.panel.collapse(True)
 
     # already running in main GUI thread as it receives event from GUI
     def _remove_project(self, _, project_ctrl):
@@ -115,6 +127,14 @@ class FastEMProjectListController(object):
         :param mode: (bool) Whether the system is currently acquiring or not acquiring.
         """
         self._project_list.Enable(not mode)
+
+    def _on_rectangle(self, rectangle):
+        """Callback on a new rectangle overlay creation."""
+        for project_ctrl in self.project_ctrls.keys():
+            # Add ROA to the project whose panel is not collapsed
+            if not project_ctrl.panel.collapsed:
+                project_ctrl.add_roa(None, rectangle)
+                return
 
 
 class FastEMProjectController(object):
@@ -145,7 +165,6 @@ class FastEMProjectController(object):
         # Create the panel and add it to the project list. Subscribe to the controls.
         self.panel = FastEMProjectPanel(project_list, name=name)
         project_list.add_project_panel(self.panel)
-        self.panel.btn_add_roa.Bind(wx.EVT_BUTTON, self._on_btn_roa)
         # Listen to both enter and kill focus event to make sure the text is really updated
         self.panel.txt_ctrl.Bind(wx.EVT_KILL_FOCUS, self._on_text)
         self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)
@@ -167,8 +186,7 @@ class FastEMProjectController(object):
             self.panel.txt_ctrl.SetValue(txt)
         evt.Skip()
 
-    # already running in main GUI thread as it receives event from GUI
-    def _on_btn_roa(self, _, name=None):
+    def add_roa(self, _, overlay, name=None):
         # Two-step process: Instantiate FastEM object here, but wait until first ROA is selected until
         # further processing. The process can still be aborted by clicking in the viewport without dragging.
         # In the callback to the ROI, the ROI creation will be completed or aborted.
@@ -184,18 +202,16 @@ class FastEMProjectController(object):
             name = "ROA-%s" % num
         name = make_unique_name(name, [roa.name.value for roa in self.model.roas.value])
         # better guess for parameters after region is selected in _add_roa_ctrl
-        roa_ctrl = FastEMROAController(name, None, None, self.colour, self._tab_data, self.panel, self._viewport)
+        roa_ctrl = FastEMROAController(name, None, None, self.colour, self._tab_data, self.panel, self._viewport, overlay)
         self.roa_ctrls[roa_ctrl] = num
         sub_callback = partial(self._add_roa_ctrl, roa_ctrl=roa_ctrl)
         self._roa_coord_sub_callback[roa_ctrl] = sub_callback
         roa_ctrl.model.coordinates.subscribe(sub_callback)
-        return roa_ctrl
 
     # already running in main GUI thread as it receives event from GUI
     def _on_btn_remove(self, _, roa_ctrl):
         self.remove_roa_ctrl(roa_ctrl)
 
-    @call_in_wx_main # call in main thread as changes in GUI are triggered
     def _add_roa_ctrl(self, coords, roa_ctrl):
         roa_ctrl.model.coordinates.unsubscribe(self._roa_coord_sub_callback[roa_ctrl])
 
@@ -204,6 +220,7 @@ class FastEMProjectController(object):
             logging.debug("Aborting ROA creation.")
             self._viewport.canvas.remove_overlay(roa_ctrl.overlay)
             del self.roa_ctrls[roa_ctrl]
+            del self._roa_coord_sub_callback[roa_ctrl]
         else:
             # Create the panel
             roa_ctrl.create_panel()
@@ -266,7 +283,7 @@ class FastEMROAController(object):
     Controller for a single region of acquisition (ROA).
     """
 
-    def __init__(self, name, roc_2, roc_3, colour, tab_data, project_panel, viewport):
+    def __init__(self, name, roc_2, roc_3, colour, tab_data, project_panel, viewport, overlay):
         """
         :param name: (str) The default name for the ROA.
         :param roc_2: (FastEMROC): The region of calibration corresponding to the ROA.
@@ -275,6 +292,7 @@ class FastEMROAController(object):
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param project_panel: (FastEMProjectPanel) The corresponding project panel.
         :param viewport: (FastEMMainViewport) The acquisition view.
+        :param overlay:(RectangleOverlay) The rectangle overlay.
         """
         self._tab_data = tab_data
         self._project_panel = project_panel
@@ -295,9 +313,9 @@ class FastEMROAController(object):
         # (cf discussion in FastEMProjectController), create panel with .create_panel().
         self.panel = None
 
-        logging.debug("Creating overlay for ROA '%s'.", name)
-        canvas = self._viewport.canvas
-        self.overlay = canvas.add_roa_overlay(self.model.coordinates, colour)
+        self.overlay = overlay
+        self.overlay.colour = conversion.hex_to_frgba(colour)
+        self.overlay.coordinates.subscribe(self._on_coordinates, init=True)
         self.overlay.active.subscribe(self._on_overlay_active)
 
     def create_panel(self):
@@ -327,7 +345,8 @@ class FastEMROAController(object):
                 self.panel.deactivate()
 
     def _on_coordinates(self, coords):
-        # Purely for logging
+        """Assign the overlay coordinates value to ROA model's coordinates"""
+        self.model.coordinates.value = coords
         logging.debug("ROA '%s' coordinates changed to %s.", self.model.name.value, coords)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
@@ -414,10 +433,14 @@ class FastEMROCController(object):
         """
         if self.overlay is None:
             self.overlay = self._viewport.canvas.\
-                add_calibration_overlay(self.calib_model.coordinates,
-                                        self.calib_model.name.value,
+                add_calibration_overlay(self.calib_model.name.value,
                                         self._sample_bbox,
                                         colour=self.calib_model.colour)
+            self.overlay.coordinates.subscribe(self._on_coordinates, init=True)
+
+    def _on_coordinates(self, coords):
+        """Assign the overlay coordinates value to ROC model's coordinates"""
+        self.calib_model.coordinates.value = coords
 
     def remove_calibration_overlay(self):
         """
@@ -487,9 +510,9 @@ class FastEMCalibrationRegionsController(object):
             xmax = pos[0] + 0.5 * sz[0]
             ymax = pos[1] - 0.5 * sz[1]
 
-            roc_ctrl.calib_model.coordinates.value = (xmin, ymin, xmax, ymax)
             roc_ctrl.fit_view_to_bbox()  # Zoom to calibration region
             roc_ctrl.create_calibration_overlay()
+            roc_ctrl.overlay.coordinates.value = (xmin, ymin, xmax, ymax)
         else:
             # reset coordinates for ROC to undefined and remove overlay
             roc_ctrl.calib_model.coordinates.value = acqstream.UNDEFINED_ROI
