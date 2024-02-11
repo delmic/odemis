@@ -67,6 +67,7 @@ class ImportExportROAPlugin(Plugin):
         try:
             fastem_main_tab = main_app.main_data.getTabByName("fastem_main")
             self._acquisition_tab = fastem_main_tab.acquisition_tab
+            self._cnvs = fastem_main_tab.vp.canvas
         except LookupError:
             logging.debug(
                 "Not loading Import Export ROAs tool since acquisition tab is not present."
@@ -162,10 +163,12 @@ class ImportExportROAPlugin(Plugin):
                 project_ctrl.regions_calib_3.value[
                     int(roc_3_name)
                 ].coordinates.value = roc_3_coordinates
-                # ROA button click to create the controller
-                roa_ctrl = project_ctrl._on_btn_roa(None, name=roa_name)
-                # Finally assign the ROA coordinates value to draw the ROA
-                roa_ctrl.model.coordinates.value = roa_coordinates
+                # Create and add a rectangle overlay
+                rectangle_overlay = self._cnvs.add_rectangle_overlay()
+                project_ctrl.add_roa(None, rectangle_overlay, name=roa_name)
+                # Finally assign the rectangle coordinates value to draw it
+                rectangle_overlay.coordinates.value = roa_coordinates
+            self._cnvs.reset_default_cursor()
 
     def _write_data_to_csv_file(self, filepath: str) -> None:
         """
