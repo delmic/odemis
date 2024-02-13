@@ -59,8 +59,9 @@ class FastEMProjectListController(object):
         self._main_data_model = tab_data.main
         self._project_list = project_list
         self._viewport = viewport
-        # New rectangle overlay creation
-        self._viewport.canvas.rectangles_overlay.rectangle.subscribe(self._on_rectangle)
+        # New shape overlay creation
+        for overlay in self._viewport.canvas.shapes_overlay:
+            overlay.shape_overlay.subscribe(self._on_overlay)
 
         self.project_ctrls = {}  # dict FastEMProjectController --> int
         self._project_list.btn_add_project.Bind(wx.EVT_BUTTON, self._add_project)
@@ -128,12 +129,12 @@ class FastEMProjectListController(object):
         """
         self._project_list.Enable(not mode)
 
-    def _on_rectangle(self, rectangle):
-        """Callback on a new rectangle overlay creation."""
+    def _on_overlay(self, overlay):
+        """Callback on a new shape overlay creation."""
         for project_ctrl in self.project_ctrls.keys():
             # Add ROA to the project whose panel is not collapsed
             if not project_ctrl.panel.collapsed:
-                project_ctrl.add_roa(None, rectangle)
+                project_ctrl.add_roa(None, overlay)
                 return
 
 
@@ -347,7 +348,6 @@ class FastEMROAController(object):
     def _on_coordinates(self, coords):
         """Assign the overlay coordinates value to ROA model's coordinates"""
         self.model.coordinates.value = coords
-        logging.debug("ROA '%s' coordinates changed to %s.", self.model.name.value, coords)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_roc(self, roc):

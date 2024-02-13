@@ -58,8 +58,9 @@ from odemis.gui.comp.overlay.play_icon import PlayIconOverlay
 from odemis.gui.comp.overlay.point_select import PointSelectOverlay
 from odemis.gui.comp.overlay.points import PointsOverlay
 from odemis.gui.comp.overlay.polar import PolarOverlay
-from odemis.gui.comp.overlay.rectangle import RectangleOverlay, RectanglesOverlay
+from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
+from odemis.gui.comp.overlay.shapes import ShapesOverlay
 from odemis.gui.comp.overlay.spectrum_line_select import SpectrumLineSelectOverlay
 from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
 from odemis.gui.comp.overlay.text_view import TextViewOverlay
@@ -1801,7 +1802,7 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
-        self.rectangles_overlay = None
+        self.shapes_overlay = []
 
     def add_background_overlay(self, rectangles):
         """
@@ -1828,8 +1829,8 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         """
         overlay (RectangleOverlay or RectangleOverlay): overlay to be deleted
         """
-        if self.rectangles_overlay and isinstance(overlay, RectangleOverlay):
-            self.rectangles_overlay.remove_overlay(overlay)
+        for shapes_overlay in self.shapes_overlay:
+            shapes_overlay.remove_overlay(overlay)
         wx.CallAfter(self.request_drawing_update)
 
     def add_calibration_overlay(self, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
@@ -1881,5 +1882,6 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         view.show_crosshair.value = False
 
         if guimodel.TOOL_RECTANGLE in tab_data.tool.choices:
-            self.rectangles_overlay = RectanglesOverlay(self, tool_va=tab_data.tool)
-            self.add_world_overlay(self.rectangles_overlay)
+            rectangles_overlay = ShapesOverlay(self, RectangleOverlay, guimodel.TOOL_RECTANGLE, tab_data.tool)
+            self.add_world_overlay(rectangles_overlay)
+            self.shapes_overlay.append(rectangles_overlay)
