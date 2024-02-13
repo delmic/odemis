@@ -99,13 +99,10 @@ class FastEMROA(object):
     and detector.
     """
 
-    def __init__(self, name, coordinates, roc_2, roc_3, asm, multibeam, descanner, detector, overlap=0.06):
+    def __init__(self, name, roc_2, roc_3, asm, multibeam, descanner, detector, overlap=0.06):
         """
         :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
                      the external storage.
-        :param coordinates: (float, float, float, float) xmin, ymin, xmax, ymax
-                            Bounding box coordinates of the ROA in [m]. The coordinates are in the sample carrier
-                            coordinate system, which corresponds to the component with role='stage'.
         :param roc_2: (FastEMROC) Corresponding region of calibration (ROC). Used for dark offset and digital
                       gain calibration.
         :param roc_3: (FastEMROC) Corresponding region of calibration (ROC). Used for the final scanner rotation,
@@ -119,10 +116,7 @@ class FastEMROA(object):
             overlap by 20%. By default, the overlap is 0.06, this means there is 6% overlap between the fields.
         """
         self.name = model.StringVA(name)
-        self.coordinates = model.TupleContinuous(coordinates,
-                                                 range=((-1, -1, -1, -1), (1, 1, 1, 1)),
-                                                 cls=(int, float),
-                                                 unit='m')
+        self.coordinates = model.VigilantAttribute(None)
         self.roc_2 = model.VigilantAttribute(roc_2)
         self.roc_3 = model.VigilantAttribute(roc_3)
         self._asm = asm
@@ -146,7 +140,7 @@ class FastEMROA(object):
                             Bounding box coordinates of the ROA in [m]. The coordinates are in the sample carrier
                             coordinate system, which corresponds to the component with role='stage'.
         """
-        self.field_indices = self._calculate_field_indices()
+        self.field_indices = self._calculate_field_indices(coordinates)
 
     def estimate_acquisition_time(self):
         """
@@ -158,10 +152,15 @@ class FastEMROA(object):
 
         return tot_time
 
-    def _calculate_field_indices(self):
-        # TODO: Old method is used since polygonal fields is not yet supported by the gui. This must be adjusted when
-        #  it is.
-        indices = self.get_square_field_indices(self.coordinates.value)
+    def _calculate_field_indices(self, coordinates):
+        indices = []
+        if coordinates:
+            # Rectangle (l, t, r, b)
+            if isinstance(coordinates, tuple):
+                indices = self.get_square_field_indices(coordinates)
+            # Ellipse or polygon points List[(y, x)]
+            elif isinstance(coordinates, list):
+                indices = self.get_poly_field_indices(coordinates.copy())
         return indices
 
     def get_square_field_indices(self, coordinates):
@@ -781,7 +780,13 @@ class AcquisitionTask(object):
 
         # Get the coordinate of the top left corner of the ROA, this corresponds to the (xmin, ymax) coordinate in the
         # role='stage' coordinate system.
-        xmin_roa, _, _, ymax_roa = self._roa.coordinates.value  # TODO: update with boundingbox instead of coordinates
+        coordinates = self._roa.coordinates.value
+        # Rectangle (l, t, r, b)
+        if isinstance(coordinates, tuple):
+            xmin_roa, _, _, ymax_roa = coordinates
+        # Ellipse or polygon points List[(y, x)]
+        elif isinstance(coordinates, list):
+            _, xmin_roa, ymax_roa, _ = util.get_polygon_bbox(coordinates.copy())
 
         # Transform from stage to scan-stage coordinate system
         rot_cor = self._stage_scan.getMetadata()[model.MD_ROTATION_COR]

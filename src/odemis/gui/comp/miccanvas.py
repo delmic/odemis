@@ -47,6 +47,7 @@ import odemis.gui.comp.canvas as canvas
 from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
 from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
 from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
+from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.fastem import FastEMROCOverlay, FastEMBackgroundOverlay
 from odemis.gui.comp.overlay.focus import FocusOverlay
 from odemis.gui.comp.overlay.gadget import GadgetOverlay
@@ -1885,3 +1886,8 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
             rectangles_overlay = ShapesOverlay(self, RectangleOverlay, guimodel.TOOL_RECTANGLE, tab_data.tool)
             self.add_world_overlay(rectangles_overlay)
             self.shapes_overlay.append(rectangles_overlay)
+
+        if guimodel.TOOL_ELLIPSE in tab_data.tool.choices:
+            ellipses_overlay = ShapesOverlay(self, EllipseOverlay, guimodel.TOOL_ELLIPSE, tab_data.tool)
+            self.add_world_overlay(ellipses_overlay)
+            self.shapes_overlay.append(ellipses_overlay)

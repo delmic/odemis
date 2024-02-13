@@ -134,7 +134,7 @@ class FastEMProjectListController(object):
         for project_ctrl in self.project_ctrls.keys():
             # Add ROA to the project whose panel is not collapsed
             if not project_ctrl.panel.collapsed:
-                project_ctrl.add_roa(None, overlay)
+                project_ctrl.add_roa(overlay)
                 return
 
 
@@ -187,7 +187,7 @@ class FastEMProjectController(object):
             self.panel.txt_ctrl.SetValue(txt)
         evt.Skip()
 
-    def add_roa(self, _, overlay, name=None):
+    def add_roa(self, overlay, name=None):
         # Two-step process: Instantiate FastEM object here, but wait until first ROA is selected until
         # further processing. The process can still be aborted by clicking in the viewport without dragging.
         # In the callback to the ROI, the ROI creation will be completed or aborted.
@@ -227,7 +227,11 @@ class FastEMProjectController(object):
             roa_ctrl.create_panel()
 
             # Improve parameters guess
-            num = self._find_closest_scintillator(coords)
+            num = 1
+            if isinstance(coords, tuple):
+                num = self._find_closest_scintillator(coords)
+            elif isinstance(coords, list):
+                num = self._find_closest_scintillator(roa_ctrl.overlay.coordinates.value)
             roa_ctrl.model.roc_2.value = self.regions_calib_2.value[num]
             roa_ctrl.model.roc_3.value = self.regions_calib_3.value[num]
 
@@ -302,7 +306,7 @@ class FastEMROAController(object):
         # Read the overlap from the acquisition configuration
         acqui_conf = conf.get_acqui_conf()
 
-        self.model = FastEMROA(name, acqstream.UNDEFINED_ROI, roc_2, roc_3,
+        self.model = FastEMROA(name, roc_2, roc_3,
                                self._tab_data.main.asm, self._tab_data.main.multibeam,
                                self._tab_data.main.descanner, self._tab_data.main.mppc,
                                acqui_conf.overlap)
@@ -316,7 +320,10 @@ class FastEMROAController(object):
 
         self.overlay = overlay
         self.overlay.colour = conversion.hex_to_frgba(colour)
-        self.overlay.coordinates.subscribe(self._on_coordinates, init=True)
+        if hasattr(self.overlay, "points"):
+            self.overlay.points.subscribe(self._on_coordinates, init=True)
+        elif hasattr(self.overlay, "coordinates"):
+            self.overlay.coordinates.subscribe(self._on_coordinates, init=True)
         self.overlay.active.subscribe(self._on_overlay_active)
 
     def create_panel(self):

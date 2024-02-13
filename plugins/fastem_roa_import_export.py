@@ -165,7 +165,7 @@ class ImportExportROAPlugin(Plugin):
                 ].coordinates.value = roc_3_coordinates
                 # Create and add a rectangle overlay
                 rectangle_overlay = self._cnvs.add_rectangle_overlay()
-                project_ctrl.add_roa(None, rectangle_overlay, name=roa_name)
+                project_ctrl.add_roa(rectangle_overlay, name=roa_name)
                 # Finally assign the rectangle coordinates value to draw it
                 rectangle_overlay.coordinates.value = roa_coordinates
             self._cnvs.reset_default_cursor()

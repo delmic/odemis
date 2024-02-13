@@ -163,6 +163,13 @@ TOOLS = {
             model.TOOL_NONE,
             "Create/Move rectangle"
         ),
+    model.TOOL_ELLIPSE:
+        ModeTool(
+            "btn_circle",
+            model.TOOL_ELLIPSE,
+            model.TOOL_NONE,
+            "Create/Move ellipse"
+        ),
 }
 
 
