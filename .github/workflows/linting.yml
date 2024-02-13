@@ -1,0 +1,44 @@
+# This workflow will perform linting on the changed python files of a push or
+# pull request and on the full codebase. For the full# codebase it will not fail
+# if there are linting errors, for the changed files it will fail.
+
+name: Linting
+
+on: [push, pull_request]
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Get changed files
+        id: changed-files
+        uses: tj-actions/changed-files@v42
+
+      - name: Setup Python environment
+        uses: actions/setup-python@v3
+
+      - name: Install flake8
+        run: pip install flake8
+
+      - name: Run flake8 on full codebase
+        continue-on-error: true
+        # W291 Trailing whitespace
+        # W292 No newline at end of file
+        # W293 Blank line contains whitespace
+        # W391 Blank line at end of file
+        # E999 SyntaxError
+        run: flake8 . --select W291,W292,W293,W391,E999
+
+      - name: Run flake8 on changed files
+        run: |
+          for changed_file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            if [[ $changed_file == *.py ]]
+            then
+              flake8 "$changed_file" --select W291,W292,W293,W391,E999
+            fi
+          done
