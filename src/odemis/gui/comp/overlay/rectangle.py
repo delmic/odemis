@@ -1,6 +1,4 @@
 # -*- coding: utf-8 -*-
-
-
 """
 :created: 2024-02-02
 :author: Nandish Patel
@@ -21,11 +19,9 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from typing import Union
 import wx
 
 import odemis.gui as gui
-import odemis.gui.model as guimodel
 import odemis.util.units as units
 from odemis import model, util
 from odemis.acq.stream import UNDEFINED_ROI
@@ -220,137 +216,3 @@ class RectangleOverlay(RectangleSelectOverlay):
             self._write_labels(ctx)
 
         super().draw(ctx, shift, scale, line_width, dash=True)
-
-
-class RectanglesOverlay(WorldOverlay):
-    """
-    Overlay that allows for the selection and deletion of a rectangle in physical coordinates.
-    It can handle multiple rectangles.
-    """
-
-    def __init__(self, cnvs, tool_va=None):
-        """
-        cnvs: canvas for the overlay.
-        tool_va (None or VA of value TOOL_*): If it's set to TOOL_RECTANGLE, then new rectangles can be
-        created. If None, then no rectangle can be added by the user.
-        """
-        WorldOverlay.__init__(self, cnvs)
-        # VA which changes value upon RectangleOverlay creation
-        self.rectangle = model.VigilantAttribute(None, readonly=True)
-        self._selected_rectangle = None
-        self._rectangles = []
-        if tool_va:
-            tool_va.subscribe(self._on_tool, init=True)
-
-    def clear(self):
-        """Remove all rectangles and update canvas."""
-        for rectangle in self._rectangles:
-            rectangle.active.value = False
-        self._rectangles.clear()
-
-    def remove_overlay(self, overlay: RectangleOverlay):
-        """Remove a rectangle's overlay and update canvas."""
-        if overlay in self._rectangles:
-            overlay.active.value = False
-            self._rectangles.remove(overlay)
-            self.cnvs.remove_world_overlay(overlay)
-            self.cnvs.request_drawing_update()
-
-    def on_enter(self, evt):
-        if self.active.value:
-            self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
-        else:
-            WorldOverlay.on_enter(self, evt)
-
-    def on_leave(self, evt):
-        if self.active.value:
-            self.cnvs.reset_default_cursor()
-        else:
-            WorldOverlay.on_leave(self, evt)
-
-    def _lock_rectangles(self, flag=True):
-        """Lock or unlock rectangles to process on_left_down and on_left_up events."""
-        for rectangle in self._rectangles:
-            rectangle.locked.value = flag
-
-    def _activate_rectangles(self, flag=True):
-        """Activate or de-activate the rectangles."""
-        for rectangle in self._rectangles:
-            rectangle.active.value = flag
-
-    def _on_tool(self, selected_tool):
-        """Update the overlay when it's active and tools change."""
-        if selected_tool == guimodel.TOOL_RECTANGLE:
-            self.active.value = True
-            self._lock_rectangles(False)
-            # Make the last created rectangle active
-            if self._rectangles:
-                last_rectangle = self._rectangles[-1]
-                last_rectangle.active.value = True
-        elif selected_tool == guimodel.TOOL_NONE:
-            self.active.value = False
-            self._lock_rectangles(True)
-            self._activate_rectangles(False)
-            self.cnvs.reset_default_cursor()
-
-    def _get_rectangle(self, evt) -> Union[RectangleOverlay, None]:
-        """
-        Find a rectangle corresponding to the given on_left_down event position.
-        Returns: (RectangleOverlay or None): the most appropriate rectangle.
-            If no rectangle is found, it returns None.
-        """
-        if self._rectangles:
-            pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-            for rectangle in self._rectangles[::-1]:
-                if util.is_point_in_rect(pos, rectangle.coordinates.value):
-                    return rectangle
-        return None
-
-    def on_left_down(self, evt):
-        """Start drawing a rectangle if the overlay is active and there is no selected rectangle."""
-        if not self.active.value:
-            return super().on_left_down(evt)
-
-        self._selected_rectangle = self._get_rectangle(evt)
-        if self._selected_rectangle is None:
-            rectangle = RectangleOverlay(self.cnvs)
-            self._rectangles.append(rectangle)
-            self.cnvs.add_world_overlay(rectangle)
-            self.rectangle._set_value(rectangle, force_write=True)
-            self._selected_rectangle = rectangle
-        self._selected_rectangle.locked.value = False
-        self._selected_rectangle.active.value = True
-        self._selected_rectangle.on_left_down(evt)
-
-    def on_char(self, evt):
-        """Delete the selected rectangle."""
-        if not self.active.value:
-            return super().on_char(evt)
-
-        if evt.GetKeyCode() == wx.WXK_DELETE:
-            for rectangle in self._rectangles:
-                if rectangle.active.value:
-                    self.remove_overlay(rectangle)
-                    break
-            self._selected_rectangle = None
-        else:
-            WorldOverlay.on_char(self, evt)
-
-    def on_left_up(self, evt):
-        """Stop drawing a rectangle."""
-        if not self.active.value:
-            return super().on_left_up(evt)
-
-        if self._selected_rectangle:
-            self._selected_rectangle.on_left_up(evt)
-        else:
-            WorldOverlay.on_left_up(self, evt)
-
-    def draw(self, ctx, shift=(0, 0), scale=1.0):
-        """Draw all the rectangles."""
-        for rectangle in self._rectangles:
-            rectangle.draw(
-                ctx,
-                shift,
-                scale,
-            )
