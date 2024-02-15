@@ -49,6 +49,7 @@ CLASS_SHRK = andorshrk.Shamrock
 KWARGS_SHRK = dict(name="sr193", role="spectrograph", device=0)
 KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake",
                        slits={1: ["slit-in", "force_max"], 3: "slit-monochromator"},
+                       iris={0: "iris-in"},
                        bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"},
                        drives_shutter=[1.57],
                        accessory="slitleds",
@@ -572,6 +573,21 @@ class TestShamrock(SpectrographTestBaseClass, unittest.TestCase):
         # ideally, f12, would be "logically" based on the other values: f11 + (f22-f21)
         # self.assertEqual(f12_actual, f11 + (f22 - f21))
 
+    def test_iris(self):
+        self.assertIn("iris-in", self.spectrograph.axes)
+        sp = self.spectrograph
+        rng = sp.axes["iris-in"].range
+        orig_pos = sp.position.value["iris-in"]
+        sp.moveAbsSync({"iris-in": rng[0]})
+        self.assertAlmostEqual(sp.position.value["iris-in"], rng[0])
+
+        sp.moveRelSync({"iris-in": 1e-3})
+        self.assertAlmostEqual(sp.position.value["iris-in"], rng[0] + 1e-3)
+
+        sp.moveAbsSync({"iris-in": rng[1]})
+        self.assertAlmostEqual(sp.position.value["iris-in"], rng[1])
+
+        sp.moveAbsSync({"iris-in": orig_pos})
 
 class TestShamrockAndCCD(SpectrographTestBaseClass, unittest.TestCase):
     """
