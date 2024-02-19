@@ -1203,7 +1203,7 @@ class SEM(model.HwComponent):
         Get the min/max values of the compound lens focus mode.
 
         :return (dict str -> Any): The range of the focusing mode for the key "range"
-           (as a tuple min/max). The unit for key "unit", as a string or None. 
+           (as a tuple min/max). The unit for key "unit", as a string or None.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -1275,13 +1275,24 @@ class SEM(model.HwComponent):
 
         Returns
         -------
-        Position
+        optimal_stigmation
             Optimal stigmator setting.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.start_autostig(n_images, sweep_range, dwell_time, resolution,
-                                              reduced_area_size, save_results, results_fp)
+            self.server._pyroTimeout = 300  # seconds
+            try:
+                optimal_stigmation = self.server.start_autostig(n_images, sweep_range, dwell_time, resolution,
+                                                                reduced_area_size, save_results, results_fp)
+            except TimeoutError:
+                logging.warning(
+                    "Autostigmation timed out after %s s. Check the xt user interface for the current status.",
+                    self.server._pyroTimeout
+                )
+                optimal_stigmation = None
+            finally:
+                self.server._pyroTimeout = 30  # seconds
+            return optimal_stigmation
 
     def start_auto_lens_centering_flash(self):
         """
