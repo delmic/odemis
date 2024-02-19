@@ -293,7 +293,7 @@ class SparcAcquisitionTab(Tab):
             ssaxes = sstage.axes
             posc = {"x": sum(ssaxes["x"].range) / 2,
                     "y": sum(ssaxes["y"].range) / 2}
-            # In case of a 'real' scan stage, move the scan stage
+            # In case of a 'independent' scan stage, move the scan stage
             # to the center (so that scan has maximum range)
             if main_data.stage.name not in sstage.affects.value:
                 sstage.moveAbs(posc)
@@ -307,7 +307,7 @@ class SparcAcquisitionTab(Tab):
 
             tab_data.useScanStage.subscribe(self._on_use_scan_stage, init=True)
 
-            # In case of a 'real' scan stage, draw the limits on the SEM view
+            # draw the limits on the SEM view
             roi = (ssaxes["x"].range[0] - posc["x"],
                    ssaxes["y"].range[0] - posc["y"],
                    ssaxes["x"].range[1] - posc["x"],

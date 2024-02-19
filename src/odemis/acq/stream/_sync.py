@@ -277,15 +277,14 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
 
         if hasattr(self, "useScanStage") and self.useScanStage.value:
             if self._sstage:
-                # It's pretty hard to estimate the move time, as the speed is only the maximum speed
-                # and what takes actually most of the time is to stop to the next point.
-                # TODO: just get the output of _getScanStagePositions() and add up distances?
-                repetition = tuple(self.repetition.value)
+                # The move time is dependent on the type of the stage with their own properties.
+                # This makes it quite hard to estimate. A rough guess using actuator speed,
+                # acceleration and distance is generated through guessActuatorMoveDuration.
                 roi = self.roi.value
                 width = (roi[2] - roi[0], roi[3] - roi[1])
 
                 # Take into account the "border" around each pixel
-                pxs = (width[0] / repetition[0], width[1] / repetition[1])
+                pxs = (width[0] / rep[0], width[1] / rep[1])
                 lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2,
                        roi[2] - pxs[0] / 2, roi[3] - pxs[1] / 2)
 
@@ -295,16 +294,12 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
                 phy_width = sem_fov[0] * (lim[2] - lim[0]), sem_fov[1] * (lim[3] - lim[1])
 
                 # Count 2x as we need to go back and forth
-                tot_dist = (phy_width[0] * repetition[1] + phy_width[1]) * 2
-                # speed = self._sstage.speed.value["x"]  # consider both axes have same speed
-                #
-                # npixels = int(numpy.prod(repetition))
-                # # x2 the move time for compensating the accel/decel + 50 ms per pixel overhead
-                # move_time = 2 * tot_dist / speed + npixels * 50e-3  # s
+                tot_dist = (phy_width[0] * rep[1] + phy_width[1]) * 2
 
                 # check the move time for at least both of the x and y axes
-                move_time_x = guessActuatorMoveDuration(self._sstage, "x", tot_dist)  # s
-                move_time_y = guessActuatorMoveDuration(self._sstage, "y", tot_dist)  # s
+                pxs = self._getPixelSize()
+                move_time_x = (guessActuatorMoveDuration(self._sstage, "x", pxs[0]) * (rep[0] - 1) * rep[1])
+                move_time_y = (guessActuatorMoveDuration(self._sstage, "y", pxs[1]) * rep[1])
                 # take the move with the longest duration as final move time
                 move_time = max(move_time_x, move_time_y)
                 logging.debug("Estimated total scan stage travel distance is %s = %s s",
@@ -1584,7 +1579,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         #  * Start SED acquisition and trigger CCD
         #  * Wait for the CCD/SED data
         #  * Repeat until all the points have been scanned
-        #  * Move back the stage to center
+        #  * Move back the stage to center in case of an 'independent' stage
 
         # TODO does not support polarimetry and image integration so far
         if self._analyzer is not None:
@@ -1600,7 +1595,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         if not sstage:
             raise ValueError("Cannot acquire with scan stage, as no stage was provided")
         orig_spos = sstage.position.value  # TODO: need to protect from the stage being outside of the axes range?
-        keep_stage_pos = model.getComponent(role="stage").name in sstage.affects.value
+        scan_stage_is_stage = model.getComponent(role="stage").name in sstage.affects.value
 
         try:
             saxes = sstage.axes
@@ -1747,12 +1742,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     # TODO: here the code is different compared to _runAcquisitionEbeam
                     raw_pos = self._acq_data[0][-1].metadata[MD_POS]
                     strans = spos[0] - orig_spos["x"], spos[1] - orig_spos["y"]
-                    # check if a scan-stage wrapper (has stage dependency) is used
-                    # if so only use the translated position and don't add to raw
-                    if model.getComponent(role="stage").name in sstage.affects.value:
-                        cor_pos = strans[0], strans[1]
-                    else:
-                        cor_pos = raw_pos[0] + strans[0], raw_pos[1] + strans[1]
+                    # check if the scan stage is the SEM stage itself
+                    # if it is an 'independent' stage MD_POS (raw_pos) is added to the translation
+                    cor_pos = raw_pos[0] + strans[0], raw_pos[1] + strans[1]
                     logging.debug("Updating pixel pos from %s to %s", raw_pos, cor_pos)
                     # In practice, for the e-beam data, it's only useful to
                     # update the metadata for the first pixel.
@@ -1840,7 +1832,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
             self._current_scan_area = None  # Indicate we are done for the live (also in case of error)
             if sstage:
                 saxes = sstage.axes
-                if keep_stage_pos:
+                if scan_stage_is_stage:
                     # if it's a scan-stage wrapper we use the sem stage for scanning so in
                     # this case go back to the (user selected) position before the acquisition
                     pos0 = orig_spos
