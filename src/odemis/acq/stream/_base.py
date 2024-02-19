@@ -15,7 +15,6 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
-from past.builtins import long
 from collections.abc import Iterable
 import functools
 import gc
@@ -239,7 +238,7 @@ class Stream(object):
         # black/white. Its range is ._drange (will be updated by _updateDRange)
         self.intensityRange = model.TupleContinuous((0, 0),
                                                     range=((0, 0), (1, 1)),
-                                                    cls=(int, long, float),
+                                                    cls=(int, float),
                                                     setter=self._setIntensityRange)
         # Make it so that the value gets clipped when its range is updated and
         # the value is outside of it.

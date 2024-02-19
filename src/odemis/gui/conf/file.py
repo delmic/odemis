@@ -17,18 +17,17 @@ This file is part of Odemis.
     see http://www.gnu.org/licenses/.
 
 """
-from abc import ABCMeta, abstractproperty
 import configparser
-from configparser import NoOptionError
 import logging
 import math
 import os.path
+from abc import ABCMeta, abstractproperty
+from configparser import NoOptionError
+from typing import Union
 
-from odemis.dataio import tiff
 from odemis.acq.align import delphi
+from odemis.dataio import tiff
 from odemis.gui.util import get_picture_folder, get_home_folder
-import sys
-from past.builtins import unicode
 
 CONF_PATH = os.path.join(get_home_folder(), u".config/odemis")
 ACQUI_PATH = get_picture_folder()
@@ -140,15 +139,13 @@ class Config(metaclass=ABCMeta):
         except (configparser.NoOptionError, configparser.NoSectionError):
             return self.default.get(section, option)
 
-    def _ensure_str_format(self, s):
+    def _ensure_str_format(self, s: Union[str, bytes]) -> str:
         """
-        The value argument of ConfigParser requires a unicode str in python3 and a byte str
-        in python2. This function makes sure a string is in the right format.
+        The value argument of ConfigParser requires a unicode str in python3.
+        This function makes sure a string is in the right format.
         """
-        if sys.version_info[0] >= 3 and isinstance(s, bytes):
+        if isinstance(s, bytes):
             s = s.decode("utf-8")
-        elif sys.version_info[0] < 3 and isinstance(s, unicode):
-            s = s.encode("utf-8")
         return s
 
 

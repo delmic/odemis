@@ -25,7 +25,6 @@ This module contains functions that help in the generation of dynamic configurat
 """
 
 from builtins import str
-from past.builtins import long
 from collections import OrderedDict
 from collections.abc import Iterable, Mapping
 import logging
@@ -288,7 +287,7 @@ def determine_default_control(va):
             logging.debug("Found range %s", va.range)
 
             # TODO: if unit is "s" => scale=exp
-            if isinstance(va.value, (int, long, float)):
+            if isinstance(va.value, (int, float)):
                 # If the value is a number with a range, return the slider control
                 return odemis.gui.CONTROL_SLIDER
         except AttributeError:
@@ -298,7 +297,7 @@ def determine_default_control(va):
         val = va.value
         if isinstance(val, bool):
             return odemis.gui.CONTROL_CHECK
-        elif isinstance(val, (int, long)):
+        elif isinstance(val, int):
             return odemis.gui.CONTROL_INT
         elif isinstance(val, float):
             return odemis.gui.CONTROL_FLT
