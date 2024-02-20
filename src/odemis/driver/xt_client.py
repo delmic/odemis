@@ -1252,7 +1252,7 @@ class SEM(model.HwComponent):
     def start_autostig(self, n_images=17, sweep_range=0.015, dwell_time=3e-6, resolution=(1536, 1024),
                        reduced_area_size=0.5, save_results=False, results_fp=None):
         """
-        Preform the autostig routine for determining the optimal stigmator setting.
+        Preform the autostig routine for determining the optimal stigmator setting. This is a blocking call.
         NOTE: will be available from xtadapter version 1.11.5 and higher.
 
         Parameters
@@ -1275,7 +1275,7 @@ class SEM(model.HwComponent):
 
         Returns
         -------
-        optimal_stigmation
+        optimal_stigmation : float
             Optimal stigmator setting.
         """
         with self._proxy_access:
@@ -1285,11 +1285,12 @@ class SEM(model.HwComponent):
                 optimal_stigmation = self.server.start_autostig(n_images, sweep_range, dwell_time, resolution,
                                                                 reduced_area_size, save_results, results_fp)
             except TimeoutError:
-                logging.warning(
-                    "Autostigmation timed out after %s s. Check the xt user interface for the current status.",
+                logging.error(
+                    "Autostigmation timed out after %s s. Check the xt user interface, "
+                    "autostigmation might still be running.",
                     self.server._pyroTimeout
                 )
-                optimal_stigmation = None
+                raise
             finally:
                 self.server._pyroTimeout = 30  # seconds
             return optimal_stigmation
