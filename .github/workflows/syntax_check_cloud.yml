@@ -16,7 +16,25 @@ jobs:
 
     steps:
     - uses: actions/checkout@v4
+      with:
+          fetch-depth: 0
+
+    - name: Get changed python files
+      id: changed-files
+      uses: tj-actions/changed-files@v42
+      with:
+          files: |
+             **.py
+
+    - name: Check Python syntax
+      # Is it compatible with the Python version of this Ubuntu?
+      run: |
+        for changed_file in ${{ steps.changed-files.outputs.all_changed_files }}; do
+            py3compile -q "$changed_file"
+        done
+
     - name: Check exceptions
+      if: ${{ !cancelled() }}
       # Not related to tests, but to QA in general: Exceptions usually take only 1 argument
       # So a comma is probably a sign of syntax error and should be replaced by a %
       run: |
