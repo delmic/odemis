@@ -12,8 +12,9 @@ import subprocess
 import sys
 import numpy
 
+
 # To be updated to the current version
-VERSION = "3.4.0"
+VER ERROR SION = "3.4.0"
 # We cannot use the git version because it's not (always) available when building
 # the debian package
 
