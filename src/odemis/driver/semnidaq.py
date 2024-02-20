@@ -959,7 +959,7 @@ class Acquirer:
                     sent_n = self._write_ao_data(num_of_samples)
                 else:
                     sent_n = self._write_ao_data_finite(num_of_samples)
-            except nidaqmx.DaqWriteError as ex:
+            except nidaqmx.DaqError as ex:
                 # It might have failed just because the task was stopped/closed
                 try:
                     if not self._ao_task.is_task_done():
@@ -995,7 +995,7 @@ class Acquirer:
                     sent_n = self._write_do_data(num_of_samples)
                 else:
                     sent_n = self._write_do_data_finite(num_of_samples)
-            except nidaqmx.DaqWriteError as ex:
+            except nidaqmx.DaqError as ex:
                 # It might have failed just because the task was stopped/closed
                 try:
                     if not self._do_task.is_task_done():
@@ -1869,9 +1869,9 @@ class Scanner(model.Emitter):
                  limits: List[List[float]],
                  park: Optional[List[float]] = None,
                  scanning_ttl: Dict[int, List] = None,
-                 pixel_ttl: Optional[int] = None,
-                 line_ttl: Optional[int] = None,
-                 frame_ttl: Optional[int] = None,
+                 pixel_ttl: Optional[List[int]] = None,
+                 line_ttl: Optional[List[int]] = None,
+                 frame_ttl: Optional[List[int]] = None,
                  settle_time: float = 0,
                  scan_active_delay: float = 0,
                  hfw_nomag: float = 0.1,
@@ -1887,12 +1887,12 @@ class Scanner(model.Emitter):
         :param park (None or 2-tuple of (0<=float)): voltage (in V) of resting position,
         if None, it will default to top-left corner. If the beam cannot be blanked
         this will be the position of the beam when not scanning.
-        :param pixel_ttl: digital output channel (on port0) to indicate the beginning
+        :param pixel_ttl: digital output channels (on port0) to indicate the beginning
         of a scan of a pixel. It goes high the first half of the duration of a pixel.
-        :param line_ttl: digital output channel (on port0) to indicate the beginning
+        :param line_ttl: digital output channels (on port0) to indicate the beginning
         of a line, not including the settling time. It goes high on the first
         pixel of the line, and goes down at the end of the last pixel.
-        :param frame_ttl: digital output channel (on port0) to indicate the beginning
+        :param frame_ttl: digital output channels (on port0) to indicate the beginning
         of a frame, not including the settling time. It goes high on the first
         pixel of the frame, and goes down at the end of the last pixel.
         :param scanning_ttl (None or dict of int -> (bool, Optional[str], bool))):
@@ -2011,9 +2011,13 @@ class Scanner(model.Emitter):
 
         # Validate fast TTLs
         fast_do_channels = set()  # set of ints, to check all channels are unique
-        for do_channel in (pixel_ttl, line_ttl, frame_ttl):
-            if do_channel is None:
-                continue
+        if not all (v is None or isinstance(v, list) for v in (pixel_ttl, line_ttl, frame_ttl)):
+            raise ValueError("pixel_ttl, line_ttl and frame_ttl should be lists of int, but got %s, %s, %s" %
+                             (pixel_ttl, line_ttl, frame_ttl))
+        pixel_ttl = pixel_ttl or []
+        line_ttl = line_ttl or []
+        frame_ttl = frame_ttl or []
+        for do_channel in pixel_ttl + line_ttl + frame_ttl:
             # Check it's a valid channel
             if do_channel not in available_do_ports:
                 raise ValueError("DAQ device '%s' does not have digital output %s, available ones: %s" %
@@ -2029,6 +2033,10 @@ class Scanner(model.Emitter):
         self._pixel_ttl = pixel_ttl
         self._line_ttl = line_ttl
         self._frame_ttl = frame_ttl
+
+        # TODO: have a better way to indicate the channel number as it's limited to port0
+        # while there is also port 1 & 2. Explicitly ask the full NI name? as "port1/line3"? Or as written on hardware "P1.3"?
+        self._fast_do_names = ",".join(f"{self.parent._device_name}/port0/line{n}" for n in fast_do_channels)
 
         # Manage the scanning state
         self._scan_state_req = queue.Queue()
@@ -2187,23 +2195,15 @@ class Scanner(model.Emitter):
         raise:
             ValueError: if the settings defined by the user are invalid
         """
-        if all(c is None for c in (self._pixel_ttl, self._line_ttl, self._frame_ttl)):
+        if not self._fast_do_names:
             # It's OK, the task is just going to do nothing... should just not write to it.
             return
 
-        try:
-            # TODO: have a better way to indicate the channel number as it's limited to port0
-            # while there is also port 1 & 2. Explicitly ask the full NI name? as "port1/line3"? Or as written on hardware "P1.3"?
-            channels_str = ",".join(f"{self.parent._device_name}/port0/line{n}"
-                                    for n in (self._pixel_ttl, self._line_ttl, self._frame_ttl)
-                                    if n is not None)
-            do_task.do_channels.add_do_chan(
-                channels_str,
-                line_grouping=LineGrouping.CHAN_FOR_ALL_LINES,  # data array should be of shape (samples)
-            )
-            logging.debug(f"Added DO channels: {channels_str}")
-        except nidaqmx.DaqError as ex:
-            raise ValueError(f"A TTL channel doesn't exist: {channels_str}") from ex  # TODO: better message
+        do_task.do_channels.add_do_chan(
+            self._fast_do_names,
+            line_grouping=LineGrouping.CHAN_FOR_ALL_LINES,  # data array should be of shape (samples,)
+        )
+        logging.debug(f"Added DO channels: {self._fast_do_names}")
 
     def _get_available_do_channels(self, port_number: int) -> Set[int]:
         """
@@ -2749,7 +2749,7 @@ class Scanner(model.Emitter):
             The bits are set to match the *_ttl options.
             If not TTLs are to be changed, None is returned
         """
-        if all(c is None for c in (self._pixel_ttl, self._line_ttl, self._frame_ttl)):
+        if not self._fast_do_names:
             # It's OK, the task is just going to do nothing... should just not write to it.
             return None
 
@@ -2761,15 +2761,15 @@ class Scanner(model.Emitter):
         ttl_signal = numpy.zeros(full_shape, dtype=numpy.uint32, order='C')
 
         # Pixel: everything after the margin, is filled with alternating high/low
-        if self._pixel_ttl is not None:
-            pixel_bit = numpy.uint32(1 << self._pixel_ttl)
+        for c in self._pixel_ttl:
+            pixel_bit = numpy.uint32(1 << c)
             ttl_signal[:, margin * 2::2, 0] |= pixel_bit
 
         # Line: everything after the margin is the line
         # Special array view, with dup to as first dim, to tell numpy everything needs to be copied
         ttl_signal_dup = numpy.moveaxis(ttl_signal, 2, 0)
-        if self._line_ttl is not None:
-            line_bit = numpy.uint32(1 << self._line_ttl)
+        for c in self._line_ttl:
+            line_bit = numpy.uint32(1 << c)
             ttl_signal_dup[:, :, margin * 2:] |= line_bit
             # Special case when there is no margin: make it low as the end of the line, to get a transition
             # TODO: if there is really some hardware that rely on the precise timing for line and frame
@@ -2780,8 +2780,8 @@ class Scanner(model.Emitter):
                 ttl_signal_dup[-1, :, -1] &= ~line_bit
 
         # Frame: almost everywhere high, except for the margin of the first line
-        if self._frame_ttl is not None:
-            frame_bit = numpy.uint32(1 << self._frame_ttl)
+        for c in self._frame_ttl:
+            frame_bit = numpy.uint32(1 << c)
             frame_signal = ttl_signal_dup.reshape(dup, res[1] * 2 * (res[0] + margin))
             frame_signal[:, margin * 2:] |= frame_bit
             # Special case when there is no margin: make it low as the end of the frame, to get a transition
@@ -2796,7 +2796,7 @@ class Scanner(model.Emitter):
         :return: ttl_signal: numpy array of shape 1, dtype uint32
         If not TTLs are to be changed, None is returned
         """
-        if all(c is None for c in (self._pixel_ttl, self._line_ttl, self._frame_ttl)):
+        if not self._fast_do_names:
             # It's OK, the task is just going to do nothing... should just not write to it.
             return None
 

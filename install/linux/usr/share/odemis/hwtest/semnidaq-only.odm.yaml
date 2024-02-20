@@ -44,9 +44,9 @@ SEM: {
             2: [True, True, "external"],  # High when scanning, High when VA set to True
             3: [False, True, "blanker"],  # Low when scanning, High when VA set to True
         },
-        pixel_ttl: 0,
-        line_ttl: 1,
-        frame_ttl: 6,
+        pixel_ttl: [0],
+        line_ttl: [1],
+        frame_ttl: [6],
     },
     properties: {
         scale: [4, 4], # (ratio) : start with a pretty fast scan

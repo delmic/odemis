@@ -85,9 +85,9 @@ CONFIG_SCANNER = {
         2: [True, True, "external"],  # High when scanning, High when VA set to True
         3: [False, True, "blanker"],  # Low when scanning, High when VA set to True
     },
-    "pixel_ttl": 0,
-    "line_ttl": 1,
-    "frame_ttl": 6,
+    "pixel_ttl": [0, 7],
+    "line_ttl": [1],
+    "frame_ttl": [6],
 }
 
 # For loop-back testing (currently on the breadboard):
@@ -127,9 +127,9 @@ class TestAnalogSEM(unittest.TestCase):
                 cls.counter = child
 
         # Compute the fast TTL masks, for the waveform checks
-        cls.pixel_bit = 1 << CONFIG_SCANNER["pixel_ttl"]
-        cls.line_bit = 1 << CONFIG_SCANNER["line_ttl"]
-        cls.frame_bit = 1 << CONFIG_SCANNER["frame_ttl"]
+        cls.pixel_bit = sum(1 << c for c in CONFIG_SCANNER["pixel_ttl"])
+        cls.line_bit = sum(1 << c for c in CONFIG_SCANNER["line_ttl"])
+        cls.frame_bit = sum(1 << c for c in CONFIG_SCANNER["frame_ttl"])
 
     @classmethod
     def tearDownClass(cls) -> None:
@@ -266,7 +266,7 @@ class TestAnalogSEM(unittest.TestCase):
         # Check the TTL signals
         self.assertEqual(ttl_array.shape, (exp_length * 2,))
         # There should be one high tick per pixel position
-        nb_high = numpy.sum(ttl_array & self.pixel_bit)
+        nb_high = numpy.sum((ttl_array & self.pixel_bit).astype(bool))
         self.assertEqual(nb_high, res[0] * res[1])
         # First value of line and frame should be low, and last one should be high
         self.assertEqual(bool(ttl_array[0] & self.line_bit), False)
@@ -312,7 +312,7 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertEqual(ttl_array.shape, (exp_length * 2,))
 
         # There should be one high tick per pixel position
-        nb_high = numpy.sum(ttl_array & self.pixel_bit)
+        nb_high = numpy.sum((ttl_array & self.pixel_bit).astype(bool))
         self.assertEqual(nb_high, res[0] * res[1])
         # No margin, so first value of line and frame should immediately be high,
         # but (as a special case), the very last value should be low
