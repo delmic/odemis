@@ -95,6 +95,17 @@ def index_closest(val, l):
         return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
 
 
+def round_up_to_multiple(v: float, m: float) -> float:
+    """
+    Rounds up a value to the nearest multiple of another value.
+    :param v: value to round up
+    :param m: the multiplicand
+    :return: the closest value >= v, that is k x m, with k an integer.
+    """
+    # Subtract a small value to avoid rounding errors when values are already a multiple of m
+    return math.ceil((v - 1e-18) / m) * m
+
+
 def almost_equal(a, b, atol=1e-18, rtol=1e-7):
     """
     Compares two floats within a margin (to handle rounding errors).
