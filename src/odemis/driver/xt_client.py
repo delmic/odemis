@@ -1203,7 +1203,7 @@ class SEM(model.HwComponent):
         Get the min/max values of the compound lens focus mode.
 
         :return (dict str -> Any): The range of the focusing mode for the key "range"
-           (as a tuple min/max). The unit for key "unit", as a string or None. 
+           (as a tuple min/max). The unit for key "unit", as a string or None.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -1252,7 +1252,7 @@ class SEM(model.HwComponent):
     def start_autostig(self, n_images=17, sweep_range=0.015, dwell_time=3e-6, resolution=(1536, 1024),
                        reduced_area_size=0.5, save_results=False, results_fp=None):
         """
-        Preform the autostig routine for determining the optimal stigmator setting.
+        Preform the autostig routine for determining the optimal stigmator setting. This is a blocking call.
         NOTE: will be available from xtadapter version 1.11.5 and higher.
 
         Parameters
@@ -1275,13 +1275,25 @@ class SEM(model.HwComponent):
 
         Returns
         -------
-        Position
+        optimal_stigmation : float
             Optimal stigmator setting.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.start_autostig(n_images, sweep_range, dwell_time, resolution,
-                                              reduced_area_size, save_results, results_fp)
+            self.server._pyroTimeout = 300  # seconds
+            try:
+                optimal_stigmation = self.server.start_autostig(n_images, sweep_range, dwell_time, resolution,
+                                                                reduced_area_size, save_results, results_fp)
+            except TimeoutError:
+                logging.error(
+                    "Autostigmation timed out after %s s. Check the xt user interface, "
+                    "autostigmation might still be running.",
+                    self.server._pyroTimeout
+                )
+                raise
+            finally:
+                self.server._pyroTimeout = 30  # seconds
+            return optimal_stigmation
 
     def start_auto_lens_centering_flash(self):
         """
