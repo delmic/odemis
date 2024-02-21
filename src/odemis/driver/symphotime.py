@@ -171,7 +171,7 @@ class OptionalDataRecord(object):
         bytestring: (string) byte string of data from the Symphotime server
         index: (int) start index in the byte string
         '''
-        index_null = raw_data.find(b'\0')
+        index_null = raw_data.find(b'\x00')
         name = raw_data[0:index_null].decode('utf-8', 'replace')
         index = (PQ_OPT_DATATYPE_NAME_MAXLEN + 1)
         data_type = struct.unpack_from('B', raw_data, index)[0]
@@ -208,7 +208,7 @@ class OptionalDataRecord(object):
         Raises:
             ValueError if invalid record types are in the list.
         '''
-        output_string = self.name.ljust(PQ_OPT_DATATYPE_NAME_MAXLEN + 1, '\0').encode('utf-8')
+        output_string = self.name.ljust(PQ_OPT_DATATYPE_NAME_MAXLEN + 1, '\x00').encode('utf-8')
 
         if self.typ == PQ_OPT_DATATYPE_FLOAT:
             output_string += struct.pack('<Bf', self.typ, self.data)
