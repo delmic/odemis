@@ -26,7 +26,6 @@ import wx
 
 from odemis.acq.stream import EMStream, FastEMSEMStream
 from odemis.gui import img, main_xrc
-from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.viewport import FastEMMainViewport
 from odemis.gui.cont.fastem_user_settings_panel import FastEMUserSettingsPanel
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
@@ -38,7 +37,6 @@ from odemis.gui.model import (
     TOOL_NONE,
     TOOL_ACT_ZOOM_FIT,
     TOOL_RULER,
-    TOOL_LINE,
     FastEMMainTabGUIData,
     StreamView
 )
@@ -73,7 +71,6 @@ class FastEMMainTab(Tab):
             TOOL_NONE,
             TOOL_ACT_ZOOM_FIT,
             TOOL_RULER,
-            TOOL_LINE,
         }
         super(FastEMMainTab, self).__init__(name, button, panel, main_frame, tab_data)
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
@@ -170,17 +167,8 @@ class FastEMMainTab(Tab):
 
         # Toolbar
         self.tb = panel.toolbar
-        self.tab_data_model.tool.subscribe(self._on_tool_va)
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
         self.tb.add_tool(TOOL_RULER, self.tab_data_model.tool)
-        self.tb.add_tool(TOOL_LINE, self.tab_data_model.tool)
-
-    def _on_tool_va(self, selected_tool):
-        if selected_tool == TOOL_NONE:
-            self.vp.canvas.enable_drag()
-            return
-        if CAN_DRAG in self.vp.canvas.abilities:
-            self.vp.canvas.disable_drag()
 
     def on_pnl_user_settings_size(self, _):
         """Handle the wx.EVT_SIZE event for pnl_user_settings"""
