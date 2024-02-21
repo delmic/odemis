@@ -59,6 +59,7 @@ from odemis.gui.comp.overlay.play_icon import PlayIconOverlay
 from odemis.gui.comp.overlay.point_select import PointSelectOverlay
 from odemis.gui.comp.overlay.points import PointsOverlay
 from odemis.gui.comp.overlay.polar import PolarOverlay
+from odemis.gui.comp.overlay.polygon import PolygonOverlay
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
 from odemis.gui.comp.overlay.shapes import ShapesOverlay
@@ -1891,3 +1892,8 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
             ellipses_overlay = ShapesOverlay(self, EllipseOverlay, guimodel.TOOL_ELLIPSE, tab_data.tool)
             self.add_world_overlay(ellipses_overlay)
             self.shapes_overlay.append(ellipses_overlay)
+
+        if guimodel.TOOL_POLYGON in tab_data.tool.choices:
+            polygon_overlay = ShapesOverlay(self, PolygonOverlay, guimodel.TOOL_POLYGON, tab_data.tool)
+            self.add_world_overlay(polygon_overlay)
+            self.shapes_overlay.append(polygon_overlay)

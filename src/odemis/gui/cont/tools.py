@@ -170,6 +170,13 @@ TOOLS = {
             model.TOOL_NONE,
             "Create/Move ellipse"
         ),
+    model.TOOL_POLYGON:
+        ModeTool(
+            "btn_star",
+            model.TOOL_POLYGON,
+            model.TOOL_NONE,
+            "Create/Move polygon"
+        ),
 }
 
 
