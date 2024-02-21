@@ -105,15 +105,15 @@ class CryoFeatureController(object):
         logging.info(f"Moving to position: {pos}")
         self._main_data_model.stage.moveAbs({'x': pos[0], 'y': pos[1]})
         self._main_data_model.focus.moveAbs({'z': pos[2]})
-    
+
     def _display_go_to_feature_warning(self) -> bool:
-        box = wx.MessageDialog(self._tab.main_frame, 
+        box = wx.MessageDialog(self._tab.main_frame,
                                message="The stage is currently in the SEM imaging position. "
                                        "Please move to the FM imaging position first.",
                                caption="Unable to Move", style=wx.OK | wx.ICON_WARNING | wx.CENTER)
         box.SetOKLabel("OK")
         ans = box.ShowModal()  # Waits for the window to be closed
-        return ans == wx.ID_OK    
+        return ans == wx.ID_OK
 
     def _enable_feature_ctrls(self, enable: bool):
         """

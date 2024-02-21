@@ -34,7 +34,7 @@ class TestClipTilingArea(unittest.TestCase):
     This test case is to test the method clip_tiling_area_to_range()
     """
     def test_clipping_is_performed_same_width_and_height(self):
-        # move the stage close to the bottom left corner of the active range (200 micrometers 
+        # move the stage close to the bottom left corner of the active range (200 micrometers
         # away from the corner in x and y directions).
         w = 600e-6
         h = 600e-6
@@ -51,7 +51,7 @@ class TestClipTilingArea(unittest.TestCase):
         self.assertAlmostEqual(rect_pts[3], ovv_rng["y"][0] + 200e-6 + h / 2)
 
     def test_clipping_is_performed_different_width_and_height(self):
-        # move the stage close to the bottom left corner of the active range (200 micrometers 
+        # move the stage close to the bottom left corner of the active range (200 micrometers
         # away from the corner in x and y directions).
         w = 700e-6
         h = 600e-6
@@ -87,7 +87,7 @@ class TestClipTilingArea(unittest.TestCase):
 
     def test_clipping_is_not_performed_different_width_and_height(self):
         # move the stage to some position away from the edges of the active
-        # range so that clipping is not needed (i.e in the middle of the active range). 
+        # range so that clipping is not needed (i.e in the middle of the active range).
         w = 500e-6
         h = 600e-6
 

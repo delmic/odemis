@@ -9,22 +9,22 @@ Copyright © 2024, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import argparse
 import datetime
 import glob
 import json
-import logging 
+import logging
 import os
 
 from odemis import model
@@ -49,7 +49,7 @@ def write_test_metadata(path: str):
     It will write the test_metadata.json file to the same directory as the test data.
     :param path: (str) path to test data (directory of *.tif images)"""
 
-    filenames = glob.glob(os.path.join(path, "**/*.tif*"), recursive=True) 
+    filenames = glob.glob(os.path.join(path, "**/*.tif*"), recursive=True)
     test_metadata = {}
 
     for fname in filenames:
@@ -77,7 +77,7 @@ def write_test_metadata(path: str):
     # save test_metadata as json
     with open(os.path.join(path, "test_metadata.json"), "w") as f:
         json.dump(test_metadata, f)
-    
+
     return test_metadata
 
 def main():

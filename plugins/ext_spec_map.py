@@ -549,4 +549,3 @@ class ExtSpectrumMapPlugin(Plugin):
 
         # Don't allow removing the stream
         scont.stream_panel.show_remove_btn(False)
-

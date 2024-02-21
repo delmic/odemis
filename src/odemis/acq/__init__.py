@@ -22,4 +22,3 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 # Everything related to high-level image acquisition on the microscope.
-

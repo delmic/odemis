@@ -1694,7 +1694,7 @@ class ScannedTCSettingsStream(RepetitionStream):
 
         self._append(d, date)
         self._shouldUpdateImage()
-        
+
     def _setPower(self, value):
         # set all light power at once to a value
         pw = list(self.emitter.power.range[1])
@@ -1702,13 +1702,13 @@ class ScannedTCSettingsStream(RepetitionStream):
         self.emitter.power.value = pw
 
     def _onActive(self, active):
-        if active: 
+        if active:
             # set power values
             self._setPower(1)
         else:
             # stop power values
             self._setPower(0)
-            
+
         RepetitionStream._onActive(self, active)
 
 
@@ -1721,10 +1721,10 @@ class ScannedTemporalSettingsStream(CCDSettingsStream):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_TEMPORAL
         super(ScannedTemporalSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
-    
+
         # typical user wants density much lower than SEM
         self.pixelSize.value *= 30
-        
+
         # Fuzzing not supported (yet)
         del self.fuzzing
 

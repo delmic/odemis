@@ -9,15 +9,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # Don't import unicode_literals to avoid issues with external functions. Code works on python2 and python3.
@@ -1946,7 +1946,7 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(subimage[-1][0], 9893)
         self.assertEqual(subimage[-1][-1], 10148)
 
-    def testExportThinPyramid(self):           
+    def testExportThinPyramid(self):
         """
         Checks that can both write and read back a thin pyramidal grayscale 16 bit image
         """
@@ -2346,7 +2346,7 @@ class TestTiffIO(unittest.TestCase):
         self.assertEqual(tiles[0][0].shape, (156, 187))
 
     def test_convert_thermo_fisher_to_odemis_metadata(self):
-        
+
         # open example image
         TFS_FILENAME = os.path.join(os.path.dirname(__file__), "tfs_example.tif")
         data = tiff.open_data(TFS_FILENAME)
@@ -2359,7 +2359,7 @@ class TestTiffIO(unittest.TestCase):
 
 
         # special case to deal with local timezone matching
-        md_acq_date = datetime.strptime('11/10/2023 02:09:15 PM', 
+        md_acq_date = datetime.strptime('11/10/2023 02:09:15 PM',
                                         "%m/%d/%Y %I:%M:%S %p").timestamp()
         # assert metadata
         md = {
@@ -2401,7 +2401,7 @@ class TestTiffIO(unittest.TestCase):
 
 
         # special case to deal with local timezone matching
-        md_acq_date = datetime.strptime('2023-04-11 08:40:47', 
+        md_acq_date = datetime.strptime('2023-04-11 08:40:47',
                                         "%Y-%m-%d %H:%M:%S").timestamp()
         # assert metadata
         md = {
@@ -2430,11 +2430,11 @@ class TestTiffIO(unittest.TestCase):
                 numpy.testing.assert_almost_equal(value, data.content[0].metadata[key])
             else:
                 self.assertEqual(value, data.content[0].metadata[key])
-    
+
     def test_convert_tescan_to_odemis_metadata(self):
-        # NOTE: not using the other images for now, as they are too large to include. 
+        # NOTE: not using the other images for now, as they are too large to include.
         # Useful for because they have different metadata (FIB / SEM)
-        
+
         # example images
         filename = os.path.join(os.path.dirname(__file__), "tescan_example_sem1.tif")
 
@@ -2444,7 +2444,7 @@ class TestTiffIO(unittest.TestCase):
                 "dtype": numpy.uint16,
                 "length": 1,
                 # special case to deal with local timezone matching
-                model.MD_ACQ_DATE: datetime.strptime('2016-05-16 16:03:27', 
+                model.MD_ACQ_DATE: datetime.strptime('2016-05-16 16:03:27',
                                             "%Y-%m-%d %H:%M:%S").timestamp(),
                 model.MD_HW_NAME: "MIRA3 XMU-MI3261471CZ",
                 model.MD_HW_VERSION: "MIRA3 XMU MI3261471CZ",

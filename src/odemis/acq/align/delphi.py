@@ -1803,4 +1803,3 @@ def _DoScaleShiftFactor(future, detector, escan, logpath=None):
             if future._task_state == CANCELLED:
                 raise CancelledError()
             future._task_state = FINISHED
-

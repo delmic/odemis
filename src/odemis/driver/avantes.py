@@ -525,7 +525,7 @@ class Spectrometer(model.Detector):
 
     def _open_device(self, sn):
         """
-        return IdentityType, AvsHandle: info on the device, and opaque handle 
+        return IdentityType, AvsHandle: info on the device, and opaque handle
         """
         # Check all USB devices
         self.Init(0)  # USB only

@@ -120,7 +120,7 @@ class HistoryOverlay(base.ViewOverlay):
 
     def set_merge_ratio(self, merge_ratio):
         """
-        Modifies the internal attribute _merge_ratio that controls the transparency 
+        Modifies the internal attribute _merge_ratio that controls the transparency
         of the history overlay.
         """
         self._merge_ratio = merge_ratio

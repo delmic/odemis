@@ -75,13 +75,13 @@ class TestFoV(unittest.TestCase):
     def test_scanner_fov(self):
         # Move a little bit out of the origin, to make it less easy
         self.stage.moveAbsSync({"x": 10e-3, "y":-5e-3})
-        
+
         fov = compute_scanner_fov(self.ebeam)
         rect = get_fov_rect(self.ebeam, fov)
 
         # Compare to the actual FoV of an acquired image
         im = self.sed.data.get()
-        
+
         pxs_im = im.metadata[model.MD_PIXEL_SIZE]
         fov_im = im.shape[1] * pxs_im[0], im.shape[0] * pxs_im[1]
         self.assertEqual(fov, fov_im)
@@ -129,7 +129,7 @@ class TestGenerateZlevels(unittest.TestCase):
         zrange = [zMin, zMax]
         zStep = 0e-6
         with self.assertRaises(ZeroDivisionError):
-            generate_zlevels(self.focus, zrange, zStep) 
+            generate_zlevels(self.focus, zrange, zStep)
 
     def test_zmax_and_zmin_both_zeros(self):
         self.focus.moveAbsSync({"z": 1300e-6})
@@ -250,4 +250,3 @@ class TestGenerateZlevels(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
-

@@ -24,12 +24,12 @@ from odemis.acq.stitching._weaver import MeanWeaver, CollageWeaver, CollageWeave
 
 def register(tiles, method=REGISTER_GLOBAL_SHIFT):
     """
-    tiles (list of DataArray of shape YX or tuples of DataArrays): The tiles to compute the registration. 
-    If it's tuples, the first tile of each tuple is the “main tile”, and the following ones are 
+    tiles (list of DataArray of shape YX or tuples of DataArrays): The tiles to compute the registration.
+    If it's tuples, the first tile of each tuple is the “main tile”, and the following ones are
     dependent tiles.
     method (REGISTER_*): REGISTER_SHIFT → ShiftRegistrar, REGISTER_IDENTITY → IdentityRegistrar
     returns:
-        tiles (list of DataArray of shape YX or tuples of DataArrays): The tiles as passed, but with updated 
+        tiles (list of DataArray of shape YX or tuples of DataArrays): The tiles as passed, but with updated
         MD_POS metadata
     """
 
@@ -111,5 +111,3 @@ def weave(tiles, method=WEAVER_MEAN, adjust_brightness=False):
     stitched_image = weaver.getFullImage()
 
     return stitched_image
-
-

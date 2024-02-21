@@ -186,4 +186,3 @@ if __name__ == '__main__':
 #     suite = unittest.TestLoader().loadTestsFromTestCase(TestTurnLightAndCheck)
 #     unittest.TextTestRunner(verbosity=2).run(suite)
     unittest.main()
-

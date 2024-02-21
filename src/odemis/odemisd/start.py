@@ -268,7 +268,7 @@ class BackendStarter(object):
                           size=(800, 800),
                           # No close button
                           style=wx.CAPTION | wx.RESIZE_BORDER)
-        frame.SetMinClientSize((400, 200)) 
+        frame.SetMinClientSize((400, 200))
         self._list = wx.ListCtrl(frame,
                                  style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_NO_SORT_HEADER)
         self._list.InsertColumn(0, "Component")

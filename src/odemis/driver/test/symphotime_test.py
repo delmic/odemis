@@ -90,7 +90,7 @@ class TestStatic(unittest.TestCase):
 class TestSymphotime(unittest.TestCase):
     @classmethod
     def setUpClass(self):
-        # note: The symphotime simulator must be running before we start the tests. 
+        # note: The symphotime simulator must be running before we start the tests.
         self.controller = symphotime.Controller(**CONFIG_SYMPHOTIME_SIM)
         self.controller.updateMetadata(MD)
         for c in self.controller.children.value:
@@ -106,7 +106,7 @@ class TestSymphotime(unittest.TestCase):
         self.controller.terminate()
 
     def test_acquisition(self):
-        # Test the starting and stopping of acquisition. 
+        # Test the starting and stopping of acquisition.
         done = threading.Event()
 
         # ~ 4s of acquisition (theoretical)
@@ -225,7 +225,7 @@ class TestSymphotime(unittest.TestCase):
         # Test that the class functions properly when multiple subscribers are active.
         done1 = threading.Event()
         done2 = threading.Event()
-        
+
         self.scanner.filename.value = "file.ptu"
         self.scanner.directory.value = "group"
 

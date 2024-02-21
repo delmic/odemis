@@ -437,9 +437,9 @@ class StreamPanelHeader(wx.Control):
             # Set default colour to the current value
             cldata = wx.ColourData()
             cldata.SetColour(wx.Colour(*tint))
-    
+
             dlg = wx.ColourDialog(self, cldata)
-    
+
             if dlg.ShowModal() == wx.ID_OK:
                 tint = dlg.ColourData.GetColour().Get(includeAlpha=False)  # convert to a 3-tuple
                 logging.debug("Colour %r selected", tint)

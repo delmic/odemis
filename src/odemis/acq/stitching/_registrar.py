@@ -23,7 +23,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 ### Purpose ###
 
 This is a series of classes which use different methods to compute the best
-location of a set of tiles in a tiled acquisition based on their metadata and 
+location of a set of tiles in a tiled acquisition based on their metadata and
 content, in other words performing "image registration".
 
 """
@@ -54,9 +54,9 @@ class IdentityRegistrar(object):
     def addTile(self, tile, dependent_tiles=None):
         """
         Extends grid by one tile.
-        tile (DataArray of shape YX): each image must have at least MD_POS and MD_PIXEL_SIZE metadata. 
+        tile (DataArray of shape YX): each image must have at least MD_POS and MD_PIXEL_SIZE metadata.
         They should all have the same dtype.
-        dependent_tiles (list of DataArray or None): each of the dependent tile, where their position 
+        dependent_tiles (list of DataArray or None): each of the dependent tile, where their position
         can be considered fixed relative to the main tile. Their content and metadata are not used
         for the computation of the final position.
         """
@@ -69,7 +69,7 @@ class IdentityRegistrar(object):
         """
         returns:
         tile_positions (list of N tuples of 2 floats)): the adjusted position in X/Y for each tile, in the order they were added
-        dep_tile_positions (list of N tuples of tuples of 2 floats): the adjusted position for each dependent tile 
+        dep_tile_positions (list of N tuples of tuples of 2 floats): the adjusted position for each dependent tile
         (in the order they were passed)
         """
         return self.tile_pos, self.dep_tiles_pos
@@ -77,9 +77,9 @@ class IdentityRegistrar(object):
 
 class ShiftRegistrar(object):
     """
-    Locates the position of the image relative to the previous top tiles (horizontally and vertically) 
-    by using cross-correlation. The cross-correlation is done using just the part of the images which are 
-    supposed to be overlapping. In case the cross-correlation doesn't work (based on a couple of simple tests), 
+    Locates the position of the image relative to the previous top tiles (horizontally and vertically)
+    by using cross-correlation. The cross-correlation is done using just the part of the images which are
+    supposed to be overlapping. In case the cross-correlation doesn't work (based on a couple of simple tests),
     fallback to the average shift on the same axis.
     """
 
@@ -116,14 +116,14 @@ class ShiftRegistrar(object):
     def addTile(self, tile, dependent_tiles=None):
         """
         Extends grid by one tile.
-        tile (DataArray of shape YX): each image must have at least MD_POS and MD_PIXEL_SIZE metadata. 
+        tile (DataArray of shape YX): each image must have at least MD_POS and MD_PIXEL_SIZE metadata.
         They should all have the same dtype.
-        dependent_tiles (list of K DataArray or None): each of the dependent tile, where their position 
+        dependent_tiles (list of K DataArray or None): each of the dependent tile, where their position
         can be considered fixed relative to the main tile. Their content and metadata are not used
         for the computation of the final position.
-        Not every random order of adding tiles is supported: the first tile has to be in the left top 
+        Not every random order of adding tiles is supported: the first tile has to be in the left top
         position, any following tile must either be inserted to the right of an existing tile, to its left,
-        or to the bottom. The grid has to be filled up from top to bottom, moving from the bottom up is not 
+        or to the bottom. The grid has to be filled up from top to bottom, moving from the bottom up is not
         supported.
         """
 
@@ -228,7 +228,7 @@ class ShiftRegistrar(object):
 
     def _find_closest_tile(self, pos):
         """ finds the tile in the grid that is closest to pos.
-        returns: 
+        returns:
         pos_prev: tuple of two ints. Grid position of closest tile.
         md_pos_prev: actual position of closest tile in m """
         minDist = float("inf")
@@ -288,7 +288,7 @@ class ShiftRegistrar(object):
     def _estimateMatch(self, imageA, imageB, shift):
         """
         Returns an estimation of the similarity between the given images
-        when the second is shifted by the shift value. It is used to assess 
+        when the second is shifted by the shift value. It is used to assess
         the quality of a shift measurement by giving the shifted image.
         imageA: (DataArray) first image that is to be compared to imageB
         imageB: (DataArray) second image that is shifted by the shift, compared to imageA
@@ -499,7 +499,7 @@ class GlobalShiftRegistrar(ShiftRegistrar):
 
     def getPositions(self):
         """
-        Updates the registered positions (found using cross correlation and a min spanning tree) and returns the 
+        Updates the registered positions (found using cross correlation and a min spanning tree) and returns the
         adjusted tile_positions & dep_tile_positions. When calling this function .registered_positions is updated with
         the calculated position of each tile relative to the upper left (first) tile in pixels as a 3D array.
         :returns tile_positions: (list of N tuples) the adjusted position in X/Y for each tile, in the
@@ -690,7 +690,7 @@ class GlobalShiftRegistrar(ShiftRegistrar):
 
     def _assemble_mosaic(self):
         """
-        Performs a global optimization to find the best path through the tile grid using 
+        Performs a global optimization to find the best path through the tile grid using
         a minimum spanning tree.
 
         :returns: (numpy array with shape: num_rows x num_cols x 2) registered positions relative to the upper left

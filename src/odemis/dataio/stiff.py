@@ -37,7 +37,7 @@ LOSSY = False
 
 def export(filename, data, thumbnail=None, compressed=True, pyramid=False):
     '''
-    Write a collection of multiple OME-TIFF files with the given images and 
+    Write a collection of multiple OME-TIFF files with the given images and
     metadata
     filename (unicode): filename of the file to create (including path)
     data (list of model.DataArray, or model.DataArray): the data to export.

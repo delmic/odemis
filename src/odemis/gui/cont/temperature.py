@@ -85,7 +85,7 @@ class TemperatureController(object):
         # add the new temperature to the history with a timestamp
         self.temperature_history.append((time.time(), temperature))
         wx.CallAfter(self.temperature_label.SetLabel, u"Sample: {temp:.1f}°C".format(temp=temperature))
-        
+
         # clear out values of the history that are too old i.e. older than the max_duration
         while len(self.temperature_history) > 0:
             t, _ = self.temperature_history[0]
@@ -143,4 +143,3 @@ class TemperatureController(object):
             # reset warnings so they can be invoked again.
             self._time_last_speed_warning = 0
             self._time_last_warning = 0
-

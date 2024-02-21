@@ -927,7 +927,7 @@ class AntiBacklashActuator(model.Actuator):
         to wrap
         backlash (dict str -> float): for each axis of the stage, the additional
         distance to move (and the direction). If an axis of the stage is not
-        present, then it’s the same as having 0 as backlash (=> no antibacklash 
+        present, then it’s the same as having 0 as backlash (=> no antibacklash
         motion is performed for this axis)
 
         """
@@ -2201,7 +2201,7 @@ class RotationActuator(model.Actuator):
             if not isinstance(p, numbers.Real) or abs(p) > self._cycle / 2:
                 raise ValueError("POS_COR value %s is not allowed, it should be in range -%s/2 and +%s/2." %
                                  (p, self._cycle, self._cycle))
-            
+
         super().updateMetadata(md)
         self._updatePosition()
 
@@ -2307,14 +2307,14 @@ class RotationActuator(model.Actuator):
             # Move to pos close to ref switch
             cur_pos = self._dependency.position.value[self._caxis]
             move = util.rot_shortest_move(cur_pos, self._ref_start, self._cycle)
-                
+
             self._dependency.moveRel({self._caxis: move}).result()
             self._dependency.reference({self._caxis}).result()
 
             # now calc how to move to the actual position requested
             cur_pos = self._dependency.position.value[self._caxis]
             move = util.rot_shortest_move(cur_pos, target_pos, self._cycle)
-                
+
             self._move_num_total = 0
 
         _dep_future = self._dependency.moveRel({self._caxis: move})

@@ -727,7 +727,7 @@ class MFF102Simulator(object):
 
             # remove the bytes we've just read
             self._input_buf = self._input_buf[len(msg):]
-            
+
             self._processMessage(msg)
 
     def _createMessage(self, mid, dest=0x1, src=0x50, p1=None, p2=None, data=None):
@@ -764,7 +764,7 @@ class MFF102Simulator(object):
                           self._add, dest)
             return
         src = ord(msg[5:6]) & 0x7f
-        
+
         res = None
         try:
             if mid == HW_REQ_INFO.id:

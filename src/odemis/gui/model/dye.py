@@ -180,4 +180,3 @@ if DyeDatabase is None:
 
     load_time = time.time() - start
     logging.debug("Dye database loading took %g s", load_time)
-

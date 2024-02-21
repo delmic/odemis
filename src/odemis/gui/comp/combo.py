@@ -169,7 +169,7 @@ class ComboBox(wx.adv.OwnerDrawnComboBox):
         dc.SetBackground(back_brush)
         dc.Clear()
 
-        
+
 ITEM_WIDTH = 200
 ITEM_HEIGHT = 28
 COLOBAR_WITH_RATIO = 0.5
@@ -227,4 +227,3 @@ class ColorMapComboBox(ComboBox):
             dc.DrawBitmap(bmp, 0, item * r.height)
             item_name = self.Strings[item]
             dc.DrawText(item_name.title(), colorbar_width + 5, item * r.height + 5)
-

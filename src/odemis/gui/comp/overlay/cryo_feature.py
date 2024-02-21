@@ -40,7 +40,7 @@ MODE_EDIT_FEATURES = 1
 MODE_SHOW_FEATURES = 2
 FEATURE_DIAMETER = 30  # pixels
 FEATURE_ICON_CENTER = 17  # pixels
-    
+
 
 class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
     """ Overlay for handling showing interesting features of cryo projects """
@@ -196,7 +196,7 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
     def _detect_point_inside_feature(self, v_pos):
         """
         Detect if a given point is over a feature
-        :param v_pos: (int, int) Point in view coordinates 
+        :param v_pos: (int, int) Point in view coordinates
         :return: (CryoFeature or None) Found feature, None if not found
         """
 

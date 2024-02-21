@@ -485,4 +485,3 @@ class ScannerFoVAdapter(object):
         pxs = self._scanner.pixelSize.value
         hfov = self.shape[0] * pxs[0] / zoom
         self.horizontalFoV.value = hfov
-

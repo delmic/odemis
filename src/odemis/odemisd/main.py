@@ -9,15 +9,15 @@ Copyright © 2012-2016 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
@@ -120,7 +120,7 @@ class BackendContainer(model.Container):
             self._persistent_data[comp.name]['properties'][prop_name] = va.value
         except AttributeError:
             logging.warning("Persistent property %s not found for component %s." % (prop_name, comp.name))
-        else:     
+        else:
             va.subscribe(on_va_change, init=True)
             self._persistent_listeners.append(on_va_change)
 

@@ -9,15 +9,15 @@ Copyright © 2012-2021 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
@@ -38,7 +38,7 @@ class SimpleDataFlow(model.DataFlow):
         self._thread_must_stop = threading.Event()
         self._thread = None
         self.startAcquire = model.Event() # triggers when the acquisition starts
-    
+
     def _thread_main(self):
         i = 0
         # generate a simple array every 0.1s
@@ -48,14 +48,14 @@ class SimpleDataFlow(model.DataFlow):
             i += 1
             self.notify(data)
         self._thread_must_stop.clear()
-    
+
     def start_generate(self):
         # if there is already a thread, wait for it to finish before starting a new one
         if self._thread:
             self._thread.join()
             assert not self._thread_must_stop.is_set()
             self._thread = None
-        
+
         # create a thread
         self._thread = threading.Thread(target=self._thread_main, name="flow thread")
         self._thread.start()
@@ -77,20 +77,20 @@ class SynchronizableDataFlow(model.DataFlow):
         self.max_lat = []
         self._got_event = threading.Event()
         self.hwTrigger = model.HwTrigger()
-    
+
     @oneway
     def onEvent(self, triggert=None):
         if triggert: # sent for debug only
             latency = time.time() - triggert
             self.max_lat.append(latency)
         self._got_event.set()
-    
+
     def _wait_event_or_stop_cb(self):
         """
         return True if must stop, False otherwise
         """
         while not self._thread_must_stop.is_set():
-            event = self._sync_event 
+            event = self._sync_event
             if event is None:
                 return False
             # In practice, this would be a hardware signal, not an threading.event!
@@ -98,13 +98,13 @@ class SynchronizableDataFlow(model.DataFlow):
                 self._got_event.clear()
                 return False
         return True
-        
+
     def _wait_event_or_stop(self):
         """
         return True if must stop, False otherwise
         """
         while not self._thread_must_stop.is_set():
-            event = self._sync_event 
+            event = self._sync_event
             if event is None:
                 return False
             # timeout doesn't need to be very small, just often enough to check
@@ -118,30 +118,30 @@ class SynchronizableDataFlow(model.DataFlow):
                 self.max_lat.append(latency)
                 return False
         return True
-        
+
     def _thread_main(self):
         i = 0
         # generate a simple array every time we receive an event
         while not self._thread_must_stop.is_set():
             time.sleep(0.01) # bit of "initialisation" time
-            
+
             must_stop = self._wait_event_or_stop_cb()
             if must_stop:
                 break
-            
+
 #            time.sleep(1) #DEBUG: for test over-run
             data = model.DataArray([[i, 0],[0, 0]], metadata={"a": 2, "num": i})
             i += 1
             self.notify(data)
         self._thread_must_stop.clear()
-    
+
     def start_generate(self):
         # if there is already a thread, wait for it to finish before starting a new one
         if self._thread:
             self._thread.join()
             assert not self._thread_must_stop.is_set()
             self._thread = None
-        
+
         # create a thread
         self._thread = threading.Thread(target=self._thread_main, name="flow thread")
         self._thread.start()
@@ -151,14 +151,14 @@ class SynchronizableDataFlow(model.DataFlow):
         assert not self._thread_must_stop.is_set()
         # we don't wait for the thread to stop fully
         self._thread_must_stop.set()
-    
+
     def synchronizedOn(self, event):
         if self._sync_event == event:
             return
-        
+
         if self._sync_event:
             self._sync_event.unsubscribe(self)
-        
+
         self._sync_event = event
         if self._sync_event:
             self._sync_event.subscribe(self)
@@ -183,7 +183,7 @@ class FakeDataFlowException(Exception):
 
 
 class TestDataFlow(unittest.TestCase):
-    
+
     # @unittest.skip("simple")
     def test_dataarray_pickle(self):
         darray = model.DataArray([[1, 2], [3, 4]], metadata={"a": 1})
@@ -197,30 +197,30 @@ class TestDataFlow(unittest.TestCase):
     def test_df_subscribe_get(self):
         self.df = SimpleDataFlow()
         self.size = (2, 2)
-        
+
         number = 5
         self.left = number
         self.df.subscribe(self.receive_data)
-        
+
         time.sleep(0.2)
-        
+
         # get one image: should be shared with the subscribe
         im = self.df.get()
-        
+
         # get a second image: also shared
         im = self.df.get()
 
         self.assertEqual(im.shape, self.size)
         self.assertIn("a", im.metadata)
-        
+
         for i in range(number):
             # end early if it's already finished
             if self.left == 0:
                 break
             time.sleep(0.2)  # 0.2s per image should be more than enough in any case
-        
+
         self.assertEqual(self.left, 0)
-    
+
     # @unittest.skip("simple")
     def test_df_double_subscribe(self):
         self.df = SimpleDataFlow()
@@ -228,17 +228,17 @@ class TestDataFlow(unittest.TestCase):
         number, number2 = 8, 3
         self.left = number
         self.df.subscribe(self.receive_data)
-        
+
         time.sleep(0.2)  # long enough to be after the first data
         self.left2 = number2
         self.df.subscribe(self.receive_data2)
-        
+
         for i in range(number):
             # end early if it's already finished
             if self.left == 0:
                 break
             time.sleep(0.2)  # 0.2s should be more than enough in any case
-        
+
         self.assertEqual(self.left2, 0)  # it should be done before left
         self.assertEqual(self.left, 0)
 
@@ -255,7 +255,7 @@ class TestDataFlow(unittest.TestCase):
 
     def receive_data2(self, dataflow, data):
         """
-        callback for df 
+        callback for df
         """
         self.assertEqual(data.shape, self.size)
         self.assertIn("a", data.metadata)
@@ -267,31 +267,31 @@ class TestDataFlow(unittest.TestCase):
         self.dfe = SimpleDataFlow()
         self.dfs = SynchronizableDataFlow()
         self.dfs.synchronizedOn(self.dfe.startAcquire)
-        
+
         self.size = (2, 2)
         number = 30
         self.left = number + 10
         self.dfs.subscribe(self.receive_data)
-        
+
         time.sleep(0.2)  # long enough to be after the first data
         # ensure the dfs hasn't generated anything yet
         self.assertEqual(self.left, number + 10)
-        
+
         # start the eventfull df
         self.left2 = number
         self.dfe.subscribe(self.receive_data2)
-        
+
         for i in range(number):
             # end early if it's already finished
             if self.left2 == 0:
                 break
             time.sleep(0.2)  # 0.2s should be more than enough in any case
-        
+
         self.assertEqual(self.left2, 0)  # it should be done before left
         self.assertEqual(self.left, 10)
-        
+
         # make sure we can unsubscribe even if synchronized and waiting on event
-        self.dfs.unsubscribe(self.receive_data) 
+        self.dfs.unsubscribe(self.receive_data)
         self.dfs.synchronizedOn(None)
         if self.dfs.max_lat:
             print(self.dfs.max_lat, max(self.dfs.max_lat))
@@ -301,7 +301,7 @@ class TestDataFlow(unittest.TestCase):
     def test_non_synchronized_df(self):
         self.df = SynchronizableDataFlow()
         self.df.synchronizedOn(None)
-        
+
         self.size = (2, 2)
         number = 3
         self.left = number
@@ -312,7 +312,7 @@ class TestDataFlow(unittest.TestCase):
             if self.left == 0:
                 break
             time.sleep(0.2) # 0.2s should be more than enough in any case
-        
+
         self.assertEqual(self.left, 0)
 
     def test_df_raise_error(self):
