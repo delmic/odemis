@@ -73,21 +73,6 @@ class Rectangle(object):
             cls=cls,
             unit=unit,
         )
-        self.coordinates.subscribe(self._on_coordinates, init=True)
-
-    def _on_coordinates(self, coordinates):
-        """
-        Update the overlay with the new data of the .coordinates VA.
-        coordinates (tuple of 4 floats): left, top, right, bottom position in m
-        """
-        self.position.value = (
-            (coordinates[0] + coordinates[2]) / 2,
-            (coordinates[1] + coordinates[3]) / 2,
-        )
-        self.size.value = (
-            abs(coordinates[0] - coordinates[2]),
-            abs(coordinates[1] - coordinates[3]),
-        )
 
 
 class RectangleSelectOverlay(Rectangle, WorldSelectOverlay):
@@ -109,6 +94,14 @@ class RectangleSelectOverlay(Rectangle, WorldSelectOverlay):
         """
         if coordinates != UNDEFINED_ROI:
             self.set_physical_sel(coordinates)
+            self.position.value = (
+                (coordinates[0] + coordinates[2]) / 2,
+                (coordinates[1] + coordinates[3]) / 2,
+            )
+            self.size.value = (
+                abs(coordinates[0] - coordinates[2]),
+                abs(coordinates[1] - coordinates[3]),
+            )
             wx.CallAfter(self.cnvs.request_drawing_update)
 
 
@@ -121,16 +114,25 @@ class RectangleOverlay(RectangleSelectOverlay):
         colour (str): hex colour code for the rectangle
         """
         super().__init__(cnvs, colour)
-        # VA which states if the reactangle is locked and unable to process on_left_down and on_left_up events
-        self.locked = model.BooleanVA(True)
+        # VA which states if the reactangle is selected
+        self.selected = model.BooleanVA(True)
+
+    def is_point_in_overlay(self, point):
+        """Determine if the point is in the overlay.
+
+        :param: point: (tuple) The point in physical coordinates.
+
+        :returns: (bool) whether the point is inside the overlay or not.
+        """
+        return util.is_point_in_rect(point, self.coordinates.value)
 
     def on_left_down(self, evt):
         """
         Similar to the same function in SelectionMixin, but only starts a selection, if .coordinates is undefined.
         If a rectangle has already been selected for this overlay, any left click outside this reactangle will be ignored.
         """
-        # Start editing / dragging if the overlay is active
-        if self.active.value and not self.locked.value:
+        # Start editing / dragging if the overlay is active and selected
+        if self.active.value and self.selected.value:
             DragMixin._on_left_down(self, evt)
 
             if self.left_dragging:
@@ -156,9 +158,9 @@ class RectangleOverlay(RectangleSelectOverlay):
 
     def on_left_up(self, evt):
         """
-        Check if left click was in rectangle. If so, activate the overlay. Otherwise, deactivate.
+        Check if left click was in rectangle. If so, select the overlay. Otherwise, unselect.
         """
-        if not self.locked.value:
+        if self.active.value:
             abort_rectangle_creation = (
                 self.coordinates.value == UNDEFINED_ROI
                 and max(self.get_height() or 0, self.get_width() or 0) < gui.SELECTION_MINIMUM
@@ -173,9 +175,9 @@ class RectangleOverlay(RectangleSelectOverlay):
                 rect = self.get_physical_sel()
                 if rect:
                     pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-                    self.active.value = util.is_point_in_rect(pos, rect)
+                    self.selected.value = util.is_point_in_rect(pos, rect)
                     # Update .coordinates VA
-                    if self.active.value:
+                    if self.selected.value:
                         self.coordinates.value = rect
 
             # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
@@ -187,14 +189,22 @@ class RectangleOverlay(RectangleSelectOverlay):
             self.cnvs.update_drawing()  # Line width changes in .draw when .active is changed
         WorldOverlay.on_left_up(self, evt)
 
+    def on_motion(self, evt):
+        # Start editing / dragging and making use of the hover if the overlay is active and selected
+        if self.active.value and self.selected.value:
+            super().on_motion(evt)
+        else:
+            WorldOverlay.on_motion(self, evt)
+
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """Draw the selection as a rectangle. Exactly the same as parent function except that
         it has an adaptive line width (wider if the overlay is active) and it always shows the
         size label of the selected rectangle."""
-        line_width = 5 if self.active.value else 2
+        flag = self.active.value and self.selected.value
+        line_width = 5 if flag else 2
 
         # show size label if ROA is selected
-        if self.p_start_pos and self.p_end_pos and self.active.value:
+        if self.p_start_pos and self.p_end_pos and flag:
             # Important: We need to use the physical positions, in order to draw
             # everything at the right scale.
             offset = self.cnvs.get_half_buffer_size()

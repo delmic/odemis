@@ -23,7 +23,7 @@ import math
 
 import cairo
 
-from odemis import model
+from odemis import model, util
 import odemis.util.units as units
 import odemis.gui as gui
 from odemis.gui.comp.overlay.base import Vec
@@ -44,12 +44,21 @@ class EllipseOverlay(RectangleOverlay):
         self.points = model.ListVA()
         self._points = []
 
+    def is_point_in_overlay(self, point):
+        """Determine if the point is in the overlay.
+
+        :param: point: (tuple) The point in physical coordinates.
+
+        :returns: (bool) whether the point is inside the overlay or not.
+        """
+        return util.is_point_in_rect(point, self.coordinates.value)
+
     def on_left_up(self, evt):
         """
         Check if left click was in ellipse. If so, activate the overlay. Otherwise, deactivate.
         """
         super().on_left_up(evt)
-        if not self.locked.value:
+        if self.selected.value:
             self.points.value = self._points
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
@@ -57,7 +66,8 @@ class EllipseOverlay(RectangleOverlay):
         it has an adaptive line width (wider if the overlay is active) and it always shows the
         size label of the selected ellipse."""
         self._points.clear()
-        line_width = 5 if self.active.value else 2
+        flag = self.active.value and self.selected.value
+        line_width = 5 if flag else 2
 
         if self.p_start_pos and self.p_end_pos:
             # Important: We need to use the physical positions, in order to draw
@@ -102,7 +112,7 @@ class EllipseOverlay(RectangleOverlay):
                 ctx.stroke()
 
             # show size label if ROA is selected
-            if self.active.value:
+            if flag:
                 w, h = (abs(s - e) for s, e in zip(self.p_start_pos, self.p_end_pos))
                 w = units.readable_str(w, "m", sig=2)
                 h = units.readable_str(h, "m", sig=2)
