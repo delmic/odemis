@@ -1819,10 +1819,9 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         """
         rectangle_overlay = RectangleOverlay(self)
         self.add_world_overlay(rectangle_overlay)
-        # Always activate and unlock after creating, otherwise the code to select the region in
+        # Always activate after creating, otherwise the code to select the region in
         # FastEMROAOverlay.on_left_down will never be called.
         rectangle_overlay.active.value = True
-        rectangle_overlay.locked.value = False
         return rectangle_overlay
 
     def remove_overlay(self, overlay):

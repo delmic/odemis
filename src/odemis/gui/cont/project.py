@@ -317,7 +317,7 @@ class FastEMROAController(object):
         self.overlay = overlay
         self.overlay.colour = conversion.hex_to_frgba(colour)
         self.overlay.coordinates.subscribe(self._on_coordinates, init=True)
-        self.overlay.active.subscribe(self._on_overlay_active)
+        self.overlay.selected.subscribe(self._on_overlay_selected)
 
     def create_panel(self):
         """
@@ -336,13 +336,13 @@ class FastEMROAController(object):
         self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def _on_overlay_active(self, active):
+    def _on_overlay_selected(self, selected):
         if self.panel:
-            if active:
-                logging.debug("Activating ROA '%s'.", self.model.name.value)
+            if selected:
+                logging.debug("Selected ROA '%s'.", self.model.name.value)
                 self.panel.activate()
             else:
-                logging.debug("Deactivating ROA '%s'.", self.model.name.value)
+                logging.debug("Deselected ROA '%s'.", self.model.name.value)
                 self.panel.deactivate()
 
     def _on_coordinates(self, coords):

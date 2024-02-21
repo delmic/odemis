@@ -21,7 +21,7 @@ This file is part of Odemis.
 """
 import wx
 
-from odemis import model, util
+from odemis import model
 from odemis.gui.comp.overlay.base import WorldOverlay
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 
@@ -50,8 +50,7 @@ class ShapesOverlay(WorldOverlay):
 
     def clear(self):
         """Remove all shapes and update canvas."""
-        for shape in self._shapes:
-            shape.active.value = False
+        self._activate_shapes(False)
         self._shapes.clear()
 
     def remove_overlay(self, overlay):
@@ -74,11 +73,6 @@ class ShapesOverlay(WorldOverlay):
         else:
             WorldOverlay.on_leave(self, evt)
 
-    def _lock_shapes(self, flag=True):
-        """Lock or unlock shapes to process on_left_down and on_left_up events."""
-        for shape in self._shapes:
-            shape.locked.value = flag
-
     def _activate_shapes(self, flag=True):
         """Activate or de-activate the shapes."""
         for shape in self._shapes:
@@ -88,14 +82,9 @@ class ShapesOverlay(WorldOverlay):
         """Update the overlay when it's active and tools change."""
         if selected_tool == self.tool:
             self.active.value = True
-            self._lock_shapes(False)
-            # Make the last created shape active
-            if self._shapes:
-                last_shape = self._shapes[-1]
-                last_shape.active.value = True
+            self._activate_shapes(True)
         else:
             self.active.value = False
-            self._lock_shapes(True)
             self._activate_shapes(False)
             self.cnvs.reset_default_cursor()
 
@@ -108,7 +97,7 @@ class ShapesOverlay(WorldOverlay):
         if self._shapes:
             pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
             for shape in self._shapes[::-1]:
-                if util.is_point_in_rect(pos, shape.coordinates.value):
+                if shape.is_point_in_overlay(pos):
                     return shape
         return None
 
@@ -124,7 +113,6 @@ class ShapesOverlay(WorldOverlay):
             self.cnvs.add_world_overlay(shape)
             self.shape_overlay._set_value(shape, force_write=True)
             self._selected_shape = shape
-        self._selected_shape.locked.value = False
         self._selected_shape.active.value = True
         self._selected_shape.on_left_down(evt)
 
