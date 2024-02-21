@@ -217,7 +217,9 @@ class FastEMProjectController(object):
         roa_ctrl.model.coordinates.unsubscribe(self._roa_coord_sub_callback[roa_ctrl])
 
         # Abort ROA creation if nothing was selected
-        if coords == acqstream.UNDEFINED_ROI:
+        if (isinstance(coords, tuple) and coords == acqstream.UNDEFINED_ROI) or (
+            isinstance(coords, list) and len(coords) == 0
+        ):
             logging.debug("Aborting ROA creation.")
             self._viewport.canvas.remove_overlay(roa_ctrl.overlay)
             del self.roa_ctrls[roa_ctrl]
@@ -225,15 +227,6 @@ class FastEMProjectController(object):
         else:
             # Create the panel
             roa_ctrl.create_panel()
-
-            # Improve parameters guess
-            num = 1
-            if isinstance(coords, tuple):
-                num = self._find_closest_scintillator(coords)
-            elif isinstance(coords, list):
-                num = self._find_closest_scintillator(roa_ctrl.overlay.coordinates.value)
-            roa_ctrl.model.roc_2.value = self.regions_calib_2.value[num]
-            roa_ctrl.model.roc_3.value = self.regions_calib_3.value[num]
 
             # Add the ROA model to project model
             self.model.roas.value.append(roa_ctrl.model)
@@ -263,24 +256,6 @@ class FastEMProjectController(object):
         # Destroy roa controller and its subscriber callback
         del self.roa_ctrls[roa_ctrl]
         del self._roa_coord_sub_callback[roa_ctrl]
-
-    def _find_closest_scintillator(self, coordinates):
-        """
-        Find the closest scintillator for the provided region of acquisition (ROA) coordinates.
-        :param coordinates: (float, float, float, float) xmin (left), ymin (top), xmax (right), ymax (bottom)
-                            coordinates in m.
-        :return: (int) Name (key) of closest scintillator in the ._tab_data.scintillator_positions dictionary.
-        """
-        roi_x, roi_y = (coordinates[2] + coordinates[0]) / 2, (coordinates[1] + coordinates[3]) / 2
-        mindist = 1  # distances always lower 1
-        closest = None
-        for num, (sc_x, sc_y) in self._tab_data.main.scintillator_positions.items():
-            # scintillators are rectangular, use maximum instead of euclidean distance
-            dist = max(abs(roi_x - sc_x), abs(roi_y - sc_y))
-            if dist < mindist:
-                mindist = dist
-                closest = num
-        return closest
 
 
 class FastEMROAController(object):
@@ -325,6 +300,7 @@ class FastEMROAController(object):
         elif hasattr(self.overlay, "coordinates"):
             self.overlay.coordinates.subscribe(self._on_coordinates, init=True)
         self.overlay.active.subscribe(self._on_overlay_active)
+        self.overlay.position.subscribe(self._find_closest_scintillator)
 
     def create_panel(self):
         """
@@ -389,6 +365,23 @@ class FastEMROAController(object):
             self.panel.txt_ctrl.SetValue(txt)
 
         evt.Skip()
+
+    def _find_closest_scintillator(self, position):
+        """
+        Find the closest scintillator for the provided region of acquisition (ROA) position.
+        :param position: (float, float) the position of the ROA.
+        """
+        roi_x, roi_y = position
+        mindist = 1  # distances always lower 1
+        closest = None
+        for num, (sc_x, sc_y) in self._tab_data.main.scintillator_positions.items():
+            # scintillators are rectangular, use maximum instead of euclidean distance
+            dist = max(abs(roi_x - sc_x), abs(roi_y - sc_y))
+            if dist < mindist:
+                mindist = dist
+                closest = num
+        self.model.roc_2.value = self._tab_data.calibrations[CALIBRATION_2].regions.value[closest]
+        self.model.roc_3.value = self._tab_data.calibrations[CALIBRATION_3].regions.value[closest]
 
 
 class FastEMROCController(object):
