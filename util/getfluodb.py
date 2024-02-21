@@ -36,7 +36,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 # environment is defined also by a temperature, solvent, pH, and substance.
 # Each substance can be queried, to get more information on it.
 
-URL_DB = "http://www.fluorophores.tugraz.at/"
+URL_DB = "https://fluorophores.tugraz.at/"
 # Where all the files will be saved (must exists)
 OUT_DIR = "./install/linux/usr/share/odemis/fluodb/"
 
@@ -79,6 +79,9 @@ def open_json_or_remove(filename):
     # strings, separated with \r\n. It's invalid, but easy to understand.
     # => change \r\n to " ".
     fixed_text = fixed_text.replace("\r\n", " ")
+
+    # Some " are expressed as HTML escaped characters
+    fixed_text = fixed_text.replace("&quot;", "\"")
 
     try:
         if fixed_text == text:
