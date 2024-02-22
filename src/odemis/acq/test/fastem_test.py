@@ -816,7 +816,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.scan_stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, pre_calibrations=None, future=None,
+                                          roa, path=None, pre_calibrations=None,
+                                          save_full_cells=False, future=None,
                                           settings_obs=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
@@ -891,7 +892,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.scan_stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, pre_calibrations=None, future=None,
+                                          roa, path=None, pre_calibrations=None,
+                                          save_full_cells=False, future=None,
                                           settings_obs=None)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
@@ -960,7 +962,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
-                                      roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
+                                      roa, path=None, pre_calibrations=None,
+                                      save_full_cells=False, future=None, settings_obs=None)
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
 
@@ -1005,7 +1008,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
-                                      roa, path=None, pre_calibrations=None, future=None, settings_obs=None)
+                                      roa, path=None, pre_calibrations=None,
+                                      save_full_cells=False, future=None, settings_obs=None)
 
         self.descanner.updateMetadata({model.MD_SCAN_GAIN: (5000, 5000)})
 
@@ -1050,7 +1054,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.scan_stage, self.ccd,
                                           self.beamshift, self.lens,
-                                          roa, path=None, pre_calibrations=None, future=None,
+                                          roa, path=None, pre_calibrations=None,
+                                          save_full_cells=False, future=None,
                                           settings_obs=None)
 
             pos_first_tile_actual = task.get_pos_first_tile()
@@ -1074,7 +1079,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
-                                      roa, path=None, pre_calibrations=None, future=None,
+                                      roa, path=None, pre_calibrations=None,
+                                      save_full_cells=False, future=None,
                                       settings_obs=settings_obs)
 
         # Test that _create_acquisition_metadata() sets the settings from the selection
@@ -1090,6 +1096,46 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         # Set back original metadata on the mppc
         self.mppc.updateMetadata({model.MD_EXTRA_SETTINGS: original_md})
 
+    @unittest.skipIf(TEST_NOHW, "Setting dataContent to full does not work in simulator")
+    def test_save_full_cells(self):
+        """Test saving fields with cell images of 900x900 px instead of 800x800 px"""
+        data_content = self.mppc.dataContent.value
+        self.mppc.dataContent.value = "full"
+
+        # Create the settings observer to store the settings on the metadata
+        settings_obs = SettingsObserver(model.getComponents())
+
+        coordinates = (0, 0, 1e-8, 1e-8)  # in m
+        roc_2 = fastem.FastEMROC("roc_2", coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+
+        roa = fastem.FastEMROA("roa_name", (0, 0, 0, 0), roc_2, roc_3,
+                               self.asm, self.multibeam, self.descanner,
+                               self.mppc, overlap=0.06)
+
+        # Acquire an image were the full cell images are cropped to 800x800px
+        task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
+                                      self.mppc, self.stage, self.scan_stage, self.ccd,
+                                      self.beamshift, self.lens,
+                                      roa, path="test-path", pre_calibrations=None,
+                                      save_full_cells=False, future=Mock(),
+                                      settings_obs=settings_obs)
+        data, err = task.run()
+        self.assertEqual(data[(0, 0)].shape, (6400, 6400))
+
+        # Acquire an image were the cell images are 900x900px
+        task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
+                                      self.mppc, self.stage, self.scan_stage, self.ccd,
+                                      self.beamshift, self.lens,
+                                      roa, path="test-path", pre_calibrations=None,
+                                      save_full_cells=True, future=Mock(),
+                                      settings_obs=settings_obs)
+        data, err = task.run()
+        self.assertEqual(data[(0, 0)].shape, (7200, 7200))
+
+        # set back initial value
+        self.mppc.dataContent.value = data_content
+
 
 class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
     """Test the methods of fastem.AcquisitionTask without a backend and with mocked components."""
@@ -1097,12 +1143,15 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
     @classmethod
     def setUpClass(cls):
         # If we are testing without hardware we just need a few attributes to be set correctly.
-        cls.scanner = None
         cls.asm = None
 
         # Use Mocks of the classes to be able to call the fake VAs as for instance mppc.dataContent.value
         cls.mppc = Mock()
+        cls.mppc.configure_mock(**{"getMetadata.return_value": {model.MD_USER: "test-user"}})
         cls.mppc.dataContent.value = 'empty'
+        cls.mppc.frameDuration.value = 0.1
+        cls.mppc.cellCompleteResolution.value = (900, 900)
+        cls.mppc.shape = (8, 8)
 
         cls.multibeam = Mock()
         cls.multibeam.pixelSize.value = (4.0e-9, 4.0e-9)
@@ -1117,14 +1166,32 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         }
         cls.scan_stage = Mock()
         cls.scan_stage.configure_mock(**{"getMetadata.return_value": {model.MD_ROTATION_COR: 0.0}})
+        cls.scan_stage.position.value = {"x": 0, "y": 0, "z": 0}
         cls.scan_stage.axes = {
             "x": model.Axis(unit="m", range=(-100.0e-6, 100.0e-6)),
             "y": model.Axis(unit="m", range=(-100.0e-6, 100.0e-6)),
             "z": model.Axis(unit="m", range=(-100.0e-6, 100.0e-6)),
         }
-        cls.ccd = None
-        cls.beamshift = None
-        cls.lens = None
+
+        cls.scanner = Mock()
+        cls.scanner.configure_mock(**{"getMetadata.return_value": {}})
+        cls.scanner.blanker.value = True
+
+        cls.ccd = Mock()
+        image = numpy.zeros((256, 256))
+        # set a grid of 8 by 8 points to 1
+        image[54:150:12, 54:150:12] = 1
+        image = model.DataArray(input_array=image)
+        cls.ccd.data.configure_mock(**{"get.return_value": image})
+        cls.ccd.configure_mock(**{"getMetadata.return_value": {model.MD_FAV_POS_ACTIVE: {"j": 100, "i": 100}}})
+        cls.ccd.pointSpreadFunctionSize.value = 1
+        cls.ccd.pixelSize.value = (1.0e-7, 1.0e-7)
+
+        cls.lens = Mock()
+        cls.lens.magnification.value = 10
+
+        cls.beamshift = Mock()
+        cls.beamshift.shift.value = [1, 1]
 
         # Mock fastem_calibrations and fastem_calibrations.util, to be able to call them on systems where
         # fastem_calibrations is not available.
@@ -1141,6 +1208,48 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
     def tearDownClass(cls):
         # override the teardownclass of the base class
         return
+
+    def test_save_full_cells(self):
+        """Test saving fields with cell images of 900x900 px instead of 800x800 px"""
+        # Create the settings observer to store the settings on the metadata
+        settings_obs = SettingsObserver({})
+
+        coordinates = (0, 0, 1e-8, 1e-8)  # in m
+        roc_2 = fastem.FastEMROC("roc_2", coordinates)
+        roc_3 = fastem.FastEMROC("roc_3", coordinates)
+
+        roa = fastem.FastEMROA("roa_name", (0, 0, 0, 0), roc_2, roc_3,
+                               self.asm, self.multibeam, self.descanner,
+                               self.mppc, overlap=0.0)
+
+        # Acquire an image were the full cell images are cropped to 800x800px
+        task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
+                                      self.mppc, self.stage, self.scan_stage, self.ccd,
+                                      self.beamshift, self.lens,
+                                      roa, path="test-path", pre_calibrations=None,
+                                      save_full_cells=False, future=Mock(),
+                                      settings_obs=settings_obs)
+
+        # image_received should be called as a side effect of calling data.next, this signals that the data is received
+        def _image_received(*args, **kwargs):
+            # Create a fake image of ones, the multibeam resolution determines the image shape
+            task.image_received(None, numpy.ones(self.multibeam.resolution.value))
+
+        self.mppc.configure_mock(**{"data.next.side_effect": _image_received})
+
+        data, err = task.run()
+        self.assertEqual(data[(0, 0)].shape, (6400, 6400))
+
+        # Acquire an image were the cell images are 900x900px
+        task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
+                                      self.mppc, self.stage, self.scan_stage, self.ccd,
+                                      self.beamshift, self.lens,
+                                      roa, path="test-path", pre_calibrations=None,
+                                      save_full_cells=True, future=Mock(),
+                                      settings_obs=settings_obs)
+
+        data, err = task.run()
+        self.assertEqual(data[(0, 0)].shape, (7200, 7200))
 
     def test_pre_calibrate(self):
         self.skipTest(

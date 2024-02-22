@@ -43,6 +43,7 @@ try:
         configure_hw
     )
     from fastem_calibrations import util as fastem_util
+
     fastem_calibrations = True
 except ImportError as err:
     logging.info("fastem_calibrations package not found with error: {}".format(err))
@@ -112,7 +113,8 @@ class FastEMROA(object):
                       final scanning amplitude and cell translation (cell stitching) calibration (field corrections).
         :param asm: (technolution.AcquisitionServer) The acquisition server module component.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
-        :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
+        :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server
+        module.
         :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
         :param overlap: (float), optional
             The amount of overlap required between single fields. An overlap of 0.2 means that two neighboring fields
@@ -433,8 +435,8 @@ def estimate_acquisition_time(roa, pre_calibrations=None):
     return tot_time
 
 
-def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift,
-            lens, pre_calibrations=None, settings_obs=None):
+def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
+            pre_calibrations=None, save_full_cells=False, settings_obs=None):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -457,6 +459,8 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stag
     :param lens: (static.OpticalLens) Optical lens component.
     :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA acquisition.
                              Default is None.
+    :param save_full_cells: (bool) If True save the full cell images instead of cropping them
+                       to the effective cell size.
     :param settings_obs: (SettingsObserver) VAs of all components of which some will be
                          integrated in the acquired ROA as metadata. Default is None,
                          if None the metadata will not be updated.
@@ -474,7 +478,7 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stag
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
     task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, roa, path,
-                           pre_calibrations, settings_obs, f)
+                           pre_calibrations, save_full_cells, settings_obs, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -492,11 +496,12 @@ class AcquisitionTask(object):
     """
 
     def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, roa, path,
-                 pre_calibrations, settings_obs, future):
+                 pre_calibrations, save_full_cells, settings_obs, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
-        :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
+        :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server
+        module.
         :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
         :param stage: (actuator.ConvertStage) The stage in the sample carrier coordinate system. The x and y axes are
             aligned with the x and y axes of the ebeam scanner.
@@ -513,6 +518,8 @@ class AcquisitionTask(object):
                     if they do not exist.
         :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA
                                  acquisition.
+        :param save_full_cells: (bool) If True save the full cell images instead of cropping them
+                               to the effective cell size.
         :param settings_obs: (SettingsObserver) VAs of all components of which some will be
                              integrated in the acquired ROA as metadata. If None the metadata will not be updated.
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future
@@ -536,6 +543,7 @@ class AcquisitionTask(object):
         self._path = path  # sub-directories on external storage
         self._future = future
         self._pre_calibrations = pre_calibrations
+        self._save_full_cells = save_full_cells
         self._pre_calibrations_future = None
         self._settings_obs = settings_obs
 
@@ -600,6 +608,23 @@ class AcquisitionTask(object):
             self.pre_calibrate(self._pre_calibrations)
             self._roa.overlap = overlap_init  # set back the overlap to the initial value
 
+        if self._save_full_cells:
+            old_res = self._multibeam.resolution.value
+            old_cell_translation = self._detector.cellTranslation.value
+            old_cell_translation_md = self._detector.getMetadata().get(model.MD_CELL_TRANSLATION, None)
+
+            # set the resolution to the complete resolution, typically 7200px
+            self._multibeam.resolution.value = (
+                self._detector.shape[0] * self._detector.cellCompleteResolution.value[0],
+                self._detector.shape[1] * self._detector.cellCompleteResolution.value[1]
+            )
+
+            # set the cell translation to 0, because we do not want to do any cropping
+            cell_translation = tuple(tuple((0, 0) for i in range(0, self._detector.shape[0]))
+                                     for j in range(0, self._detector.shape[1]))
+            self._detector.updateMetadata({model.MD_CELL_TRANSLATION: cell_translation})
+            self._detector.cellTranslation.value = cell_translation
+
         # set the sub-directories (<user>/<project-name>/<roa-name>)
         # FIXME use username from GUI when that is implemented
         username = self._detector.getMetadata().get(model.MD_USER, "fastem-user")
@@ -651,6 +676,12 @@ class AcquisitionTask(object):
             # Finish the megafield also if an exception was raised, in order to enable a new acquisition.
             logging.debug("Finish ROA acquisition.")
             dataflow.unsubscribe(self.image_received)
+            if self._save_full_cells:
+                # Restore all parameter values, to have the correct values for the next acquisition without
+                # save_full_cells
+                self._multibeam.resolution.value = old_res
+                self._detector.cellTranslation.value = old_cell_translation
+                self._detector.getMetadata()[model.MD_CELL_TRANSLATION] = old_cell_translation_md
 
         return self.megafield, exception
 
