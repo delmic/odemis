@@ -29,6 +29,7 @@ from odemis import model, util
 import odemis.gui as gui
 from odemis.gui.comp.overlay.base import PolygonMixin, Vec, WorldOverlay
 import odemis.util.units as units
+from odemis.util.raster import point_in_polygon
 
 
 class Polygon(object):
@@ -100,8 +101,7 @@ class PolygonOverlay(WorldOverlay, PolygonMixin, Polygon):
 
         :returns: (bool) whether the point is inside the overlay or not.
         """
-        IN, _ = util.inumpyoly2([point], self.p_points)
-        return IN.tolist()[0]
+        return point_in_polygon(point, self.p_points)
 
     def on_left_down(self, evt):
         if self.active.value and self.selected.value:

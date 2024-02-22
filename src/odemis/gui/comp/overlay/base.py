@@ -41,6 +41,7 @@ from odemis import model
 import odemis.gui as gui
 import odemis.util as util
 import odemis.util.conversion as conversion
+from odemis.util.raster import point_in_polygon
 from odemis.gui import EVT_BUFFER_SIZE
 from odemis.model import TupleVA, BooleanVA
 
@@ -1232,8 +1233,7 @@ class PolygonMixin(ClickMixin, DragMixin):
                     ):
                         return gui.HOVER_EDGE, idx
 
-            IN, ON = util.inumpyoly2([vpos], self.v_points)
-            if (IN.tolist()[0] or ON.tolist()[0]):
+            if point_in_polygon(vpos, self.v_points):
                 return gui.HOVER_SELECTION, None
 
             return gui.HOVER_NONE, None
