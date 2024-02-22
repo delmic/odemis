@@ -245,7 +245,7 @@ class Instantiator(object):
           model without actually any driver contacting the hardware. It will also
           be stricter, and some issues which are normally just warnings will be
           considered errors.
-        strict_children: If True, only can use "children" for components whithout class and created
+        strict_children: If True, only can use "children" for components without class and created
         by delegation by one other component. Otherwise, children is allowed as synonym for
         "dependencies" (for backward-compatibility).
         """
