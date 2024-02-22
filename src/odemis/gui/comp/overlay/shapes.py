@@ -19,13 +19,10 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from typing import Union
 import wx
 
-import odemis.gui.model as guimodel
 from odemis import model, util
 from odemis.gui.comp.overlay.base import WorldOverlay
-from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 
 
@@ -35,7 +32,7 @@ class ShapesOverlay(WorldOverlay):
     It can handle multiple shapes.
     """
 
-    def __init__(self, cnvs, shape_cls: Union[EllipseOverlay, RectangleOverlay], tool=None, tool_va=None):
+    def __init__(self, cnvs, shape_cls: RectangleOverlay, tool=None, tool_va=None):
         """
         cnvs: canvas for the overlay.
         tool_va (None or VA of value TOOL_TOOL_RECTANGLE, TOOL_ELLIPSE): New shapes can be
