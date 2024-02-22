@@ -361,17 +361,6 @@ class SEM(model.HwComponent):
         except Exception as err:
             logging.exception(err)
 
-    def list_available_channels(self) -> dict:
-        """
-        List all available channels and their current state as a dict.
-
-        :return:
-            A dict of the names of the available channels as keys and the corresponding channel state as values.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.list_available_channels()
-
     def move_stage(self, position: Dict[str, float], rel: bool = False) -> None:
         """
         Move the stage the given position in meters. This is non-blocking. Throws an error when the requested position
