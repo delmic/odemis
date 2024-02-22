@@ -7,15 +7,15 @@ Copyright © 2022 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
@@ -46,14 +46,14 @@ class MDUpdaterTest(unittest.TestCase):
                                   mirror_pos_top=[600.5, 0.2],  # Try with list, as when initialized from YAML it'll be a list
                                   mirror_pos_bottom=(-200, 0.3))
         lens.affects.value = [ccd.name]
-        
+
         # Mock model.getComponent()
         comps = [ccd, lens]
         def fake_get_component(name):
             for c in comps:
                 if c.name == name:
                     return c
-            raise LookupError(f"no component {name}") 
+            raise LookupError(f"no component {name}")
 
         with unittest.mock.patch.object(model, "getComponent", fake_get_component):
 

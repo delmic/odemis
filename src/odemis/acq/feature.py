@@ -24,7 +24,7 @@ class CryoFeature(object):
         # The 3D position of an interesting point in the site (Typically, the milling should happen around that
         # volume, never touching it.)
         self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), unit="m")
-        
+
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
         self.streams = streams if streams is not None else model.ListVA()

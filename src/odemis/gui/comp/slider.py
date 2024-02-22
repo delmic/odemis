@@ -1042,4 +1042,3 @@ class BandwidthSlider(VisualRangeSlider):
 
     def get_bandwidth_value(self):
         return self.value[1] - self.value[0]
-

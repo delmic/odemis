@@ -115,4 +115,3 @@ class SpecCSVPlugin(Plugin):
                     # Wavelength
                     for wl, data in zip(spectrum_range, da[:, iy, ix]):
                         csv_writer.writerow([wl, ix * pxs[0], iy * pxs[1], data])
-

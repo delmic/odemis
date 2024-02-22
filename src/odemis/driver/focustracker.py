@@ -194,7 +194,7 @@ class FocusTrackerCO(model.HwComponent):
 
         # Change state to operational (NMT start)
         self.node.nmt.state = "OPERATIONAL"
-        
+
         self.node.tpdo[1].add_callback(self._on_tpdo)
 
     def terminate(self):

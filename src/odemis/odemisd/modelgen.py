@@ -993,7 +993,7 @@ class Instantiator(object):
         empty dictionary in case a YAMLError is raised or the file is empty.
         f (File or None): opened YAML file
         return (dict): dictionary with file contents or empty dictionary. The format is:
-          comp -> ('metadata'|'properties' -> (key -> value)) 
+          comp -> ('metadata'|'properties' -> (key -> value))
         """
         if f is None:
             return {}
@@ -1050,4 +1050,3 @@ class Instantiator(object):
                             comp_name)
 
         return prop_names, md_names
-

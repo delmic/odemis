@@ -708,7 +708,7 @@ class MicroscopeViewport(ViewPort):
         if not self.stage_limit_overlay:
             self.stage_limit_overlay = BoxOverlay(self.canvas)
         self.stage_limit_overlay.set_dimensions(roi)
-        
+
     def _on_stream_change(self, streams):
         """
         When the streams are changed, check if z-index is supported. If so,

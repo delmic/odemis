@@ -49,12 +49,12 @@ def read_timelapse(infn, emfn, fmfn):
     emda_prev = emda0 = fmda_prev = fmda0 = None
     for i, infl in enumerate(infiles):
         logging.info("Processing %s (%d/%d)", infl, i + 1, len(infiles))
-        
+
         try:
             # Read the file
             reader = dataio.find_fittest_converter(infl)
             das = reader.read_data(infl)
-            
+
             # Read the metadata (we expect one fluo image and one SEM image)
             fmpos = empos = emda = fmda = fmfoc = emfoc = None
             for da in das:
@@ -70,7 +70,7 @@ def read_timelapse(infn, emfn, fmfn):
                     emda = da
                     empxs = da.metadata[model.MD_PIXEL_SIZE]
                     emfoc = odemis.util.focus.MeasureSEMFocus(da)
-            
+
             # Overlay translation
             ovlpos = fmpos[0] - empos[0], fmpos[1] - empos[1]
 
@@ -86,7 +86,7 @@ def read_timelapse(infn, emfn, fmfn):
                 emdrift = MeasureShift(emda0, emda, 10)  # in pixels
                 emdriftm = emdrift[0] * empxs[0], emdrift[1] * empxs[1]
                 logging.info("Computed total EM drift of %s px = %s m", emdrift, emdriftm)
-                
+
                 empdrift = MeasureShift(emda_prev, emda, 10)  # in pixels
                 empdriftm = empdrift[0] * empxs[0], empdrift[1] * empxs[1]
                 logging.info("Computed previous EM drift of %s px = %s m", empdrift, empdriftm)
@@ -127,7 +127,7 @@ def export_csv(data, filename, header):
     for ts in sorted(data.keys()):
         info = data[ts]
         f.write("%f,%s\n" % (ts, ",".join(str(i) for i in info)))
-        
+
     f.close()
 
 def main(args):
@@ -153,7 +153,7 @@ def main(args):
         basename, ext = os.path.splitext(options.outptn)
         emfn = basename + "em" + ext
         fmfn = basename + "fm" + ext
-        
+
         read_timelapse(options.inptn, emfn, fmfn)
     except Exception:
         logging.exception("Unexpected error while performing action.")
@@ -165,4 +165,3 @@ if __name__ == '__main__':
     ret = main(sys.argv)
     logging.shutdown()
     exit(ret)
-

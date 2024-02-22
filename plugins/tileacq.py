@@ -944,4 +944,3 @@ class TileAcqPlugin(Plugin):
         finally:
             logging.info("Tiled acquisition ended")
             main_data.stage.moveAbs(orig_pos)
-

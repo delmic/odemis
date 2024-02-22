@@ -51,14 +51,14 @@ class CorrelationTab(Tab):
 
     def __init__(self, name: str,
                  button: odemis.gui.comp.buttons.TabButton,
-                 panel: wx.Panel, 
+                 panel: wx.Panel,
                  main_frame: odemis.gui.main_xrc.xrcfr_main,
                  main_data: odemis.gui.model.MainGUIData):
         """ Correlation tab for the correlation of multiple streams"""
 
         tab_data = guimod.CryoCorrelationGUIData(main_data)
         super().__init__(name, button, panel, main_frame, tab_data)
-    
+
         self.main_data = main_data
 
         # create the views, view_controller, and then add streams
@@ -78,7 +78,7 @@ class CorrelationTab(Tab):
             (panel.btn_correlation_view_br,
                 (panel.vp_correlation_br, panel.lbl_correlation_view_br)),
         ])
-        
+
         # view selector
         self._view_selector = viewcont.ViewButtonController(
             tab_data,
@@ -87,7 +87,7 @@ class CorrelationTab(Tab):
             panel.pnl_correlaton_grid.viewports
         )
 
-        # stream bar controller 
+        # stream bar controller
         self._streambar_controller = StreamBarController(
             tab_data,
             panel.pnl_correlation_streams,
@@ -101,14 +101,14 @@ class CorrelationTab(Tab):
         # correlation controller
         self._correlation_controller = CorrelationController(
             tab_data,
-            panel, 
-            self, 
-            panel.pnl_correlaton_grid.viewports 
+            panel,
+            self,
+            panel.pnl_correlaton_grid.viewports
         )
-     
+
         # export controller
         self.export_controller = exportcont.ExportController(tab_data, main_frame, panel, vpv)
-    
+
         self.conf = conf.get_acqui_conf()
 
         # Toolbar
@@ -117,8 +117,8 @@ class CorrelationTab(Tab):
             if t in tab_data.tool.choices:
                 self.tb.add_tool(t, tab_data.tool)
         # Add fit view to content to toolbar
-        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)       
- 
+        self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
+
     @property
     def streambar_controller(self):
         return self._streambar_controller
@@ -139,7 +139,7 @@ class CorrelationTab(Tab):
              {"name": "FLM Overview",
               "stream_classes": OpticalStream,
               }),
-            (viewports[1],  
+            (viewports[1],
              {"name": "SEM Overview",
               "stream_classes": EMStream,
               }),
@@ -222,24 +222,24 @@ class CorrelationTab(Tab):
         """ Load the data in the overview viewports
         :param data: (list[model.DataArray]) list of data arrays to load as streams
         """
-        
+
         # Create streams from data, add to correlation controller
         streams = data_to_static_streams(data)
         self.correlation_controller.add_streams(streams)
-        
+
         # fit to content
         for vp in self.panel.pnl_correlaton_grid.viewports:
             vp.canvas.fit_view_to_content()
-   
+
     def add_streams(self, streams:list) -> None:
         """add streams to correlation tab
         :param streams: (list[Stream]) list of streams to add"""
         self.correlation_controller.add_streams(streams)
-    
+
     def clear_streams(self) -> None:
         """clears streams from the correlation tab"""
         self.correlation_controller.clear_streams()
-    
+
     @classmethod
     def get_display_priority(cls, main_data) -> int:
         if main_data.role == "meteor":

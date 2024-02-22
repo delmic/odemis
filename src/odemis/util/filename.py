@@ -32,12 +32,12 @@ from datetime import datetime, timedelta
 
 def guess_pattern(fn):
     """
-    Generates a filename pattern form a given filename. The function detects certain 
+    Generates a filename pattern form a given filename. The function detects certain
     formats of dates, time, and counters. It returns a string with replacement fields which
     can be used in create_filename to provide an updated version of the filename.
     input
         fn (String): filename (may include path and extension)
-    returns 
+    returns
         fn_ptn (String): filename pattern (without path and extension)
         cnt (String): counter
     """
@@ -236,4 +236,3 @@ def update_counter(old_count):
     n_digits = len(old_count)
     new_count = str(c).zfill(n_digits)  # add as many leading zeros as specified
     return new_count
-

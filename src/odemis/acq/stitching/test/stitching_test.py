@@ -8,15 +8,15 @@ Copyright © 2017 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
@@ -254,12 +254,12 @@ class TestWeave(unittest.TestCase):
 def decompose_image(img, overlap=0.1, numTiles=5, method="horizontalLines", shift=True):
     """
     Decomposes image into tiles for testing. The tiles overlap and their center positions are subject to random noise.
-    Returns list of tiles and list of the actual positions. 
+    Returns list of tiles and list of the actual positions.
     img: 2D numpy array representing gray-scale image
     numTiles: number of desired tiles in each direction
     method: acquisition method, "horizontalLines" scans image by row and starts at the left for each row,
-    "verticalLines" scans image by columns starting at the top for each row, and "horizontalZigzag" scans 
-    a row, then scans the next row in reverse, etc. mimicking the behaviour of DELMIC microscopes. 
+    "verticalLines" scans image by columns starting at the top for each row, and "horizontalZigzag" scans
+    a row, then scans the next row in reverse, etc. mimicking the behaviour of DELMIC microscopes.
     shift : Boolean variable indicating whether or not to add a shift to the positions
     """
 

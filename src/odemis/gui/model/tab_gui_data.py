@@ -379,7 +379,7 @@ class CryoCorrelationGUIData(CryoGUIData):
 
         # the streams to correlate among all streams in .streams
         self.selected_stream = model.VigilantAttribute(None)
-        
+
         # for export tool
         self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
 

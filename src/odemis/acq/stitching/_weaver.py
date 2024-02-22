@@ -231,7 +231,7 @@ class CollageWeaverReverse(Weaver):
     """
     Similar to CollageWeaver, but only fills parts of the global image with the new tile that
     are still empty. This is desirable if the quality of the overlap regions is much better the first
-    time a region is imaged due to bleaching effects. The result is equivalent to a collage that starts 
+    time a region is imaged due to bleaching effects. The result is equivalent to a collage that starts
     with the last tile and pastes the older tiles in reverse order of acquisition.
     """
 
@@ -267,7 +267,7 @@ class CollageWeaverReverse(Weaver):
 
 class MeanWeaver(Weaver):
     """
-    Pixels of the final image which are corresponding to several tiles are computed as an 
+    Pixels of the final image which are corresponding to several tiles are computed as an
     average of the pixel of each tile.
     """
 

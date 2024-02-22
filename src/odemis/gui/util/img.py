@@ -1292,7 +1292,7 @@ def val_y_to_pos_y(val_y, client_size, range_y):
 
 
 def bar_plot(ctx, data, range_x, range_y, client_size, fill_colour):
-    """ Do a bar plot of the current `_data` 
+    """ Do a bar plot of the current `_data`
     data needs to be a list or ndarray, not an iterator
     """
 
@@ -2102,11 +2102,11 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
         # Handle the stream colormap
         if stream is None and hasattr(s, "tint"):
             tint = s.tint.value
-            
+
             if tint != TINT_RGB_AS_IS:
 
                 tint = img.tintToColormap(tint)
-            
+
                 # Draw a gradient of the colormap
                 width = int(cell_x_step * 2 * COLORBAR_WIDTH_RATIO)
                 height = int(tint_box_size)
@@ -2136,7 +2136,7 @@ def draw_legend_multi_streams(images, buffer_size, buffer_scale,
                 legend_ctx.paint()
 
                 legend_x_pos += cell_x_step
-                
+
             legend_ctx.set_source_rgb(*text_color)
 
         legend_x_pos += cell_x_step
@@ -2846,7 +2846,7 @@ def wxImageScaleKeepRatio(im, size, quality=wx.IMAGE_QUALITY_NORMAL):
 
 
 def insert_tile_to_image(tile, ovv):
-    """ 
+    """
     Inserts a tile into a larger (overview) image. The entire tile is inserted into the
     corresponding part of the ovv and the previous content at this part of the ovv is
     deleted. If the tile reaches beyond the borders of the ovv, it is cropped.
@@ -2894,7 +2894,7 @@ def insert_tile_to_image(tile, ovv):
 
 
 def merge_screen(ima, imb):
-    """ 
+    """
     Merges two images into one using the "screen" operator. Roughly, it's a
     "soft plus", which only reaches the maximum when both values are at the maximum.
     Precisely, it's defined as: f(xA,xB) = xA + xB − xA·xB (with values between

@@ -11,7 +11,7 @@ run as:
 ./script/timelapse -n 12 --output filename
 
 -n defines the number of images to acquire
---output indicates the name of the file which will contain all the output. It 
+--output indicates the name of the file which will contain all the output. It
          should finish by .h5 (for HDF5) or .tiff (for TIFF).
 
 You first need to run the odemis backend with the SECOM config. For instance,
@@ -49,7 +49,7 @@ def acquire_timelapse(num, filename):
     for i in range(num):
         logging.info("Acquiring image %d", i + 1)
         images.append(ccd.data.get())
-    
+
     # save the file
     exporter = dataio.find_fittest_converter(filename)
     exporter.export(filename, images)
@@ -84,4 +84,3 @@ if __name__ == '__main__':
     ret = main(sys.argv)
     logging.shutdown()
     exit(ret)
-

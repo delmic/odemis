@@ -419,7 +419,7 @@ class Stream(object):
         if lva._value != v:
             lva._value = v  # TODO: works with ListVA?
             lva.notify(v)
-            
+
     def _duplicateAxis(self, axis_name, actuator):
         """
         Create a new VigilanteAttribute (VA) for the given axis, , which imitates is behaviour.
@@ -651,7 +651,7 @@ class Stream(object):
                     f.result()
                 except Exception:
                     logging.exception("Failed to move axis.")
-                    
+
     def _onAxisMoveDone(self, f):
         """
          Callback method, which checks that the move is actually finished.
@@ -661,7 +661,7 @@ class Stream(object):
             f.result()
         except Exception:
             logging.exception("Failed to move axis.")
-            
+
     def _update_linked_position(self, act, pos):
         """ Subscriber called when the actuator position changes.
         update the linked axis VA's with the new position value

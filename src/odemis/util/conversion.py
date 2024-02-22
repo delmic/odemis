@@ -293,7 +293,7 @@ def ensure_tuple(v):
 def get_img_transformation_matrix(md):
     """
     Computes the 2D transformation matrix based on the given metadata.
-    md (dict str -> value): the metadata (of the DataArray) containing MD_PIXEL_SIZE 
+    md (dict str -> value): the metadata (of the DataArray) containing MD_PIXEL_SIZE
         and possibly also MD_ROTATION and MD_SHEAR.
     return (numpy.array of 2,2 floats): the 2D transformation matrix
     """

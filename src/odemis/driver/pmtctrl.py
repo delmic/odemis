@@ -131,7 +131,7 @@ class PMT(model.Detector):
                               "available.")
         else:
             self._control = None
-        
+
 
         if "pmt-signal" in dependencies:
             self._signal = dependencies["pmt-signal"]
@@ -293,7 +293,7 @@ class PMTDataFlow(model.DataFlow):
         if self._control and self._control.protection.value:
             logging.warning("PMT protection was triggered during acquisition.")
         model.DataFlow.notify(self, data)
-  
+
     def _on_signal(self, df, data):
         pass
 

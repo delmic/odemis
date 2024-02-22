@@ -161,7 +161,7 @@ class OdemisBugreporter(object):
     def run(self):
         """
         Runs the compression and ticket creation in a separate thread. Starts the GUI.
-        The create_ticket function waits until the compression is done and the user 
+        The create_ticket function waits until the compression is done and the user
         has finished the report description before sending.
         """
         # Take a screenshot if the GUI is there

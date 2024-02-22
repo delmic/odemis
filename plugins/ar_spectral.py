@@ -614,7 +614,7 @@ class SpectralARScanStream(stream.Stream):
         """
         Compute the X and Y positions of the ebeam
         roi (0<=4 floats<=1): ltrb of the ROI
-        pxs (float): distance between each pixel (in m, in both directions) 
+        pxs (float): distance between each pixel (in m, in both directions)
         return (list of Y*X tuples of 2 floats) positions in the ebeam coordinates
                (X, Y) in SEM referential for each spot to be scanned.
         """
@@ -776,7 +776,7 @@ class ARspectral(Plugin):
         }),
         ("roi", {
             "control_type": odemis.gui.CONTROL_NONE, # TODO: CONTROL_READONLY to show it
-        }), 
+        }),
         ("centerWavelength", {
             "control_type": odemis.gui.CONTROL_FLT,  # no slider
         }),
@@ -1096,4 +1096,3 @@ class ARspectral(Plugin):
             exporter.export(fn, das)
 
         dlg.Close()
-

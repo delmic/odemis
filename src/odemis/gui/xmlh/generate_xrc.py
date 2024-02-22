@@ -100,7 +100,7 @@ class OdemisXmlResourceCompiler(XmlResourceCompiler):
 
         if node.nodeName == "icon_progress":
             return True
-            
+
         return XmlResourceCompiler.NodeContainsFilename(self, node)
 
     # Fixed version, for label of the menu
@@ -191,7 +191,7 @@ def main(args=None):
     embedResources = True
     generateGetText = False
     assignVariables = True
-    
+
     comp = OdemisXmlResourceCompiler()
 
     try:

@@ -58,7 +58,7 @@ logging.getLogger().setLevel(logging.INFO)
 def acquire_angles(polarizer, angles):
     """
     Acquire an image from "ccd" for the given polarizer for each angle
-    returns (list of float): the average brightness for each of these angles. 
+    returns (list of float): the average brightness for each of these angles.
     """
     logging.info("Preparing to acquire brightness of %d angles on %s",
                  len(angles), polarizer.name)
@@ -118,7 +118,7 @@ def main(args):
         angles = numpy.arange(0, math.pi * 1.25, math.radians(2))
         brightness = acquire_angles(polarizer, angles)
         logging.debug("Acquired brightness: %s", brightness)
-        
+
         # Stores the file
         with open(options.filename, "w+") as f:
             for a, b in zip(angles, brightness):

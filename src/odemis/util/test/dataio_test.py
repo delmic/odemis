@@ -15,7 +15,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-import os 
+import os
 import re
 import time
 import unittest
@@ -41,7 +41,7 @@ class TestDataIO(unittest.TestCase):
         warnings.filterwarnings(
             "ignore", category=RuntimeWarning, message=re.escape("numpy.ndarray size changed")
         )
-    
+
     def tearDown(self):
         # clean up
         try:
@@ -262,10 +262,10 @@ class TestDataIO(unittest.TestCase):
             dtype = numpy.dtype("uint16")
             ldata = model.DataArray(numpy.zeros(size[::-1], dtype), md.copy())
             tiff.export(filename, ldata)
-    
+
         # open files and stitch together
         rdata = open_files_and_stitch(FILENAMES)
-        
+
         # assert array data
         self.assertIsInstance(rdata[0], model.DataArray, f"Unexpected type for stitched data {type(rdata)}")
         numpy.testing.assert_array_equal(rdata[0], 0)
@@ -275,7 +275,7 @@ class TestDataIO(unittest.TestCase):
         self.assertEqual(rdata[0].metadata[model.MD_DESCRIPTION], "sem")
         self.assertEqual(rdata[0].metadata[model.MD_DIMS], "YX")
         self.assertEqual(rdata[0].metadata[model.MD_BPP], 16)
-        
+
         testing.assert_tuple_almost_equal(rdata[0].metadata[model.MD_POS], (25e-6, 25e-6))
         testing.assert_tuple_almost_equal(rdata[0].metadata[model.MD_PIXEL_SIZE], (1e-6, 1e-6))
 

@@ -9,15 +9,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 """
@@ -33,10 +33,8 @@ for line in fileinput.input():
 
     words = line.strip().split(" ")
 #    print words
-    if (len(words) == 3 and words[0] == "#define" and 
+    if (len(words) == 3 and words[0] == "#define" and
         "_" in words[1] and words[2].isdigit()):
         # and generates something like:
         # 20001: "DRV_ERROR_CODES",
         print("%s: \"%s\"," % (words[2], words[1]))
-        
-    

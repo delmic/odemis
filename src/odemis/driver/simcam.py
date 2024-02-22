@@ -8,15 +8,15 @@ Copyright © 2014-2022 Éric Piel, Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import math
@@ -60,10 +60,10 @@ class Camera(model.DigitalCamera):
         self._img = converter.read_data(image)[0]  # can be RGB or greyscale
 
         model.DigitalCamera.__init__(self, name, role, dependencies=dependencies, daemon=daemon, **kwargs)
-        
-        # remove metadata which would not be on real hardware 
+
+        # remove metadata which would not be on real hardware
         self._img.metadata.pop(model.MD_DESCRIPTION, None)
-        
+
         if self._img.ndim > 3:  # remove dims of length 1
             self._img = numpy.squeeze(self._img)
 

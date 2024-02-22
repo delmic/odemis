@@ -12,7 +12,7 @@ run as:
 
 -n defines the number of images to acquire
 --period defines the time between each acquisition
---output indicates the name of the file which will contain all the output. It 
+--output indicates the name of the file which will contain all the output. It
          should finish by .h5 (for HDF5) or .tiff (for TIFF).
 
 You first need to run the odemis backend with the SECOM config. For instance,
@@ -61,7 +61,7 @@ def acquire_timelapse(num, period, filename):
         logging.info("Closing after only %d images acquired", i + 1)
     except Exception:
         logging.exception("Failed to acquire all the images, will try to save anyway")
-    
+
     # save the file
     exporter = dataio.find_fittest_converter(filename)
     exporter.export(filename, images)
@@ -98,4 +98,3 @@ if __name__ == '__main__':
     ret = main(sys.argv)
     logging.shutdown()
     exit(ret)
-
