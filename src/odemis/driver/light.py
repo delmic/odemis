@@ -21,7 +21,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
 from odemis import model
-from past.builtins import long
 
 class Light(model.Emitter):
     """
@@ -35,7 +34,7 @@ class Light(model.Emitter):
         self.powerSupply.value = False  # immediately turn it off
 
         self._shape = ()
-        self.power = model.ListContinuous([0], ((0,), (10,)), unit="W", cls=(int, long, float),
+        self.power = model.ListContinuous([0], ((0,), (10,)), unit="W", cls=(int, float),
                                           setter=self._setPower)
         # just one band: white
         # TODO: update spectra VA to support the actual spectra of the lamp

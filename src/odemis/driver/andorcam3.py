@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # * limit the memory to about 3G. For example add highmem=3500M to the kernel
 #   command line (in /etc/default/grub)
 
-from past.builtins import long
 from builtins import str
 import collections
 from ctypes import *
@@ -354,7 +353,6 @@ class AndorCam3(model.DigitalCamera):
             tran_rng = ((-uh_shape[0], -uh_shape[1]),
                         (uh_shape[0], uh_shape[1]))
             self.translation = model.ResolutionVA((0, 0), tran_rng, unit="px",
-                                                  cls=(int, long),
                                                   setter=self._setTranslation)
         else:
             # to keep it simple, provide a translation VA but fixed to 0,0

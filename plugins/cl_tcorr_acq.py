@@ -36,7 +36,6 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.util import executeAsyncTask
 import os.path
-from past.builtins import long
 import threading
 import time
 
@@ -87,7 +86,7 @@ class CorrelatorScanStream(stream.Stream):
         # Region of acquisition. ROI form is LEFT Top RIGHT Bottom, relative to full field size
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
+                                         cls=(int, float))
 
         # Cropvalue that  can be used to crop the data for better visualization in odemis
         self.cropvalue = model.IntContinuous(1024, (1, 65536), unit="px")
@@ -95,7 +94,7 @@ class CorrelatorScanStream(stream.Stream):
         # For drift correction
         self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
                                               range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                              cls=(int, long, float))
+                                              cls=(int, float))
         self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
                                                  range=emitter.dwellTime.range, unit="s")
         #number of drift corrections per scanning pixel

@@ -365,6 +365,21 @@ SPARC2: {
     affects: ["CL Detector"],
 }
 
+
+# Simulate an interlock for the mirror
+"BSED Interlock": {
+    class: simulated.GenericComponent,
+    role: bsd-interlock,
+    init: {
+        vas: {
+            "interlockTriggered": {
+                value: False,
+            },
+        },
+    },
+    affects: ["Mirror Actuators"],
+}
+
 # Controller for moving the 'Redux' stage
 # Note: the S axis can _only_ be moved when the l axis is near the active/engaged position
 "Mirror Actuators": {

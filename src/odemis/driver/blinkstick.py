@@ -24,7 +24,6 @@ import logging
 from odemis import model
 from odemis.model import HwError
 import time
-from past.builtins import long
 
 class WhiteLed(model.Emitter):
     '''
@@ -68,7 +67,7 @@ class WhiteLed(model.Emitter):
                                     unit="m", readonly=True)
 
         self.power = model.ListContinuous([0., ], ((0.,), (max_power,)), unit="W",
-                                          cls=(int, long, float), setter=self._setPower)
+                                          cls=(int, float), setter=self._setPower)
         self.power.subscribe(self._updatePower, init=True)
 
         self._swVersion = "Blinkstick v%s" % (blinkstick.__version__,)

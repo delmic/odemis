@@ -28,7 +28,6 @@ import time
 from builtins import str
 from collections import OrderedDict
 from collections.abc import Iterable
-from past.builtins import long
 
 import numpy
 import odemis.acq.stream as acqstream
@@ -448,11 +447,11 @@ class StreamController(object):
             else:
                 # Still try to beautify a bit if it's a number
                 if (
-                    isinstance(value, (int, long, float)) or
+                    isinstance(value, (int, float)) or
                     (
                         isinstance(value, Iterable) and
                         len(value) > 0 and
-                        isinstance(value[0], (int, long, float))
+                        isinstance(value[0], (int, float))
                     )
                 ):
                     nice_str = readable_str(value, unit, 3)

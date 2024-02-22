@@ -30,7 +30,6 @@ import os
 import serial
 import threading
 import time
-from past.builtins import long
 
 # Colour name (lower case) to source ID (as used in the device)
 COLOUR_TO_SOURCE = {"red": 0,
@@ -159,7 +158,7 @@ class LLE(model.Emitter):
         self._shape = ()
         self.power = model.ListContinuous(value=[0.0] * len(spectra),
                                           range=((0.,) * len(spectra), tuple(self._max_power),),
-                                          unit="W", cls=(int, long, float),)
+                                          unit="W", cls=(int, float),)
 
         self.spectra = model.ListVA(spectra, unit="m", readonly=True)
 
