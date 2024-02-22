@@ -60,6 +60,19 @@ CONFIG_STAGE = {"name": "stage", "role": "stage",
 CONFIG_FOCUS = {"name": "focuser", "role": "ebeam-focus"}
 CONFIG_DETECTOR = {"name": "detector", "role": "se-detector"}
 CONFIG_CHAMBER = {"name": "Chamber", "role": "chamber"}
+
+CONFIG_SEM_HELPER = {
+    "name": "sem",
+    "role": "sem",
+    "address": "PYRO:Microscope@192.168.31.162:4242",
+    "children": {
+        "scanner": CONFIG_SCANNER,
+        "focus": CONFIG_FOCUS,
+        "stage": CONFIG_STAGE,
+        "chamber": CONFIG_CHAMBER,
+    },
+}
+
 CONFIG_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.168.31.162:4242",
               "children": {"scanner": CONFIG_SCANNER,
                            "focus": CONFIG_FOCUS,
@@ -95,6 +108,7 @@ CONFIG_MB_SEM = {"name": "sem", "role": "sem", "address": "PYRO:Microscope@192.1
                  }
 
 if TEST_NOHW == "sim":
+    CONFIG_SEM_HELPER["address"] = "PYRO:Microscope@localhost:4242"
     CONFIG_SEM["address"] = "PYRO:Microscope@localhost:4242"
     CONFIG_FIB_SEM["address"] = "PYRO:Microscope@localhost:4242"
     CONFIG_DUAL_MODE_SEM["address"] = "PYRO:Microscope@localhost:4242"
@@ -127,7 +141,7 @@ class TestMicroscope(unittest.TestCase):
 
     @classmethod
     def tearDownClass(cls):
-        cls.detector.terminate()
+        cls.microscope.terminate()
 
     def setUp(self):
         # if self.chamber.position.value["vacuum"] > 100e-3:
@@ -593,6 +607,57 @@ class TestMicroscope(unittest.TestCase):
         self.detector.brightness.value = init_brightness
         self.detector.contrast.value = init_contrast
 
+
+class TestHelperMicroscope(TestMicroscope):
+    """
+    Test the SEM connection when it's used as an extra settings control for the analog scan control
+    => No detector.
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        if TEST_NOHW is True:
+            raise unittest.SkipTest("No simulator available.")
+
+        cls.microscope = xt_client.SEM(**CONFIG_SEM_HELPER)
+
+        for child in cls.microscope.children.value:
+            if child.name == CONFIG_SCANNER["name"]:
+                cls.scanner = child
+            elif child.name == CONFIG_FOCUS["name"]:
+                cls.efocus = child
+            elif child.name == CONFIG_STAGE["name"]:
+                cls.stage = child
+            elif child.name == CONFIG_CHAMBER["name"]:
+                cls.chamber = child
+
+    # Disable tests for anything related to the detector
+    def test_acquire(self):
+        self.skipTest("No detector to test.")
+
+    def test_live_change(self):
+        self.skipTest("No detector to test.")
+
+    def test_apply_autofocus(self):
+        self.skipTest("No detector to test.")
+
+    def test_apply_auto_contrast_brightness(self):
+        self.skipTest("No detector to test.")
+
+    def test_autoblanking(self):
+        self.skipTest("No detector to test.")
+
+    def test_brightness(self):
+        self.skipTest("No detector to test.")
+
+    def test_contrast(self):
+        self.skipTest("No detector to test.")
+
+    def test_scale(self):
+        self.skipTest("No detector to test.")
+
+    def test_stop_acquisition(self):
+        self.skipTest("No detector to test.")
 
 class TestMicroscopeInternal(unittest.TestCase):
     """
