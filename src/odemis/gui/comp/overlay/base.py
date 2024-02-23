@@ -432,7 +432,7 @@ class Overlay(metaclass=ABCMeta):
     # END Default Event handlers
 
 
-class ClickMixin(object):
+class ClickMixin:
     """
     This mixin class can be used to add click functionality. The class keeps on appending click
     points on left clicks and stops on a right click.
@@ -464,7 +464,7 @@ class ClickMixin(object):
         """Set the click attributes to their initial values."""
         self._left_click = False
         self._right_click = False
-        self._finished = None
+        self._finished = False
         self.v_pos = Vec(0.0, 0.0)
         self.v_points.clear()
 
@@ -1079,7 +1079,7 @@ class SelectionMixin(DragMixin):
         # Cursor manipulation should be done in superclasses
 
 
-class PolygonMixin(ClickMixin, DragMixin):
+class LineEditingMixin(ClickMixin, DragMixin):
     """
     This class will store the last selection created by clicking. It allows for manipulation
     of that selection by dragging.

@@ -193,9 +193,9 @@ class FastEMProjectController(object):
         # In the callback to the ROI, the ROI creation will be completed or aborted.
         self._project_bar.enable_buttons(False)
 
-        # Deactivate all ROAs
+        # Deselect all ROAs
         for roa_ctrl in self.roa_ctrls.keys():
-            roa_ctrl.overlay.active.value = False
+            roa_ctrl.overlay.selected.value = False
 
         # Minimum index that has not yet been deleted, find the first index which is not in the existing indices
         num = next(idx for idx, n in enumerate(sorted(self.roa_ctrls.values()) + [0], 1) if idx != n)
@@ -285,7 +285,6 @@ class FastEMROAController(object):
                                self._tab_data.main.asm, self._tab_data.main.multibeam,
                                self._tab_data.main.descanner, self._tab_data.main.mppc,
                                acqui_conf.overlap)
-        self.model.coordinates.subscribe(self._on_coordinates)
         self.model.roc_2.subscribe(self._on_roc)
         self.model.roc_3.subscribe(self._on_roc)
 
@@ -296,9 +295,9 @@ class FastEMROAController(object):
         self.overlay = overlay
         self.overlay.colour = conversion.hex_to_frgba(colour)
         if hasattr(self.overlay, "points"):
-            self.overlay.points.subscribe(self._on_coordinates, init=True)
+            self.overlay.points.subscribe(self._on_coordinates)
         elif hasattr(self.overlay, "coordinates"):
-            self.overlay.coordinates.subscribe(self._on_coordinates, init=True)
+            self.overlay.coordinates.subscribe(self._on_coordinates)
         self.overlay.selected.subscribe(self._on_overlay_selected)
         self.overlay.position.subscribe(self._find_closest_scintillator)
 

@@ -27,7 +27,7 @@ import wx
 
 from odemis import model, util
 import odemis.gui as gui
-from odemis.gui.comp.overlay.base import PolygonMixin, Vec, WorldOverlay
+from odemis.gui.comp.overlay.base import LineEditingMixin, Vec, WorldOverlay
 import odemis.util.units as units
 from odemis.util.raster import point_in_polygon
 
@@ -59,7 +59,7 @@ class Polygon(object):
             )
 
 
-class PolygonOverlay(WorldOverlay, PolygonMixin, Polygon):
+class PolygonOverlay(WorldOverlay, LineEditingMixin, Polygon):
     """Overlay representing one polygon."""
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
@@ -68,7 +68,7 @@ class PolygonOverlay(WorldOverlay, PolygonMixin, Polygon):
         :param: colour (str): hex colour code for the polygon.
         """
         WorldOverlay.__init__(self, cnvs)
-        PolygonMixin.__init__(self, colour)
+        LineEditingMixin.__init__(self, colour)
         Polygon.__init__(self)
         self.selected = model.BooleanVA(True)
         self.p_points = []
@@ -105,39 +105,41 @@ class PolygonOverlay(WorldOverlay, PolygonMixin, Polygon):
 
     def on_left_down(self, evt):
         if self.active.value and self.selected.value:
-            PolygonMixin._on_left_down(self, evt)
+            LineEditingMixin._on_left_down(self, evt)
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
         if self.active.value:
-            PolygonMixin._on_left_up(self, evt)
+            LineEditingMixin._on_left_up(self, evt)
             if self.finished_click_mixin:
                 self._phys_to_view()
                 offset = self.cnvs.get_half_buffer_size()
                 p_point = Vec(self.cnvs.view_to_phys(evt.Position, offset))
                 self.selected.value = self.is_point_in_overlay(p_point)
                 if self.selected.value:
+                    # fastem.acq.get_poly_field_indices expects list of nested tuples (y, x)
                     self.points.value = [(y, x) for x, y in self.p_points]
             self.cnvs.update_drawing()
         WorldOverlay.on_left_up(self, evt)
 
     def on_right_down(self, evt):
         if self.active.value:
-            PolygonMixin._on_right_down(self, evt)
+            LineEditingMixin._on_right_down(self, evt)
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_right_down(self, evt)
 
     def on_right_up(self, evt):
         if self.active.value:
-            PolygonMixin._on_right_up(self, evt)
+            LineEditingMixin._on_right_up(self, evt)
             self._view_to_phys()
             if len(self.p_points) <= 2:
                 logging.warning("Cannot create a polygon for less than 3 points.")
                 self.reset_click_mixin()
                 self.p_points.clear()
+            # fastem.acq.get_poly_field_indices expects list of nested tuples (y, x)
             self.points.value = [(y, x) for x, y in self.p_points]
             self.cnvs.update_drawing()
         else:
@@ -157,7 +159,7 @@ class PolygonOverlay(WorldOverlay, PolygonMixin, Polygon):
 
     def on_motion(self, evt):
         if self.active.value and self.selected.value:
-            PolygonMixin._on_motion(self, evt)
+            LineEditingMixin._on_motion(self, evt)
             if not self.dragging:
                 if self.hover == gui.HOVER_SELECTION:
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
@@ -215,10 +217,10 @@ class PolygonOverlay(WorldOverlay, PolygonMixin, Polygon):
                 phi = math.atan2(dx, dy) % (2 * math.pi)  # phi angle in radians
 
                 # Find the side length by calculating the Euclidean distance
-                length = math.hypot(dx, dy)  # ruler length in physical coordinates
-                pixel_length = math.hypot(dpx, dpy)  # ruler length in pixels
+                length = math.hypot(dx, dy)  # side length in physical coordinates
+                pixel_length = math.hypot(dpx, dpy)  # side length in pixels
 
-                self._label.deg = math.degrees(phi + (math.pi / 2))  # angle of the ruler label
+                self._label.deg = math.degrees(phi + (math.pi / 2))  # angle of the side label
 
                 # Distance display with 3 digits
                 size_lbl = units.readable_str(length, "m", sig=3)
@@ -236,11 +238,11 @@ class PolygonOverlay(WorldOverlay, PolygonMixin, Polygon):
                 self._label.pos = pos
 
                 # If the side is smaller than 1 pixel, make it seem as 1 point (1 pixel) and decrease the font size to 5pt.
-                # Only the move area of the ruler is available, without the option of editing the start, end positions.
+                # Only the move area of the side is available, without the option of editing the start, end positions.
                 if pixel_length <= 1:
                     self._label.font_size = 5
                 else:
-                    if pixel_length < 40:  # about the length of the ruler
+                    if pixel_length < 40:  # about the length of the side
                         self._label.font_size = 9
                     else:
                         self._label.font_size = 14

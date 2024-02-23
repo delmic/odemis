@@ -27,6 +27,7 @@ import logging
 from typing import List, Union
 import wx
 
+from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.plugin import Plugin
 
 
@@ -164,7 +165,9 @@ class ImportExportROAPlugin(Plugin):
                     int(roc_3_name)
                 ].coordinates.value = roc_3_coordinates
                 # Create and add a rectangle overlay
-                rectangle_overlay = self._cnvs.add_rectangle_overlay()
+                rectangle_overlay = RectangleOverlay(self._cnvs)
+                self._cnvs.add_world_overlay(rectangle_overlay)
+                rectangle_overlay.active.value = True
                 project_ctrl.add_roa(rectangle_overlay, name=roa_name)
                 # Finally assign the rectangle coordinates value to draw it
                 rectangle_overlay.coordinates.value = roa_coordinates

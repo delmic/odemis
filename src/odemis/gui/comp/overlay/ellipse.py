@@ -29,6 +29,12 @@ import odemis.gui as gui
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 
+# The circumference of an ellipse is divided by this factor to calculate number of
+# arcs to be drawn. This increases the angle of an arc and reduces the number of
+# points on the circumference of the ellipse. A factor value of 3 is choosen because
+# the cicumference is calculated in buffer coordinates which has values greater than
+# 1 and even with the reduced number of points on the circumference the ellipse is
+# still visible.
 NUM_ARCS_FACTOR = 3
 
 
@@ -62,9 +68,7 @@ class EllipseOverlay(RectangleOverlay):
             self.points.value = self._points
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
-        """Draw the selection as a ellipse. Exactly the same as parent function except that
-        it has an adaptive line width (wider if the overlay is active) and it always shows the
-        size label of the selected ellipse."""
+        """Draw the selection as a ellipse."""
         self._points.clear()
         flag = self.active.value and self.selected.value
         line_width = 5 if flag else 2
@@ -107,6 +111,7 @@ class EllipseOverlay(RectangleOverlay):
                     else:
                         ctx.line_to(x, y)
                     p_x, p_y = self.cnvs.buffer_to_phys((x, y), offset)
+                    # fastem.acq.get_poly_field_indices expects list of nested tuples (y, x)
                     self._points.append((p_y, p_x))
                 ctx.close_path()
                 ctx.stroke()

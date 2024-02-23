@@ -1814,24 +1814,13 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         self.add_world_overlay(bg_overlay)
         return bg_overlay
 
-    def add_rectangle_overlay(self):
-        """
-        coordinates (TupleContinuousVA): VA of 4 floats representing region of acquisition coordinates
-        colour (str): border colour of ROA overlay, given as string of hex code
-        """
-        rectangle_overlay = RectangleOverlay(self)
-        self.add_world_overlay(rectangle_overlay)
-        # Always activate after creating, otherwise the code to select the region in
-        # FastEMROAOverlay.on_left_down will never be called.
-        rectangle_overlay.active.value = True
-        return rectangle_overlay
-
     def remove_overlay(self, overlay):
         """
-        overlay (RectangleOverlay or RectangleOverlay): overlay to be deleted
+        :param: overlay: (RectangleOverlay, EllipseOverlay, PolygonOverlay) overlay to be deleted
         """
         for shapes_overlay in self.shapes_overlay:
             shapes_overlay.remove_overlay(overlay)
+        self.remove_world_overlay(overlay)
         wx.CallAfter(self.request_drawing_update)
 
     def add_calibration_overlay(self, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
