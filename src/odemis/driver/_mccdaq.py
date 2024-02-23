@@ -1,5 +1,3 @@
-#! /usr/bin/python3
-#
 # Copyright (c) 2018 Warren J. Jasper <wjasper@ncsu.edu>
 #
 # This library is free software; you can redistribute it and/or
@@ -15,8 +13,7 @@
 # License along with this library; if not, write to the Free Software
 # Foundation, Inc., 51 Franklin Street, Fifth Floor, Boston, MA 02110-1301 USA
 
-import sys
-import time
+import logging
 from struct import *
 
 import hid
@@ -26,23 +23,18 @@ from odemis.model import HwError
 
 
 class Error(Exception):
-  ''' Base class for other exceptions.'''
-  pass
+    """ Base class for other exceptions."""
+    pass
 
 
 class OverrunError(Error):
-  ''' Raised when overrun on AInScan'''
-  pass
+    """ Raised when overrun on AInScan """
+    pass
 
 
 class UnderrunError(Error):
-  ''' Raised when underrun on AOutScan'''
-  pass
-
-
-class SaturationError(Error):
-  ''' Raised when DAQ is saturated '''
-  pass
+    """ Raised when underrun on AOutScan """
+    pass
 
 
 # Description of the requestType byte
@@ -61,38 +53,39 @@ ENDPOINT_RECIPIENT  = 0x2
 OTHER_RECIPIENT     = 0x3
 RESERVED_RECIPIENT  = 0x4
 
+
 # Base class for lookup tables of calibration coefficients (slope and intercept)
 class table:
-  def __init__(self):
-    self.slope = 0.0
-    self.intercept = 0.0
+    def __init__(self):
+        self.slope = 0.0
+        self.intercept = 0.0
 
 
 # Base class for timer parameters
 class TimerParameters:
-  def __init__(self):
-    self.timer = 0
-    self.period = 0
-    self.pulseWidth = 0
-    self.count = 0
-    self.dely = 0
-    self.control = 0x0
-    self.frequency = 0.0
+    def __init__(self):
+        self.timer = 0
+        self.period = 0
+        self.pulseWidth = 0
+        self.count = 0
+        self.delay = 0
+        self.control = 0x0
+        self.frequency = 0.0
 
 
 # Base class for counter parameters
 class CounterParameters:
-  def __init__(self):
-    self.counter = 0
-    self.modeOptions = 0x0
-    self.counterOptions = 0x0
-    self.gateOptions = 0x0
-    self.outputOptions = 0x0
-    self.debounce = 0x0
-    self.outputValue0 = 0x0
-    self.outputValue1 = 0x0
-    self.limitValue0 = 0x0    # Minimum Limit Value
-    self.limitValue1 = 0x0    # Maximum Limit Value
+    def __init__(self):
+        self.counter = 0
+        self.modeOptions = 0x0
+        self.counterOptions = 0x0
+        self.gateOptions = 0x0
+        self.outputOptions = 0x0
+        self.debounce = 0x0
+        self.outputValue0 = 0x0
+        self.outputValue1 = 0x0
+        self.limitValue0 = 0x0    # Minimum Limit Value
+        self.limitValue1 = 0x0    # Maximum Limit Value
 
 
 class mccUSB:
@@ -214,7 +207,7 @@ class usb_1208(mccUSB):
         try:
             self.h = hid.device()
         except:
-            print('Error creating hid device')
+            raise HwError('Error creating hid device')
 
     #################################
     #     Digital I/O  Commands     #
@@ -249,10 +242,8 @@ class usb_1208(mccUSB):
         '''
 
         self.h.write([0x0, self.DIN, port_number, 0, 0, 0, 0, 0, 0])
-        try:
-            value = self.h.read(8, 500)
-        except:
-            print('DIn: error in reading.')
+        value = self.h.read(8, 500)
+
         return (value[0])
 
     def DOut(self, port_number, value):
@@ -279,10 +270,8 @@ class usb_1208(mccUSB):
         '''
 
         self.h.write([self.DBIT_IN, port_number, bit, 0, 0, 0, 0, 0])
-        try:
-            value = self.h.read(1, 500)
-        except:
-            print('DBitIn: error in reading.')
+        value = self.h.read(1, 500)
+
         return (value[0])
 
     def DBitOut(self, port_number, bit, value):
@@ -319,18 +308,15 @@ class usb_1208(mccUSB):
             mode = 1  # differential
 
         if (channel > 3 and mode == 1):
-            print('AIn: channel out of range for differential mode.')
+            logging.warning('AIn: channel out of range for differential mode.')
             return -1
 
         if (channel > 7 and mode == 0):
-            print('AIn: channel out of range for single ended mode.')
+            logging.warning('AIn: channel out of range for single ended mode.')
             return -1
 
         self.h.write([self.AIN, channel, gain, 0, 0, 0, 0, 0])
-        try:
-            data = self.h.read(3, 100)
-        except:
-            print('AIn: error in reading A/D.')
+        data = self.h.read(3, 100)
 
         if (mode == 1):
             # Differential
@@ -427,18 +413,13 @@ class usb_1208(mccUSB):
             data = self.h.get_feature_report(0, 105)  # get 64 samples
             self.scanIdx += 1
             scanIndex = data[102] | (data[103] << 8)
-            try:
-                if (scanIndex > self.scanIdx):
-                    raise OverrunError
-            except OverrunError:
-                print('AInScan: Overrun Error')
-                return
-            try:
-                if (scanIndex < self.scanIdx):
-                    raise UnderrunError
-            except UnderrunError:
-                print('AInScan: Underrun Error')
-                return
+
+            if (scanIndex > self.scanIdx):
+                raise OverrunError('AInScan: Overrun Error')
+
+            if (scanIndex < self.scanIdx):
+                raise UnderrunError('AInScan: Underrun Error')
+
             # 12 bit signed data packed 2 samples in 3 bytes
             for i in range(0, 96, 3):
                 value = ((data[i + 1]) | (data[i + 2] << 4) & 0x0f00)
@@ -492,8 +473,8 @@ class usb_1208(mccUSB):
         if (value < 0):
             value = 0
         if (channel < 0 or channel > 1):
-            print('AOut: channel out of range.')
-            return
+            raise ValueError('AOut: channel out of range.')
+
         self.h.write([self.AOUT, channel, (value & 0xff), (value >> 8) & 0xff, 0, 0, 0, 0])
 
     #################################
@@ -508,11 +489,8 @@ class usb_1208(mccUSB):
         '''
 
         self.h.write([self.CIN, 0, 0, 0, 0, 0, 0, 0])
-        try:
-            value = self.h.read(4, 100)
-        except:
-            print('Error in CIn.')
-            return 0
+        value = self.h.read(4, 100)
+
         return (value[0] | (value[1] << 8) | (value[2] << 16) | (value[3] << 24))
 
     def CInit(self):
@@ -548,13 +526,11 @@ class usb_1208(mccUSB):
         '''
 
         if (count > 8):
-            print('MemRead: max count is 8')
-            return
+            raise ValueError('MemRead: max count is 8')
+
         self.h.write([self.MEM_READ, address, count, 0, 0, 0, 0, 0])
-        try:
-            value = self.h.read(count, 100)
-        except:
-            print('Error in reading memory, value =', value)
+        value = self.h.read(count, 100)
+
         return (value[0:count])
 
     def MemWrite(self, address, count, data):
@@ -583,8 +559,8 @@ class usb_1208(mccUSB):
         '''
 
         if (count > 4):
-            print('MemWrite: max count is 4')
-            return
+            raise ValueError('MemWrite: max count is 4')
+
         self.h.write([self.MEM_WRITE, address, count, data[0:count]] + [0] * (5 - count))
 
     #################################
@@ -627,26 +603,20 @@ class usb_1208(mccUSB):
         '''
 
         if id < 0 or id > 255:
-            print('SetID: id out of range')
-            return
-        try:
-            self.h.write([self.SET_ID, id, 0, 0, 0, 0, 0, 0])
-        except:
-            print('Error in writing id')
+            raise ValueError('SetID: id out of range')
+
+        self.h.write([self.SET_ID, id, 0, 0, 0, 0, 0, 0])
 
     def GetID(self):
         '''
         This function retrieves the id number stored on the device.  Note that a value of 0
         is used to flag an uninitialized device.
         '''
-        try:
-            self.h.write([self.GET_ID, 0, 0, 0, 0, 0, 0, 0])
-        except:
-            print('Error in reading id')
-        try:
-            value = self.h.read(8, 100)
-        except:
-            print('Error in reading id, value =', value)
+
+        self.h.write([self.GET_ID, 0, 0, 0, 0, 0, 0, 0])
+
+        value = self.h.read(8, 100)
+
         return (value[0])
 
     def volts(self, gain, value):
@@ -683,18 +653,21 @@ class usb_1208LS(usb_1208):
         self.productID = 0x0007a  # USB-1208LS
         usb_1208.__init__(self)
         try:
+            logging.info(f"Trying opening device USB-1208LS with s/n {serial}..")
             self.h.open(0x09db, self.productID, serial)
-        except Exception:
-            raise HwError
+        except Exception as ex:
+            raise HwError(f"Failed to find USB device {self.productID}, serial {serial}: {ex}")
 
         self.device_type, self.device_sn = self.h.get_product_string(), self.h.get_serial_number_string()
+        logging.debug(f"Successfully connected with device type {self.device_type} with s/n {self.device_sn}")
 
         # enable non-blocking mode
         self.h.set_nonblocking(1)
 
         # set default configuration
         self.DConfig(self.DIO_PORTA, 0x00)  # Port A output
-        self.DConfig(self.DIO_PORTB, 0xff)  # Port B input
+        self.DConfig(self.DIO_PORTB, 0x00)  # Port B input
         self.DOut(self.DIO_PORTA, 0x0)
+        self.DOut(self.DIO_PORTB, 0x0)
         self.AOut(0, 0x0)
         self.AOut(1, 0x0)
