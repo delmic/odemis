@@ -29,27 +29,13 @@ class StagePointSelectOverlay(WorldOverlay):
     """ Overlay for moving the stage (in physical coordinates) upon the selection of canvas points"""
 
     def on_dbl_click(self, evt):
-        if self.active:
+        if self.active.value:
             v_pos = evt.Position
             p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
             # directly move the stage to the selected physical position
             self.cnvs.view.moveStageTo(p_pos)
         else:
             WorldOverlay.on_dbl_click(self, evt)
-
-    def on_left_down(self, evt):
-        if self.active:
-            # let the canvas handle dragging
-            self.cnvs.on_left_down(evt)
-        else:
-            WorldOverlay.on_left_down(self, evt)
-
-    def on_left_up(self, evt):
-        if self.active:
-            # let the canvas handle dragging
-            self.cnvs.on_left_up(evt)
-        else:
-            WorldOverlay.on_left_up(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         pass
