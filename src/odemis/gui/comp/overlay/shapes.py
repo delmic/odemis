@@ -119,18 +119,19 @@ class ShapesOverlay(WorldOverlay):
             self._selected_shape = shape
         self._selected_shape.active.value = True
         self._selected_shape.on_left_down(evt)
+        WorldOverlay.on_left_down(self, evt)
 
     def on_char(self, evt):
-        """Delete the selected shape."""
+        """Delete or unselect the selected shape."""
         if not self.active.value:
             return super().on_char(evt)
 
-        if evt.GetKeyCode() == wx.WXK_DELETE:
-            for shape in self._shapes:
-                if shape.active.value:
-                    self.remove_overlay(shape)
-                    break
-            self._selected_shape = None
+        if self._selected_shape and self._selected_shape.selected.value:
+            if evt.GetKeyCode() == wx.WXK_DELETE:
+                self.remove_overlay(self._selected_shape)
+            elif evt.GetKeyCode() == wx.WXK_ESCAPE:
+                self._selected_shape.selected.value = False
+                self.cnvs.request_drawing_update()
         else:
             WorldOverlay.on_char(self, evt)
 
