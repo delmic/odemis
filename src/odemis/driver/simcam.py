@@ -280,8 +280,16 @@ class Camera(model.DigitalCamera):
             img = ndimage.gaussian_filter(gen_img, sigma=dist)
         else:
             img = gen_img
-        # to simulate changing the exposure time exp/self._orig_exp
-        numpy.multiply(img, exp/self._orig_exp, out=img, casting="unsafe")
+
+        # Simulate changing the exposure time exp/self._orig_exp (without overflow, but clipping)
+        orig_dtype = img.dtype
+        img = img * float(exp/self._orig_exp)  # forces to a float dtype, so that it doesn't overflow
+        # Revert to original type, with data clipped
+        if orig_dtype.kind in "biu":
+            idtype = numpy.iinfo(orig_dtype)
+            img = img.clip(idtype.min, idtype.max).astype(orig_dtype)
+        else:  # float
+            img = img.astype(orig_dtype)
 
         img = model.DataArray(img, metadata)
 
