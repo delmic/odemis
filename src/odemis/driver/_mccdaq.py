@@ -666,8 +666,9 @@ class usb_1208LS(usb_1208):
 
         # set default configuration
         self.DConfig(self.DIO_PORTA, 0x00)  # Port A output
-        self.DConfig(self.DIO_PORTB, 0x00)  # Port B input
-        self.DOut(self.DIO_PORTA, 0x0)
-        self.DOut(self.DIO_PORTB, 0x0)
+        self.DConfig(self.DIO_PORTB, 0x00)  # Port B output
+        # TODO check if these DOut calls are necessary
+        self.DOut(self.DIO_PORTA, 0x0)  # all ports set to 0
+        self.DOut(self.DIO_PORTB, 0x0)  # all ports set to 0
         self.AOut(0, 0x0)
         self.AOut(1, 0x0)

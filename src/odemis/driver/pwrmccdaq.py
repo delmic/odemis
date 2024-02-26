@@ -1,7 +1,36 @@
+# -*- coding: utf-8 -*-
+'''
+Created on 23 Feb 2024
+
+@author: Stefan Sneep
+
+Copyright © 2024 Stefan Sneep, Delmic
+
+This file is part of Odemis.
+
+Odemis is free software: you can redistribute it and/or modify it under the terms of the
+GNU General Public License version 2 as published by the Free Software Foundation.
+
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty
+of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with Odemis.
+If not, see http://www.gnu.org/licenses/.
+'''
+# Uses a Diligent MCC DAQ board with analog output which can be used to control
+# the power of an emitter.
+# This is designed for the USB-1208LS board, but it can be modified to support
+# other board types of this brand. It is mainly used in single-ended mode pinout.
+# Note, with the USB-1208LS board, only 2 analogue channels can be used as output
+# you should use pins 13 and 14 for channels respectively 0 and 1.
+# For using the DIO ports use pins 21->28 for channels 0->7 and pins 32->39 for channels 8->15.
+
 import logging
 import time
+from collections import namedtuple
+from dataclasses import dataclass
 from threading import Thread
-from typing import List, Tuple, Dict
+from typing import List, Tuple, Dict, Optional
 
 import odemis
 from odemis import model
@@ -10,7 +39,22 @@ from odemis.model import HwError, Emitter, HwComponent
 
 MAX_VOLTAGE_VALUE = 0x3ff  # for 1208LS
 MAX_VOLTAGE = 5.0  # V
-INTERLOCK_POLL_INTERVAL = 0.1
+INTERLOCK_POLL_INTERVAL = 0.1  # s
+
+
+@dataclass
+class DIChannelInfo:
+    """
+    Dataclass for storing the DI channel info as specified in the configuration file.
+    Channel info refers to a DI channel which should be polled to get information on
+    the status of the bit which is connected to the value of the VA. Note this only
+    works with Python v3.7 and higher.
+    """
+    channel: int  # the channel number that is assigned through the configuration file
+    bit_value: bool  # the saved value of the bit read at the DI port, 0 or 1.
+    ttl_high: bool  # set the change of TTL signal tracked on this channel to high or low
+    va_name: str  # the name of the VA which is connected to the tracking of this channel
+    va: model.BooleanVA  # the Boolean VA which should be changed when the bit value changes
 
 
 class MCCDevice(HwComponent):
@@ -18,27 +62,27 @@ class MCCDevice(HwComponent):
     Basic version of the Class for MCC DAQ device functionality with support for digital input status.
     This class can be inherited for more functionality to support more complex components.
     """
-    def __init__(self, name: str, role: str, mcc_device: str,
-                 di_channels: Dict[int, Tuple[str, bool]] = None, **kwargs):
+    def __init__(self, name: str, role: str, mcc_device: Optional[str],
+                 di_channels: Dict[int, Tuple[str, bool]] = {}, **kwargs):
         """
         :param mcc_device (str or None): serial number or None (null in yaml file) for auto-detect.
-            the device is considered a USB-powered MCC DAQ 1208LS device.
+            the device is considered a USB-powered MCC DAQ 1208LS device. Note that the serial number
+            should contain an added 0 to the beginning of the s/n. If "fake" is passed the simulator
+            is used.
         :param di_channels (dict -> int, list(str, bool)):
             the DIO channel used for TTL signal status change through the MCC device.
             for example di_channels: {2: ["interlockTriggered", False], 7: ["leftSwitch", True]}.
-            key is the channel number(int), value is a list with VA name(str) and tll high is true(bool),
-                this means that the VA will be considered True or False when the TTL signal is high.
+            key is the channel number(int), value is a list with VA name(str) and a flag stating
+                if ttl high is True(bool), this means that the VA will be considered True or False
+                when the TTL signal is high.
             with this approach it is actually possible to keep track of customized status changes.
         """
         super().__init__(name, role, **kwargs)
-        # force add a trailing 0 or just add a comment to config file?
-        # if device and len(device) < 8:
-        #     device = "0" + device
         self._name = name
-        self._di_channels = di_channels if di_channels else {}
-        self.device = None
-        self._status_thread = None
-        self._channel_vas = {}
+        self._di_channels = dict(sorted(di_channels.items()))  # sort the list of channels
+        self.device = None  # either MCCDeviceSimulator class or usb_1208LS class
+        self._status_thread = None  # MCCDeviceDIStatus class for polling of VA status
+        self._channel_vas = []  # list of ChannelVA dataclass
 
         if mcc_device == "fake":
             self.device = MCCDeviceSimulator()
@@ -48,26 +92,53 @@ class MCCDevice(HwComponent):
             except HwError:
                 raise HwError("Failed to open MCC DAQ device with s/n '%s'" % mcc_device)
 
-        for channel, (va_name, ttl_high) in self._di_channels.items():
-            # create a VA with False as default
-            va = model.BooleanVA(False, readonly=True)
-            # append a new dict with the added VA
-            self._channel_vas[channel] = va_name, ttl_high, va
-            setattr(self, va_name, va)  # set the class VA variable name
-            logging.info(f"{va_name} status activated for component {self._name} on channel {channel}")
+        # Default to every channel is output (both ports set to 0)
+        dconfig = {
+            usb_1208LS.DIO_PORTA: 0,
+            usb_1208LS.DIO_PORTB: 0,
+        }
 
-        # create the thread to poll all the status bits
-        self._status_thread = MCCDeviceDIStatus(self.device, self._channel_vas)
-        self._status_thread.start()
+        if self._di_channels:
+            for channel, va_properties in self._di_channels.items():
+                if len(va_properties) != 2:
+                    # check if va_properties is an iterator with 2 elements
+                    raise TypeError(
+                        f"di_channels expects for each channel a [int, [str, boolean]], but got {va_properties}")
+                va_name, ttl_high = va_properties
+
+                # check the di_channel values
+                try:
+                    port, bit = self.channel_to_port(channel)
+                except ValueError:
+                    raise ValueError(f"Invalid channel value for status {self._di_channels[channel]}")
+
+                dconfig[port] |= 1 << bit  # set channel to input
+
+                # create a VA with False as default
+                va = model.BooleanVA(False, readonly=True)
+                # append the channel_vas dict with the new VA
+                ch_va_obj = DIChannelInfo(channel, False, ttl_high, va_name, va)
+                self._channel_vas.append(ch_va_obj)
+                setattr(self, va_name, va)  # set the class VA variable name
+                logging.info(f"{va_name} status activated for component {self._name} on channel {channel}")
+
+            for port, val in dconfig.items():
+                self.device.DConfig(port, val)
+
+            # create the thread to poll all the status bits
+            self._status_thread = MCCDeviceDIStatus(self.device, self._channel_vas)
+            self._status_thread.start()
 
     @classmethod
-    def channel_to_port(cls, channel: int):
+    def channel_to_port(cls, channel: int) -> Tuple[int, int]:
         """
         This is a support method to return the port and bit of a selected channel
         which is mainly used for the DBitIn and DBitOut commands of the MCC device
         :param channel (int): the channel number from the config file (0-15)
         :return (tuple(int, int)): the port of the device and the individual bit
         """
+        if not isinstance(channel, int):
+            raise ValueError("Channel value is not an integer")
         if channel < 0 or channel > 15:
             raise ValueError("DIO channel value has to be between 0 and 15")
 
@@ -84,10 +155,11 @@ class MCCDevice(HwComponent):
         return port, bit
 
     def terminate(self):
-        # release the running status poll thread
-        self._status_thread.terminated = True
-        # wait for the tread to be really suspended
-        self._status_thread.join()
+        if self._status_thread:
+            # release the running status poll thread
+            self._status_thread.terminated = True
+            # wait for the tread to be really suspended
+            self._status_thread.join()
         super().terminate()
 
 
@@ -99,38 +171,39 @@ class MCCDeviceDIStatus(Thread):
     """
     def __init__(self, mcc_device, channel_vas):
         super().__init__()
-        self._channel_vas = channel_vas  # dict (channel: int -> list(va_name: str, ttl_high: bool, va: BooleanVA))
+        self._channel_list = channel_vas  # dict (port: str -> port_bit_value: int, VA's: list(CHANNEL_VA))
         self._device = mcc_device
         self.terminated = False
 
     def run(self):
-        # retrieve only the port, the individual bits are not used separately
-        port, _ = MCCDevice.channel_to_port(list(self._channel_vas.keys())[0])
-        # set the start bit status value of the specified port
-        current_bit_status = self._device.DIn(port)
+        try:
+            while not self.terminated:
+                # wait for a fixed interval
+                time.sleep(INTERLOCK_POLL_INTERVAL)
 
-        while not self.terminated:
-            # wait for a fixed interval
-            time.sleep(INTERLOCK_POLL_INTERVAL)
+                # retrieve the full port bit satus, the individual bits are not used separately
+                # bit status = 0 -> TTL LOW (0.0V) | bit status = 1 -> TTL HIGH (3.3-5.0V)
+                bit_list = self.status_bits_all_ports()
+                for chan in self._channel_list:
+                    new_val = bit_list[chan.channel] == chan.ttl_high
+                    if new_val != chan.va.value:
+                        logging.info(f"{chan.va_name} changed to {new_val}")
+                    chan.va._set_value(new_val, force_write=True)
 
-            # bit status = 0 -> TTL LOW (0.0V) | bit status = 1 -> TTL HIGH (3.3-5.0V)
-            new_bit_status = self._device.DIn(port)
+            logging.info("DI Status thread suspended.")
 
-            if current_bit_status != new_bit_status:
-                # convert the bit status value to a binary string
-                bin_str_cur, bin_str_new = format(current_bit_status, "#010b"), format(new_bit_status, "#010b")
-                bin_str_cur, bin_str_new = bin_str_cur.replace("0b", ""), bin_str_new.replace("0b", "")
+        except Exception as ex:
+            logging.error(f"An Exception occurred while polling DI port status ({ex}) "
+                          f"status changes are not longer tracked.")
 
-                for num, (old_bit, new_bit) in enumerate(zip(bin_str_cur[::-1], bin_str_new[::-1])):
-                    # only check the changed DI bit values in reverse order
-                    if int(new_bit) != int(old_bit):
-                        if num in self._channel_vas.keys():
-                            # change the status VA according to TTL readout config e.g. high is true or false
-                            bool_value = True if self._channel_vas[num][1] == bool(int(old_bit)) else False
-                            self._channel_vas[num][2].value._set_value(bool_value, force_write=True)
+    def status_bits_all_ports(self):
+        porta = self._device.DIn(usb_1208LS.DIO_PORTA)
+        bit_list_porta = [bool(porta & 1 << i) for i in range(8)]
 
-                # set the new bit status value
-                current_bit_status = new_bit_status
+        portb = self._device.DIn(usb_1208LS.DIO_PORTB)
+        bit_list_portb = [bool(portb & 1 << i) for i in range(8)]
+
+        return bit_list_porta + bit_list_portb
 
 
 class MCCDeviceLight(Emitter, MCCDevice):
@@ -138,14 +211,14 @@ class MCCDeviceLight(Emitter, MCCDevice):
     Class to support laser emitter control of one or more lasers through the use of a MCCDevice.
     Inherits from Emitter for ComponentProxy support and from MCCDevice for power and interlock control.
     """
-    def __init__(self, name: str, role: str, mcc_device: str, ao_channels: List[int], do_channels: List[int],
-                 spectra, pwr_curve, di_channels: Dict[int, Tuple[str, bool]] = None, **kwargs):
+    def __init__(self, name: str, role: str, mcc_device: Optional[str], ao_channels: List[int], do_channels: List[int],
+                 spectra, pwr_curve, di_channels: Dict[int, Tuple[str, bool]] = {}, **kwargs):
         """
         :param mcc_device (str or None): refer to parent.
         :param ao_channels: (list of (0<=int<=3)):
-            The analogue output channel for each source, as numbered in the mccdaq device.
+            The analogue output channel for each source, used to control the power level of the laser output.
         :param do_channels: (list of (0<=int<=15)):
-            The digital output (0 or 5 v) channel for each source, as numbered in the mccdaq device.
+            The digital output (0 or 5 v) channel for each source, used to control the on/off state of the laser output.
         :param spectra (list of 5-tuple of float): the spectra for each output channel used.
             Each tuple represents the wavelength in m for the 99% low, 25% low,
             centre/max, 25% high, 99% high. They do not have to be extremely precise.
@@ -158,7 +231,6 @@ class MCCDeviceLight(Emitter, MCCDevice):
         :param di_channels (dict -> int, list(str, bool)): refer to parent.
         """
         Emitter.__init__(self, name, role, **kwargs)
-        MCCDevice.__init__(self, name, role, mcc_device, di_channels)
 
         self._shape = ()
         self._name = name
@@ -211,18 +283,22 @@ class MCCDeviceLight(Emitter, MCCDevice):
                                      % (c, wl * 1e9))
             spect.append(tuple(wls))
 
+        # if the parameters of this call are set incorrect in the config file
+        # the thread will be started prematurely and not be suspended properly
+        MCCDevice.__init__(self, name, role, mcc_device, di_channels)
+
         # Maximum power for channel to be used as a range for power
         max_power = tuple([crv[-1][1] for crv in self._pwr_curve])
         # Power value for each channel of the device
-        self.power = model.ListContinuous(value=[0.] * len(ao_channels),
-                                          range=(tuple([0.] * len(ao_channels)), max_power,),
-                                          unit="W", cls=(int, float), )
+        self.power = model.ListContinuous(value=[0] * len(ao_channels),
+                                          range=(tuple([0] * len(ao_channels)), max_power,),
+                                          unit="W", cls=(int, float),)
         self.power.subscribe(self._update_power)
 
         # info on which channel is which wavelength
         self.spectra = model.ListVA(spect, unit="m", readonly=True)
 
-        # make sure everything is off (turning on the HUB will turn on the lights)
+        # make sure everything is off
         self.power.value = self.power.range[0]
 
         self._metadata = {model.MD_HW_NAME: f"{self.device.getManufacturer()} "
@@ -238,7 +314,6 @@ class MCCDeviceLight(Emitter, MCCDevice):
         :param power (0 < float): the requested power of the light
         :param curve (list of tuple (float, float)): the mapping between volt -> power
         :return (float): voltage for outputting the given power
-        raise (ValueError): if the requested power value is out of the power curve range limits
         """
         if power < curve[0][1]:
             raise ValueError("Power requested %g < %g" % (power, curve[0][1]))
@@ -279,7 +354,7 @@ class MCCDeviceLight(Emitter, MCCDevice):
                 self.device.DBitOut(port, bit, new_bit_value)
 
 
-class MCCDeviceSimulator(object):
+class MCCDeviceSimulator:
     """
     A really basic and simple interface to simulate a USB-1208LS device with
     support for DIO pin read/write commands and a single AO write command.
@@ -288,15 +363,16 @@ class MCCDeviceSimulator(object):
         # initialize values
         self.productID = 0x0007a  # USB-1208LS
         # to keep track of the individual bits and values
-        self.port_a_bit_config = {"0": 0, "1": 0, "2": 0, "3": 0, "4": 0, "5": 0, "6": 0, "7": 0}
-        self.port_b_bit_config = {"0": 1, "1": 1, "2": 1, "3": 1, "4": 1, "5": 1, "6": 1, "7": 1}
-        self.AO_channels = {"0": 0, "1": 0}  # value (uint16) in counts to output [10-bits 0-5V]
+        self.port_a_bit_status = [False, False, False, False, False, False, False, False]
+        self.port_b_bit_status = [False, False, False, False, False, False, False, False]
+        self.port_a_bit_config = [False, False, False, False, False, False, False, False]
+        self.port_b_bit_config = [False, False, False, False, False, False, False, False]
+        # port 1 (A) or 2 (B) write on A is 2 write to B is 1
+        self.AO_channels = [0, 0]  # value (uint16) in counts to output [10-bits 0-5V]
 
         # set default configuration
-        self.DConfig(usb_1208LS.DIO_PORTA, 0x00)  # Port A output
-        self.DConfig(usb_1208LS.DIO_PORTB, 0x00)  # Port B input
-        self.DOut(usb_1208LS.DIO_PORTA, 0x0)
-        self.DOut(usb_1208LS.DIO_PORTB, 0x0)
+        self.DConfig(usb_1208LS.DIO_PORTA, 0x00)  # Port A output (all LOW)
+        self.DConfig(usb_1208LS.DIO_PORTB, 0x00)  # Port B input (all LOW)
         self.AOut(0, 0x0)
         self.AOut(1, 0x0)
 
@@ -304,10 +380,10 @@ class MCCDeviceSimulator(object):
         return "MCC"
 
     def getProduct(self):
-        return "USB-1208LS"
+        return "USB-1208LS-SIM"
 
     def getSerialNumber(self):
-        return "021B0CB8"
+        return "fake"
 
     def DConfig(self, port_number, bit_mask):
         """
@@ -315,23 +391,23 @@ class MCCDeviceSimulator(object):
         :param port_number: AUXPORT = 0x10 | Port A = 0x01 | Port B = 0x04
         :param bit_mask (int:bit value): 0 = output | 1 = input
         """
-        if self.productID == 0x0075 and port_number == usb_1208LS.DIO_AUXPORT:
-            bit_mask = ((bit_mask ^ 0xff) & 0xff)
+        if bit_mask < 0x00 or bit_mask > 0xff:
+            raise ValueError("Bit mask to set is not between 0 and 255")
 
-        self.DOut(port_number, bit_mask)
+        if port_number == usb_1208LS.DIO_PORTA:
+            self.port_a_bit_config = [bool(bit_mask & 1 << i) for i in range(8)]
+        elif port_number == usb_1208LS.DIO_PORTB:
+            self.port_b_bit_config = [bool(bit_mask & 1 << i) for i in range(8)]
+        else:
+            raise ValueError()
 
     def DIn(self, port_number):
         """
         :param port_number: AUXPORT = 0x10 | Port A = 0x01 | Port B = 0x04
         :return: the value seen at the port pins
         """
-        ret_val = "0b"
-        DIO_port = self._return_port_config(port_number)
-
-        for bit in DIO_port.keys():
-            ret_val += str(DIO_port[bit])
-
-        return int(ret_val, 2)
+        DIO_port = self._return_port_status(port_number, read=True)
+        return sum(v << i for i, v in enumerate(DIO_port))
 
     def DOut(self, port_number, value):
         """
@@ -342,12 +418,17 @@ class MCCDeviceSimulator(object):
         if value < 0 or value > 255:
             raise ValueError("Value to set is not between 0 and 255")
 
-        DIO_port = self._return_port_config(port_number)
-        in_val = format(value, '#010b')
-        in_val = in_val.replace("0b", "")
+        DIO_port = self._return_port_status(port_number, read=False)
 
-        for num, c in enumerate(in_val[::-1]):
-            DIO_port[str(num)] = int(c)
+        if port_number == usb_1208LS.DIO_PORTA:
+            bit_config = self.port_a_bit_config
+        elif port_number == usb_1208LS.DIO_PORTB:
+            bit_config = self.port_b_bit_config
+        else:
+            raise ValueError()
+
+        # when port A is requested, writing to port B is simulated and the other way around
+        DIO_port[:] = [bool(value & 1 << i) if not bit_config[i] else DIO_port[i] for i in range(8)]
 
     def DBitIn(self, port_number, bit):
         """
@@ -360,9 +441,9 @@ class MCCDeviceSimulator(object):
         if bit < 0 or bit > 7:
             raise ValueError("Bit value is not between 0 and 7")
 
-        DIO_port = self._return_port_config(port_number)
+        DIO_port = self._return_port_status(port_number, read=True)
 
-        return DIO_port[str(bit)]
+        return DIO_port[bit]
 
     def DBitOut(self, port_number, bit, value):
         """
@@ -376,8 +457,8 @@ class MCCDeviceSimulator(object):
         if value < 0 or value > 1:
             raise ValueError("Value to set should be either 0 or 1")
 
-        DIO_port = self._return_port_config(port_number)
-        DIO_port[str(bit)] = value
+        DIO_port = self._return_port_status(port_number, read=False)
+        DIO_port[bit] = value
 
     def AOut(self, channel, value):
         """
@@ -385,17 +466,17 @@ class MCCDeviceSimulator(object):
         :param channel: selects output channel (0 or 1)
         :param value: value (uint16) in counts to output [10-bits 0-5V]
         """
-        channel = 0 if channel > 1 or channel < 0 else None
+        if channel > 1 or channel < 0:
+            channel = 0
         # force automatic clipping
-        if (value > 0x3ff):
-            value = 0x3ff
-        if (value < 0):
-            value = 0
-        self.AO_channels[str(channel)] = value
+        value = min(max(0, value), 0x3ff)
 
-    def _return_port_config(self, port_number):
-        if port_number == usb_1208LS.DIO_PORTB:
-            return self.port_b_bit_config
+        self.AO_channels[channel] = value
+
+    def _return_port_status(self, port_number, read: bool = True) -> List[bool]:
+        if port_number == usb_1208LS.DIO_PORTA:
+            return self.port_a_bit_status if read else self.port_b_bit_status
+        elif port_number == usb_1208LS.DIO_PORTB:
+            return self.port_b_bit_status if read else self.port_a_bit_status
         else:
-            # Port A as default
-            return self.port_a_bit_config
+            raise ValueError()
