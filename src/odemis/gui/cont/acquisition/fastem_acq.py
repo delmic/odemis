@@ -385,7 +385,7 @@ class FastEMAcquiController(object):
                 roa.roc_2.subscribe(self._on_va_change)
                 roa.roc_3.subscribe(self._on_va_change)
                 # update the estimated acquisition time when the roa is resized
-                roa.coordinates.subscribe(self._on_update_acquisition_time)
+                roa.points.subscribe(self._on_update_acquisition_time)
                 self.subscribed_roas.add(roa)
         self._update_roa_count()
         self.check_acquire_button()

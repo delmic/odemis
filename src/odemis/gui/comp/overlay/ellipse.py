@@ -23,7 +23,7 @@ import math
 
 import cairo
 
-from odemis import model, util
+from odemis import util
 import odemis.util.units as units
 import odemis.gui as gui
 from odemis.gui.comp.overlay.base import Vec
@@ -47,29 +47,27 @@ class EllipseOverlay(RectangleOverlay):
         colour (str): hex colour code for the ellipse
         """
         super().__init__(cnvs, colour)
-        self.points = model.ListVA()
-        self._points = []
+        # The points on the circumference of the ellipse from where the arcs are drawn
+        self._circumference_points = []
 
-    def is_point_in_overlay(self, point):
-        """Determine if the point is in the overlay.
-
-        :param: point: (tuple) The point in physical coordinates.
-
-        :returns: (bool) whether the point is inside the overlay or not.
-        """
-        return util.is_point_in_rect(point, self.coordinates.value)
+    def _on_selected(self, selected):
+        """Callback for selected VA. Override EditableShape's method to only set coordinates value."""
+        if selected:
+            self.coordinates.value = util.get_polygon_bbox(self._points)
 
     def on_left_up(self, evt):
         """
         Check if left click was in ellipse. If so, activate the overlay. Otherwise, deactivate.
         """
+        # on_left_up draws the ellipse and gathers the circumference points
         super().on_left_up(evt)
+        # Finally assign the points value
         if self.selected.value:
-            self.points.value = self._points
+            self.points.value = self._circumference_points
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """Draw the selection as a ellipse."""
-        self._points.clear()
+        self._circumference_points.clear()
         flag = self.active.value and self.selected.value
         line_width = 5 if flag else 2
 
@@ -111,8 +109,8 @@ class EllipseOverlay(RectangleOverlay):
                     else:
                         ctx.line_to(x, y)
                     p_x, p_y = self.cnvs.buffer_to_phys((x, y), offset)
-                    # fastem.acq.get_poly_field_indices expects list of nested tuples (y, x)
-                    self._points.append((p_y, p_x))
+                    # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
+                    self._circumference_points.append((p_y, p_x))
                 ctx.close_path()
                 ctx.stroke()
 

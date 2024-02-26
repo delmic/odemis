@@ -19,13 +19,88 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from typing import Union
+from abc import ABCMeta, abstractmethod
+
 import wx
 
-from odemis import model
+from odemis import model, util
+from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.overlay.base import WorldOverlay
-from odemis.gui.comp.overlay.ellipse import EllipseOverlay
-from odemis.gui.comp.overlay.rectangle import RectangleOverlay
+
+UNDEFINED_POS_SIZE = (0, 0)
+
+
+class EditableShape(metaclass=ABCMeta):
+    """
+    This abstract EditableShape class forms the base for a series of classes that
+    refer to shape tools like rectangle, ellipse, polygon and their functionality.
+
+    """
+
+    def __init__(self, cnvs):
+        """:param: cnvs: canvas passed by the shape's overlay and used to draw the shapes."""
+        # States if the shape is selected
+        # The VA's value should always be set using _set_value(selected, must_notify=True)
+        # method because the points and/or coordinates should always be updated id the shape
+        # was selected
+        self.selected = model.BooleanVA(True)
+        # list of nested points (y, x) representing the shape and whose value will be used
+        # during ROA acquisition
+        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
+        self.points = model.ListVA()
+        # Any shape can be represented by a bounding box and the coordinates (l, t, r, b) are
+        # stored here
+        self.coordinates = model.TupleVA(UNDEFINED_ROI)
+        self._points = []
+        # The position of shape i.e. the center of the shape's bounding box
+        self.position = model.TupleVA(UNDEFINED_POS_SIZE)
+        # The size of the shape's bounding box
+        self.size = model.TupleVA(UNDEFINED_POS_SIZE)
+        self.cnvs = cnvs
+        self.selected.subscribe(self._on_selected)
+        self.coordinates.subscribe(self._on_coordinates)
+
+    def _on_selected(self, selected):
+        """
+        Callback for selected VA. Override this method in the shape's overlay if one does
+        not want to set the points and/or coordinates value.
+
+        """
+        if selected:
+            self.points.value = [(y, x) for x, y in self._points]
+            self.coordinates.value = util.get_polygon_bbox(self._points)
+
+    def _on_coordinates(self, coordinates):
+        """
+        Callback for coordinates VA. Override this method in the shape's overlay if one does
+        not want to set the position and/or size value.
+
+        """
+        self.position.value = (
+            (coordinates[0] + coordinates[2]) / 2,
+            (coordinates[1] + coordinates[3]) / 2,
+        )
+        self.size.value = (
+            abs(coordinates[0] - coordinates[2]),
+            abs(coordinates[1] - coordinates[3]),
+        )
+
+    @abstractmethod
+    def is_point_in_shape(self, point) -> bool:
+        """
+        Determine if the point is in the shape.
+
+        :param: point: (tuple) The point in physical coordinates.
+
+        :returns: (bool) whether the point is inside the shape or not.
+
+        """
+        pass
+
+    @abstractmethod
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        """Draw the tool to given context."""
+        pass
 
 
 class ShapesOverlay(WorldOverlay):
@@ -34,9 +109,7 @@ class ShapesOverlay(WorldOverlay):
     It can handle multiple shapes.
     """
 
-    def __init__(
-        self, cnvs, shape_cls: Union[EllipseOverlay, RectangleOverlay], tool=None, tool_va=None
-    ):
+    def __init__(self, cnvs, shape_cls: EditableShape, tool=None, tool_va=None):
         """
         cnvs: canvas for the overlay.
         tool_va (None or VA of value TOOL_TOOL_RECTANGLE, TOOL_ELLIPSE): New shapes can be
@@ -101,7 +174,7 @@ class ShapesOverlay(WorldOverlay):
         if self._shapes:
             pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
             for shape in self._shapes[::-1]:
-                if shape.is_point_in_overlay(pos):
+                if shape.is_point_in_shape(pos):
                     return shape
         return None
 

@@ -25,41 +25,14 @@ import math
 import cairo
 import wx
 
-from odemis import model, util
 import odemis.gui as gui
 from odemis.gui.comp.overlay.base import LineEditingMixin, Vec, WorldOverlay
+from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
 from odemis.util.raster import point_in_polygon
 
 
-class Polygon(object):
-    """A class which contains important attributes that represent a polygon."""
-
-    def __init__(self):
-        self.points = model.ListVA()
-        self.position = model.TupleVA((0, 0))
-        self.size = model.TupleVA((0, 0))
-        self.points.subscribe(self._on_points, init=True)
-
-    def _on_points(self, points):
-        """
-        Update the overlay with the new data of the .points VA.
-        :param: points: list of (y, x)
-        """
-        if len(points) >= 3:
-            ymin, xmin, ymax, xmax = util.get_polygon_bbox(points)
-            coordinates = (xmin, ymin, xmax, ymax)
-            self.position.value = (
-                (coordinates[0] + coordinates[2]) / 2,
-                (coordinates[1] + coordinates[3]) / 2,
-            )
-            self.size.value = (
-                abs(coordinates[0] - coordinates[2]),
-                abs(coordinates[1] - coordinates[3]),
-            )
-
-
-class PolygonOverlay(WorldOverlay, LineEditingMixin, Polygon):
+class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
     """Overlay representing one polygon."""
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
@@ -69,9 +42,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, Polygon):
         """
         WorldOverlay.__init__(self, cnvs)
         LineEditingMixin.__init__(self, colour)
-        Polygon.__init__(self)
-        self.selected = model.BooleanVA(True)
-        self.p_points = []
+        EditableShape.__init__(self, cnvs)
 
         self._label = self.add_label("", colour=self.colour, align=wx.ALIGN_CENTRE_HORIZONTAL)
         self.v_point.subscribe(self._on_v_point)
@@ -80,28 +51,22 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, Polygon):
         """Callback for a new value v_point in ClickMixin."""
         offset = self.cnvs.get_half_buffer_size()
         p_point = Vec(self.cnvs.view_to_phys(point, offset))
-        self.p_points.append(p_point)
+        self._points.append(p_point)
 
     def _view_to_phys(self):
-        if len(self.v_points) == len(self.p_points):
+        if len(self.v_points) == len(self._points):
             offset = self.cnvs.get_half_buffer_size()
             for idx, point in enumerate(self.v_points):
-                self.p_points[idx] = Vec(self.cnvs.view_to_phys(point, offset))
+                self._points[idx] = Vec(self.cnvs.view_to_phys(point, offset))
 
     def _phys_to_view(self):
-        if len(self.p_points) == len(self.v_points):
+        if len(self._points) == len(self.v_points):
             offset = self.cnvs.get_half_buffer_size()
-            for idx, point in enumerate(self.p_points):
+            for idx, point in enumerate(self._points):
                 self.v_points[idx] = Vec(self.cnvs.phys_to_view(point, offset))
 
-    def is_point_in_overlay(self, point):
-        """Determine if the point is in the overlay.
-
-        :param: point: (tuple) The point in physical coordinates.
-
-        :returns: (bool) whether the point is inside the overlay or not.
-        """
-        return point_in_polygon(point, self.p_points)
+    def is_point_in_shape(self, point):
+        return point_in_polygon(point, self._points)
 
     def on_left_down(self, evt):
         if self.active.value and self.selected.value:
@@ -117,10 +82,8 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, Polygon):
                 self._phys_to_view()
                 offset = self.cnvs.get_half_buffer_size()
                 p_point = Vec(self.cnvs.view_to_phys(evt.Position, offset))
-                self.selected.value = self.is_point_in_overlay(p_point)
-                if self.selected.value:
-                    # fastem.acq.get_poly_field_indices expects list of nested tuples (y, x)
-                    self.points.value = [(y, x) for x, y in self.p_points]
+                selected = self.is_point_in_shape(p_point)
+                self.selected._set_value(selected, must_notify=True)
             self.cnvs.update_drawing()
         WorldOverlay.on_left_up(self, evt)
 
@@ -135,12 +98,12 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, Polygon):
         if self.active.value:
             LineEditingMixin._on_right_up(self, evt)
             self._view_to_phys()
-            if len(self.p_points) <= 2:
+            if len(self._points) <= 2:
                 logging.warning("Cannot create a polygon for less than 3 points.")
                 self.reset_click_mixin()
-                self.p_points.clear()
-            # fastem.acq.get_poly_field_indices expects list of nested tuples (y, x)
-            self.points.value = [(y, x) for x, y in self.p_points]
+                self._points.clear()
+            # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
+            self.points.value = [(y, x) for x, y in self._points]
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_right_up(self, evt)
@@ -175,7 +138,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, Polygon):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4, dash=True):
         """Draw the selection as a polygon"""
-        if self.p_points:
+        if self._points:
             offset = self.cnvs.get_half_buffer_size()
 
             # draws the dotted line
@@ -188,7 +151,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, Polygon):
 
             # draw the polygon
             shiftscale = (shift[0], shift[1], scale)
-            for idx, point in enumerate(self.p_points):
+            for idx, point in enumerate(self._points):
                 b_pos = self.cnvs.phys_to_buffer(point, offset)
                 self.update_projection(idx, b_pos, shiftscale)
                 if idx == 0:
@@ -200,7 +163,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, Polygon):
             # if the polygon creation is not finished in ClickMixin
             if not self.finished_click_mixin:
                 # draw the line to current position of the cursor
-                p_last_point = self.p_points[-1]
+                p_last_point = self._points[-1]
                 b_last_point = self.cnvs.phys_to_buffer(p_last_point, offset)
                 p_current_pos = self.cnvs.view_to_phys(self.v_pos, offset)
                 b_current_pos = self.cnvs.phys_to_buffer(p_current_pos, offset)

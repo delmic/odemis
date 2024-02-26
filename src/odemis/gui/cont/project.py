@@ -207,19 +207,17 @@ class FastEMProjectController(object):
         self.roa_ctrls[roa_ctrl] = num
         sub_callback = partial(self._add_roa_ctrl, roa_ctrl=roa_ctrl)
         self._roa_coord_sub_callback[roa_ctrl] = sub_callback
-        roa_ctrl.model.coordinates.subscribe(sub_callback)
+        roa_ctrl.model.points.subscribe(sub_callback)
 
     # already running in main GUI thread as it receives event from GUI
     def _on_btn_remove(self, _, roa_ctrl):
         self.remove_roa_ctrl(roa_ctrl)
 
-    def _add_roa_ctrl(self, coords, roa_ctrl):
-        roa_ctrl.model.coordinates.unsubscribe(self._roa_coord_sub_callback[roa_ctrl])
+    def _add_roa_ctrl(self, points, roa_ctrl):
+        roa_ctrl.model.points.unsubscribe(self._roa_coord_sub_callback[roa_ctrl])
 
         # Abort ROA creation if nothing was selected
-        if (isinstance(coords, tuple) and coords == acqstream.UNDEFINED_ROI) or (
-            isinstance(coords, list) and len(coords) == 0
-        ):
+        if len(points) == 0:
             logging.debug("Aborting ROA creation.")
             self._viewport.canvas.remove_overlay(roa_ctrl.overlay)
             del self.roa_ctrls[roa_ctrl]
@@ -294,10 +292,7 @@ class FastEMROAController(object):
 
         self.overlay = overlay
         self.overlay.colour = conversion.hex_to_frgba(colour)
-        if hasattr(self.overlay, "points"):
-            self.overlay.points.subscribe(self._on_coordinates)
-        elif hasattr(self.overlay, "coordinates"):
-            self.overlay.coordinates.subscribe(self._on_coordinates)
+        self.overlay.points.subscribe(self._on_points)
         self.overlay.selected.subscribe(self._on_overlay_selected)
         self.overlay.position.subscribe(self._find_closest_scintillator)
 
@@ -327,9 +322,9 @@ class FastEMROAController(object):
                 logging.debug("Deselected ROA '%s'.", self.model.name.value)
                 self.panel.deactivate()
 
-    def _on_coordinates(self, coords):
+    def _on_points(self, points):
         """Assign the overlay coordinates value to ROA model's coordinates"""
-        self.model.coordinates.value = coords
+        self.model.points.value = points
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_roc(self, roc):

@@ -23,59 +23,14 @@ import wx
 
 import odemis.gui as gui
 import odemis.util.units as units
-from odemis import model, util
+from odemis import util
 from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.overlay.base import SEL_MODE_NONE, DragMixin, Vec, WorldOverlay
+from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
-import odemis.acq.stream as acqstream
-
-UNDEFINED_REC_POS_SIZE = (0, 0)
 
 
-class Rectangle(object):
-    """A class which contains important attributes that represent a rectangle."""
-
-    def __init__(self, range=((-1, -1, -1, -1), (1, 1, 1, 1)), unit="m", cls=(int, float)):
-        """
-        range (2 tuples of len 4):
-            The first tuple contains the minimum values corresponding to l, t, r, b respectively,
-            the second tuple contains the maximum values corresponding to l, t, r, b respectively,
-            where l, t, r, b stands for left (xmin), top (ymin), right (xmax), bottom (ymax)
-            of the rectangle
-        unit (str): a SI unit in which the coordinates VA is expressed
-        cls (class or list of classes): classes allowed for each element of coordinates
-          default to the same class as the first element
-        """
-        self.coordinates = model.TupleContinuous(
-            acqstream.UNDEFINED_ROI,
-            range=range,
-            unit=unit,
-            cls=cls,
-        )
-        # Minimum values for position
-        pos_xmin = (range[0][0] + range[0][2]) / 2
-        pos_ymin = (range[0][1] + range[0][3]) / 2
-        # Maximum values for position
-        pos_xmax = (range[1][0] + range[1][2]) / 2
-        pos_ymax = (range[1][1] + range[1][3]) / 2
-        self.position = model.TupleContinuous(
-            UNDEFINED_REC_POS_SIZE,
-            range=((pos_xmin, pos_ymin), (pos_xmax, pos_ymax)),
-            cls=cls,
-            unit=unit,
-        )
-        # Maximum values for size
-        size_xmax = abs(range[0][0] - range[1][0])
-        size_ymax = abs(range[0][1] - range[1][1])
-        self.size = model.TupleContinuous(
-            UNDEFINED_REC_POS_SIZE,
-            range=(UNDEFINED_REC_POS_SIZE, (size_xmax, size_ymax)),
-            cls=cls,
-            unit=unit,
-        )
-
-
-class RectangleSelectOverlay(Rectangle, WorldSelectOverlay):
+class RectangleSelectOverlay(EditableShape, WorldSelectOverlay):
     """Superclass for a rectangle selection overlay."""
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
@@ -83,26 +38,24 @@ class RectangleSelectOverlay(Rectangle, WorldSelectOverlay):
         cnvs: canvas for the overlay
         colour (str): border colour of overlay, given as string of hex code
         """
-        Rectangle.__init__(self)
+        EditableShape.__init__(self, cnvs)
         WorldSelectOverlay.__init__(self, cnvs, colour)
-        self.coordinates.subscribe(self._on_coordinates, init=True)
+        self.coordinates.subscribe(self._on_coordinates_rec, init=True)
 
-    def _on_coordinates(self, coordinates):
+    def is_point_in_shape(self, point):
+        return util.is_point_in_rect(point, self.coordinates.value)
+
+    def _on_coordinates_rec(self, coordinates):
         """
         Update the overlay with the new data of the .coordinates VA.
         coordinates (tuple of 4 floats): left, top, right, bottom position in m
         """
         if coordinates != UNDEFINED_ROI:
             self.set_physical_sel(coordinates)
-            self.position.value = (
-                (coordinates[0] + coordinates[2]) / 2,
-                (coordinates[1] + coordinates[3]) / 2,
-            )
-            self.size.value = (
-                abs(coordinates[0] - coordinates[2]),
-                abs(coordinates[1] - coordinates[3]),
-            )
             wx.CallAfter(self.cnvs.request_drawing_update)
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        return super().draw(ctx, shift, scale)
 
 
 class RectangleOverlay(RectangleSelectOverlay):
@@ -114,17 +67,6 @@ class RectangleOverlay(RectangleSelectOverlay):
         colour (str): hex colour code for the rectangle
         """
         super().__init__(cnvs, colour)
-        # VA which states if the reactangle is selected
-        self.selected = model.BooleanVA(True)
-
-    def is_point_in_overlay(self, point):
-        """Determine if the point is in the overlay.
-
-        :param: point: (tuple) The point in physical coordinates.
-
-        :returns: (bool) whether the point is inside the overlay or not.
-        """
-        return util.is_point_in_rect(point, self.coordinates.value)
 
     def on_left_down(self, evt):
         """
@@ -175,10 +117,10 @@ class RectangleOverlay(RectangleSelectOverlay):
                 rect = self.get_physical_sel()
                 if rect:
                     pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-                    self.selected.value = util.is_point_in_rect(pos, rect)
-                    # Update .coordinates VA
-                    if self.selected.value:
-                        self.coordinates.value = rect
+                    xmin, ymin, xmax, ymax = rect
+                    self._points = [(xmin, ymin), (xmin, ymax), (xmax, ymin), (xmax, ymax)]
+                    selected = util.is_point_in_rect(pos, rect)
+                    self.selected._set_value(selected, must_notify=True)
 
             # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
             # that we need
@@ -225,4 +167,4 @@ class RectangleOverlay(RectangleSelectOverlay):
             self.position_label.background = (0.7, 0.7, 0.7, 0.8)  # background grey
             self._write_labels(ctx)
 
-        super().draw(ctx, shift, scale, line_width, dash=True)
+        WorldSelectOverlay.draw(self, ctx, shift, scale, line_width, dash=True)

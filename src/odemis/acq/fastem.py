@@ -116,7 +116,7 @@ class FastEMROA(object):
             overlap by 20%. By default, the overlap is 0.06, this means there is 6% overlap between the fields.
         """
         self.name = model.StringVA(name)
-        self.coordinates = model.VigilantAttribute(None)
+        self.points = model.ListVA()
         self.roc_2 = model.VigilantAttribute(roc_2)
         self.roc_3 = model.VigilantAttribute(roc_3)
         self._asm = asm
@@ -128,19 +128,17 @@ class FastEMROA(object):
         # Automatically updated when the coordinates change.
         self.field_indices = []
         self.overlap = overlap
-        self.coordinates.subscribe(self.on_coordinates, init=True)
+        self.points.subscribe(self.on_points, init=True)
 
         # TODO need to check if megafield already exists, otherwise overwritten, subscribe whenever name is changed,
         #  it should be checked
 
-    def on_coordinates(self, coordinates):
-        """Recalculate the field indices when the coordinates of the region of acquisition (ROA) have changed
+    def on_points(self, points):
+        """Recalculate the field indices when the points of the region of acquisition (ROA) have changed
         (e.g. resize, moving).
-        :param coordinates: (float, float, float, float) xmin, ymin, xmax, ymax
-                            Bounding box coordinates of the ROA in [m]. The coordinates are in the sample carrier
-                            coordinate system, which corresponds to the component with role='stage'.
+        :param points: list of nested points (y, x) representing the shape in physical coordinates.
         """
-        self.field_indices = self._calculate_field_indices(coordinates)
+        self.field_indices = self._calculate_field_indices(points)
 
     def estimate_acquisition_time(self):
         """
@@ -152,15 +150,10 @@ class FastEMROA(object):
 
         return tot_time
 
-    def _calculate_field_indices(self, coordinates):
+    def _calculate_field_indices(self, points):
         indices = []
-        if coordinates:
-            # Rectangle (l, t, r, b)
-            if isinstance(coordinates, tuple):
-                indices = self.get_square_field_indices(coordinates)
-            # Ellipse or polygon points List[(y, x)]
-            elif isinstance(coordinates, list):
-                indices = self.get_poly_field_indices(coordinates.copy())
+        if points:
+            indices = self.get_poly_field_indices(points.copy())
         return indices
 
     def get_square_field_indices(self, coordinates):
@@ -780,13 +773,8 @@ class AcquisitionTask(object):
 
         # Get the coordinate of the top left corner of the ROA, this corresponds to the (xmin, ymax) coordinate in the
         # role='stage' coordinate system.
-        coordinates = self._roa.coordinates.value
-        # Rectangle (l, t, r, b)
-        if isinstance(coordinates, tuple):
-            xmin_roa, _, _, ymax_roa = coordinates
-        # Ellipse or polygon points List[(y, x)]
-        elif isinstance(coordinates, list):
-            _, xmin_roa, ymax_roa, _ = util.get_polygon_bbox(coordinates.copy())
+        points = self._roa.points.value
+        _, xmin_roa, ymax_roa, _ = util.get_polygon_bbox(points.copy())
 
         # Transform from stage to scan-stage coordinate system
         rot_cor = self._stage_scan.getMetadata()[model.MD_ROTATION_COR]

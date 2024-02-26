@@ -27,6 +27,7 @@ import logging
 from typing import List, Union
 import wx
 
+from odemis import util
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.plugin import Plugin
 
@@ -157,19 +158,27 @@ class ImportExportROAPlugin(Plugin):
                     float(roa[CSVFieldnames.ROC_3_COORDINATES_B.value]),
                 )
                 project_ctrl.regions_calib_2.value[int(roc_2_name)].name.value = roc_2_name
-                project_ctrl.regions_calib_2.value[
-                    int(roc_2_name)
-                ].coordinates.value = roc_2_coordinates
+                project_ctrl.regions_calib_2.value[int(roc_2_name)].coordinates.value = (
+                    roc_2_coordinates
+                )
                 project_ctrl.regions_calib_3.value[int(roc_3_name)].name.value = roc_3_name
-                project_ctrl.regions_calib_3.value[
-                    int(roc_3_name)
-                ].coordinates.value = roc_3_coordinates
+                project_ctrl.regions_calib_3.value[int(roc_3_name)].coordinates.value = (
+                    roc_3_coordinates
+                )
                 # Create and add a rectangle overlay
                 rectangle_overlay = RectangleOverlay(self._cnvs)
                 self._cnvs.add_world_overlay(rectangle_overlay)
                 rectangle_overlay.active.value = True
                 project_ctrl.add_roa(rectangle_overlay, name=roa_name)
                 # Finally assign the rectangle coordinates value to draw it
+                # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
+                points = [
+                    (roa_coordinates[1], roa_coordinates[0]),  # ymin, xmin
+                    (roa_coordinates[1], roa_coordinates[2]),  # ymin, xmax
+                    (roa_coordinates[3], roa_coordinates[0]),  # ymax, xmin
+                    (roa_coordinates[3], roa_coordinates[2]),  # ymax, xmax
+                ]
+                rectangle_overlay.points.value = points
                 rectangle_overlay.coordinates.value = roa_coordinates
             self._cnvs.reset_default_cursor()
 
@@ -193,7 +202,9 @@ class ImportExportROAPlugin(Plugin):
                 roas = project_ctrl.model.roas.value
                 for roa in roas:
                     data[CSVFieldnames.ROA_NAME.value] = roa.name.value
-                    roa_coordinates = roa.coordinates.value
+                    points = [(x, y) for y, x in roa.points.value]
+                    # Convert points to coordinates (xmin, ymin, xmax, ymax) or (l, t, r, b)
+                    roa_coordinates = util.get_polygon_bbox(points)
                     data[CSVFieldnames.ROA_COORDINATES_L.value] = roa_coordinates[0]
                     data[CSVFieldnames.ROA_COORDINATES_T.value] = roa_coordinates[1]
                     data[CSVFieldnames.ROA_COORDINATES_R.value] = roa_coordinates[2]

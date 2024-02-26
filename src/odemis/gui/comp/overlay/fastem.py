@@ -21,14 +21,12 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-
-import logging
-
 import odemis.gui as gui
-from odemis import model, util
+from odemis import util
 from odemis.gui.comp.overlay.base import (SEL_MODE_NONE, SEL_MODE_DRAG,
                                           DragMixin, Vec, WorldOverlay)
 from odemis.gui.comp.overlay.rectangle import RectangleSelectOverlay
+from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
 
 
 class FastEMROCOverlay(RectangleSelectOverlay):
@@ -44,8 +42,6 @@ class FastEMROCOverlay(RectangleSelectOverlay):
         super().__init__(cnvs, colour)
         self.label = label
         self._sample_bbox = sample_bbox
-        # VA which states if the ROC is selected
-        self.selected = model.BooleanVA(False)
 
     def on_left_down(self, evt):
         """
@@ -78,12 +74,10 @@ class FastEMROCOverlay(RectangleSelectOverlay):
                 # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
                 # the rectangle if the selection is near (based on mpp value, so independent of scale).
                 margin = self.cnvs.view.mpp.value * 20
-                self.selected.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or (self.selection_mode == SEL_MODE_DRAG)
-
-                # Set new ROC coordinates
-                if self.selected.value:
-                    logging.debug("Setting ROC '%s' coordinates to %s.", self.label, rect)
-                    self.coordinates.value = rect
+                xmin, ymin, xmax, ymax = rect
+                self._points = [(xmin, ymin), (xmin, ymax), (xmax, ymin), (xmax, ymax)]
+                selected = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or (self.selection_mode == SEL_MODE_DRAG)
+                self.selected._set_value(selected, must_notify=True)
 
             # Stop dragging
             # Don't use SelectionMixin._on_left_up, there is some confusion with editing the size of the region, which is
@@ -137,7 +131,7 @@ class FastEMROCOverlay(RectangleSelectOverlay):
         Draw with adaptive line width (depending on whether or not the overlay is active and enabled) and add label.
         """
         line_width = 5 if (self.active.value and self.selected.value) else 2
-        super(FastEMROCOverlay, self).draw(ctx, shift, scale, line_width, dash=False)
+        WorldSelectOverlay.draw(self, ctx, shift, scale, line_width, dash=False)
 
         # Draw the label of the ROC on the bottom left of the rectangle
         if self.p_start_pos and self.p_end_pos:
