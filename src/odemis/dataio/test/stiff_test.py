@@ -9,15 +9,15 @@ Copyright © 2015 Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
@@ -297,7 +297,7 @@ class TestTiffIO(unittest.TestCase):
         lin.shape = (size3d[2], 1, 1) # to be able to copy it on the first dim
         data3d[:] = lin
         # introduce Time and Z dimension to state the 3rd dim is channel
-        data3d = data3d[:, numpy.newaxis, numpy.newaxis,:,:] 
+        data3d = data3d[:, numpy.newaxis, numpy.newaxis,:,:]
         ldata.append(model.DataArray(data3d, metadata3d))
 
         # an additional 2D data, for the sake of it
@@ -622,7 +622,7 @@ class TestTiffIO(unittest.TestCase):
     def testReadMDFluo(self):
         """
         Checks that we can read back the metadata of a fluoresence image
-        The OME-TIFF file will contain just one big array, but three arrays 
+        The OME-TIFF file will contain just one big array, but three arrays
         should be read back with the right data.
         """
         metadata = [{model.MD_SW_VERSION: "1.0-test",

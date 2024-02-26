@@ -20,7 +20,6 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-from past.builtins import long
 from builtins import str
 import logging
 import numpy
@@ -62,7 +61,7 @@ class VigilantAttributeTest(unittest.TestCase):
 
         self.assertTrue(prop.value == 0)
         self.assertTrue(self.called == 2)
-        
+
     def test_del(self):
         """
         Test that the VA is properly deleted.
@@ -398,7 +397,7 @@ class VigilantAttributeTest(unittest.TestCase):
         """
         Test ListContinuous behavior
         """
-        va = model.ListContinuous([0.1, 10, .5], ((-1.3, 9, 0), (100., 150., 1.)), cls=(int, long, float))
+        va = model.ListContinuous([0.1, 10, .5], ((-1.3, 9, 0), (100., 150., 1.)), cls=(int, float))
         self.assertEqual(va.value, [0.1, 10, .5])
         self.assertEqual(va.range, ((-1.3, 9, 0), (100., 150., 1.)))
 
@@ -418,7 +417,7 @@ class VigilantAttributeTest(unittest.TestCase):
         TupleContinuous
         """
 
-        va = model.TupleContinuous((0.1, 10, .5), ((-1.3, 9, 0), (100., 150., 1.)), cls=(int, long, float))
+        va = model.TupleContinuous((0.1, 10, .5), ((-1.3, 9, 0), (100., 150., 1.)), cls=(int, float))
         self.assertEqual(va.value, (0.1, 10, .5))
         self.assertEqual(va.range, ((-1.3, 9, 0), (100., 150., 1.)))
 
@@ -441,7 +440,7 @@ class VigilantAttributeTest(unittest.TestCase):
 
         # Test creating a VA with value out of range
         with self.assertRaises(IndexError):
-            va = model.TupleContinuous((0.1, 10), ((-1.3, 12), (100., 150.)), cls=(int, long, float))
+            va = model.TupleContinuous((0.1, 10), ((-1.3, 12), (100., 150.)), cls=(int, float))
 
     def test_tuple(self):
         """

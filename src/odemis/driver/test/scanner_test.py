@@ -268,7 +268,7 @@ class TestDetector(unittest.TestCase):
         # Make sure no data is acquired until we ask for it
         time.sleep(2 + expected_duration * 1.1)
         self.assertEqual(self.left, 3)
-        
+
         # Send triggers
         for i in range(3):
             self.detector.softwareTrigger.notify()

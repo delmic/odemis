@@ -982,10 +982,10 @@ class Sparc2ExtSpecPathTestCase(unittest.TestCase):
 
 class Sparc2FourSpecPathTestCase(unittest.TestCase):
     """
-    Tests to be run with a (simulated) SPARC2 with 2 spectrometers on the 
+    Tests to be run with a (simulated) SPARC2 with 2 spectrometers on the
     "integrated" spectrograph and 2 spectrometers on a spectrograph connected
     via an optical fiber. In addition to check the handling of multiple external
-    spectrometers, it also tests the detectors with numbered roles (eg, spectrometer2) 
+    spectrometers, it also tests the detectors with numbered roles (eg, spectrometer2)
     """
     @classmethod
     def setUpClass(cls):

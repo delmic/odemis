@@ -244,4 +244,3 @@ class DPSS(model.PowerSupplier):
             raise HwError("Failed to find a Cobolt device on ports '%s'. "
                           "Check that the device is turned on and connected to "
                           "the computer." % (ports,))
-

@@ -4475,4 +4475,3 @@ class FakeBus(Bus):
     @classmethod
     def _scanIPMasters(cls):
         return []  # Nothing
-

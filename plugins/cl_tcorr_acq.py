@@ -36,7 +36,6 @@ from odemis.gui.conf import get_acqui_conf
 from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.util import executeAsyncTask
 import os.path
-from past.builtins import long
 import threading
 import time
 
@@ -48,7 +47,7 @@ import odemis.util.driver as udriver
 # be handled automatically by the Odemis acquisition manager.
 class CorrelatorScanStream(stream.Stream):
     """
-    Stream that allows to acquire a 2D spatial map with the time correlator for lifetime mapping or g(2) mapping 
+    Stream that allows to acquire a 2D spatial map with the time correlator for lifetime mapping or g(2) mapping
     """
     def __init__(self, name, detector, sed, emitter, opm=None):
         """
@@ -79,15 +78,15 @@ class CorrelatorScanStream(stream.Stream):
         #Sync Offset time correlator
         self.syncOffset = self._detector.syncOffset
         #Sync Divider time correlator
-        self.syncDiv = self._detector.syncDiv 
-        
+        self.syncDiv = self._detector.syncDiv
+
         # Distance between the center of each pixel
         self.stepsize = model.FloatContinuous(1e-6, (1e-9, 1e-4), unit="m")
 
         # Region of acquisition. ROI form is LEFT Top RIGHT Bottom, relative to full field size
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
+                                         cls=(int, float))
 
         # Cropvalue that  can be used to crop the data for better visualization in odemis
         self.cropvalue = model.IntContinuous(1024, (1, 65536), unit="px")
@@ -95,7 +94,7 @@ class CorrelatorScanStream(stream.Stream):
         # For drift correction
         self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
                                               range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                              cls=(int, long, float))
+                                              cls=(int, float))
         self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
                                                  range=emitter.dwellTime.range, unit="s")
         #number of drift corrections per scanning pixel
@@ -459,7 +458,7 @@ class CorrelatorScanStream(stream.Stream):
         """
         Compute the X and Y positions of the ebeam
         roi (0<=4 floats<=1): ltrb of the ROI
-        pxs (float): distance between each pixel (in m, in both directions) 
+        pxs (float): distance between each pixel (in m, in both directions)
         return (list of Y*X tuples of 2 floats) positions in the ebeam coordinates
                (X, Y) in SEM referential for each spot to be scanned.
         """

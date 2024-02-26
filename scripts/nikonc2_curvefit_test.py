@@ -71,7 +71,7 @@ def main(args):
     options = parser.parse_args(args[1:])
 
     filenames = options.filenames
-    
+
     data = collections.defaultdict(dict)  # res -> zoom -> td > s
 
     for filename in filenames:
@@ -126,7 +126,7 @@ def main(args):
     """
     n = 50
 
-    
+
     xdata = np.linspace(1, 50, n)
     ydata = np.linspace(0.00000096, 0.00004, n)
     zdata = np.empty((n, n))
@@ -165,10 +165,10 @@ def main(args):
 
 def s_of_z_td(zoom, td, calib):
     """
-    
+
     calib: dict of float -> [a, b, c] where the float is a Zoom level
     """
-    
+
     try:
         popt = calib[zoom]
         return arctan_func(td, *popt)

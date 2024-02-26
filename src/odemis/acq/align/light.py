@@ -33,7 +33,7 @@ def turnOnLight(bl, ccd):
     bl (Light): the light, which should initially be turned off.
     ccd (DigitalCamera): detector to use to check for the signal
     returns (CancellableFuture): a future that will finish when a significant
-      signal increase is detected. Can also be used to stop the procedure. 
+      signal increase is detected. Can also be used to stop the procedure.
     """
     f = CancellableFuture()
     f.task_canceller = _cancelTurnOnLight

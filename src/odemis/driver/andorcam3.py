@@ -8,15 +8,15 @@ Copyright © 2012-2016 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 # Note that in Linux the SDK 3.7 32 bits still has problem with the Zyla CL.
@@ -25,7 +25,6 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # * limit the memory to about 3G. For example add highmem=3500M to the kernel
 #   command line (in /etc/default/grub)
 
-from past.builtins import long
 from builtins import str
 import collections
 from ctypes import *
@@ -354,7 +353,6 @@ class AndorCam3(model.DigitalCamera):
             tran_rng = ((-uh_shape[0], -uh_shape[1]),
                         (uh_shape[0], uh_shape[1]))
             self.translation = model.ResolutionVA((0, 0), tran_rng, unit="px",
-                                                  cls=(int, long),
                                                   setter=self._setTranslation)
         else:
             # to keep it simple, provide a translation VA but fixed to 0,0

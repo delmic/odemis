@@ -54,7 +54,6 @@ from odemis.gui.plugin import Plugin, AcquisitionDialog
 from odemis.gui.util import formats_to_wildcards
 from odemis.util import executeAsyncTask
 import os.path
-from past.builtins import long
 import threading
 import time
 import wx
@@ -105,7 +104,7 @@ class SpectralARScanStream(stream.Stream):
                                                unit="s")
         self.emtTranslation = model.TupleContinuous((0, 0),
                                                     range=self._emitter.translation.range,
-                                                    cls=(int, long, float),
+                                                    cls=(int, float),
                                                     unit="px")
 
         # Distance between the center of each pixel
@@ -114,12 +113,12 @@ class SpectralARScanStream(stream.Stream):
         # Region of acquisition. ROI form is LEFT Top RIGHT Bottom, relative to full field size
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float))
+                                         cls=(int, float))
 
         # For drift correction
         self.dcRegion = model.TupleContinuous(UNDEFINED_ROI,
                                               range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                              cls=(int, long, float))
+                                              cls=(int, float))
         self.dcDwellTime = model.FloatContinuous(emitter.dwellTime.range[0],
                                                  range=emitter.dwellTime.range, unit="s")
 
@@ -615,7 +614,7 @@ class SpectralARScanStream(stream.Stream):
         """
         Compute the X and Y positions of the ebeam
         roi (0<=4 floats<=1): ltrb of the ROI
-        pxs (float): distance between each pixel (in m, in both directions) 
+        pxs (float): distance between each pixel (in m, in both directions)
         return (list of Y*X tuples of 2 floats) positions in the ebeam coordinates
                (X, Y) in SEM referential for each spot to be scanned.
         """
@@ -777,7 +776,7 @@ class ARspectral(Plugin):
         }),
         ("roi", {
             "control_type": odemis.gui.CONTROL_NONE, # TODO: CONTROL_READONLY to show it
-        }), 
+        }),
         ("centerWavelength", {
             "control_type": odemis.gui.CONTROL_FLT,  # no slider
         }),
@@ -1097,4 +1096,3 @@ class ARspectral(Plugin):
             exporter.export(fn, das)
 
         dlg.Close()
-

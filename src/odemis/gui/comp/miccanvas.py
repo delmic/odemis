@@ -1281,9 +1281,9 @@ class BarPlotCanvas(canvas.PlotCanvas):
 
         if self.view:
             self.update_thumbnail()
-            
+
 class NavigableBarPlotCanvas(BarPlotCanvas):
-    
+
     """
     A plot canvas that can be navigated by the user.
 
@@ -1353,7 +1353,7 @@ class NavigableBarPlotCanvas(BarPlotCanvas):
         self.data_yrange = range_y
         self.display_xrange = range_x if display_xrange is None else display_xrange
         self.display_yrange = range_y if display_yrange is None else display_yrange
-        
+
         self.refresh_plot()
 
     def clear(self):

@@ -556,4 +556,3 @@ class FastEMCalibrationRegionsController(object):
 
         # update ROC buttons
         self._update_buttons()
-

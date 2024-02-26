@@ -6,7 +6,7 @@ Created on 11 Jun 2014
 
 Copyright © 2013-2014 Kimon Tsitsikas, Delmic
 
-This is a script to test the functionalities included to “AlignSpot” i.e. 
+This is a script to test the functionalities included to “AlignSpot” i.e.
 Autofocus and CenterSpot.
 
 run as:

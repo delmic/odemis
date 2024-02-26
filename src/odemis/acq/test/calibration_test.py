@@ -407,7 +407,7 @@ class TestSpectrum(unittest.TestCase):
         data = numpy.ones((512, 1080, 1, 2, 3), dtype=numpy.uint16)
         wld = numpy.linspace(333e-9, 511e-9, data.shape[0])
         angles = numpy.linspace(-1.1, 1.5, data.shape[1])
-        
+
         # set a few angles as NaN
         for i in [0, 1, -1]:
             angles[i] = math.nan
@@ -435,7 +435,7 @@ class TestSpectrum(unittest.TestCase):
         self.assertFalse(any(math.isnan(x) for x in angles_cal))
         self.assertEqual(calibrated.shape, (512, len(angles_cal) , 1, 2, 3))
         numpy.testing.assert_array_equal(calibrated, 1)
-        
+
         # The original data shouldn't have been changed
         numpy.testing.assert_array_equal(arspec, orig_arspec)
         self.assertEqual(arspec.metadata, orig_md)

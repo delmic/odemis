@@ -405,7 +405,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
             self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
 
     def test_moving_to_grid2_in_sem_imaging_area_after_loading(self):
-        # move the stage to the loading position  
+        # move the stage to the loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
         f.result()
         # move the stage to grid2
@@ -431,12 +431,12 @@ class TestMeteorTFS1Move(unittest.TestCase):
         # now the selected grid is already the grid1
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(GRID_1, current_grid)
-        # move the stage to grid2 
+        # move the stage to grid2
         f = self.posture_manager.cryoSwitchSamplePosition(GRID_2)
         f.result()
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(GRID_2, current_grid)
-        # make sure we are still in sem  imaging area 
+        # make sure we are still in sem  imaging area
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
         sem_angles = self.stage.getMetadata()[model.MD_FAV_SEM_POS_ACTIVE]
@@ -452,7 +452,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
         f.result()
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(SEM_IMAGING, current_imaging_mode)
-        # move the stage to grid2 
+        # move the stage to grid2
         f = self.posture_manager.cryoSwitchSamplePosition(GRID_2)
         f.result()
         current_grid = self.posture_manager.getCurrentGridLabel()
@@ -525,7 +525,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
         f.result()
         current_grid = self.posture_manager.getCurrentGridLabel()
         self.assertEqual(GRID_2, current_grid)
-        # move back to the grid1 
+        # move back to the grid1
         f = self.posture_manager.cryoSwitchSamplePosition(GRID_1)
         f.result()
         current_grid = self.posture_manager.getCurrentGridLabel()
@@ -564,14 +564,14 @@ class TestMeteorTFS1Move(unittest.TestCase):
         self.assertEqual(current_grid, None)
 
     def test_transformFromSEMToMeteor(self):
-        
-        # previously, the transformFromSEMToMeteor function accepted positions without rz axes. 
+
+        # previously, the transformFromSEMToMeteor function accepted positions without rz axes.
         # now, it checks compares the current and target rz axes for the required transformation.
         # the function will now raise an error if both positions don't have rz axes.
-        # 
+        #
         # the grid positions in the metadata of the stage component are defined without rz axes.
-        # and were previously used to check which grid the stage is in (in the flm) (_get_CurrentGridLabel). 
-        # if these are passed without adding the rz axes from the active sem pos, it should raise 
+        # and were previously used to check which grid the stage is in (in the flm) (_get_CurrentGridLabel).
+        # if these are passed without adding the rz axes from the active sem pos, it should raise
         # an error
 
         # assert that raises value error when no rz
@@ -984,19 +984,19 @@ class TestMoveUtil(unittest.TestCase):
         # negative tests (not near)
         start = {'x': 0.023, 'y': 0.032, 'z': 0.01, "rx": 0, "rz": 0}
         end = {'x': 0.024, 'y': 0.033, 'z': 0.015, "rx": 0.12213888553625313  , "rz":  5.06145}
-    
+
         self.assertFalse(isNearPosition(start, end, {'x'}))
-        self.assertFalse(isNearPosition(start, end, {'y'}))    
+        self.assertFalse(isNearPosition(start, end, {'y'}))
         self.assertFalse(isNearPosition(start, end, {'z'}))
         self.assertFalse(isNearPosition(start, end, {'rx'}))
         self.assertFalse(isNearPosition(start, end, {'rz'}))
-        
+
         # positive tests (is near)
         start = {'x': 0.023, 'y': 0.32, 'z': 0.01, "rx": 0, "rz": 0}
         end = {'x': 0.023+0.09e-6, 'y': 0.32+0.09e-6, 'z': 0.01, "rx": 0+0.5e-3, "rz": 0+0.5e-3}
-        
+
         self.assertTrue(isNearPosition(start, end, {'x'}))
-        self.assertTrue(isNearPosition(start, end, {'y'}))    
+        self.assertTrue(isNearPosition(start, end, {'y'}))
         self.assertTrue(isNearPosition(start, end, {'z'}))
         self.assertTrue(isNearPosition(start, end, {'rx'}))
         self.assertTrue(isNearPosition(start, end, {'rz'}))
@@ -1004,14 +1004,14 @@ class TestMoveUtil(unittest.TestCase):
         # test user defined tolerance
         start = {'x': 20e-6, 'y': 0.032, 'z': 0.01, "rx": 0, "rz": 5.043996}
         end = {'x': 22e-6, 'y': 0.06, 'z': 0.015, "rx": 0.12213888553625313  , "rz": 5.06145}
-        
+
         # true
-        self.assertTrue(isNearPosition(start, end, {'x', 'rz'}, 
+        self.assertTrue(isNearPosition(start, end, {'x', 'rz'},
                                        atol_linear=ATOL_LINEAR_TRANSFORM,
                                        atol_rotation=ATOL_ROTATION_TRANSFORM))
 
         # false
-        self.assertFalse(isNearPosition(start, end, {'y', 'rx'}, 
+        self.assertFalse(isNearPosition(start, end, {'y', 'rx'},
                                         atol_linear=ATOL_LINEAR_TRANSFORM,
                                         atol_rotation=ATOL_ROTATION_TRANSFORM))
 

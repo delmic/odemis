@@ -20,7 +20,6 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from past.builtins import long
 from abc import ABCMeta
 import logging
 import math
@@ -170,7 +169,7 @@ class LiveViewGUIData(MicroscopyGUIData):
 
             self.roa = model.TupleContinuous(acqstream.UNDEFINED_ROI,
                                              range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                             cls=(int, long, float))
+                                             cls=(int, float))
 
             # Component to which the (relative) ROIs and spot position refer to for
             # the field-of-view.
@@ -380,7 +379,7 @@ class CryoCorrelationGUIData(CryoGUIData):
 
         # the streams to correlate among all streams in .streams
         self.selected_stream = model.VigilantAttribute(None)
-        
+
         # for export tool
         self.acq_fileinfo = VigilantAttribute(None) # a FileInfo
 

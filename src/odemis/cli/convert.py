@@ -208,7 +208,7 @@ def main(args):
     parser.add_argument("--minus", "-m", dest="minus", action='append',
             help="name of an acquisition file whose data is subtracted from the input file.")
     parser.add_argument("--weaver", "-w", dest="weaver",
-            help="name of weaver to be used during stitching. Options: 'mean': MeanWeaver " 
+            help="name of weaver to be used during stitching. Options: 'mean': MeanWeaver "
             "(blend overlapping regions of adjacent tiles), 'collage': CollageWeaver "
             "(paste tiles as-is at calculated position)", choices=("mean", "collage", "collage_reverse"),
             default='mean')

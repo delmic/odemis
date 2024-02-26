@@ -130,4 +130,3 @@ class CLiCCDPlugin(Plugin):
         sem_cl_stream = SEMCLCCDStream("SEM CLi CCD", [sem_stream, ar_stream])
 
         return stctrl._addRepStream(ar_stream, sem_cl_stream)
-

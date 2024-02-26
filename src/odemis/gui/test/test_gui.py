@@ -688,4 +688,3 @@ def __init_resources():
 
     wx.MemoryFSHandler.AddFile('XRC/test_gui/test_gui_xrc', bytearray(test_gui_xrc.encode('utf-8')))
     __res.Load('memory:XRC/test_gui/test_gui_xrc')
-

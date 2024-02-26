@@ -8,20 +8,19 @@ Copyright © 2014-2016 Kimon Tsitsikas, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 
 import queue
-from past.builtins import long
 import gc
 import logging
 import math
@@ -57,7 +56,7 @@ class SEM(model.HwComponent):
         children (dict string->kwargs): parameters setting for the children.
             Known children are "scanner", "detector", "stage", "focus", "camera"
             and "pressure". They will be provided back in the .children VA
-        host (string): ip address of the SEM server 
+        host (string): ip address of the SEM server
         Raise an exception if the device cannot be opened
         """
         # we will fill the set of children with Components later in ._children
@@ -528,12 +527,12 @@ class SEM(model.HwComponent):
 
 class Scanner(model.Emitter):
     """
-    This is an extension of the model.Emitter class. It contains Vigilant 
+    This is an extension of the model.Emitter class. It contains Vigilant
     Attributes and setters for magnification, pixel size, translation, resolution,
-    scale, rotation and dwell time. Whenever one of these attributes is changed, 
-    its setter also updates another value if needed e.g. when scale is changed, 
-    resolution is updated, when resolution is changed, the translation is recentered 
-    etc. Similarly it subscribes to the VAs of scale and magnification in order 
+    scale, rotation and dwell time. Whenever one of these attributes is changed,
+    its setter also updates another value if needed e.g. when scale is changed,
+    resolution is updated, when resolution is changed, the translation is recentered
+    etc. Similarly it subscribes to the VAs of scale and magnification in order
     to update the pixel size.
     """
     def __init__(self, name, role, parent, fov_range, **kwargs):
@@ -577,7 +576,7 @@ class Scanner(model.Emitter):
         tran_rng = [(-self._shape[0] / 2, -self._shape[1] / 2),
                     (self._shape[0] / 2, self._shape[1] / 2)]
         self.translation = model.TupleContinuous((0, 0), tran_rng,
-                                              cls=(int, long, float), unit="",
+                                              cls=(int, float), unit="",
                                               setter=self._setTranslation)
 
         # .resolution is the number of pixels actually scanned. If it's less than
@@ -592,7 +591,7 @@ class Scanner(model.Emitter):
         # (Default to scan the whole area)
         self._scale = (self._shape[0] / resolution[0], self._shape[1] / resolution[1])
         self.scale = model.TupleContinuous(self._scale, [(1, 1), self._shape],
-                                           cls=(int, long, float),
+                                           cls=(int, float),
                                            unit="", setter=self._setScale)
         self.scale.subscribe(self._onScale, init=True)  # to update metadata
 
@@ -804,7 +803,7 @@ class Scanner(model.Emitter):
 
     def _setResolution(self, value):
         """
-        value (0<int, 0<int): defines the size of the resolution. If the 
+        value (0<int, 0<int): defines the size of the resolution. If the
          resolution is not possible, it will pick the most fitting one. It will
          recenter the translation if otherwise it would be out of the whole
          scanned area.
@@ -895,8 +894,8 @@ class Scanner(model.Emitter):
 # acquisition it sometimes dead-locks or the connection drops.
 class Detector(model.Detector):
     """
-    This is an extension of model.Detector class. It performs the main functionality 
-    of the SEM. It sets up a Dataflow and notifies it every time that an SEM image 
+    This is an extension of model.Detector class. It performs the main functionality
+    of the SEM. It sets up a Dataflow and notifies it every time that an SEM image
     is captured.
     """
     def __init__(self, name, role, parent, channel, detector, **kwargs):
@@ -938,8 +937,8 @@ class Detector(model.Detector):
 
 class SEMDataFlow(model.DataFlow):
     """
-    This is an extension of model.DataFlow. It receives notifications from the 
-    detector component once the SEM output is captured. This is the dataflow to 
+    This is an extension of model.DataFlow. It receives notifications from the
+    detector component once the SEM output is captured. This is the dataflow to
     which the SEM acquisition streams subscribe.
     """
     def __init__(self, detector, sem):
@@ -1220,8 +1219,8 @@ class Stage(model.Actuator):
 class EbeamFocus(model.Actuator):
     """
     This is an extension of the model.Actuator class. It provides functions for
-    adjusting the ebeam focus by changing the working distance i.e. the distance 
-    between the end of the objective and the surface of the observed specimen 
+    adjusting the ebeam focus by changing the working distance i.e. the distance
+    between the end of the objective and the surface of the observed specimen
     """
     def __init__(self, name, role, parent, axes, ranges=None, **kwargs):
         assert len(axes) > 0
@@ -1494,7 +1493,7 @@ class ChamberPressure(model.Actuator):
     def GetStatus(self):
         """
         return int: vacuum status,
-            -1 error 
+            -1 error
             0 ready for operation
             1 pumping in progress
             2 venting in progress
@@ -1575,7 +1574,7 @@ class Light(model.Emitter):
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
         self._shape = ()
-        self.power = model.ListContinuous([10], ((0,), (10,)), unit="W", cls=(int, long, float),
+        self.power = model.ListContinuous([10], ((0,), (10,)), unit="W", cls=(int, float),
                                           setter=self._setPower)
         # turn on when initializing
         self.parent._device.ChamberLed(1)

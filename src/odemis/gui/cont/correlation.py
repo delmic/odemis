@@ -41,7 +41,7 @@ def update_image_in_views(s: StaticStream, views: list) -> None:
     """Force update the static stream in the selected views
     :param s: (StaticStream) the static stream to update
     :param views: (list[View]) the list of views to update"""
-    v: guimod.View 
+    v: guimod.View
     for v in views:
         for sp in v.stream_tree.getProjections():  # stream or projection
             if isinstance(sp, acqstream.DataProjection):
@@ -61,7 +61,7 @@ class CorrelationController(object):
         :param tab: (Tab) the tab which should show the data
         :param viewports: (ViewPorts) the tab view ports
         """
-        
+
         self._tab_data_model = tab_data
         self._main_data_model = tab_data.main
         self._panel = panel
@@ -98,8 +98,8 @@ class CorrelationController(object):
         for vp in self._viewports:
             vp.canvas.Bind(wx.EVT_CHAR, self.on_char)
             vp.canvas.Bind(wx.EVT_LEFT_DOWN, self.on_mouse_down)
-    
-        # localization tab 
+
+        # localization tab
         self.localization_tab: LocalizationTab = None
 
     @call_in_wx_main
@@ -112,11 +112,11 @@ class CorrelationController(object):
             if isinstance(s, self.ref_stream):
                 continue # cant move fluo streams
             self._panel.cmb_correlation_stream.Append(s.name.value, s)
-        
+
         # select the first stream, if available
         if self._panel.cmb_correlation_stream.GetCount() > 0:
             self._panel.cmb_correlation_stream.SetSelection(0)
-    
+
     @call_in_wx_main
     def _on_correlation_streams_change(self, streams: list) -> None:
         """hide/show the correlation panel if there are no streams
@@ -131,7 +131,7 @@ class CorrelationController(object):
         idx = self._panel.cmb_correlation_stream.GetSelection()
         self._tab_data_model.selected_stream.value = self._panel.cmb_correlation_stream.GetClientData(idx)
         logging.debug(f"Selected Stream Changed to {idx}: {self._tab_data_model.selected_stream.value.name.value}")
-    
+
     @call_in_wx_main
     def _on_reference_stream_change(self, evt: wx.Event) -> None:
         """change the reference stream to the one selected in the combo box
@@ -163,8 +163,8 @@ class CorrelationController(object):
         :param streams: (list[StaticStream]) the streams to add"""
 
         # NOTE: we only add streams if they are not already in the correlation tab
-        # we will not remove streams from the correlation tab from outside it, 
-        # as the user may still want to correlate them, 
+        # we will not remove streams from the correlation tab from outside it,
+        # as the user may still want to correlate them,
         # even if they have been removed from another tab, e.g. 'localization'
 
         # add streams to correlation tab
@@ -173,29 +173,29 @@ class CorrelationController(object):
 
             # skip existing streams, live streams
             if s in self._tab_data_model.streams.value or not isinstance(s, StaticStream):
-                continue 
+                continue
 
             # reset the stream correlation data, and add to correlation streams
             self._reset_stream_correlation_data(s)
-            self._tab_data_model.streams.value.append(s)          
-            
+            self._tab_data_model.streams.value.append(s)
+
             # add stream to streambar
             sc = self._tab.streambar_controller.addStream(s, add_to_view=True, play=False)
-            sc.stream_panel.show_remove_btn(True)  
+            sc.stream_panel.show_remove_btn(True)
 
     def add_to_localization_tab(self, streams: list) -> None:
         """add streams to the localization tab
         :param streams: (list[StaticStream]) the streams to add"""
         # NOTE: we only add streams if they are not already in the localization tab
-        # we will not remove streams from the localization tab from outside it, 
-        # as the user may still want to localize them, 
+        # we will not remove streams from the localization tab from outside it,
+        # as the user may still want to localize them,
         # even if they have been removed from another tab, e.g. 'correlation'
         if self.localization_tab is None:
             self.localization_tab: LocalizationTab  = self._main_data_model.getTabByName("cryosecom-localization")
 
         logging.debug(f"Adding {len(streams)} streams to localization tab {streams}")
         for s in streams:
-            # add stream to localizations tab 
+            # add stream to localizations tab
             if s not in self.localization_tab.tab_data_model.streams.value:
                 self.localization_tab.tab_data_model.overviewStreams.value.append(s)
                 self.localization_tab.tab_data_model.streams.value.insert(0, s)
@@ -218,10 +218,10 @@ class CorrelationController(object):
         :param evt: (wx.Event) the event"""
         active_canvas = evt.GetEventObject()
         logging.debug(f"mouse down event, canvas: {active_canvas}")
- 
+
         # check if shift is pressed, and if a stream is selected
         if evt.ShiftDown() and self.correlation_enabled():
-                                    
+
             # get the position of the mouse, convert to physical position
             pos = evt.GetPosition()
             p_pos = active_canvas.view_to_phys(pos, active_canvas.get_half_buffer_size())
@@ -229,10 +229,10 @@ class CorrelationController(object):
 
             # move selected stream to position
             self._move_stream_to_pos(p_pos)
-    
+
         else:
             logging.debug("invalid correlation event, passing event to canvas")
-            active_canvas.on_left_down(evt)       # super event passthrough      
+            active_canvas.on_left_down(evt)       # super event passthrough
 
     def on_char(self, evt: wx.Event) -> None:
         """handle key presses
@@ -251,13 +251,13 @@ class CorrelationController(object):
         # LEFT, RIGHT -> TRANSLATION X
         # UP, DOWN -> TRANSLATION Y
         # SHIFT + LEFT, RIGHT -> ROTATION
-        # SHIFT + UP, DOWN -> SCALE 
+        # SHIFT + UP, DOWN -> SCALE
         ###########################################
         dx, dy, dr, dpx  = 0, 0, 0, 0
 
         # correlation control modifiers
         if shift_mod:
-            dr = math.radians(self._panel.dr_step_cntrl.GetValue()) 
+            dr = math.radians(self._panel.dr_step_cntrl.GetValue())
             dpx = self._panel.dpx_step_cntrl.GetValue() / 100
         else:
             dx = self._panel.dx_step_cntrl.GetValue()
@@ -274,9 +274,9 @@ class CorrelationController(object):
             self._move_stream(0, dy, 0, dpx)
         elif key == wx.WXK_DOWN:
             self._move_stream(0, -dy, 0, -dpx)
-    
+
     def _move_stream(self, dx: float, dy: float , dr: float = 0, dpx: float = 0) -> None:
-        """move the selected stream by the specified amount. the stream is forced 
+        """move the selected stream by the specified amount. the stream is forced
         to update in the views.
         :param dx: (float) the change in x translation (metres)
         :param dy: (float) the change y translation (metres)
@@ -285,9 +285,9 @@ class CorrelationController(object):
         """
         if self._tab_data_model.selected_stream.value is None:
             return
-        
+
         s = self._tab_data_model.selected_stream.value
-    
+
         logging.debug(f"move stream {s.name.value}: {dx}, {dy}, {dr}, {dpx}")
 
         # translation
@@ -302,7 +302,7 @@ class CorrelationController(object):
         # rotation
         rotation = s.raw[0].metadata.get(model.MD_ROTATION_COR, 0)
         s.raw[0].metadata[model.MD_ROTATION_COR] = (rotation + dr)
-        
+
         # scale (pixel size)
         scalecor = s.raw[0].metadata.get(model.MD_PIXEL_SIZE_COR, (1, 1))
         s.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = (scalecor[0] + dpx, scalecor[1] + dpx)
@@ -311,7 +311,7 @@ class CorrelationController(object):
 
         # update the image in the views
         update_image_in_views(s, self._tab_data_model.views.value)
-        
+
         # fit the source viewports to the content, as the image may have moved
         self._panel.vp_correlation_tl.canvas.fit_view_to_content()
         self._panel.vp_correlation_tr.canvas.fit_view_to_content()
@@ -338,32 +338,32 @@ class CorrelationController(object):
             sl.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = s.raw[0].metadata[model.MD_PIXEL_SIZE_COR]
 
             update_image_in_views(s, self.localization_tab.tab_data_model.views.value)
-    
+
     def _move_stream_to_pos(self, pos: tuple) -> None:
         """move the selected stream to the position pos
         :param pos: (tuple) the realspace position to move the stream to (metres)"""
         # the difference between the clicked position, and the position in metadata
         # is the offset (be careful because correlation is sign flipped)
         s = self._tab_data_model.selected_stream.value
-        
+
         # the cur_pos is the realspace position of the image
         p = s.raw[0].metadata[model.MD_POS]
         x, y = p[:2]  # x, y positions only (ignore z)
-        
+
         # the correlation pos is the change in position in the viewer
         cx, cy = s.raw[0].metadata[model.MD_POS_COR]
 
         # the new position is the difference between the clicked position and the realspace position
         # i.e. the correlation position. However, already have an existing correlation position, so we need to
-        # find how much we need to modify this by. 
+        # find how much we need to modify this by.
         nx = -(pos[0] - x)
-        ny = -(pos[1] - y)      
+        ny = -(pos[1] - y)
 
         # the offset is the difference between the current cor position and the new position
         # that is how much we need to move the current correlation position by.
         dx = cx - nx
         dy = cy - ny
-        
+
         logging.debug(f"cur_pos: {x}, {y}, cor_pos: {cx}, {cy}, new_pos: {nx}, {ny}, offset_pos: {dx}, {dy}")
 
         # move the stream using the correlation position offset

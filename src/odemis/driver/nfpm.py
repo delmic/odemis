@@ -308,7 +308,7 @@ class PM8742(model.Actuator):
 
     def IsMotionDone(self, axis):
         """
-        Check whether the axis is in motion 
+        Check whether the axis is in motion
         axis (1<=int<=4): axis number
         return (bool): False if in motion, True if motion is finished
         """
@@ -318,7 +318,7 @@ class PM8742(model.Actuator):
         elif resp == b"1": # no motion
             return True
         else:
-            raise IOError("Failed to decode answer about motion '%s'" % 
+            raise IOError("Failed to decode answer about motion '%s'" %
                           to_str_escape(resp))
 
     def AbortMotion(self):
@@ -337,7 +337,7 @@ class PM8742(model.Actuator):
     def GetError(self):
         """
         Read the oldest error in memory.
-        The error buffer is FIFO with 10 elements, so it might not be the 
+        The error buffer is FIFO with 10 elements, so it might not be the
         latest error if multiple errors have happened since the last time this
         function was called.
         return (None or (int, str)): the error number and message
@@ -574,7 +574,7 @@ class PM8742(model.Actuator):
     def _cancelCurrentMove(self, future):
         """
         Cancels the current move (both absolute or relative). Non-blocking.
-        future (Future): the future to stop. Unused, only one future must be 
+        future (Future): the future to stop. Unused, only one future must be
          running at a time.
         return (bool): True if it successfully cancelled (stopped) the move.
         """

@@ -130,7 +130,7 @@ class Cryolab(model.HwComponent):
             raise IOError("Invalid number of status values: %s " % (values,))
         values = [bool(x) for x in values]
         return values
-    
+
     def sendSetPoint(self, setpoint):
         """
         Set the temperature setpoint of the device
@@ -153,4 +153,3 @@ class Cryolab(model.HwComponent):
         Disconnect from the device
         """
         _ = self._sendQuery(b"DISCONNECT")
-

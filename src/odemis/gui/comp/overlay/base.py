@@ -1501,4 +1501,3 @@ class SpotModeBase(metaclass=ABCMeta):
         ctx.set_source_rgb(r, g, b)
         ctx.arc(x, y, radius, 0, 2 * math.pi)
         ctx.stroke()
-

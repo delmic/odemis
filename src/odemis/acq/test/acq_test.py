@@ -820,7 +820,7 @@ class CRYOSECOMTestCase(unittest.TestCase):
                 zlevels[s] = list(zlevels_list)
 
         est_time = acqmng.estimateZStackAcquisitionTime(self.streams, zlevels)
-        # about 5 seconds for fm streams, and 1 sec for sem stream, so should be 
+        # about 5 seconds for fm streams, and 1 sec for sem stream, so should be
         # greater than or equal 5 sec
         self.assertGreaterEqual(est_time, 4)
 

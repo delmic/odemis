@@ -10,15 +10,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from builtins import range
@@ -243,7 +243,7 @@ class TestActuator(unittest.TestCase):
 #    @skip("faster")
     def test_speed(self):
         """
-        Note: with C-867 open-looped (SMOController), speed is very imprecise,  
+        Note: with C-867 open-looped (SMOController), speed is very imprecise,
         so test failure might not indicate software bug.
         """
         # For moves big enough, a 0.1m/s move should take approximately 100 times less time
@@ -356,7 +356,7 @@ class TestActuator(unittest.TestCase):
 #    @skip("faster")
     def test_queue(self):
         """
-        Note: with C-867 open-looped (SMOController), speed is very imprecise,  
+        Note: with C-867 open-looped (SMOController), speed is very imprecise,
         so test failure might not indicate software bug.
         """
         stage = CLASS(**self.kwargs)

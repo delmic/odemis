@@ -84,17 +84,17 @@ class ExportController(object):
         # Only let Export to be enabled in current tab
         if tab is not None and tab.tab_data_model is self._data_model:
             # rebind menu event
-            self._main_frame.Bind(wx.EVT_MENU, self.on_export, 
+            self._main_frame.Bind(wx.EVT_MENU, self.on_export,
                                   id=self._main_frame.menu_item_export_as.GetId())
-            
+
             self._data_model.focussedView.subscribe(self.on_view_change, init=True)
         else:
             self._data_model.focussedView.unsubscribe(self.on_view_change)
             self._main_frame.menu_item_export_as.Enable(False)
             self._tab_panel.btn_export.Enable(False)
-            
+
             # unbind menu event to avoid multiple calls
-            self._main_frame.Unbind(wx.EVT_MENU, handler=self.on_export, 
+            self._main_frame.Unbind(wx.EVT_MENU, handler=self.on_export,
                                     source=self._main_frame.menu_item_export_as)
 
     def on_view_change(self, view):

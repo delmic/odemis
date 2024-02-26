@@ -8,15 +8,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import collections
@@ -85,13 +85,13 @@ ERROR_COMMAND_NOT_FOUND = 0x01 #01: command not found
 
 class PIRedStone(object):
     '''
-    This represents the bare PI C-170 piezo motor controller (Redstone), the 
+    This represents the bare PI C-170 piezo motor controller (Redstone), the
     information comes from the manual C-170_User_MS133E104.pdf. Note that this
     controller uses only native commands, which are different from the "PI GCS",
-    (general command set). 
-    
+    (general command set).
+
     From the device description:
-    The distance and velocity travelled corresponds to the width, frequency and 
+    The distance and velocity travelled corresponds to the width, frequency and
     number of motor-on pulses. By varying the pulse width, the step length [...]
     the motor velocity can be controlled. As the mechanical environment
     also influences the motion, the size of single steps is not highly
@@ -100,15 +100,15 @@ class PIRedStone(object):
     Miniature-stages can achieve speeds of 500 mm/s and more with minimum
     incremental motion of 50 nm.
     :
-    The smallest step a piezo motor can make is typically on the order of 
+    The smallest step a piezo motor can make is typically on the order of
     0.05 μm and corresponds to a 10 μs pulse (shorter pulses have no effect).
 
-    In practice: if you give a too small duration to a step, it will not move 
+    In practice: if you give a too small duration to a step, it will not move
     at all. In experiments, 40~50µs for duration of a pulse is the minimum that
     moves the axis (of about 1µm). Note that it's not linear:
     50 µs  => 1µm
     255 µs => 8µm
-    
+
     The controller has also many undocumented behaviour (bugs):
         * when doing a burst move at maximum frequency (wait == 0), it cannot be
           stopped
@@ -116,9 +116,9 @@ class PIRedStone(object):
           report status and enter error mode. Only a set command can recover
           it (SR? works).
         * HE returns a string which starts with 2 null characters.
-        
+
     Here are all the commands the controller reports:
-    EM RM RZ TZ TM MD MC YF YN WE CP XF XN TA WF WN CF CN TC SW SS SR SJ SI PP JN JF IW IS IR GP GN CD CA BR HM DM UD DE SO HE FE LH LL LF LN AB WS TD SC TT TP TL TY SD SA SV GH DH MA MR TS CS EN EF TI TB RP WA RT VE 
+    EM RM RZ TZ TM MD MC YF YN WE CP XF XN TA WF WN CF CN TC SW SS SR SJ SI PP JN JF IW IS IR GP GN CD CA BR HM DM UD DE SO HE FE LH LL LF LN AB WS TD SC TT TP TL TY SD SA SV GH DH MA MR TS CS EN EF TI TB RP WA RT VE
     '''
 
     def __init__(self, ser, address=None):
@@ -179,8 +179,8 @@ class PIRedStone(object):
         com (string): the command to send
         prefix (string): the prefix to the report,
             it will be removed from the return value
-        suffix (string): the suffix of the report. Read will continue until it 
-            is found or there is a timeout. It is removed from the return value.  
+        suffix (string): the suffix of the report. Read will continue until it
+            is found or there is a timeout. It is removed from the return value.
         return (string): the report without prefix nor newline
         """
         assert(len(com) <= 10)
@@ -233,7 +233,7 @@ class PIRedStone(object):
     def addressSelection(self, address):
         """
         Send the address selection command over the bus to select the given controller
-        address 0<int<15: the address of the controller as defined by its jumpers 1-4  
+        address 0<int<15: the address of the controller as defined by its jumpers 1-4
         """
         assert((0 <= address) and (address <= 15))
         self._sendSetCommand("\x01%X" % address)
@@ -249,7 +249,7 @@ class PIRedStone(object):
     def tellStatus(self):
         """
         Call the Tell Status command and return the answer.
-        return (2-tuple (status: int, error: int): 
+        return (2-tuple (status: int, error: int):
             * status is a flag based value (cf STATUS_*)
             * error is a number corresponding to the last error (cf ERROR_*)
         """
@@ -310,7 +310,7 @@ class PIRedStone(object):
 
     def setDirection(self, axis, direction):
         """
-        Applies a static direction flag (positive or negative) to the axis. 
+        Applies a static direction flag (positive or negative) to the axis.
         axis (int 0 or 1): the output channel
         direction (int 0 or 1): 0=low(positive) and 1=high(negative)
         """
@@ -394,7 +394,7 @@ class PIRedStone(object):
             commanding a burst move for the given axis.
         axis (int 0 or 1): the output channel
         duration (0<=int<=65535): the wait time (ms), 1 gives the highest output frequency.
-                 warning: duration == 0 => fastest but unabordable during move 
+                 warning: duration == 0 => fastest but unabordable during move
         """
         assert((0 <= axis) and (axis <= 1))
         assert((0 <= duration) and (duration <= 65535))
@@ -490,7 +490,7 @@ class PIRedStone(object):
 
     def isMoving(self, axis=None):
         """
-        Indicate whether the motors are moving. 
+        Indicate whether the motors are moving.
         axis (None, 0, or 1): axis to check whether it is moving, or both if None
         return (boolean): True if moving, False otherwise
         """
@@ -601,7 +601,7 @@ class PIRedStone(object):
         return (2 tuple of (int, int)): number of steps,
                 device units (us), 0 if it's so small that it cannot be done
                     < 0 if going negative
-                                    
+
         """
         # if less than 255 for pulse => one step => use convertSmallMToDevice
         a, b, c = self.move_calibration
@@ -632,7 +632,7 @@ class PIRedStone(object):
 
     def getPosition(self, axis):
         """
-        axis (int 0 or 1): axis to pic  
+        axis (int 0 or 1): axis to pic
         Note: it's very approximate.
         return (float): the current position of the given axis
         """
@@ -641,9 +641,9 @@ class PIRedStone(object):
 
     def setSpeed(self, axis, speed):
         """
-        Changes the move speed of the motor (for the next move). It's very 
+        Changes the move speed of the motor (for the next move). It's very
         approximate.
-        axis (int 0 or 1): axis to pic  
+        axis (int 0 or 1): axis to pic
         speed (0<float<5): speed in m/s.
         """
         assert((0 < speed) and (speed < self.speed_max))
@@ -657,7 +657,7 @@ class PIRedStone(object):
     def speedToWaittime(self, speed, move):
         """
         Converts the speed to a waittime for a given move.
-        speed (float>0): speed in m/s 
+        speed (float>0): speed in m/s
         move (2-tuple float (steps, stepsize)): steps and stepsize of the move
         returns (1<=int<=65535): waittime in ms (never 0, because it'd be unabordable)
         """
@@ -823,7 +823,7 @@ class StageRedStone(model.Actuator):
         port (string): name of the serial port to connect to the controllers
         axes (dict string=> 2-tuple (0<=int<=15, 0<=int<=1)): the configuration of the network.
          for each axis name the controller address and channel
-         Note that even if it's made of several controllers, each controller is 
+         Note that even if it's made of several controllers, each controller is
          _not_ seen as a child from the odemis model point of view.
         """
 
@@ -854,7 +854,7 @@ class StageRedStone(model.Actuator):
             axes_def[axis] = ad
 
         model.Actuator.__init__(self, name, role, axes=axes_def, **kwargs)
-        
+
         # RO, as to modify it the client must use .moveRel() or .moveAbs()
         self.position = model.VigilantAttribute(position, unit="m", readonly=True)
 
@@ -1119,7 +1119,7 @@ FINISHED = 'FINISHED'
 
 class ActionFuture(object):
     """
-    Provides the interface for the clients to manipulate an (asynchronous) action 
+    Provides the interface for the clients to manipulate an (asynchronous) action
     they requested.
     It follows http://docs.python.org/dev/library/concurrent.futures.html
     The result is always None, or raises an Exception.
@@ -1219,7 +1219,7 @@ class ActionFuture(object):
 
     def _start_action(self):
         """
-        Start the physical action, and immediately return. It also set the 
+        Start the physical action, and immediately return. It also set the
         state to RUNNING.
         Note: to be called without the lock (._condition) acquired.
         """
@@ -1318,7 +1318,7 @@ class ActionFuture(object):
 
     def _moveRel(self, axes):
         """
-        axes (dict: PIRedStone -> list (tuple(int, double)): 
+        axes (dict: PIRedStone -> list (tuple(int, double)):
             controller to list of channel/distance to move (m)
         returns (float): approximate time in s it will take (optimistic)
         """

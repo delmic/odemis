@@ -68,7 +68,7 @@ def acquire_timelapse(num, period, filename):
     stovl.dwellTime.value = OVERLAY_DT
 
     acq_streams = [stem, stfm, stovl]
-    
+
     # Prepare to save each acquisition in a separate file
     exporter = dataio.find_fittest_converter(filename)
     basename, ext = os.path.splitext(filename)
@@ -157,4 +157,3 @@ if __name__ == '__main__':
     ret = main(sys.argv)
     logging.shutdown()
     exit(ret)
-

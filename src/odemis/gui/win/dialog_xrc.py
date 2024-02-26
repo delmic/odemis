@@ -191,4 +191,3 @@ nmn\x00tst\x00\xb7v^\x00wvw\x00\xb7w_\x00zzz\x00|{|\x00~~~\x00\x85\x85\x85\
     wx.MemoryFSHandler.AddFile('XRC/dialog/dialog_xrc', bytearray(dialog_xrc.encode('utf-8')))
     wx.MemoryFSHandler.AddFile('XRC/dialog/___img_odemis_ico', bytearray(___img_odemis_ico))
     __res.Load('memory:XRC/dialog/dialog_xrc')
-

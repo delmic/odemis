@@ -37,6 +37,27 @@ import weakref
 logging.getLogger().setLevel(logging.DEBUG)
 
 
+class TestRoundUpMultiple(unittest.TestCase):
+
+    # Test the round_up_multiple function
+    def test_round_up_to_multiple(self):
+        self.assertEqual(util.round_up_to_multiple(0, 4), 0)
+        self.assertEqual(util.round_up_to_multiple(1, 4), 4)
+        self.assertEqual(util.round_up_to_multiple(3, 4), 4)
+        self.assertEqual(util.round_up_to_multiple(4, 4), 4)
+        self.assertEqual(util.round_up_to_multiple(24, 4), 24)
+        self.assertEqual(util.round_up_to_multiple(24.001, 4), 28)
+        self.assertEqual(util.round_up_to_multiple(27.99, 4), 28)
+        self.assertEqual(util.round_up_to_multiple(28, 4), 28)
+
+    def test_round_up_to_multiple_float(self):
+        self.assertEqual(util.round_up_to_multiple(5.63e-6, 1e-6), 6e-6)
+
+        # Check that the function handles rounding errors
+        for i in range(100):
+            self.assertEqual(util.round_up_to_multiple(i * 1e-6, 1e-6), i * 1e-6)
+
+
 class TestLimitInvocation(unittest.TestCase):
     def test_not_too_often(self):
         self.count = 0

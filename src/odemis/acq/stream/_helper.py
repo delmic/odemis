@@ -19,7 +19,6 @@ You should have received a copy of the GNU General Public License along with Ode
 # store or retrieve information.
 
 
-from past.builtins import long
 from abc import abstractmethod
 from concurrent.futures._base import CancelledError
 from functools import wraps
@@ -114,7 +113,7 @@ class RepetitionStream(LiveStream):
         # We overwrite the VA provided by LiveStream to define a setter.
         self.roi = model.TupleContinuous((0, 0, 1, 1),
                                          range=((0, 0, 0, 0), (1, 1, 1, 1)),
-                                         cls=(int, long, float),
+                                         cls=(int, float),
                                          setter=self._setROI)
 
         # Start with pixel size to fit 1024 px, as it's typically a sane value
@@ -1695,7 +1694,7 @@ class ScannedTCSettingsStream(RepetitionStream):
 
         self._append(d, date)
         self._shouldUpdateImage()
-        
+
     def _setPower(self, value):
         # set all light power at once to a value
         pw = list(self.emitter.power.range[1])
@@ -1703,13 +1702,13 @@ class ScannedTCSettingsStream(RepetitionStream):
         self.emitter.power.value = pw
 
     def _onActive(self, active):
-        if active: 
+        if active:
             # set power values
             self._setPower(1)
         else:
             # stop power values
             self._setPower(0)
-            
+
         RepetitionStream._onActive(self, active)
 
 
@@ -1722,10 +1721,10 @@ class ScannedTemporalSettingsStream(CCDSettingsStream):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_TEMPORAL
         super(ScannedTemporalSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
-    
+
         # typical user wants density much lower than SEM
         self.pixelSize.value *= 30
-        
+
         # Fuzzing not supported (yet)
         del self.fuzzing
 

@@ -45,4 +45,3 @@ def dichotomy_to_region(seq):
         roi = (l, t, r, b)
 
     return roi
-

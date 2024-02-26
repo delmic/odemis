@@ -27,14 +27,15 @@ import re
 import threading
 import time
 import zipfile
+from concurrent import futures
 from concurrent.futures import CancelledError
-from typing import Optional
+from typing import Any, Dict, Optional, Set, Tuple, Union
 
 import msgpack_numpy
 import notify2
 import numpy
-import Pyro5.api
 import pkg_resources
+import Pyro5.api
 from Pyro5.errors import CommunicationError
 
 from odemis import model
@@ -90,6 +91,7 @@ class Package(object):
         version: The version of the xtadapter.
 
     """
+
     def __init__(self):
         self._adapter = None
         self._bitness = None
@@ -139,7 +141,7 @@ class Package(object):
 
 
 def check_latest_package(
-    directory: str, current_version: str, adapter: str, bitness: str, is_zip: bool
+        directory: str, current_version: str, adapter: str, bitness: str, is_zip: bool
 ) -> Optional[Package]:
     """
     Check if a latest xtadapter package is available.
@@ -166,8 +168,9 @@ def check_latest_package(
             result = re.search(regex, entity)
             entity_path = os.path.join(directory, entity)
             if result and (
-                entity.endswith(".zip") if is_zip
-                else os.path.isdir(entity_path) and len([entity for entity in os.listdir(entity_path) if entity.endswith(".exe")]) == 1
+                    entity.endswith(".zip") if is_zip
+                    else os.path.isdir(entity_path) and len(
+                        [entity for entity in os.listdir(entity_path) if entity.endswith(".exe")]) == 1
             ):
                 package = Package()
                 package.adapter = result.group(1)
@@ -213,15 +216,11 @@ class SEM(model.HwComponent):
     be set to "xttoolkit".
     """
 
-    def __init__(self, name, role, children, address, daemon=None,
-                 **kwargs):
+    def __init__(self, name: str, role: str, children: Dict[str, dict], address: str, daemon=None,
+                 **kwargs) -> None:
         """
-        Parameters
-        ----------
-        address: str
+        :param address: (str)
             server address and port of the Microscope server, e.g. "PYRO:Microscope@localhost:4242"
-        timeout: float
-            Time in seconds the client should wait for a response from the server.
         """
 
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
@@ -350,40 +349,26 @@ class SEM(model.HwComponent):
                     # Notify the user that a newer xtadpater version is available
                     notify2.init("Odemis")
                     update = notify2.Notification(
-                        "Update Delmic XT Adapter", "Newer version {} is available on ThermoFisher Support PC.\n\n"
-                        "How to update?\n\n1. Full stop Odemis and close Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
-                        "to install it.".format(package.version))
+                        "Update Delmic XT Adapter",
+                        "Newer version {} is available on ThermoFisher Support PC.\n\n"
+                        "How to update?\n\n1. Full stop Odemis and close Delmic XT Adapter.\n"
+                        "2. Restart the Delmic XT Adapter to install it.".format(package.version))
                     update.set_urgency(notify2.URGENCY_NORMAL)
-                    update.set_timeout(10000)    # 10 seconds
+                    update.set_timeout(10000)  # 10 seconds
                     update.show()
                 else:
                     logging.warning("{} is a bad file in {} not transferring latest package.".format(ret, package.path))
         except Exception as err:
             logging.exception(err)
 
-    def list_available_channels(self):
-        """
-        List all available channels and their current state as a dict.
-
-        Returns
-        -------
-        available channels: dict
-            A dict of the names of the available channels as keys and the corresponding channel state as values.
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.list_available_channels()
-
-    def move_stage(self, position, rel=False):
+    def move_stage(self, position: Dict[str, float], rel: bool = False) -> None:
         """
         Move the stage the given position in meters. This is non-blocking. Throws an error when the requested position
         is out of range.
 
-        Parameters
-        ----------
-        position: dict(string->float)
+        :param position:
             Absolute or relative position to move the stage to per axes in m. Axes are 'x' and 'y'.
-        rel: boolean
+        :param rel:
             If True the staged is moved relative to the current position of the stage, by the distance specified in
             position. If False the stage is moved to the absolute position.
         """
@@ -391,92 +376,86 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.move_stage(position, rel)
 
-    def stage_is_moving(self):
-        """Returns: (bool) True if the stage is moving and False if the stage is not moving."""
+    def stage_is_moving(self) -> bool:
+        """
+        :return: True if the stage is moving and False if the stage is not moving.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.stage_is_moving()
 
-    def stop_stage_movement(self):
+    def stop_stage_movement(self) -> None:
         """Stop the movement of the stage."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.stop_stage_movement()
 
-    def get_stage_position(self):
+    def get_stage_position(self) -> Dict[str, float]:
         """
-        Returns: (dict) the axes of the stage as keys with their corresponding position.
+        :return: The axes of the stage as keys with their corresponding position.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_stage_position()
 
-    def stage_info(self):
-        """Returns: (dict) the unit and range of the stage position."""
+    def stage_info(self) -> Dict[str, Any]:
+        """
+        :return: the unit and range of the stage position.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.stage_info()
 
-    def get_latest_image(self, channel_name):
+    def get_latest_image(self, channel_name: str) -> numpy.ndarray:
         """
-        Acquire an image observed via the currently set channel. Note: the channel needs to be stopped before an image
-        can be acquired. To acquire multiple consecutive images the channel needs to be started and stopped. This
-        causes the acquisition speed to be approximately 1 fps.
+        Acquire an image observed via the currently set channel.
 
-        Returns
-        -------
-        image: numpy array
-            The acquired image.
+        Note: the channel needs to be stopped before an image can be acquired.
+        To acquire multiple consecutive images the channel needs to be started and stopped.
+        This causes the acquisition speed to be approximately 1 fps.
+
+        :return: The acquired image.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             image = self.server.get_latest_image(channel_name)
             return image
 
-    def set_scan_mode(self, mode):
+    def set_scan_mode(self, mode: str) -> None:
         """
         Set the scan mode.
-        Parameters
-        ----------
-        mode: str
-            Name of desired scan mode, one of: unknown, external, full_frame, spot, or line.
+
+        :param mode: Name of desired scan mode, one of: unknown, external, full_frame, spot, or line.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_scan_mode(mode)
 
-    def get_scan_mode(self):
+    def get_scan_mode(self) -> str:
         """
         Get the scan mode.
-        Returns
-        -------
-        mode: str
-            Name of set scan mode, one of: unknown, external, full_frame, spot, or line.
+
+        :return: Name of set scan mode, one of: unknown, external, full_frame, spot, or line.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_scan_mode()
 
-    def set_selected_area(self, start_position, size):
+    def set_selected_area(self, start_position: Tuple[int, int], size: Tuple[int, int]):
         """
         Specify a selected area in the scan field area.
 
-        Parameters
-        ----------
-        start_position: (tuple of int)
+        :param start_position:
             (x, y) of where the area starts in pixel, (0,0) is at the top left.
-        size: (tuple of int)
-            (width, height) of the size in pixel.
+        :param size: (width, height) of the size in pixel.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_selected_area(start_position, size)
 
-    def get_selected_area(self):
+    def get_selected_area(self) -> Tuple[int, int, int, int]:
         """
-        Returns
-        -------
-        x, y, width, height: pixels
+        :return: (x, y, width, height) in pixels
             The current selected area. If selected area is not active it returns the stored selected area.
         """
         with self._proxy_access:
@@ -484,139 +463,144 @@ class SEM(model.HwComponent):
             x, y, width, height = self.server.get_selected_area()
             return x, y, width, height
 
-    def selected_area_info(self):
-        """Returns: (dict) the unit and range of set selected area."""
+    def selected_area_info(self) -> Dict[str, Any]:
+        """
+        :return: the unit and range of set selected area.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.selected_area_info()
 
-    def reset_selected_area(self):
+    def reset_selected_area(self) -> None:
         """Reset the selected area to select the entire image."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.reset_selected_area()
 
-    def set_scanning_size(self, x):
+    def set_scanning_size(self, x: float) -> None:
         """
         Set the size of the to be scanned area (aka field of view or the size, which can be scanned with the current
         settings).
 
-        Parameters
-        ----------
-        x: (float)
-            size for X in meters.
+        :param x: size for X in meters.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_scanning_size(x)
 
-    def get_scanning_size(self):
+    def get_scanning_size(self) -> Tuple[float, float]:
         """
-        Returns: (tuple of floats) x and y scanning size in meters.
+        :return: x and y scanning size in meters.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_scanning_size()
 
-    def scanning_size_info(self):
-        """Returns: (dict) the scanning size unit and range."""
+    def scanning_size_info(self) -> Dict[str, Any]:
+        """
+        :return: the scanning size unit and range.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.scanning_size_info()
 
-    def set_ebeam_spotsize(self, spotsize):
+    def set_ebeam_spotsize(self, spotsize: float) -> None:
         """
         Setting the spot size of the ebeam.
-        Parameters
-        ----------
-        spotsize: float
-            desired spotsize, unitless
+
+        :param spotsize: desired spotsize, unitless
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_ebeam_spotsize(spotsize)
 
-    def get_ebeam_spotsize(self):
-        """Returns: (float) the current spotsize of the electron beam (unitless)."""
+    def get_ebeam_spotsize(self) -> float:
+        """
+        :return: the current spotsize of the electron beam (unitless).
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_ebeam_spotsize()
 
-    def spotsize_info(self):
-        """Returns: (dict) the unit and range of the spotsize. Unit is None means the spotsize is unitless."""
+    def spotsize_info(self) -> Dict[str, Any]:
+        """
+        :returns: the unit and range of the spotsize. Unit is None means the spotsize is unitless.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.spotsize_info()
 
-    def set_dwell_time(self, dwell_time):
+    def set_dwell_time(self, dwell_time: float) -> None:
         """
-
-        Parameters
-        ----------
-        dwell_time: float
-            dwell time in seconds
+        :param dwell_time: dwell time in seconds
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_dwell_time(dwell_time)
 
-    def get_dwell_time(self):
-        """Returns: (float) the dwell time in seconds."""
+    def get_dwell_time(self) -> float:
+        """
+        :return: the dwell time in seconds.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_dwell_time()
 
-    def dwell_time_info(self):
-        """Returns: (dict) range of the dwell time and corresponding unit."""
+    def dwell_time_info(self) -> Dict[str, Any]:
+        """
+        :return: range of the dwell time and corresponding unit.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.dwell_time_info()
 
-    def set_ht_voltage(self, voltage):
+    def set_ht_voltage(self, voltage: float) -> None:
         """
         Set the high voltage.
 
-        Parameters
-        ----------
-        voltage: float
-            Desired high voltage value in volt.
-
+        :param voltage: Desired high voltage value in volt.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_ht_voltage(voltage)
 
-    def get_ht_voltage(self):
-        """Returns: (float) the HT Voltage in volt."""
+    def get_ht_voltage(self) -> float:
+        """
+        :return: the HT Voltage in volt.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_ht_voltage()
 
-    def ht_voltage_info(self):
-        """Returns: (dict) the unit and range of the HT Voltage."""
+    def ht_voltage_info(self) -> Dict[str, Any]:
+        """
+        :return: the unit and range of the HT Voltage.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.ht_voltage_info()
 
-    def blank_beam(self):
+    def blank_beam(self) -> None:
         """Blank the electron beam."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.blank_beam()
 
-    def unblank_beam(self):
+    def unblank_beam(self) -> None:
         """Unblank the electron beam."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.unblank_beam()
 
-    def beam_is_blanked(self):
-        """Returns: (bool) True if the beam is blanked and False if the beam is not blanked."""
+    def beam_is_blanked(self) -> bool:
+        """
+        :return: True if the beam is blanked and False if the beam is not blanked.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beam_is_blanked()
 
-    def pump(self):
+    def pump(self) -> None:
         """Pump the microscope's chamber. Note that pumping takes some time. This is blocking."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -630,14 +614,16 @@ class SEM(model.HwComponent):
             finally:
                 self.server._pyroTimeout = 30  # seconds
 
-    def get_vacuum_state(self):
-        """Returns: (str) the vacuum state of the microscope chamber to see if it is pumped or vented,
-        possible states: "vacuum", "vented", "prevac", "pumping", "venting","vacuum_error" """
+    def get_vacuum_state(self) -> str:
+        """
+        :return: the vacuum state of the microscope chamber to see if it is pumped or vented,
+            possible states: "vacuum", "vented", "prevac", "pumping", "venting","vacuum_error"
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_vacuum_state()
 
-    def vent(self):
+    def vent(self) -> None:
         """Vent the microscope's chamber. Note that venting takes time (appr. 3 minutes). This is blocking."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -651,334 +637,319 @@ class SEM(model.HwComponent):
             finally:
                 self.server._pyroTimeout = 30  # seconds
 
-    def get_pressure(self):
-        """Returns: (float) the chamber pressure in pascal, or -1 in case the system is vented."""
+    def get_pressure(self) -> float:
+        """
+        :return: the chamber pressure in pascal, or -1 in case the system is vented.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             pressure = self.server.get_pressure()
             return pressure
 
-    def pressure_info(self):
-        """Returns (dict): the unit and range of the pressure."""
+    def pressure_info(self) -> Dict[str, Any]:
+        """
+        :return: the unit and range of the pressure.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.pressure_info()
 
-    def home_stage(self):
+    def home_stage(self) -> None:
         """Home stage asynchronously. This is non-blocking."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.home_stage()
 
-    def is_homed(self):
-        """Returns: (bool) True if the stage is homed and False otherwise."""
+    def is_homed(self) -> bool:
+        """
+        :return: True if the stage is homed and False otherwise.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.is_homed()
 
-    def set_channel_state(self, name, state):
+    def set_channel_state(self, name: str, state: bool) -> None:
         """
         Stop or start running the channel. This is non-blocking.
 
-        Parameters
-        ----------
-        name: str
-            name of channel.
-        state: bool
-            Desired state of the channel, if True set state to run, if False set state to stop.
+        :param name: name of channel.
+        :param state: Desired state of the channel, if True set state to run, if False set state to stop.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_channel_state(name, state)
 
-    def wait_for_state_changed(self, desired_state, name, timeout=10):
+    def wait_for_state_changed(self, desired_state: str, name: str, timeout: int = 10) -> None:
         """
         Wait until the state of the channel has changed to the desired state, if it has not changed after a certain
         timeout an error will be raised.
 
-        Parameters
-        ----------
-        desired_state: XT_RUN or XT_STOP
-            The state the channel should change into.
-        name: str
-            name of channel.
-        timeout: int
-            Amount of time in seconds to wait until the channel state has changed.
+        :param desired_state: The state the channel should change into; XT_RUN or XT_STOP.
+        :param name: name of channel.
+        :param timeout: Amount of time in seconds to wait until the channel state has changed.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.wait_for_state_changed(desired_state, name, timeout)
 
-    def get_channel_state(self, name):
-        """Returns: (str) the state of the channel: XT_RUN or XT_STOP."""
+    def get_channel_state(self, name: str) -> str:
+        """
+        :param name: name of the channel to request the status from
+        :return: the state of the channel: XT_RUN or XT_STOP."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_channel_state(name)
 
-    def get_free_working_distance(self):
-        """Returns: (float) the free working distance in meters."""
+    def get_free_working_distance(self) -> float:
+        """
+        :return: the free working distance in meters.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_free_working_distance()
 
-    def set_free_working_distance(self, free_working_distance):
+    def set_free_working_distance(self, free_working_distance: float) -> None:
         """
         Set the free working distance.
-        Parameters
-        ----------
-        free_working_distance: float
-            free working distance in meters.
+
+        :param free_working_distance: free working distance in meters.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_free_working_distance(free_working_distance)
 
-    def fwd_info(self):
-        """Returns the unit and range of the free working distance."""
+    def fwd_info(self) -> Dict[str, Any]:
+        """
+        :return: the unit and range of the free working distance.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.fwd_info()
 
-    def get_fwd_follows_z(self):
+    def get_fwd_follows_z(self) -> bool:
         """
-        Returns: (bool) True if Z follows free working distance.
+        :return: True if Z follows free working distance.
         When Z follows FWD and Z-axis of stage moves, FWD is updated to keep image in focus.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_fwd_follows_z()
 
-    def set_fwd_follows_z(self, follow_z):
+    def set_fwd_follows_z(self, follow_z: bool) -> None:
         """
         Set if z should follow the free working distance. When Z follows FWD and Z-axis of stage moves, FWD is updated
         to keep image in focus.
-        Parameters
-        ---------
-        follow_z: bool
-            True if Z should follow free working distance.
+
+        :param follow_z: True if Z should follow free working distance.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_fwd_follows_z(follow_z)
 
-    def set_autofocusing(self, name, state):
+    def set_autofocusing(self, name: str, state: str) -> None:
         """
         Set the state of autofocus, beam must be turned on. This is non-blocking.
 
-        Parameters
-        ----------
-        name: str
-            Name of one of the electron channels, the channel must be running.
-        state: XT_RUN or XT_STOP
-            If state is start, autofocus starts. States cancel and stop both stop the autofocusing. Some microscopes
-            might need stop, while others need cancel. The Apreo system requires stop.
+        :param name: Name of one of the electron channels, the channel must be running.
+        :param state: XT_RUN or XT_STOP
+            If state is start, autofocus starts. State stop, stops the autofocus.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_autofocusing(name, state)
 
-    def is_autofocusing(self, channel_name):
+    def is_autofocusing(self, channel_name: str) -> bool:
         """
-        Parameters
-        ----------
-            channel_name (str): Holds the channels name on which the state is checked.
-
-        Returns: (bool) True if autofocus is running and False if autofocus is not running.
+        :param channel_name: Holds the channels name on which the state is checked.
+        :return: True if autofocus is running and False if autofocus is not running.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.is_autofocusing(channel_name)
 
-    def set_auto_contrast_brightness(self, name, state):
+    def set_auto_contrast_brightness(self, name: str, state: str) -> None:
         """
         Set the state of auto contrast brightness. This is non-blocking.
 
-        Parameters
-        ----------
-        name: str
-            Name of one of the electron channels.
-        state: XT_RUN or XT_STOP
-            If state is start, auto contrast brightness starts. States cancel and stop both stop the auto contrast
-            brightness.
+        :param name: Name of one of the electron channels.
+        :param state: XT_RUN or XT_STOP
+            IIf state is start, auto contrast brightness starts. State stop, stops the auto contrast brightness.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_auto_contrast_brightness(name, state)
 
-    def is_running_auto_contrast_brightness(self, channel_name):
+    def is_running_auto_contrast_brightness(self, channel_name: str) -> bool:
         """
-        Parameters
-        ----------
-            channel_name (str): Holds the channels name on which the state is checked.
-
-        Returns: (bool) True if auto contrast brightness is running and False if auto contrast brightness is not
+        :param channel_name: Holds the channels name on which the state is checked.
+        :return: True if auto contrast brightness is running and False if auto contrast brightness is not
         running.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.is_running_auto_contrast_brightness(channel_name)
 
-    def get_beam_shift(self):
-        """Returns: (float) the current beam shift (DC coils position) x and y values in meters."""
+    def get_beam_shift(self) -> Tuple[float, float]:
+        """
+        :return: the current beam shift (DC coils position) x and y values in meters.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return tuple(self.server.get_beam_shift())
 
-    def set_beam_shift(self, x_shift, y_shift):
+    def set_beam_shift(self, x_shift: float, y_shift: float) -> None:
         """Set the current beam shift (DC coils position) values in meters."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_beam_shift(x_shift, y_shift)
 
-    def beam_shift_info(self):
-        """Returns: (dict) the unit and xy-range of the beam shift (DC coils position)."""
+    def beam_shift_info(self) -> Dict[str, Any]:
+        """
+        :return: the unit and xy-range of the beam shift (DC coils position).
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beam_shift_info()
 
-    def get_stigmator(self):
+    def get_stigmator(self) -> Tuple[float, float]:
         """
         Retrieves the current stigmator x and y values. This stigmator corrects for the astigmatism of the probe shape.
         In MBSEM systems this stigmator also controls the individual probe shape within the multi-probe pattern
         (stigmator: secondary, physical position column: upper).
 
-        Returns
-        -------
-        tuple, (float, float) current x and y values of stigmator, unitless.
+        :return: current x and y values of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return tuple(self.server.get_stigmator())
 
-    def set_stigmator(self, x, y):
+    def set_stigmator(self, x: float, y: float) -> None:
         """
         Sets the stigmator x and y values. This stigmator corrects for the astigmatism of the probe shape.
         In MBSEM systems this stigmator also controls the individual probe shape within the multi-probe pattern
         (stigmator: secondary, physical position column: upper).
 
-        Parameters
-        -------
-        x (float): x value of stigmator, unitless.
-        y (float): y value of stigmator, unitless.
+        :param x: x value of stigmator, unitless.
+        :param y: y value of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_stigmator(x, y)
 
-    def stigmator_info(self):
+    def stigmator_info(self) -> Dict[str, Any]:
         """
         Returns the unit and range of the stigmator. This stigmator corrects for the astigmatism of the probe shape.
         In MBSEM systems this stigmator also controls the individual probe shape within the multi-probe pattern
         (stigmator: secondary, physical position column: upper).
 
-        Returns
-        -------
-        dict, keys: "unit", "range"
-        'unit': returns physical unit of the stigmator, typically None.
-        'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
+        :return: a dictionary with keys: "unit", "range"
+            'unit': returns physical unit of the stigmator, typically None.
+            'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.stigmator_info()
 
-    def get_rotation(self):
-        """Returns: (float) the current rotation value in rad."""
+    def get_rotation(self) -> float:
+        """
+        :return: the current rotation value in rad.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_rotation()
 
-    def set_rotation(self, rotation):
-        """Set the current rotation value in rad."""
+    def set_rotation(self, rotation: float) -> None:
+        """
+        :param rotation: the current rotation value in rad.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_rotation(rotation)
 
-    def rotation_info(self):
-        """Returns: (dict) the unit and range of the rotation."""
+    def rotation_info(self) -> Dict[str, Any]:
+        """
+        :return: the unit and range of the rotation.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.rotation_info()
 
-    def set_resolution(self, resolution):
+    def set_resolution(self, resolution: tuple) -> None:
         """
         Set the resolution of the image.
 
-        Parameters
-        ----------
-        resolution (tuple): The resolution of the image in pixels as (width, height). Options: (768, 512),
+        :return resolution: The resolution of the image in pixels as (width, height). Options: (768, 512),
                             (1536, 1024), (3072, 2048), (6144, 4096)
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_resolution(resolution)
 
-    def get_resolution(self):
-        """Returns the resolution of the image as (width, height)."""
+    def get_resolution(self) -> Tuple:
+        """
+        :return: the resolution of the image as (width, height).
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return tuple(self.server.get_resolution())
 
-    def resolution_info(self):
-        """Returns the unit and range of the resolution of the image."""
+    def resolution_info(self) -> Dict[str, Any]:
+        """
+        :return: the unit and range of the resolution of the image.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.resolution_info()
 
-    def set_beam_power(self, state):
+    def set_beam_power(self, state: bool) -> None:
         """
         Turn on or off the beam power.
 
-        Parameters
-        ----------
-        state: bool
-            True to turn on the beam and False to turn off the beam.
+        :param state: True to turn on the beam and False to turn off the beam.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_beam_power(state)
 
-    def get_beam_is_on(self):
-        """Returns True if the beam is on and False if the beam is off."""
+    def get_beam_is_on(self) -> bool:
+        """
+        :return: True if the beam is on and False if the beam is off.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_beam_is_on()
 
-    def get_delta_pitch(self):
+    def get_delta_pitch(self) -> float:
         """
         Get the delta pitch. The pitch is the distance between two neighboring beams within the multiprobe pattern
         which is pre-set by TFS. The delta pitch adjusts the pre-set pitch.
 
-        Returns
-        -------
-        delta pitch: float, [um]
-            The adjustment in the pitch from the factory pre-set pitch.
+        :return: delta pitch in [um], the adjustment in the pitch from the factory pre-set pitch.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_delta_pitch()
 
-    def set_delta_pitch(self, delta_pitch):
+    def set_delta_pitch(self, delta_pitch: float) -> None:
         """
         Set the delta pitch. The pitch is the distance between two neighboring beams within the multiprobe pattern
         which is pre-set by TFS. The delta pitch adjusts the pre-set pitch.
 
-        Parameters
-        -------
-        delta pitch (float): [um]
-            The adjustment in the pitch from the factory pre-set pitch.
-
+        :param delta_pitch: The adjustment in the pitch from the factory pre-set pitch in [um].
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.set_delta_pitch(delta_pitch)
+            self.server.set_delta_pitch(delta_pitch)
 
-    def delta_pitch_info(self):
-        """"Returns a dict with the 'unit' and 'range' of the delta pitch."""
+    def delta_pitch_info(self) -> Dict[str, Any]:
+        """
+        :return: a dict with the 'unit' and 'range' of the delta pitch.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.delta_pitch_info()
 
-    def get_secondary_stigmator(self):
+    def get_secondary_stigmator(self) -> Tuple[float, float]:
         """
         Retrieves the current secondary stigmator x and y values. Within the MBSEM system
         there are two stigmators to correct for both beamlet astigmatism as well
@@ -990,15 +961,13 @@ class SEM(model.HwComponent):
         The primary stigmator does not have its own method, because it gets the
         same value as get_stigmator()
 
-        Returns
-        -------
-        tuple, (float, float) current x and y values of stigmator, unitless.
+        :return: current x and y values of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return tuple(self.server.get_secondary_stigmator())
 
-    def set_secondary_stigmator(self, x, y):
+    def set_secondary_stigmator(self, x: float, y: float) -> None:
         """
         Sets the secondary stigmator x and y values. Within the MBSEM system
         there are two stigmators to correct for both beamlet astigmatism as well
@@ -1010,17 +979,15 @@ class SEM(model.HwComponent):
         The primary stigmator does not have its own method, because it sets the
         same value as set_stigmator()
 
-        Parameters
-        -------
-        x (float): x value of stigmator, unitless.
-        y (float): y value of stigmator, unitless.
+        :param x: x value of stigmator, unitless.
+        :param y: y value of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.set_secondary_stigmator(x, y)
+            self.server.set_secondary_stigmator(x, y)
 
-    def secondary_stigmator_info(self):
-        """"
+    def secondary_stigmator_info(self) -> dict:
+        """
         Returns the unit and range of the secondary stigmator. Only available on MBSEM systems.
 
         Notes
@@ -1029,68 +996,58 @@ class SEM(model.HwComponent):
         The primary stigmator does not have its own method, because it gets the
         same info as stigmator_info()
 
-        Returns
-        -------
-        dict, keys: "unit", "range"
-        'unit': returns physical unit of the stigmator, typically None.
-        'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
+        :return: a dictionary with keys: "unit", "range"
+            'unit': returns physical unit of the stigmator, typically None.
+            'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.secondary_stigmator_info()
 
-    def get_pattern_stigmator(self):
+    def get_pattern_stigmator(self) -> Tuple[float, float]:
         """
         Retrieves the current pattern stigmator x and y values. Only available on MBSEM systems.
         This stigmator corrects for the astigmatism of the multi-probe pattern shape
         (stigmator: primary, physical position column: lower).
 
-        Returns
-        -------
-        tuple, (float, float) current x and y values of stigmator, unitless.
+        :return: current x and y values of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return tuple(self.server.get_pattern_stigmator())
 
-    def set_pattern_stigmator(self, x, y):
+    def set_pattern_stigmator(self, x: float, y: float) -> None:
         """
         Sets the pattern stigmator x and y values. Only available on MBSEM systems.
         This stigmator corrects for the astigmatism of the multi-probe pattern shape
         (stigmator: primary, physical position column: lower).
 
-        Parameters
-        -------
-        x (float): x value of stigmator, unitless.
-        y (float): y value of stigmator, unitless.
+        :param x: x value of stigmator, unitless.
+        :param y: y value of stigmator, unitless.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.set_pattern_stigmator(x, y)
+            self.server.set_pattern_stigmator(x, y)
 
-    def pattern_stigmator_info(self):
-        """"
+    def pattern_stigmator_info(self) -> Dict[str, Any]:
+        """
         Returns the unit and range of the pattern stigmator. Only available on MBSEM systems.
         This stigmator corrects for the astigmatism of the multi-probe pattern shape
         (stigmator: primary, physical position column: lower).
 
-        Returns
-        -------
-        dict, keys: "unit", "range"
-        'unit': returns physical unit of the stigmator, typically None.
-        'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
+        :return: a dictionary with keys: "unit", "range"
+            'unit': returns physical unit of the stigmator, typically None.
+            'range': returns dict with keys 'x' and 'y' -> returns range of axis (tuple of length 2).
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.pattern_stigmator_info()
 
-    def get_dc_coils(self):
+    def get_dc_coils(self) -> list:
         """
         Get the four values of the dc coils.
 
-        Returns
-        -------
-        list of tuples of two floats, len 4
+        :return: list of tuples of two floats, len 4
             A list of 4 tuples containing 2 values (floats) of each of the 4 dc coils, in the order:
             [x lower, x upper, y lower, y upper].
             These 4 items describe 4x2 transformation matrix for a required beam shift using DC coils.
@@ -1099,133 +1056,125 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_dc_coils()
 
-    def get_use_case(self):
+    def get_use_case(self) -> str:
         """
         Get the current use case state. The use case reflects whether the system
         is currently in multi-beam or single beam mode.
 
-        Returns
-        -------
-        state: str, 'MultiBeamTile' or 'SingleBeamlet'
-
+        :return: 'MultiBeamTile' or 'SingleBeamlet'
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_use_case()
 
-    def set_use_case(self, state):
+    def set_use_case(self, state: str) -> None:
         """
         Set the current use case state. The use case reflects whether the system
         is currently in multi-beam or single beam mode.
 
-        Parameters
-        ----------
-        state: str, 'MultiBeamTile' or 'SingleBeamlet'
-
+        :param state: 'MultiBeamTile' or 'SingleBeamlet'
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.set_use_case(state)
+            self.server.set_use_case(state)
 
-    def get_mpp_orientation(self):
+    def get_mpp_orientation(self) -> float:
         """
         Get the current multi probe pattern orientation in degrees.
 
-        :return (float): Multi probe orientation in degrees
+        :return: Multi probe orientation in degrees
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_mpp_orientation()
 
-    def mpp_orientation_info(self):
+    def mpp_orientation_info(self) -> Dict[str, Any]:
         """
         Get the current multi probe pattern orientation information, contains the range and the unit (defined as
         degrees).
 
-        :return (dict str -> list (of length 2)): The range of the rotation for the keyword "range"
-        and the 'degrees' for the keyword "unit"
+        :return: The range of the rotation for the keyword "range" and the 'degrees' for the keyword "unit"
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.mpp_orientation_info()
 
-    def get_beamlet_index(self):
+    def get_beamlet_index(self) -> Tuple[int, int]:
         """
         Get the current beamlet index which is represented by the two values in a grid (x,y).
 
-        :return (tuple of ints): Beamlet index (typical range 1 - 8)
+        :return: Beamlet index (typical range 1 - 8)
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return tuple(int(i) for i in self.server.get_beamlet_index())
 
-    def set_beamlet_index(self, beamlet_idx):
+    def set_beamlet_index(self, beamlet_idx: Tuple[int, int]) -> None:
         """
         Set the current beamlet index which is represented by the two values in a grid (x,y).
 
-        :param beamlet_idx (tuple of ints): Beamlet index (typical range 1 - 8)
+        :param beamlet_idx: Beamlet index (typical range 1 - 8)
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_beamlet_index(*tuple(float(i) for i in beamlet_idx))
 
-    def beamlet_index_info(self):
+    def beamlet_index_info(self) -> Dict[str, any]:
         """
         Get the current beamlet index information, contains the range in x and y direction (1 - 8).
 
-        :return (dict with sub-dict, str -> list (of length 2)): The range of the beamlet index for the keyword
-        "range" and in that sub dictionary either of the keywords "x"/"y".
+        :return: The range of the beamlet index for the keyword "range" and in that
+            sub dictionary either of the keywords "x"/"y". The unit in the keyword "unit".
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beamlet_index_info()
 
-    def get_compound_lens_focusing_mode(self):
+    def get_compound_lens_focusing_mode(self) -> float:
         """
         Get the compound lens focus mode. Used to adjust the immersion mode.
-        :return (0<= float <= 10): the focusing mode (0 means no immersion)
+
+        :return: (0<= float <= 10) the focusing mode (0 means no immersion)
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_compound_lens_focusing_mode()
 
-    def set_compound_lens_focusing_mode(self, mode):
+    def set_compound_lens_focusing_mode(self, mode: float) -> None:
         """
         Set the compound lens focus mode. Used to adjust the immersion mode.
-        :param mode (0<= float <= 10): focusing mode (0 means no immersion)
+
+        :param mode: (0<= float <= 10) focusing mode (0 means no immersion)
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_compound_lens_focusing_mode(mode)
 
-    def compound_lens_focusing_mode_info(self):
+    def compound_lens_focusing_mode_info(self) -> Dict[str, any]:
         """
         Get the min/max values of the compound lens focus mode.
 
-        :return (dict str -> Any): The range of the focusing mode for the key "range"
-           (as a tuple min/max). The unit for key "unit", as a string or None. 
+        :return: The range of the focusing mode for the key "range"
+           (as a tuple min/max). The unit for key "unit", as a string or None.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.compound_lens_focusing_mode_info()
 
-    def scan_image(self, channel_name='electron1'):
+    def scan_image(self, channel_name: str = 'electron1') -> None:
         """
         Start the scan of a single image and block until the image is done scanning.
         This function does not return the image, to get the image call get_latest_image after this function.
         Only works for systems running XTToolkit.
 
-        Parameters
-        ----------
-        channel_name: str
-            Name of one of the channels.
+        :param channel_name: Name of one of the channels.
 
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.scan_image(channel_name)
+            self.server.scan_image(channel_name)
 
-    def start_autofocusing_flash(self):
+    def start_autofocusing_flash(self) -> None:
         """
         Start running autofocus through FLASH. This is a blocking call.
 
@@ -1235,9 +1184,9 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.start_autofocusing_flash()
+            self.server.start_autofocusing_flash()
 
-    def start_autostigmating_flash(self):
+    def start_autostigmating_flash(self) -> None:
         """
         Start running auto stigmation through FLASH. This is a blocking call.
 
@@ -1247,43 +1196,53 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.start_autostigmating_flash()
+            self.server.start_autostigmating_flash()
 
-    def start_autostig(self, n_images=17, sweep_range=0.015, dwell_time=3e-6, resolution=(1536, 1024),
-                       reduced_area_size=0.5, save_results=False, results_fp=None):
+    def start_autostig(self, n_images: int = 17, sweep_range: float = 0.015, dwell_time: float = 3e-6,
+                       resolution: Tuple[int, int] = (1536, 1024),
+                       reduced_area_size: float = 0.5, save_results: bool = False,
+                       results_fp: Optional[str] = None) -> Tuple[float, float]:
         """
-        Preform the autostig routine for determining the optimal stigmator setting.
+        Preform the autostig routine for determining the optimal stigmator setting. This is a blocking call.
         NOTE: will be available from xtadapter version 1.11.5 and higher.
 
-        Parameters
-        ----------
-        n_images : int, optional
+        :param n_images:
             Determines the number of images taken per stigmator axis, n_images+floor(n_images/2) images are taken
             per axis. The default is 17.
-        sweep_range : float, optional
+        :param sweep_range:
             Sweep range, sweep is preformed from -sweep_range to sweep_range. The default is 0.015.
-        dwell_time : float, optional
+        :param dwell_time:
             Dwell time to use in seconds. The default is 3e-6.
-        resolution : Union[Size, Tuple[int, int]], optional
+        :param resolution:
             Resolution to use. The default is Size(width=1536, height=1024).
-        reduced_area_size : float, optional
+        :param reduced_area_size:
             Reduced area size to use. The default is 0.5.
-        save_results : bool, optional
+        :param save_results:
             Whether to save the results. The default is False.
-        results_fp : Optional[Union[Path, str]], optional
+        :param results_fp:
             Folder to save the results in. If None, results will not be saved. The default is None.
 
-        Returns
-        -------
-        Position
-            Optimal stigmator setting.
+        :return optimal_stigmation: Optimal (x, y) stigmator setting.
+        :raises: TimeoutError when autostigmation exceeds the timeout of 300 seconds.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.start_autostig(n_images, sweep_range, dwell_time, resolution,
-                                              reduced_area_size, save_results, results_fp)
+            self.server._pyroTimeout = 300  # seconds
+            try:
+                optimal_stigmation = self.server.start_autostig(n_images, sweep_range, dwell_time, resolution,
+                                                                reduced_area_size, save_results, results_fp)
+            except TimeoutError:
+                logging.error(
+                    "Autostigmation timed out after %s s. Check the xt user interface, "
+                    "autostigmation might still be running.",
+                    self.server._pyroTimeout
+                )
+                raise
+            finally:
+                self.server._pyroTimeout = 30  # seconds
+            return optimal_stigmation
 
-    def start_auto_lens_centering_flash(self):
+    def start_auto_lens_centering_flash(self) -> None:
         """
         Start running lens alignment through FLASH. This is a blocking call.
 
@@ -1295,80 +1254,63 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.start_auto_lens_centering_flash()
 
-    def set_contrast(self, contrast, channel_name='electron1'):
+    def set_contrast(self, contrast: float, channel_name: str = 'electron1') -> None:
         """
         Set the contrast of the scanned image to a specified factor.
 
-        Parameters
-        ----------
-        contrast: float
-            Value the brightness should be set to as a factor between 0 and 1.
-        channel_name: str
-            Name of one of the electron channels.
+        :param contrast: Value the brightness should be set to as a factor between 0 and 1.
+        :param channel_name: Name of one of the electron channels.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.set_contrast(contrast, channel_name)
+            self.server.set_contrast(contrast, channel_name)
 
-    def get_contrast(self, channel_name='electron1'):
+    def get_contrast(self, channel_name: str = 'electron1') -> float:
         """
         Get the contrast of the scanned image.
 
-        Parameters
-        ----------
-        channel_name: str
-            Name of one of the electron channels.
+        :param channel_name: Name of one of the electron channels.
 
-        Returns
-        -------
-        contrast: float
-            Returns value of current contrast as a factor between 0 and 1.
+        :return contrast: Returns value of current contrast as a factor between 0 and 1.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_contrast(channel_name)
 
-    def contrast_info(self):
-        """Returns the contrast unit [-] and range [0, 1]."""
+    def contrast_info(self) -> Dict[str, Any]:
+        """
+        :return: the contrast unit [-] and range [0, 1].
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.contrast_info()
 
-    def set_brightness(self, brightness, channel_name='electron1'):
+    def set_brightness(self, brightness: float, channel_name: str = 'electron1') -> None:
         """
         Set the brightness of the scanned image to a specified factor.
 
-        Parameters
-        ----------
-        brightness: float
-            Value the brightness should be set to as a factor between 0 and 1.
-        channel_name: str
-            Name of one of the electron channels.
+        :param brightness: Value the brightness should be set to as a factor between 0 and 1.
+        :param channel_name: Name of one of the electron channels.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.set_brightness(brightness, channel_name)
+            self.server.set_brightness(brightness, channel_name)
 
-    def get_brightness(self, channel_name='electron1'):
+    def get_brightness(self, channel_name: str = 'electron1') -> float:
         """
         Get the brightness of the scanned image.
 
-        Parameters
-        ----------
-        channel_name: str
-            Name of one of the electron channels.
-
-        Returns
-        -------
-        brightness: float
-            Returns value of current brightness as a factor between 0 and 1.
+        :param channel_name: Name of one of the electron channels.
+        :return: Returns value of current brightness as a factor between 0 and 1.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_brightness(channel_name)
 
-    def brightness_info(self):
-        """Returns the brightness unit [-] and range [0, 1]."""
+    def brightness_info(self) -> Dict[str, Any]:
+        """
+        :return: the brightness unit [-] and range [0, 1].
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.brightness_info()
@@ -1382,10 +1324,11 @@ class Scanner(model.Emitter):
     setter also updates another value if needed.
     """
 
-    def __init__(self, name, role, parent, hfw_nomag, channel="electron1", has_detector=False, **kwargs):
+    def __init__(self, name: str, role: str, parent: model.HwComponent, hfw_nomag: float, channel: str = "electron1",
+                 has_detector: bool = False, **kwargs):
         """
-        channel (str): Name of one of the electron channels.
-        has_detector (bool): True if a Detector is also controlled. In this case,
+        :param channel: Name of one of the electron channels.
+        :param has_detector: True if a Detector is also controlled. In this case,
           the .resolution, .scale and associated VAs will be provided too.
         """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
@@ -1486,7 +1429,7 @@ class Scanner(model.Emitter):
             resolution = tuple(self.parent.get_resolution())
             res_choices = set(r for r in RESOLUTIONS
                               if (rng["x"][0] <= r[0] <= rng["x"][1] and rng["y"][0] <= r[1] <= rng["y"][1])
-                             )
+                              )
             self.resolution = model.VAEnumerated(resolution, res_choices, unit="px", readonly=True)
             self._resolution = resolution
 
@@ -1510,7 +1453,7 @@ class Scanner(model.Emitter):
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling")
         self._va_poll.start()
 
-    def _updateSettings(self):
+    def _updateSettings(self) -> None:
         """
         Read all the current settings from the SEM and reflects them on the VAs
         """
@@ -1566,12 +1509,12 @@ class Scanner(model.Emitter):
         except Exception:
             logging.exception("Unexpected failure when polling settings")
 
-    def _setScale(self, value):
+    def _setScale(self, value: Tuple[float, float]) -> Tuple[float, float]:
         """
-        value (1 < float, 1 < float): increase of size between pixels compared to
+        :param value: (1 < float, 1 < float): increase of size between pixels compared to
             the original pixel size. It will adapt the resolution to
             have the same ROI (just different amount of pixels scanned)
-        return the actual value used
+        :return: the actual value used
         """
         # Pick the resolution which matches the scale in X
         res_x = int(round(self._shape[0] / value[0]))
@@ -1586,10 +1529,10 @@ class Scanner(model.Emitter):
 
         return value
 
-    def _onScale(self, s):
+    def _onScale(self, s) -> None:
         self._updatePixelSize()
 
-    def _updateResolution(self):
+    def _updateResolution(self) -> None:
         """
         To be called to read the server resolution and update the corresponding VAs
         """
@@ -1600,7 +1543,7 @@ class Scanner(model.Emitter):
             self.resolution._set_value(resolution, force_write=True)
             self.scale.notify(scale)
 
-    def _updatePixelSize(self):
+    def _updatePixelSize(self) -> None:
         """
         Update the pixel size using the horizontalFoV.
         """
@@ -1615,7 +1558,7 @@ class Scanner(model.Emitter):
         pxs_scaled = (pxs[0] * self.scale.value[0], pxs[1] * self.scale.value[1])
         self._metadata[model.MD_PIXEL_SIZE] = pxs_scaled
 
-    def _setDwellTime(self, dwell_time):
+    def _setDwellTime(self, dwell_time: float) -> float:
         self.parent.set_dwell_time(dwell_time)
         # Cannot set the dwell_time on the parent if the scan mode is 'external'
         # hence return the requested value itself
@@ -1623,23 +1566,17 @@ class Scanner(model.Emitter):
             return dwell_time
         return self.parent.get_dwell_time()
 
-    def _setVoltage(self, voltage):
+    def _setVoltage(self, voltage: float) -> float:
         self.parent.set_ht_voltage(voltage)
         return self.parent.get_ht_voltage()
 
-    def _setBlanker(self, blank):
+    def _setBlanker(self, blank: Union[bool, None]) -> Union[bool, None]:
         """
-        Parameters
-        ----------
-        blank (bool or None): True if the the electron beam should blank, False if it should be unblanked,
+        :param blank: True if the the electron beam should blank, False if it should be unblanked,
             None if it should be blanked/unblanked automatically. Only useful when using the Detector or the
             XTTKDetector component. Not useful when operating the SEM in external mode.
-
-        Returns
-        -------
-        (bool or None): True if the the electron beam is blanked, False if it is unblanked. See Notes for edge case,
+        :return: True if the the electron beam is blanked, False if it is unblanked. See Notes for edge case,
             None if it should be blanked/unblanked automatically.
-
         """
         if blank is None:
             # TODO Blanker should explicitly be set based on whether we are scanning or not.
@@ -1651,19 +1588,19 @@ class Scanner(model.Emitter):
             self.parent.unblank_beam()
         return self.parent.beam_is_blanked()
 
-    def _setSpotSize(self, spotsize):
+    def _setSpotSize(self, spotsize: float) -> float:
         self.parent.set_ebeam_spotsize(spotsize)
         return self.parent.get_ebeam_spotsize()
 
-    def _setBeamShift(self, beam_shift):
+    def _setBeamShift(self, beam_shift: Tuple[float, float]) -> Tuple[float, float]:
         self.parent.set_beam_shift(*beam_shift)
         return self.parent.get_beam_shift()
 
-    def _setRotation(self, rotation):
+    def _setRotation(self, rotation: float) -> float:
         self.parent.set_rotation(rotation)
         return self.parent.get_rotation()
 
-    def _setHorizontalFoV(self, fov):
+    def _setHorizontalFoV(self, fov: float) -> float:
         self.parent.set_scanning_size(fov)
         fov = self.parent.get_scanning_size()[0]
         mag = self._hfw_nomag / fov
@@ -1671,37 +1608,37 @@ class Scanner(model.Emitter):
         self.magnification.notify(mag)
         return fov
 
-    def _onHorizontalFoV(self, fov):
+    def _onHorizontalFoV(self, fov: float) -> None:
         self._updateDepthOfField()
         # the dwell time range is dependent on the magnification/horizontalFoV
         self._updateDwellTimeRng()
         if self._has_detector:
             self._updatePixelSize()
 
-    def _updateDepthOfField(self):
+    def _updateDepthOfField(self) -> None:
         fov = self.horizontalFoV.value
         # Formula was determined by experimentation
         K = 100  # Magical constant that gives a not too bad depth of field
         dof = K * (fov / 1024)
         self.depthOfField._set_value(dof, force_write=True)
 
-    def _updateDwellTimeRng(self):
+    def _updateDwellTimeRng(self) -> None:
         """The dwell time range is dependent on the magnification/horizontalFoV, the range whenever the fov updates."""
         self.dwellTime._set_range(self.parent.dwell_time_info()["range"])
 
-    def _isExternal(self):
+    def _isExternal(self) -> bool:
         """
-        :return:
-        bool, True if the scan mode is 'external', False if the scan mode is different than 'external'.
+        :return: True if the scan mode is 'external', False if the scan mode is different than 'external'.
         """
         return self.parent.get_scan_mode().lower() == "external"
 
-    def _setExternal(self, external):
+    def _setExternal(self, external: bool) -> bool:
         """
         Switching between internal and external control of the SEM.
-        :param external: (bool) True is external, False is full frame mode.
-        :return: (bool) True if the scan mode should be 'external'.
-                        False if the scan mode should be internally controlled by the SEM.
+
+        :param external: True is external, False is full frame mode.
+        :return: True if the scan mode should be 'external'.
+            False if the scan mode should be internally controlled by the SEM.
         """
         scan_mode = "external" if external else "full_frame"
         self.parent.set_scan_mode(scan_mode)
@@ -1711,19 +1648,19 @@ class Scanner(model.Emitter):
             if self.dwellTime.value != self.parent.get_dwell_time():
                 # Set the VA value again to reflect changes on the parent
                 self.dwellTime.value = self.dwellTime.value
-            if self.resolution.value != tuple(self.parent.get_resolution()):
+            if hasattr(self, "resolution") and self.resolution.value != tuple(self.parent.get_resolution()):
                 # Set the VA value again to reflect changes on the parent
                 self.scale.value = self.scale.value
         return external
 
-    def prepareForScan(self):
+    def prepareForScan(self) -> None:
         """
         Make sure the beam is unblanked when the blanker is in 'auto' mode before starting to scan.
         """
         if self.blanker.value is None:
             self.parent.unblank_beam()
 
-    def finishScan(self):
+    def finishScan(self) -> None:
         """
         Make sure the beam is blanked when the blanker is in 'auto' mode at the end of scanning.
         """
@@ -1737,16 +1674,16 @@ class FibScanner(model.Emitter):
     only minimal control of the FIB is possible.
     """
 
-    def __init__(self, name, role, parent, channel="ion2", **kwargs):
+    def __init__(self, name: str, role: str, parent: model.HwComponent, channel: str = "ion2", **kwargs) -> None:
         """
 
-        :param name (str):
-        :param role (str):
-        :param parent (SEM object):
-        :param channel (str): Specifies the type of scanner (alphabetic part) and the quadrant it is displayed in (
-        numerical part) on which the scanning feed is displayed on the Microscope PC in the Microscope control window
-        of TFS. The quadrants are numbered 1 (top left) - 4 (right bottom).
-        Usually the top right quadrant, ion2 is set as default for the FIB image.
+        :param name:
+        :param role:
+        :param parent:
+        :param channel: Specifies the type of scanner (alphabetic part) and the quadrant it is displayed in
+            (numerical part) on which the scanning feed is displayed on the Microscope PC in the Microscope
+            control window of TFS. The quadrants are numbered 1 (top left) - 4 (right bottom).
+            Usually the top right quadrant, ion2 is set as default for the FIB image.
         """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
@@ -1757,7 +1694,7 @@ class FibScanner(model.Emitter):
         res = self._shape[:2]
         self.resolution = model.ResolutionVA(res, (res, res), readonly=True)
 
-    def prepareForScan(self):
+    def prepareForScan(self) -> None:
         """
         Make sure the scan mode is in "full_frame" and not in "external" before starting to scan.
         """
@@ -1773,7 +1710,7 @@ class FibScanner(model.Emitter):
                 raise HwError("Couldn't set full_frame as scan mode on the XT client mode. Current mode is: %s" %
                               current_mode)
 
-    def finishScan(self):
+    def finishScan(self) -> None:
         """Call when done with scanning."""
         # We do not change the scan mode, because it is fine to leave it in full frame.
         pass
@@ -1786,7 +1723,7 @@ class Detector(model.Detector):
     is captured.
     """
 
-    def __init__(self, name, role, parent, **kwargs):
+    def __init__(self, name: str, role: str, parent: model.HwComponent, **kwargs) -> None:
         # The acquisition is based on a FSM that roughly looks like this:
         # Event\State |    Stopped    |   Acquiring    | Receiving data |
         #    START    | Ready for acq |        .       |       .        |
@@ -1832,14 +1769,14 @@ class Detector(model.Detector):
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling detector")
         self._va_poll.start()
 
-    def terminate(self):
+    def terminate(self) -> None:
         if self._generator:
             self.stop_generate()
             self._genmsg.put(GEN_TERM)
             self._generator.join(5)
             self._generator = None
 
-    def start_generate(self):
+    def start_generate(self) -> None:
         self._genmsg.put(GEN_START)
         if not self._generator or not self._generator.is_alive():
             logging.info("Starting acquisition thread")
@@ -1847,11 +1784,11 @@ class Detector(model.Detector):
                                                name="XT acquisition thread")
             self._generator.start()
 
-    def stop_generate(self):
+    def stop_generate(self) -> None:
         self._scanner.finishScan()
         self._genmsg.put(GEN_STOP)
 
-    def _acquire(self):
+    def _acquire(self) -> None:
         """
         Acquisition thread
         Managed via the ._genmsg Queue
@@ -1911,7 +1848,7 @@ class Detector(model.Detector):
         finally:
             self._generator = None
 
-    def stop_acquisition(self):
+    def stop_acquisition(self) -> None:
         """
         Stop acquiring images.
         """
@@ -1925,13 +1862,14 @@ class Detector(model.Detector):
             # Stopping it twice does a full stop.
             self.parent.set_channel_state(self._scanner.channel, False)
 
-    def _acq_should_stop(self, timeout=None):
+    def _acq_should_stop(self, timeout: Optional[float] = None) -> bool:
         """
         Indicate whether the acquisition should now stop or can keep running.
         Non blocking.
         Note: it expects that the acquisition is running.
 
-        return (bool): True if needs to stop, False if can continue
+        :param timeout: timeout to wait for the message from the acquisition queue
+        :return: True if needs to stop, False if can continue
         raise TerminationRequested: if a terminate message was received
         """
         try:
@@ -1951,14 +1889,14 @@ class Detector(model.Detector):
             logging.warning("Skipped message: %s", msg)
             return False
 
-    def _acq_wait_data(self, timeout=0):
+    def _acq_wait_data(self, timeout: float = 0) -> bool:
         """
         Block until data or a stop message is received.
         Note: it expects that the acquisition is running.
 
-        timeout (0<=float): how long to wait to check (use 0 to not wait)
-        return (bool): True if needs to stop, False if data is ready
-        raise TerminationRequested: if a terminate message was received
+        :param timeout: (0<=float) how long to wait to check (use 0 to not wait)
+        :return: True if needs to stop, False if data is ready
+        :raises: TerminationRequested if a terminate message was received
         """
         tend = time.time() + timeout
         t = time.time()
@@ -1973,12 +1911,12 @@ class Detector(model.Detector):
 
         return False  # Data received
 
-    def _acq_wait_start(self):
+    def _acq_wait_start(self) -> None:
         """
         Blocks until the acquisition should start.
         Note: it expects that the acquisition is stopped.
 
-        raise TerminationRequested: if a terminate message was received
+        :raises: TerminationRequested if a terminate message was received
         """
         while True:
             msg = self._get_acq_msg(block=True)
@@ -1990,11 +1928,12 @@ class Detector(model.Detector):
             # Duplicate Stop
             logging.debug("Skipped message %s as acquisition is stopped", msg)
 
-    def _get_acq_msg(self, **kwargs):
+    def _get_acq_msg(self, **kwargs) -> str:
         """
         Read one message from the acquisition queue
-        return (str): message
-        raises queue.Empty: if no message on the queue
+
+        :return: message
+        :raises: queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
         if msg in (GEN_START, GEN_STOP, GEN_TERM):
@@ -2003,12 +1942,13 @@ class Detector(model.Detector):
             logging.warning("Acq received unexpected message %s", msg)
         return msg
 
-    def _set_scanner(self, scanner_name):
+    def _set_scanner(self, scanner_name: str) -> str:
         """
         Setter for changing the scanner which will be used. The correct scanner object is also updated in
         ._scanner.
-        :param scanner_name (string): contains mode, can be either 'scanner' or 'fib-scanner'
-        :return (string): The set mode
+
+        :param scanner_name: contains mode, can be either 'scanner' or 'fib-scanner'
+        :return: The set mode
         """
         if scanner_name == self.parent._scanner.name:
             self._scanner = self.parent._scanner
@@ -2017,7 +1957,7 @@ class Detector(model.Detector):
 
         return scanner_name
 
-    def _updateSettings(self):
+    def _updateSettings(self) -> None:
         """
         Reads all the current settings from the Detector and reflects them on the VAs
         """
@@ -2030,16 +1970,16 @@ class Detector(model.Detector):
             self.contrast._value = contrast
             self.contrast.notify(contrast)
 
-    def _setBrightness(self, brightness):
+    def _setBrightness(self, brightness: float) -> float:
         self.parent.set_brightness(brightness, self._scanner.channel)
         return self.parent.get_brightness(self._scanner.channel)
 
-    def _setContrast(self, contrast):
+    def _setContrast(self, contrast: float) -> float:
         self.parent.set_contrast(contrast, self._scanner.channel)
         return self.parent.get_contrast(self._scanner.channel)
 
     @isasync
-    def applyAutoContrastBrightness(self):
+    def applyAutoContrastBrightness(self) -> futures.Future:
         """
         Wrapper for running the automatic setting of the contrast brightness functionality asynchronously. It
         automatically sets the contrast and the brightness via XT, the beam must be turned on and unblanked. Auto
@@ -2059,10 +1999,11 @@ class Detector(model.Detector):
         f._channel_name = self._scanner.channel
         return self._scanner._executor.submitf(f, self._applyAutoContrastBrightness, f)
 
-    def _applyAutoContrastBrightness(self, future):
+    def _applyAutoContrastBrightness(self, future: futures.Future) -> None:
         """
         Starts applying auto contrast brightness and checks if the process is finished for the ProgressiveFuture object.
-        :param future (Future): the future to start running.
+
+        :param future: the future to start running.
         """
         channel_name = future._channel_name
         with future._auto_contrast_brightness_lock:
@@ -2077,11 +2018,12 @@ class Detector(model.Detector):
             if future._must_stop.is_set():
                 raise CancelledError()
 
-    def _cancelAutoContrastBrightness(self, future):
+    def _cancelAutoContrastBrightness(self, future: futures.Future) -> bool:
         """
         Cancels the auto contrast brightness. Non-blocking.
-        :param future (Future): the future to stop.
-        :return (bool): True if it successfully cancelled (stopped) the move.
+
+        :param future: the future to stop.
+        :return: True if it successfully cancelled (stopped) the move.
         """
         future._must_stop.set()  # Tell the thread taking care of auto contrast brightness it's over.
 
@@ -2106,7 +2048,7 @@ class Chamber(model.Actuator):
     which accepts two position values: 0 for vented, 1 for vacuum.
     """
 
-    def __init__(self, name, role, parent, **kwargs):
+    def __init__(self, name: str, role: str, parent: model.HwComponent, **kwargs) -> None:
         axes = {"vacuum": model.Axis(choices={PRESSURE_VENTED: "vented",
                                               PRESSURE_PUMPED: "vacuum"})}
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes, **kwargs)
@@ -2121,7 +2063,7 @@ class Chamber(model.Actuator):
 
         self._executor = CancellableThreadPoolExecutor(max_workers=1)
 
-    def stop(self, axes=None):
+    def stop(self, axes: Optional[str] = None) -> None:
         self._executor.cancel()
         if self._executor._queue:
             logging.warning("Stopping the pumping/venting process is not supported.")
@@ -2131,13 +2073,13 @@ class Chamber(model.Actuator):
         raise NotImplementedError("Relative movements are not implemented for vacuum control. Use moveAbs instead.")
 
     @isasync
-    def moveAbs(self, pos):
+    def moveAbs(self, pos: Dict[str, float]) -> futures.Future:
         self._checkMoveAbs(pos)
         return self._executor.submit(self._changePressure, pos["vacuum"])
 
-    def _changePressure(self, target):
+    def _changePressure(self, target: int) -> None:
         """
-        target (0, 1): 0 for pumping to vacuum, 1 for venting the chamber
+        :param target: 0 or 1; 0 for pumping to vacuum, 1 for venting the chamber
         """
         self._refreshPressure()
         if target == self.position.value["vacuum"]:
@@ -2150,7 +2092,7 @@ class Chamber(model.Actuator):
             self.parent.vent()
         self._refreshPressure()
 
-    def _refreshPressure(self):
+    def _refreshPressure(self) -> None:
         # Position (vacuum state)
         state = self.parent.get_vacuum_state()
         val = {"vacuum": PRESSURE_PUMPED if state == "vacuum" else PRESSURE_VENTED}
@@ -2166,7 +2108,7 @@ class Chamber(model.Actuator):
             self.pressure._set_value(pressure, force_write=True)
             logging.warning("Couldn't read pressure value, assuming ambient pressure %s.", pressure)
 
-    def terminate(self):
+    def terminate(self) -> None:
         self._polling_thread.cancel()
 
 
@@ -2184,18 +2126,18 @@ class SEMDataFlow(model.DataFlow):
     which the SEM acquisition streams subscribe.
     """
 
-    def __init__(self, detector):
+    def __init__(self, detector: model.Detector):
         """
-        detector (model.Detector): the detector that the dataflow corresponds to
+        :param detector: the detector that the dataflow corresponds to
         """
         model.DataFlow.__init__(self)
         self._detector = detector
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
-    def start_generate(self):
+    def start_generate(self) -> None:
         self._detector.start_generate()
 
-    def stop_generate(self):
+    def stop_generate(self) -> None:
         self._detector.stop_generate()
 
 
@@ -2205,7 +2147,7 @@ class Stage(model.Actuator):
     moving the TFS stage and updating the position.
     """
 
-    def __init__(self, name, role, parent, rng=None, **kwargs):
+    def __init__(self, name: str, role: str, parent: model.HwComponent, rng: dict = None, **kwargs) -> None:
         if rng is None:
             rng = {}
         stage_info = parent.stage_info()
@@ -2241,7 +2183,7 @@ class Stage(model.Actuator):
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Stage position polling")
         self._pos_poll.start()
 
-    def _updatePosition(self):
+    def _updatePosition(self) -> None:
         """
         update the position VA
         """
@@ -2251,7 +2193,7 @@ class Stage(model.Actuator):
         if old_pos != self.position.value:
             logging.debug("Updated position to %s", self.position.value)
 
-    def _refreshPosition(self):
+    def _refreshPosition(self) -> None:
         """
         Called regularly to update the current position
         """
@@ -2263,7 +2205,7 @@ class Stage(model.Actuator):
         except Exception:
             logging.exception("Unexpected failure when updating position")
 
-    def _getPosition(self):
+    def _getPosition(self) -> None:
         """Get position and translate the axes names to be Odemis compatible."""
         pos = self.parent.get_stage_position()
         pos["rx"] = pos.pop("t")
@@ -2279,7 +2221,7 @@ class Stage(model.Actuator):
                 pos[an] = (pos[an] - rng[0]) % (2 * math.pi) + rng[0]
         return pos
 
-    def _moveTo(self, future, pos, rel=False, timeout=60):
+    def _moveTo(self, future: futures.Future, pos: Dict[str, float], rel: bool = False, timeout: float = 60) -> None:
         with future._moving_lock:
             try:
                 if future._must_stop.is_set():
@@ -2346,23 +2288,21 @@ class Stage(model.Actuator):
                 # Update the position, even if the move didn't entirely succeed
                 self._updatePosition()
 
-    def _doMoveRel(self, future, shift):
+    def _doMoveRel(self, future: futures.Future, shift: Dict[str, float]):
         """
-        shift (dict): position in internal coordinates (ie, axes in the same
+        :param shift: position in internal coordinates (ie, axes in the same
            direction as the hardware expects)
         """
         # We don't check the target position fit the range, the xt-adapter will take care of that
         self._moveTo(future, shift, rel=True)
 
     @isasync
-    def moveRel(self, shift):
+    def moveRel(self, shift: Dict[str, float]) -> None:
         """
         Shift the stage the given position in meters. This is non-blocking.
         Throws an error when the requested position is out of range.
 
-        Parameters
-        ----------
-        shift: dict(string->float)
+        :param shift:
             Relative shift to move the stage to per axes in m for 'x', 'y', 'z' in rad for 'rx', 'rz'.
             Axes are 'x', 'y', 'z', 'rx' and 'rz'.
         """
@@ -2375,18 +2315,16 @@ class Stage(model.Actuator):
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
 
-    def _doMoveAbs(self, future, pos):
+    def _doMoveAbs(self, future: futures.Future, pos: dict) -> None:
         self._moveTo(future, pos, rel=False)
 
     @isasync
-    def moveAbs(self, pos):
+    def moveAbs(self, pos: Dict[str, float]) -> None:
         """
         Move the stage the given position in meters. This is non-blocking.
         Throws an error when the requested position is out of range.
 
-        Parameters
-        ----------
-        pos: dict(string->float)
+        :param pos:
             Absolute position to move the stage to per axes in m for 'x', 'y', 'z' in rad for 'rx', 'rz'.
             Axes are 'x', 'y', 'z', 'rx' and 'rz'.
         """
@@ -2399,7 +2337,7 @@ class Stage(model.Actuator):
         f = self._executor.submitf(f, self._doMoveAbs, f, pos)
         return f
 
-    def stop(self, axes=None):
+    def stop(self, axes: Optional[Set[str]] = None) -> None:
         """Stop the movement of the stage."""
         self._executor.cancel()
         self.parent.stop_stage_movement()
@@ -2408,9 +2346,9 @@ class Stage(model.Actuator):
         except Exception:
             logging.exception("Unexpected failure when updating position")
 
-    def _createFuture(self):
+    def _createFuture(self) -> CancellableFuture:
         """
-        Return (CancellableFuture): a future that can be used to manage a move
+        :return: a future that can be used to manage a move
         """
         f = CancellableFuture()
         f._moving_lock = threading.Lock()  # taken while moving
@@ -2419,12 +2357,13 @@ class Stage(model.Actuator):
         f.task_canceller = self._cancelCurrentMove
         return f
 
-    def _cancelCurrentMove(self, future):
+    def _cancelCurrentMove(self, future: futures.Future) -> bool:
         """
         Cancels the current move (both absolute or relative). Non-blocking.
-        future (Future): the future to stop. Unused, only one future must be
+
+        :param future: the future to stop. Unused, only one future must be
          running at a time.
-        return (bool): True if it successfully cancelled (stopped) the move.
+        :return: True if it successfully cancelled (stopped) the move.
         """
         # The difficulty is to synchronise correctly when:
         #  * the task is just starting (not finished requesting axes to move)
@@ -2445,9 +2384,9 @@ class Focus(model.Actuator):
     moving the SEM focus (as it's considered an axis in Odemis)
     """
 
-    def __init__(self, name, role, parent, **kwargs):
+    def __init__(self, name: str, role: str, parent: model.HwComponent, **kwargs) -> None:
         """
-        axes (set of string): names of the axes
+        :param axes: names of the axes
         """
 
         fwd_info = parent.fwd_info()
@@ -2473,14 +2412,14 @@ class Focus(model.Actuator):
         self._pos_poll.start()
 
     @isasync
-    def applyAutofocus(self, detector):
+    def applyAutofocus(self, detector: model.Detector) -> futures.Future:
         """
         Wrapper for running the autofocus functionality asynchronously. It sets the state of autofocus,
-        the beam must be turned on and unblanked. Also a a reasonable manual focus is needed. When the image is too far
+        the beam must be turned on and unblanked. Also, a reasonable manual focus is needed. When the image is too far
         out of focus, an incorrect focus can be found using the autofocus functionality.
         This call is non-blocking.
 
-        :param detector: (model.Detector)
+        :param detector:
             Detector component that stores information about which channel to use for autofocusing.
         :return: Future object
         """
@@ -2494,10 +2433,11 @@ class Focus(model.Actuator):
         f._channel_name = detector._scanner.channel
         return self._executor.submitf(f, self._applyAutofocus, f)
 
-    def _applyAutofocus(self, future):
+    def _applyAutofocus(self, future: futures.Future) -> None:
         """
         Starts autofocussing and checks if the autofocussing process is finished for ProgressiveFuture.
-        :param future (Future): the future to start running.
+
+        :param future: the future to start running.
         """
         channel_name = future._channel_name
         with future._autofocus_lock:
@@ -2512,11 +2452,12 @@ class Focus(model.Actuator):
             if future._must_stop.is_set():
                 raise CancelledError()
 
-    def _cancelAutoFocus(self, future):
+    def _cancelAutoFocus(self, future: futures.Future) -> bool:
         """
         Cancels the autofocussing. Non-blocking.
-        :param future (Future): the future to stop.
-        :return (bool): True if it successfully cancelled (stopped) the move.
+
+        :param future: the future to stop.
+        :return: True if it successfully cancelled (stopped) the move.
         """
         future._must_stop.set()  # tell the thread taking care of autofocussing it's over
 
@@ -2529,14 +2470,14 @@ class Focus(model.Actuator):
                 logging.warning("Failed to cancel autofocus: %s", error_msg)
                 return False
 
-    def _updatePosition(self):
+    def _updatePosition(self) -> None:
         """
         update the position VA
         """
         z = self.parent.get_free_working_distance()
         self.position._set_value({"z": z}, force_write=True)
 
-    def _refreshPosition(self):
+    def _refreshPosition(self) -> None:
         """
         Called regularly to update the current position
         """
@@ -2548,10 +2489,11 @@ class Focus(model.Actuator):
         except Exception:
             logging.exception("Unexpected failure when updating position")
 
-    def _doMoveRel(self, foc):
+    def _doMoveRel(self, foc: float) -> None:
         """
         move by foc
-        foc (float): relative change in m
+
+        :param foc: relative change in m
         """
         try:
             foc += self.parent.get_free_working_distance()
@@ -2560,10 +2502,11 @@ class Focus(model.Actuator):
             # Update the position, even if the move didn't entirely succeed
             self._updatePosition()
 
-    def _doMoveAbs(self, foc):
+    def _doMoveAbs(self, foc: float) -> None:
         """
         move to pos
-        foc (float): unit m
+
+        :param foc: unit m
         """
         try:
             self.parent.set_free_working_distance(foc)
@@ -2572,9 +2515,9 @@ class Focus(model.Actuator):
             self._updatePosition()
 
     @isasync
-    def moveRel(self, shift):
+    def moveRel(self, shift: Dict[str, float]) -> futures.Future:
         """
-        shift (dict): shift in m
+        :param shift: shift in m
         """
         if not shift:
             return model.InstantaneousFuture()
@@ -2585,9 +2528,9 @@ class Focus(model.Actuator):
         return f
 
     @isasync
-    def moveAbs(self, pos):
+    def moveAbs(self, pos: Dict[str, float]) -> futures.Future:
         """
-        pos (dict): pos in m
+        :param pos: pos in m
         """
         if not pos:
             return model.InstantaneousFuture()
@@ -2597,7 +2540,7 @@ class Focus(model.Actuator):
         f = self._executor.submit(self._doMoveAbs, foc)
         return f
 
-    def stop(self, axes=None):
+    def stop(self, axes: Optional[Set[str]] = None) -> None:
         """
         Stop the last command
         """
@@ -2613,7 +2556,8 @@ class Focus(model.Actuator):
 
 class MultiBeamScanner(Scanner):
     """
-    This class extends  behaviour of the xt_client.Scanner class with XTtoolkit functionality.
+    This class extends behaviour of the xt_client.Scanner class with XTtoolkit functionality.
+
     xt_client.Scanner contains Vigilant Attributes for magnification, accel voltage, blanking, spotsize, beam shift,
     rotation and dwell time. This class adds XTtoolkit functionality via the Vigilant Attributes for the delta pitch,
     beam stigmator, pattern stigmator, the beam shift transformation matrix (read-only),
@@ -2621,7 +2565,8 @@ class MultiBeamScanner(Scanner):
     Whenever one of these attributes is changed, its setter also updates another value if needed.
     """
 
-    def __init__(self, name, role, parent, hfw_nomag, channel="electron1", **kwargs):
+    def __init__(self, name: str, role: str, parent: model.HwComponent,
+                 hfw_nomag: float, channel: str = "electron1", **kwargs) -> None:
         self.channel = channel  # Name of the electron channel used.
 
         # First instantiate the xt_toolkit VA's then call the __init__ of the super for the update thread.
@@ -2712,7 +2657,7 @@ class MultiBeamScanner(Scanner):
         super(MultiBeamScanner, self).__init__(name, role, parent, hfw_nomag, **kwargs)
 
     @isasync
-    def applyAutoStigmator(self):
+    def applyAutoStigmator(self) -> None:
         """
         Wrapper for autostigmation function, non-blocking.
         """
@@ -2729,7 +2674,7 @@ class MultiBeamScanner(Scanner):
             f = self._executor.submitf(f, self.parent.start_autostig)
         return f
 
-    def _updateSettings(self):
+    def _updateSettings(self) -> None:
         """
         Read all the current settings from the SEM and reflects them on the VAs
         """
@@ -2781,28 +2726,28 @@ class MultiBeamScanner(Scanner):
         except Exception:
             logging.exception("Unexpected failure when polling XTtoolkit settings")
 
-    def _setDeltaPitch(self, delta_pitch):
+    def _setDeltaPitch(self, delta_pitch: float) -> float:
         self.parent.set_delta_pitch(delta_pitch * 1e6)  # Convert from meters to micrometers.
         return self.parent.get_delta_pitch() * 1e-6
 
-    def _setBeamStigmator(self, beam_stigmator_value):
+    def _setBeamStigmator(self, beam_stigmator_value: Tuple[float, float]) -> Tuple[float, float]:
         self.parent.set_stigmator(*beam_stigmator_value)
         return self.parent.get_stigmator()
 
-    def _setPatternStigmator(self, pattern_stigmator_value):
+    def _setPatternStigmator(self, pattern_stigmator_value: Tuple[float, float]) -> Tuple[float, float]:
         self.parent.set_pattern_stigmator(*pattern_stigmator_value)
         return self.parent.get_pattern_stigmator()
 
-    def _setBeamletIndex(self, beamlet_index):
+    def _setBeamletIndex(self, beamlet_index: Tuple[int, int]) -> Tuple[int, int]:
         self.parent.set_beamlet_index(beamlet_index)
         new_beamlet_index = self.parent.get_beamlet_index()
         return tuple(int(i) for i in new_beamlet_index)  # convert tuple values to integers.
 
-    def _setBeamPower(self, power_value):
+    def _setBeamPower(self, power_value: bool) -> bool:
         self.parent.set_beam_power(power_value)
         return self.parent.get_beam_is_on()
 
-    def _setImmersion(self, immersion: bool):
+    def _setImmersion(self, immersion: bool) -> bool:
         # immersion disabled -> focusing mode = 0
         # immersion enabled -> focusing mode = COMPOUND_LENS_FOCUS_IMMERSION
         self.parent.set_compound_lens_focusing_mode(COMPOUND_LENS_FOCUS_IMMERSION if immersion else 0)
@@ -2812,7 +2757,7 @@ class MultiBeamScanner(Scanner):
         self._updateHFWRange()
         return self.parent.get_compound_lens_focusing_mode() > 0
 
-    def _updateHFWRange(self):
+    def _updateHFWRange(self) -> None:
         """
         To be called when the field of view range might have changed.
         This can happen when some settings are changed.
@@ -2831,7 +2776,7 @@ class MultiBeamScanner(Scanner):
             mag_range_min = self._hfw_nomag / hfov_range[1]
             self.magnification.range = (mag_range_min, mag_range_max)
 
-    def _setMultiBeamMode(self, multi_beam_mode):
+    def _setMultiBeamMode(self, multi_beam_mode: bool) -> bool:
         if multi_beam_mode:
             self.parent.set_use_case('MultiBeamTile')
         else:
@@ -2846,7 +2791,7 @@ class XTTKDetector(Detector):
     to work with image acquisition in XTToolkit.
     """
 
-    def __init__(self, name, role, parent, address, **kwargs):
+    def __init__(self, name: str, role: str, parent: model.HwComponent, address: str, **kwargs):
         # The acquisition is based on a FSM that roughly looks like this:
         # Event\State |    Stopped    |   Acquiring    | Receiving data |
         #    START    | Ready for acq |        .       |       .        |
@@ -2865,9 +2810,9 @@ class XTTKDetector(Detector):
                           "uri is correct and XT server is"
                           " connected to the network. %s" % (address, err))
         Detector.__init__(self, name, role, parent=parent, **kwargs)
-        self._shape = (2**16,)  # Depth of the image
+        self._shape = (2 ** 16,)  # Depth of the image
 
-    def stop_generate(self):
+    def stop_generate(self) -> None:
         logging.debug("Stopping image acquisition")
         self._genmsg.put(GEN_STOP)
         with self._cancel_access:
@@ -2883,7 +2828,7 @@ class XTTKDetector(Detector):
             self.parent.blank_beam()
         logging.debug("Stopped generate image acquisition")
 
-    def _acquire(self):
+    def _acquire(self) -> None:
         """
         Acquisition thread
         Managed via the ._genmsg Queue
@@ -2949,11 +2894,11 @@ class XTTKFocus(Focus):
     """
 
     @isasync
-    def applyAutofocus(self, detector):
+    def applyAutofocus(self, detector: model.Detector) -> futures.Future:
         """
         Wrapper for autofocus flash function, non-blocking.
 
-        :param detector: (model.Detector)
+        :param detector:
             The detector is unused for XTTK focusing, because it is not possible to select a channel for flash focusing.
         :return: Future object
         """

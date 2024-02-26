@@ -41,7 +41,7 @@ class FastEMAcquisitionTab(Tab):
         acquisition (ROAs), which are organized in projects.
 
         During creation, the following controllers are created:
-        
+
         StreamController
           Manages the single beam stream.
 

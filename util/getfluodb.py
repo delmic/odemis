@@ -9,15 +9,15 @@ Copyright © 2013 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import os
@@ -31,7 +31,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 # Downloads the fluorophores database from fluorophores.org (using the special
 # JSON interface we've sponsored)
-# See fluorophores-api.txt for the API description. Basically, there are 
+# See fluorophores-api.txt for the API description. Basically, there are
 # "environments" (a dye) which have a excitation and emission wavelength. Each
 # environment is defined also by a temperature, solvent, pH, and substance.
 # Each substance can be queried, to get more information on it.
@@ -58,8 +58,8 @@ def open_json_or_remove(filename):
     and delete the file if it's really bad.
     filename (string): path to a JSON file to open
     return (object): python object representing the content of the JSON file
-    raises: 
-        ValueError: if the file is not a correct JSON file (the file has been 
+    raises:
+        ValueError: if the file is not a correct JSON file (the file has been
           deleted)
     """
     f = open(filename, "r")

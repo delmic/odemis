@@ -37,7 +37,7 @@ class PixelValueOverlay(ViewOverlay):
         ViewOverlay.__init__(self, cnvs, view)
 
         self._v_pos = None
-        self._p_pos = None  
+        self._p_pos = None
         self.view = view
         self._raw_value = None
 

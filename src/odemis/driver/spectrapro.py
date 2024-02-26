@@ -1088,4 +1088,3 @@ class SPSimulator(object):
         else:
             out = b" " + out + b"  ok\r\n"
         self._output_buf += out
-

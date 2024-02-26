@@ -247,4 +247,3 @@ class ScaleWindow(BufferedWindow):
         # gc.DrawLines([(margin, vmiddle - nod), (margin, vmiddle + nod)])
         # gc.DrawLines([(self.Width - margin, vmiddle - nod), (self.Width - margin, vmiddle + nod)])
         # # could use strokelines
-

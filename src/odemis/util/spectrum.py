@@ -133,7 +133,7 @@ def get_time_per_pixel(da):
         tl = da.metadata[model.MD_TIME_LIST]
         # check available dimension of data
         dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim:])
-        
+
         if len(dims) == 3 and dims == "YXC" and da.shape[2] in (3, 4):  # RGB?
             # This is a hack that works the same way as in get_wavelength_per_pixel
             # Typically, CT data is represented as TCR.

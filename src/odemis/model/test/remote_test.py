@@ -9,15 +9,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import gc
@@ -312,7 +312,7 @@ class ProxyOfProxyTest(unittest.TestCase):
         count_arrays = comp2.get_data_count()
         logging.info("received %d arrays", count_arrays)
         nlisteners = comp.data._count_listeners()
-        
+
         # WARNING: This relies on comp2 being unreferenced immediately, and cleaned-up.
         # This works fine when running the test cases using unittest, however
         # when running with pytest, it doesn't behave the same, and the object is
@@ -549,7 +549,7 @@ class RemoteTest(unittest.TestCase):
         """
         Tests 2 dataflows, one synchronized on the event of acquisition started
         on the other dataflow.
-        """ 
+        """
         number = 20
         self.count = 0
         self.left = number

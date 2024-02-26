@@ -23,7 +23,6 @@ see http://www.gnu.org/licenses/.
 # Contains all the static streams, which only provide projections of the data
 # they were initialised with.
 
-from past.builtins import long
 import copy
 import gc
 import logging
@@ -139,7 +138,7 @@ class RGBStream(StaticStream):
 
     def _clean_raw(self, raw):
         '''
-        Returns cleaned raw data or raises error if raw is not RGB(A) 
+        Returns cleaned raw data or raises error if raw is not RGB(A)
         '''
         # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
         if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
@@ -693,7 +692,7 @@ class StaticSpectrumStream(StaticStream):
                                         (cwl - width, cwl + width),
                                         range=((min_bw, min_bw), (max_bw, max_bw)),
                                         unit=unit_bw,
-                                        cls=(int, long, float))
+                                        cls=(int, float))
             self.spectrumBandwidth.subscribe(self.onSpectrumBandwidth)
 
         # the raw data after calibration
@@ -957,7 +956,7 @@ class RGBUpdatableStream(StaticStream):
 
     def _clean_raw(self, raw):
         '''
-        Returns cleaned raw data or raises error if raw is not RGB(A) 
+        Returns cleaned raw data or raises error if raw is not RGB(A)
         '''
         # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
         if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):

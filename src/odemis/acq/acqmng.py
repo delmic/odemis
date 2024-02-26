@@ -40,7 +40,7 @@ import time
 import copy
 from odemis.model import prepare_to_listen_to_more_vas
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING
-from odemis.util.driver import guessActuatorMoveDuration 
+from odemis.util.driver import guessActuatorMoveDuration
 from odemis.util.img import assembleZCube
 
 # This is the "manager" of an acquisition. The basic idea is that you give it
@@ -126,9 +126,9 @@ class ZStackAcquisitionTask(object):
         """
         self._main_future = future
         self._future_lock = threading.Lock()
-        self._actuator_f = None 
-        self._single_acqui_f = None 
-        self._future_state = RUNNING 
+        self._actuator_f = None
+        self._single_acqui_f = None
+        self._future_state = RUNNING
         self._streams = sortStreams(streams)
         self._zlevels = zlevels
         self._settings_obs = settings_obs
@@ -168,7 +168,7 @@ class ZStackAcquisitionTask(object):
         # iterate through streams
         for stream in self._streams:
             zstack = []
-            if stream not in self._zlevels: 
+            if stream not in self._zlevels:
                 try:
                     # acquire this single stream, and get the data
                     self._single_acqui_f = acquire([stream], self._settings_obs)
@@ -186,10 +186,10 @@ class ZStackAcquisitionTask(object):
                         logging.info("The acquisition for stream %s is done", stream)
 
                 except CancelledError:
-                    raise 
+                    raise
                 except Exception as e:
                     logging.exception("The acquisition of stream %s failed", stream.name.value)
-                    # return what was acquired so far  
+                    # return what was acquired so far
                     return acquired_data, e
 
                 if data:
@@ -198,7 +198,7 @@ class ZStackAcquisitionTask(object):
                 remaining_t -= stream.estimateAcquisitionTime()
                 self._main_future.set_end_time(time.time() + remaining_t)
 
-            else: 
+            else:
                 # for each stream, iterate through zlevels
                 for i, z in enumerate(self._zlevels[stream]):
                     # move the focuser
@@ -235,9 +235,9 @@ class ZStackAcquisitionTask(object):
                     except Exception as e:
                         logging.exception("The acquisition failed at the %s-th zlevel of the stream %s, because %s" % (
                         i + 1, stream, e))
-                        # TODO handle zstack assembling in case of error 
+                        # TODO handle zstack assembling in case of error
                         return acquired_data, e
-                        
+
                     # only if there is data acquired
                     if data:
                         zstack.append(data[0])
@@ -257,19 +257,19 @@ class ZStackAcquisitionTask(object):
 
 def estimateZStackAcquisitionTime(streams, zlevels):
     """
-    Estimates the total time for zstack acquisition including the movements time 
-        of the zsteps 
-    streams(list of Stream): the streams to be acquired 
+    Estimates the total time for zstack acquisition including the movements time
+        of the zsteps
+    streams(list of Stream): the streams to be acquired
     zlevels(dict Stream -> list of float): the zlevels dictionary containing
-        the streams along with the list of z positions 
-    return (float): total estimated time of acquisition of streams and zsteps 
+        the streams along with the list of z positions
+    return (float): total estimated time of acquisition of streams and zsteps
     """
     acq_time = 0
     for s in streams:
         if s in zlevels.keys():
             acq_time += s.estimateAcquisitionTime() * len(zlevels[s])
         else:
-            acq_time += s.estimateAcquisitionTime() 
+            acq_time += s.estimateAcquisitionTime()
     for s in streams:
         zs = zlevels.get(s, [0])  # concider that streams without zlevels are acquired at a single z
         if len(zs) > 1 and s.focuser:
@@ -473,9 +473,9 @@ def _weight_stream(stream):
 
 def sortStreams(streams):
     """
-    Sorts a list of streams based on the order they will be acquired 
-    streams (acq.stream.Stream): a list of streams to be sorted 
-    returns (acq.stream.Stream): a list of sorted streams 
+    Sorts a list of streams based on the order they will be acquired
+    streams (acq.stream.Stream): a list of streams to be sorted
+    returns (acq.stream.Stream): a list of sorted streams
     """
     return sorted(streams, key=_weight_stream, reverse=True)
 

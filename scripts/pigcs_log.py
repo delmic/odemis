@@ -3,7 +3,7 @@
 '''
 Created on 28 Oct 2013
 
-Log info about PI controllers. Run it once, with all the controllers you're 
+Log info about PI controllers. Run it once, with all the controllers you're
 interested in connected. The result will be saved in ./pigcs.log
 
 @author: Éric Piel
@@ -49,6 +49,3 @@ if __name__ == '__main__':
                 prms = controller._sendQueryCommand("SPA?\n")
                 logging.info("Parameters of controller %d:\n%s",
                              controller.address, "\n".join(prms))
-
-
-
