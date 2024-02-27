@@ -1804,6 +1804,8 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # List of overlays which handles creation, editing and removal of a shape class which
+        # is a subclass of EditableShape class
         self.shapes_overlay = []
 
     def add_background_overlay(self, rectangles):
@@ -1814,18 +1816,19 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         self.add_world_overlay(bg_overlay)
         return bg_overlay
 
-    def remove_overlay(self, overlay):
+    def remove_shape(self, shape):
         """
-        :param: overlay: (RectangleOverlay, EllipseOverlay, PolygonOverlay) overlay to be deleted
+        :param: shape: (EditableShape) shape to be deleted
         """
-        for shapes_overlay in self.shapes_overlay:
-            shapes_overlay.remove_overlay(overlay)
-        self.remove_world_overlay(overlay)
+        for overlay in self.shapes_overlay:
+            overlay.remove_shape(shape)
+        # To handle removal of calibration shape and rectangle shape from import/export ROA plugin,
+        # always remove shape from the world overlay
+        self.remove_world_overlay(shape)
         wx.CallAfter(self.request_drawing_update)
 
-    def add_calibration_overlay(self, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
+    def add_calibration_shape(self, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
         """
-        coordinates (TupleContinuousVA): VA of 4 floats representing region of calibration coordinates
         label (str): label for the overlay (typically a number 1-9)
         sample_bbox (tuple): bounding box coordinates of the sample holder (minx, miny, maxx, maxy) [m]
         colour (str): border colour of ROA overlay, given as string of hex code
