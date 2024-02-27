@@ -457,8 +457,7 @@ class SECOMCLSettingsStream(acqstream.CCDSettingsStream):
             _, rep, pxs = self._updateROIAndPixelSize((0, 0, 1, 1), pxs)
             return roi, rep, pxs
 
-        # compute the ROI.
-        roi = self._fitROI(roi)
+        # Note: don't update the RoI, as in this plugin we want to keep it as fixed as possible.
 
         # Compute the pixel size for a given scanner px size and ensure it's within range.
         spxs = self._scanner.pixelSize.value  # px size of scanner for given magnification (pitch size)
@@ -693,6 +692,8 @@ class CLAcqPlugin(Plugin):
     # Describe how the values should be displayed
     # See odemis.gui.conf.data for all the possibilities
     vaconf = OrderedDict((
+        ("roi", {
+        }),
         ("repetition", {
         }),
         ("pixelSize", {
@@ -897,6 +898,7 @@ class CLAcqPlugin(Plugin):
         self.repetition = self._secom_cl_stream.repetition  # ebeam positions to acquire
         self.repetition.subscribe(self._on_rep, init=True)
         self.pixelSize = self._secom_cl_stream.pixelSize  # pixel size per ebeam pos
+        self.roi = self._secom_cl_stream.roi
         self.roi_margin = self._secom_cl_stream.roi_margin
         self.period = self._driftCorrector.period  # time between to drift corrections
         self.tool = dlg._dmodel.tool  # tools to select ROA and anchor region for drift correction
