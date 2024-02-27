@@ -623,6 +623,23 @@ class AcquisitionTask(object):
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
             fastem_conf.configure_detector(self._detector, self._roc2, self._roc3)
 
+            if self._save_full_cells:
+                old_res = self._multibeam.resolution.value
+                old_cell_translation = self._detector.cellTranslation.value
+                old_cell_translation_md = self._detector.getMetadata().get(model.MD_CELL_TRANSLATION, None)
+
+                # set the resolution to the complete resolution, typically 7200px
+                self._multibeam.resolution.value = (
+                    self._detector.shape[0] * self._detector.cellCompleteResolution.value[0],
+                    self._detector.shape[1] * self._detector.cellCompleteResolution.value[1]
+                )
+
+                # set the cell translation to 0, because we do not want to do any cropping
+                cell_translation = tuple(tuple((0, 0) for i in range(0, self._detector.shape[0]))
+                                         for j in range(0, self._detector.shape[1]))
+                self._detector.updateMetadata({model.MD_CELL_TRANSLATION: cell_translation})
+                self._detector.cellTranslation.value = cell_translation
+
             dataflow.subscribe(self.image_received)
 
             # Acquire the single field images.
