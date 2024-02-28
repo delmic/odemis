@@ -156,6 +156,15 @@ class TestActuator(unittest.TestCase):
         # back (at the end, in case of overshoot)
         self.assertGreater(diff_pos * self.direction, -20e-6) # negative means opposite dir
 
+    def test_set_speed(self):
+
+        orig_speed = self.dev.speed.value
+        new_speed = orig_speed.copy()
+        new_speed["x"] /= 2
+        self.dev.speed.value = new_speed
+        self.assertAlmostEqual(self.dev.speed.value["x"], orig_speed["x"] / 2)
+        self.dev.speed.value = orig_speed
+
     def test_stop(self):
         self.dev.stop()
 
