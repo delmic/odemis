@@ -32,13 +32,14 @@ jobs:
         # W293 Blank line contains whitespace
         # W391 Blank line at end of file
         # E999 SyntaxError
-        run: flake8 . --select W291,W292,W293,W391,E999
+        # (Exclude the automatically generated files)
+        run: flake8 . --select W291,W292,W293,W391,E999 --exclude src/odemis/gui/main_xrc.py,src/odemis/gui/win/dialog_xrc.py
 
       - name: Run flake8 on changed files
         run: |
           for changed_file in ${{ steps.changed-files.outputs.all_changed_files }}; do
             if [[ $changed_file == *.py ]]
             then
-              flake8 "$changed_file" --select W291,W292,W293,W391,E999
+              flake8 "$changed_file" --select W291,W292,W293,W391,E999  --exclude src/odemis/gui/main_xrc.py,src/odemis/gui/win/dialog_xrc.py
             fi
           done
