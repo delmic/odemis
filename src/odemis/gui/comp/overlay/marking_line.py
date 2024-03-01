@@ -150,8 +150,14 @@ class MarkingLineOverlay(base.ViewOverlay, base.DragMixin):
 
             # If it's a big number: use at least all the characters needed to show the number (IOW, round to an int).
             # If it's a small number: show 4 significant digits.
-            sig_x = max(4, math.ceil(math.log10(abs(val[0]))))
-            sig_y = max(4, math.ceil(math.log10(abs(val[1]))))
+            def sig_digits(val):
+                abs_val = abs(val)
+                if abs_val < 10_000:
+                    return 4
+                return math.ceil(math.log10(abs_val))
+
+            sig_x = sig_digits(val[0])
+            sig_y = sig_digits(val[1])
             self.x_label = units.readable_str(val[0], self.cnvs.unit_x, sig_x)
             self.y_label = units.readable_str(val[1], self.cnvs.unit_y, sig_y)
 

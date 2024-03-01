@@ -1655,6 +1655,9 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         span = rng[1] - rng[0]
+        if span == 0:
+            # Let's just pick something not too weird
+            span = 1
 
         # relative position of the centre in the current display range
         prop = (centre - rng[0]) / span
@@ -1691,6 +1694,9 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         span = rng[1] - rng[0]
+        if span == 0:
+            # Let's just pick something not too weird
+            span = 1
 
         # relative position of the centre
         prop = (centre - rng[0]) / span
