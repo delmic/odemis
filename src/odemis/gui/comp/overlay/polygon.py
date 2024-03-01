@@ -106,23 +106,11 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                 logging.warning("Cannot create a polygon for less than 3 points.")
                 self.reset_click_mixin()
                 self._points.clear()
-            # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
-            self.points.value = [(y, x) for x, y in self._points]
+            # Force update points and coordinates VA on finishing
+            self._on_selected(True)
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_right_up(self, evt)
-
-    def on_enter(self, evt):
-        if self.active.value:
-            self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
-        else:
-            WorldOverlay.on_enter(self, evt)
-
-    def on_leave(self, evt):
-        if self.active.value:
-            self.cnvs.reset_default_cursor()
-        else:
-            WorldOverlay.on_leave(self, evt)
 
     def on_motion(self, evt):
         if self.active.value and self.selected.value:
