@@ -3538,9 +3538,9 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                                 <object class="sizeritem">
                                   <object class="UnitFloatCtrl" name="dpx_step_cntrl">
                                     <value>1</value>
-                                    <key_step>0.000001</key_step>
+                                    <key_step>1</key_step>
                                     <min>0</min>
-                                    <max>10</max>
+                                    <max>250</max>
                                     <unit>%</unit>
                                     <accuracy>3</accuracy>
                                     <XRCED>
