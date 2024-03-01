@@ -26,6 +26,7 @@ import math
 import os
 import threading
 import time
+import warnings
 from concurrent.futures import CancelledError
 
 import numpy
@@ -185,6 +186,9 @@ class FastEMROA(object):
         6000 = 6400 * (1 - overlap) = field_size * (1 - overlap)
         => n_fields = (abs(r - l) - field_size * overlap) / (field_size * (1 - overlap))
         """
+        warnings.warn(
+        "`get_square_field_indices() is deprecated, use `get_poly_field_indices()` instead", DeprecationWarning
+        )
         l, t, r, b = coordinates  # tuple of floats: l, t, r, b coordinates in m
         px_size = self._multibeam.pixelSize.value  # Size per pixel in m
         field_res = self._multibeam.resolution.value  # Number of pixels per field

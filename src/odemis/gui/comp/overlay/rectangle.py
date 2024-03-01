@@ -25,6 +25,7 @@ import odemis.gui as gui
 import odemis.util.units as units
 from odemis import util
 from odemis.acq.stream import UNDEFINED_ROI
+from odemis.gui.comp.overlay._constants import LINE_WIDTH_THIN, LINE_WIDTH_THICK
 from odemis.gui.comp.overlay.base import SEL_MODE_NONE, DragMixin, Vec, WorldOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
@@ -35,8 +36,8 @@ class RectangleSelectOverlay(EditableShape, WorldSelectOverlay):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
         """
-        cnvs: canvas for the overlay
-        colour (str): border colour of overlay, given as string of hex code
+        :param cnvs: canvas for the overlay
+        :param colour: (str) border colour of overlay, given as string of hex code
         """
         EditableShape.__init__(self, cnvs)
         WorldSelectOverlay.__init__(self, cnvs, colour)
@@ -48,7 +49,7 @@ class RectangleSelectOverlay(EditableShape, WorldSelectOverlay):
     def _on_coordinates_rec(self, coordinates):
         """
         Update the overlay with the new data of the .coordinates VA.
-        coordinates (tuple of 4 floats): left, top, right, bottom position in m
+        :param coordinates: (tuple of 4 floats) left, top, right, bottom position in m
         """
         if coordinates != UNDEFINED_ROI:
             self.set_physical_sel(coordinates)
@@ -63,8 +64,8 @@ class RectangleOverlay(RectangleSelectOverlay):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
         """
-        cnvs: canvas for the overlay
-        colour (str): hex colour code for the rectangle
+        :param cnvs: canvas for the overlay
+        :param colour: (str) hex colour code for the rectangle
         """
         super().__init__(cnvs, colour)
 
@@ -143,7 +144,7 @@ class RectangleOverlay(RectangleSelectOverlay):
         it has an adaptive line width (wider if the overlay is active) and it always shows the
         size label of the selected rectangle."""
         flag = self.active.value and self.selected.value
-        line_width = 5 if flag else 2
+        line_width = LINE_WIDTH_THICK if flag else LINE_WIDTH_THIN
 
         # show size label if ROA is selected
         if self.p_start_pos and self.p_end_pos and flag:

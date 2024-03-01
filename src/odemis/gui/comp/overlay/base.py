@@ -1094,7 +1094,6 @@ class LineEditingMixin(ClickMixin, DragMixin):
     _on_motion
 
     """
-    hover_margin = 10  # px
 
     def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0), edit_mode=EDIT_MODE_POINT):
 
@@ -1106,6 +1105,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
         self.edit_mode = edit_mode
 
         self.hover = gui.HOVER_NONE
+        self.hover_margin = 10  # px
 
         # Selection modes (none, edit and drag)
         self.selection_mode = SEL_MODE_NONE

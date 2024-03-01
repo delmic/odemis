@@ -26,6 +26,7 @@ import cairo
 import wx
 
 import odemis.gui as gui
+from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
 from odemis.gui.comp.overlay.base import LineEditingMixin, Vec, WorldOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
@@ -66,7 +67,10 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                 self.v_points[idx] = Vec(self.cnvs.phys_to_view(point, offset))
 
     def is_point_in_shape(self, point):
-        return point_in_polygon(point, self._points)
+        # A polygon should have atleast 2 points after on_right_up
+        if len(self._points) > 2:
+            return point_in_polygon(point, self._points)
+        return False
 
     def on_left_down(self, evt):
         if self.active.value and self.selected.value:
@@ -142,7 +146,11 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
             offset = self.cnvs.get_half_buffer_size()
 
             # draws the dotted line
-            line_width = 5 if (self.active.value and self.selected.value) else 2
+            if (self.active.value and self.selected.value):
+                line_width = LINE_WIDTH_THICK
+            else:
+                line_width = LINE_WIDTH_THIN
+
             ctx.set_line_width(line_width)
             if dash:
                 ctx.set_dash([2])

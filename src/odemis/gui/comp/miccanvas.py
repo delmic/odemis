@@ -1818,7 +1818,7 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
 
     def remove_shape(self, shape):
         """
-        :param: shape: (EditableShape) shape to be deleted
+        :param shape: (EditableShape) shape to be deleted
         """
         for overlay in self.shapes_overlay:
             overlay.remove_shape(shape)

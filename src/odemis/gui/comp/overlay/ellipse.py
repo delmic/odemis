@@ -26,6 +26,7 @@ import cairo
 from odemis import util
 import odemis.util.units as units
 import odemis.gui as gui
+from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
 from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 
@@ -43,8 +44,8 @@ class EllipseOverlay(RectangleOverlay):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
         """
-        cnvs: canvas for the overlay
-        colour (str): hex colour code for the ellipse
+        :param cnvs: canvas for the overlay
+        :param colour: (str) hex colour code for the ellipse
         """
         super().__init__(cnvs, colour)
         # The points on the circumference of the ellipse from where the arcs are drawn
@@ -69,7 +70,7 @@ class EllipseOverlay(RectangleOverlay):
         """Draw the selection as a ellipse."""
         self._circumference_points.clear()
         flag = self.active.value and self.selected.value
-        line_width = 5 if flag else 2
+        line_width = LINE_WIDTH_THICK if flag else LINE_WIDTH_THIN
 
         if self.p_start_pos and self.p_end_pos:
             # Important: We need to use the physical positions, in order to draw
