@@ -26,7 +26,8 @@ import cairo
 from odemis import util
 import odemis.util.units as units
 import odemis.gui as gui
-from odemis.gui.comp.overlay.base import Vec
+from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
+from odemis.gui.comp.overlay.base import SEL_MODE_NONE, Vec, WorldOverlay
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 
 # The circumference of an ellipse is divided by this factor to calculate number of
@@ -43,33 +44,49 @@ class EllipseOverlay(RectangleOverlay):
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
         """
-        cnvs: canvas for the overlay
-        colour (str): hex colour code for the ellipse
+        :param cnvs: canvas for the overlay
+        :param colour: (str) hex colour code for the ellipse
         """
         super().__init__(cnvs, colour)
         # The points on the circumference of the ellipse from where the arcs are drawn
-        self._circumference_points = []
-
-    def _on_selected(self, selected):
-        """Callback for selected VA. Override EditableShape's method to only set coordinates value."""
-        if selected:
-            self.coordinates.value = util.get_polygon_bbox(self._points)
+        # The points VA is set to _points if the shape is selected
+        self._points = []
 
     def on_left_up(self, evt):
         """
         Check if left click was in ellipse. If so, activate the overlay. Otherwise, deactivate.
         """
-        # on_left_up draws the ellipse and gathers the circumference points
-        super().on_left_up(evt)
-        # Finally assign the points value
-        if self.selected.value:
-            self.points.value = self._circumference_points
+        if self.active.value:
+            abort_rectangle_creation = (
+                max(self.get_height() or 0, self.get_width() or 0) < gui.SELECTION_MINIMUM
+            )
+            if not abort_rectangle_creation:
+                # Activate/deactivate region
+                self._view_to_phys()
+                rect = self.get_physical_sel()
+                if rect:
+                    pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
+                    self.selected.value = util.is_point_in_rect(pos, rect)
+                    if self.selected.value:
+                        self.set_physical_sel(rect)
+
+            # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
+            # that we need
+            self.clear_drag()
+            self.selection_mode = SEL_MODE_NONE
+            self.edit_hover = None
+
+            # Set the points VA after drawing because draw() gathers the points
+            self.cnvs.update_drawing()
+            if self.selected.value:
+                self.points.value = self._points
+        WorldOverlay.on_left_up(self, evt)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """Draw the selection as a ellipse."""
-        self._circumference_points.clear()
+        self._points.clear()
         flag = self.active.value and self.selected.value
-        line_width = 5 if flag else 2
+        line_width = LINE_WIDTH_THICK if flag else LINE_WIDTH_THIN
 
         if self.p_start_pos and self.p_end_pos:
             # Important: We need to use the physical positions, in order to draw
@@ -108,9 +125,8 @@ class EllipseOverlay(RectangleOverlay):
                         ctx.move_to(x, y)
                     else:
                         ctx.line_to(x, y)
-                    p_x, p_y = self.cnvs.buffer_to_phys((x, y), offset)
-                    # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
-                    self._circumference_points.append((p_y, p_x))
+                    point = self.cnvs.buffer_to_phys((x, y), offset)
+                    self._points.append(point)
                 ctx.close_path()
                 ctx.stroke()
 

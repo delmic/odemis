@@ -26,6 +26,7 @@ import math
 import os
 import threading
 import time
+import warnings
 from concurrent.futures import CancelledError
 
 import numpy
@@ -138,8 +139,10 @@ class FastEMROA(object):
     def on_points(self, points):
         """Recalculate the field indices when the points of the region of acquisition (ROA) have changed
         (e.g. resize, moving).
-        :param points: list of nested points (y, x) representing the shape in physical coordinates.
+        :param points: list of nested points (x, y) representing the shape in physical coordinates.
         """
+        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
+        points = [(y, x) for x, y in points]
         self.field_indices = self._calculate_field_indices(points)
 
     def estimate_acquisition_time(self):
@@ -155,73 +158,8 @@ class FastEMROA(object):
     def _calculate_field_indices(self, points):
         indices = []
         if points:
-            indices = self.get_poly_field_indices(points.copy())
+            indices = self.get_poly_field_indices(points)
         return indices
-
-    def get_square_field_indices(self, coordinates):
-        """
-        Calculates the number of single field images needed to cover the ROA (region of acquisition). Determines the
-        corresponding indices of the field images in a matrix covering the ROA. If the ROA cannot be covered
-        by an integer number of single field images, the number of single field images is increased to cover the
-        full region. An ROA is a rectangle. Its coordinates are defined in the role="stage" coordinate system and
-        is thus aligned with the axes of the sample carrier.
-
-        :param coordinates: (tuple of floats (xmin, ymin, xmax, ymax) The minimum and maximum real world x and y
-        coordinates of the ROA in [m]
-        :return: (list of nested tuples (col, row)) The column and row field indices of
-        the field images in the order they should be acquired. The tuples are re-ordered so that the single field
-        images resembling the ROA are acquired first rows then columns.
-
-        Note: The number of fields with overlap is calculated in the following way:
-        An ROA with overlap can be visualized as follows:
-        |------|--⁞----|--⁞----|--⁞
-        If you have 3 fields of 6400 pixels wide with 400 pixels overlap, the resulting megafield is
-        6000 * 3 + 400 pixels in width and the width is abs(r - l). The number of fields that fit in a
-        certain width can be derived from this:
-        abs(r - l) = 6000 * 3 + 400
-        (abs(r-l) - 400) / 6000 = 3 fields
-        with:
-        400 = 6400 * overlap = field_size * overlap
-        6000 = 6400 * (1 - overlap) = field_size * (1 - overlap)
-        => n_fields = (abs(r - l) - field_size * overlap) / (field_size * (1 - overlap))
-        """
-        l, t, r, b = coordinates  # tuple of floats: l, t, r, b coordinates in m
-        px_size = self._multibeam.pixelSize.value  # Size per pixel in m
-        field_res = self._multibeam.resolution.value  # Number of pixels per field
-
-        # The size of a field consists of the effective cell images excluding overscanned pixels.
-        field_size = (field_res[0] * px_size[0],
-                      field_res[1] * px_size[1])  # [px] * [m/px] = [m]
-
-        # Note: Megafields get asymmetrically extended towards the right and bottom.
-        # When fields overlap the number of fields is calculated by subtracting the size of the field that overlaps
-        # from the total roa size and dividing that by the non-overlapping field size. (see note in docstring)
-        width = abs(r - l) - field_size[0] * self.overlap
-        # If the width is smaller than field_size * overlap assume the user wants to acquire at least 1 field
-        if width <= 0:
-            n_hor_fields = 1
-        else:
-            # Note: floating point errors here, can result in an additional row or column of fields (that's fine)
-            n_hor_fields = math.ceil(width / (field_size[0] * (1 - self.overlap)))
-
-        height = abs(b - t) - field_size[1] * self.overlap
-        # If the height is smaller than field_size * overlap assume the user wants to acquire at least 1 field
-        if height <= 0:
-            n_vert_fields = 1
-        else:
-            # Note: floating point errors here, can result in an additional row or column of fields (that's fine)
-            n_vert_fields = math.ceil(height / (field_size[1] * (1 - self.overlap)))
-
-        # Create the field indices based on the number of horizontal and vertical fields.
-        field_indices = numpy.ndindex(n_vert_fields, n_hor_fields)
-
-        # ndindex returns an iterator, the values need to be returned as a list.
-        # The fields should be acquired per row, therefore when looping over the field indices the vertical fields
-        # should initially stay constant. The indices are swapped, because the dataflow expects first the column
-        # index, then the row index. ((0,0), (1,0), (2,0), ...., (0,2), (1,2), ...)
-        field_indices = [f[::-1] for f in field_indices]
-
-        return field_indices
 
     def get_poly_field_indices(self, polygon):
         """
@@ -804,8 +742,8 @@ class AcquisitionTask(object):
 
         # Get the coordinate of the top left corner of the ROA, this corresponds to the (xmin, ymax) coordinate in the
         # role='stage' coordinate system.
-        points = self._roa.points.value
-        _, xmin_roa, ymax_roa, _ = util.get_polygon_bbox(points.copy())
+        points = self._roa.points.value.copy()
+        xmin_roa, _, _, ymax_roa = util.get_polygon_bbox(points)
 
         # Transform from stage to scan-stage coordinate system
         rot_cor = self._stage_scan.getMetadata()[model.MD_ROTATION_COR]

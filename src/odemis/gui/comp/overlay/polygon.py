@@ -26,6 +26,7 @@ import cairo
 import wx
 
 import odemis.gui as gui
+from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
 from odemis.gui.comp.overlay.base import LineEditingMixin, Vec, WorldOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
@@ -45,6 +46,8 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         EditableShape.__init__(self, cnvs)
 
         self._label = self.add_label("", colour=self.colour, align=wx.ALIGN_CENTRE_HORIZONTAL)
+        # The points VA is set to _points if the shape is selected
+        self._points = []
         self.v_point.subscribe(self._on_v_point)
 
     def _on_v_point(self, point):
@@ -66,7 +69,10 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                 self.v_points[idx] = Vec(self.cnvs.phys_to_view(point, offset))
 
     def is_point_in_shape(self, point):
-        return point_in_polygon(point, self._points)
+        # A polygon should have atleast 2 points after on_right_up
+        if len(self._points) > 2:
+            return point_in_polygon(point, self._points)
+        return False
 
     def on_left_down(self, evt):
         if self.active.value and self.selected.value:
@@ -78,12 +84,13 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
     def on_left_up(self, evt):
         if self.active.value:
             LineEditingMixin._on_left_up(self, evt)
-            if self.finished_click_mixin:
+            if self.right_click_finished:
                 self._phys_to_view()
                 offset = self.cnvs.get_half_buffer_size()
                 p_point = Vec(self.cnvs.view_to_phys(evt.Position, offset))
-                selected = self.is_point_in_shape(p_point)
-                self.selected._set_value(selected, must_notify=True)
+                self.selected.value = self.is_point_in_shape(p_point)
+                if self.selected.value:
+                    self.points.value = self._points
             self.cnvs.update_drawing()
         WorldOverlay.on_left_up(self, evt)
 
@@ -102,8 +109,8 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                 logging.warning("Cannot create a polygon for less than 3 points.")
                 self.reset_click_mixin()
                 self._points.clear()
-            # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
-            self.points.value = [(y, x) for x, y in self._points]
+            # Set initial value
+            self.points.value = self._points
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_right_up(self, evt)
@@ -142,7 +149,11 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
             offset = self.cnvs.get_half_buffer_size()
 
             # draws the dotted line
-            line_width = 5 if (self.active.value and self.selected.value) else 2
+            if (self.active.value and self.selected.value):
+                line_width = LINE_WIDTH_THICK
+            else:
+                line_width = LINE_WIDTH_THIN
+
             ctx.set_line_width(line_width)
             if dash:
                 ctx.set_dash([2])
@@ -161,7 +172,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
             self.last_shiftscale = shiftscale
 
             # if the polygon creation is not finished in ClickMixin
-            if not self.finished_click_mixin:
+            if not self.right_click_finished:
                 # draw the line to current position of the cursor
                 p_last_point = self._points[-1]
                 b_last_point = self.cnvs.phys_to_buffer(p_last_point, offset)

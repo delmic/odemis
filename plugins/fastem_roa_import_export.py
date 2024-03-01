@@ -173,13 +173,13 @@ class ImportExportROAPlugin(Plugin):
                 # Finally assign the rectangle coordinates value to draw it
                 # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
                 points = [
-                    (roa_coordinates[1], roa_coordinates[0]),  # ymin, xmin
-                    (roa_coordinates[1], roa_coordinates[2]),  # ymin, xmax
-                    (roa_coordinates[3], roa_coordinates[0]),  # ymax, xmin
-                    (roa_coordinates[3], roa_coordinates[2]),  # ymax, xmax
+                    (roa_coordinates[0], roa_coordinates[1]),  # xmin, ymin
+                    (roa_coordinates[2], roa_coordinates[1]),  # xmax, ymin
+                    (roa_coordinates[0], roa_coordinates[3]),  # xmin, ymax
+                    (roa_coordinates[2], roa_coordinates[3]),  # xmax, ymax
                 ]
                 rectangle_overlay.points.value = points
-                rectangle_overlay.coordinates.value = roa_coordinates
+                rectangle_overlay.set_physical_sel(roa_coordinates)
             self._cnvs.reset_default_cursor()
 
     def _write_data_to_csv_file(self, filepath: str) -> None:
@@ -202,9 +202,8 @@ class ImportExportROAPlugin(Plugin):
                 roas = project_ctrl.model.roas.value
                 for roa in roas:
                     data[CSVFieldnames.ROA_NAME.value] = roa.name.value
-                    points = [(x, y) for y, x in roa.points.value]
                     # Convert points to coordinates (xmin, ymin, xmax, ymax) or (l, t, r, b)
-                    roa_coordinates = util.get_polygon_bbox(points)
+                    roa_coordinates = util.get_polygon_bbox(roa.points.value)
                     data[CSVFieldnames.ROA_COORDINATES_L.value] = roa_coordinates[0]
                     data[CSVFieldnames.ROA_COORDINATES_T.value] = roa_coordinates[1]
                     data[CSVFieldnames.ROA_COORDINATES_R.value] = roa_coordinates[2]
@@ -238,6 +237,7 @@ class ImportExportROAPlugin(Plugin):
         try:
             data = self._get_data_from_csv_file(filepath)
             self._update_project_list(data)
+            self._cnvs.request_drawing_update()
         except Exception as ex:
             logging.exception("Failure importing ROAs")
             wx.MessageBox(

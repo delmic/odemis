@@ -1818,7 +1818,7 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
 
     def remove_shape(self, shape):
         """
-        :param: shape: (EditableShape) shape to be deleted
+        :param shape: (EditableShape) shape to be deleted
         """
         for overlay in self.shapes_overlay:
             overlay.remove_shape(shape)
@@ -1827,13 +1827,14 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         self.remove_world_overlay(shape)
         wx.CallAfter(self.request_drawing_update)
 
-    def add_calibration_shape(self, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
+    def add_calibration_shape(self, coordinates, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
         """
+        coordinates (TupleContinuousVA): VA of 4 floats representing region of calibration coordinates
         label (str): label for the overlay (typically a number 1-9)
         sample_bbox (tuple): bounding box coordinates of the sample holder (minx, miny, maxx, maxy) [m]
         colour (str): border colour of ROA overlay, given as string of hex code
         """
-        roc_overlay = FastEMROCOverlay(self, label, sample_bbox, colour=colour)
+        roc_overlay = FastEMROCOverlay(self, coordinates, label, sample_bbox, colour=colour)
         self.add_world_overlay(roc_overlay)
         # Always activate after creating, otherwise the code to select the region in
         # FastEMROCOverlay.on_left_up will never be called.

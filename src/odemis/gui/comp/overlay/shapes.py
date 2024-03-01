@@ -20,14 +20,12 @@ This file is part of Odemis.
 
 """
 from abc import ABCMeta, abstractmethod
+from typing import Tuple
 
 import wx
 
 from odemis import model, util
-from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.overlay.base import WorldOverlay
-
-UNDEFINED_POS_SIZE = (0, 0)
 
 
 class EditableShape(metaclass=ABCMeta):
@@ -39,59 +37,44 @@ class EditableShape(metaclass=ABCMeta):
     def __init__(self, cnvs):
         """:param cnvs: canvas passed by the shape's overlay and used to draw the shapes."""
         # States if the shape is selected
-        # The VA's value should always be set using _set_value(selected, must_notify=True)
-        # method because the points and/or coordinates should always be updated id the shape
-        # was selected
         self.selected = model.BooleanVA(True)
-        # list of nested points (y, x) representing the shape and whose value will be used
+        # list of nested points (x, y) representing the shape and whose value will be used
         # during ROA acquisition
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         self.points = model.ListVA()
-        # Any shape can be represented by a bounding box and the coordinates (l, t, r, b) are
-        # stored here
-        self.coordinates = model.TupleVA(UNDEFINED_ROI)
-        self._points = []
-        # The position of shape i.e. the center of the shape's bounding box
-        self.position = model.TupleVA(UNDEFINED_POS_SIZE)
-        # The size of the shape's bounding box
-        self.size = model.TupleVA(UNDEFINED_POS_SIZE)
         self.cnvs = cnvs
-        self.selected.subscribe(self._on_selected)
-        self.coordinates.subscribe(self._on_coordinates)
 
-    def _on_selected(self, selected):
+    def get_bounding_box(self) -> Tuple[float, float, float, float]:
+        """Get the shape's bounding box."""
+        return util.get_polygon_bbox(self.points.value)
+
+    def get_position(self) -> Tuple[float, float]:
+        """Get the shape's position."""
+        xmin, ymin, xmax, ymax = self.get_bounding_box()
+        return ((xmin + xmax) / 2, (ymin + ymax) / 2)
+
+    def get_size(self) -> Tuple[float, float]:
+        """Get the shape's size."""
+        xmin, ymin, xmax, ymax = self.get_bounding_box()
+        return (abs(xmin - xmax), abs(ymin - ymax))
+
+    def shift_points(self, shift: Tuple[float, float]):
         """
-        Callback for selected VA. Override this method in the shape's overlay if one does
-        not want to set the points and/or coordinates value.
+        Shift the points representing the shape.
+
+        :param shift: the shift in (x, y).
 
         """
-        if selected:
-            self.points.value = [(y, x) for x, y in self._points]
-            self.coordinates.value = util.get_polygon_bbox(self._points)
-
-    def _on_coordinates(self, coordinates):
-        """
-        Callback for coordinates VA. Override this method in the shape's overlay if one does
-        not want to set the position and/or size value.
-
-        """
-        self.position.value = (
-            (coordinates[0] + coordinates[2]) / 2,
-            (coordinates[1] + coordinates[3]) / 2,
-        )
-        self.size.value = (
-            abs(coordinates[0] - coordinates[2]),
-            abs(coordinates[1] - coordinates[3]),
-        )
+        for idx, point in enumerate(self.points.value):
+            self.points.value[idx] = (point[0] + shift[0], point[1] + shift[1])
 
     @abstractmethod
-    def is_point_in_shape(self, point) -> bool:
+    def is_point_in_shape(self, point: Tuple[float, float]) -> bool:
         """
         Determine if the point is in the shape.
 
-        :param: point: (tuple) The point in physical coordinates.
+        :param: point: The point in physical coordinates.
 
-        :returns: (bool) whether the point is inside the shape or not.
+        :returns: whether the point is inside the shape or not.
 
         """
         pass

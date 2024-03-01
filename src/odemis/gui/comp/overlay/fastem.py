@@ -21,20 +21,23 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+import wx
+
 import odemis.gui as gui
-from odemis import util
+from odemis import model, util
+from odemis.acq.stream import UNDEFINED_ROI
 from odemis.gui.comp.overlay.base import (SEL_MODE_NONE, SEL_MODE_DRAG,
                                           DragMixin, Vec, WorldOverlay)
-from odemis.gui.comp.overlay.rectangle import RectangleSelectOverlay
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
 
 
-class FastEMROCOverlay(RectangleSelectOverlay):
+class FastEMROCOverlay(WorldSelectOverlay):
     """ Overlay representing one region of calibration (ROC) on the FastEM. """
 
-    def __init__(self, cnvs, label, sample_bbox, colour=gui.SELECTION_COLOUR):
+    def __init__(self, cnvs, coordinates, label, sample_bbox, colour=gui.SELECTION_COLOUR):
         """
         cnvs (FastEMAcquisitionCanvas): canvas for the overlay
+        coordinates (TupleContinuousVA): VA of 4 floats representing region of calibration coordinates
         label (str or int): label to be displayed next to rectangle
         sample_bbox (tuple): bounding box coordinates of the sample holder (minx, miny, maxx, maxy) [m]
         colour (str): hex colour code for ROC display in viewport
@@ -42,6 +45,19 @@ class FastEMROCOverlay(RectangleSelectOverlay):
         super().__init__(cnvs, colour)
         self.label = label
         self._sample_bbox = sample_bbox
+        # VA which states if the ROC is selected
+        self.selected = model.BooleanVA(False)
+        self._coordinates = coordinates
+        self._coordinates.subscribe(self._on_coordinates, init=True)
+
+    def _on_coordinates(self, coordinates):
+        """
+        Update the overlay with the new data of the .coordinates VA.
+        coordinates (tuple of 4 floats): left, top, right, bottom position in m
+        """
+        if coordinates != UNDEFINED_ROI:
+            self.set_physical_sel(coordinates)
+            wx.CallAfter(self.cnvs.request_drawing_update)
 
     def on_left_down(self, evt):
         """
@@ -74,10 +90,9 @@ class FastEMROCOverlay(RectangleSelectOverlay):
                 # to select a point inside the rectangle with the mouse. Instead, we consider a selection "inside"
                 # the rectangle if the selection is near (based on mpp value, so independent of scale).
                 margin = self.cnvs.view.mpp.value * 20
-                xmin, ymin, xmax, ymax = rect
-                self._points = [(xmin, ymin), (xmin, ymax), (xmax, ymin), (xmax, ymax)]
-                selected = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or (self.selection_mode == SEL_MODE_DRAG)
-                self.selected._set_value(selected, must_notify=True)
+                self.selected.value = util.is_point_in_rect(pos, util.expand_rect(rect, margin)) or (self.selection_mode == SEL_MODE_DRAG)
+                if self.selected.value:
+                    self._coordinates.value = rect
 
             # Stop dragging
             # Don't use SelectionMixin._on_left_up, there is some confusion with editing the size of the region, which is
@@ -107,7 +122,7 @@ class FastEMROCOverlay(RectangleSelectOverlay):
                 self._view_to_phys()
                 minx, miny, maxx, maxy = self.get_physical_sel()
                 # Clip the ROC so that it stays within the sample bounding box
-                rect = self.coordinates.value
+                rect = self._coordinates.value
                 roc_size = (rect[2] - rect[0], rect[3] - rect[1])
                 if minx < self._sample_bbox[0]:
                     minx = self._sample_bbox[0]

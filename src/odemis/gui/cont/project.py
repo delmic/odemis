@@ -294,7 +294,6 @@ class FastEMROAController(object):
         self.shape.colour = conversion.hex_to_frgba(colour)
         self.shape.points.subscribe(self._on_shape_points)
         self.shape.selected.subscribe(self._on_shape_selected)
-        self.shape.position.subscribe(self._find_closest_scintillator)
 
     def create_panel(self):
         """
@@ -325,6 +324,7 @@ class FastEMROAController(object):
     def _on_shape_points(self, points):
         """Assign the shape points value to ROA model's points"""
         self.model.points.value = points
+        self._find_closest_scintillator(self.shape.get_position())
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_roc(self, roc):
@@ -427,14 +427,10 @@ class FastEMROCController(object):
         """
         if self.shape is None:
             self.shape = self._viewport.canvas.\
-                add_calibration_shape(self.calib_model.name.value,
+                add_calibration_shape(self.calib_model.coordinates,
+                                      self.calib_model.name.value,
                                       self._sample_bbox,
                                       colour=self.calib_model.colour)
-            self.shape.coordinates.subscribe(self._on_coordinates, init=True)
-
-    def _on_coordinates(self, coords):
-        """Assign the shape coordinates value to ROC model's coordinates"""
-        self.calib_model.coordinates.value = coords
 
     def remove_calibration_shape(self):
         """
@@ -504,9 +500,9 @@ class FastEMCalibrationRegionsController(object):
             xmax = pos[0] + 0.5 * sz[0]
             ymax = pos[1] - 0.5 * sz[1]
 
+            roc_ctrl.calib_model.coordinates.value = (xmin, ymin, xmax, ymax)
             roc_ctrl.fit_view_to_bbox()  # Zoom to calibration region
             roc_ctrl.create_calibration_shape()
-            roc_ctrl.shape.coordinates.value = (xmin, ymin, xmax, ymax)
         else:
             # reset coordinates for ROC to undefined and remove overlay
             roc_ctrl.calib_model.coordinates.value = acqstream.UNDEFINED_ROI

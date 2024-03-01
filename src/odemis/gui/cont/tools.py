@@ -172,7 +172,7 @@ TOOLS = {
         ),
     model.TOOL_POLYGON:
         ModeTool(
-            "btn_star",
+            "btn_polygon",
             model.TOOL_POLYGON,
             model.TOOL_NONE,
             "Create/Move polygon"

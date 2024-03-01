@@ -22,51 +22,30 @@ This file is part of Odemis.
 import wx
 
 import odemis.gui as gui
-import odemis.util.units as units
 from odemis import util
-from odemis.acq.stream import UNDEFINED_ROI
+import odemis.util.units as units
+from odemis.util.raster import point_in_polygon
+from odemis.gui.comp.overlay._constants import LINE_WIDTH_THIN, LINE_WIDTH_THICK
 from odemis.gui.comp.overlay.base import SEL_MODE_NONE, DragMixin, Vec, WorldOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.comp.overlay.world_select import WorldSelectOverlay
 
 
-class RectangleSelectOverlay(EditableShape, WorldSelectOverlay):
-    """Superclass for a rectangle selection overlay."""
-
-    def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
-        """
-        cnvs: canvas for the overlay
-        colour (str): border colour of overlay, given as string of hex code
-        """
-        EditableShape.__init__(self, cnvs)
-        WorldSelectOverlay.__init__(self, cnvs, colour)
-        self.coordinates.subscribe(self._on_coordinates_rec, init=True)
-
-    def is_point_in_shape(self, point):
-        return util.is_point_in_rect(point, self.coordinates.value)
-
-    def _on_coordinates_rec(self, coordinates):
-        """
-        Update the overlay with the new data of the .coordinates VA.
-        coordinates (tuple of 4 floats): left, top, right, bottom position in m
-        """
-        if coordinates != UNDEFINED_ROI:
-            self.set_physical_sel(coordinates)
-            wx.CallAfter(self.cnvs.request_drawing_update)
-
-    def draw(self, ctx, shift=(0, 0), scale=1.0):
-        return super().draw(ctx, shift, scale)
-
-
-class RectangleOverlay(RectangleSelectOverlay):
+class RectangleOverlay(EditableShape, WorldSelectOverlay):
     """Overlay representing one rectangle."""
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
         """
-        cnvs: canvas for the overlay
-        colour (str): hex colour code for the rectangle
+        :param cnvs: canvas for the overlay
+        :param colour: (str) hex colour code for the rectangle
         """
-        super().__init__(cnvs, colour)
+        EditableShape.__init__(self, cnvs)
+        WorldSelectOverlay.__init__(self, cnvs, colour)
+
+    def is_point_in_shape(self, point):
+        if self.points.value:
+            return point_in_polygon(point, self.points.value)
+        return False
 
     def on_left_down(self, evt):
         """
@@ -82,9 +61,9 @@ class RectangleOverlay(RectangleSelectOverlay):
                 if not hover:
                     # Clicked outside selection
                     if (
-                        self.coordinates.value == UNDEFINED_ROI
+                        len(self.points.value) == 0
                     ):  # that's different from SelectionMixin
-                        # If ROA undefined, create new selection
+                        # Create new selection
                         self.start_selection()
                 elif hover in (gui.HOVER_SELECTION, gui.HOVER_LINE):
                     # Clicked inside selection or near line, so start dragging
@@ -104,23 +83,19 @@ class RectangleOverlay(RectangleSelectOverlay):
         """
         if self.active.value:
             abort_rectangle_creation = (
-                self.coordinates.value == UNDEFINED_ROI
-                and max(self.get_height() or 0, self.get_width() or 0) < gui.SELECTION_MINIMUM
+                max(self.get_height() or 0, self.get_width() or 0) < gui.SELECTION_MINIMUM
             )
-            if abort_rectangle_creation:
-                # Process aborted by clicking in the viewport
-                # VA did not change, so notify explicitly to make sure aborting the process works
-                self.coordinates.notify(UNDEFINED_ROI)
-            else:
+            if not abort_rectangle_creation:
                 # Activate/deactivate region
                 self._view_to_phys()
                 rect = self.get_physical_sel()
                 if rect:
                     pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
                     xmin, ymin, xmax, ymax = rect
-                    self._points = [(xmin, ymin), (xmin, ymax), (xmax, ymin), (xmax, ymax)]
-                    selected = util.is_point_in_rect(pos, rect)
-                    self.selected._set_value(selected, must_notify=True)
+                    self.selected.value = util.is_point_in_rect(pos, rect)
+                    if self.selected.value:
+                        self.set_physical_sel(rect)
+                        self.points.value = [(xmin, ymin), (xmin, ymax), (xmax, ymin), (xmax, ymax)]
 
             # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
             # that we need
@@ -143,7 +118,7 @@ class RectangleOverlay(RectangleSelectOverlay):
         it has an adaptive line width (wider if the overlay is active) and it always shows the
         size label of the selected rectangle."""
         flag = self.active.value and self.selected.value
-        line_width = 5 if flag else 2
+        line_width = LINE_WIDTH_THICK if flag else LINE_WIDTH_THIN
 
         # show size label if ROA is selected
         if self.p_start_pos and self.p_end_pos and flag:

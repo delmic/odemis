@@ -175,165 +175,6 @@ class TestFastEMROA(unittest.TestCase):
         cls.multibeam = model.getComponent(role="multibeam")
         cls.descanner = model.getComponent(role="descanner")
 
-    def test_estimate_acquisition_time(self):
-        """Check that the estimated time for one ROA (megafield) is calculated correctly."""
-        # Use float for number of fields, in order to not end up with additional fields scanned and thus an
-        # incorrectly estimated roa acquisition time.
-        x_fields = 2.9
-        y_fields = 3.2
-        n_fields = math.ceil(x_fields) * math.ceil(y_fields)
-        res_x, res_y = self.multibeam.resolution.value  # single field size
-        px_size_x, px_size_y = self.multibeam.pixelSize.value
-        coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = "test_megafield_id"
-
-        for dwell_time in [400e-9, 1e-6, 10e-6]:
-            self.multibeam.dwellTime.value = dwell_time
-            roa = fastem.FastEMROA(roa_name,
-                                   roc_2,
-                                   roc_3,
-                                   self.asm,
-                                   self.multibeam,
-                                   self.descanner,
-                                   self.mppc,
-                                   overlap=0.0)
-            roa.field_indices = roa.get_square_field_indices(coordinates)
-
-            cell_res = self.mppc.cellCompleteResolution.value
-            flyback = self.descanner.physicalFlybackTime.value  # extra time per line scan
-
-            # calculate expected roa (megafield) acquisition time
-            # (number of pixels per line * dwell time + flyback time) * number of lines * number of cells in x and y
-            estimated_line_time = cell_res[0] * dwell_time
-            # Remainder of the line scan time, part which is not a whole multiple of the descan periods.
-            remainder_scanning_time = estimated_line_time % self.descanner.clockPeriod.value
-            if remainder_scanning_time != 0:
-                # Adjusted the flyback time if there is a remainder of scanning time by adding one setpoint to ensure
-                # the line scan time is equal to a whole multiple of the descanner clock period
-                flyback = flyback + (self.descanner.clockPeriod.value - remainder_scanning_time)
-
-            # Round to prevent floating point errors
-            estimated_line_time = numpy.round(estimated_line_time + flyback, 9)
-
-            # The estimated ROA time is the line time multiplied with the cell resolution and the number of fields.
-            # Additionally, 1.5s overhead per field image and the first field image is acquired twice.
-            estimated_roa_acq_time = (estimated_line_time * cell_res[1] + 1.5) * (n_fields + 1)
-
-            # get roa acquisition time
-            roa_acq_time = estimate_acquisition_time(roa)
-
-            self.assertAlmostEqual(estimated_roa_acq_time, roa_acq_time)
-
-    def test_get_square_field_indices(self):
-        """Check that the correct number and order of field indices is returned and that row and column are in the
-        correct order."""
-        x_fields = 3
-        y_fields = 2
-        self.multibeam.resolution.value = (6400, 6400)  # don't change
-        res_x, res_y = self.multibeam.resolution.value  # single field size
-        px_size_x, px_size_y = self.multibeam.pixelSize.value
-        coordinates = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)  # in m, don't change
-        roc_2 = fastem.FastEMROC("roc_2", coordinates)
-        roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name,
-                               roc_2,
-                               roc_3,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap=0.0)
-
-        expected_indices = [(0, 0), (1, 0), (2, 0),
-                            (0, 1), (1, 1), (2, 1)]  # (col, row)
-
-        field_indices = roa.get_square_field_indices(coordinates)
-
-        self.assertListEqual(expected_indices, field_indices)
-
-    def test_get_square_field_indices_overlap(self):
-        """Check that the correct number of field indices are calculated when there is overlap between the fields."""
-        x_fields = 3
-        y_fields = 2
-        self.multibeam.resolution.value = (6400, 6400)  # don't change
-        res_x, res_y = self.multibeam.resolution.value  # single field size
-        px_size_x, px_size_y = self.multibeam.pixelSize.value
-
-        roa_name = "test_megafield_id"
-
-        field_size_x = res_x * px_size_x
-        field_size_y = res_y * px_size_y
-
-        for overlap in (0, 0.0625, 0.2, 0.5, 0.7):
-            # The coordinates of the ROA in meters.
-            xmin, ymin = (0, 0)
-            # Calculate the ROA size for a well specified number of fields taking the specified overlap between fields
-            # into account. As the fields of the last row and column do not have any neighbor to their right and bottom,
-            # do take their full size into account.
-            # An ROA with overlap can be visualized as follows:
-            # |------|--⁞----|--⁞----|--⁞
-            # where the left border of each field is drawn with a '|' and the right border of each field with a '⁞'.
-            # There are 3 fields of 8 '-' and the overlap is 2, therefore the total size is 3 * (8-2) + 2
-            xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
-                          field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
-            coordinates = (xmin, ymin, xmax - px_size_x, ymax - px_size_y)  # in m
-            roa = fastem.FastEMROA(roa_name,
-                                   None,
-                                   None,
-                                   self.asm,
-                                   self.multibeam,
-                                   self.descanner,
-                                   self.mppc,
-                                   overlap)
-
-            expected_indices = [(0, 0), (1, 0), (2, 0), (0, 1), (1, 1), (2, 1)]  # (col, row)
-            field_indices = roa.get_square_field_indices(coordinates)
-
-            # Floating point errors can result in an extra field, which is fine.
-            # Check that maximum 1 extra field index in x and 1 in y is calculated and that there are not fewer fields
-            # calculated than expected.
-            exp_x_min, exp_y_min, exp_x_max, exp_y_max = get_polygon_bbox(expected_indices)
-            res_x_min, res_y_min, res_x_max, res_y_max = get_polygon_bbox(field_indices)
-            self.assertEqual(exp_x_min, res_x_min)
-            self.assertEqual(exp_y_min, res_y_min)
-            self.assertLessEqual(res_x_max - exp_x_max, 1)
-            self.assertLessEqual(res_y_max - exp_y_max, 1)
-            self.assertGreaterEqual(res_x_max - exp_x_max, 0)
-            self.assertGreaterEqual(res_y_max - exp_y_max, 0)
-
-    def test_get_square_field_indices_overlap_small_roa(self):
-        """Check that the correct number of field indices are calculated for ROA's that are smaller than the overlap."""
-        res_x, res_y = self.multibeam.resolution.value  # single field size
-        px_size_x, px_size_y = self.multibeam.pixelSize.value
-        overlap = 0.2
-
-        roa_name = "test_megafield_id"
-
-        field_size_x = res_x * px_size_x
-        field_size_y = res_y * px_size_y
-        # The coordinates of the ROA in meters.
-        xmin, ymin = (0, 0)
-        # Create xmax and ymax such that they are smaller than the field_size * overlap.
-        xmax, ymax = (0.8 * field_size_x * overlap,
-                      0.8 * field_size_y * overlap)
-        coordinates = (xmin, ymin, xmax, ymax)  # in m
-        roa = fastem.FastEMROA(roa_name,
-                               None,
-                               None,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap)
-
-        # For very small ROA's we expect at least a single field.
-        expected_indices = [(0, 0)]  # (col, row)
-        field_indices = roa.get_square_field_indices(coordinates)
-        self.assertListEqual(field_indices, expected_indices)
-
     def test_get_poly_field_indices(self):
         """Test that the correct indices are returned and that they are in the right order."""
         x_fields = 5
@@ -492,12 +333,11 @@ class TestFastEMAcquisition(unittest.TestCase):
         coordinates = (top, left,
                        top + res_x * px_size_x * x_fields * (1 - overlap),
                        left + res_y * px_size_y * y_fields * (1 - overlap))  # in m
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         points = [
-            (coordinates[1], coordinates[0]),  # ymin, xmin
-            (coordinates[1], coordinates[2]),  # ymin, xmax
-            (coordinates[3], coordinates[0]),  # ymax, xmin
-            (coordinates[3], coordinates[2]),  # ymax, xmax
+            (coordinates[0], coordinates[1]),  # xmin, ymin
+            (coordinates[2], coordinates[1]),  # xmax, ymin
+            (coordinates[0], coordinates[3]),  # xmin, ymax
+            (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
@@ -537,12 +377,11 @@ class TestFastEMAcquisition(unittest.TestCase):
         coordinates = (0, 0,
                        res_x * px_size_x * x_fields + x_margin * px_size_x * (1 - overlap),
                        res_y * px_size_y * y_fields + y_margin * px_size_y * (1 - overlap))  # in m
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         points = [
-            (coordinates[1], coordinates[0]),  # ymin, xmin
-            (coordinates[1], coordinates[2]),  # ymin, xmax
-            (coordinates[3], coordinates[0]),  # ymax, xmin
-            (coordinates[3], coordinates[2]),  # ymax, xmax
+            (coordinates[0], coordinates[1]),  # xmin, ymin
+            (coordinates[2], coordinates[1]),  # xmax, ymin
+            (coordinates[0], coordinates[3]),  # xmin, ymax
+            (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
@@ -580,12 +419,11 @@ class TestFastEMAcquisition(unittest.TestCase):
                        0,
                        res_x * px_size_x * x_fields * (1 - overlap),
                        res_y * px_size_y * y_fields * (1 - overlap))  # in m
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         points = [
-            (coordinates[1], coordinates[0]),  # ymin, xmin
-            (coordinates[1], coordinates[2]),  # ymin, xmax
-            (coordinates[3], coordinates[0]),  # ymax, xmin
-            (coordinates[3], coordinates[2]),  # ymax, xmax
+            (coordinates[0], coordinates[1]),  # xmin, ymin
+            (coordinates[2], coordinates[1]),  # xmax, ymin
+            (coordinates[0], coordinates[3]),  # xmin, ymax
+            (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
@@ -627,12 +465,11 @@ class TestFastEMAcquisition(unittest.TestCase):
                        0,
                        res_x * px_size_x * x_fields * (1 - overlap),
                        res_y * px_size_y * y_fields * (1 - overlap))  # in m
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         points = [
-            (coordinates[1], coordinates[0]),  # ymin, xmin
-            (coordinates[1], coordinates[2]),  # ymin, xmax
-            (coordinates[3], coordinates[0]),  # ymax, xmin
-            (coordinates[3], coordinates[2]),  # ymax, xmax
+            (coordinates[0], coordinates[1]),  # xmin, ymin
+            (coordinates[2], coordinates[1]),  # xmax, ymin
+            (coordinates[0], coordinates[3]),  # xmin, ymax
+            (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
@@ -685,12 +522,11 @@ class TestFastEMAcquisition(unittest.TestCase):
         xmax = xmin + res_x * px_size_x * x_fields * (1 - overlap)
         ymax = ymin + res_y * px_size_y * y_fields * (1 - overlap)
         coordinates = (xmin, ymin, xmax, ymax)  # in m
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         points = [
-            (coordinates[1], coordinates[0]),  # ymin, xmin
-            (coordinates[1], coordinates[2]),  # ymin, xmax
-            (coordinates[3], coordinates[0]),  # ymax, xmin
-            (coordinates[3], coordinates[2]),  # ymax, xmax
+            (coordinates[0], coordinates[1]),  # xmin, ymin
+            (coordinates[2], coordinates[1]),  # xmax, ymin
+            (coordinates[0], coordinates[3]),  # xmin, ymax
+            (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
@@ -749,12 +585,11 @@ class TestFastEMAcquisition(unittest.TestCase):
         xmax = xmin + res_x * px_size_x * x_fields * (1 - overlap)
         ymax = ymin + res_y * px_size_y * y_fields * (1 - overlap)
         coordinates = (xmin, ymin, xmax, ymax)  # in m
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         points = [
-            (coordinates[1], coordinates[0]),  # ymin, xmin
-            (coordinates[1], coordinates[2]),  # ymin, xmax
-            (coordinates[3], coordinates[0]),  # ymax, xmin
-            (coordinates[3], coordinates[2]),  # ymax, xmax
+            (coordinates[0], coordinates[1]),  # xmin, ymin
+            (coordinates[2], coordinates[1]),  # xmax, ymin
+            (coordinates[0], coordinates[3]),  # xmin, ymax
+            (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
@@ -840,12 +675,11 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             # The coordinates of the ROA in meters.
             xmin, ymin, xmax, ymax = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)
             coordinates = (xmin, ymin, xmax, ymax)  # in m
-            # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
             points = [
-                (coordinates[1], coordinates[0]),  # ymin, xmin
-                (coordinates[1], coordinates[2]),  # ymin, xmax
-                (coordinates[3], coordinates[0]),  # ymax, xmin
-                (coordinates[3], coordinates[2]),  # ymax, xmax
+                (coordinates[0], coordinates[1]),  # xmin, ymin
+                (coordinates[2], coordinates[1]),  # xmax, ymin
+                (coordinates[0], coordinates[3]),  # xmin, ymax
+                (coordinates[2], coordinates[3]),  # xmax, ymax
             ]
 
             # Create an ROA with the coordinates of the field.
@@ -924,12 +758,11 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
                           field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
             coordinates = (xmin, ymin, xmax, ymax)  # in m
-            # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
             points = [
-                (coordinates[1], coordinates[0]),  # ymin, xmin
-                (coordinates[1], coordinates[2]),  # ymin, xmax
-                (coordinates[3], coordinates[0]),  # ymax, xmin
-                (coordinates[3], coordinates[2]),  # ymax, xmax
+                (coordinates[0], coordinates[1]),  # xmin, ymin
+                (coordinates[2], coordinates[1]),  # xmax, ymin
+                (coordinates[0], coordinates[3]),  # xmin, ymax
+                (coordinates[2], coordinates[3]),  # xmax, ymax
             ]
 
             # Create an ROA with the coordinates of the field.
@@ -1002,12 +835,11 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         xmax, ymax = (field_size_x * x_fields,
                       field_size_y * y_fields)
         coordinates = (xmin, ymin, xmax, ymax)  # in m
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         points = [
-            (coordinates[1], coordinates[0]),  # ymin, xmin
-            (coordinates[1], coordinates[2]),  # ymin, xmax
-            (coordinates[3], coordinates[0]),  # ymax, xmin
-            (coordinates[3], coordinates[2]),  # ymax, xmax
+            (coordinates[0], coordinates[1]),  # xmin, ymin
+            (coordinates[2], coordinates[1]),  # xmax, ymin
+            (coordinates[0], coordinates[3]),  # xmin, ymax
+            (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
 
         # Create an ROA with the coordinates of the field.
@@ -1056,12 +888,11 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         # The coordinates of the ROA in meters.
         xmin, ymin, xmax, ymax = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)
         coordinates = (xmin, ymin, xmax, ymax)  # in m
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         points = [
-            (coordinates[1], coordinates[0]),  # ymin, xmin
-            (coordinates[1], coordinates[2]),  # ymin, xmax
-            (coordinates[3], coordinates[0]),  # ymax, xmin
-            (coordinates[3], coordinates[2]),  # ymax, xmax
+            (coordinates[0], coordinates[1]),  # xmin, ymin
+            (coordinates[2], coordinates[1]),  # xmax, ymin
+            (coordinates[0], coordinates[3]),  # xmin, ymax
+            (coordinates[2], coordinates[3]),  # xmax, ymax
         ]
 
         # Create an ROA with the coordinates of the field.
@@ -1110,12 +941,11 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             # The coordinates of the ROA in meters.
             xmin, ymin, xmax, ymax = (0, 0, res_x * px_size_x * x_fields, res_y * px_size_y * y_fields)
             coordinates = (xmin, ymin, xmax, ymax)  # in m
-            # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
             points = [
-                (coordinates[1], coordinates[0]),  # ymin, xmin
-                (coordinates[1], coordinates[2]),  # ymin, xmax
-                (coordinates[3], coordinates[0]),  # ymax, xmin
-                (coordinates[3], coordinates[2]),  # ymax, xmax
+                (coordinates[0], coordinates[1]),  # xmin, ymin
+                (coordinates[2], coordinates[1]),  # xmax, ymin
+                (coordinates[0], coordinates[3]),  # xmin, ymax
+                (coordinates[2], coordinates[3]),  # xmax, ymax
             ]
 
             # Create an ROA with the coordinates of the field.
@@ -1146,7 +976,6 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
         # Create the settings observer to store the settings on the metadata
         settings_obs = SettingsObserver(model.getComponents())
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
         points = [(0, 0), (0, 0), (0, 0), (0, 0)]
 
         roa = fastem.FastEMROA("roa_name", None, None,

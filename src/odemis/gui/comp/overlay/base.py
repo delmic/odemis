@@ -511,7 +511,7 @@ class ClickMixin:
         return self._right_click
 
     @property
-    def finished_click_mixin(self):
+    def right_click_finished(self):
         """Boolean value indicating whether right click up has finished."""
         return self._finished
 
@@ -1094,10 +1094,13 @@ class LineEditingMixin(ClickMixin, DragMixin):
     _on_motion
 
     """
-    hover_margin = 10  # px
 
     def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0), edit_mode=EDIT_MODE_POINT):
+        """
+        :param center: (float, float) The center of the selection after right_click_finished
+        :param edit_mode: The mode which helps manipulation of the selection.
 
+        """
         ClickMixin.__init__(self)
         DragMixin.__init__(self)
 
@@ -1106,6 +1109,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
         self.edit_mode = edit_mode
 
         self.hover = gui.HOVER_NONE
+        self.hover_margin = 10  # px
 
         # Selection modes (none, edit and drag)
         self.selection_mode = SEL_MODE_NONE
@@ -1113,6 +1117,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
         # This attribute can be used to see if the canvas has shifted or scaled
         self.last_shiftscale = None
 
+        # Dict which contains l, r, t, b coordinates of each v_point according to the hover margin
         self.v_edges = {}
 
         # TODO: Move these to the super classes
@@ -1201,18 +1206,15 @@ class LineEditingMixin(ClickMixin, DragMixin):
             self.v_points[idx] = Vec(self.cnvs.buffer_to_view(b_pos))
 
     def _calc_edges(self):
-        """Calculate the inner and outer edges of the selection according to the hover margin."""
-        if self.finished_click_mixin:
-            points = self.v_points.copy()
-
-            if self.edit_mode == EDIT_MODE_POINT:
-                for idx, point in enumerate(points):
-                    self.v_edges.update({
-                        f"x{idx}_l": point.x - self.hover_margin,
-                        f"x{idx}_r": point.x + self.hover_margin,
-                        f"y{idx}_t": point.y - self.hover_margin,
-                        f"y{idx}_b": point.y + self.hover_margin,
-                    })
+        """Calculate the l, r, t, b coordinates of each edge according to the hover margin."""
+        if self.right_click_finished:
+            for idx, point in enumerate(self.v_points):
+                self.v_edges.update({
+                    f"x{idx}_l": point.x - self.hover_margin,
+                    f"x{idx}_r": point.x + self.hover_margin,
+                    f"y{idx}_t": point.y - self.hover_margin,
+                    f"y{idx}_b": point.y + self.hover_margin,
+                })
 
     def get_hover(self, vpos):
         """
@@ -1236,13 +1238,11 @@ class LineEditingMixin(ClickMixin, DragMixin):
             if point_in_polygon(vpos, self.v_points):
                 return gui.HOVER_SELECTION, None
 
-            return gui.HOVER_NONE, None
-
         return gui.HOVER_NONE, None
 
     def _on_left_down(self, evt):
         """Call this method from the 'on_left_down' method of super classes."""
-        if not self.finished_click_mixin:
+        if not self.right_click_finished:
             ClickMixin._on_left_down(self, evt)
         else:
             DragMixin._on_left_down(self, evt)
@@ -1261,7 +1261,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
 
     def _on_left_up(self, evt):
         """Call this method from the 'on_left_up' method of super classes."""
-        if not self.finished_click_mixin:
+        if not self.right_click_finished:
             ClickMixin._on_left_up(self, evt)
         else:
             DragMixin._on_left_up(self, evt)
@@ -1271,15 +1271,15 @@ class LineEditingMixin(ClickMixin, DragMixin):
         self.edit_hover = None
 
     def _on_right_up(self, evt):
-        if not self.finished_click_mixin:
+        if not self.right_click_finished:
             ClickMixin._on_right_up(self, evt)
 
     def _on_right_down(self, evt):
-        if not self.finished_click_mixin:
+        if not self.right_click_finished:
             ClickMixin._on_right_down(self, evt)
 
     def _on_motion(self, evt):
-        if not self.finished_click_mixin:
+        if not self.right_click_finished:
             ClickMixin._on_motion(self, evt)
         else:
             DragMixin._on_motion(self, evt)
