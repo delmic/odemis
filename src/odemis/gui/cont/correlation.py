@@ -143,6 +143,47 @@ class CorrelationController(object):
         # refresh combobox
         self._update_correlation_cmb(self._tab_data_model.streams.value)
 
+        # warn user that this will reset correlation data
+
+        # reset correlation data
+        
+        # skip if no reference is selected... free movement
+
+        # loop through streams, find first that matches reference frame
+        # set as reference frame
+        # move all other streams to reference frame
+        ref_stream = None
+        for s in self._tab_data_model.streams.value:
+            self._reset_stream_correlation_data(s)
+            if isinstance(s, self.ref_stream):
+                logging.info(f"Stream {s.name.value} is chosen as reference frame")
+
+                ref_stream = s
+            update_image_in_views(s, self._tab_data_model.views.value)
+
+        if ref_stream is None:
+            logging.info(f"No reference frame found, skipping correlation reset")
+            return
+        
+
+        ref_pos = ref_stream.raw[0].metadata[model.MD_POS]
+        # move non-reference streams to first reference frame
+        for s in self._tab_data_model.streams.value:
+            logging.info(f"Stream: {s.name.value}, pos: {s.raw[0].metadata[model.MD_POS]}")
+            if not isinstance(s, self.ref_stream):
+                logging.info(f"Moving stream {s.name.value} to reference frame {ref_stream.name.value}")
+                self._move_stream_to_pos(pos=ref_pos, s=s)
+            else:
+                logging.info(f"Stream {s.name.value} is already in reference frame")
+
+            update_image_in_views(s, self._tab_data_model.views.value)
+
+        # TODO: @patrick replace with meteor-968 helper once merged
+        self._panel.vp_correlation_tl.canvas.fit_view_to_content()
+        self._panel.vp_correlation_tr.canvas.fit_view_to_content()
+        self._panel.vp_correlation_bl.canvas.fit_view_to_content()
+        self._panel.vp_correlation_br.canvas.fit_view_to_content()
+
     def reset_correlation_pressed(self, evt: wx.Event) -> None:
         """"Reset the correlation data for the selected stream, and re-draw
         :param evt: (wx.Event) the event"""
@@ -154,6 +195,7 @@ class CorrelationController(object):
         """reset the stream position to the original position / rotation / scale
         :param s: (StaticStream) the stream to reset"""
         if s is not None and s.raw:
+            logging.debug(f"Resetting stream correlation data: {s.name.value}")
             s.raw[0].metadata[model.MD_POS_COR] = (0, 0)
             s.raw[0].metadata[model.MD_ROTATION_COR] = 0
             s.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = (1, 1)
@@ -339,12 +381,13 @@ class CorrelationController(object):
 
             update_image_in_views(s, self.localization_tab.tab_data_model.views.value)
 
-    def _move_stream_to_pos(self, pos: tuple) -> None:
+    def _move_stream_to_pos(self, pos: tuple, s: StaticStream = None) -> None:
         """move the selected stream to the position pos
         :param pos: (tuple) the realspace position to move the stream to (metres)"""
         # the difference between the clicked position, and the position in metadata
         # is the offset (be careful because correlation is sign flipped)
-        s = self._tab_data_model.selected_stream.value
+        if s is None:
+            s = self._tab_data_model.selected_stream.value
 
         # the cur_pos is the realspace position of the image
         p = s.raw[0].metadata[model.MD_POS]
