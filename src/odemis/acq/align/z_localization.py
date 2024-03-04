@@ -19,10 +19,14 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
-from concurrent.futures import Future
+import threading
 import logging
 import math
+from concurrent.futures._base import CancelledError
+
 import numpy
+from Pyro4.futures import FINISHED, CANCELLED, RUNNING
+
 from odemis import dataio, model, util
 from odemis.acq import acqmng
 from odemis.model import ProgressiveFuture
@@ -224,7 +228,10 @@ def measure_z(stigmator, angle: float, pos: Tuple[float, float], stream, logpath
                           end=est_start + estimate_measure_z(stigmator, angle, pos, stream))
 
     # For now, it's impossible to cancel (it's very short anyway)
-    # f.task_canceller = ...
+    f._task_state = RUNNING
+    f._task_lock = threading.Lock()
+    f.task_canceller = _cancel_localization
+    f.running_subf = model.InstantaneousFuture()
 
     # Run in separate thread
     util.executeAsyncTask(f, _do_measure_z, args=(f, stigmator, angle, pos, stream, logpath))
@@ -243,13 +250,13 @@ def estimate_measure_z(stigmator, angle: float, pos: Tuple[float, float], stream
     return 3 + acqmng.estimateTime([stream])
 
 
-def _do_measure_z(f: Future, stigmator, angle: float, pos: Tuple[float, float], stream, logpath: Optional[str]=None):
+def _do_measure_z(f: ProgressiveFuture, stigmator, angle: float, pos: Tuple[float, float], stream,
+                  logpath: Optional[str] = None):
     """
     Using the stigmator at the given angle, observe the image of a spot, and based
       on the Gaussian estimates the position of the point in the Z direction.
     arguments: see measure_z()
     """
-
     try:
         if logpath:
             exporter = dataio.find_fittest_converter(logpath)
@@ -261,14 +268,22 @@ def _do_measure_z(f: Future, stigmator, angle: float, pos: Tuple[float, float], 
             raise KeyError(f"No CALIB found for {angle} rad on stigmator")
 
         # Move the stigmator to the measurement angle
-        f = stigmator.moveAbs({"rz": angle})
-        f.result(timeout=600)
+        with f._task_lock:
+            if f._task_state == CANCELLED:
+                raise CancelledError
+            f.running_subf = stigmator.moveAbs({"rz": angle})
+        f.running_subf.result(timeout=600)
 
-        # Acquire an image of the spot
-        f = acqmng.acquire([stream])
+
         # Typically ex is always None as we acquire only one stream (an error will directly raise a exception)
         # so we don't check it.
-        data, ex = f.result(timeout=600)
+
+        # Acquire an image of the spot
+        with f._task_lock:
+            if f._task_state == CANCELLED:
+                raise CancelledError
+            f.running_subf = acqmng.acquire([stream])
+        data, ex = f.running_subf.result(timeout=600)
         im = data[0]
         if len(data) != 1:
             logging.warning("Unexpected extra DataArray from acquisition: %s", data)
@@ -300,6 +315,30 @@ def _do_measure_z(f: Future, stigmator, angle: float, pos: Tuple[float, float], 
         logging.debug("Located feature Z shifted by %s m", zshift)
 
         return zshift, warning
+
+    except CancelledError:
+        raise
+
     finally:
-        f = stigmator.moveAbs({"rz": 0})
-        f.result(timeout=600)
+        f.running_subf = stigmator.moveAbs({"rz": 0})
+        f.running_subf.result(timeout=600)
+        with f._task_lock:
+            if f._task_state == CANCELLED:
+                raise CancelledError()
+            f._task_state = FINISHED
+
+
+def _cancel_localization(future) -> bool:
+    """
+    Canceler of Z Localization.
+    :param future: the future that will be executing the task
+    :return: True if it successfully cancelled (stopped) the future
+    """
+    logging.debug("Canceling localization procedure...")
+    with future._task_lock:
+        if future._task_state == FINISHED:
+            return False
+        future._task_state = CANCELLED
+        future.running_subf.cancel()
+        logging.debug("Localization procedure cancelled.")
+    return True
