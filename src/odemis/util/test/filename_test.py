@@ -68,22 +68,22 @@ class TestFilenameSuggestions(unittest.TestCase):
 
     def test_guess_pattern(self):
         fn_ptns = {
-                   'test-123': ('test-123-{cnt}', '001'),
-                   '%stest-123' % date: ('{datelng}test-123-{cnt}', '001'),
-                   '123-test-%s' % date: ('123-test-{datelng}-{cnt}', '001'),
+                   'test-123': ('test-{cnt}', '123'),
+                   '%stest-123' % date: ('{datelng}test-{cnt}', '123'),
+                   '123-test-%s' % date: ('{cnt}-test-{datelng}', '123'),
                    # This doesn't work "23-%s" % timelng_hyphen, but it's fine, as it's too much a corner case to be sure it was time
-                   'test-123 %s--' % timelng_hyphen: ('test-123 {timelng_hyphen}--', '001'),
-                   'test-123-%s' % timeshrt_colon: ('test-123-{timelng_colon}', '001'),
-                   'test-%s-123-' % timelng_colon: ('test-{timelng_colon}-123-', '001'),
+                   'test-123 %s--' % timelng_hyphen: ('test-{cnt} {timelng_hyphen}--', '123'),
+                   'test-123-%s' % timeshrt_colon: ('test-{cnt}-{timeshrt_colon}', '123'),
+                   'test-%s-123-' % timelng_colon: ('test-{timelng_colon}-{cnt}-', '123'),
                    '%s%s-acquisition' % (date, timelng): ('{datelng}{timelng}-acquisition', '001'),
-                   'test-0070': ('test-0070-{cnt}', '001'),
-                   '4580-test-%s' % dshrtrev: ('4580-test-{dshrtrev}-{cnt}', '001'),
-                   '4580-test:%s' % dshrtrev_hyphen: ('4580-test:{dshrtrev_hyphen}-{cnt}', '001'),
+                   'test-0070': ('test-{cnt}', '0070'),
+                   '4580-test-%s' % dshrtrev: ('{cnt}-test-{dshrtrev}', '4580'),
+                   '4580-test:%s' % dshrtrev_hyphen: ('{cnt}-test:{dshrtrev_hyphen}', '4580'),
                    '%s%s' % (daterev, timelng): ('{daterev}{timelng}', '001'),
-                   'test2-45': ('test2-45-{cnt}', '001'),
-                   'test 1980-08-23': ('test 1980-08-23-{cnt}', '001'),  # a date, but not *now*
+                   'test2-45': ('test2-{cnt}', '45'),
+                   'test 1980-08-23': ('test 1980-08-{cnt}', '23'),  # a date, but not *now*
                    'test': ('test-{cnt}', '001'),
-                   '%s-cell5' % current_year: ('{year}-cell5-{cnt}', '001'),
+                   '%s-cell5' % current_year: ('{year}-cell{cnt}', '5'),
                    '%s-{cell}{cnt}' % current_year: ('{year}-{{cell}}{{cnt}}', '001')
                     }
 
@@ -122,9 +122,9 @@ class TestFilenameSuggestions(unittest.TestCase):
     def test_filename_is_unique(self):
 
         fns = {
-            'test-123': 'test-123-001',
-            'test 0800 great': 'test 0800 great-001',
-            'test-%s-1' % time.strftime('%Y%m%d'): 'test-%s-1-001' % time.strftime('%Y%m%d'),
+            'test-123': 'test-124',
+            'test 0800 great': 'test 0801 great',
+            'test-%s-1' % time.strftime('%Y%m%d'): 'test-%s-2' % time.strftime('%Y%m%d'),
             'booo': 'booo-001',
             }
 
@@ -140,14 +140,14 @@ class TestFilenameSuggestions(unittest.TestCase):
 
         # Check what happens is next proposed file is also already in directory
         open('./test-123.tiff', "w+").close()
-        open('./test-123-001.tiff', "w+").close()
+        open('./test-124.tiff', "w+").close()
 
         ptn, cnt = guess_pattern('./test-123')
-        new_fullfn = os.path.join('.', 'test-123-002.tiff')
+        new_fullfn = os.path.join('.', 'test-125.tiff')
         self.assertEqual(create_filename('.', ptn, '.tiff', cnt), new_fullfn)
 
         os.remove('./test-123.tiff')
-        os.remove('./test-123-001.tiff')
+        os.remove('./test-124.tiff')
 
     def test_update_counter(self):
         self.assertEqual(update_counter('0'), '1')

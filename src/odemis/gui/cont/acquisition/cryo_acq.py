@@ -33,7 +33,6 @@ import os
 from builtins import str
 from concurrent import futures
 from concurrent.futures._base import CancelledError
-import re
 
 import wx
 
@@ -48,7 +47,9 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttribut
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
 from odemis.util import units
 from odemis.util.comp import generate_zlevels
-from odemis.util.filename import guess_pattern, create_filename, update_counter, make_unique_name
+from odemis.util.dataio import splitext
+from odemis.util.filename import guess_pattern, create_filename, update_counter
+
 
 # constants for the acquisition future state of the cryo-secom
 ST_FINISHED = "FINISHED"
@@ -78,6 +79,9 @@ class CryoAcquiController(object):
         self._filename = self._tab_data.filename
         self._acquiStreams = self._tab_data.acquisitionStreams
         self._zStackActive = self._tab_data.zStackActive
+
+        # Find the function pattern without detecting the count
+        self._config.fn_ptn, _ = guess_pattern(self._filename.value, is_count=False)
 
         # hide/show some widgets at initialization
         self._panel.gauge_cryosecom_acq.Hide()
@@ -276,7 +280,6 @@ class CryoAcquiController(object):
         """
         # get the localization tab
         local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
-        # local_tab.tab_data_model.select_current_position_feature()
         local_tab.display_acquired_data(data)
 
     @call_in_wx_main
@@ -289,28 +292,20 @@ class CryoAcquiController(object):
         data = future.result()
         self._display_acquired_data(data)
 
-    def _add_feature_info_filename(self):
+    def _add_feature_info_filename(self, filename: str) -> str:
         """
         Add feature name, feature status and the counter at the end of the filename.
+        :param filename: filename given by user
         """
+        path_base, ext = splitext(filename)
         local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
         feature_name = local_tab.tab_data_model.main.currentFeature.value.name.value
         feature_status = local_tab.tab_data_model.main.currentFeature.value.status.value
-        feature_pattern = f"{feature_name}-{feature_status}"
 
-        if 'Feature' in self._config.fn_ptn:
-            # If feature pattern is present in filename
-            # Replace Feature and everything after with the current feature pattern and the updated count
-            base_name = re.sub(r'(Feature).*', f'{feature_pattern}-0', self._config.fn_ptn)
-        else:
-            # If feature pattern not present in filename add it
-            # Add the feature pattern and count at the end of the given filename
-            base_name = re.sub('{cnt}', f'-{feature_pattern}-0', self._config.fn_ptn)
+        path, basename = os.path.split(path_base)
+        ptn = f"{basename}-{feature_name}-{feature_status}-{{cnt}}"
 
-        # update the filename for the current acquisition
-        list_names = os.listdir(self._config.pj_last_path)
-        name = make_unique_name(f'{base_name}{self._config.last_extension}', list_names)
-        self._filename.value = os.path.join(self._config.pj_last_path, name)
+        return create_filename(path, ptn, ext, count="001")
 
     def _export_data(self, data, thumb_nail):
         """
@@ -320,8 +315,7 @@ class CryoAcquiController(object):
         """
         filename = self._filename.value
         if data:
-            self._add_feature_info_filename()
-            filename = self._filename.value
+            filename = self._add_feature_info_filename(filename)
             exporter = dataio.get_converter(self._config.last_format)
             exporter.export(filename, data, thumb_nail)
             logging.info(u"Acquisition saved as file '%s'.", filename)
@@ -538,17 +532,6 @@ class CryoAcquiController(object):
         """
         called when the .filename VA changes
         """
-        # For the first feature acquisition, reset the counter to zero
-        if self.overview_acqui_controller._tab_data_model.main.currentFeature.value is None:
-            self._config.fn_count = '0'
-            self._filename.value = create_filename(
-                self._config.pj_last_path,
-                self._config.fn_ptn,
-                self._config.last_extension,
-                self._config.fn_count,
-            )
-            name = self._filename.value
-
         path, base = os.path.split(name)
         self._panel.txt_filename.SetValue(str(path))
         self._panel.txt_filename.SetInsertionPointEnd()
@@ -562,7 +545,7 @@ class CryoAcquiController(object):
         new_filename = ShowAcquisitionFileDialog(self._panel, current_filename)
         if new_filename is not None:
             self._filename.value = new_filename
-            self._config.fn_ptn, self._config.fn_count = guess_pattern(new_filename)
+            self._config.fn_ptn, _ = guess_pattern(new_filename, is_count=False)
             logging.debug("Generated filename pattern '%s'", self._config.fn_ptn)
 
     def _get_wavelength_vas(self, st):

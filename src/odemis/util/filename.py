@@ -30,16 +30,16 @@ import time
 from datetime import datetime, timedelta
 
 
-def guess_pattern(fn):
+def guess_pattern(fn, is_count=True):
     """
     Generates a filename pattern form a given filename. The function detects certain
     formats of dates, time, and counters. It returns a string with replacement fields which
     can be used in create_filename to provide an updated version of the filename.
-    input
-        fn (String): filename (may include path and extension)
-    returns
-        fn_ptn (String): filename pattern (without path and extension)
-        cnt (String): counter
+    :param fn: (string) filename (may include path and extension)
+    :param is_count: (boolean) by default True, if count is the name is to be detected, else False
+    return:
+        fn_ptn: (string) filename pattern (without path and extension)
+        cnt: (string) counter
     """
 
     _, fn_ptn = os.path.split(fn)
@@ -102,16 +102,30 @@ def guess_pattern(fn):
                 # That's a real match => change the pattern
                 fn_ptn = fn_ptn[0:m.start()] + name_ptn + fn_ptn[m.end():]
 
-    cnt = "001"
-    if '{cnt}' not in fn_ptn:
-        if '{timeshrt_colon}' in fn_ptn:
-            fn_ptn = re.sub('{timeshrt_colon}', '{timelng_colon}', fn_ptn)
-        elif ("{timelng}" in fn_ptn or
-              "{timelng_colon}" in fn_ptn or
-              "{timelng_hyphen}" in fn_ptn):
-            pass
-        else:
-            fn_ptn = fn_ptn + '-{cnt}'
+    # Detect count
+    cnt = "001"  # will be used in case cnt pattern is added afterwards
+    if is_count:
+        cnt_ptn = r'\d{1,5}'
+        cnt_m = None
+        for m in re.finditer(cnt_ptn, fn_ptn):
+            cnt_m = m
+        # if multiple numbers are present, use last
+        if cnt_m:
+            cnt = cnt_m.group()
+            fn_ptn = fn_ptn[:cnt_m.start()] + "{cnt}" + fn_ptn[cnt_m.end():]
+
+        # If neither time, nor count are specified, add count, if only short time (h, min)
+        # specified and no count, add seconds to make filename unique
+        # Doesn't behave properly if user enters terms with curly braces like {{cnt}}.
+        if '{cnt}' not in fn_ptn:
+            if '{timeshrt_colon}' in fn_ptn:
+                fn_ptn = re.sub('{timeshrt_colon}', '{timelng_colon}', fn_ptn)
+            elif ("{timelng}" in fn_ptn or
+                  "{timelng_colon}" in fn_ptn or
+                  "{timelng_hyphen}" in fn_ptn):
+                pass
+            else:
+                fn_ptn = fn_ptn + '-{cnt}'
 
     return fn_ptn, cnt
 
