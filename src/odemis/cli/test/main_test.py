@@ -69,7 +69,7 @@ class TestWithoutBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run '%s' returned %s" % (cmdline, ret))
 
         output = out.getvalue()
-        self.assertTrue(b"optional arguments" in output)
+        self.assertTrue(b"Microscope management" in output)
 
 #    @skip("Simple")
     def test_error_command_line(self):
