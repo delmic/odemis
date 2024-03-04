@@ -238,13 +238,15 @@ class CorrelationController(object):
         """handle key presses
         :param evt: (wx.Event) the event"""
 
-        if not self.correlation_enabled():
-            logging.debug("correlation not enabled, passing event to canvas")
-            active_canvas = evt.GetEventObject()
-            active_canvas.on_char(evt)            # super event passthrough
-
+        # event data
         key = evt.GetKeyCode()
         shift_mod = evt.ShiftDown()
+
+        # pass through event, if not a valid correlation key or enabled
+        valid_keys = [wx.WXK_LEFT, wx.WXK_RIGHT, wx.WXK_UP, wx.WXK_DOWN]
+        if key not in valid_keys or not self.correlation_enabled():
+            evt.Skip()
+            return
 
         ### CONTROLS ##############################
         # SHIFT + LEFT CLICK -> MOVE_TO_POSITION
