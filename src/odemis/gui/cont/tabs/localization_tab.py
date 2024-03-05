@@ -422,8 +422,9 @@ class LocalizationTab(Tab):
                 chamber_tab = self.main_data.getTabByName("cryosecom_chamber")
                 chamber_tab.remove_overview_streams([st])
 
-        # Update and save the used stream settings
-        self._streambar_controller.update_stream_settings()
+        # Update and save the used stream settings on acquisition
+        if acquired_streams:
+            self._streambar_controller.update_stream_settings()
 
     @call_in_wx_main
     def display_acquired_data(self, data):

@@ -64,8 +64,11 @@ class StreamSettingsConfig:
         self.file_path = file_path
         try:
             self._read()  # update the config_data by reading the JSON file
+        except FileNotFoundError:
+            # Log that the file doesn't exist, which is expected on the first run
+            logging.info("Stream settings file does not exist.")
         except Exception as e:
-            logging.exception(f"Error in reading the stream settings: {e}")
+            logging.exception("Error in reading the stream settings.")
 
     def _read(self):
         logging.debug(f"Reading the most recently used stream settings from {self.file_path}")
@@ -126,8 +129,8 @@ class StreamSettingsConfig:
 
         try:
             self._write()
-        except Exception as e:
-            logging.exception(f"Error in writing the stream settings: {e}")
+        except Exception:
+            logging.exception(f"Error in writing the stream settings")
 
     def update_entries(self, streams: list):
         """
