@@ -2696,11 +2696,11 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
     # parse ini metadata as dictionary
     tfs_md = {}
     try:
-        cfg = configparser.ConfigParser()
+        cfg = configparser.ConfigParser(strict=False) # allow duplicate keys
         cfg.read_string(metadata)
         tfs_md = cfg
     except Exception as e:
-        logging.warning("Failed to parse metadata as ini: %s", e)
+        logging.warning("Duplicate keys allowed, but failed to parse metadata as ini: %s", e)
         return tfs_md
 
     # convert to odemis format
