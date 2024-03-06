@@ -93,6 +93,9 @@ class CorrelationController(object):
 
         # enable correlation controls
         self._panel.ctrl_enable_correlation.SetValue(True) # enable by default
+        self._panel.ctrl_auto_resize_view.SetValue(False) # disable auto resize by default
+        self._panel.ctrl_enable_correlation.SetToolTip("Enable/Disable correlation controls")
+        self._panel.ctrl_auto_resize_view.SetToolTip("Automatically resize correlation overlay viewports after moving the streams.")
 
         # bind mouse and keyboard events for correlation controls
         for vp in self._viewports:
@@ -149,6 +152,7 @@ class CorrelationController(object):
         s = self._tab_data_model.selected_stream.value
         self._reset_stream_correlation_data(s)
         update_image_in_views(s, self._tab_data_model.views.value)
+        self.fit_correlation_views_to_content(force=True)
 
     def _reset_stream_correlation_data(self, s: StaticStream) -> None:
         """reset the stream position to the original position / rotation / scale
@@ -314,14 +318,23 @@ class CorrelationController(object):
         # update the image in the views
         update_image_in_views(s, self._tab_data_model.views.value)
 
-        # fit the source viewports to the content, as the image may have moved
-        self._panel.vp_correlation_tl.canvas.fit_view_to_content()
-        self._panel.vp_correlation_tr.canvas.fit_view_to_content()
-        self._panel.vp_correlation_bl.canvas.fit_view_to_content()
-        self._panel.vp_correlation_br.canvas.fit_view_to_content()
+        # fit viewports to content, as they have moved
+        self.fit_correlation_views_to_content()
 
         # update the localization tab
         self.update_localization_tab(s)
+
+    def fit_correlation_views_to_content(self, force: bool = False) -> None:
+        # TODO: be more selective about which viewports to fit
+        # fit the source viewports to the content, as the image may have moved
+        self._panel.vp_correlation_tl.canvas.fit_view_to_content()
+        self._panel.vp_correlation_tr.canvas.fit_view_to_content()
+
+        # fit the overlay viewports to the content (optional)
+        auto_resize = self._panel.ctrl_auto_resize_view.IsChecked()
+        if auto_resize or force:
+            self._panel.vp_correlation_bl.canvas.fit_view_to_content()
+            self._panel.vp_correlation_br.canvas.fit_view_to_content()
 
     def update_localization_tab(self, s: StaticStream) -> None:
         # TODO: change this to callback?
