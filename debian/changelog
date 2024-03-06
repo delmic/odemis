@@ -1,3 +1,23 @@
+odemis (3.4.1-1) bionic; urgency=medium
+
+  * New version 3.4.1
+  * Main new changes and features:
+    -
+  * Other improvements and bug fixes:
+    - fix xt_client external VA failed when no detector is used
+    - Increase timeout of xt autostigmation
+    - adjust "\0" -> "\x00" because "\0" is deprecated
+    - gui marking_line fails to show value if value is 0
+    - gui NavigablePlotViewport could fail to zoom in/out if data contains only the same value
+    - driver simcam: on long exposure simulate properly over-exposure
+    - fastem save full cell images, set values after calibration values are applied.
+    - fix fastem autostig period for idx 0
+    - increase pixel scaling step size limits in correlation tab Meteor
+    - correlation tab Meteor should passthrough arrow controls when correlation enabled is unchecked
+    - allow duplicate metadata keys in tfs metadata parser
+
+ -- Thera Pals <pals@delmic.com>  Wed, 06 Mar 2024 15:26:01 +0100
+
 odemis (3.4.0-1) bionic; urgency=medium
 
   * New version 3.4
