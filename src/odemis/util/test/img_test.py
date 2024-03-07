@@ -2107,6 +2107,18 @@ class TestFloodFill(unittest.TestCase):
         with self.assertRaises(ValueError):
             img.apply_flood_fill(a, (2, 4))
 
+    def test_boundary_fill(self):
+        """Test filling the boundaries"""
+        a = numpy.zeros((5, 5), dtype=bool)
+        a[0, :] = True
+        a[-1, :] = True
+        a[:, 0] = True
+        a[:, -1] = True
+
+        expected_array = numpy.ones((5, 5), dtype=bool)
+
+        filled_array = img.apply_flood_fill(a, (2, 2))
+        numpy.testing.assert_array_equal(expected_array, filled_array)
 
 if __name__ == "__main__":
     unittest.main()
