@@ -1,4 +1,4 @@
-name: Self Hosted Runner Ubuntu 18 and 20 Unit Testing
+name: Self Hosted Runner Ubuntu Testing
 
 on:
   schedule:
