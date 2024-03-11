@@ -8,15 +8,15 @@ Copyright © 2013-2020 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 from collections.abc import Iterable
@@ -681,7 +681,7 @@ def _parse_physical_data(pdgroup, da):
     Parse the metadata found in PhysicalData, and cut the DataArray if necessary.
     pdgroup (HDF Group): the group "PhysicalData" associated to an image
     da (DataArray): the DataArray that was obtained by reading the ImageData
-    returns (list of DataArrays): The same data, but broken into smaller 
+    returns (list of DataArrays): The same data, but broken into smaller
       DataArrays if necessary, and with additional metadata.
     """
     # The information in PhysicalData might be different for each channel (e.g.
@@ -776,7 +776,7 @@ def read_metadata(pdgroup, c_index, md, name, md_key, converter, bad_states=(ST_
     :parameter md: (dict) metadata associated with the image data
     :parameter name: (str) name of the metadata in the HDF5 file
     :parameter md_key: (str) metadata key to be stored
-    :parameter converter: (function(ndarray) -> value) used to convert from the value read 
+    :parameter converter: (function(ndarray) -> value) used to convert from the value read
         from the file to standard metadata type.
     :parameter bad_states: (tuple) specifies bad states for a value, in which case the value
         will not be stored in the metadata.
@@ -1233,7 +1233,7 @@ def _add_acquistion_svi(group, data, mds, **kwargs):
     group (HDF Group): the group that will contain the metadata (named "PhysicalData")
     data (DataArray): image with (global) metadata, all the images must
       have the same shape.
-    mds (None or list of dict): metadata for each C of the image (if different) 
+    mds (None or list of dict): metadata for each C of the image (if different)
     """
     gi = group.create_group("ImageData")
 
@@ -1370,7 +1370,7 @@ def _groupImages(das):
     one, and ordering/extending the shape to CTZYX or CAZYX.
     das (list of DataArray): all the images
     returns :
-      acq (list of DataArrays): each group of data, with the (general) metadata 
+      acq (list of DataArrays): each group of data, with the (general) metadata
       metadatas (list of (list of dict, or None)): for each item of acq, either
        None if the metadata is fully in acq or one metadata per channel.
     """
@@ -1551,7 +1551,7 @@ def _saveAsHDF5(filename, ldata, thumbnail, compressed=True):
     """
     Saves a list of DataArray as a HDF5 (SVI) file.
     filename (string): name of the file to save
-    ldata (list of DataArray): list of 2D (up to 5D) data of int or float. 
+    ldata (list of DataArray): list of 2D (up to 5D) data of int or float.
      Should have at least one array.
     thumbnail (None or DataArray): see export
     compressed (boolean): whether the file is compressed or not.
@@ -1596,14 +1596,14 @@ def export(filename, data, thumbnail=None):
     '''
     Write an HDF5 file with the given image and metadata
     filename (str): filename of the file to create (including path)
-    data (list of model.DataArray, or model.DataArray): the data to export, 
-        must be 2D or more of int or float. Metadata is taken directly from the data 
+    data (list of model.DataArray, or model.DataArray): the data to export,
+        must be 2D or more of int or float. Metadata is taken directly from the data
         object. If it's a list, a multiple page file is created. The order of the
-        dimensions is Channel, Time, Z, Y, X. It tries to be smart and if 
-        multiple data appears to be the same acquisition at different C, T, Z, 
+        dimensions is Channel, Time, Z, Y, X. It tries to be smart and if
+        multiple data appears to be the same acquisition at different C, T, Z,
         they will be aggregated into one single acquisition.
     thumbnail (None or model.DataArray): Image used as thumbnail for the file. Can be of any
-      (reasonable) size. Must be either 2D array (greyscale) or 3D with last 
+      (reasonable) size. Must be either 2D array (greyscale) or 3D with last
       dimension of length 3 (RGB). If the exporter doesn't support it, it will
       be dropped silently.
     '''
@@ -1619,12 +1619,12 @@ def read_data(filename):
     """
     Read an HDF5 file and return its content (skipping the thumbnail).
     filename (str): filename of the file to read
-    return (list of model.DataArray): the data to import (with the metadata 
+    return (list of model.DataArray): the data to import (with the metadata
      as .metadata). It might be empty.
      Warning: reading back a file just exported might give a smaller number of
      DataArrays! This is because export() tries to aggregate data which seems
      to be from the same acquisition but on different dimensions C, T, Z.
-     read_data() cannot separate them back explicitly. 
+     read_data() cannot separate them back explicitly.
     raises:
         IOError in case the file format is not as expected.
     """
@@ -1639,8 +1639,8 @@ def read_thumbnail(filename):
     """
     Read the thumbnail data of a given HDF5 file.
     filename (str): filename of the file to read
-    return (list of model.DataArray): the thumbnails attached to the file. If 
-     the file contains multiple thumbnails, all of them are returned. If it 
+    return (list of model.DataArray): the thumbnails attached to the file. If
+     the file contains multiple thumbnails, all of them are returned. If it
      contains none, an empty list is returned.
     raises:
         IOError in case the file format is not as expected.

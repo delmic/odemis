@@ -155,7 +155,7 @@ class SmarPodDLL(CDLL):
     Subclass of CDLL specific to SmarPod library, which handles error codes for
     all the functions automatically.
     """
-    
+
     # Status
     OK = 0
     OTHER_ERROR = 1
@@ -219,7 +219,7 @@ class SmarPodDLL(CDLL):
     CALIBRATING = 3
     REFERENCING = 4
     STANDBY = 5
-    
+
     HOLDTIME_INFINITE = 60000
 
     err_code = {
@@ -305,7 +305,7 @@ class SmarPodError(Exception):
 
 
 class SmarPod(model.Actuator):
-    
+
     def __init__(self, name: str, role: str, locator: str, hwmodel: int=10001,
                  axes: dict=None, ref_on_init: bool=False,
                  speed: float=1e-3, accel: float=1e-3,
@@ -354,7 +354,7 @@ class SmarPod(model.Actuator):
             self.core = FakeSmarPodDLL()
         else:
             self.core = SmarPodDLL()
-            
+
         # axis name (as seen by user) -> axis name (as used by hardware)
         self._axis_u2hw: Dict[str, str] = {}
         axes_def = {}  # axis name -> Axis object
@@ -684,7 +684,7 @@ class SmarPod(model.Actuator):
             return acceleration.value
         else:
             return None
-    
+
     def IsPoseReachable(self, pos):
         """
         Ask the controller if a pose is reachable
@@ -840,7 +840,7 @@ class SmarPod(model.Actuator):
         """
         if not pos:
             return model.InstantaneousFuture()
-        
+
         self._checkMoveAbs(pos)
 
         pos_hw = self._to_hw_axes(pos)
@@ -975,7 +975,7 @@ class SmarPod(model.Actuator):
         f = self._createMoveFuture()
         f = self._executor.submitf(f, self._doMoveRel, f, shift)
         return f
-    
+
     def _doMoveRel(self, future, shift: dict):
         """
         Do a relative move by converting it into an absolute move
@@ -1326,7 +1326,7 @@ class SA_MC_Pose(Structure):
         pose.ry = self.ry - o.ry
         pose.rz = self.rz - o.rz
         return pose
-    
+
     def __str__(self):
         return "5DOF Pose. x: %f, y: %f, z: %f, rx: %f, ry: %f, rz: %f" % \
             (self.x, self.y, self.z, self.rx, self.ry, self.rz)

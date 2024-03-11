@@ -99,5 +99,3 @@ class GraphicalRadioButtonControl(wx.Panel):
         self._reset_buttons(btn)
         #if not btn.GetToggle():
         evt.Skip()
-
-

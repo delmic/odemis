@@ -61,7 +61,7 @@ class VigilantAttributeTest(unittest.TestCase):
 
         self.assertTrue(prop.value == 0)
         self.assertTrue(self.called == 2)
-        
+
     def test_del(self):
         """
         Test that the VA is properly deleted.

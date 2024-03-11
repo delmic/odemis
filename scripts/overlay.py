@@ -6,14 +6,14 @@ Created on 17 Dec 2013
 
 Copyright © 2012-2013 Kimon Tsitsikas, Delmic
 
-This is a script to test the functionalities included to “FineOverlay” i.e. 
-ScanGrid, DivideInNeighborhoods, FindCenterCoordinates, ReconstructImage, 
-MatchCoordinates, CalculateTransform. The user gives arguments regarding the 
-grid scanned for the overlay and receives output regarding the precision of 
+This is a script to test the functionalities included to “FineOverlay” i.e.
+ScanGrid, DivideInNeighborhoods, FindCenterCoordinates, ReconstructImage,
+MatchCoordinates, CalculateTransform. The user gives arguments regarding the
+grid scanned for the overlay and receives output regarding the precision of
 the achieved overlay (in case an overlay cannot be found for the given parameters,
-a warning message is shown). The script first finds the components needed for 
-scanning and capturing the grid i.e. e-beam scanner, se-detector and CCD. Then, 
-similarly to “FineOverlay”, it links the different functions feeding the output 
+a warning message is shown). The script first finds the components needed for
+scanning and capturing the grid i.e. e-beam scanner, se-detector and CCD. Then,
+similarly to “FineOverlay”, it links the different functions feeding the output
 of the one to the input of the other.
 
 run as:
@@ -83,7 +83,7 @@ def main(args):
         if not all([escan, detector, ccd]):
             logging.error("Failed to find all the components")
             raise KeyError("Not all components found")
-    
+
         # ccd.data.get()
         gscanner = GridScanner(repetitions, dwell_time, escan, ccd, detector)
 
@@ -98,7 +98,7 @@ def main(args):
 #        grid_data[0].shape = Y, X
 #        optical_image = grid_data[0]
         #####################################################
-    
+
         logging.debug("Isolating spots...")
         opxs = optical_image.metadata[model.MD_PIXEL_SIZE]
         optical_dist = escan.pixelSize.value[0] * electron_scale[0] / opxs[0]
@@ -112,12 +112,12 @@ def main(args):
         optical_coordinates = coordinates.ReconstructCoordinates(subimage_coordinates, spot_coordinates)
         logging.debug(optical_coordinates)
         rgb_optical = img.DataArray2RGB(optical_image)
-        
+
         for ta in optical_coordinates:
             rgb_optical[ta[1] - 1:ta[1] + 1, ta[0] - 1:ta[0] + 1, 0] = 255
             rgb_optical[ta[1] - 1:ta[1] + 1, ta[0] - 1:ta[0] + 1, 1] *= 0.5
             rgb_optical[ta[1] - 1:ta[1] + 1, ta[0] - 1:ta[0] + 1, 2] *= 0.5
-        
+
         misc.imsave('spots_image.png', rgb_optical)
 
         # TODO: Make function for scale calculation
@@ -132,7 +132,7 @@ def main(args):
 
         logging.debug("Matching coordinates...")
         known_electron_coordinates, known_optical_coordinates, max_diff = coordinates.MatchCoordinates(optical_coordinates, electron_coordinates, scale, max_allowed_diff_px)
-    
+
         logging.debug("Calculating transformation...")
         (calc_translation_x, calc_translation_y), (calc_scaling_x, calc_scaling_y), calc_rotation = transform.CalculateTransform(known_electron_coordinates, known_optical_coordinates)
         logging.debug("Electron->Optical: ")
@@ -140,7 +140,7 @@ def main(args):
         final_electron = coordinates._TransformCoordinates(known_optical_coordinates, (calc_translation_x, calc_translation_y), calc_rotation, (calc_scaling_x, calc_scaling_y))
 
         logging.debug("Overlay done.")
-        
+
         # Calculate distance between the expected and found electron coordinates
         coord_diff = []
         for ta, tb in zip(final_electron, known_electron_coordinates):
@@ -153,7 +153,7 @@ def main(args):
         for i in range(0, len(coord_diff)):
             variance_sum += (mean_difference - coord_diff[i]) ** 2
         variance = (variance_sum / len(coord_diff)) * escan.pixelSize.value[0]
-        
+
         not_found_spots = len(electron_coordinates) - len(final_electron)
 
         # Generate overlay image
@@ -165,7 +165,7 @@ def main(args):
 
         for ta in overlay_coordinates:
             rgb_optical[ta[0] - 1:ta[0] + 1, ta[1] - 1:ta[1] + 1, 1] = 255
-            
+
         misc.imsave('overlay_image.png', rgb_optical)
         misc.imsave('optical_image.png', optical_image)
         logging.debug("Done. Check electron_image.png, optical_image.png and overlay_image.png.")

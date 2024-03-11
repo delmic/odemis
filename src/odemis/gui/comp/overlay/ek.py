@@ -98,7 +98,7 @@ class EKOverlay(WorldOverlay):
 
         # Will be updated before every redraw
         self.wl_list = ccd.getMetadata().get(model.MD_WL_LIST)
-        
+
         # TODO: listen to the spectrograph position to force a redraw?
         # Or have a separate function to update the wl_list? (which would be called whenever the MD_WL_LIST changes)?
         # The tricky part is that the MD_WL_LIST is updated after the spectrograph position changes.

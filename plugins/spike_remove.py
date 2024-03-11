@@ -125,7 +125,7 @@ class SpikeRemovalPlugin(Plugin):
         self._spec_stream = None  # drop reference
         dlg.Close()
         self._dlg = None
-        
+
         if dlg: # If dlg hasn't been destroyed yet
             dlg.Destroy()
 
@@ -233,18 +233,18 @@ class SpikeRemovalPlugin(Plugin):
         diffspec = numpy.diff(numpy.float32(specdat), axis=0) ** 2
         size = numpy.shape(diffspec)
         ms_step = (diffspec / numpy.prod(size)).sum()
-        
+
         # We are now calculating the threshold based on the global average.
         # Using a more local average could help identifying spikes
         # more precisely although but it is more involved and possibly overkill
-        threshold = ms_step * spikestep**2     
+        threshold = ms_step * spikestep**2
         # this sets sensitivity to spikes. Used in combination with this number
         # is rather large now, we could be a bit more clever if a spike covers more pixels
         spike_margin = 1  # number of pixels left and right of spike that are also corrected
         spike_spacing = 3  # when spikes are considered to be two separate spikes
         npixels = 0  # number of corrected pixels (aka single spectrum)
         nspikes = 0  # spike counter
-    
+
         # Look at each spectrum independently (as they were acquired independently)
         for ii in range(size[1]):
             for jj in range(size[2]):
@@ -253,7 +253,7 @@ class SpikeRemovalPlugin(Plugin):
                 # These are the indices of the spike starts and ends.
                 spike_indices = numpy.argwhere(specdiff > threshold)
                 num_spike_indices = numpy.size(spike_indices)
-             
+
                 if num_spike_indices > 1: # only one step that deviates is no spike.
                     npixels += 1
                     spike_indices = numpy.squeeze(spike_indices)

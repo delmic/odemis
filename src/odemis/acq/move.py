@@ -444,12 +444,12 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         # check if the stage positions have rz axes
         if not ("rz" in pos and"rz" in fm_pos_active):
             raise ValueError(f"The stage position does not have rz axis pos={pos}, fm_pos_active={fm_pos_active}")
-        
-        # whether we need to rotate around the z axis (180deg)
-        has_rz = not isNearPosition(pos, fm_pos_active, {"rz"}, 
-                                    atol_rotation=ATOL_ROTATION_TRANSFORM) 
 
-        # NOTE: 
+        # whether we need to rotate around the z axis (180deg)
+        has_rz = not isNearPosition(pos, fm_pos_active, {"rz"},
+                                    atol_rotation=ATOL_ROTATION_TRANSFORM)
+
+        # NOTE:
         # if we are rotating around the z axis (180deg), we need to flip the x and y axes
         # if we are not rotating around the z axis, we we only need to translate the x and y axes
         # For the rotation case: pos_cor calibration data is multipled by 2x due to historical reasons
@@ -461,14 +461,14 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         else:
             transformed_pos["x"] = pos["x"] + pos_cor[0]
             transformed_pos["y"] = pos["y"] + pos_cor[1]
-        
+
         transformed_pos.update(fm_pos_active)
 
         # check if the transformed position is within the FM imaging range
         if not isInRange(transformed_pos, stage_md[model.MD_FM_IMAGING_RANGE], {'x', 'y'}):
             # only log warning, because transforms are used to get current position too
             logging.warning(f"Transformed position {transformed_pos} is outside FM imaging range")
-        
+
         return transformed_pos
 
     # Note: this transformation also consists of translation and rotation.
@@ -492,12 +492,12 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         # check if the stage positions have rz axes
         if not ("rz" in pos and"rz" in sem_pos_active):
             raise ValueError(f"The stage position does not have rz axis. pos={pos}, sem_pos_active={sem_pos_active}")
-        
-        # whether we need to rotate around the z axis (180deg)
-        has_rz = not isNearPosition(pos, sem_pos_active, {"rz"}, 
-                                    atol_rotation=ATOL_ROTATION_TRANSFORM)   
 
-        # NOTE: 
+        # whether we need to rotate around the z axis (180deg)
+        has_rz = not isNearPosition(pos, sem_pos_active, {"rz"},
+                                    atol_rotation=ATOL_ROTATION_TRANSFORM)
+
+        # NOTE:
         # if we are rotating around the z axis (180deg), we need to flip the x and y axes
         # if we are not rotating around the z axis, we we only need to translate the x and y axes
         # For the rotation case: pos_cor calibration data is multipled by 2x due to historical reasons

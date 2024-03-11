@@ -263,4 +263,3 @@ def to_readable_band(band):
             center_nm = int(round(c * 1e9))
             centers.append(u"%d" % center_nm)
         return u", ".join(centers) + " nm"
-

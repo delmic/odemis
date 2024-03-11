@@ -555,4 +555,3 @@ class SimpleStreakCameraDataFlow(model.DataFlow):
         Synchronize the dataflow.
         """
         self._sync(event)
-

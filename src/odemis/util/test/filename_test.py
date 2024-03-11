@@ -54,7 +54,7 @@ PATH = get_home_folder()
 
 class TestFilenameSuggestions(unittest.TestCase):
     """
-    Tests the util-acquisition functions for filename suggestions. 
+    Tests the util-acquisition functions for filename suggestions.
     """
 
     def setUp(self) -> None:

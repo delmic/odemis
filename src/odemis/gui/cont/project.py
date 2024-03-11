@@ -26,16 +26,17 @@ as the region of acquisition (ROA), region of calibration (ROC) and projects in 
 FASTEM system.
 """
 
-from functools import partial
 import logging
+from functools import partial
 
 import wx
 
-from odemis.acq.fastem import CALIBRATION_2, CALIBRATION_3, FastEMROA
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
-from odemis.gui import conf, FG_COLOUR_RADIO_INACTIVE, FG_COLOUR_BUTTON
+from odemis.acq.fastem import CALIBRATION_2, CALIBRATION_3, FastEMROA
+from odemis.gui import FG_COLOUR_RADIO_INACTIVE, FG_COLOUR_BUTTON
 from odemis.gui.comp.fastem import FastEMProjectPanel, FastEMROAPanel, FastEMCalibrationPanel
+from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.util import call_in_wx_main
 from odemis.util.filename import make_unique_name
 
@@ -281,7 +282,7 @@ class FastEMROAController(object):
         self._viewport = viewport
 
         # Read the overlap from the acquisition configuration
-        acqui_conf = conf.get_acqui_conf()
+        acqui_conf = AcquisitionConfig()
 
         self.model = FastEMROA(name, acqstream.UNDEFINED_ROI, roc_2, roc_3,
                                self._tab_data.main.asm, self._tab_data.main.multibeam,
@@ -539,4 +540,3 @@ class FastEMCalibrationRegionsController(object):
 
         # update ROC buttons
         self._update_buttons()
-

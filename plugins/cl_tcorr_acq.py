@@ -47,7 +47,7 @@ import odemis.util.driver as udriver
 # be handled automatically by the Odemis acquisition manager.
 class CorrelatorScanStream(stream.Stream):
     """
-    Stream that allows to acquire a 2D spatial map with the time correlator for lifetime mapping or g(2) mapping 
+    Stream that allows to acquire a 2D spatial map with the time correlator for lifetime mapping or g(2) mapping
     """
     def __init__(self, name, detector, sed, emitter, opm=None):
         """
@@ -78,8 +78,8 @@ class CorrelatorScanStream(stream.Stream):
         #Sync Offset time correlator
         self.syncOffset = self._detector.syncOffset
         #Sync Divider time correlator
-        self.syncDiv = self._detector.syncDiv 
-        
+        self.syncDiv = self._detector.syncDiv
+
         # Distance between the center of each pixel
         self.stepsize = model.FloatContinuous(1e-6, (1e-9, 1e-4), unit="m")
 
@@ -458,7 +458,7 @@ class CorrelatorScanStream(stream.Stream):
         """
         Compute the X and Y positions of the ebeam
         roi (0<=4 floats<=1): ltrb of the ROI
-        pxs (float): distance between each pixel (in m, in both directions) 
+        pxs (float): distance between each pixel (in m, in both directions)
         return (list of Y*X tuples of 2 floats) positions in the ebeam coordinates
                (X, Y) in SEM referential for each spot to be scanned.
         """

@@ -67,7 +67,7 @@ class StreamController(object):
                  sb_ctrl=None):
         """
         view (MicroscopeView or None): Link stream to a view. If view is None, the stream
-        will be linked to the focused view. Passing a view to the controller ensures 
+        will be linked to the focused view. Passing a view to the controller ensures
         that the visibility button functions correctly when multiple views are present.
         sb_ctrl (StreamBarController or None): the StreamBarController which (typically)
           created this StreamController. Only needed for ROA repetition display.
@@ -188,7 +188,7 @@ class StreamController(object):
             self.mean_spec_proj.image.subscribe(self._on_new_spec_data, init=True)
             if hasattr(self.stream, "selectionWidth"):
                 self._add_selwidth_ctrl()
-                
+
         if hasattr(stream, "zIndex") and hasattr(self.tab_data_model, "zPos"):
             self.stream.zIndex.subscribe(self._on_z_index)
             self.tab_data_model.zPos.subscribe(self._on_z_pos, init=True)
@@ -245,7 +245,7 @@ class StreamController(object):
         gc.collect()
 
     def _display_metadata(self):
-        """ 
+        """
         Display metadata for integration time, ebeam voltage, probe current and
         emission/excitation wavelength
         """
@@ -489,7 +489,7 @@ class StreamController(object):
             logging.error("No peak method corresponding to state %s", evt.state)
 
     def _on_z_index(self, zIndex):
-        
+
         self.tab_data_model.zPos.unsubscribe(self._on_z_pos)
 
         metadata = self.stream.getRawMetadata()[0]  # take the first only

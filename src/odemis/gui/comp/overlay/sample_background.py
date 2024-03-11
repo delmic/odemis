@@ -58,7 +58,7 @@ class SampleBackgroundOverlay(WorldOverlay):
         Draw the background image by displaying all circles
         :param ctx: cairo context from the canvas
         :param shift (float, float): physical coordinates of the center of the canvas buffer
-        :param scale (float > 0): the ratio between the size of a feature in pixels and its actual size, in px/m 
+        :param scale (float > 0): the ratio between the size of a feature in pixels and its actual size, in px/m
         """
         if not self.show:
             return

@@ -69,8 +69,11 @@ def get_best_dtype_for_acc(idtype, count):
         return idtype
     else:
         maxval = numpy.iinfo(idtype).max * count
+        if idtype.kind == "i":
+            maxval = -maxval # force an signed int
 
-        if maxval <= numpy.iinfo(numpy.uint64).max:
+        if -2**63 <= maxval < 2**64:
+            # Anything bigger, numpy returns a Python integer type (very slow & big)
             adtype = numpy.min_scalar_type(maxval)
         else:
             logging.debug("Going to use lossy intermediate type in order to support values up to %d", maxval)
@@ -93,6 +96,17 @@ def index_closest(val, l):
         return min(l.items(), key=lambda x:abs(x[1] - val))[0]
     else:
         return min(enumerate(l), key=lambda x:abs(x[1] - val))[0]
+
+
+def round_up_to_multiple(v: float, m: float) -> float:
+    """
+    Rounds up a value to the nearest multiple of another value.
+    :param v: value to round up
+    :param m: the multiplicand
+    :return: the closest value >= v, that is k x m, with k an integer.
+    """
+    # Subtract a small value to avoid rounding errors when values are already a multiple of m
+    return math.ceil((v - 1e-18) / m) * m
 
 
 def almost_equal(a, b, atol=1e-18, rtol=1e-7):

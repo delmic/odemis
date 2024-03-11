@@ -280,4 +280,3 @@ def _export_angular_spectrum_data(data: model.DataArray, filename:str):
         csv_writer = csv.writer(fd)
         csv_writer.writerow(headers)
         csv_writer.writerows(rows)
-

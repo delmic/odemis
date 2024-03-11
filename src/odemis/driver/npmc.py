@@ -194,7 +194,7 @@ class ESP(model.Actuator):
 
         # Check the error state
         self.checkError()
-        
+
     def terminate(self):
         if self._serial.isOpen():
             self.LockKeypad(KEYPAD_UNLOCK)  # unlock user input for the controller
@@ -213,7 +213,7 @@ class ESP(model.Actuator):
 
         if not isinstance(value, dict):
             raise ValueError("Invalid metadata, should be a coordinate dictionary but got %s." % (value,))
-                
+
         # update all axes
         for n in self._axis_map.keys():
             if n in value:
@@ -556,7 +556,7 @@ class ESP(model.Actuator):
                 dur = driver.estimateMoveDuration(abs(v) * self._axis_conv_factor[aid],
                                 self._speed[an],
                                 self._accel[an])
-                    
+
                 end = max(time.time() + dur, end)
 
             self._waitEndMove(future, moving_axes, end)
@@ -702,7 +702,7 @@ class ESP(model.Actuator):
 
                 # Should now turn the motor back on
                 self.MotorOn(aid)
-        
+
     def _createMoveFuture(self):
         """
         Return (CancellableFuture): a future that can be used to manage a move
@@ -784,7 +784,7 @@ class ESPSimulator(object):
         self._accel = [20, 20, 20]  # mm/s^2
         self._decel = [20, 20, 20]  # mm/s^2
         self._error_stack = []  # Stack that is populated by error codes
-        
+
         self._current_move_start = time.time()
         self._current_move_finish = time.time()
 
@@ -842,7 +842,7 @@ class ESPSimulator(object):
 
     def _sendAnswer(self, ans):
         self._output_buf += b"%s\r" % (ans,)
-        
+
     def _isMoving(self):
         return time.time() < self._current_move_finish
 
@@ -871,10 +871,10 @@ class ESPSimulator(object):
         logging.debug("SIM: parsing %s", to_str_escape(msg))
         msg = msg.strip()  # remove leading and trailing whitespace
         msg = b"".join(msg.split())  # remove all space characters
-        
+
         if msg == b"VE?":
             self._sendAnswer(b"ESP301 Version 3.0.1 6/1/99")
-            
+
         elif msg == b"SM":
             # save memory to non-volatile RAM
             pass
@@ -1014,7 +1014,7 @@ class ESPSimulator(object):
         elif re.match(br'\dSN', msg):
             # we don't need to do anything here
             pass
-        
+
         # Lock keypad
         elif re.match(br'LC\d', msg):
             val = int(msg[2:])

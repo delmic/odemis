@@ -281,7 +281,7 @@ def _readTiffTag(tfile):
 
     # parse openfibsem metadata
     openfibsem_md = tfile.GetField(T.TIFFTAG_IMAGEDESCRIPTION)
-    if openfibsem_md is not None:      
+    if openfibsem_md is not None:
         try:
             omd = openfibsem_md.decode("utf-8")
             md.update(_convert_openfibsem_to_odemis_metadata(omd))
@@ -626,8 +626,8 @@ def _updateMDFromOME(root, das):
         try:
             md[model.MD_EXTRA_SETTINGS] = json.loads(extrase.text)
         except (AttributeError, KeyError, ValueError):
-            pass  
-   
+            pass
+
         # rotation (and mirroring and translation, but we don't support this)
         trans_mat = ime.find("Transform")
         if trans_mat is not None:
@@ -2696,16 +2696,16 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
     # parse ini metadata as dictionary
     tfs_md = {}
     try:
-        cfg = configparser.ConfigParser()
+        cfg = configparser.ConfigParser(strict=False) # allow duplicate keys
         cfg.read_string(metadata)
         tfs_md = cfg
     except Exception as e:
-        logging.warning("Failed to parse metadata as ini: %s", e)
+        logging.warning("Duplicate keys allowed, but failed to parse metadata as ini: %s", e)
         return tfs_md
-    
+
     # convert to odemis format
     md = {}
-    
+
     # general
     try:
         datetime_str = tfs_md["User"]["date"] + " " + tfs_md["User"]["time"]
@@ -2714,7 +2714,7 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_ACQ_DATE} - {e}")
     try:
-        md[model.MD_HW_NAME] = tfs_md["System"]["systemtype"] + "-" + tfs_md["System"]["dnumber"]    
+        md[model.MD_HW_NAME] = tfs_md["System"]["systemtype"] + "-" + tfs_md["System"]["dnumber"]
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_HW_NAME} -  {e}")
     try:
@@ -2723,7 +2723,7 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_SW_VERSION} - {e}")
 
     try:
-        md[model.MD_PIXEL_SIZE] = (float(tfs_md["Scan"]["pixelwidth"]), 
+        md[model.MD_PIXEL_SIZE] = (float(tfs_md["Scan"]["pixelwidth"]),
                                    float(tfs_md["Scan"]["pixelheight"]))
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_PIXEL_SIZE} - {e}")
@@ -2734,7 +2734,7 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_DWELL_TIME} - {e}")
     try:
         # MD_POS should match image dimensions, e.g. only XY for 2D, XYZ for 3D, etc.
-        md[model.MD_POS] = (float(tfs_md["Stage"]["stagex"]), 
+        md[model.MD_POS] = (float(tfs_md["Stage"]["stagex"]),
                            float(tfs_md["Stage"]["stagey"]),
                            )
     except Exception as e:
@@ -2746,7 +2746,7 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
         md[model.MD_ROTATION] = float(tfs_md[beam_type]["scanrotation"])
         md[model.MD_EBEAM_VOLTAGE] = float(tfs_md[beam_type]["hv"])
         md[model.MD_EBEAM_CURRENT] = float(tfs_md[beam_type]["beamcurrent"])
-        
+
         # acquistion type
         acq_map =  {
             "EBeam": model.MD_AT_EM,
@@ -2755,19 +2755,19 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
         md[model.MD_ACQ_TYPE] = acq_map[beam_type]
 
     except Exception as e:
-        logging.warning(f"""Failed to parse ThermoFisher metadata: {model.MD_ROTATION}, 
-                        {model.MD_EBEAM_VOLTAGE}, {model.MD_EBEAM_CURRENT}, 
+        logging.warning(f"""Failed to parse ThermoFisher metadata: {model.MD_ROTATION},
+                        {model.MD_EBEAM_VOLTAGE}, {model.MD_EBEAM_CURRENT},
                         {model.MD_ACQ_TYPE} - {e}""")
     try:
         # NB: this is not actual spot size, actual spot diam is in xml metadata
-        md[model.MD_EBEAM_SPOT_DIAM] = float(tfs_md["Beam"]["spot"]) 
+        md[model.MD_EBEAM_SPOT_DIAM] = float(tfs_md["Beam"]["spot"])
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_EBEAM_SPOT_DIAM} - {e}")
 
     try:
         # detector
-        md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL 
-                                    if tfs_md["Detectors"]["name"] in ["ETD", "TLD"] 
+        md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL
+                                    if tfs_md["Detectors"]["name"] in ["ETD", "TLD"]
                                     else model.MD_DT_INTEGRATING)
     except Exception as e:
         logging.warning(f"Failed to parse ThermoFisher metadata: {model.MD_DET_TYPE} - {e}")
@@ -2791,18 +2791,18 @@ def _parse_zeiss_metadata(metadata:str) -> dict:
         # Stage at X = 48.5090 mm
 
         try:
-            
+
             # skip all caps lines as they are headers
             if line.isupper():
                 continue
 
-            # NOTE: 
-            # Date, Time are separated by : 
+            # NOTE:
+            # Date, Time are separated by :
             # everything else is separated by =
             try:
                 k, v = line.split("=")
-            except ValueError:             
-                k, v = line.split(":", maxsplit=1) 
+            except ValueError:
+                k, v = line.split(":", maxsplit=1)
             k, v = k.strip(), v.strip()
             zmd[k] = v
         except ValueError:
@@ -2842,7 +2842,7 @@ def _convert_zeiss_to_odemis_metadata(metadata: str) -> dict:
         logging.warning(f"Failed to parse ZEISS metadata: {model.MD_SW_VERSION} - {type(e)}: {e}")
 
     try:
-        # NOTE: 
+        # NOTE:
         # There are three values in the ZEISS metadata for pixel size
         # Pixel Size, Image Pixel Size, and FIB Pixel Size
         # Pixel Size is the one we want as it changes based on the beam type (FIB Imaging field)
@@ -2872,7 +2872,7 @@ def _convert_zeiss_to_odemis_metadata(metadata: str) -> dict:
         str_y = zmd["Stage at Y"]
         str_val, si_prefix, unit = units.decompose_si_prefix(str_y, "m")
         y = units.si_scale_val(float(str_val), si_prefix)
-        
+
         # MD_POS should match image dimensions, e.g. only XY for 2D, XYZ for 3D, etc.
         md[model.MD_POS] = (x, y)
     except Exception as e:
@@ -2916,7 +2916,7 @@ def _convert_zeiss_to_odemis_metadata(metadata: str) -> dict:
             bc_map ={
                 "SEM": "I Probe",
                 "FIB": "FIB Probe Current Actual",
-            } 
+            }
             beam_current_key = bc_map[beam_type]
 
             str_beam_current = zmd[beam_current_key]
@@ -2932,7 +2932,7 @@ def _convert_zeiss_to_odemis_metadata(metadata: str) -> dict:
             hv_map ={
                 "SEM": "EHT",
                 "FIB": "FIB EHT",
-            } 
+            }
             hv_key = hv_map[beam_type]
 
             str_hv = zmd[hv_key]
@@ -2944,17 +2944,17 @@ def _convert_zeiss_to_odemis_metadata(metadata: str) -> dict:
             logging.warning(f"Failed to parse ZEISS metadata: {model.MD_EBEAM_VOLTAGE} - {type(e)}: {e}")
     except Exception as e:
         logging.warning(f"Failed to parse ZEISS metadata: BeamType - {type(e)}: {e}")
-        
+
     # spot size
     try:
-        md[model.MD_EBEAM_SPOT_DIAM] = float(zmd["Spot Size"]) 
+        md[model.MD_EBEAM_SPOT_DIAM] = float(zmd["Spot Size"])
     except Exception as e:
         logging.warning(f"Failed to parse ZEISS metadata: {model.MD_EBEAM_SPOT_DIAM} - {type(e)}: {e}")
 
     # detector
     try:
-        md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL 
-                                    if zmd["Signal A"] in ["InLens", "SE2"] 
+        md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL
+                                    if zmd["Signal A"] in ["InLens", "SE2"]
                                     else model.MD_DT_INTEGRATING)
     except Exception as e:
         logging.warning(f"Failed to parse ZEISS metadata: {model.MD_DET_TYPE} - {type(e)}: {e}")
@@ -2991,7 +2991,7 @@ def _parse_tescan_metadata(metadata: bytes) -> str:
     vmd = ""
 
     # header type map
-    # 1: JPEG2000 Image header (thumbnail?) which is not used here. 
+    # 1: JPEG2000 Image header (thumbnail?) which is not used here.
     header_map ={
         2: "[MAIN]",
         3: "[SEM]",
@@ -3000,13 +3000,13 @@ def _parse_tescan_metadata(metadata: bytes) -> str:
 
     # loop through the chunks, extract the valid data
     while len(metadata) > LENGTH_BYTES + HEADER_BYTES:
-        
+
         # read the length of the next chunk (first 4 bytes)
-        chunk_len = int.from_bytes(metadata[:LENGTH_BYTES], 
+        chunk_len = int.from_bytes(metadata[:LENGTH_BYTES],
                                             byteorder="little", signed=False)
-        
+
         # read the type of the chunk (next 2 bytes)
-        chunk_type = int.from_bytes(metadata[LENGTH_BYTES:LENGTH_BYTES + HEADER_BYTES], 
+        chunk_type = int.from_bytes(metadata[LENGTH_BYTES:LENGTH_BYTES + HEADER_BYTES],
                                             byteorder="little", signed=False)
         if chunk_type == 0:
             break # end of metadata
@@ -3015,14 +3015,14 @@ def _parse_tescan_metadata(metadata: bytes) -> str:
         chunk_start = LENGTH_BYTES + HEADER_BYTES
         chunk_end = LENGTH_BYTES + chunk_len
         chunk = metadata[chunk_start:chunk_end]
-        
+
         # add the chunk data to the metadata string (if valid), not including the null byte at the end of the string
         if chunk_type in header_map:
             vmd += header_map[chunk_type] + "\n" + chunk[:-1].decode("latin1")
-        
+
         # skip to next chunk
-        metadata = metadata[chunk_end:]  # skip to next chunk        
-        
+        metadata = metadata[chunk_end:]  # skip to next chunk
+
     return vmd
 
 
@@ -3035,7 +3035,7 @@ def _convert_tescan_to_odemis_metadata(metadata: bytes) -> dict:
     """
 
     # parse metadata bytes as str (valid metadata)
-    try:    
+    try:
         vmd: str = _parse_tescan_metadata(metadata)
     except ValueError as e:
         raise ValueError(f"Failed to parse TESCAN metadata: {e}")
@@ -3046,7 +3046,7 @@ def _convert_tescan_to_odemis_metadata(metadata: bytes) -> dict:
     # https://stackoverflow.com/questions/19359556/configparser-reads-capital-keys-and-make-them-lower-case
     tmd = configparser.ConfigParser()
     tmd.read_string(vmd)
-        
+
     md = {}
 
     # general
@@ -3058,21 +3058,21 @@ def _convert_tescan_to_odemis_metadata(metadata: bytes) -> dict:
         logging.warning(f"Failed to parse TESCAN metadata: {model.MD_ACQ_DATE} - {type(e)}: {e}")
 
     try:
-        md[model.MD_HW_NAME] = tmd["MAIN"]["device"] + "-" + tmd["MAIN"]["serialnumber"]    
+        md[model.MD_HW_NAME] = tmd["MAIN"]["device"] + "-" + tmd["MAIN"]["serialnumber"]
     except KeyError as e:
         logging.warning(f"Failed to parse TESCAN metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
     try:
-        md[model.MD_HW_VERSION] = tmd["MAIN"]["device"] + "-" + tmd["MAIN"]["devicemodel"]    
+        md[model.MD_HW_VERSION] = tmd["MAIN"]["device"] + "-" + tmd["MAIN"]["devicemodel"]
     except KeyError as e:
         logging.warning(f"Failed to parse TESCAN metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
-    
+
     try:
         md[model.MD_SW_VERSION] = tmd["MAIN"]["softwareversion"]
     except KeyError as e:
         logging.warning(f"Failed to parse TESCAN metadata: {model.MD_SW_VERSION} - {type(e)}: {e}")
 
     try:
-        md[model.MD_PIXEL_SIZE] = (float(tmd["MAIN"]["pixelsizex"]), 
+        md[model.MD_PIXEL_SIZE] = (float(tmd["MAIN"]["pixelsizex"]),
                                    float(tmd["MAIN"]["pixelsizey"]))
     except KeyError as e:
         logging.warning(f"Failed to parse TESCAN metadata: {model.MD_PIXEL_SIZE} - {type(e)}: {e}")
@@ -3082,23 +3082,23 @@ def _convert_tescan_to_odemis_metadata(metadata: bytes) -> dict:
     try:
         # beam types is the section header of SEM/FIB metadata
         beam_type = "SEM" if "SEM" in tmd.sections() else "FIB"
-        
+
         # check if beam type is valid
         assert beam_type in tmd.sections()
-            
+
         try:
             md[model.MD_DWELL_TIME] = float(tmd[beam_type]["dwelltime"])
         except KeyError as e:
             logging.warning(f"Failed to parse TESCAN metadata: {model.MD_DWELL_TIME} - {e}")
         try:
             # MD_POS should match image dimensions, e.g. only XY for 2D, XYZ for 3D, etc.
-            md[model.MD_POS] = (float(tmd[beam_type]["stagex"]), 
+            md[model.MD_POS] = (float(tmd[beam_type]["stagex"]),
                                 float(tmd[beam_type]["stagey"]),
                             )
         except KeyError as e:
             logging.warning(f"Failed to parse TESCAN metadata: {model.MD_POS} - {e}")
 
-        try:   
+        try:
             acq_map =  {
                 "SEM": model.MD_AT_EM,
                 "FIB": model.MD_AT_FIB,
@@ -3112,47 +3112,47 @@ def _convert_tescan_to_odemis_metadata(metadata: bytes) -> dict:
             md[model.MD_ROTATION] = numpy.deg2rad(float(tmd[beam_type]["scanrotation"]))
         except KeyError as e:
             logging.warning(f"Failed to parse TESCAN metadata: {model.MD_ROTATION} - {e}")
-        
+
         try:
             md[model.MD_EBEAM_VOLTAGE] = float(tmd[beam_type]["hv"])
         except KeyError as e:
             logging.warning(f"Failed to parse TESCAN metadata: {model.MD_EBEAM_VOLTAGE} - {e}")
-        
-        try:    
-            md[model.MD_EBEAM_CURRENT] = float(tmd[beam_type]["predictedbeamcurrent"]) 
+
+        try:
+            md[model.MD_EBEAM_CURRENT] = float(tmd[beam_type]["predictedbeamcurrent"])
         except KeyError as e:
             logging.warning(f"Failed to parse TESCAN metadata: {model.MD_EBEAM_CURRENT} - {e}")
 
         try:
             # beam spot size
-            md[model.MD_EBEAM_SPOT_DIAM] = float(tmd[beam_type]["spotsize"]) 
+            md[model.MD_EBEAM_SPOT_DIAM] = float(tmd[beam_type]["spotsize"])
         except KeyError as e:
             logging.warning(f"Failed to parse TESCAN metadata: {model.MD_EBEAM_SPOT_DIAM} - {e}")
 
         try:
             # detector
-            md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL 
-                                        if tmd[beam_type]["detector"] in ["E-T", "SE"] 
+            md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL
+                                        if tmd[beam_type]["detector"] in ["E-T", "SE"]
                                         else model.MD_DT_INTEGRATING)
         except KeyError as e:
             logging.warning(f"Failed to parse TESCAN metadata: {model.MD_DET_TYPE} - {e}")
 
     except Exception as e:
         logging.warning(f"Failed to parse TESCAN metadata: {e}", exc_info=True)
-    
+
     return md
 
 def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
 
     # load json metadata
     try:
-        omd = json.loads(metadata)       
+        omd = json.loads(metadata)
         version = omd["system"]["info"]["fibsem_version"]
     except ValueError as e:
         raise ValueError(f"Failed to parse OpenFIBSEM metadata json: {e}")
     except KeyError as e:
         raise ValueError(f"Invalid json structure for OpenFIBSEM metadata: {e}")
-    
+
     md = {}
 
     # general
@@ -3164,26 +3164,26 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
 
     try:
         system_info = omd["system"]["info"]
-        md[model.MD_HW_NAME] = system_info["manufacturer"] + " " + system_info["model"] + "-" + system_info["serial_number"]  
+        md[model.MD_HW_NAME] = system_info["manufacturer"] + " " + system_info["model"] + "-" + system_info["serial_number"]
     except KeyError as e:
         logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
-    
+
     try:
         system_info = omd["system"]["info"]
-        md[model.MD_HW_VERSION] = system_info["hardware_version"] 
+        md[model.MD_HW_VERSION] = system_info["hardware_version"]
     except KeyError as e:
         logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_HW_NAME} -  {type(e)}: {e}")
-    
+
     try:
         md[model.MD_SW_VERSION] = omd["system"]["info"]["fibsem_version"]
     except:
         logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_SW_VERSION} - {type(e)}: {e}")
-    
+
     try:
-        md[model.MD_PIXEL_SIZE] = (float(omd["pixel_size"]["x"]), 
+        md[model.MD_PIXEL_SIZE] = (float(omd["pixel_size"]["x"]),
                                    float(omd["pixel_size"]["y"]))
     except KeyError as e:
-        logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_PIXEL_SIZE} - {type(e)}: {e}") 
+        logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_PIXEL_SIZE} - {type(e)}: {e}")
 
     # beam metadata
     try:
@@ -3200,7 +3200,7 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
         except KeyError as e:
             logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_POS} - {e}")
 
-        try:   
+        try:
             acq_map =  {
                 "ELECTRON": model.MD_AT_EM,
                 "ION": model.MD_AT_FIB,
@@ -3212,19 +3212,19 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
 
         beam_type_settings = "electron_beam" if beam_type == "ELECTRON" else "ion_beam"
         beam_settings = omd["microscope_state"][beam_type_settings]
-            
+
         try:
             md[model.MD_ROTATION] = math.radians(float(beam_settings["scan_rotation"]))
         except KeyError as e:
             logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_ROTATION} - {e}")
-        
+
         try:
             md[model.MD_EBEAM_VOLTAGE] = float(beam_settings["voltage"])
         except KeyError as e:
             logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_EBEAM_VOLTAGE} - {e}")
-        
-        try:    
-            md[model.MD_EBEAM_CURRENT] = float(beam_settings["beam_current"]) 
+
+        try:
+            md[model.MD_EBEAM_CURRENT] = float(beam_settings["beam_current"])
         except KeyError as e:
             logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_EBEAM_CURRENT} - {e}")
 
@@ -3233,8 +3233,8 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
             # detector
             beam_detector = "electron_detector" if beam_type == "ELECTRON" else "ion_detector"
             detector_type = omd["microscope_state"][beam_detector]["type"]
-            md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL 
-                                        if detector_type in ["ETD", "TLD", "E-T", "SE"] 
+            md[model.MD_DET_TYPE] = (model.MD_DT_NORMAL
+                                        if detector_type in ["ETD", "TLD", "E-T", "SE"]
                                         else model.MD_DT_INTEGRATING)
         except KeyError as e:
             logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_DET_TYPE} - {e}")
@@ -3242,9 +3242,9 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
     except Exception as e:
         logging.warning(f"Failed to parse OpenFIBSEM metadata: {e}", exc_info=True)
 
-    # if the md is still empty, something else was using ImageDescription tag, 
+    # if the md is still empty, something else was using ImageDescription tag,
     # so we raise an error so external metadata is not updated
-    if not md: 
+    if not md:
         raise ValueError("ImageDescription tag contained data, but no OpenFIBSEM metadata found... falling back to previous metadata...")
 
     return md

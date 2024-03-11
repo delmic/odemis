@@ -153,7 +153,7 @@ class TestOdemisBugreporter(unittest.TestCase):
                 # No installation field, should still work (it's optional, and old bug reporters didn't provide it)
                 # 'installation': "test"
             }
-    
+
             try:
                 self.bugreporter.create_ticket(api_key, description, [self.bugreporter.zip_fn])
             except Exception as e:

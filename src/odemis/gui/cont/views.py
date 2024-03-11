@@ -389,7 +389,7 @@ class OverviewController(object):
     def _initialize_ovv_im(self, shape):
         """
         Initialize an overview image, i.e. a black DataArray with corresponding
-        metadata. 
+        metadata.
         shape (int, int, int): XYC tuple
         returns:
             DataArray of shape XYC: a new DataArray, black, with PIXEL_SIZE and POS metadata

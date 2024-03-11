@@ -10,15 +10,15 @@ Copyright © 2012 Éric Piel, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import logging
@@ -52,7 +52,7 @@ class TestWithoutBackend(unittest.TestCase):
         # reset the logging (because otherwise it accumulates)
         if logging.root:
             del logging.root.handlers[:]
-    
+
 #    @skip("Simple")
     def test_help(self):
         """
@@ -67,10 +67,10 @@ class TestWithoutBackend(unittest.TestCase):
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s' returned %s" % (cmdline, ret))
-        
+
         output = out.getvalue()
-        self.assertTrue(b"optional arguments" in output)
-    
+        self.assertTrue(b"Microscope management" in output)
+
 #    @skip("Simple")
     def test_error_command_line(self):
         """
@@ -89,13 +89,13 @@ class TestWithoutBackend(unittest.TestCase):
             # change the stdout
             out = BytesIO()
             sys.stdout = out
-            
+
             cmdline = "cli --log-level=2 --scan"
             ret = main.main(cmdline.split())
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s' returned %s" % (cmdline, ret))
-        
+
         output = out.getvalue()
         # AndorCam3 SimCam should be there for sure (if libandor3-dev is installed)
         # self.assertTrue("andorcam3.AndorCam3" in output)
@@ -160,13 +160,13 @@ class TestWithBackend(unittest.TestCase):
             # change the stdout
             out = BytesIO()
             sys.stdout = out
-            
+
             cmdline = "cli --list"
             ret = main.main(cmdline.split())
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         output = out.getvalue()
         self.assertTrue(b"Light Engine" in output)
         self.assertTrue(b"Camera" in output)
@@ -200,13 +200,13 @@ class TestWithBackend(unittest.TestCase):
             # change the stdout
             out = BytesIO()
             sys.stdout = out
-            
+
             cmdline = ["cli", "--list-prop", "Light Engine"]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         output = out.getvalue()
         self.assertTrue(b"role" in output)
         self.assertTrue(b"swVersion" in output)
@@ -220,71 +220,71 @@ class TestWithBackend(unittest.TestCase):
         self.assertEqual(ret, 0, "trying to run %s" % cmd)
         f.close()
         os.remove("test.txt")
-    
+
     def test_set_attr(self):
         # to read attribute power (which is a list of numbers)
         regex = re.compile(br"\spower.+ value: \[(.*?)\]")
-        
+
         # read before
         try:
             # change the stdout
             out = BytesIO()
             sys.stdout = out
-            
+
             cmdline = ["cli", "--list-prop", "Light Engine"]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         output = out.getvalue()
         # Parse each individual power value from the power list
         power_val_str = [val_str for val_str in str(regex.search(output).group(1)).split(",")]
         power = [float(re.search(r"([.0-9]+)", val).group(0)) for val in power_val_str]
         self.assertTrue(any(pw >= 0 for pw in power), "Power values should be bigger than 0")
-        
+
         # set the new value
         try:
             # change the stdout
             out = BytesIO()
             sys.stdout = out
-            
+
             cmdline = ["cli", "--set-attr", "Light Engine", "power", str([0.0 for _ in power])]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         # read the new value
         try:
             # change the stdout
             out = BytesIO()
             sys.stdout = out
-            
+
             cmdline = ["cli", "--list-prop", "Light Engine"]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         output = out.getvalue()
         power_val_str = [val_str for val_str in str(regex.search(output).group(1)).split(",")]
         power = [float(re.search(r"([.0-9]+)", val).group(0)) for val in power_val_str]
         self.assertTrue(all(pw == 0 for pw in power), "Power values should be 0")
-        
+
     def test_set_attr_dict(self):
         # set a dict, which is a bit complicated structure
         try:
             # change the stdout
             out = BytesIO()
             sys.stdout = out
-            
+
             cmdline = ["cli", "--set-attr", "Sample Stage", "speed", "x: 0.5, y: 0.2"]
             ret = main.main(cmdline)
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-    
+
     def test_move(self):
         # TODO compare position VA
         # test move and also multiple move requests
@@ -292,7 +292,7 @@ class TestWithBackend(unittest.TestCase):
             # change the stdout
             out = BytesIO()
             sys.stdout = out
-            
+
             cmdline = ["cli", "--move", "Sample Stage", "x", "5", "--move", "Sample Stage", "y", "-0.2"]
             ret = main.main(cmdline)
         except SystemExit as exc:
@@ -343,18 +343,18 @@ class TestWithBackend(unittest.TestCase):
             # change the stdout
             out = BytesIO()
             sys.stdout = out
-            
+
             cmdline = "cli --stop"
             ret = main.main(cmdline.split())
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-    
+
     def test_acquire(self):
         # utf-8 bytes on Python 2, unicode on Python 3
         picture_name = "TÈßt.tiff"
         size = (1024, 1024)
-        
+
         # change resolution
         try:
             # "Andor SimCam" contains a space, so cut the line ourselves
@@ -363,7 +363,7 @@ class TestWithBackend(unittest.TestCase):
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         # acquire (simulated) image
         try:
             # "Andor SimCam" contains a space, so cut the line ourselves
@@ -372,12 +372,12 @@ class TestWithBackend(unittest.TestCase):
         except SystemExit as exc:
             ret = exc.code
         self.assertEqual(ret, 0, "trying to run '%s'" % cmdline)
-        
+
         st = os.stat(picture_name) # this test also that the file is created
         self.assertGreater(st.st_size, 0)
         im = Image.open(picture_name)
         self.assertEqual(im.format, "TIFF")
         self.assertEqual(im.size, size)
-    
+
 if __name__ == "__main__":
     unittest.main()

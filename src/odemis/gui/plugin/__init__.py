@@ -137,7 +137,7 @@ def load_plugin(filename, microscope, main_app):
 
         if microscope:
             logging.debug("Trying to instantiate %s (%s) of '%s' with microscope %s",
-                      pc.name, n, filename, microscope.name)
+                          pc.name, n, filename, microscope.name)
         else:
             logging.debug("Trying to instantiate %s (%s) of '%s' without microscope",
                           pc.name, n, filename)
@@ -221,7 +221,7 @@ class Plugin(metaclass=ABCMeta):
         pass
 
     @call_in_wx_main
-    def addMenu(self, entry, callback):
+    def addMenu(self, entry, callback, item_kind=wx.ITEM_NORMAL, pass_menu_item=False):
         """
         Adds a menu entry in the main GUI menu.
         entry (str): the complete path for the entry.
@@ -231,6 +231,10 @@ class Plugin(metaclass=ABCMeta):
           For instance: "View/Fancy acquisition..."
                     or: "New group/Subgroup/The action\tCtrl+A"
         callback (callable): function to call when that entry is selected.
+        item_kind (wx.Item): the type of menu item that should be added.
+            Default is wx.ITEM_NORMAL, which makes it a normal item.
+            Set to wx.ITEM_CHECK to make it a checkbox item.
+        pass_menu_item (bool): If True the menu_item will be passed as an argument to the callback.
         raise ValueError: If the entry doesn't have a group or a name
         """
         # TODO: have a way to disable the menu on some conditions
@@ -282,17 +286,21 @@ class Plugin(metaclass=ABCMeta):
 
         # TODO: if adding for the first time to standard menu, first add a separator
         # Add the menu item
-        menu_item = curr_group.Append(wx.ID_ANY, path[-1])
+        menu_item = curr_group.Append(wx.ID_ANY, path[-1], kind=item_kind)
 
         # Attach the callback function
         def menu_callback_wrapper(evt):
             try:
                 logging.info("Menu '%s' handled by %s, %s", entry, self.__class__.__name__, callback)
-                callback()
+                if pass_menu_item:
+                    callback(menu_item)
+                else:
+                    callback()
                 logging.debug("Menu '%s' callback completed", entry)
             except Exception:
                 logging.exception("Error when processing menu entry %s of plugin %s",
                                   path[-1], self)
+
         main_frame.Bind(wx.EVT_MENU, menu_callback_wrapper, id=menu_item.Id)
 
     def showAcquisition(self, filename):
@@ -425,6 +433,7 @@ class AcquisitionDialog(xrcfr_plugin):
                 except Exception:
                     logging.exception("Error when processing button %s of plugin %s",
                                       label, self.plugin)
+
             btn.Bind(wx.EVT_BUTTON, button_callback_wrapper)
         else:
             btn.Bind(wx.EVT_BUTTON, partial(self.on_close, btnid))

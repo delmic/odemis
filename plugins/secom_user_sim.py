@@ -65,7 +65,7 @@ class SecomUserPlugin(Plugin):
         """
         Simulates the user going around with the Fluorescence stream.
         In particular, it will play/pause the stream, tweak the exposure time,
-        and the binning. 
+        and the binning.
         """
         self._should_stop.clear()
 
@@ -104,8 +104,8 @@ class SecomUserPlugin(Plugin):
                 # Change a little the exposure time
                 exp = fms.detExposureTime.clip(exp_orig * random.uniform(0.1, 3.0))
                 fms.detExposureTime.value = exp
-                logging.debug("Changed exposure time to %g s", exp) 
-    
+                logging.debug("Changed exposure time to %g s", exp)
+
                 # Wait a little while
                 if self._should_stop.wait(3):
                     break

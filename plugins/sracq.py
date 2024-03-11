@@ -365,4 +365,3 @@ class SRAcqPlugin(Plugin):
                 logging.debug("Data %d saved", n)
         except Exception:
             logging.exception("Failure in the saving thread")
-

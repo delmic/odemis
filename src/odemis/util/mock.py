@@ -186,5 +186,3 @@ class CCDDataFlow(model.DataFlow):
             self.component().stop_acquire()
         except ReferenceError:
             pass
-
-

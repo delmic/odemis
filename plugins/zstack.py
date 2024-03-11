@@ -70,7 +70,7 @@ class ZStackPlugin(Plugin):
         super(ZStackPlugin, self).__init__(microscope, main_app)
         # Can only be used with a microscope
         main_data = self.main_app.main_data
-        
+
         if not microscope or main_data.focus is None:
             return
 
@@ -88,7 +88,7 @@ class ZStackPlugin(Plugin):
 
         self.zstep.subscribe(self._update_exp_dur)
         self.numberOfAcquisitions.subscribe(self._update_exp_dur)
-        
+
         # Two acquisition order possible:
         # * for each Z, all the streams (aka intertwined): Z exactly the same for each stream
         # * for each stream, the whole Z stack: Might be faster (if filter wheel used for changing wavelength)
@@ -100,7 +100,7 @@ class ZStackPlugin(Plugin):
         self._acq_streams = None  # previously folded streams, for optimisation
         self._dlg = None
         self.addMenu("Acquisition/ZStack...\tCtrl+B", self.start)
-        
+
     def _acqRangeIsValid(self, acq_range):
         return self._zrange[0] <= acq_range <= self._zrange[1]
 
@@ -111,7 +111,7 @@ class ZStackPlugin(Plugin):
             return zstep
         else:
             return self.zstep.value  # Old value
-        
+
     def _setNumberOfAcquisitions(self, n_acq):
         # Check if the acquisition will be within the range of the actuator
         acq_range = self.zstart.value + self.zstep.value * n_acq
@@ -372,7 +372,7 @@ class ZStackPlugin(Plugin):
         self.focus.moveAbs(self._old_pos).result()
         self.focus.position.subscribe(self._on_focus_pos)
         self.zstart.subscribe(self._on_zstart)
-        
+
     def postProcessing(self, images):
         """
         Post-process the images after the acquisition is done.
@@ -408,7 +408,7 @@ class ZStackPlugin(Plugin):
         else:
             # Streams are slowest changed: for each stream, do all steps together
             all_ss = [[s] for s in ss]
-        
+
         try:
             # list of list of list of DataArray: for each acquisition, for each stream, for each step, the data acquired
             all_images = [[] for _ in all_ss]
@@ -422,7 +422,7 @@ class ZStackPlugin(Plugin):
             dlg.showProgress(f)
 
             total_nb = left = len(all_ss) * nb
-            
+
             logging.debug("Will repeat the acquisition %d times", len(all_ss))
             for ss, images in zip(all_ss, all_images):
                 for i in range(nb):
@@ -467,7 +467,7 @@ class ZStackPlugin(Plugin):
             f.set_result(None)  # Indicate it's over
             completed = True
             dlg.Close()
-            
+
         except CancelledError:
             logging.debug("Acquisition cancelled.")
             dlg.resumeSettings()

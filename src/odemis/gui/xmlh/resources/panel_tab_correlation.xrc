@@ -292,7 +292,7 @@
                                     <border>5</border>
                                     <flag>wxEXPAND</flag>
                                   </object>
-                                  <object class="sizeritem"> 
+                                  <object class="sizeritem">
                                     <object class="OwnerDrawnComboBox" name="cmb_correlation_reference">
                                         <size>250,-1</size>
                                         <fg>#2FA7D4</fg>
@@ -405,9 +405,9 @@
                                 <object class="sizeritem">
                                   <object class="UnitFloatCtrl" name="dpx_step_cntrl">
                                     <value>1</value>
-                                    <key_step>0.000001</key_step>
+                                    <key_step>1</key_step>
                                     <min>0</min>
-                                    <max>10</max>
+                                    <max>250</max>
                                     <unit>%</unit>
                                     <accuracy>3</accuracy>
                                     <XRCED>

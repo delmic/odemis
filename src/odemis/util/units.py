@@ -420,4 +420,3 @@ def value_to_str(value, unit=None, accuracy=None, pretty_time=False):
     except Exception:
         logging.warning("Failed to convert value to string", exc_info=True)
         return u"%s" % value
-

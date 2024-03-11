@@ -552,7 +552,7 @@ class Stage(model.Actuator):
         """
         Read the stage position, using either GetStagePosition of GetStagePosition6 where the first supports 3
         linear axes and the latter 6 axes including rx and rm rotational axes.
-        :return position dict str -> float: (in m/rad) with the axes supported in .axes 
+        :return position dict str -> float: (in m/rad) with the axes supported in .axes
                 is_moving (bool)
         """
         pos = {}
@@ -842,7 +842,7 @@ class Scanner(model.Emitter):
                 logging.info("No blanker control available, will disable it")
             else:
                 raise
-            
+
 
         self.external = model.VAEnumerated(self.parent.GetExternal(), choices={True, False},
                                           setter=self._setExternal)

@@ -71,7 +71,7 @@ class CryoAcquiController(object):
             self._tab_data, self._tab
         )
         self._config = conf.get_acqui_conf()
-        # contains the acquisition progressive future for the given streams 
+        # contains the acquisition progressive future for the given streams
         self._acq_future = None
 
         # VA's
@@ -86,7 +86,7 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Hide()
         self._panel.Layout()
 
-        # bind events (buttons, checking, ...) with callbacks 
+        # bind events (buttons, checking, ...) with callbacks
         # for "ACQUIRE" button
         self._panel.btn_cryosecom_acquire.Bind(wx.EVT_BUTTON, self._on_acquire)
         # for "change..." button
@@ -99,7 +99,7 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acqui_cancel.Bind(wx.EVT_BUTTON, self._on_cancel)
         # for the check list box
         self._panel.streams_chk_list.Bind(wx.EVT_CHECKLISTBOX, self._on_check_list)
-        # for the z parameters widgets 
+        # for the z parameters widgets
         self._panel.param_Zmin.SetValueRange(self._tab_data.zMin.range[0], self._tab_data.zMin.range[1])
         self._panel.param_Zmax.SetValueRange(self._tab_data.zMax.range[0], self._tab_data.zMax.range[1])
         self._panel.param_Zstep.SetValueRange(self._tab_data.zStep.range[0], self._tab_data.zStep.range[1])
@@ -152,7 +152,7 @@ class CryoAcquiController(object):
         """
         called when the button "acquire" is pressed
         """
-        # store the focuser position 
+        # store the focuser position
         self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
 
         # hide/show/disable some widgets
@@ -290,7 +290,7 @@ class CryoAcquiController(object):
         """
         Called to export the acquired data.
         data (DataArray): the returned data/images from the future
-        thumb_nail (DataArray): the thumbnail of the views  
+        thumb_nail (DataArray): the thumbnail of the views
         """
         filename = self._filename.value
         if data:
@@ -313,15 +313,15 @@ class CryoAcquiController(object):
     def _on_streams_change(self, streams):
         """
         a VA callback that is called when the .streams VA is changed, more specifically
-        it is called when the user adds or removes a stream 
+        it is called when the user adds or removes a stream
         """
-        # removing a stream 
+        # removing a stream
         # for every entry in the list, is it also present in the .streams?
-        # Note: the reverse order is needed in case 2 or more streams are deleted 
+        # Note: the reverse order is needed in case 2 or more streams are deleted
         # at the same time. Because, when an entry in array is deleted, the other
         # entries shift leftwards. So iterating from left to right would lead to skipping
         # some entries required to delete, and deleting other entries. Therefore,
-        # iterating from right to left is chosen. 
+        # iterating from right to left is chosen.
         for i in range(self._panel.streams_chk_list.GetCount() - 1, -1, -1):
             item_stream = self._panel.streams_chk_list.GetClientData(i)
             if item_stream not in streams:
@@ -337,7 +337,7 @@ class CryoAcquiController(object):
                     va.unsubscribe(self._on_stream_wavelength)
                 item_stream.name.unsubscribe(self._on_stream_name)
 
-        # adding a stream 
+        # adding a stream
         # for every stream in .streams, is it already present in the list?
         item_streams = [
             self._panel.streams_chk_list.GetClientData(i)
@@ -380,7 +380,7 @@ class CryoAcquiController(object):
             acq_time = acqmng.estimateZStackAcquisitionTime(self._acquiStreams.value, self._zlevels)
 
         acq_time = math.ceil(acq_time)
-        # display the time on the GUI 
+        # display the time on the GUI
         txt = u"Estimated time: {}.".format(units.readable_time(acq_time, full=False))
         self._panel.txt_cryosecom_est_time.SetLabel(txt)
 
@@ -412,7 +412,7 @@ class CryoAcquiController(object):
     def _on_stream_name(self, _):
         """
         a VA callback that is called when the user changes
-         the name of a stream 
+         the name of a stream
         """
         counts = self._panel.streams_chk_list.GetCount()
         for i in range(counts):
@@ -436,7 +436,7 @@ class CryoAcquiController(object):
     def _on_zstack(self):
         """
         Takes care of preparing for the zstack by generating the zlevels,
-        and making the streams-zlevel dictionary that will be passed to the acquisition manager 
+        and making the streams-zlevel dictionary that will be passed to the acquisition manager
         """
         if not self._zStackActive.value:
             return
@@ -450,7 +450,7 @@ class CryoAcquiController(object):
         self._zlevels = {s: levels for s in self._acquiStreams.value
                          if isinstance(s, (FluoStream, BrightfieldStream))}
 
-        # update the time, taking the zstack into account 
+        # update the time, taking the zstack into account
         self._update_acquisition_time()
 
     def _on_z_min(self, zmin):
@@ -529,7 +529,7 @@ class CryoAcquiController(object):
     def _get_wavelength_vas(self, st):
         """
         Gets the excitation and emission VAs of a stream.
-        st (Stream): the stream of which the excitation and emission wavelengths 
+        st (Stream): the stream of which the excitation and emission wavelengths
             are to be returned
         return (set of VAs)
         """

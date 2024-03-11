@@ -138,7 +138,7 @@ class RGBStream(StaticStream):
 
     def _clean_raw(self, raw):
         '''
-        Returns cleaned raw data or raises error if raw is not RGB(A) 
+        Returns cleaned raw data or raises error if raw is not RGB(A)
         '''
         # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
         if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):
@@ -956,7 +956,7 @@ class RGBUpdatableStream(StaticStream):
 
     def _clean_raw(self, raw):
         '''
-        Returns cleaned raw data or raises error if raw is not RGB(A) 
+        Returns cleaned raw data or raises error if raw is not RGB(A)
         '''
         # if raw is a DataArrayShadow, but not pyramidal, read the data to a DataArray
         if isinstance(raw, model.DataArrayShadow) and not hasattr(raw, 'maxzoom'):

@@ -29,7 +29,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 
 class TestGetWavelength(unittest.TestCase):
-    
+
     def test_wl_list(self):
         shape = (220, 1, 1, 50, 400)
         dtype = numpy.dtype("uint16")
@@ -128,7 +128,7 @@ class TestGetAngle(unittest.TestCase):
 
 
 class TestCoefToDA(unittest.TestCase):
-    
+
     def test_simple(self):
         dcalib = numpy.array([1, 1.3, 2, 3.5, 4, 5, 0.1, 6, 9.1], dtype=float)
         wl_calib = (400 + numpy.arange(len(dcalib)))

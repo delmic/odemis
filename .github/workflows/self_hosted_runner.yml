@@ -44,17 +44,15 @@ jobs:
       # Start the VirtualBox Manager
       # Sleep for 5s to give VirtualBox Manager some time to start
       # The testing user of the Virtual Machine should automatically be logged in for the display (or the xserver) to be started
-      # Pass the DISPLAY to the Virtual Machine while starting it
       # Sleep for 1.5m to give the Virtual Machine time to start and automatically login
       # Set runpytest_wrapper.sh execution timeout of 8 hours, i.e. 8 * 60 * 60 * 1000 = 28800000 milliseconds
       run: |
-        export DISPLAY=:0
         VirtualBox &
         sleep 5s
         echo "Started VirtualBox with PID $(pidof VirtualBox)"
-        VBoxManage startvm "$VM_NAME" --putenv "DISPLAY=:0"
+        VBoxManage startvm "$VM_NAME"
         sleep 1.5m
-        VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --putenv "DISPLAY=:0" --username testing --password "$CI_VM_PASSWORD" --wait-stdout --timeout 28800000
+        VBoxManage --nologo guestcontrol "$VM_NAME" run --exe "/home/testing/development/odemis-testing/runpytest_wrapper.sh" --username testing --password "$CI_VM_PASSWORD" --wait-stdout --timeout 28800000
       continue-on-error: true
 
     - name: Summary

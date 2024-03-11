@@ -135,7 +135,7 @@ class CryoFeatureController(object):
                             caption="Unable to Move", style=wx.OK | wx.ICON_WARNING| wx.CENTER)
         box.SetOKLabel("OK")
         ans = box.ShowModal()  # Waits for the window to be closed
-        return ans == wx.ID_OK    
+        return ans == wx.ID_OK
 
     def _enable_feature_ctrls(self, enable: bool):
         """

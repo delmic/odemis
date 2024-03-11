@@ -708,7 +708,7 @@ class MicroscopeViewport(ViewPort):
         if not self.stage_limit_overlay:
             self.stage_limit_overlay = BoxOverlay(self.canvas)
         self.stage_limit_overlay.set_dimensions(roi)
-        
+
     def _on_stream_change(self, streams):
         """
         When the streams are changed, check if z-index is supported. If so,
@@ -1655,6 +1655,9 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         span = rng[1] - rng[0]
+        if span == 0:
+            # Let's just pick something not too weird
+            span = 1
 
         # relative position of the centre in the current display range
         prop = (centre - rng[0]) / span
@@ -1691,6 +1694,9 @@ class NavigablePlotViewport(PlotViewport):
             return
 
         span = rng[1] - rng[0]
+        if span == 0:
+            # Let's just pick something not too weird
+            span = 1
 
         # relative position of the centre
         prop = (centre - rng[0]) / span

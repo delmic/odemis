@@ -9,15 +9,15 @@ Copyright © 2024, Delmic
 
 This file is part of Odemis.
 
-Odemis is free software: you can redistribute it and/or modify it under the terms 
-of the GNU General Public License version 2 as published by the Free Software 
+Odemis is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
 Foundation.
 
-Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; 
-without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR 
+Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
 PURPOSE. See the GNU General Public License for more details.
 
-You should have received a copy of the GNU General Public License along with 
+You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 '''
 import glob
@@ -31,14 +31,14 @@ from odemis import model
 from odemis.dataio import tiff
 
 
-"""This test case requires additional test data to be downloaded from Drive/Software Engineering/Test data/metor/test_images 
+"""This test case requires additional test data to be downloaded from Drive/Software Engineering/Test data/metor/test_images
 and the associated metadata to be generated using the generate_test_metadata.py script.
 
 To generate the test metadata, run the following command from the root of the repository:
 
 python -m odemis.dataio.test.generate_test_metadata --path ~/test_data/meteor/test_images
 
-This will generate a test_metadata.json file in the test data directory. This file is used by the test case below. 
+This will generate a test_metadata.json file in the test data directory. This file is used by the test case below.
 You will need to re-run this script if you add new test data.
 
 """
@@ -60,11 +60,11 @@ class TestMultiTiffIO(unittest.TestCase):
 
     # open metadata from test_metadata.json
     with open(os.path.join(TEST_PATH, "test_metadata.json"), "r") as f:
-        test_metadata = json.load(f)    
+        test_metadata = json.load(f)
 
     for fname, md in test_metadata.items():
 
-        # open data    
+        # open data
         fname = os.path.join(TEST_PATH, "**", f"{fname}*.tif")
         fname = glob.glob(fname, recursive=True)[0]
         data = tiff.open_data(fname)
@@ -89,4 +89,3 @@ class TestMultiTiffIO(unittest.TestCase):
 
 if __name__ == '__main__':
     unittest.main()
-

@@ -268,7 +268,7 @@ class BackendStarter(object):
                           size=(800, 800),
                           # No close button
                           style=wx.CAPTION | wx.RESIZE_BORDER)
-        frame.SetMinClientSize((400, 200)) 
+        frame.SetMinClientSize((400, 200))
         self._list = wx.ListCtrl(frame,
                                  style=wx.LC_REPORT | wx.LC_SINGLE_SEL | wx.LC_NO_SORT_HEADER)
         self._list.InsertColumn(0, "Component")
@@ -354,6 +354,9 @@ class BackendStarter(object):
                  "--log-level", self._config["LOGLEVEL"],
                  "--log-target", self._config["LOGFILE"],
                  modelfile]
+        if self._config.get("MODEL_STRICT_SYNTAX", "").lower() in ("true", "1"):
+            odemisd_cmd.append("--strict-children")
+
         logging.debug("Running: %s", " ".join(odemisd_cmd))
 
         # odemisd likes to start as root to be able to create /var/run files, but then

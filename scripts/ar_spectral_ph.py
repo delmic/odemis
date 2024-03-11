@@ -16,7 +16,7 @@ run as:
   the SEM field of view)
 --drift defines the time between each drift corrections
 --anchor defines the top-left and bottom-right points of the anchor region
---output indicates the name of the file which will contain all the output. It 
+--output indicates the name of the file which will contain all the output. It
          should finish by .h5 (for HDF5) or .tiff (for TIFF).
 
 You first need to run the odemis backend with the SPARC config. For instance,
@@ -54,7 +54,7 @@ class Acquirer(object):
         self.sed = model.getComponent(role="se-detector")
         # the spectrometer
         self.spect = model.getComponent(role="spectrometer")
-        
+
         # For acquisition
         self.spec_data = None
         self.acq_done = threading.Event()
@@ -238,4 +238,3 @@ if __name__ == '__main__':
     else:
         ret = 0
     exit(ret)
-

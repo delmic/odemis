@@ -893,4 +893,3 @@ class GridScanner(object):
         logging.info("CCD res = %s, binning = %s",
                      self.ccd.resolution.value,
                      self.ccd.binning.value)
-
