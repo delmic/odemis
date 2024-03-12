@@ -269,20 +269,33 @@
                               <border>5</border>
                               <flag>wxEXPAND</flag>
                             </object>
-                            <object class="sizeritem">
-                              <object class="wxCheckBox" name="ctrl_enable_correlation">
-                                <label>Correlaton Enabled</label>
-                                <fg>#E5E5E5</fg>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP|wxLEFT</flag>
-                              <border>5</border>
-                            </object>
+                            
                             <object class="sizeritem">
                               <object class="wxFlexGridSizer">
+                                <object class="sizeritem">
+                                <object class="wxCheckBox" name="ctrl_enable_correlation">
+                                  <label>Correlaton Enabled</label>
+                                  <fg>#E5E5E5</fg>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <option>0</option>
+                                <flag>wxTOP|wxLEFT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxCheckBox" name="ctrl_auto_resize_view">
+                                  <label>Auto Resize Overlay</label>
+                                  <fg>#E5E5E5</fg>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <option>0</option>
+                                <flag>wxTOP|wxLEFT</flag>
+                                <border>5</border>
+                              </object>
                                 <object class="sizeritem">
                                     <object class="wxStaticText">
                                       <label>Reference Frame</label>
@@ -420,7 +433,7 @@
                                   </object>
                                 </object>
                                 <cols>2</cols>
-                                <rows>6</rows>
+                                <rows>7</rows>
                                 <vgap>10</vgap>
                                 <hgap>10</hgap>
                                 <growablecols>1</growablecols>
