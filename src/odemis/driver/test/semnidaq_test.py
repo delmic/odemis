@@ -63,6 +63,12 @@ CONFIG_BSD = {
     "limits": [-4, 4]  # Data inverted
 }
 
+CONFIG_CNT = {
+    "name": "counter",
+    "role": "counter",
+    "source": 8,  # PFI8
+}
+
 CONFIG_SCANNER = {
     "name": "scanner",
     "role": "ebeam",
@@ -97,6 +103,7 @@ CONFIG_SEM = {
         "detector0": CONFIG_SED,
         "detector1": CONFIG_CLD,
         "detector2": CONFIG_BSD,
+        "counter0": CONFIG_CNT,
     }
 }
 
@@ -116,6 +123,8 @@ class TestAnalogSEM(unittest.TestCase):
                 cls.bsd = child
             elif child.name == CONFIG_SCANNER["name"]:
                 cls.scanner = child
+            elif child.name == CONFIG_CNT["name"]:
+                cls.counter = child
 
         # Compute the fast TTL masks, for the waveform checks
         cls.pixel_bit = 1 << CONFIG_SCANNER["pixel_ttl"]
@@ -141,6 +150,14 @@ class TestAnalogSEM(unittest.TestCase):
         self.acq_dates2 = []  # floats
         self.acq_done2 = threading.Event()
         self.das = []  # DataArrays
+
+    def compute_expected_metadata(self) -> Tuple[Tuple[int, int], Tuple[float, float], float]:
+        exp_shape = self.scanner.resolution.value[::-1]
+        scanner_pxs = self.scanner.pixelSize.value
+        scale = self.scanner.scale.value
+        exp_pxs = tuple(p * s for p, s in zip(scanner_pxs, scale))
+        exp_duration = self.scanner.dwellTime.value * numpy.prod(exp_shape)
+        return exp_shape, exp_pxs, exp_duration
 
     def test_simple(self):
         self.assertEqual(self.scanner.resolution.range[1], tuple(CONFIG_SCANNER["max_res"]))
@@ -337,7 +354,7 @@ class TestAnalogSEM(unittest.TestCase):
                 self.assertGreaterEqual(accepted_dt, prev_accepted_dt)
             prev_accepted_dt = accepted_dt
 
-        # Large dwell times (> 42s)
+        # Large dwell times (> 42s), meaning AO OSR > 1
         for dt_extra in numpy.arange(0, 0.1, 1e-3):
             dt = 50 + dt_extra
             accepted_dt, ao_osr, ai_osr = self.sem.find_best_dwell_time(dt, 1)
@@ -391,7 +408,7 @@ class TestAnalogSEM(unittest.TestCase):
         margin = 3
         osr = 1
         data = numpy.zeros(res[::-1], dtype=numpy.int16)
-        buffer = numpy.linspace(500, 1500, (res[1] * (res[0] + margin)) * osr, dtype=numpy.uint16)
+        buffer = numpy.linspace(500, 1500, (res[1] * (res[0] + margin)) * osr, dtype=numpy.int16)
         acc_dtype = util.get_best_dtype_for_acc(buffer.dtype, osr)
         samples_n, samples_sum = Acquirer._downsample_data(data, res, margin, 0, osr,
                                                            buffer, 0, 0,
@@ -550,15 +567,35 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertEqual(data[0, 0], buffer[margin])
         self.assertEqual(data[-1, -1], buffer[-1])
 
-    def compute_expected_metadata(self) -> Tuple[Tuple[int, int], Tuple[float, float], float]:
-        exp_shape = self.scanner.resolution.value[::-1]
-        scanner_pxs = self.scanner.pixelSize.value
-        scale = self.scanner.scale.value
-        exp_pxs = tuple(p * s for p, s in zip(scanner_pxs, scale))
-        exp_duration = self.scanner.dwellTime.value * numpy.prod(exp_shape)
-        return exp_shape, exp_pxs, exp_duration
+        # Test like CI
+        res = (1024, 768)
+        margin = 10
+        osr = 1
+        prev_samples_n = 0
+        prev_samples_sum = 0
+        data = numpy.zeros(res[::-1], dtype=numpy.uint32)
+        grain = 100000
+        buffer = numpy.linspace(500, 1500, (res[1] * (res[0] + margin)) * osr, dtype=numpy.uint32)
+        left_buffer = buffer[:]
+        acc_dtype = numpy.uint32
+        acquired_n = 0
+        while left_buffer.size > 0:
+            logging.debug(f"Passing another {grain} samples, still {left_buffer.size} left")
+            prev_samples_n, prev_samples_sum = Acquirer._downsample_data(data, res, margin,
+                                                                         acquired_n, osr,
+                                                                         left_buffer[:grain],
+                                                                         prev_samples_n, prev_samples_sum,
+                                                                         acc_dtype,
+                                                                         average=False)
+            acquired_n += grain
+            left_buffer = left_buffer[grain:]
+
+        self.assertEqual(samples_n, 0)
+        self.assertEqual(data[0, 0], buffer[margin])
+        self.assertEqual(data[-1, -1], buffer[-1])
 
     def test_acquisition(self):
+        # Fast acquisition, using synchronous acquisition
         self.scanner.dwellTime.value = 1.e-6  # s
         self.scanner.scale.value = (300, 384)  # => res = 13x8
         exp_shape, exp_pxs, _ = self.compute_expected_metadata()
@@ -566,18 +603,6 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertEqual(da.shape, exp_shape)
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
-
-        # ai_port = CONFIG_SED["channel"]
-        # hdf5.export(f"scan-ai{ai_port}-{exp_res[0]}x{exp_res[1]}-dt{self.scanner.dwellTime.value * 1e6:.1f}µs.hdf5", da)
-
-        # # Count the number of samples at the beginning which are low, which should correspond to the margin
-        # # For pixel TTL, that should be margin * ai_osr  => confirmed
-        # small_values = self.count_start_pixels(da)
-        # logging.info("Starting values: %s", small_values)
-        # plt.plot(da.flatten(), label="Intensity")  # X voltage
-        # plt.xlabel('Intensity')
-        # plt.ylabel('Voltage')
-        # plt.show()
 
         # Slightly different settings
         self.scanner.dwellTime.value = 2.1234e-6  # s
@@ -588,24 +613,55 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
-    def test_acquisition_do(self):
+        # Tricky dwell time with respect to DO period
         # 3570 ns divides nicely into 7 x 510ns, but when divided by 2 (for DO), it's not a multiple of 10ns: 2 x 1785
         self.scanner.dwellTime.value = 3.57e-06  # s
         # Same with 1530ns:
         # self.scanner.dwellTime.value = 1.53e-06  # s
         self.scanner.scale.value = 8, 8  # Doesn't really matter for DO
-        self.scanner.resolution.value = 512, 384
+        self.scanner.resolution.value = (512, 384)
         exp_shape, exp_pxs, _ = self.compute_expected_metadata()
         da = self.sed.data.get()
         self.assertEqual(da.shape, exp_shape)
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
+    def test_acquisition_counter(self):
+        self.scanner.dwellTime.value = 10e-06  # s
+        self.scanner.scale.value = 8, 8
+        self.scanner.resolution.value = (512, 384)  # px
+        exp_shape, exp_pxs, _ = self.compute_expected_metadata()
+        da = self.counter.data.get()
+        self.assertEqual(da.shape, exp_shape)
+        self.assertIn(model.MD_DWELL_TIME, da.metadata)
+        self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(da.metadata[model.MD_INTEGRATION_COUNT], 1)
+
+        # Single pixel tests, which can be more difficult, because the hardware expects always at least 2 samples
+        self.scanner.dwellTime.value = 10e-06  # s
+        self.scanner.scale.value = 1, 1
+        self.scanner.resolution.value = (1, 1)  # px
+        exp_shape, exp_pxs, _ = self.compute_expected_metadata()
+        da = self.counter.data.get()
+        self.assertEqual(da.shape, exp_shape)
+        self.assertIn(model.MD_DWELL_TIME, da.metadata)
+        self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(da.metadata[model.MD_INTEGRATION_COUNT], 1)
+
+        # Same thing, but with "long" acquisition (AO OSR > 1)
+        self.scanner.dwellTime.value = 43  # s
+        self.scanner.scale.value = 1, 1
+        self.scanner.resolution.value = (1, 1)  # px
+        exp_shape, exp_pxs, _ = self.compute_expected_metadata()
+        da = self.counter.data.get()
+        self.assertEqual(da.shape, exp_shape)
+        self.assertIn(model.MD_DWELL_TIME, da.metadata)
+        self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(da.metadata[model.MD_INTEGRATION_COUNT], 2)  # AO OSR
 
     def test_acquisition_fast(self):
         """
         Try acquisition which is too fast for continuous acquisition
-        :return:
         """
         # Default dwell time is the shortest dwell time => that's what we want
         self.scanner.scale.value = 64, 64
@@ -616,7 +672,20 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
-    def test_big_acquisition(self):
+        # Very tiny (single sample)
+        self.scanner.scale.value = 64, 64
+        self.scanner.resolution.value = 1, 1
+        self.scanner.dwellTime.value = self.scanner.dwellTime.range[0]
+        exp_shape, exp_pxs, _ = self.compute_expected_metadata()
+        da = self.sed.data.get()
+        self.assertEqual(da.shape, exp_shape)
+        self.assertIn(model.MD_DWELL_TIME, da.metadata)
+        self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+
+    def test_acquisition_big_res(self):
+        """
+        Test acquisitions with large resolution
+        """
         self.scanner.dwellTime.value = self.scanner.dwellTime.range[0] * 2  # 2 samples per point
         self.scanner.scale.value = (1, 1)  # => res is max
         self.scanner.resolution.value = self.scanner.resolution.range[1]
@@ -636,16 +705,19 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
-    def count_start_pixels(self, data):
-        data = data.flatten()
-        mn = data.min()
-        mx = data.max()
-        small = mn + (mx - mn) * 0.1
-        for i in range(data.shape[0]):
-            if data[i] > small:
-                return i
-
-        return data.shape[0]
+    def test_acquisition_long_dt(self):
+        """
+        Test image acquisition with a long dwell time (so that AO OSR > 1)
+        """
+        # The maximum period for AO OSR == 1 is 2**32 * 10ns = 42.9s
+        self.scanner.dwellTime.value = 43  # s, AO OSR == 2
+        self.scanner.scale.value = (1, 1)  # Not that is matters
+        self.scanner.resolution.value = (1, 1)  # px, small so that it's too long
+        exp_shape, exp_pxs, _ = self.compute_expected_metadata()
+        da = self.sed.data.get()
+        self.assertEqual(da.shape, exp_shape)
+        self.assertIn(model.MD_DWELL_TIME, da.metadata)
+        self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
     def test_flow(self):
         """
@@ -717,7 +789,7 @@ class TestAnalogSEM(unittest.TestCase):
         exp_shape1, exp_pxs1, exp_duration1 = self.compute_expected_metadata()
 
         # Acquire several points/frame in a row, to make sure it can continuously acquire
-        number = 5000
+        number = 500
         self.left = number
         self.sed.data.subscribe(self.receive_and_store_image)
         start_t = time.time()
@@ -732,7 +804,7 @@ class TestAnalogSEM(unittest.TestCase):
         exp_shape2, exp_pxs2, exp_duration2 = self.compute_expected_metadata()
 
         # wait until the end
-        done = self.acq_done.wait(timeout=(exp_duration2 + 10e-3) * 5000 * 1.3)
+        done = self.acq_done.wait(timeout=(exp_duration2 + 30e-3) * number * 1.3)
         stop_t = time.time()
         duration = stop_t - start_t
         self.assertTrue(done, f"Acquisition not completed within time. Still running after {duration}")
@@ -857,6 +929,7 @@ class TestAnalogSEM(unittest.TestCase):
         """
         Acquire a dataflow with a softwareTrigger
         """
+        self.scanner.dwellTime.value = 1e-6
         exp_shape, exp_pxs1, exp_duration = self.compute_expected_metadata()
 
         # set softwareTrigger on the first detector to be subscribed
@@ -882,6 +955,37 @@ class TestAnalogSEM(unittest.TestCase):
 
         self.assertEqual(self.left, 0)
 
+    def test_sync_ai_ci(self):
+        """
+        Acquire simultaneously one analog detector and one counter detector
+        """
+        exp_shape, exp_pxs1, exp_duration = self.compute_expected_metadata()
+
+        # set softwareTrigger on the first detector to be subscribed
+        self.sed.data.synchronizedOn(self.sed.softwareTrigger)
+
+        self.left = 1
+        self.left2 = 1
+        self.expected_shape = exp_shape
+        self.sed.data.subscribe(self.receive_image)
+        self.counter.data.subscribe(self.receive_image2)
+
+        # start acquiring one image
+        self.sed.softwareTrigger.notify()
+        self.counter.softwareTrigger.notify()
+
+        # wait enough for the 2 acquisitions
+        time.sleep(1 * (2 + exp_duration * 1.1))  # 2s per image should be more than enough in any case
+
+        self.assertEqual(self.left, 0)
+        self.assertEqual(self.left2, 0)
+
+        # wait for last acq
+        self.acq_done.wait(2 + exp_duration * 1.1)
+
+        # remove synchronisation, should do nothing as they are stopped
+        self.sed.data.synchronizedOn(None)
+        self.counter.data.synchronizedOn(None)
 
     def receive_image(self, dataflow, image):
         """

@@ -67,7 +67,8 @@ import gc
 import logging
 import math
 import queue
-import statistics
+import subprocess
+import sys
 import threading
 import time
 import warnings
@@ -80,10 +81,11 @@ import nidaqmx  # Tested with 0.9.0-dev (August 2023), modified to accept
 import numpy
 from nidaqmx.constants import (AcquisitionType, DigitalWidthUnits,
                                LineGrouping, TerminalConfiguration,
-                               VoltageUnits, RegenerationMode, FillMode, WaitMode, TaskMode)
-from nidaqmx.stream_readers import AnalogUnscaledReader
-from nidaqmx.stream_writers import AnalogUnscaledWriter
+                               VoltageUnits, RegenerationMode, Edge, CountDirection,
+                               TriggerType)
+from nidaqmx.stream_readers import CounterReader
 from numpy.polynomial import polynomial
+
 from odemis import model, util
 from odemis.model import roattribute, oneway
 from odemis.util import driver, get_best_dtype_for_acc
@@ -98,6 +100,20 @@ MAX_GC_PERIOD = 10  # s, maximum time elapsed before running the garbage collect
 # first we have to wait for "scan_delay_time", and second some hardware get confused/unhappy
 # by frequent active/inactive status.
 AFTER_SCAN_DELAY = 0.1  # s
+
+# Rough duration of the AI/AO buffer, during which the command loop is not checked.
+# The exact duration will depend on the data. It's good to not be too short, otherwise too much CPU
+# is used, and it shouldn't be too long otherwise the NI DAQ might not have an internal buffer
+# long enough, and the request to stop acquisition might suffer latency.
+BUFFER_DURATION = 0.1  # s
+
+# Any settings with frame shorter than below will not be handled by the "standard" continuous
+# acquisition, and instead be handled by the "synchronized" acquisition (ie, 1 frame at a time).
+# It doesn't have to be very accurate as both methods work. The continuous method is faster and
+# avoid some artifacts. It is better give a slightly too short time, and if a frame rate still cannot
+# be acquired by continuous acquisition, the method will be switched automatically when detecting the
+# issue (but the beginning of the scan will be discarded).
+MIN_FRAME_DURATION_CONT_ACQ = 1e-3  # s
 
 
 
@@ -127,13 +143,14 @@ class AnalogSEM(model.HwComponent):
             raise ValueError(f"The device argument must be a string but is a {type(device)}")
         self._device_name = device
 
+        self._check_nidaqmx()
+
         # Check the device is present, and read its basic properties
         # Checks for the presence of AI, AO, DO will be done by the respective children
 
         # we will fill the set of children with Components later in ._children
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
 
-        # TODO: report a nice error if the nidriver is not installed (ie only nidaqmx python)
         system = nidaqmx.system.System.local()
 
         try:
@@ -141,8 +158,6 @@ class AnalogSEM(model.HwComponent):
             # If device doesn't exist, it will fail on first usage of _nidev... hence we do it now
             self._hwVersion = f"NI {self._nidev.product_type} s/n: {self._nidev.serial_num}"
         except nidaqmx.DaqError:
-            # TODO: handle the case that the API has been updated, and it's no more compatible with
-            # the kernel. A reboot is required. => Detect and log the issue.
             raise ValueError(f"Failed to find device {device}")
 
         lnx_ver = ".".join(str(v) for v in driver.get_linux_version())
@@ -165,7 +180,7 @@ class AnalogSEM(model.HwComponent):
         else:
             self._multi_detector_min_period = multi_detector_min_period
 
-        # create the scanner child "scanner" (must be _after_ the detectors)
+        # create the scanner child "scanner" (must be before the detectors)
         try:
             ckwargs = children["scanner"]
         except (KeyError, TypeError):
@@ -173,12 +188,24 @@ class AnalogSEM(model.HwComponent):
         self._scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self._scanner)
 
-        self._detectors = []
+        self._analog_dets = []
         for name, ckwargs in children.items():
             if name.startswith("detector"):
                 d = AnalogDetector(parent=self, daemon=daemon, **ckwargs)
                 self.children.value.add(d)
-                self._detectors.append(d)
+                self._analog_dets.append(d)
+
+        # We need at least one analog detector. Even if there is a counter, we always need
+        # an analog detector, which may be physically connected to nothing.
+        if len(self._analog_dets) < 1:
+            raise ValueError(f"AnalogSEM device '{device}' was not given any detector")
+
+        self._counting_dets = []
+        for name, ckwargs in children.items():
+            if name.startswith("counter"):
+                d = CountingDetector(parent=self, daemon=daemon, **ckwargs)
+                self.children.value.add(d)
+                self._counting_dets.append(d)
 
         self._acquirer = Acquirer(self, self._scanner)
 
@@ -194,6 +221,37 @@ class AnalogSEM(model.HwComponent):
         for c in self.children.value:
             c.terminate()
         super().terminate()
+
+    @staticmethod
+    def _check_nidaqmx() -> None:
+        """
+        Check that the nidaqmx installation is working.
+        In particular, it can detect if the NIDAQmx library is not compatible with the kernel drivers.
+        :raises:
+            HwError: if the installation has some issue
+        """
+        # Normally does nothing, but will fail if NI-DAQmx is not ready
+        canary_cmd = [sys.executable, "-c", "import nidaqmx; nidaqmx.system.System.local().devices"]
+        process = subprocess.run(canary_cmd)
+        return_code = process.returncode
+
+        if return_code == 0:
+            logging.debug("nidaqmx canary went fine")
+        else:
+            # Check if the process exited due to a signal
+            if return_code < 0:
+                # Typically that's because the nidadmx C libary failed to load and kill the whole
+                # process with SIGABRT (6) to indicate something is wrong.
+                # That happens in particular if the NI-DAQmx has been updated, and the old drivers
+                # are still loaded in the kernel. In such case, either the old drivers must be
+                # unloaded (rmmod) and then the new version reloaded (modprobe), or just rebooting
+                # the computer.
+                logging.debug(f"nidaqmx canary exited due to signal {- return_code}")
+                raise model.HwError("NI-DAQmx failed to load, reboot the computer and try again.")
+            else:
+                logging.warning(f"nidaqmx canary exited with code {return_code}")
+                # For now, just let it pass... but we probably want to try more to find out what is wrong
+                # Example: report a nice error if the libnidaqmx.so is not installed (ie only nidaqmx python)
 
     def _gc_while_waiting(self, max_time=None):
         """
@@ -321,7 +379,7 @@ class AnalogSEM(model.HwComponent):
                 self._scanner.configure_ao_task(ao_task)
                 self._scanner.configure_do_task(do_task)
                 # Add N AI channels. The exact channel doesn't matter so we just use the first N detectors
-                for det in self._detectors[:nr_ai]:
+                for det in self._analog_dets[:nr_ai]:
                     det.configure_ai_task(ai_task)
 
                 period_step_size = 10e-9  # s, known step size of the AI period on the NI 625x and 616x.
@@ -423,7 +481,7 @@ class AnalogSEM(model.HwComponent):
         period_accepted = self._get_closest_period(task, period)
         if util.almost_equal(period, period_accepted):
             return True
-        logging.warning(f"Period {period} not accepted, got {period_accepted}")
+        logging.info(f"Period {period} not accepted, got {period_accepted}")
         return False
 
 
@@ -449,7 +507,8 @@ class AcquisitionSettings:
     All the settings used to configure an SEM acquisition
     """
     def __init__(self,
-                 detectors: List,
+                 analog_detectors: List,
+                 counting_detectors: List,
                  dwell_time: float,
                  ao_osr: int,
                  ai_osr: int,
@@ -459,18 +518,21 @@ class AcquisitionSettings:
                  has_do: bool,
                  continuous: bool = True):
         """
-        :param detectors: list of detectors to acquire the data
+        :param analog_detectors: list of analog detectors to acquire the data
+        :param counting_detectors: list of counting detectors to acquire the data
         :param dwell_time: duration the beam stays at the same position
         :param ao_osr: number of AO samples per dwell time
         :param ai_osr: number of AI samples per dwell time
         :param res: number of useful pixels in x, y
         :param margin: number of extra pixels for the settle time (aka fly-back)
         :param positions_n: total numbers of e-beam positions to acquire
+        :param has_do: True if a digital output task will run
         :param continuous: If False, only acquire a single frame. Otherwise, acquires until a
         UPDATE_SETTINGS (or a STOP) message is received on the message queue.
         """
 
-        self.detectors = detectors
+        self.analog_detectors = analog_detectors
+        self.counting_detectors = counting_detectors
         self.dwell_time = dwell_time  # s
         self.ao_osr = ao_osr
         self.ai_osr = ai_osr
@@ -480,7 +542,7 @@ class AcquisitionSettings:
         self.continuous = continuous
 
         # Derive some useful info
-        self.frame_duration = positions_n / dwell_time  # s
+        self.frame_duration = positions_n * dwell_time  # s
         self.ao_sample_rate = ao_osr / dwell_time  # Hz
         self.ao_samples_n = positions_n * ao_osr
         if has_do:
@@ -491,16 +553,6 @@ class AcquisitionSettings:
             self.do_samples_n = 0
         self.ai_sample_rate = ai_osr / dwell_time  # Hz
         self.ai_samples_n = positions_n * ai_osr
-
-
-BUFFER_DURATION = 0.1  # s, maximum duration of a AI buffer, during which the command loop is not checked
-# Any settings with frame shorter than below will not be handled by the "standard" continuous
-# acquisition, and instead be handled by the "synchronized" acquisition (ie, 1 frame at a time).
-# It doesn't have to be very accurate as both methods work. The continuous method is faster and
-# avoid some artifacts. It is better give a slightly too short time, and if a frame rate still cannot
-# be acquired by continuous acquisition, the method will be switched automatically when detecting the
-# issue (but the beginning of the scan will be discarded).
-MIN_FRAME_DURATION_CONT_ACQ = 1e-3  # s
 
 
 class Acquirer:
@@ -675,13 +727,14 @@ class Acquirer:
 
                 # Based on the settings & detectors, use continuous, or frame-by-frame
                 need_sync = any(d.data._is_synchronized() for d in detectors)
+
                 if need_sync or self._settings_too_fast:
                     # Acquire a single frame
                     self._acquire_sync(detectors)
                 else:
                     # Acquire frame continuously until a setting is changed, or the acquisition is stopped
                     # (return False if the frame rate was too fast)
-                    self._settings_too_fast = not self._acquire_cont(detectors)
+                    self._settings_too_fast = not self._acquire_series(detectors, continuous=True)
         except ImmediateStop:
             logging.debug("Acquisition stopped immediately")
         except Exception:
@@ -738,16 +791,17 @@ class Acquirer:
     # (or task.ao_channels[0].ao_resolution) => 16 bits
     # Or task.out_stream.raw_data_width (in bytes) => 2 bytes
 
-    def _get_images_metadata(self, acq_settings: AcquisitionSettings) -> List[Dict[str, Any]]:
+    def _get_images_metadata(self, acq_settings: AcquisitionSettings) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
         """
         Generate the metadata for the images based on the hardware settings
         :param acq_settings: The settings for the given acquisition
-        :return: list of metadata dict, in the same order as the detectors
+        :return:
+            list of metadata dict, in the same order as the analog detectors
+            list of metadata dict, in the same order as the counting detectors
         """
         base_md = self._scanner.getMetadata().copy()
         base_md[model.MD_ACQ_DATE] = time.time()
         base_md[model.MD_DWELL_TIME] = acq_settings.dwell_time
-        base_md[model.MD_INTEGRATION_COUNT] = acq_settings.ai_osr
         # add scanner translation to the center
         center = base_md.get(model.MD_POS, (0, 0))
         trans = self._scanner.pixelToPhy(self._scanner.translation.value)
@@ -755,13 +809,22 @@ class Acquirer:
                                  center[1] + trans[1])
 
         # metadata is the merge of the base MD + detector MD + scanner MD
-        mds = []
-        for det in acq_settings.detectors:
+        base_md[model.MD_INTEGRATION_COUNT] = acq_settings.ai_osr
+        analog_mds = []
+        for det in acq_settings.analog_detectors:
             md = base_md.copy()
             md.update(det.getMetadata())
-            mds.append(md)
+            analog_mds.append(md)
 
-        return mds
+        # CI: sampling is at the same rate as AO
+        base_md[model.MD_INTEGRATION_COUNT] = acq_settings.ao_osr
+        counting_mds = []
+        for det in acq_settings.counting_detectors:
+            md = base_md.copy()
+            md.update(det.getMetadata())
+            counting_mds.append(md)
+
+        return analog_mds, counting_mds
 
     def _write_int16_interleaved(self, data: numpy.ndarray) -> int:
         """
@@ -1024,125 +1087,41 @@ class Acquirer:
             raise ImmediateStop()
 
         # Run the tasks
-        self._acquire_frame(list(detectors))
+        self._acquire_series(list(detectors), continuous=False)
 
-    def _acquire_frame(self, detectors: list):
-        """
-        Acquire a single frame
-        :param detectors: list of the detectors (ie, the AI channels) to use
-        """
-        # TODO: look into the setup time (overhead): it seems to take 40-50 ms to start the acquisition
-        # We probably can reduce it to < 5ms by reusing the tasks.
-        # For finite tasks, it seems they just need to be stopped.
-        # For continuous, we need to set the task to the UNRESERVED state.
-
-        # Get the waveforms
-        (scan_array, ttl_array,
-         dt, ao_osr, ai_osr, res, margin) = self._scanner._get_scan_waveforms(len(detectors))
-        acq_settings = AcquisitionSettings(detectors,
-                                           dt, ao_osr, ai_osr, res, margin, scan_array.shape[1] // ao_osr,
-                                           has_do=(ttl_array is not None), continuous=False)
-        # assert(ttl_array.shape[-1] == do_samples_n)
-        logging.debug(f"Will scan {acq_settings.positions_n} positions @ {acq_settings.dwell_time * 1e6:.3g} µs "
-                      f"with {len(detectors)} detectors, for a total of {acq_settings.frame_duration:.6g} s per frame")
-
-        # TODO: now that the AO/DO data is sent in small pieces, we could duplicate it "on the fly"
-        # when ao_osr >= 1. In these cases, the sampling rate is always very small (by definition)
-        # so it's OK to do an extra copy. This would avoid the (unlikely) case of
-        # using a huge amount of memory for the AO data if the user selects by mistake a large resolution
-        # + long dwell time. (which would probably be stopped before the end, but could fail to even
-        # start due to not having enough memory)
-        self._ao_data = scan_array
-        self._ao_data_next_sample = 0  # position of the next sample to write to the board (updated by _write_ao_data())
-        self._do_data = ttl_array
-        self._do_data_next_sample = 0  # position of the next sample to write to the board (updated by _write_do_data())
-
-        # we want a buffer which is not too long (~ BUFFER_DURATION)
-        ai_buffer_n = self._find_good_ai_buffer_size(acq_settings, BUFFER_DURATION)
-        logging.debug("Using a AI buffer of %s samples (%s s) => %g buffers per frame",
-                      ai_buffer_n, ai_buffer_n / acq_settings.ai_sample_rate,
-                      acq_settings.ai_samples_n / ai_buffer_n)
-
-        # The AO buffer size must be at least of len 2. So if there is just one
-        # point, we duplicate it, to make the NI DAQ happy. (It's the same behaviour
-        # as anyway the task is continuously repeating)
-        ao_samples_n = acq_settings.ao_samples_n
-        if ao_samples_n == 1:
-            logging.debug("Duplicating AO buffer as it has size 1")
-            ao_samples_n = 2
-            self._ao_data = numpy.append(self._ao_data, self._ao_data, 1)
-
-        # For large data, write only for the data coming, to avoid latency or even error because the
-        # nidaq buffer cannot contain the whole data. In tests, it seems it can sustain even 100µs
-        # updates, but there is enough buffer to do quite a lot bigger (and really make sure that
-        # not interruption can disturb the write)
-        ao_buffer_n = min(max(self._min_ao_buffer_n, int(acq_settings.ao_sample_rate * BUFFER_DURATION)), ao_samples_n)
-        logging.debug("Using a AO buffer of %s samples (%s s) => %g buffers per frame",
-                      ao_buffer_n, ao_buffer_n / acq_settings.ao_sample_rate,
-                      ao_samples_n / ao_buffer_n)
-
-        do_buffer_n = min(2 * ao_buffer_n, acq_settings.do_samples_n)  # It's always 2x faster, so always twice bigger
-
-        # Prepare the single run tasks, including adding events on data read
-        with nidaqmx.Task() as ao_task, nidaqmx.Task() as do_task, nidaqmx.Task() as ai_task:
-            self._scanner.configure_ao_task(ao_task)
-            self._ao_task = ao_task
-
-            if acq_settings.do_samples_n:
-                self._scanner.configure_do_task(do_task)
-                self._do_task = do_task
-            else:
-                self._do_task = None
-
-            if ao_buffer_n < ao_samples_n:
-                # TODO: instead of relying on the callback, we could push the new data at the same
-                # time as the AI is read. It's mostly just a matter of using a buffer of the right size.
-                logging.debug("Will push new AO data every %s s",
-                              (ao_buffer_n // 2) / acq_settings.ao_sample_rate)
-                finite_on_ao_data_consumed = functools.partial(self._on_ao_data_consumed, continuous=False)
-                ao_task.register_every_n_samples_transferred_from_buffer_event(ao_buffer_n // 2,
-                                                                               finite_on_ao_data_consumed)
-                if acq_settings.do_samples_n:
-                    finite_on_do_data_consumed = functools.partial(self._on_do_data_consumed, continuous=False)
-                    do_task.register_every_n_samples_transferred_from_buffer_event(do_buffer_n // 2,
-                                                                                   finite_on_do_data_consumed)
-
-            # AI task
-            for d in detectors:
-                d.configure_ai_task(ai_task)
-            self._ai_dtype = self._get_ai_dtype(ai_task)
-
-            try:
-                self._acquire_frames(acq_settings,
-                                     ao_task, self._do_task, ai_task,
-                                     ao_buffer_n, do_buffer_n, ai_buffer_n)
-            finally:
-                ao_task.stop()
-                ao_task.register_every_n_samples_transferred_from_buffer_event(0, None)
-                do_task.stop()
-                do_task.register_every_n_samples_transferred_from_buffer_event(0, None)
-                ai_task.stop()
-                self._ao_data = None
-                self._do_data = None
-                logging.debug("End of single frame acquisition")
-
-    def _acquire_cont(self, detectors: list) -> bool:
+    def _acquire_series(self, detectors: list, continuous: bool) -> bool:
         """
         Run a continuous acquisition until a setting has changed or stop request was received (vie the command queue)
-        :param detectors: list of the detectors (ie, the AI channels) to use
+        :param detectors: list of the detectors (ie, the AI & CI channels) to use
+        :param continuous: If False, only acquire a single frame. Otherwise, acquires until a
+        UPDATE_SETTINGS (or a STOP) message is received on the message queue.
         :return: False if hardware cannot handle continuous acquisition with the current settings
         (typically, because it causes a too high frame rate). True if the acquisition was successful.
         """
+        analog_dets = [d for d in detectors if isinstance(d, AnalogDetector)]
+        counting_dets = [d for d in detectors if isinstance(d, CountingDetector)]
+
+        # The acquisition expects to have a AI task, so if no AI detector, just add a arbitrary one,
+        # and no one will receive the data. (It uses a tiny bit more CPU but keeps the code simpler)
+        if counting_dets and not analog_dets:
+            adet = self._sem._analog_dets[0]
+            logging.debug(f"Adding dummy AI detector {adet.name} as only CI detector was provided")
+            detectors.append(adet)
+            analog_dets.append(adet)
+
         # Get the waveforms
         (scan_array, ttl_array,
-         dt, ao_osr, ai_osr, res, margin) = self._scanner._get_scan_waveforms(len(detectors))
-        acq_settings = AcquisitionSettings(detectors, dt, ao_osr, ai_osr, res, margin,
+         dt, ao_osr, ai_osr, res, margin) = self._scanner._get_scan_waveforms(len(analog_dets))
+        acq_settings = AcquisitionSettings(analog_dets, counting_dets,
+                                           dt, ao_osr, ai_osr, res, margin,
                                            scan_array.shape[1] // ao_osr,
-                                           has_do=(ttl_array is not None), continuous=True)
+                                           has_do=(ttl_array is not None), continuous=continuous)
         logging.debug(f"Will scan {acq_settings.positions_n} positions @ {acq_settings.dwell_time * 1e6:.3g} µs "
-                      f"with {len(detectors)} detectors, for a total of {acq_settings.frame_duration:.6g} s per frame")
+                      f"{'continuously' if continuous else 'once'} "
+                      f"with {len(analog_dets)} AI and {len(counting_dets)} CI, for a total of "
+                      f"{acq_settings.frame_duration:.6g} s per frame")
 
-        if acq_settings.frame_duration < MIN_FRAME_DURATION_CONT_ACQ:
+        if continuous and acq_settings.frame_duration < MIN_FRAME_DURATION_CONT_ACQ:
             logging.debug(f"Frame duration {acq_settings.frame_duration:.6g} s is too short for "
                           "continuous acquisition, will use synchronized acquisition")
             return False
@@ -1173,11 +1152,12 @@ class Acquirer:
             ao_samples_n = 2
             self._ao_data = numpy.append(self._ao_data, self._ao_data, 1)
 
-        # For large data, write only for the data coming, to avoid latency or even error because the
-        # nidaq buffer cannot contain the whole data. In tests, it seems it can sustain even 100µs
+        # Also pass AO data in chunks, so that it doesn't need to write the whole AO data before
+        # starting, and also can handle really long scan. In tests, it seems it can sustain even 100µs
         # updates, but there is enough buffer to do quite a lot bigger (and really make sure that
-        # no interruption can disturb the write)
-        ao_buffer_n = min(max(self._min_ao_buffer_n, int(acq_settings.ao_sample_rate * BUFFER_DURATION)), ao_samples_n)
+        # no interruption can disturb the write).
+        # As CI uses the same buffer size, it's best to just use the same period as AI.
+        ao_buffer_n = min(max(self._min_ao_buffer_n, int((ai_buffer_n * ao_osr) // ai_osr)), ao_samples_n)
         logging.debug("Using a AO buffer of %s samples (%s s) => %g buffers per frame",
                       ao_buffer_n, ao_buffer_n / acq_settings.ao_sample_rate,
                       ao_samples_n / ao_buffer_n)
@@ -1185,6 +1165,7 @@ class Acquirer:
         do_buffer_n = min(2 * ao_buffer_n, acq_settings.do_samples_n)  # It's always 2x faster, so always twice bigger
 
         # Note: creating and configuring the tasks can take up to 30ms!
+        ci_tasks = []
         with nidaqmx.Task() as ao_task, nidaqmx.Task() as do_task, nidaqmx.Task() as ai_task:
             self._scanner.configure_ao_task(ao_task)
             self._ao_task = ao_task
@@ -1200,46 +1181,68 @@ class Acquirer:
                 # time as the AI is read. It's mostly just a matter of using a buffer of the right size.
                 logging.debug("Will push new AO data every %s s",
                               (ao_buffer_n // 2) / acq_settings.ao_sample_rate)
+                on_ao_data_consumed = functools.partial(self._on_ao_data_consumed, continuous=continuous)
                 ao_task.register_every_n_samples_transferred_from_buffer_event(ao_buffer_n // 2,
-                                                                               self._on_ao_data_consumed)
+                                                                               on_ao_data_consumed)
                 ao_task.out_stream.regen_mode = RegenerationMode.DONT_ALLOW_REGENERATION  # Don't loop back
                 if acq_settings.do_samples_n:
+                    on_do_data_consumed = functools.partial(self._on_do_data_consumed, continuous=continuous)
                     do_task.register_every_n_samples_transferred_from_buffer_event(do_buffer_n // 2,
-                                                                                   self._on_do_data_consumed)
+                                                                                   on_do_data_consumed)
                     do_task.out_stream.regen_mode = RegenerationMode.DONT_ALLOW_REGENERATION  # Don't loop back
-            else:
+            elif continuous:
                 # Everything fits in a single buffer => easy, let the hardware loop
                 ao_task.out_stream.regen_mode = RegenerationMode.ALLOW_REGENERATION  # loop back (default)
                 if self._do_data is not None:
                     do_task.out_stream.regen_mode = RegenerationMode.ALLOW_REGENERATION  # loop back (default)
+            else:  # Only once => don't regen
+                ao_task.out_stream.regen_mode = RegenerationMode.DONT_ALLOW_REGENERATION
+                if self._do_data is not None:
+                    do_task.out_stream.regen_mode = RegenerationMode.DONT_ALLOW_REGENERATION
 
-            # AI task
-            for d in detectors:
+            # AI tasks
+            for d in analog_dets:
                 d.configure_ai_task(ai_task)
+
+            # CI tasks
+            for d in counting_dets:
+                # needs one task per counter => create a new task for each counter
+                ci_task = nidaqmx.Task()
+                d.configure_ci_task(ci_task)
+                ci_tasks.append(ci_task)
 
             self._ai_dtype = self._get_ai_dtype(ai_task)
 
             try:
                 self._acquire_frames(acq_settings,
-                                     ao_task, do_task, ai_task,
+                                     ao_task, do_task, ai_task, ci_tasks,
                                      ao_buffer_n, do_buffer_n, ai_buffer_n)
-            except IOError:
-                return False
+            except IOError as ex:
+                if continuous:
+                    logging.info(f"Continuous acquisition failed ({ex}), will use synchronized acquisition")
+                    return False
+                else:  # Too fast for single frame? There is not much hope.
+                    raise
             finally:
                 ao_task.stop()
                 ao_task.register_every_n_samples_transferred_from_buffer_event(0, None)
                 do_task.stop()
                 do_task.register_every_n_samples_transferred_from_buffer_event(0, None)
                 ai_task.stop()
+                for ci_task in ci_tasks:
+                    ci_task.stop()
+                    ci_task.close()
+
                 self._ao_data = None
                 self._do_data = None
-                logging.debug("End of round of continuous hardware acquisition")
+                logging.debug("End of acquisition")
 
             return True
 
     def _acquire_frames(self,
                         acq_settings: AcquisitionSettings,
                         ao_task: nidaqmx.Task, do_task: nidaqmx.Task, ai_task: nidaqmx.Task,
+                        ci_tasks: List[nidaqmx.Task],
                         ao_buffer_n: int, do_buffer_n: int, ai_buffer_n: int,
                         ):
         """
@@ -1248,14 +1251,17 @@ class Acquirer:
         :param ao_task: The AO task object.
         :param do_task: The DO task object.
         :param ai_task: The AI task object.
+        :param ci_tasks: All the CI task (counter input)
         :param ao_buffer_n: The number of samples for AO.
         :param do_buffer_n: The number of samples for DO.
         :param ai_buffer_n: The number of samples for AI.
         :raise:
           IOError: if fails to write to buffer or fails to read the data fast enough for the hardware
         """
+        assert self._ai_dtype is not None  # It should be now specified
+
         self._configure_sync_tasks(acq_settings,
-                                   ao_task, do_task, ai_task,
+                                   ao_task, do_task, ai_task, ci_tasks,
                                    ao_buffer_n, do_buffer_n, ai_buffer_n)
 
         # Initiate the AO and DO buffers & start the tasks (so they wait for the start trigger)
@@ -1264,59 +1270,74 @@ class Acquirer:
         if acq_settings.do_samples_n:
             self._write_do_data(do_buffer_n)
             do_task.start()  # still waits for the start trigger
+        for ci_task in ci_tasks:
+            ci_task.start()  # still waits for the start trigger
 
         # Now start!
         ai_task.start()
         logging.debug("AI task started (with AO + DO too)")
 
+        n_analog_det = len(acq_settings.analog_detectors)
+        n_counting_det = len(acq_settings.counting_detectors)
+        assert n_counting_det == len(ci_tasks)
+
         # Acquire data until a STOP message is received (or only once if it's a single frame)
         should_stop = not acq_settings.continuous
         # Place to store the raw AI data, with over-sampling
-        detectors_n = len(acq_settings.detectors)
-        ai_buffer_full = numpy.empty((detectors_n, ai_buffer_n), dtype=self._ai_dtype)
+        ai_buffer_full = numpy.empty((n_analog_det, ai_buffer_n), dtype=self._ai_dtype)
         acc_dtype = get_best_dtype_for_acc(ai_buffer_full.dtype, acq_settings.ai_osr)
+
+        # create a counter reader to read from the counter InStream
+        ci_readers = []
+        for ci_task in ci_tasks:
+            ci_reader = CounterReader(ci_task.in_stream)
+            ci_reader.verify_array_shape = False  # To go a tiny bit faster when reading
+            ci_readers.append(ci_reader)
+
+        # TODO: acquire in multiple times, of sizes ao_buffer_n
+        # Note: also works if n_counting_det == 0 => makes a numpy array of dim 0
+        # We only need one buffer for all the counters, as they are read one at a time
+        ci_buffer_n = ao_buffer_n  # For now ao_buffer is sized for the same duration as AI buffer, so it's what we want
+        ci_buffer = numpy.empty((ci_buffer_n,),
+                                dtype=numpy.uint32)  # TODO get dtype from the detector
+
+        n_ci_samples_per_ai_sample = acq_settings.ao_sample_rate / acq_settings.ai_sample_rate
+        if ci_tasks:
+            logging.debug("Will acquire %s CI sample/AI sample", n_ci_samples_per_ai_sample)
+
         while True:
             # Prepare the metadata, with the settings at the beginning of acquisition
             # Update at every frame as metadata can change at any time (ex: MD_PIXEL_SIZE, MD_POS)
-            mds = self._get_images_metadata(acq_settings)
+            analog_mds, counting_mds = self._get_images_metadata(acq_settings)
 
             # The actual frame data, after downsampling.
-            ai_data = numpy.empty((len(acq_settings.detectors), acq_settings.res[1], acq_settings.res[0]),
+            ai_data = numpy.empty((n_analog_det, acq_settings.res[1], acq_settings.res[0]),
                                   dtype=self._ai_dtype)
-
             acquired_n = 0
-            prev_samples_n = [0] * len(acq_settings.detectors)
-            prev_samples_sum = [0] * len(acq_settings.detectors)
+            prev_samples_n = [0] * n_analog_det
+            prev_samples_sum = [0] * n_analog_det
+
+            ci_data = numpy.empty((n_counting_det, acq_settings.res[1], acq_settings.res[0]),
+                                  dtype=numpy.uint32)
+            ci_acquired_n = 0
+            ci_prev_samples_n = [0] * n_counting_det
+            ci_prev_samples_sum = [0] * n_counting_det
 
             while acquired_n < acq_settings.ai_samples_n:
-                # Compute the number of data left to acquire to fill the array
-                samples_left_n = acq_settings.ai_samples_n - acquired_n
-                # Note: the hardware buffer must be at least 2, but it's fine to read just 1 at a
-                # time, so no minimum value.
-                samples_to_acquire = min(samples_left_n, ai_buffer_n)
-                if samples_to_acquire < ai_buffer_n:
-                    # Need to reshape the buffer so that it's of shape C, N *and* contiguous
-                    # The simple "ai_buffer[:, :samples_to_acquire]" is not contiguous for C > 1.
-                    # As it's just a buffer we don't really care of the final shape, it's fine
-                    # to reorganise it.
-                    ai_buffer = ai_buffer_full.ravel()[:detectors_n * samples_to_acquire]  # long blob
-                    ai_buffer = ai_buffer.reshape(detectors_n, samples_to_acquire)  # put in the expected shape
-                else:
-                    ai_buffer = ai_buffer_full
+                new_samples_n, prev_samples_n, prev_samples_sum = self._read_ai_buffer(
+                    acq_settings,
+                    ai_task, ai_data, ai_buffer_full, acquired_n,
+                    acc_dtype, prev_samples_n, prev_samples_sum)
 
-                # Now we have a bit of time, let's run the garbage collector
-                estimated_ai_time = samples_to_acquire / acq_settings.ai_sample_rate
-                self._sem._gc_while_waiting(estimated_ai_time)
+                acquired_n += new_samples_n
 
-                # Note: the nidaqmx API is annoying because arrays must be of shape
-                # C,N (channel, sample numbers), *except* if C == 1, in which case
-                # it must only be of shape N. However, readinto works fine with 1,N.
-                try:
-                    new_samples_n = ai_task.in_stream.readinto(ai_buffer)
-                except nidaqmx.DaqReadError as ex:
-                    raise IOError("Failed to read acquisition data") from ex
+                # Is it time to acquire CI?
+                ci_acquired_n, ci_prev_samples_n, ci_prev_samples_sum = self._read_ci_buffer(
+                    acq_settings,
+                    ci_readers, ci_data, ci_buffer, acquired_n,
+                    ci_acquired_n, n_ci_samples_per_ai_sample,
+                    ci_prev_samples_n, ci_prev_samples_sum)
 
-                logging.debug("Got another %s samples, %s still to acquire", new_samples_n, samples_left_n)
                 m = self._wait_for_message(timeout=0)
                 if m is None:  # No message
                     pass
@@ -1326,33 +1347,187 @@ class Acquirer:
                 else:
                     logging.debug("Discarding message during acquisition: %s", m)
 
-                # Downsample each channel independently
-                for c in range(ai_data.shape[0]):
-                    prev_samples_n[c], prev_samples_sum[c] = self._downsample_data(ai_data[c],
-                                                                                   acq_settings.res,
-                                                                                   acq_settings.margin,
-                                                                                   acquired_n, acq_settings.ai_osr,
-                                                                                   ai_buffer[c, :new_samples_n],
-                                                                                   prev_samples_n[c],
-                                                                                   prev_samples_sum[c],
-                                                                                   acc_dtype)
-
-                acquired_n += new_samples_n
+                # End of buffer read
 
             logging.debug(f"Acquired one frame of {ai_data.shape} px, with {acquired_n} samples")
 
             # TODO: just put the data on a queue, and let the listener take care of this?
             # This would avoid blocking (of course, it's not a big issue, as the hardware is running in background)
-            for i, d in enumerate(acq_settings.detectors):
-                im = model.DataArray(ai_data[i], mds[i])
+
+            for i, d in enumerate(acq_settings.analog_detectors):
+                im = model.DataArray(ai_data[i], analog_mds[i])
+                d.data.notify(im)
+
+            for i, d in enumerate(acq_settings.counting_detectors):
+                im = model.DataArray(ci_data[i], counting_mds[i])
                 d.data.notify(im)
 
             if should_stop:
                 return
 
+    # TODO: make a whole class for this?
+    def _read_ai_buffer(self, acq_settings: AcquisitionSettings,
+                        ai_task: nidaqmx.Task, ai_data: numpy.ndarray,
+                        ai_buffer_full: numpy.ndarray,
+                        acquired_n: int, acc_dtype: numpy.dtype,
+                        prev_samples_n: List[int], prev_samples_sum: List[int],
+                        ) -> Tuple[int, List[int], List[int]]:
+        """
+        Reads data from the Analog Input (AI) buffer and processes it to fill the corresponding part
+        of the final frame data.
+
+        :param acq_settings: AcquisitionSettings object containing the settings for the current acquisition.
+        :param ai_task: nidaqmx.Task object representing the AI task.
+        :param ai_data: image array to store the data, shape (channels, height, width)
+        :param ai_buffer_full: temporary array to store the raw AI data from the device, shape (channels, N)
+        :param acquired_n: number of samples already acquired.
+        :param acc_dtype: numpy.dtype object representing the data type used for accumulation during downsampling.
+        :param prev_samples_n: number of samples lastly processed but not yet completing
+        a whole pixel, for each channel. It should be the samples_n returned by the last call.
+        :param prev_samples_sum: sum of samples lastly processed but not yet completing
+        a whole pixel, for each channel. It should be the samples_sum returned by the last call.
+        :param acc_dtype: the numpy data type to use for the accumulator.
+        :returns:
+            * acquired_n: updated number of samples acquired
+            * samples_n: the number of the (last) samples which could not be fully
+            fitted in a pixel yet.
+            * samples_sum: the sum of the (last) samples which could not be fully
+            fitted in a pixel yet.
+        """
+        n_detectors, ai_buffer_n = ai_buffer_full.shape
+        # Compute the number of data left to acquire to fill the array
+        samples_left_n = acq_settings.ai_samples_n - acquired_n
+        # Note: the hardware buffer must be at least 2, but it's fine to read just 1 at a
+        # time, so no minimum value.
+        samples_to_acquire = min(samples_left_n, ai_buffer_n)
+        if samples_to_acquire < ai_buffer_n:
+            # Need to reshape the buffer so that it's of shape C, N *and* contiguous
+            # The simple "ai_buffer[:, :samples_to_acquire]" is not contiguous for C > 1.
+            # As it's just a buffer we don't really care of the final shape, it's fine
+            # to reorganise it.
+            ai_buffer = ai_buffer_full.ravel()[:n_detectors * samples_to_acquire]  # long blob
+            ai_buffer = ai_buffer.reshape(n_detectors, samples_to_acquire)  # put in the expected shape
+            logging.debug("Reduced ai_buffer to %s", ai_buffer.shape)
+        else:
+            ai_buffer = ai_buffer_full
+
+        # Now we have a bit of time, let's run the garbage collector
+        estimated_ai_time = samples_to_acquire / acq_settings.ai_sample_rate
+        self._sem._gc_while_waiting(estimated_ai_time)
+
+        # Note: the nidaqmx API is annoying because arrays must be of shape
+        # C,N (channel, sample numbers), *except* if C == 1, in which case
+        # it must only be of shape N. However, readinto works fine with 1,N.
+        try:
+            new_samples_n = ai_task.in_stream.readinto(ai_buffer)
+        except nidaqmx.DaqReadError as ex:
+            raise IOError("Failed to read AI acquisition data") from ex
+        if new_samples_n != samples_to_acquire:
+            if new_samples_n > samples_to_acquire:
+                logging.error("Received %d samples, while expecting %d, there is data loss."
+                              "ai_buffer shape %s, nbytes %s",
+                              new_samples_n, samples_to_acquire, ai_buffer.shape, ai_buffer.nbytes)
+            else:
+                logging.warning("Only received %d samples, while expecting %d, will try more",
+                                new_samples_n, samples_to_acquire)
+
+        logging.debug("Got another %s AI samples, over %s still to acquire", new_samples_n, samples_left_n)
+
+        # Downsample each channel independently
+        for c in range(ai_data.shape[0]):
+            prev_samples_n[c], prev_samples_sum[c] = self._downsample_data(ai_data[c],
+                                                                           acq_settings.res,
+                                                                           acq_settings.margin,
+                                                                           acquired_n, acq_settings.ai_osr,
+                                                                           ai_buffer[c, :new_samples_n],
+                                                                           prev_samples_n[c],
+                                                                           prev_samples_sum[c],
+                                                                           acc_dtype,
+                                                                           average=True)
+        return new_samples_n, prev_samples_n, prev_samples_sum
+
+    def _read_ci_buffer(self, acq_settings: AcquisitionSettings,
+                        ci_readers: List[CounterReader],
+                        ci_data: numpy.ndarray, ci_buffer: numpy.ndarray,
+                        ai_acquired_n: int, ci_acquired_n: int, n_ci_samples_per_ai_sample: float,
+                        ci_prev_samples_n: List[int], ci_prev_samples_sum: List[int],
+                        ) -> Tuple[int, List[int], List[int]]:
+        """
+        Reads data from the Counter Input (CI) buffers and processes it to fill the corresponding part
+        of the final frame data.
+
+        :param acq_settings: AcquisitionSettings object containing the settings for the current acquisition.
+        :param ci_readers: a reader for each channel (one per CI task)
+        :param ci_data: image array to store the data, shape (channels, height, width)
+        :param ci_buffer_full: temporary array to store the raw CI data from the device, for a single channel. shape (N)
+        :param ai_acquired_n: number of AI samples already acquired.
+        :param ci_acquired_n: number of CI samples already processed. Should be ci_acquired_n as return in the previous call.
+        :param n_ci_samples_per_ai_sample: number of samples a CI samples acquired for each AI sample, on average
+        :param acc_dtype: numpy.dtype object representing the data type used for accumulation during downsampling.
+        :param prev_samples_n: number of samples lastly processed but not yet completing
+        a whole pixel, for each channel. It should be the samples_n returned by the last call.
+        :param prev_samples_sum: sum of samples lastly processed but not yet completing
+        a whole pixel, for each channel. It should be the samples_sum returned by the last call.
+        :param acc_dtype: the numpy data type to use for the accumulator.
+        :returns:
+            * ci_acquired_n: updated number of samples acquired
+            * samples_n: the number of the (last) samples which could not be fully
+            fitted in a pixel yet.
+            * samples_sum: the sum of the (last) samples which could not be fully
+            fitted in a pixel yet.
+        """
+        if not ci_readers:  # Short-cut
+            return 0, ci_prev_samples_n, ci_prev_samples_sum
+
+        ci_buffer_n = ci_buffer.shape[0]  # not duplicated per detector, so just 1 dim
+
+        # Estimate how many samples we can expect to be available, and read by chunks of buffer size
+        if ai_acquired_n < acq_settings.ai_samples_n:
+            ci_samples_done_n = int(ai_acquired_n * n_ci_samples_per_ai_sample)  # theoretical & pessimistic number
+            ci_to_read_n = ci_samples_done_n - ci_acquired_n
+            ci_to_read_n = (ci_to_read_n // ci_buffer_n) * ci_buffer_n  # round down to buffer size
+            ci_samples_goal_n = ci_acquired_n + ci_to_read_n
+        else:  # It's the end => read the rest
+            ci_samples_goal_n = acq_settings.ao_samples_n
+
+        while ci_acquired_n < ci_samples_goal_n:
+            samples_left_n = acq_settings.ao_samples_n - ci_acquired_n
+            samples_to_acquire = min(samples_left_n, ci_buffer_n)
+            logging.debug("Going to read CI buffer of %s samples", samples_to_acquire)
+            for c, ci_reader in enumerate(ci_readers):
+                try:
+                    new_samples_n = ci_reader.read_many_sample_uint32(ci_buffer[:samples_to_acquire],
+                                                                      number_of_samples_per_channel=samples_to_acquire,
+                                                                      timeout=0.1)  # Should be immediate as we just checked the period
+                except nidaqmx.DaqReadError as ex:
+                    raise IOError("Failed to read CI acquisition data") from ex
+
+                if new_samples_n != samples_to_acquire:
+                    logging.warning("Only received %d samples, while expecting %d, will try more",
+                                    new_samples_n, samples_to_acquire)
+
+                logging.debug("Got another %s CI samples, over %s still to acquire", new_samples_n, samples_left_n)
+                logging.debug(
+                    f"ci_data[c] shape = {ci_data[c].shape}, ci_buffer shape: {ci_buffer[:new_samples_n].shape}")
+                ci_prev_samples_n[c], ci_prev_samples_sum[c] = self._downsample_data(ci_data[c],
+                                                                                     acq_settings.res,
+                                                                                     acq_settings.margin,
+                                                                                     ci_acquired_n,
+                                                                                     acq_settings.ao_osr,
+                                                                                     ci_buffer[:new_samples_n],
+                                                                                     ci_prev_samples_n[c],
+                                                                                     ci_prev_samples_sum[c],
+                                                                                     acc_dtype=ci_data.dtype,
+                                                                                     # for sum, this is the same as data.dtype
+                                                                                     average=False)
+            ci_acquired_n += new_samples_n
+
+        return ci_acquired_n, ci_prev_samples_n, ci_prev_samples_sum
+
     def _configure_sync_tasks(self,
                               acq_settings: AcquisitionSettings,
                               ao_task: nidaqmx.Task, do_task: nidaqmx.Task, ai_task: nidaqmx.Task,
+                              ci_tasks: List[nidaqmx.Task],
                               ao_buffer_n: int, do_buffer_n: int, ai_buffer_n: int,
                               ):
         """
@@ -1360,6 +1535,7 @@ class Acquirer:
         :param ao_task: The AO task object.
         :param do_task: The DO task object.
         :param ai_task: The AI task object.
+        :param ci_tasks: The list of counter input tasks.
         :param ao_buffer_n: The number of samples for AO.
         :param do_buffer_n: The number of samples for DO.
         :param ai_buffer_n: The number of samples for AI.
@@ -1368,17 +1544,25 @@ class Acquirer:
             IOError: If the actual AO sample rate is not equal to the expected AO sample rate.
             IOError: If the actual DO sample rate is not equal to the expected DO sample rate.
         """
+        # CI use the same buffer size as AO, but it seems that to read it reliably, we need to
+        # ask for extra room (which is automatically done on AI)
+        ci_buffer_n = ao_buffer_n * 2
+
         if acq_settings.continuous:
             sample_mode = AcquisitionType.CONTINUOUS
-            ai_samples_n = ai_buffer_n  # Just a hint to "guide the internal buffer size"
+            # Buffer size is a hint to "guide the internal buffer size" indicating how much data
+            # will be read each time. It seems that internally the buffer is 8x bigger.
+            ai_samples_n = ai_buffer_n
             ao_samples_n = ao_buffer_n
+            ci_samples_n = ci_buffer_n
             do_samples_n = do_buffer_n
         else:
             sample_mode = AcquisitionType.FINITE
-            ai_samples_n = acq_settings.ai_samples_n  # To indicate when it will finish
-            ao_samples_n = acq_settings.ao_samples_n
-            do_samples_n = acq_settings.do_samples_n
-            #TODO: use task.in_stream.input_buf_size = buffer_n to specify the buffer?
+            # Hardware wants at least 2 samples. If it's less than that, ask 2, and we'll read just 1
+            ai_samples_n = max(2, acq_settings.ai_samples_n)  # To indicate when it will finish
+            ao_samples_n = max(2, acq_settings.ao_samples_n)
+            ci_samples_n = ao_samples_n
+            do_samples_n = max(2, acq_settings.do_samples_n)
 
         # See list of terminals for the options of source
         # https://www.ni.com/docs/en-US/bundle/ni-daqmx/page/mxcncpts/termnames.html
@@ -1391,12 +1575,14 @@ class Acquirer:
                 sample_mode=sample_mode,
                 samps_per_chan=ai_samples_n
             )
-
+            ai_task.in_stream.input_buf_size = ai_buffer_n
             ai_sample_rate_actual = ai_task.timing.samp_clk_rate
 
         if not util.almost_equal(ai_sample_rate_actual, acq_settings.ai_sample_rate):
             raise IOError(f"AI sample rate accepted to {ai_sample_rate_actual}, "
                           f"while expected {acq_settings.ai_sample_rate}")
+
+        # logging.debug(f"AI buffer size = {ai_task.in_stream.input_buf_size}, board buffer size: {ai_task.in_stream.input_onbrd_buf_size}")
 
         # Use the adjusted AI sample rate to select the AO (and DO) sample rates
         ao_task.timing.cfg_samp_clk_timing(
@@ -1406,6 +1592,7 @@ class Acquirer:
             sample_mode=sample_mode,
             samps_per_chan=ao_samples_n
         )
+        ao_task.out_stream.output_buf_size = ao_buffer_n
         ao_sample_rate_actual = ao_task.timing.samp_clk_rate
         if not util.almost_equal(ao_sample_rate_actual, acq_settings.ao_sample_rate):
             raise IOError(f"AO sample rate accepted to {ao_sample_rate_actual}, "
@@ -1418,6 +1605,7 @@ class Acquirer:
                                                sample_mode=sample_mode,
                                                samps_per_chan=do_samples_n,
                                                )
+            do_task.out_stream.output_buf_size = do_buffer_n
 
             # TODO: instead of using isclose(), have a special function that converts between rate and period in ns
             # The value in ns is actually what the hardware uses, and we know it's a int, so that
@@ -1455,6 +1643,21 @@ class Acquirer:
         ao_task.triggers.start_trigger.cfg_dig_edge_start_trig(ai_task.triggers.start_trigger.term)
         ao_task.out_stream.auto_start = False
 
+        # Configure counter task(s)
+        for ci_task in ci_tasks:
+            ci_task.timing.cfg_samp_clk_timing(acq_settings.ao_sample_rate,
+                                               source=ao_task.timing.samp_clk_term,
+                                               active_edge=Edge.RISING,
+                                               sample_mode=sample_mode,
+                                               samps_per_chan=ci_samples_n,
+                                               )
+
+            ci_task.in_stream.input_buf_size = ci_buffer_n
+            # For counter *input*, it's not the "start trigger" which is used, but the "arm start trigger".
+            ci_task.triggers.arm_start_trigger.trig_type = TriggerType.DIGITAL_EDGE
+            ci_task.triggers.arm_start_trigger.dig_edge_edge = Edge.RISING
+            ci_task.triggers.arm_start_trigger.dig_edge_src = ao_task.timing.samp_clk_term
+
         if acq_settings.do_samples_n:
             do_task.triggers.start_trigger.delay = 2  # 2 ticks is minimum
             do_task.triggers.start_trigger.delay_units = DigitalWidthUnits.TICKS
@@ -1472,6 +1675,7 @@ class Acquirer:
                          prev_samples_n: int,
                          prev_samples_sum: int,
                          acc_dtype: numpy.dtype=numpy.float64,  # dtype to store the sum
+                         average: bool = True,
                          ) -> Tuple[int, int]:  # samples_n, samples_sum
         """
         Downsample the provided acquisition data, and store it at the final place into the
@@ -1493,6 +1697,7 @@ class Acquirer:
         :param acc_dtype: the numpy data type to use for the accumulator. Typically, it
         should be the smallest (for optimization) type that fits the sum of osr
         samples.
+        :param average: if True, computes the average value (ie, sum/osr), otherwise store the sum
         :returns:
             * samples_n: the number of the (last) samples which could not be fully
             fitted in a pixel yet.
@@ -1567,7 +1772,7 @@ class Acquirer:
             buffer_2d.shape = (available_lines, line_width * osr)
             buffer_2d = buffer_2d[:, margin * osr:]
             # Downsample the whole set of data to the given location
-            cls._downsample_pixels(data, (0, y), buffer_2d, osr, acc_dtype)
+            cls._downsample_pixels(data, (0, y), buffer_2d, osr, acc_dtype, average)
 
             # Update the pointers
             acquired_n += new_samples_n
@@ -1586,7 +1791,7 @@ class Acquirer:
             buffer_pixels = buffer[margin * osr:new_samples_n]
             # Downsample the whole set of data to the given location (which always starts at the beginning of the line)
             if buffer_pixels.size > 0:
-                cls._downsample_pixels(data, (0, y), buffer_pixels, osr, acc_dtype)
+                cls._downsample_pixels(data, (0, y), buffer_pixels, osr, acc_dtype, average)
 
             # Update the pointers
             buffer = buffer[new_samples_n:]
@@ -1602,7 +1807,9 @@ class Acquirer:
                            pos: Tuple[int, int],
                            buffer: numpy.array,
                            osr: int,
-                           acc_dtype) -> None:
+                           acc_dtype,
+                           average: bool = True,
+                           ) -> None:
         """
         Average the given data, and store it at the specific area
         :param data: complete numpy array (shape YX) where to store the result
@@ -1612,6 +1819,7 @@ class Acquirer:
         :param osr: number of samples to average per point
         :param acc_dtype: data type for the temporary array that will sum all the data. It has to
         be large enough to fit osr * buffer.dtype
+        :param average: if True, computes the average value (ie, sum/osr), otherwise store the sum
         :raise:
           ValueError: if the shape of buffer is not a multiple of osr
         """
@@ -1630,7 +1838,7 @@ class Acquirer:
         # Compute average and store immediately in the final array
         if osr == 1:  # Fast path
             subdata[:] = buffer_osr[:, :, 0]
-        else:
+        elif average:
             # TODO: this is not optimal, because a temporary "acc" array is created. It should be
             # possible to compute the mean using a single temporary scalar.
             # At least, we could instantiate a temporary array at the beginning of an acquisition,
@@ -1641,6 +1849,8 @@ class Acquirer:
             # a separate array of a big enough dtype.
             acc = numpy.add.reduce(buffer_osr, axis=2, dtype=acc_dtype)
             numpy.true_divide(acc, osr, out=subdata, casting='unsafe', subok=False)
+        else:  # Just the sum
+            numpy.add.reduce(buffer_osr, axis=2, out=subdata)
 
 
 class Scanner(model.Emitter):
@@ -1908,7 +2118,7 @@ class Scanner(model.Emitter):
         self.dwellTime.subscribe(self._on_setting_changed)
 
         # Cached data for the waveforms
-        self._prev_settings = [None, None, None, None]  # resolution, scale, translation, margin
+        self._prev_settings = [None, None, None, None, None]  # resolution, scale, translation, margin, ao_osr
         self._scan_array = None  # last scan array computed
         self._ao_osr = 1
         self._ai_osr = 1
@@ -2384,7 +2594,7 @@ class Scanner(model.Emitter):
         # being exposed twice more than the others.
         margin = int(math.ceil(st / dwell_time - 0.01))
 
-        new_settings = [resolution, scale, translation, margin]
+        new_settings = [resolution, scale, translation, margin, ao_osr]
         if self._prev_settings != new_settings:
             self._update_raw_scan_array(resolution, scale, translation, margin, ao_osr)
             self._prev_settings = new_settings
@@ -2554,7 +2764,6 @@ class Scanner(model.Emitter):
         if self._pixel_ttl is not None:
             pixel_bit = numpy.uint32(1 << self._pixel_ttl)
             ttl_signal[:, margin * 2::2, 0] |= pixel_bit
-            logging.debug("First pixel value with pixel: %s", ttl_signal[0, margin * 2, 0])
 
         # Line: everything after the margin is the line
         # Special array view, with dup to as first dim, to tell numpy everything needs to be copied
@@ -2570,8 +2779,6 @@ class Scanner(model.Emitter):
             if not margin:
                 ttl_signal_dup[-1, :, -1] &= ~line_bit
 
-            logging.debug("First pixel value with line: %s", ttl_signal[0, margin * 2, 0])
-
         # Frame: almost everywhere high, except for the margin of the first line
         if self._frame_ttl is not None:
             frame_bit = numpy.uint32(1 << self._frame_ttl)
@@ -2580,7 +2787,6 @@ class Scanner(model.Emitter):
             # Special case when there is no margin: make it low as the end of the frame, to get a transition
             if not margin:
                 frame_signal[-1, -1] &= ~frame_bit
-            logging.debug("First frame value with frame: %s", ttl_signal[0, margin * 2, 0])
 
         return ttl_signal
 
@@ -2614,7 +2820,7 @@ class AnalogDetector(model.Detector):
           first value > second value, the data is inverted (=reversed contrast)
         """
         # It will set up ._shape and .parent
-        model.Detector.__init__(self, name, role, parent=parent, **kwargs)
+        super().__init__(name, role, parent=parent, **kwargs)
 
         self._channel = channel
         if isinstance(channel, int):
@@ -2669,10 +2875,71 @@ class AnalogDetector(model.Detector):
             raise ValueError(f"Data range between {self._limits[0]} and {self._limits[1]} V is too high for hardware.")
 
 
+class CountingDetector(model.Detector):
+    """
+    Represents a detector which observe a pulsed signal (rising edges). Typically, the higher
+    the pulse frequency, the stronger the original signal is. E.g., a counting
+    PMT.
+    """
+    def __init__(self, name, role, parent, source, **kwargs):
+        """
+        source (0 <= int): PFI number, the input pin on which the signal is received
+        """
+        # It will set up ._shape and .parent
+        super().__init__(name, role, parent=parent, **kwargs)
+
+        # Try to find an available counter
+        for chan in self.parent._nidev.ci_physical_chans:
+            cnt_name = chan.name
+            if cnt_name not in [d._counter_name for d in parent._counting_dets]:
+                # Found a counter not yet used
+                self._counter_name = cnt_name
+                logging.debug("Using counter %s for counting detector '%s'", cnt_name, name)
+                break
+        else:
+            raise ValueError(f"No counter available anymore, only {len(self.parent._nidev.ci_physical_chans)} available")
+
+        self._source_name = f"/{self.parent._device_name}/PFI{source}"
+        # Check that the channel exist
+        if self._source_name not in self.parent._nidev.terminals:
+            raise ValueError(f"Source PFI{source} not available")
+        self.source = source
+
+        maxdata = 2 ** self.parent._nidev.ci_max_size
+        self._shape = (maxdata + 1,)  # only one point
+        self.data = SEMDataFlow(self, parent)
+
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = model.Event()
+
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
+
+    def configure_ci_task(self, task):
+        # create a counter input channel using 'ctr0' to count
+        # rising digital edges, counting up from initial_count
+        task.ci_channels.add_ci_count_edges_chan(
+            self._counter_name,
+            edge=Edge.RISING,
+            initial_count=0,
+            count_direction=CountDirection.COUNT_UP)
+
+        # set the input terminal of the counter input channel on which
+        # the counter receives the signal on which it counts edges
+        task.ci_channels[0].ci_count_edges_term = self._source_name
+
+        # By default, the counter is "cummulative": it never resets. But we want to reset it
+        # after every sample read
+        # TODO: clock name should come from argument? In some way it's always correct, right?
+        task.ci_channels[0].ci_count_edges_count_reset_term = f'/{self.parent._device_name}/ao/SampleClock'
+        task.ci_channels[0].ci_count_edges_count_reset_reset_cnt = 0
+        task.ci_channels[0].ci_count_edges_count_reset_enable = True
+
+
 # Copied from semcomedi
 class SEMDataFlow(model.DataFlow):
 
-    def __init__(self, detector: AnalogDetector, sem: AnalogSEM, inverted=False):
+    def __init__(self, detector: Optional[AnalogDetector | CountingDetector],
+                 sem: AnalogSEM, inverted=False):
         """
         detector: the detector that the dataflow corresponds to
         sem: the SEM
