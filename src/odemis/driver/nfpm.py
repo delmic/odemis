@@ -243,7 +243,7 @@ class PM8742(model.Actuator):
         """
         if not 1 <= val <= 2000:
             raise ValueError("Velocity outside of the range 0->2000")
-        self._sendOrderCommand(b"VA", "%d" % (val,), axis)
+        self._sendOrderCommand(b"VA", b"%d" % (val,), axis)
 
     def GetAccel(self, axis):
         """
