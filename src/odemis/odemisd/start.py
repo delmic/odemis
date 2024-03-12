@@ -289,8 +289,17 @@ class BackendStarter(object):
         frame.CenterOnScreen()
         return frame
 
-    def show_popup(self, summary, message="", icon="dialog-info"):
+    def show_popup(self, summary: str, message: str = "", icon: str = "dialog-info", transient: bool = True) -> None:
+        """
+        Shows a notification to the user.
+        :param summary: the title of the message
+        :param message: text to display below the title
+        :param icon: a standard icon name
+        :param transient: if True, the notification will completely disapear after being shown,
+        otherwise, it will stay in the notification list until the user dismisses it.
+        """
         self._notif.update(summary, message, icon)
+        self._notif.hints["transient"] = transient
         self._notif.show()
 
     def proc_communicate(self, p):
@@ -371,7 +380,8 @@ class BackendStarter(object):
             logging.error("Backend returned code %s", p.returncode)
             self.show_popup("Odemis back-end failed to start",
                             "For more information type odemis-start in a terminal.",
-                            "dialog-warning")
+                            "dialog-warning",
+                            transient=False)
             show_error_box("Error starting Odemis back-end",
                            "Unexpected error (%d) while starting Odemis back-end:\n"
                            "%s\n"
@@ -417,7 +427,8 @@ class BackendStarter(object):
                         "Odemis back-end failed to start",
                         ("For more information look at the log messages in %s "
                          "or type odemis-start in a terminal.") % self._config["LOGFILE"],
-                        "dialog-warning"
+                        "dialog-warning",
+                        transient=False,
                     )
                     raise IOError("Back-end failed to start")
                 else:
@@ -431,7 +442,8 @@ class BackendStarter(object):
                 "Odemis back-end failed to start",
                 ("For more information look at the log messages in %s "
                  "or type odemis-start in a terminal.") % self._config["LOGFILE"],
-                "dialog-warning"
+                "dialog-warning",
+                transient=False,
             )
             raise IOError("Back-end failed to fully instantiate")
 
@@ -478,14 +490,15 @@ class BackendStarter(object):
         if ret == wx.ID_OK:
             self.show_popup("Odemis back-end successfully started",
                             "" if self._nogui else "Graphical interface will now start.",
-                            "dialog-info")
+                            "odemis")
         # elif status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
         elif ret == wx.ID_EXIT:
             self.show_popup(
                 "Odemis back-end failed to start",
                 ("For more information look at the log messages in %s "
                  "or type odemis-start in a terminal.") % self._config["LOGFILE"],
-                "dialog-warning")
+                "dialog-warning",
+                transient=False)
             raise IOError("Back-end failed to fully instantiate")
         elif ret == wx.ID_CANCEL:
             logging.info("Stopping the backend")
@@ -720,7 +733,7 @@ def main(args):
 
             try:
                 if status in (driver.BACKEND_DEAD, driver.BACKEND_STOPPED):
-                    starter.show_popup("Starting Odemis back-end")
+                    starter.show_popup("Starting Odemis", "Back-end is starting", icon="odemis")
 
                     # Get the model file in this order:
                     # 1. the command line (either model selector or model file)
@@ -782,8 +795,9 @@ def main(args):
 
                         notif = get_notify_object()
                         notif.update("Failed to start the GUI",
-                                     f"For more information look at the log file odemis-gui.log in the home folder.'",
+                                     "For more information look at the log file odemis-gui.log in the home folder.",
                                      "dialog-warning")
+                        notif.hints["transient"] = False
                         notif.show()
 
                         display_log("Odemis GUI", os.path.expanduser("~/odemis-gui.log"))
