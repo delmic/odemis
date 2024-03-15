@@ -116,9 +116,15 @@ class CorrelationController(object):
                 continue # cant move fluo streams
             self._panel.cmb_correlation_stream.Append(s.name.value, s)
 
-        # select the first stream, if available
-        if self._panel.cmb_correlation_stream.GetCount() > 0:
-            self._panel.cmb_correlation_stream.SetSelection(0)
+        # select the first stream, if available and nothing is selected
+        if (self._panel.cmb_correlation_stream.GetCount() > 0
+            and self._panel.cmb_correlation_stream.GetSelection() == wx.NOT_FOUND):
+            self._panel.cmb_correlation_stream.SetSelection(0) # this doesn't trigger selection event
+
+            # trigger the event manually, to automatically select the first stream
+            if self._tab_data_model.selected_stream.value is None:
+                logging.debug(f"Forcing selected stream change to first stream")
+                self._on_selected_stream_change(None)
 
     @call_in_wx_main
     def _on_correlation_streams_change(self, streams: list) -> None:
@@ -126,6 +132,10 @@ class CorrelationController(object):
         :param streams: (list[StaticStream]) the streams in the correlation tab"""
         visible = len(streams) != 0
         self._panel.fp_meteor_correlation.Show(visible)
+        # reset selected stream
+        if not visible:
+            self._panel.cmb_correlation_stream.Clear()
+            self._tab_data_model.selected_stream.value = None
 
     @call_in_wx_main
     def _on_selected_stream_change(self, evt: wx.Event) -> None:
