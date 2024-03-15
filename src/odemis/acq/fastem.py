@@ -547,6 +547,9 @@ class AcquisitionTask(object):
         self._pre_calibrations_future = None
         self._settings_obs = settings_obs
 
+        # save the initial multibeam resolution, because the resolution will get updated if save_full_cells is True
+        self._old_res = self._multibeam.resolution.value
+
         self.path = fastem_util.create_image_dir("beam-shift-correction")
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
@@ -590,8 +593,9 @@ class AcquisitionTask(object):
         # No need to set the start time of the future: it's automatically done when setting its state to running.
         self._future.set_progress(end=time.time() + total_roa_time)  # provide end time to future
         logging.info(
-            "Starting acquisition of ROA %s, with expected duration of %f s and %s by %s fields.",
-            self._roa.name, total_roa_time, self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1
+            "Starting acquisition of ROA %s, with expected duration of %f s, %s by %s fields and overlap %s.",
+            self._roa.name, total_roa_time, self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1,
+            self._roa.overlap,
         )
 
         # Update the position of the first tile.
@@ -633,7 +637,6 @@ class AcquisitionTask(object):
             fastem_conf.configure_multibeam(self._multibeam)
 
             if self._save_full_cells:
-                old_res = self._multibeam.resolution.value
                 old_cell_translation = self._detector.cellTranslation.value
                 old_cell_translation_md = self._detector.getMetadata().get(model.MD_CELL_TRANSLATION, None)
 
@@ -680,7 +683,7 @@ class AcquisitionTask(object):
             if self._save_full_cells:
                 # Restore all parameter values, to have the correct values for the next acquisition without
                 # save_full_cells
-                self._multibeam.resolution.value = old_res
+                self._multibeam.resolution.value = self._old_res
                 self._detector.cellTranslation.value = old_cell_translation
                 self._detector.getMetadata()[model.MD_CELL_TRANSLATION] = old_cell_translation_md
 
@@ -836,7 +839,8 @@ class AcquisitionTask(object):
         :return: (float, float) The new absolute stage x and y position in meter.
         """
         px_size = self._multibeam.pixelSize.value
-        field_res = self._multibeam.resolution.value
+        # When saving the full cells, the stage should still move based on the cropped cells.
+        field_res = self._multibeam.resolution.value if not self._save_full_cells else self._old_res
 
         rel_move_hor = self.field_idx[0] * px_size[0] * field_res[0] * (1 - self._roa.overlap)  # in meter
         rel_move_vert = self.field_idx[1] * px_size[1] * field_res[1] * (1 - self._roa.overlap)  # in meter
