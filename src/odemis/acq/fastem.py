@@ -630,6 +630,7 @@ class AcquisitionTask(object):
             # configure the HW settings
             fastem_conf.configure_scanner(self._scanner, fastem_conf.MEGAFIELD_MODE)
             fastem_conf.configure_detector(self._detector, self._roc2, self._roc3)
+            fastem_conf.configure_multibeam(self._multibeam)
 
             if self._save_full_cells:
                 old_res = self._multibeam.resolution.value
