@@ -1154,6 +1154,8 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         cls.mppc.shape = (8, 8)
 
         cls.multibeam = Mock()
+        cls.multibeam.configure_mock(**{"getMetadata.return_value": {model.MD_SCAN_OFFSET_CALIB: [0.01, 0.01],
+                                                                     model.MD_SCAN_AMPLITUDE_CALIB: [0.02, 0.02]}})
         cls.multibeam.pixelSize.value = (4.0e-9, 4.0e-9)
         cls.multibeam.resolution.value = (6400, 6400)
 
