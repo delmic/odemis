@@ -570,7 +570,7 @@ class BackendStarter(object):
     def _on_ghosts(self, ghosts):
         """ Called when the .ghosts changes """
         # The components running fine
-        for c in self._mic.alive.value:
+        for c in sorted(self._mic.alive.value, key=lambda x: x.name):
             # FIXME: reading .state sometimes blocks, somewhere in the Python server,
             # usually when the "SEM scan interface" starts.
             state = c.state.value
@@ -579,7 +579,7 @@ class BackendStarter(object):
                 self._show_component(c.name, state)
 
         # Now the defective ones
-        for cname, state in ghosts.items():
+        for cname, state in sorted(ghosts.items(), key=lambda x: x[0]):
             if isinstance(state, Exception):
                 # Exceptions are different even if just a copy
                 statecmp = str(state)
