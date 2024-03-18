@@ -26,6 +26,8 @@ import glob
 import imp
 import inspect
 import logging
+from typing import Callable
+
 from odemis import util, gui
 from wx.lib.agw.infobar import AutoWrapStaticText
 
@@ -221,27 +223,37 @@ class Plugin(metaclass=ABCMeta):
         pass
 
     @call_in_wx_main
-    def addMenu(self, entry, callback, item_kind=wx.ITEM_NORMAL, pass_menu_item=False):
+    def addMenu(self, entry: str, callback: Callable, item_kind: int = wx.ITEM_NORMAL,
+                pass_menu_item: bool = False) -> None:
         """
-        Adds a menu entry in the main GUI menu.
-        entry (str): the complete path for the entry.
+        Adds a menu entry in the main GUI menu, asynchronously. So it will not immediately create
+        the menu. In case of error, it will only log the error.
+        :param entry: the complete path for the entry.
           It should have at least one group specified.
-          If a group is non existing it will automatically be created.
-          To add a keyboard shortcut, add it after a \t.
+          If a group doesn't exist it will automatically be created.
+          To add a keyboard shortcut (aka "accelerator"), add it after a \t.
           For instance: "View/Fancy acquisition..."
                     or: "New group/Subgroup/The action\tCtrl+A"
-        callback (callable): function to call when that entry is selected.
-        item_kind (wx.Item): the type of menu item that should be added.
+        :param callback: function to call when that entry is selected.
+        :param item_kind: the type of menu item that should be added.
             Default is wx.ITEM_NORMAL, which makes it a normal item.
             Set to wx.ITEM_CHECK to make it a checkbox item.
-        pass_menu_item (bool): If True the menu_item will be passed as an argument to the callback.
-        raise ValueError: If the entry doesn't have a group or a name
+            Use wx.ITEM_RADIO to make it a radio item.
+        :param pass_menu_item: If True the menu_item will be passed as an argument to the callback.
         """
-        # TODO: have a way to disable the menu on some conditions
-        # Either return MenuItem (but cannot be call_in_wx_main anymore)
-        # or pass a BooleanVA which indicate when the menu is enabled,
-        # or just pass a list of tabs where the menu is enabled.
-        # TODO: allow to pass a BooleanVA instead of callable => make it a checkable menu item
+        try:
+            self._addMenu(entry, callback, item_kind, pass_menu_item)
+        except Exception:
+            logging.exception("Failed to add menu entry %s", entry)
+
+    def _addMenu(self, entry: str, callback: Callable, item_kind: int = wx.ITEM_NORMAL,
+                 pass_menu_item: bool = False) -> wx.MenuItem:
+        """
+        Adds a menu entry in the main GUI menu. Must be called from the main GUI thread.
+        For the arguments, see addMenu().
+        :return: the menu item created.
+        :raise ValueError: If the entry doesn't have a group or a name
+        """
         main_frame = self.main_app.main_frame
 
         # Split the entry into groups and entry name
@@ -302,6 +314,55 @@ class Plugin(metaclass=ABCMeta):
                                   path[-1], self)
 
         main_frame.Bind(wx.EVT_MENU, menu_callback_wrapper, id=menu_item.Id)
+        return menu_item
+
+    def findMenuItem(self, entry: str) -> wx.MenuItem:
+        """
+        Find the menu item ID based on the complete path of the menu entry.
+        :param entry: The complete path of the menu entry, with "/" as separator.
+        If the entry has an acccelerator, it should be included.
+        :return: the menu item.
+        :raise: LookupError if the menu item is not found.
+        """
+        main_frame = self.main_app.main_frame
+
+        # Split the entry into groups and entry name
+        path = entry.split("/")
+        if len(path) < 2:
+            raise ValueError("Failed to find a group and a name in '%s'" % (entry,))
+
+        p = path[0]
+        if not p:
+            raise ValueError("Path contains empty group name '%s'" % (p,))
+
+        root_group = main_frame.GetMenuBar()
+        sub_group_idx = root_group.FindMenu(p)
+        if sub_group_idx is wx.NOT_FOUND:
+            raise LookupError("Failed to find the menu '%s' from %s" % (p, entry))
+
+        curr_group = root_group.GetMenu(sub_group_idx)
+        for p in path[1:-1]:
+            if not p:
+                raise ValueError("Path contains empty group name '%s'" % (p,))
+
+            sub_group_id = curr_group.FindItem(p)
+            if sub_group_id == wx.NOT_FOUND:
+                raise LookupError("Failed to find the menu '%s' from %s" % (p, entry))
+
+            mi = curr_group.FindItemById(sub_group_id)
+            sub_group = mi.GetSubMenu()
+            if sub_group is None:
+                raise ValueError("Expected menu group %s, is entry, cannot find the whole %s" % (p, entry))
+
+            curr_group = sub_group
+
+        # Finally, the last item
+        p = path[-1]
+        menu_id = curr_group.FindItem(p)
+        if menu_id == wx.NOT_FOUND:
+            raise LookupError("Failed to find the menu '%s' from %s" % (p, entry))
+
+        return curr_group.FindItemById(menu_id)
 
     def showAcquisition(self, filename):
         """
