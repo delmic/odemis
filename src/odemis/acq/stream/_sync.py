@@ -1737,15 +1737,22 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
-                    # MD_POS default to the center of the sample stage, but it needs to be the position
-                    # of the sample stage + e-beam + scan stage translation (without the drift cor)
                     # TODO: here the code is different compared to _runAcquisitionEbeam
-                    raw_pos = self._acq_data[0][-1].metadata[MD_POS]
-                    strans = spos[0] - orig_spos["x"], spos[1] - orig_spos["y"]
-                    # check if the scan stage is the SEM stage itself
-                    # if it is an 'independent' stage MD_POS (raw_pos) is added to the translation
-                    cor_pos = raw_pos[0] + strans[0], raw_pos[1] + strans[1]
-                    logging.debug("Updating pixel pos from %s to %s", raw_pos, cor_pos)
+                    if scan_stage_is_stage:
+                        # Use the theoretical position of the stage. We could use the stage position as reported by the
+                        # hardware, which could be more accurately representing the current position, but that would
+                        # cause each position to be slightly differently misaligned with the grid, potentially causing
+                        # issues during the display.
+                        cor_pos = spos
+                    else:
+                        # MD_POS default to the center of the sample stage, but it needs to be the position
+                        # of the sample stage + e-beam + scan stage translation (without the drift cor)
+                        raw_pos = self._acq_data[0][-1].metadata[MD_POS]
+                        strans = spos[0] - orig_spos["x"], spos[1] - orig_spos["y"]
+                        # if it is an 'independent' stage MD_POS (raw_pos) is added to the translation
+                        cor_pos = raw_pos[0] + strans[0], raw_pos[1] + strans[1]
+                        logging.debug("Updating pixel pos from %s to %s", raw_pos, cor_pos)
+
                     # In practice, for the e-beam data, it's only useful to
                     # update the metadata for the first pixel.
                     for adas in self._acq_data:
