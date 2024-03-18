@@ -347,6 +347,7 @@ class OdemisBugreporter(object):
 
             # Save USB hardware, processes, kernel name, IP address
             outputs["lsusb.txt"] = self._get_future_output(['/usr/bin/lsusb', '-v'], timeout=60)
+            outputs["lsusb-tree.txt"] = self._get_future_output(['/usr/bin/lsusb', '-t', '-vv'], timeout=60)
             outputs["ps.txt"] = self._get_future_output(['/bin/ps', 'aux'], timeout=60)
             outputs["uname.txt"] = self._get_future_output(['/bin/uname', '-a'], timeout=5)
             outputs["ip.txt"] = self._get_future_output(['/bin/ip', 'address'], timeout=30)
