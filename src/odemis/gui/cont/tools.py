@@ -156,6 +156,27 @@ TOOLS = {
             model.TOOL_NONE,
             "Create/Move feature"
         ),
+    model.TOOL_RECTANGLE:
+        ModeTool(
+            "btn_rectangle",
+            model.TOOL_RECTANGLE,
+            model.TOOL_NONE,
+            "Create/Move rectangle"
+        ),
+    model.TOOL_ELLIPSE:
+        ModeTool(
+            "btn_circle",
+            model.TOOL_ELLIPSE,
+            model.TOOL_NONE,
+            "Create/Move ellipse"
+        ),
+    model.TOOL_POLYGON:
+        ModeTool(
+            "btn_polygon",
+            model.TOOL_POLYGON,
+            model.TOOL_NONE,
+            "Create/Move polygon"
+        ),
 }
 
 

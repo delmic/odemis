@@ -30,15 +30,18 @@ They will *only* receive mouse events if they are active!
 
 """
 
-import cairo
+from abc import ABCMeta, abstractmethod
 import logging
 import math
-import wx
-from abc import ABCMeta, abstractmethod
 
+import cairo
+import wx
+
+from odemis import model
 import odemis.gui as gui
 import odemis.util as util
 import odemis.util.conversion as conversion
+from odemis.util.raster import point_in_polygon
 from odemis.gui import EVT_BUFFER_SIZE
 from odemis.model import TupleVA, BooleanVA
 
@@ -427,6 +430,90 @@ class Overlay(metaclass=ABCMeta):
         evt.Skip()
 
     # END Default Event handlers
+
+
+class ClickMixin:
+    """
+    This mixin class can be used to add click functionality. The class keeps on appending click
+    points on left clicks and stops on a right click.
+
+    Note: Overlay should never capture a mouse, that's the canvas' job
+
+    The following methods *must* be called from their public counter part method in the super class:
+
+    _on_left_down
+    _on_left_up
+    _on_right_down
+    _on_right_up
+    _on_motion
+
+    """
+    def __init__(self):
+        # Indicate whether a mouse click is in progress
+        self._left_click = False
+        self._right_click = False
+        self._finished = False
+
+        # The cursor view points on left click
+        self.v_points = []
+        self.v_point = model.VigilantAttribute(Vec(0.0, 0.0), readonly=True)
+        # The cursor view position on motion
+        self.v_pos = Vec(0.0, 0.0)
+
+    def reset_click_mixin(self):
+        """Set the click attributes to their initial values."""
+        self._left_click = False
+        self._right_click = False
+        self._finished = False
+        self.v_pos = Vec(0.0, 0.0)
+        self.v_points.clear()
+
+    def _on_left_down(self, evt):
+        """Start a left click if no right click is in progress and not right up."""
+        if not self._right_click and not self._finished:
+            self._left_click = True
+
+    def _on_left_up(self, evt):
+        """End a left click if no right click is in progress and not right up."""
+        if self._left_click and not self._right_click and not self._finished:
+            self._left_click = False
+            v_point = Vec(evt.Position)
+            self.v_points.append(v_point)
+            self.v_pos = v_point
+            self.v_point._set_value(v_point, force_write=True)
+            logging.debug("Appending point %s", v_point)
+
+    def _on_right_down(self, evt):
+        """Start a right click if no left click is in progress."""
+        if not self._left_click:
+            self._right_click = True
+
+    def _on_right_up(self, evt):
+        """End a right click if no left click is in progress."""
+        if not self._left_click and self._right_click:
+            self._right_click = False
+            self._finished = True
+            logging.debug("Right click up, finished ClickMixin.")
+
+    def _on_motion(self, evt):
+        """Update the end position if a movement is in progress."""
+        if not (self._left_click or self._right_click) and not self._finished:
+            self.v_pos = Vec(evt.Position)
+
+    @property
+    def left_click(self):
+        """Boolean value indicating whether left click has started."""
+        return self._left_click
+
+    @property
+    def right_click(self):
+        """Boolean value indicating whether right click has started."""
+        return self._right_click
+
+    @property
+    def right_click_finished(self):
+        """Boolean value indicating whether right click up has finished."""
+        return self._finished
 
 
 class DragMixin(object):
@@ -990,6 +1077,220 @@ class SelectionMixin(DragMixin):
             self.cnvs.Refresh()
 
         # Cursor manipulation should be done in superclasses
+
+
+class LineEditingMixin(ClickMixin, DragMixin):
+    """
+    This class will store the last selection created by clicking. It allows for manipulation
+    of that selection by dragging.
+    These areas are always expressed in view port coordinates.
+    Conversions to buffer and physical coordinates should be done using subclasses.
+
+    Remember that the following methods *MUST* be called from the super class:
+    _on_left_down
+    _on_left_up
+    _on_right_down
+    _on_right_up
+    _on_motion
+
+    """
+
+    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0), edit_mode=EDIT_MODE_POINT):
+        """
+        :param center: (float, float) The center of the selection after right_click_finished
+        :param edit_mode: The mode which helps manipulation of the selection.
+
+        """
+        ClickMixin.__init__(self)
+        DragMixin.__init__(self)
+
+        self.edit_v_start_pos = None  # The view port coordinates where a drag/edit originated
+        self.edit_hover = None  # What edge is being edited (gui.HOVER_*)
+        self.edit_mode = edit_mode
+
+        self.hover = gui.HOVER_NONE
+        self.hover_margin = 10  # px
+
+        # Selection modes (none, edit and drag)
+        self.selection_mode = SEL_MODE_NONE
+
+        # This attribute can be used to see if the canvas has shifted or scaled
+        self.last_shiftscale = None
+
+        # Dict which contains l, r, t, b coordinates of each v_point according to the hover margin
+        self.v_edges = {}
+
+        # TODO: Move these to the super classes
+        self.colour = conversion.hex_to_frgba(colour)
+        self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
+        self.center = center
+
+    def stop_selection(self):
+        """End the creation of the current selection."""
+        logging.debug("Stopping selection.")
+        self._calc_edges()
+        self.selection_mode = SEL_MODE_NONE
+        self.edit_hover = None
+
+    def clear_selection(self):
+        """Clear the selection."""
+        logging.debug("Clearing selection.")
+        DragMixin.clear_drag(self)
+        self.selection_mode = SEL_MODE_NONE
+        self.v_edges.clear()
+
+    # #### END selection methods  #####
+
+    # #### edit methods  #####
+
+    def start_edit(self, hover):
+        """
+        Start an edit to the current selection.
+
+        :param hover: (int) Compound value of gui.HOVER_* representing the hovered edges
+
+        """
+        self.edit_v_start_pos = self.drag_v_start_pos
+        self.edit_hover = hover
+        self.selection_mode = SEL_MODE_EDIT
+
+    def update_edit(self, idx):
+        """
+        Adjust the selection according to the given position and the current edit action.
+
+        :param idx: (int) The v_point index which needs to be edited.
+
+        """
+        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        if self.edit_mode == EDIT_MODE_POINT:
+            if idx is not None and self.edit_hover == gui.HOVER_EDGE:
+                self.v_points[idx] = current_pos
+
+    def stop_edit(self):
+        """ End the selection edit."""
+        self.stop_selection()
+
+    # #### END edit methods  #####
+
+    # #### drag methods  #####
+
+    def start_drag(self):
+        self.edit_v_start_pos = self.drag_v_start_pos
+        self.selection_mode = SEL_MODE_DRAG
+
+    def update_drag(self):
+        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        diff = Vec(current_pos.x - self.edit_v_start_pos.x,
+                   current_pos.y - self.edit_v_start_pos.y)
+        for idx, point in enumerate(self.v_points):
+            self.v_points[idx] = Vec(point.x + diff.x, point.y + diff.y)
+        self.edit_v_start_pos = current_pos
+
+    def stop_drag(self):
+        self.stop_selection()
+
+    # #### END drag methods  #####
+
+    def update_projection(self, idx, b_pos, shiftscale):
+        """
+        Update the view position of the point if the cnvs view has shifted or scaled
+        compared to the last time this method was called.
+
+        :param idx: (int) The v_point index whose projection needs to be updated.
+        :param b_pos: (int) The buffer position of the v_point.
+        :param shiftscale: (tuple) The shift and scale value of the canvas.
+
+        """
+        if self.last_shiftscale != shiftscale:
+            logging.debug("Updating view position of %s, shiftscale %s", idx, shiftscale)
+            self.v_points[idx] = Vec(self.cnvs.buffer_to_view(b_pos))
+
+    def _calc_edges(self):
+        """Calculate the l, r, t, b coordinates of each edge according to the hover margin."""
+        if self.right_click_finished:
+            for idx, point in enumerate(self.v_points):
+                self.v_edges.update({
+                    f"x{idx}_l": point.x - self.hover_margin,
+                    f"x{idx}_r": point.x + self.hover_margin,
+                    f"y{idx}_t": point.y - self.hover_margin,
+                    f"y{idx}_b": point.y + self.hover_margin,
+                })
+
+    def get_hover(self, vpos):
+        """
+        Check if the given position is on/near a selection edge or inside the selection.
+
+        :return: (bool) Return False if not hovering, or the type of hover
+
+        """
+        if self.v_edges:
+
+            vx, vy = vpos
+
+            if self.edit_mode == EDIT_MODE_POINT:
+                for idx, _ in enumerate(self.v_points):
+                    if (
+                            self.v_edges[f"x{idx}_l"] < vx < self.v_edges[f"x{idx}_r"] and
+                            self.v_edges[f"y{idx}_t"] < vy < self.v_edges[f"y{idx}_b"]
+                    ):
+                        return gui.HOVER_EDGE, idx
+
+            if point_in_polygon(vpos, self.v_points):
+                return gui.HOVER_SELECTION, None
+
+        return gui.HOVER_NONE, None
+
+    def _on_left_down(self, evt):
+        """Call this method from the 'on_left_down' method of super classes."""
+        if not self.right_click_finished:
+            ClickMixin._on_left_down(self, evt)
+        else:
+            DragMixin._on_left_down(self, evt)
+
+            if self.left_dragging:
+                hover, _ = self.get_hover(self.drag_v_start_pos)
+
+                if not hover:
+                    return
+                if hover == gui.HOVER_SELECTION:
+                    # Clicked inside selection, so start dragging
+                    self.start_drag()
+                elif hover == gui.HOVER_EDGE:
+                    # Clicked on an edit point (e.g. an edge), so edit
+                    self.start_edit(hover)
+
+    def _on_left_up(self, evt):
+        """Call this method from the 'on_left_up' method of super classes."""
+        if not self.right_click_finished:
+            ClickMixin._on_left_up(self, evt)
+        else:
+            DragMixin._on_left_up(self, evt)
+
+        self.clear_drag()
+        self.selection_mode = SEL_MODE_NONE
+        self.edit_hover = None
+
+    def _on_right_up(self, evt):
+        if not self.right_click_finished:
+            ClickMixin._on_right_up(self, evt)
+
+    def _on_right_down(self, evt):
+        if not self.right_click_finished:
+            ClickMixin._on_right_down(self, evt)
+
+    def _on_motion(self, evt):
+        if not self.right_click_finished:
+            ClickMixin._on_motion(self, evt)
+        else:
+            DragMixin._on_motion(self, evt)
+
+            self.hover, idx = self.get_hover(evt.Position)
+
+            if self.selection_mode:
+                if self.selection_mode == SEL_MODE_EDIT:
+                    self.update_edit(idx)
+                elif self.selection_mode == SEL_MODE_DRAG:
+                    self.update_drag()
 
 
 class PixelDataMixin(object):

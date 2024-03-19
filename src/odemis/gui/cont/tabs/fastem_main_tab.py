@@ -37,6 +37,9 @@ from odemis.gui.model import (
     TOOL_NONE,
     TOOL_ACT_ZOOM_FIT,
     TOOL_RULER,
+    TOOL_RECTANGLE,
+    TOOL_ELLIPSE,
+    TOOL_POLYGON,
     FastEMMainTabGUIData,
     StreamView
 )
@@ -71,6 +74,9 @@ class FastEMMainTab(Tab):
             TOOL_NONE,
             TOOL_ACT_ZOOM_FIT,
             TOOL_RULER,
+            TOOL_RECTANGLE,
+            TOOL_ELLIPSE,
+            TOOL_POLYGON,
         }
         super(FastEMMainTab, self).__init__(name, button, panel, main_frame, tab_data)
         # Flag to indicate the tab has been fully initialized or not. Some initialisation
@@ -169,6 +175,9 @@ class FastEMMainTab(Tab):
         self.tb = panel.toolbar
         self.tb.add_tool(TOOL_ACT_ZOOM_FIT, self.view_controller.fitViewToContent)
         self.tb.add_tool(TOOL_RULER, self.tab_data_model.tool)
+        self.tb.add_tool(TOOL_RECTANGLE, self.tab_data_model.tool)
+        self.tb.add_tool(TOOL_ELLIPSE, self.tab_data_model.tool)
+        self.tb.add_tool(TOOL_POLYGON, self.tab_data_model.tool)
 
     def on_pnl_user_settings_size(self, _):
         """Handle the wx.EVT_SIZE event for pnl_user_settings"""

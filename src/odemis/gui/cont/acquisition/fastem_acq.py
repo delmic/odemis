@@ -387,7 +387,7 @@ class FastEMAcquiController(object):
                 roa.roc_2.subscribe(self._on_va_change)
                 roa.roc_3.subscribe(self._on_va_change)
                 # update the estimated acquisition time when the roa is resized
-                roa.coordinates.subscribe(self._on_update_acquisition_time)
+                roa.points.subscribe(self._on_update_acquisition_time)
                 self.subscribed_roas.add(roa)
         self._update_roa_count()
         self.check_acquire_button()
@@ -725,8 +725,8 @@ class FastEMCalibrationController:
             if calibration.regions_controller:
                 calibration.panel.Enable(not mode)
                 for roc_ctrl in calibration.regions_controller.roc_ctrls.values():
-                    if roc_ctrl.overlay:
-                        roc_ctrl.overlay.active.value = not mode
+                    if roc_ctrl.shape:
+                        roc_ctrl.shape.active.value = not mode
 
 
 class FastEMScintillatorCalibrationController(FastEMCalibrationController):
