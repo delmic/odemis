@@ -26,7 +26,7 @@ import sys
 import threading
 import time
 from ctypes import *
-from typing import Optional, Dict
+from typing import Optional, Dict, List, Tuple, Union  # Must be after ctypes
 
 import odemis
 from odemis import model
@@ -324,49 +324,55 @@ class Shamrock(model.Actuator):
     it also work via the direct USB connection.
     Note: we don't handle changing turret (live).
     """
-    def __init__(self, name, role, device, camera=None, accessory=None,
-                 slitleds_settle_time=1e-3, slits=None,
+    def __init__(self, name: str, role: str,
+                 device: Union[str, int],
+                 camera=None,
+                 accessory: Optional[str] = None,
+                 slitleds_settle_time: float = 1e-3,
+                 slits: Optional[Dict[int, Union[str, List[str]]]] = None,
                  iris: Optional[Dict[int, str]] = None,
-                 bands=None, rng=None,
-                 fstepsize=1e-6, drives_shutter=None, dependencies=None,
+                 bands: Optional[Dict[int, Union[List[float], str]]] = None,
+                 rng: Optional[Dict[str, Tuple[float, float]]] = None,
+                 fstepsize: float = 1e-6,
+                 drives_shutter: Optional[List[float]] = None,
+                 dependencies: Optional[Dict[str, model.HwComponent]] = None,
                  check_move: Optional[Dict[str, bool]] = None,
                  **kwargs):
         """
-        device (0<=int or str): if int, device number, if str serial number or
-          "fake" to use the simulator
-        camera (None or AndorCam2): Needed if the connection is done via the
-          I²C connector of the camera.
-        inverted (None): it is not allowed to invert the axes
-        slits (None, or dict int -> str, or dict int -> [str]): names of each slit,
-          for 1 to 4: in-side, in-direct, out-side, out-direct
-          Append "force_max" for a slit which requires to move to the maximum
-          value before going to the requested position. This is a workaround for
-          proper movement when the slit's reference switch doesn't work.
-        accessory (str or None): if "slitleds", then a TTL signal will be set to
-          high on line 1 whenever one of the slit leds might be turned on.
-        slitleds_settle_time (0 <= float): duration wait before (potentially)
-          turning on the slit leds. Useful to delay the move after the slitleds
-          interlock is set.
-        iris (None, or dict int -> str): for each iris (0=direct, 1=side) -> axis name.
-        bands (None or dict 1<=int<=6 -> 2-tuple of floats > 0 or str):
-          wavelength range or name of each filter for the filter wheel from 1->6.
-          Positions without filters do not need to be defined.
-        fstepsize (0<float): size of one step on the focus actuator. Not very
-          important, mostly useful for providing to the user a rough idea of how
-          much the image will change after a move.
-        rng (dict str -> (float, float)): the min/max values for each axis.
-          They should within the standard hardware limits. If an axis is not
-          specified, the standard hardware limits are used.
-          For now it *only* works for the focus axis.
-        drives_shutter (list of float): flip-out angles for which the shutter
-          should be set to BNC (external) mode. Otherwise, the shutter is left
-          opened.
-        dependencies (None or dict str -> HwComponent): if the key starts with
-          "led_prot", it will set the .protection to True any time that the
-          slit leds could be turned on.
+        :param device (0<=int or str): if int, device number, if str serial number or
+        "fake" to use the simulator
+        :param camera (None or AndorCam2): Needed if the connection is done via the
+        I²C connector of the camera.
+        :param accessory: if "slitleds", then a TTL signal will be set to
+        high on line 1 whenever one of the slit leds might be turned on.
+        :param slitleds_settle_time (0 <= float): duration wait before (potentially)
+        turning on the slit leds. Useful to delay the move after the slitleds
+        interlock is set.
+        :param slits (None, or dict int -> str, or dict int -> [str]): names of each slit,
+        for 1 to 4: in-side, in-direct, out-side, out-direct
+        Append "force_max" for a slit which requires to move to the maximum
+        value before going to the requested position. This is a workaround for
+        proper movement when the slit's reference switch doesn't work.
+        :param iris: for each iris (0=direct, 1=side) -> axis name.
+        :param bands (None or dict 1<=int<=6 -> 2-tuple of floats > 0 or str):
+        wavelength range or name of each filter for the filter wheel from 1->6.
+        Positions without filters do not need to be defined.
+        :param rng (dict str -> (float, float)): the min/max values for each axis.
+        They should within the standard hardware limits. If an axis is not
+        specified, the standard hardware limits are used.
+        For now, it *only* works for the focus axis.
+        :param fstepsize (0<float): size of one step on the focus actuator. Not very
+        important, mostly useful for providing to the user a rough idea of how
+        much the image will change after a move.
+        :param drives_shutter: flip-out angles for which the shutter should be set
+        to BNC (external) mode. Otherwise, the shutter is left opened.
+        :param dependencies (None or dict str -> HwComponent): if the key starts with
+        "led_prot", it will set the .protection to True any time that the
+        slit leds could be turned on.
         :param check_move: Name of the axis -> bool: If True (default), after move, raise an error if
         that position is not the expected one. If False, if the position is not the expected one,
         just log a warning. Note: for now, only some axes are actually checked (flipper and band)
+        :param inverted: Must be None (or not passed), as it is not allowed to invert the axes.
         """
         # From the documentation:
         # If controlling the shamrock through I²C it is important that both the
