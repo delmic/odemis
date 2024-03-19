@@ -334,7 +334,7 @@ class Shamrock(model.Actuator):
           "led_prot", it will set the .protection to True any time that the
           slit leds could be turned on.
         :param check_move: Name of the axis -> bool: If True (default), after move, raise an error if
-        that the position is not the expected one. If False, if the position is not the expected one,
+        that position is not the expected one. If False, if the position is not the expected one,
         just log a warning. Note: for now, only some axes are actually checked (flipper and band)
         """
         # From the documentation:
