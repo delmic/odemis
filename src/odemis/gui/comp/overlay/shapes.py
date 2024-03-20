@@ -39,7 +39,10 @@ class EditableShape(metaclass=ABCMeta):
         self.selected = model.BooleanVA(True)
         # list of nested points (x, y) representing the shape and whose value will be used
         # during ROA acquisition
+        # The points VA is set to _points if the shape is selected
         self.points = model.ListVA()
+        # Useful for internal points manipulation
+        self._points = []
         self.cnvs = cnvs
 
     def get_bounding_box(self) -> Tuple[float, float, float, float]:
@@ -77,8 +80,10 @@ class EditableShape(metaclass=ABCMeta):
     def copy_shape(self, shape, shift: Tuple[float, float]):
         """
         Copy a shape's attributes and shift it.
+
         :param shape: the shape whose specific attributes needs to be copied.
         :param shift: the shift in (x, y).
+
         """
         pass
 
@@ -189,7 +194,6 @@ class ShapesOverlay(WorldOverlay):
         shape.copy_shape(self._shape_to_copy, (shift_x, shift_y))
 
     def on_left_down(self, evt):
-        """Start drawing a shape if the overlay is active and there is no selected shape."""
         if not self.active.value:
             return super().on_left_down(evt)
 
@@ -210,7 +214,7 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_char(evt)
 
-        if self._selected_shape and self._selected_shape.selected.value:
+        if self._selected_shape:
             if evt.GetKeyCode() == wx.WXK_DELETE:
                 self.remove_shape(self._selected_shape)
             elif evt.GetKeyCode() == wx.WXK_ESCAPE:

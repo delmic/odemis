@@ -27,7 +27,7 @@ import wx
 
 import odemis.gui as gui
 from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
-from odemis.gui.comp.overlay.base import LineEditingMixin, Vec, WorldOverlay
+from odemis.gui.comp.overlay.base import SEL_MODE_ROTATION, LineEditingMixin, Vec, WorldOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
 from odemis.util.raster import point_in_polygon
@@ -46,8 +46,9 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         EditableShape.__init__(self, cnvs)
 
         self._label = self.add_label("", colour=self.colour, align=wx.ALIGN_CENTRE_HORIZONTAL)
-        # The points VA is set to _points if the shape is selected
-        self._points = []
+        self._rotation_label = self.add_label(
+            "", colour=self.colour, align=wx.ALIGN_CENTRE_HORIZONTAL
+        )
         self.v_point.subscribe(self._on_v_point)
 
     def copy_shape(self, shape, shift):
@@ -126,18 +127,6 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         else:
             WorldOverlay.on_right_up(self, evt)
 
-    def on_enter(self, evt):
-        if self.active.value:
-            self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
-        else:
-            WorldOverlay.on_enter(self, evt)
-
-    def on_leave(self, evt):
-        if self.active.value:
-            self.cnvs.reset_default_cursor()
-        else:
-            WorldOverlay.on_leave(self, evt)
-
     def on_motion(self, evt):
         if self.active.value and self.selected.value:
             LineEditingMixin._on_motion(self, evt)
@@ -146,6 +135,8 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                     self.cnvs.set_dynamic_cursor(gui.DRAG_CURSOR)
                 elif self.hover == gui.HOVER_EDGE:
                     self.cnvs.set_dynamic_cursor(wx.CURSOR_SIZING)
+                elif self.hover == gui.HOVER_ROTATION:
+                    self.cnvs.set_dynamic_cursor(wx.CURSOR_MAGNIFIER)
                 else:
                     self.cnvs.reset_dynamic_cursor()
             else:
@@ -153,6 +144,27 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
             self.cnvs.update_drawing()
         else:
             WorldOverlay.on_motion(self, evt)
+
+    def draw_edges(self, ctx):
+        # Draw the edit and rotation points
+        b_rotation = Vec(self.cnvs.view_to_buffer(self.v_rotation))
+        ctx.set_dash([])
+        ctx.set_line_width(1)
+        ctx.set_source_rgba(0.1, 0.5, 0.8, 0.8)  # Dark blue-green
+        ctx.arc(b_rotation.x, b_rotation.y, 4, 0, 2 * math.pi)
+        ctx.fill()
+        offset = self.cnvs.get_half_buffer_size()
+        for point in self._points:
+            b_pos = self.cnvs.phys_to_buffer(point, offset)
+            ctx.arc(b_pos[0], b_pos[1], 4, 0, 2 * math.pi)
+            ctx.fill()
+        ctx.stroke()
+
+    def draw_rotation_label(self, ctx):
+        self._rotation_label.text = units.readable_str(math.degrees(self.rotation), "°", sig=4)
+        self._rotation_label.pos = self.cnvs.view_to_buffer(self.center)
+        self._rotation_label.colour = self.colour
+        self._rotation_label.draw(ctx)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4, dash=True):
         """Draw the selection as a polygon"""
@@ -191,6 +203,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                 b_current_pos = self.cnvs.phys_to_buffer(p_current_pos, offset)
                 ctx.move_to(*b_last_point)
                 ctx.line_to(*b_current_pos)
+                ctx.stroke()
 
                 # label creation
                 # unit vector for physical coordinates
@@ -231,9 +244,15 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                         self._label.font_size = 9
                     else:
                         self._label.font_size = 14
+                self._label.colour = (1, 1, 1)  # white
+                self._label.background = (0, 0, 0)  # background
                 self._label.draw(ctx)
             else:
                 ctx.close_path()
+                ctx.stroke()
                 self._calc_edges()
-
-            ctx.stroke()
+                # Draw the rotation point after calculating the edges
+                self.draw_edges(ctx)
+                # Draw the rotation label
+                if self.selection_mode == SEL_MODE_ROTATION:
+                    self.draw_rotation_label(ctx)

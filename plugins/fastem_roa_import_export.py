@@ -171,15 +171,14 @@ class ImportExportROAPlugin(Plugin):
                 rectangle_overlay.active.value = True
                 project_ctrl.add_roa(rectangle_overlay, name=roa_name)
                 # Finally assign the rectangle coordinates value to draw it
-                # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
                 points = [
                     (roa_coordinates[0], roa_coordinates[1]),  # xmin, ymin
-                    (roa_coordinates[2], roa_coordinates[1]),  # xmax, ymin
                     (roa_coordinates[0], roa_coordinates[3]),  # xmin, ymax
                     (roa_coordinates[2], roa_coordinates[3]),  # xmax, ymax
+                    (roa_coordinates[2], roa_coordinates[1]),  # xmax, ymin
                 ]
                 rectangle_overlay.points.value = points
-                rectangle_overlay.set_physical_sel(roa_coordinates)
+                rectangle_overlay.set_physical_sel(points)
             self._cnvs.reset_default_cursor()
 
     def _write_data_to_csv_file(self, filepath: str) -> None:

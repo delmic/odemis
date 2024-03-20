@@ -33,8 +33,11 @@ They will *only* receive mouse events if they are active!
 from abc import ABCMeta, abstractmethod
 import logging
 import math
+from typing import Tuple, Optional
 
 import cairo
+import numpy
+
 import wx
 
 from odemis import model
@@ -618,6 +621,7 @@ SEL_MODE_NONE = 0
 SEL_MODE_CREATE = 1
 SEL_MODE_EDIT = 2
 SEL_MODE_DRAG = 3
+SEL_MODE_ROTATION = 6
 EDIT_MODE_POINT = 4
 EDIT_MODE_BOX = 5
 
@@ -1079,6 +1083,446 @@ class SelectionMixin(DragMixin):
         # Cursor manipulation should be done in superclasses
 
 
+class RectangleMixin(DragMixin):
+    """
+    These areas are always expressed in view port coordinates.
+    Conversions to buffer and physical coordinates should be done using subclasses.
+
+    Remember that the following methods *MUST* be called from the super class:
+
+    _on_left_down
+    _on_left_up
+    _on_motion
+
+    Rectangle:
+        1 -------------- 2
+        |                |
+        |                |
+        |                |
+        4 -------------- 3
+
+    """
+
+    hover_margin = 10  # px
+
+    def __init__(self, colour=gui.SELECTION_COLOUR, center=(0, 0)):
+
+        DragMixin.__init__(self)
+
+        self.v_point1 = None
+        self.v_point2 = None
+        self.v_point3 = None
+        self.v_point4 = None
+
+        self.edit_v_start_pos = None  # The view port coordinates where a drag/edit originated
+        self.edit_hover = None  # What edge is being edited (gui.HOVER_*)
+        self.edit_v_point_idx = None
+
+        self.hover = gui.HOVER_NONE
+        self.hover_direction = "NS"  # "NS" or "WE"
+
+        # Selection modes (none, create, edit and drag)
+        self.selection_mode = SEL_MODE_NONE
+
+        # This attribute can be used to see if the canvas has shifted or scaled
+        self._last_shiftscale = None
+
+        self.v_edges = {}
+
+        # TODO: Move these to the super classes
+        self.colour = conversion.hex_to_frgba(colour)
+        self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
+        self.center = Vec(center)
+        self.rotation = 0  # radians
+        self.v_rotation = Vec(center)
+
+    def rotate_v_point(self, point: Vec, angle: float) -> Vec:
+        """Rotate a point (x, y) by an angle around the center point."""
+        dx = point.x - self.center.x
+        dy = point.y - self.center.y
+        x_new = self.center.x + dx * math.cos(angle) - dy * math.sin(angle)
+        y_new = self.center.y + dx * math.sin(angle) + dy * math.cos(angle)
+        return Vec((x_new, y_new))
+
+    # #### selection methods  #####
+
+    def start_selection(self):
+        """ Start a new selection """
+
+        logging.debug("Starting selection")
+
+        self.selection_mode = SEL_MODE_CREATE
+        self.v_point1 = self.v_point3 = self.drag_v_start_pos
+
+    def update_selection(self):
+        """ Update the selection to reflect the given mouse position """
+
+        # Cast to list, because we need to be able to alter the x and y separately
+        self.v_point3 = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        self.v_point2 = Vec(self.v_point3.x, self.v_point1.y)
+        self.v_point4 = Vec(self.v_point1.x, self.v_point3.y)
+
+    def stop_selection(self):
+        """ End the creation of the current selection """
+
+        logging.debug("Stopping selection")
+
+        if self.v_point1 == self.v_point3:
+            logging.debug("Selection too small")
+            self.clear_selection()
+
+            self._calc_edges()
+            self.selection_mode = SEL_MODE_NONE
+            self.edit_hover = None
+
+    def clear_selection(self):
+        """ Clear the selection """
+        logging.debug("Clearing selections")
+
+        DragMixin.clear_drag(self)
+
+        self.selection_mode = SEL_MODE_NONE
+
+        self.v_point1 = None
+        self.v_point2 = None
+        self.v_point3 = None
+        self.v_point4 = None
+
+        self.v_edges = {}
+
+    # #### END selection methods  #####
+
+    # #### edit methods  #####
+
+    def start_edit(self, hover, idx):
+        """
+        Start an edit to the current selection.
+
+        :param hover: (int) Compound value of gui.HOVER_* representing the hovered edges.
+        :param idx: (int) The v_point index which needs to be edited.
+
+        """
+        self.edit_v_start_pos = self.drag_v_start_pos
+        self.edit_hover = hover
+        self.selection_mode = SEL_MODE_EDIT
+        self.edit_v_point_idx = idx
+
+    def line_orientation(self, point1, point2):
+        """
+        Calculate the orientation (direction) of a line defined by two points.
+        """
+        return numpy.arctan2(point2[1] - point1[1], point2[0] - point1[0])
+
+    def line_through_point(self, point, orientation):
+        """
+        Generate a line passing through a given point with a specified orientation.
+        """
+        if abs(orientation) == math.pi / 2:  # line is vertical
+            intercept = point[0]
+        else:
+            intercept = point[1] - numpy.tan(orientation) * point[0]
+        return orientation, intercept
+
+    def projection_on_line(self, point, line) -> Vec:
+        """
+        Calculate the projection of a point onto a line.
+        """
+        orientation, intercept = line
+        if abs(orientation) == math.pi / 2:    # line is vertical
+            x_projection = intercept
+            y_projection = point[1]
+        else:
+            slope = numpy.tan(orientation)
+            x_projection = (point[0] + slope * (point[1] - intercept)) / (1 + slope**2)
+            y_projection = slope * x_projection + intercept
+        return Vec(x_projection, y_projection)
+
+    def update_edit(self):
+        """ Adjust the selection according to the given position and the current edit action """
+        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        if self.edit_v_point_idx and (self.edit_hover == gui.HOVER_LINE or self.edit_hover == gui.HOVER_EDGE):
+            if self.edit_v_point_idx == 1:
+                orientation = self.line_orientation(self.v_point1, self.v_point2)
+                line_through_given_point = self.line_through_point(current_pos, orientation)
+                self.v_point1 = self.projection_on_line(self.v_point1, line_through_given_point)
+                self.v_point2 = self.projection_on_line(self.v_point2, line_through_given_point)
+                if self.edit_hover == gui.HOVER_EDGE:
+                    orientation = self.line_orientation(self.v_point1, self.v_point4)
+                    line_through_given_point = self.line_through_point(current_pos, orientation)
+                    self.v_point1 = self.projection_on_line(self.v_point1, line_through_given_point)
+                    self.v_point4 = self.projection_on_line(self.v_point4, line_through_given_point)
+            elif self.edit_v_point_idx == 2:
+                orientation = self.line_orientation(self.v_point2, self.v_point3)
+                line_through_given_point = self.line_through_point(current_pos, orientation)
+                self.v_point2 = self.projection_on_line(self.v_point2, line_through_given_point)
+                self.v_point3 = self.projection_on_line(self.v_point3, line_through_given_point)
+                if self.edit_hover == gui.HOVER_EDGE:
+                    orientation = self.line_orientation(self.v_point2, self.v_point1)
+                    line_through_given_point = self.line_through_point(current_pos, orientation)
+                    self.v_point2 = self.projection_on_line(self.v_point2, line_through_given_point)
+                    self.v_point1 = self.projection_on_line(self.v_point1, line_through_given_point)
+            elif self.edit_v_point_idx == 3:
+                orientation = self.line_orientation(self.v_point3, self.v_point4)
+                line_through_given_point = self.line_through_point(current_pos, orientation)
+                self.v_point3 = self.projection_on_line(self.v_point3, line_through_given_point)
+                self.v_point4 = self.projection_on_line(self.v_point4, line_through_given_point)
+                if self.edit_hover == gui.HOVER_EDGE:
+                    orientation = self.line_orientation(self.v_point3, self.v_point2)
+                    line_through_given_point = self.line_through_point(current_pos, orientation)
+                    self.v_point3 = self.projection_on_line(self.v_point3, line_through_given_point)
+                    self.v_point2 = self.projection_on_line(self.v_point2, line_through_given_point)
+            elif self.edit_v_point_idx == 4:
+                orientation = self.line_orientation(self.v_point4, self.v_point1)
+                line_through_given_point = self.line_through_point(current_pos, orientation)
+                self.v_point4 = self.projection_on_line(self.v_point4, line_through_given_point)
+                self.v_point1 = self.projection_on_line(self.v_point1, line_through_given_point)
+                if self.edit_hover == gui.HOVER_EDGE:
+                    orientation = self.line_orientation(self.v_point4, self.v_point3)
+                    line_through_given_point = self.line_through_point(current_pos, orientation)
+                    self.v_point4 = self.projection_on_line(self.v_point4, line_through_given_point)
+                    self.v_point3 = self.projection_on_line(self.v_point3, line_through_given_point)
+
+    def stop_edit(self):
+        """ End the selection edit """
+        self.stop_selection()
+
+    # #### END edit methods  #####
+
+    # #### drag methods  #####
+
+    def start_rotation(self):
+        self._calc_center()
+        dx = self.center.x - self.drag_v_start_pos.x
+        dy = self.center.y - self.drag_v_start_pos.y
+        self.rotation = math.atan2(dy, dx) % (2 * math.pi)
+        self.selection_mode = SEL_MODE_ROTATION
+
+    def update_rotation(self):
+        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        dx = self.center.x - current_pos.x
+        dy = self.center.y - current_pos.y
+        current_rotation = math.atan2(dy, dx) % (2 * math.pi)
+        diff_angle = current_rotation - self.rotation
+        self.v_point1 = self.rotate_v_point(self.v_point1, diff_angle)
+        self.v_point2 = self.rotate_v_point(self.v_point2, diff_angle)
+        self.v_point3 = self.rotate_v_point(self.v_point3, diff_angle)
+        self.v_point4 = self.rotate_v_point(self.v_point4, diff_angle)
+        self.rotation = current_rotation
+
+    def start_drag(self):
+        self.edit_v_start_pos = self.drag_v_start_pos
+        self.selection_mode = SEL_MODE_DRAG
+
+    def update_drag(self):
+        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        diff = Vec(current_pos.x - self.edit_v_start_pos.x,
+                   current_pos.y - self.edit_v_start_pos.y)
+        self.v_point1 = Vec(self.v_point1.x + diff.x,
+                            self.v_point1.y + diff.y)
+        self.v_point2 = Vec(self.v_point2.x + diff.x,
+                            self.v_point2.y + diff.y)
+        self.v_point3 = Vec(self.v_point3.x + diff.x,
+                            self.v_point3.y + diff.y)
+        self.v_point4 = Vec(self.v_point4.x + diff.x,
+                            self.v_point4.y + diff.y)
+        self.edit_v_start_pos = current_pos
+
+    def stop_drag(self):
+        self.stop_selection()
+
+    # #### END drag methods  #####
+
+    def update_projection(self, b_point1, b_point2, b_point3, b_point4, shiftscale):
+        """ Update the view positions of the selection if the cnvs view has shifted or scaled
+        compared to the last time this method was called
+
+        """
+
+        if self._last_shiftscale != shiftscale:
+            logging.debug("Updating view position of selection %s", shiftscale)
+            self._last_shiftscale = shiftscale
+            self.v_point1 = Vec(self.cnvs.buffer_to_view(b_point1))
+            self.v_point2 = Vec(self.cnvs.buffer_to_view(b_point2))
+            self.v_point3 = Vec(self.cnvs.buffer_to_view(b_point3))
+            self.v_point4 = Vec(self.cnvs.buffer_to_view(b_point4))
+
+    def _calc_center(self):
+        """Calculate the center of selection."""
+        if self.v_point1 and self.v_point3:
+            center_x = (self.v_point1.x + self.v_point3.x) / 2
+            center_y = (self.v_point1.y + self.v_point3.y) / 2
+            self.center = Vec(center_x, center_y)
+
+    def _calc_edges(self):
+        """ Calculate the inner and outer edges of the selection according to the hover margin """
+
+        if self.v_point1 and self.v_point2 and self.v_point3 and self.v_point4:
+
+            angle = math.atan2(self.v_point1.y - self.center.y, self.v_point1.x - self.center.x)
+            self.v_rotation = Vec(
+                self.v_point1.x + 2 * self.hover_margin * math.cos(angle),
+                self.v_point1.y + 2 * self.hover_margin * math.sin(angle),
+            )
+            self.v_edges.update(
+                {
+                    "r_l": self.v_rotation.x - self.hover_margin,
+                    "r_r": self.v_rotation.x + self.hover_margin,
+                    "r_t": self.v_rotation.y - self.hover_margin,
+                    "r_b": self.v_rotation.y + self.hover_margin,
+                }
+            )
+            self.v_edges.update(
+                {
+                    "mid_1_l": (self.v_point1.x + self.v_point2.x) / 2 - self.hover_margin,
+                    "mid_1_r": (self.v_point1.x + self.v_point2.x) / 2 + self.hover_margin,
+                    "mid_1_t": (self.v_point1.y + self.v_point2.y) / 2 - self.hover_margin,
+                    "mid_1_b": (self.v_point1.y + self.v_point2.y) / 2 + self.hover_margin,
+                    "mid_2_l": (self.v_point2.x + self.v_point3.x) / 2 - self.hover_margin,
+                    "mid_2_r": (self.v_point2.x + self.v_point3.x) / 2 + self.hover_margin,
+                    "mid_2_t": (self.v_point2.y + self.v_point3.y) / 2 - self.hover_margin,
+                    "mid_2_b": (self.v_point2.y + self.v_point3.y) / 2 + self.hover_margin,
+                    "mid_3_l": (self.v_point3.x + self.v_point4.x) / 2 - self.hover_margin,
+                    "mid_3_r": (self.v_point3.x + self.v_point4.x) / 2 + self.hover_margin,
+                    "mid_3_t": (self.v_point3.y + self.v_point4.y) / 2 - self.hover_margin,
+                    "mid_3_b": (self.v_point3.y + self.v_point4.y) / 2 + self.hover_margin,
+                    "mid_4_l": (self.v_point4.x + self.v_point1.x) / 2 - self.hover_margin,
+                    "mid_4_r": (self.v_point4.x + self.v_point1.x) / 2 + self.hover_margin,
+                    "mid_4_t": (self.v_point4.y + self.v_point1.y) / 2 - self.hover_margin,
+                    "mid_4_b": (self.v_point4.y + self.v_point1.y) / 2 + self.hover_margin,
+                    "1_l": self.v_point1.x - self.hover_margin,
+                    "1_r": self.v_point1.x + self.hover_margin,
+                    "1_t": self.v_point1.y - self.hover_margin,
+                    "1_b": self.v_point1.y + self.hover_margin,
+                    "2_l": self.v_point2.x - self.hover_margin,
+                    "2_r": self.v_point2.x + self.hover_margin,
+                    "2_t": self.v_point2.y - self.hover_margin,
+                    "2_b": self.v_point2.y + self.hover_margin,
+                    "3_l": self.v_point3.x - self.hover_margin,
+                    "3_r": self.v_point3.x + self.hover_margin,
+                    "3_t": self.v_point3.y - self.hover_margin,
+                    "3_b": self.v_point3.y + self.hover_margin,
+                    "4_l": self.v_point4.x - self.hover_margin,
+                    "4_r": self.v_point4.x + self.hover_margin,
+                    "4_t": self.v_point4.y - self.hover_margin,
+                    "4_b": self.v_point4.y + self.hover_margin,
+                }
+            )
+
+    def update_hover_direction(self, idx):
+        if idx == 1:
+            point1 = self.v_point1
+            point2 = self.v_point2
+        elif idx == 2:
+            point1 = self.v_point2
+            point2 = self.v_point3
+        elif idx == 3:
+            point1 = self.v_point3
+            point2 = self.v_point4
+        elif idx == 4:
+            point1 = self.v_point4
+            point2 = self.v_point1
+        dx = abs(point1.x - point2.x)
+        dy = abs(point1.y - point2.y)
+        return gui.HOVER_DIRECTION_EW if dy > dx else gui.HOVER_DIRECTION_NS
+
+    def get_hover(self, vpos) -> Tuple[int, Optional[int]]:
+        """
+        Check if the given position is on/near a selection edge or inside the selection.
+
+        :return: (tuple) the first element is False if not hovering, or the type of hover.
+            The second element is the index of the v_point if the edit mode is EDIT_MODE_POINT.
+
+        """
+
+        if self.v_edges:
+
+            vx, vy = vpos
+
+            if (
+                self.v_edges["r_l"] < vx < self.v_edges["r_r"] and
+                self.v_edges["r_t"] < vy < self.v_edges["r_b"]
+            ):
+                return gui.HOVER_ROTATION, None
+
+            for i in range(1, 5):
+                if (
+                    self.v_edges[f"mid_{i}_l"] < vx < self.v_edges[f"mid_{i}_r"] and
+                    self.v_edges[f"mid_{i}_t"] < vy < self.v_edges[f"mid_{i}_b"]
+                ):
+                    self.hover_direction = self.update_hover_direction(i)
+                    return gui.HOVER_LINE, i
+                elif (
+                    self.v_edges[f"{i}_l"] < vx < self.v_edges[f"{i}_r"] and
+                    self.v_edges[f"{i}_t"] < vy < self.v_edges[f"{i}_b"]
+                ):
+                    return gui.HOVER_EDGE, i
+
+            # If position outside outer box
+            if point_in_polygon(
+                vpos,
+                [self.v_point1, self.v_point2, self.v_point3, self.v_point4]
+            ):
+                return gui.HOVER_SELECTION, None
+
+        return gui.HOVER_NONE, None
+
+    def _on_left_down(self, evt):
+        """ Call this method from the 'on_left_down' method of super classes """
+
+        DragMixin._on_left_down(self, evt)
+
+        if self.left_dragging:
+            hover, idx = self.get_hover(self.drag_v_start_pos)
+
+            if not hover:
+                # Clicked outside selection, so create new selection
+                self.start_selection()
+            elif hover == gui.HOVER_SELECTION:
+                # Clicked inside selection or near line, so start dragging
+                self.start_drag()
+            elif hover == gui.HOVER_ROTATION:
+                # Clicked on the rotation point
+                self.start_rotation()
+            else:
+                # Clicked on an edit point (e.g. an edge or start or end point), so edit
+                self.start_edit(hover, idx)
+
+    def _on_left_up(self, evt):
+        """ Call this method from the 'on_left_up' method of super classes"""
+
+        DragMixin._on_left_up(self, evt)
+
+        # IMPORTANT: The check for selection clearing includes the left drag attribute for the
+        # following reason: When the (test) window was maximized by double clicking on the title bar
+        # of the window, the second 'mouse up' event would be processed by the overlay, causing it
+        # to clear any selection. Check for `left_dragging` makes sure that the mouse up is always
+        # paired with on of our own mouse downs.
+        if self.selection_mode == SEL_MODE_NONE and self.left_dragging:
+            self.clear_selection()
+        else:  # Editing an existing selection
+            self.stop_selection()
+
+    def _on_motion(self, evt):
+
+        DragMixin._on_motion(self, evt)
+
+        self.hover, _ = self.get_hover(evt.Position)
+
+        if self.selection_mode:
+            if self.selection_mode == SEL_MODE_CREATE:
+                self.update_selection()
+            elif self.selection_mode == SEL_MODE_EDIT:
+                self.update_edit()
+            elif self.selection_mode == SEL_MODE_DRAG:
+                self.update_drag()
+            elif self.selection_mode == SEL_MODE_ROTATION:
+                self.update_rotation()
+            self._calc_center()
+            self.cnvs.Refresh()
+
+        # Cursor manipulation should be done in superclasses
+
+
 class LineEditingMixin(ClickMixin, DragMixin):
     """
     This class will store the last selection created by clicking. It allows for manipulation
@@ -1107,6 +1551,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
         self.edit_v_start_pos = None  # The view port coordinates where a drag/edit originated
         self.edit_hover = None  # What edge is being edited (gui.HOVER_*)
         self.edit_mode = edit_mode
+        self.edit_v_point_idx = None
 
         self.hover = gui.HOVER_NONE
         self.hover_margin = 10  # px
@@ -1123,7 +1568,21 @@ class LineEditingMixin(ClickMixin, DragMixin):
         # TODO: Move these to the super classes
         self.colour = conversion.hex_to_frgba(colour)
         self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
-        self.center = center
+        self.center = Vec(center)
+        self.rotation = 0  # radians
+        self.v_rotation = Vec(center)
+
+    def rotate_v_points(self, angle: float) -> None:
+        for idx, point in enumerate(self.v_points):
+            self.v_points[idx] = self.rotate_v_point(point, angle)
+
+    def rotate_v_point(self, point: Vec, angle: float) -> Vec:
+        """Rotate a point (x, y) by an angle around the center point."""
+        dx = point.x - self.center.x
+        dy = point.y - self.center.y
+        x_new = self.center.x + dx * math.cos(angle) - dy * math.sin(angle)
+        y_new = self.center.y + dx * math.sin(angle) + dy * math.cos(angle)
+        return Vec(x_new, y_new)
 
     def stop_selection(self):
         """End the creation of the current selection."""
@@ -1143,28 +1602,25 @@ class LineEditingMixin(ClickMixin, DragMixin):
 
     # #### edit methods  #####
 
-    def start_edit(self, hover):
+    def start_edit(self, hover, idx):
         """
         Start an edit to the current selection.
 
-        :param hover: (int) Compound value of gui.HOVER_* representing the hovered edges
+        :param hover: (int) Compound value of gui.HOVER_* representing the hovered edges.
+        :param idx: (int) The v_point index which needs to be edited.
 
         """
         self.edit_v_start_pos = self.drag_v_start_pos
         self.edit_hover = hover
         self.selection_mode = SEL_MODE_EDIT
+        self.edit_v_point_idx = idx
 
-    def update_edit(self, idx):
-        """
-        Adjust the selection according to the given position and the current edit action.
-
-        :param idx: (int) The v_point index which needs to be edited.
-
-        """
+    def update_edit(self):
+        """Adjust the selection according to the given position and the current edit action."""
         current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
         if self.edit_mode == EDIT_MODE_POINT:
-            if idx is not None and self.edit_hover == gui.HOVER_EDGE:
-                self.v_points[idx] = current_pos
+            if self.edit_v_point_idx is not None and self.edit_hover == gui.HOVER_EDGE:
+                self.v_points[self.edit_v_point_idx] = current_pos
 
     def stop_edit(self):
         """ End the selection edit."""
@@ -1173,6 +1629,22 @@ class LineEditingMixin(ClickMixin, DragMixin):
     # #### END edit methods  #####
 
     # #### drag methods  #####
+
+    def start_rotation(self):
+        self._calc_center()
+        dx = self.center.x - self.drag_v_start_pos.x
+        dy = self.center.y - self.drag_v_start_pos.y
+        self.rotation = math.atan2(dy, dx) % (2 * math.pi)
+        self.selection_mode = SEL_MODE_ROTATION
+
+    def update_rotation(self):
+        current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
+        dx = self.center.x - current_pos.x
+        dy = self.center.y - current_pos.y
+        current_rotation = math.atan2(dy, dx) % (2 * math.pi)
+        diff_angle = current_rotation - self.rotation
+        self.rotate_v_points(diff_angle)
+        self.rotation = current_rotation
 
     def start_drag(self):
         self.edit_v_start_pos = self.drag_v_start_pos
@@ -1205,22 +1677,47 @@ class LineEditingMixin(ClickMixin, DragMixin):
             logging.debug("Updating view position of %s, shiftscale %s", idx, shiftscale)
             self.v_points[idx] = Vec(self.cnvs.buffer_to_view(b_pos))
 
+    def _calc_center(self):
+        """Calculate the center of selection."""
+        xmin, ymin, xmax, ymax = util.get_polygon_bbox(self.v_points)
+        self.center = Vec((xmin + xmax) / 2, (ymin + ymax) / 2)
+
     def _calc_edges(self):
         """Calculate the l, r, t, b coordinates of each edge according to the hover margin."""
         if self.right_click_finished:
-            for idx, point in enumerate(self.v_points):
-                self.v_edges.update({
-                    f"x{idx}_l": point.x - self.hover_margin,
-                    f"x{idx}_r": point.x + self.hover_margin,
-                    f"y{idx}_t": point.y - self.hover_margin,
-                    f"y{idx}_b": point.y + self.hover_margin,
-                })
 
-    def get_hover(self, vpos):
+            if self.edit_mode == EDIT_MODE_POINT:
+                # Rotation point near the first point
+                v_point_0 = self.v_points[0]
+                v_point_1 = self.v_points[1]
+                angle = math.atan2(v_point_1.y - v_point_0.y, v_point_1.x - v_point_0.x)
+                self.v_rotation = Vec(
+                    v_point_0.x - 2 * self.hover_margin * math.cos(angle),
+                    v_point_0.y - 2 * self.hover_margin * math.sin(angle),
+                )
+                self.v_edges.update(
+                    {
+                        "r_l": self.v_rotation.x - self.hover_margin,
+                        "r_r": self.v_rotation.x + self.hover_margin,
+                        "r_t": self.v_rotation.y - self.hover_margin,
+                        "r_b": self.v_rotation.y + self.hover_margin,
+                    }
+                )
+                # Vertices
+                for idx, point in enumerate(self.v_points):
+                    self.v_edges.update({
+                        f"x{idx}_l": point.x - self.hover_margin,
+                        f"x{idx}_r": point.x + self.hover_margin,
+                        f"y{idx}_t": point.y - self.hover_margin,
+                        f"y{idx}_b": point.y + self.hover_margin,
+                    })
+
+    def get_hover(self, vpos) -> Tuple[int, Optional[int]]:
         """
         Check if the given position is on/near a selection edge or inside the selection.
 
-        :return: (bool) Return False if not hovering, or the type of hover
+        :return: (tuple) the first element is False if not hovering, or the type of hover.
+            The second element is the index of the v_point if the edit mode is EDIT_MODE_POINT.
 
         """
         if self.v_edges:
@@ -1234,6 +1731,11 @@ class LineEditingMixin(ClickMixin, DragMixin):
                             self.v_edges[f"y{idx}_t"] < vy < self.v_edges[f"y{idx}_b"]
                     ):
                         return gui.HOVER_EDGE, idx
+                if (
+                    self.v_edges["r_l"] < vx < self.v_edges["r_r"] and
+                    self.v_edges["r_t"] < vy < self.v_edges["r_b"]
+                ):
+                    return gui.HOVER_ROTATION, None
 
             if point_in_polygon(vpos, self.v_points):
                 return gui.HOVER_SELECTION, None
@@ -1248,16 +1750,19 @@ class LineEditingMixin(ClickMixin, DragMixin):
             DragMixin._on_left_down(self, evt)
 
             if self.left_dragging:
-                hover, _ = self.get_hover(self.drag_v_start_pos)
+                hover, idx = self.get_hover(self.drag_v_start_pos)
 
                 if not hover:
                     return
                 if hover == gui.HOVER_SELECTION:
                     # Clicked inside selection, so start dragging
                     self.start_drag()
-                elif hover == gui.HOVER_EDGE:
+                elif hover == gui.HOVER_ROTATION:
+                    # Clicked on the rotation point
+                    self.start_rotation()
+                else:
                     # Clicked on an edit point (e.g. an edge), so edit
-                    self.start_edit(hover)
+                    self.start_edit(hover, idx)
 
     def _on_left_up(self, evt):
         """Call this method from the 'on_left_up' method of super classes."""
@@ -1284,13 +1789,15 @@ class LineEditingMixin(ClickMixin, DragMixin):
         else:
             DragMixin._on_motion(self, evt)
 
-            self.hover, idx = self.get_hover(evt.Position)
+            self.hover, _ = self.get_hover(evt.Position)
 
             if self.selection_mode:
                 if self.selection_mode == SEL_MODE_EDIT:
-                    self.update_edit(idx)
+                    self.update_edit()
                 elif self.selection_mode == SEL_MODE_DRAG:
                     self.update_drag()
+                elif self.selection_mode == SEL_MODE_ROTATION:
+                    self.update_rotation()
 
 
 class PixelDataMixin(object):
