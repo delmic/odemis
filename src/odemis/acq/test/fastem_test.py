@@ -838,13 +838,19 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
                       field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
         coordinates = (xmin, ymin, xmax, ymax)  # in m
+        points = [
+            (coordinates[0], coordinates[1]),  # xmin, ymin
+            (coordinates[2], coordinates[1]),  # xmax, ymin
+            (coordinates[0], coordinates[3]),  # xmin, ymax
+            (coordinates[2], coordinates[3]),  # xmax, ymax
+        ]
 
         # Create an ROA with the coordinates of the field.
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name, coordinates, None, None,
+        roa = fastem.FastEMROA(roa_name, None, None,
                                self.asm, self.multibeam, self.descanner,
                                self.mppc, overlap)
-
+        roa.points.value = points
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
