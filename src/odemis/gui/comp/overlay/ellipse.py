@@ -52,6 +52,19 @@ class EllipseOverlay(RectangleOverlay):
         # The points VA is set to _points if the shape is selected
         self._points = []
 
+    def copy_shape(self, shape, shift):
+        if not isinstance(shape, EllipseOverlay):
+            raise ValueError("Shape to be copied is not EllipseOverlay!")
+        rect = shape.get_physical_sel()
+        xmin, ymin, xmax, ymax = rect
+        xmin += shift[0]
+        xmax += shift[0]
+        ymin += shift[1]
+        ymax += shift[1]
+        self.set_physical_sel((xmin, ymin, xmax, ymax))
+        self.cnvs.update_drawing()
+        self.points.value = self._points
+
     def on_left_up(self, evt):
         """
         Check if left click was in ellipse. If so, activate the overlay. Otherwise, deactivate.

@@ -42,6 +42,18 @@ class RectangleOverlay(EditableShape, WorldSelectOverlay):
         EditableShape.__init__(self, cnvs)
         WorldSelectOverlay.__init__(self, cnvs, colour)
 
+    def copy_shape(self, shape, shift):
+        if not isinstance(shape, RectangleOverlay):
+            raise ValueError("Shape to be copied is not RectangleOverlay!")
+        rect = shape.get_physical_sel()
+        xmin, ymin, xmax, ymax = rect
+        xmin += shift[0]
+        xmax += shift[0]
+        ymin += shift[1]
+        ymax += shift[1]
+        self.set_physical_sel((xmin, ymin, xmax, ymax))
+        self.points.value = [(xmin, ymin), (xmin, ymax), (xmax, ymin), (xmax, ymax)]
+
     def is_point_in_shape(self, point):
         if self.points.value:
             return point_in_polygon(point, self.points.value)

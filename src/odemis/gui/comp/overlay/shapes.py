@@ -27,7 +27,6 @@ import wx
 from odemis import model, util
 from odemis.gui.comp.overlay.base import WorldOverlay
 
-
 class EditableShape(metaclass=ABCMeta):
     """
     This abstract EditableShape class forms the base for a series of classes that
@@ -57,16 +56,6 @@ class EditableShape(metaclass=ABCMeta):
         xmin, ymin, xmax, ymax = self.get_bounding_box()
         return (abs(xmin - xmax), abs(ymin - ymax))
 
-    def shift_points(self, shift: Tuple[float, float]):
-        """
-        Shift the points representing the shape.
-
-        :param shift: the shift in (x, y).
-
-        """
-        for idx, point in enumerate(self.points.value):
-            self.points.value[idx] = (point[0] + shift[0], point[1] + shift[1])
-
     @abstractmethod
     def is_point_in_shape(self, point: Tuple[float, float]) -> bool:
         """
@@ -82,6 +71,15 @@ class EditableShape(metaclass=ABCMeta):
     @abstractmethod
     def draw(self, ctx, shift=(0, 0), scale=1.0):
         """Draw the tool to given context."""
+        pass
+
+    @abstractmethod
+    def copy_shape(self, shape, shift: Tuple[float, float]):
+        """
+        Copy a shape's attributes and shift it.
+        :param shape: the shape whose specific attributes needs to be copied.
+        :param shift: the shift in (x, y).
+        """
         pass
 
 
@@ -106,6 +104,7 @@ class ShapesOverlay(WorldOverlay):
         # VA which changes value upon new shape's creation
         self.new_shape = model.VigilantAttribute(None, readonly=True)
         self._selected_shape = None
+        self._shape_to_copy = None
         self._shapes = []
         if tool and tool_va:
             self.tool = tool
@@ -154,7 +153,7 @@ class ShapesOverlay(WorldOverlay):
     def _get_shape(self, evt):
         """
         Find a shape corresponding to the given on_left_down event position.
-        Returns: the most appropriate shape.
+        :return: the most appropriate shape.
             If no shape is found, it returns None.
         """
         if self._shapes:
@@ -164,24 +163,50 @@ class ShapesOverlay(WorldOverlay):
                     return shape
         return None
 
+    def _create_new_shape(self):
+        """Create a new shape."""
+        shape = self.shape_cls(self.cnvs)
+        self._shapes.append(shape)
+        self.cnvs.add_world_overlay(shape)
+        self.new_shape._set_value(shape, force_write=True)
+        self._selected_shape = shape
+
+    def _copy_shape(self, evt):
+        """Copy a selected shape to evt.Position as the center."""
+        # Create a new shape instance since copy.deepcopy() for shape_cls does not work
+        shape = self.shape_cls(self.cnvs)
+        self._shapes.append(shape)
+        self.cnvs.add_world_overlay(shape)
+        self.new_shape._set_value(shape, force_write=True)
+        # Find the shift to evt.Position
+        pos = self._shape_to_copy.get_position()
+        current_pos = self.cnvs.view_to_phys(
+            evt.Position, self.cnvs.get_half_buffer_size()
+        )
+        shift_x = current_pos[0] - pos[0]
+        shift_y = current_pos[1] - pos[1]
+        # Copy the shape and shift it
+        shape.copy_shape(self._shape_to_copy, (shift_x, shift_y))
+
     def on_left_down(self, evt):
         """Start drawing a shape if the overlay is active and there is no selected shape."""
         if not self.active.value:
             return super().on_left_down(evt)
 
-        self._selected_shape = self._get_shape(evt)
-        if self._selected_shape is None:
-            shape = self.shape_cls(self.cnvs)
-            self._shapes.append(shape)
-            self.cnvs.add_world_overlay(shape)
-            self.new_shape._set_value(shape, force_write=True)
-            self._selected_shape = shape
-        self._selected_shape.active.value = True
-        self._selected_shape.on_left_down(evt)
+        # Copy a selected shape
+        if self._shape_to_copy:
+            self._copy_shape(evt)
+        # New or previously created shape
+        else:
+            self._selected_shape = self._get_shape(evt)
+            if self._selected_shape is None:
+                self._create_new_shape()
+            self._selected_shape.active.value = True
+            self._selected_shape.on_left_down(evt)
         WorldOverlay.on_left_down(self, evt)
 
     def on_char(self, evt):
-        """Delete or unselect the selected shape."""
+        """Delete, unselect or copy the selected shape."""
         if not self.active.value:
             return super().on_char(evt)
 
@@ -189,16 +214,26 @@ class ShapesOverlay(WorldOverlay):
             if evt.GetKeyCode() == wx.WXK_DELETE:
                 self.remove_shape(self._selected_shape)
             elif evt.GetKeyCode() == wx.WXK_ESCAPE:
+                # Unselect the selected shape
                 self._selected_shape.selected.value = False
+                # Stop copying the shape
+                self._shape_to_copy = None
+                self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
+                self.cnvs.request_drawing_update()
+            elif evt.GetKeyCode() == wx.WXK_CONTROL_C:
+                # Deselect the selected shape which will be copied
+                self._selected_shape.selected.value = False
+                self._shape_to_copy = self._selected_shape
+                self.cnvs.set_default_cursor(wx.CURSOR_BULLSEYE)
                 self.cnvs.request_drawing_update()
         else:
             WorldOverlay.on_char(self, evt)
 
     def on_left_up(self, evt):
-        """Stop drawing a shape."""
         if not self.active.value:
             return super().on_left_up(evt)
 
+        self._selected_shape = self._get_shape(evt)
         if self._selected_shape:
             self._selected_shape.on_left_up(evt)
         else:

@@ -50,6 +50,17 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         self._points = []
         self.v_point.subscribe(self._on_v_point)
 
+    def copy_shape(self, shape, shift):
+        if not isinstance(shape, PolygonOverlay):
+            raise ValueError("Shape to be copied is not PolygonOverlay!")
+        self._points = shape._points.copy()
+        for i in range(len(self._points)):
+            self._points[i] += shift
+        self._finished = shape._finished
+        self.v_points = [0] * len(self._points)
+        self._phys_to_view()
+        self.points.value = self._points
+
     def _on_v_point(self, point):
         """Callback for a new value v_point in ClickMixin."""
         offset = self.cnvs.get_half_buffer_size()
