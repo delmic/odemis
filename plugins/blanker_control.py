@@ -53,6 +53,7 @@ class BlankerControlPlugin(Plugin):
         if not main_data.ebeam or not model.hasVA("ebeam", "blanker"):
             logging.info("%s plugin cannot load as the microscope has no e-beam blanker",
                          self.name)
+            return
 
         blanker = main_data.ebeam.blanker
         # Add either a check menu if just on/off, or a radio menu if there are 3 states
