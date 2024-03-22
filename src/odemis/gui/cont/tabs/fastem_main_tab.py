@@ -43,6 +43,7 @@ from odemis.gui.model import (
     FastEMMainTabGUIData,
     StreamView
 )
+from odemis.gui.util import call_in_wx_main
 from odemis.model import getVAs
 
 
@@ -178,6 +179,10 @@ class FastEMMainTab(Tab):
         self.tb.add_tool(TOOL_RECTANGLE, self.tab_data_model.tool)
         self.tb.add_tool(TOOL_ELLIPSE, self.tab_data_model.tool)
         self.tb.add_tool(TOOL_POLYGON, self.tab_data_model.tool)
+        # enable/disable toolbar buttons if acquiring
+        self.tab_data_model.main.is_acquiring.subscribe(self._on_is_acquiring)
+        # pause live stream if working on set of tools
+        self.tab_data_model.tool.subscribe(self._on_tool)
 
     def on_pnl_user_settings_size(self, _):
         """Handle the wx.EVT_SIZE event for pnl_user_settings"""
@@ -204,6 +209,27 @@ class FastEMMainTab(Tab):
             img.getBitmap(f"icon/ico_chevron_{icon_direction}.png")
         )
         self.main_frame.Layout()
+
+    @call_in_wx_main
+    def _on_is_acquiring(self, mode):
+        """
+        Enable or disable the toolbar buttons depending on whether an acquisition
+        is already ongoing or not.
+
+        :param mode: (bool) whether the system is currently acquiring.
+        """
+        self.tab_data_model.tool.value = TOOL_NONE
+        self.tb.enable(not mode)
+
+    def _on_tool(self, selected_tool):
+        """Pause the SEM stream for a specific set of tools."""
+        if selected_tool in (TOOL_RECTANGLE, TOOL_ELLIPSE, TOOL_POLYGON):
+            if (
+                hasattr(self.tab_data_model, "semStream")
+                and self.tab_data_model.semStream.should_update.value
+            ):
+                self.tab_data_model.semStream.is_active.value = False
+                self.tab_data_model.semStream.should_update.value = False
 
     @classmethod
     def get_display_priority(cls, main_data):
