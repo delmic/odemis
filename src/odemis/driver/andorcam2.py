@@ -595,6 +595,22 @@ class AndorCam2(model.DigitalCamera):
 
             self._hw_trigger_invert = hw_trigger_invert
 
+            # Queue to control the acquisition thread
+            self._genmsg = queue.Queue()  # GEN_* or float
+            # Queue of all synchronization events received (typically max len 1)
+            # This is in case the client sends multiple triggers before one image
+            # is received.
+            self._old_triggers = []
+            self._synchronized = False  # True if the acquisition must wait for an Event trigger
+            self._num_no_gc = 0  # how many times the garbage collector was skipped
+
+            # For temporary stopping the acquisition (kludge for the andorshrk
+            # SR303i which cannot communicate during acquisition)
+            self.hw_lock = threading.RLock()  # to be held during DRV_ACQUIRING (or shrk communicating)
+            # append None to request for a temporary stop acquisition. Like an
+            # atomic counter, but Python has no atomic counter and lists are atomic.
+            self.request_hw = []
+
             # setup everything best (fixed)
             # image (6 ints), exposure, readout, gain, shutter, synchronized
             self._prev_settings = [None, None, None, None, None, None]
@@ -647,7 +663,6 @@ class AndorCam2(model.DigitalCamera):
                                                  (self._transposeSizeToUser(min_res),
                                                   self._transposeSizeToUser(resolution)),
                                                  setter=self._setResolution)
-            self._setResolution(self._transposeSizeToUser(resolution))
 
             maxbin = self.GetMaximumBinnings(AndorV2DLL.RM_IMAGE)
             self.binning = model.ResolutionVA(self._transposeSizeToUser(self._binning),
@@ -665,9 +680,7 @@ class AndorCam2(model.DigitalCamera):
 
             # The total duration of a frame acquisition (IOW, the time between two frames).
             # It's a little longer than the exposure time. (Corresponds to "accumulate" on the Andor 2 SDK).
-            # WARNING: for now it's only updated when the camera is acquiring.
-            # TODO: We probably could do better by having the acquisition thread still
-            # updating the camera settings when not acquiring (ie, idle).
+            # WARNING: during acquisition, it's only updated at the start of the next frame.
             self.frameDuration = model.FloatVA(self._exposure_time, unit="s", readonly=True)
 
             # To control the acquisition thread behaviour when several new frames
@@ -824,21 +837,7 @@ class AndorCam2(model.DigitalCamera):
                                                   "AndorCam2 temperature update")
             self.temp_timer.start()
 
-            # Queue to control the acquisition thread
-            self._genmsg = queue.Queue()  # GEN_* or float
-            # Queue of all synchronization events received (typically max len 1)
-            # This is in case the client sends multiple triggers before one image
-            # is received.
-            self._old_triggers = []
-            self._synchronized = False  # True if the acquisition must wait for an Event trigger
-            self._num_no_gc = 0  # how many times the garbage collector was skipped
-
-            # For temporary stopping the acquisition (kludge for the andorshrk
-            # SR303i which cannot communicate during acquisition)
-            self.hw_lock = threading.RLock()  # to be held during DRV_ACQUIRING (or shrk communicating)
-            # append None to request for a temporary stop acquisition. Like an
-            # atomic counter, but Python has no atomic counter and lists are atomic.
-            self.request_hw = []
+            self._setResolution(self._transposeSizeToUser(resolution))
 
             self.data = AndorCam2DataFlow(self)
             # Convenience event for the user to connect and fire. It is also a way to
@@ -1794,6 +1793,7 @@ class AndorCam2(model.DigitalCamera):
         value = self._transposeSizeFromUser(value)
         new_res = self.resolutionFitter(value)
         self._storeSize(new_res)
+        self._update_settings_if_not_acquiring()
         return self._transposeSizeToUser(new_res)
 
     def resolutionFitter(self, size_req):
@@ -1850,6 +1850,7 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.GetMaximumExposure(byref(maxexp))
         # we cache it until just before the next acquisition
         self._exposure_time = min(value, maxexp.value)
+        self._update_settings_if_not_acquiring()
         return self._exposure_time
 
     def _setReadoutRate(self, value):
@@ -1857,15 +1858,18 @@ class AndorCam2(model.DigitalCamera):
         # Everything (within the choices) is fine, just need to update gain.
         self._readout_rate = value
         self.gain.value = self.gain.value  # Force checking it
+        self._update_settings_if_not_acquiring()
         return value
 
     def _setShutterPeriod(self, period):
         self._shutter_period = period
+        self._update_settings_if_not_acquiring()
         return period
 
     def setGain(self, value):
         # Just save, and the setting will be actually updated by _update_settings()
         self._gain = value
+        self._update_settings_if_not_acquiring()
         return self._gain
 
     def _getMaxBPP(self):
@@ -1883,6 +1887,25 @@ class AndorCam2(model.DigitalCamera):
 
         assert(mbpp > 0)
         return mbpp
+
+    def _update_settings_if_not_acquiring(self):
+        """
+        Try to directly configure the camera, if it's not acquiring.
+        This way the .frameDuration value is updated
+        """
+        # See if the camera is acquiring: has hw_lock and status is acquiring
+        # If we fail to acquire the lock, it means the acquisition is ongoing
+        # so no need/not possible to update the settings. They will be updated next frame.
+        if self.hw_lock.acquire(timeout=0.1):
+            try:
+                if self.GetStatus() != AndorV2DLL.DRV_ACQUIRING:
+                    self._update_settings()
+            finally:
+                self.hw_lock.release()
+        else:
+            logging.debug("Cannot update HW settings immediately after VA update as acquisition is ongoing")
+            # TODO: might still need to update the settings at the end of the acquisition, in case
+            # the VAs were just changed before ending the acquisition?
 
     def _need_update_settings(self):
         """
