@@ -614,7 +614,7 @@ class VirtualTestSynchronized(metaclass=ABCMeta):
         self.ccd_left = numbert # unsubscribe after receiving
 
         try:
-            self.ccd.data.synchronizedOn(self.scanner.newPosition)
+            self.ccd.data.synchronizedOn(self.scanner.newPixel)
         except IOError:
             self.skipTest("Camera doesn't support synchronisation")
         self.ccd.data.subscribe(self.receive_ccd_image)
