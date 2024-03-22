@@ -154,6 +154,12 @@ jobs:
         export PYTHONPATH="$PWD/src:$PYTHONPATH"
         python3 -m unittest src/odemis/acq/test/feature_test.py --verbose
 
+    - name: Run tests from odemis.acq.move
+      if: ${{ !cancelled() }}
+      run: |
+          export PYTHONPATH="$PWD/src:$PYTHONPATH"
+          python3 -m unittest src/odemis/acq/test/move_test.py --verbose
+  
     - name: Run tests from odemis.gui.conf
       if: ${{ !cancelled() }}
       run: |
