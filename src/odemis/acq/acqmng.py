@@ -563,7 +563,7 @@ class AcquisitionTask(object):
                 # Will pass down exceptions, included in case it's cancelled
                 das = f.result()
                 if not isinstance(das, Iterable):
-                    logging.warning("Future of %s didn't return a list of DataArrays, but %s", s, das)
+                    logging.warning("Future of %s didn't return a list of DataArrays, but '%s'", s, das)
                     das = []
 
                 # Add extra settings to metadata
