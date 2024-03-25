@@ -109,7 +109,8 @@ class Camera(model.DigitalCamera):
         self.binning = model.ResolutionVA(self._binning,
                               ((1, 1), (16, 16)), setter=self._setBinning)
 
-        hlf_shape = (self._shape[0] // 2 - 1, self._shape[1] // 2 - 1)
+        # the Numpy dimension order of the DA is YX for greyscale and YXC for RGB images
+        hlf_shape = (self._img.shape[1] // 2 - 1, self._img.shape[0] // 2 - 1)
         tran_rng = [(-hlf_shape[0], -hlf_shape[1]),
                     (hlf_shape[0], hlf_shape[1])]
         self._translation = (0, 0)
@@ -206,8 +207,8 @@ class Camera(model.DigitalCamera):
         """
         # compute the min/max of the shift. It's the same as the margin between
         # the centered ROI and the border, taking into account the binning.
-        max_tran = ((self._shape[0] - self._resolution[0] * self._binning[0]) // 2,
-                    (self._shape[1] - self._resolution[1] * self._binning[1]) // 2)
+        max_tran = ((self._img.shape[-1] - self._resolution[0] * self._binning[0]) // 2,
+                    (self._img.shape[-2] - self._resolution[1] * self._binning[1]) // 2)
 
         # between -margin and +margin
         trans = (max(-max_tran[0], min(value[0], max_tran[0])),
