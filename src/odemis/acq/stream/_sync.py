@@ -31,11 +31,13 @@ from functools import partial
 import logging
 import math
 import numpy
+
 from odemis import model, util
 from odemis.acq import drift
 from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
+from odemis.util.driver import guessActuatorMoveDuration
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
     MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS, MD_THETA_LIST, MD_WL_LIST, MD_ROTATION, \
     MD_ROTATION_COR
@@ -275,17 +277,14 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
 
         if hasattr(self, "useScanStage") and self.useScanStage.value:
             if self._sstage:
-                # It's pretty hard to estimate the move time, as the speed is
-                # only the maximum speed and what takes actually most of the time
-                # is to stop to the next point.
-                # TODO: just get the output of _getScanStagePositions() and add
-                # up distances?
-                repetition = tuple(self.repetition.value)
+                # The move time is dependent on the type of the stage with their own properties.
+                # This makes it quite hard to estimate. A rough guess using actuator speed,
+                # acceleration and distance is generated through guessActuatorMoveDuration.
                 roi = self.roi.value
                 width = (roi[2] - roi[0], roi[3] - roi[1])
 
                 # Take into account the "border" around each pixel
-                pxs = (width[0] / repetition[0], width[1] / repetition[1])
+                pxs = (width[0] / rep[0], width[1] / rep[1])
                 lim = (roi[0] + pxs[0] / 2, roi[1] + pxs[1] / 2,
                        roi[2] - pxs[0] / 2, roi[3] - pxs[1] / 2)
 
@@ -295,14 +294,17 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
                 phy_width = sem_fov[0] * (lim[2] - lim[0]), sem_fov[1] * (lim[3] - lim[1])
 
                 # Count 2x as we need to go back and forth
-                tot_dist = (phy_width[0] * repetition[1] + phy_width[1]) * 2
-                speed = self._sstage.speed.value["x"]  # consider both axes have same speed
+                tot_dist = (phy_width[0] * rep[1] + phy_width[1]) * 2
 
-                npixels = int(numpy.prod(repetition))
-                # x2 the move time for compensating the accel/decel + 50 ms per pixel overhead
-                move_time = 2 * tot_dist / speed + npixels * 50e-3  # s
+                # check the move time for at least both of the x and y axes
+                pxs = self._getPixelSize()
+                move_time_x = (guessActuatorMoveDuration(self._sstage, "x", pxs[0]) * (rep[0] - 1) * rep[1])
+                move_time_y = (guessActuatorMoveDuration(self._sstage, "y", pxs[1]) * rep[1])
+                # take the move with the longest duration as final move time
+                move_time = max(move_time_x, move_time_y)
                 logging.debug("Estimated total scan stage travel distance is %s = %s s",
                               units.readable_str(tot_dist, "m"), move_time)
+
                 total_time += move_time
             else:
                 logging.warning("Estimated time cannot take into account scan stage, "
@@ -1562,8 +1564,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
     def _runAcquisitionScanStage(self, future):
         """
-        Acquires images from the multiple detectors via software synchronisation,
-        with a scan stage.
+        Acquires images from the multiple detectors via software synchronisation, with a scan stage.
         Warning: can be quite memory consuming if the grid is big
         returns (list of DataArray): all the data acquired
         raises:
@@ -1578,7 +1579,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         #  * Start SED acquisition and trigger CCD
         #  * Wait for the CCD/SED data
         #  * Repeat until all the points have been scanned
-        #  * Move back the stage to center
+        #  * Move back the stage to center in case of an 'independent' stage
 
         # TODO does not support polarimetry and image integration so far
         if self._analyzer is not None:
@@ -1591,17 +1592,18 @@ class SEMCCDMDStream(MultipleDetectorStream):
                                           "acquisitions.")
 
         sstage = self._sstage
+        if not sstage:
+            raise ValueError("Cannot acquire with scan stage, as no stage was provided")
+        orig_spos = sstage.position.value  # TODO: need to protect from the stage being outside of the axes range?
+        scan_stage_is_stage = model.getComponent(role="stage").name in sstage.affects.value
+
         try:
-            if not sstage:
-                raise ValueError("Cannot acquire with scan stage, as no stage was provided")
             saxes = sstage.axes
-            orig_spos = sstage.position.value  # TODO: need to protect from the stage being outside of the axes range?
             prev_spos = orig_spos.copy()
             spos_rng = (saxes["x"].range[0], saxes["y"].range[0],
                         saxes["x"].range[1], saxes["y"].range[1])  # max phy ROI
-
             self._acq_done.clear()
-            px_time = self._adjustHardwareSettingsScanStage()
+            px_time = self._adjustHardwareSettingsScanStage()  # sets the e-beam to the center
             dwell_time = self._emitter.dwellTime.value
             sem_time = dwell_time * numpy.prod(self._emitter.resolution.value)
             stage_pos = self._getScanStagePositions()
@@ -1696,7 +1698,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     dur = time.time() - start
                     if timedout or dur < px_time * 0.95:
                         if timedout:
-                            # Note: it can happen we don't receive the data if there
+                            # Note: it can happen we don't receive the data if there's
                             # no more memory left (without any other warning).
                             # So we log the memory usage here too.
                             memu = udriver.readMemoryUsage()
@@ -1735,14 +1737,22 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     if self._acq_state == CANCELLED:
                         raise CancelledError()
 
-                    # MD_POS default to the center of the sample stage, but it
-                    # needs to be the position of the
-                    # TODO: here different from _runAcquisitionEbeam
-                    # sample stage + e-beam + scan stage translation (without the drift cor)
-                    raw_pos = self._acq_data[0][-1].metadata[MD_POS]
-                    strans = spos[0] - orig_spos["x"], spos[1] - orig_spos["y"]
-                    cor_pos = raw_pos[0] + strans[0], raw_pos[1] + strans[1]
-                    logging.debug("Updating pixel pos from %s to %s", raw_pos, cor_pos)
+                    # TODO: here the code is different compared to _runAcquisitionEbeam
+                    if scan_stage_is_stage:
+                        # Use the theoretical position of the stage. We could use the stage position as reported by the
+                        # hardware, which could be more accurately representing the current position, but that would
+                        # cause each position to be slightly differently misaligned with the grid, potentially causing
+                        # issues during the display.
+                        cor_pos = spos
+                    else:
+                        # MD_POS default to the center of the sample stage, but it needs to be the position
+                        # of the sample stage + e-beam + scan stage translation (without the drift cor)
+                        raw_pos = self._acq_data[0][-1].metadata[MD_POS]
+                        strans = spos[0] - orig_spos["x"], spos[1] - orig_spos["y"]
+                        # if it is an 'independent' stage MD_POS (raw_pos) is added to the translation
+                        cor_pos = raw_pos[0] + strans[0], raw_pos[1] + strans[1]
+                        logging.debug("Updating pixel pos from %s to %s", raw_pos, cor_pos)
+
                     # In practice, for the e-beam data, it's only useful to
                     # update the metadata for the first pixel.
                     for adas in self._acq_data:
@@ -1761,7 +1771,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                             continue
                         leech_np[li] -= 1
                         if leech_np[li] == 0:
-                            # TODO: here different from _runAcquisitionEbeam
+                            # TODO: here the code is different compared to _runAcquisitionEbeam
                             if isinstance(l, AnchorDriftCorrector):
                                 # Move back to orig pos, to not compensate for the scan stage move
                                 sstage.moveAbsSync(orig_spos)
@@ -1828,10 +1838,16 @@ class SEMCCDMDStream(MultipleDetectorStream):
         finally:
             self._current_scan_area = None  # Indicate we are done for the live (also in case of error)
             if sstage:
-                # Move back the stage to the center
                 saxes = sstage.axes
-                pos0 = {"x": sum(saxes["x"].range) / 2,
-                        "y": sum(saxes["y"].range) / 2}
+                if scan_stage_is_stage:
+                    # if it's a scan-stage wrapper we use the sem stage for scanning so in
+                    # this case go back to the (user selected) position before the acquisition
+                    pos0 = orig_spos
+                else:
+                    # Move back the stage to the center
+                    pos0 = {"x": sum(saxes["x"].range) / 2,
+                            "y": sum(saxes["y"].range) / 2}
+
                 sstage.moveAbs(pos0).result()
 
             for s in self._streams:
