@@ -376,6 +376,15 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.move_stage(position, rel)
 
+    def set_raw_coordinate_system(self, raw: bool = True):
+        """
+        Read raw z coordinate or linked z coordinate when requesting stage coordinates
+        :param raw: (bool) If True, request raw z stage coordinates, otherwise request linked Z coordiantes
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_raw_coordinate_system(raw)
+
     def stage_is_moving(self) -> bool:
         """
         :return: True if the stage is moving and False if the stage is not moving.
@@ -2148,6 +2157,7 @@ class Stage(model.Actuator):
     """
 
     def __init__(self, name: str, role: str, parent: model.HwComponent, rng: dict = None, **kwargs) -> None:
+        parent.set_raw_coordinate_system(raw=True)
         if rng is None:
             rng = {}
         stage_info = parent.stage_info()
