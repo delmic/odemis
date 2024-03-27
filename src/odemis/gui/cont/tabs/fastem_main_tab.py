@@ -223,13 +223,12 @@ class FastEMMainTab(Tab):
 
     def _on_tool(self, selected_tool):
         """Pause the SEM stream for a specific set of tools."""
-        if selected_tool in (TOOL_RECTANGLE, TOOL_ELLIPSE, TOOL_POLYGON):
-            if (
-                hasattr(self.tab_data_model, "semStream")
-                and self.tab_data_model.semStream.should_update.value
-            ):
-                self.tab_data_model.semStream.is_active.value = False
-                self.tab_data_model.semStream.should_update.value = False
+        if (
+            selected_tool in (TOOL_RECTANGLE, TOOL_ELLIPSE, TOOL_POLYGON)
+            and self.tab_data_model.semStream.should_update.value
+        ):
+            self.tab_data_model.semStream.is_active.value = False
+            self.tab_data_model.semStream.should_update.value = False
 
     @classmethod
     def get_display_priority(cls, main_data):

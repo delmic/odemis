@@ -775,3 +775,66 @@ def bindFuture(future, fn, args=(), kwargs=None):
             future.set_exception(e)
     else:
         future.set_result(result)
+
+
+def slope_of_line(point1: Tuple[float, float], point2: Tuple[float, float]) -> float:
+    """
+    Calculate the slope of a line passing through two given points.
+    """
+    if point1[0] == point2[0]:  # Vertical line
+        slope = math.inf  # Slope is undefined for vertical lines
+    else:
+        slope = (point2[1] - point1[1]) / (point2[0] - point1[0])
+    return slope
+
+
+def intercept_of_line(point: Tuple[float, float], slope: float) -> float:
+    """
+    Calculate the intercept of a line passing through a given point with a specified slope.
+
+    :param point: The coordinates of the point through which the line passes.
+    :param slope: The slope of the line.
+
+    Note:
+        The equation of a line in slope-intercept form is y = mx + c, where:
+            - y is the vertical position of a point on the line.
+            - x is the horizontal position of a point on the line.
+            - m is the slope of the line.
+            - c is the y-intercept of the line, indicating where the line intersects the y-axis.
+
+        For vertical lines, since the slope is undefined, the x-coordinate of the point is returned
+        instead, representing the x-intercept where the line intersects the x-axis.
+    """
+    if math.isinf(slope):  # line is vertical
+        intercept = point[0]  # x-intercept for vertical line
+    else:
+        intercept = point[1] - slope * point[0]  # y-intercept for non-vertical line
+    return intercept
+
+
+def project_point_on_line(
+        point: Tuple[float, float], line_slope: float, line_intercept: float
+    ) -> Tuple[float, float]:
+    """
+    Calculate the projection of a point on a line.
+
+    :param point: The coordinates (x, y) of the point to be projected on the line.
+    :param line_slope: The slope of the line.
+    :param line_intercept: The intercept of the line.
+
+    :returns: The coordinates of the projected point on the line.
+
+    Note:
+        The projected point is basically the intersection point of the line
+        passing through the given point and perpendicular to the given line.
+
+        x_projected = x + m * (y - c) / (1 + m^2)
+        y_projected = m * x_projected + c
+    """
+    if math.isinf(line_slope):  # Vertical line
+        x_projected = line_intercept
+        y_projected = point[1]
+    else:
+        x_projected = (point[0] + line_slope * (point[1] - line_intercept)) / (1 + line_slope**2)
+        y_projected = line_slope * x_projected + line_intercept
+    return (x_projected, y_projected)

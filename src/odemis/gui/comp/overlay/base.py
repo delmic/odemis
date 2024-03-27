@@ -33,10 +33,10 @@ They will *only* receive mouse events if they are active!
 from abc import ABCMeta, abstractmethod
 import logging
 import math
-from typing import Tuple, Optional
+import statistics
+from typing import Tuple, Optional, Dict, List
 
 import cairo
-import numpy
 
 import wx
 
@@ -47,6 +47,15 @@ import odemis.util.conversion as conversion
 from odemis.util.raster import point_in_polygon
 from odemis.gui import EVT_BUFFER_SIZE
 from odemis.model import TupleVA, BooleanVA
+
+
+class EdgeBoundingBox:
+    def __init__(self, l: float, r: float, t: float, b: float, index: Optional[int] = None) -> None:
+        self.l = l  # left, xmin
+        self.r = r  # right, xmax
+        self.t = t  # top, ymin
+        self.b = b  # bottom, ymax
+        self.index = index  # Index of the edge, default None for a non-vertex edge
 
 
 class Label(object):
@@ -269,7 +278,7 @@ class Label(object):
 
 
 class Vec(tuple):
-    """ Simple vector class for easy vector addition and multiplication """
+    """ Simple vector class for easy vector addition, multiplication and rotation """
 
     def __new__(cls, a, b=None):
         if b is not None:
@@ -298,6 +307,21 @@ class Vec(tuple):
     @property
     def y(self):
         return self[1]
+
+    def rotate(self, angle: float, center: Tuple[float, float]):
+        """
+        Rotate the vector by an angle around the center.
+
+        :param angle: The angle by which the vector needs to be rotated in radians.
+        :param center: The center point (x, y) about which the vector needs to rotated.
+        :returns (Vec): The rotated vector.
+
+        """
+        dx = self.x - center[0]
+        dy = self.y - center[1]
+        x_rotated = center[0] + dx * math.cos(angle) - dy * math.sin(angle)
+        y_rotated = center[1] + dx * math.sin(angle) + dy * math.cos(angle)
+        return Vec(x_rotated, y_rotated)
 
 
 class Overlay(metaclass=ABCMeta):
@@ -458,7 +482,7 @@ class ClickMixin:
         self._finished = False
 
         # The cursor view points on left click
-        self.v_points = []
+        self.v_points: List[Vec] = []
         self.v_point = model.VigilantAttribute(Vec(0.0, 0.0), readonly=True)
         # The cursor view position on motion
         self.v_pos = Vec(0.0, 0.0)
@@ -1083,10 +1107,13 @@ class SelectionMixin(DragMixin):
         # Cursor manipulation should be done in superclasses
 
 
-class RectangleMixin(DragMixin):
+class RectangleEditingMixin(DragMixin):
     """
-    These areas are always expressed in view port coordinates.
-    Conversions to buffer and physical coordinates should be done using subclasses.
+    This class extends DragMixin and provides functionality for creating a rectangle,
+    editing its edges, dragging it and rotating it about its center.
+
+    These areas are always expressed in view port coordinates. Conversions to buffer
+    and physical coordinates should be done using subclasses.
 
     Remember that the following methods *MUST* be called from the super class:
 
@@ -1109,17 +1136,17 @@ class RectangleMixin(DragMixin):
 
         DragMixin.__init__(self)
 
-        self.v_point1 = None
-        self.v_point2 = None
-        self.v_point3 = None
-        self.v_point4 = None
+        self.v_point1: Vec = None
+        self.v_point2: Vec = None
+        self.v_point3: Vec = None
+        self.v_point4: Vec = None
 
         self.edit_v_start_pos = None  # The view port coordinates where a drag/edit originated
         self.edit_hover = None  # What edge is being edited (gui.HOVER_*)
         self.edit_v_point_idx = None
 
         self.hover = gui.HOVER_NONE
-        self.hover_direction = "NS"  # "NS" or "WE"
+        self.hover_direction = gui.HOVER_DIRECTION_NS  # "NS" or "WE"
 
         # Selection modes (none, create, edit and drag)
         self.selection_mode = SEL_MODE_NONE
@@ -1127,24 +1154,24 @@ class RectangleMixin(DragMixin):
         # This attribute can be used to see if the canvas has shifted or scaled
         self._last_shiftscale = None
 
-        self.v_edges = {}
+        # Dict in which key is the gui.HOVER_* type and value is a list of EdgeBoundingBox
+        # associated to the hover type
+        self.v_edges: Dict[int, List[EdgeBoundingBox]] = {}
 
-        # TODO: Move these to the super classes
         self.colour = conversion.hex_to_frgba(colour)
         self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
         self.center = Vec(center)
         self.rotation = 0  # radians
+        # The rotation point in view coordinates
+        # Hovering over this point's bounding box will result in the hover selection
+        # as gui.HOVER_ROTATION. This will enable start_rotation and update_rotation methods
         self.v_rotation = Vec(center)
 
-    def rotate_v_point(self, point: Vec, angle: float) -> Vec:
-        """Rotate a point (x, y) by an angle around the center point."""
-        dx = point.x - self.center.x
-        dy = point.y - self.center.y
-        x_new = self.center.x + dx * math.cos(angle) - dy * math.sin(angle)
-        y_new = self.center.y + dx * math.sin(angle) + dy * math.cos(angle)
-        return Vec((x_new, y_new))
-
     # #### selection methods  #####
+    # start_selection starts creation of the rectangle with diagonal points v_point1 and v_point3
+    # update_selection upon dragging updates the diagonal v_point3 and assigns v_point2 and v_point4
+    # stop_selection ends the current creation of rectangle
+    # clear_selection resets the rectangle creation
 
     def start_selection(self):
         """ Start a new selection """
@@ -1156,8 +1183,6 @@ class RectangleMixin(DragMixin):
 
     def update_selection(self):
         """ Update the selection to reflect the given mouse position """
-
-        # Cast to list, because we need to be able to alter the x and y separately
         self.v_point3 = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
         self.v_point2 = Vec(self.v_point3.x, self.v_point1.y)
         self.v_point4 = Vec(self.v_point1.x, self.v_point3.y)
@@ -1170,7 +1195,7 @@ class RectangleMixin(DragMixin):
         if self.v_point1 == self.v_point3:
             logging.debug("Selection too small")
             self.clear_selection()
-
+        else:
             self._calc_edges()
             self.selection_mode = SEL_MODE_NONE
             self.edit_hover = None
@@ -1188,11 +1213,14 @@ class RectangleMixin(DragMixin):
         self.v_point3 = None
         self.v_point4 = None
 
-        self.v_edges = {}
+        self.v_edges.clear()
 
     # #### END selection methods  #####
 
-    # #### edit methods  #####
+    # #### edit methods post selection methods  #####
+    # start_edit starts the editing of a v_point based on the edit_hover
+    # update_edit updates the v_point to be edited and related v_points upon dragging
+    # stop_edit ends the editing
 
     def start_edit(self, hover, idx):
         """
@@ -1207,80 +1235,50 @@ class RectangleMixin(DragMixin):
         self.selection_mode = SEL_MODE_EDIT
         self.edit_v_point_idx = idx
 
-    def line_orientation(self, point1, point2):
-        """
-        Calculate the orientation (direction) of a line defined by two points.
-        """
-        return numpy.arctan2(point2[1] - point1[1], point2[0] - point1[0])
-
-    def line_through_point(self, point, orientation):
-        """
-        Generate a line passing through a given point with a specified orientation.
-        """
-        if abs(orientation) == math.pi / 2:  # line is vertical
-            intercept = point[0]
-        else:
-            intercept = point[1] - numpy.tan(orientation) * point[0]
-        return orientation, intercept
-
-    def projection_on_line(self, point, line) -> Vec:
-        """
-        Calculate the projection of a point onto a line.
-        """
-        orientation, intercept = line
-        if abs(orientation) == math.pi / 2:    # line is vertical
-            x_projection = intercept
-            y_projection = point[1]
-        else:
-            slope = numpy.tan(orientation)
-            x_projection = (point[0] + slope * (point[1] - intercept)) / (1 + slope**2)
-            y_projection = slope * x_projection + intercept
-        return Vec(x_projection, y_projection)
-
     def update_edit(self):
         """ Adjust the selection according to the given position and the current edit action """
         current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
-        if self.edit_v_point_idx and (self.edit_hover == gui.HOVER_LINE or self.edit_hover == gui.HOVER_EDGE):
+        if self.edit_v_point_idx and self.edit_hover in (gui.HOVER_LINE, gui.HOVER_EDGE):
             if self.edit_v_point_idx == 1:
-                orientation = self.line_orientation(self.v_point1, self.v_point2)
-                line_through_given_point = self.line_through_point(current_pos, orientation)
-                self.v_point1 = self.projection_on_line(self.v_point1, line_through_given_point)
-                self.v_point2 = self.projection_on_line(self.v_point2, line_through_given_point)
+                slope = util.slope_of_line(self.v_point1, self.v_point2)
+                intercept = util.intercept_of_line(current_pos, slope)
+                self.v_point1 = Vec(util.project_point_on_line(self.v_point1, slope, intercept))
+                self.v_point2 = Vec(util.project_point_on_line(self.v_point2, slope, intercept))
                 if self.edit_hover == gui.HOVER_EDGE:
-                    orientation = self.line_orientation(self.v_point1, self.v_point4)
-                    line_through_given_point = self.line_through_point(current_pos, orientation)
-                    self.v_point1 = self.projection_on_line(self.v_point1, line_through_given_point)
-                    self.v_point4 = self.projection_on_line(self.v_point4, line_through_given_point)
+                    slope = util.slope_of_line(self.v_point1, self.v_point4)
+                    intercept = util.intercept_of_line(current_pos, slope)
+                    self.v_point1 = Vec(util.project_point_on_line(self.v_point1, slope, intercept))
+                    self.v_point4 = Vec(util.project_point_on_line(self.v_point4, slope, intercept))
             elif self.edit_v_point_idx == 2:
-                orientation = self.line_orientation(self.v_point2, self.v_point3)
-                line_through_given_point = self.line_through_point(current_pos, orientation)
-                self.v_point2 = self.projection_on_line(self.v_point2, line_through_given_point)
-                self.v_point3 = self.projection_on_line(self.v_point3, line_through_given_point)
+                slope = util.slope_of_line(self.v_point2, self.v_point3)
+                intercept = util.intercept_of_line(current_pos, slope)
+                self.v_point2 = Vec(util.project_point_on_line(self.v_point2, slope, intercept))
+                self.v_point3 = Vec(util.project_point_on_line(self.v_point3, slope, intercept))
                 if self.edit_hover == gui.HOVER_EDGE:
-                    orientation = self.line_orientation(self.v_point2, self.v_point1)
-                    line_through_given_point = self.line_through_point(current_pos, orientation)
-                    self.v_point2 = self.projection_on_line(self.v_point2, line_through_given_point)
-                    self.v_point1 = self.projection_on_line(self.v_point1, line_through_given_point)
+                    slope = util.slope_of_line(self.v_point2, self.v_point1)
+                    intercept = util.intercept_of_line(current_pos, slope)
+                    self.v_point2 = Vec(util.project_point_on_line(self.v_point2, slope, intercept))
+                    self.v_point1 = Vec(util.project_point_on_line(self.v_point1, slope, intercept))
             elif self.edit_v_point_idx == 3:
-                orientation = self.line_orientation(self.v_point3, self.v_point4)
-                line_through_given_point = self.line_through_point(current_pos, orientation)
-                self.v_point3 = self.projection_on_line(self.v_point3, line_through_given_point)
-                self.v_point4 = self.projection_on_line(self.v_point4, line_through_given_point)
+                slope = util.slope_of_line(self.v_point3, self.v_point4)
+                intercept = util.intercept_of_line(current_pos, slope)
+                self.v_point3 = Vec(util.project_point_on_line(self.v_point3, slope, intercept))
+                self.v_point4 = Vec(util.project_point_on_line(self.v_point4, slope, intercept))
                 if self.edit_hover == gui.HOVER_EDGE:
-                    orientation = self.line_orientation(self.v_point3, self.v_point2)
-                    line_through_given_point = self.line_through_point(current_pos, orientation)
-                    self.v_point3 = self.projection_on_line(self.v_point3, line_through_given_point)
-                    self.v_point2 = self.projection_on_line(self.v_point2, line_through_given_point)
+                    slope = util.slope_of_line(self.v_point3, self.v_point2)
+                    intercept = util.intercept_of_line(current_pos, slope)
+                    self.v_point3 = Vec(util.project_point_on_line(self.v_point3, slope, intercept))
+                    self.v_point2 = Vec(util.project_point_on_line(self.v_point2, slope, intercept))
             elif self.edit_v_point_idx == 4:
-                orientation = self.line_orientation(self.v_point4, self.v_point1)
-                line_through_given_point = self.line_through_point(current_pos, orientation)
-                self.v_point4 = self.projection_on_line(self.v_point4, line_through_given_point)
-                self.v_point1 = self.projection_on_line(self.v_point1, line_through_given_point)
+                slope = util.slope_of_line(self.v_point4, self.v_point1)
+                intercept = util.intercept_of_line(current_pos, slope)
+                self.v_point4 = Vec(util.project_point_on_line(self.v_point4, slope, intercept))
+                self.v_point1 = Vec(util.project_point_on_line(self.v_point1, slope, intercept))
                 if self.edit_hover == gui.HOVER_EDGE:
-                    orientation = self.line_orientation(self.v_point4, self.v_point3)
-                    line_through_given_point = self.line_through_point(current_pos, orientation)
-                    self.v_point4 = self.projection_on_line(self.v_point4, line_through_given_point)
-                    self.v_point3 = self.projection_on_line(self.v_point3, line_through_given_point)
+                    slope = util.slope_of_line(self.v_point4, self.v_point3)
+                    intercept = util.intercept_of_line(current_pos, slope)
+                    self.v_point4 = Vec(util.project_point_on_line(self.v_point4, slope, intercept))
+                    self.v_point3 = Vec(util.project_point_on_line(self.v_point3, slope, intercept))
 
     def stop_edit(self):
         """ End the selection edit """
@@ -1303,10 +1301,10 @@ class RectangleMixin(DragMixin):
         dy = self.center.y - current_pos.y
         current_rotation = math.atan2(dy, dx) % (2 * math.pi)
         diff_angle = current_rotation - self.rotation
-        self.v_point1 = self.rotate_v_point(self.v_point1, diff_angle)
-        self.v_point2 = self.rotate_v_point(self.v_point2, diff_angle)
-        self.v_point3 = self.rotate_v_point(self.v_point3, diff_angle)
-        self.v_point4 = self.rotate_v_point(self.v_point4, diff_angle)
+        self.v_point1 = self.v_point1.rotate(diff_angle, self.center)
+        self.v_point2 = self.v_point2.rotate(diff_angle, self.center)
+        self.v_point3 = self.v_point3.rotate(diff_angle, self.center)
+        self.v_point4 = self.v_point4.rotate(diff_angle, self.center)
         self.rotation = current_rotation
 
     def start_drag(self):
@@ -1357,54 +1355,88 @@ class RectangleMixin(DragMixin):
         """ Calculate the inner and outer edges of the selection according to the hover margin """
 
         if self.v_point1 and self.v_point2 and self.v_point3 and self.v_point4:
-
+            self._calc_center()
             angle = math.atan2(self.v_point1.y - self.center.y, self.v_point1.x - self.center.x)
             self.v_rotation = Vec(
                 self.v_point1.x + 2 * self.hover_margin * math.cos(angle),
                 self.v_point1.y + 2 * self.hover_margin * math.sin(angle),
             )
+            rotation = [
+                EdgeBoundingBox(
+                    l=self.v_rotation.x - self.hover_margin,
+                    r=self.v_rotation.x + self.hover_margin,
+                    t=self.v_rotation.y - self.hover_margin,
+                    b=self.v_rotation.y + self.hover_margin,
+                )
+            ]
+
+            midpoints = [
+                EdgeBoundingBox(
+                    index=1,
+                    l=(self.v_point1.x + self.v_point2.x) / 2 - self.hover_margin,
+                    r=(self.v_point1.x + self.v_point2.x) / 2 + self.hover_margin,
+                    t=(self.v_point1.y + self.v_point2.y) / 2 - self.hover_margin,
+                    b=(self.v_point1.y + self.v_point2.y) / 2 + self.hover_margin,
+                ),
+                EdgeBoundingBox(
+                    index=2,
+                    l=(self.v_point2.x + self.v_point3.x) / 2 - self.hover_margin,
+                    r=(self.v_point2.x + self.v_point3.x) / 2 + self.hover_margin,
+                    t=(self.v_point2.y + self.v_point3.y) / 2 - self.hover_margin,
+                    b=(self.v_point2.y + self.v_point3.y) / 2 + self.hover_margin,
+                ),
+                EdgeBoundingBox(
+                    index=3,
+                    l=(self.v_point3.x + self.v_point4.x) / 2 - self.hover_margin,
+                    r=(self.v_point3.x + self.v_point4.x) / 2 + self.hover_margin,
+                    t=(self.v_point3.y + self.v_point4.y) / 2 - self.hover_margin,
+                    b=(self.v_point3.y + self.v_point4.y) / 2 + self.hover_margin,
+                ),
+                EdgeBoundingBox(
+                    index=4,
+                    l=(self.v_point4.x + self.v_point1.x) / 2 - self.hover_margin,
+                    r=(self.v_point4.x + self.v_point1.x) / 2 + self.hover_margin,
+                    t=(self.v_point4.y + self.v_point1.y) / 2 - self.hover_margin,
+                    b=(self.v_point4.y + self.v_point1.y) / 2 + self.hover_margin,
+                ),
+            ]
+
+            vertices = [
+                EdgeBoundingBox(
+                    index=1,
+                    l=self.v_point1.x - self.hover_margin,
+                    r=self.v_point1.x + self.hover_margin,
+                    t=self.v_point1.y - self.hover_margin,
+                    b=self.v_point1.y + self.hover_margin,
+                ),
+                EdgeBoundingBox(
+                    index=2,
+                    l=self.v_point2.x - self.hover_margin,
+                    r=self.v_point2.x + self.hover_margin,
+                    t=self.v_point2.y - self.hover_margin,
+                    b=self.v_point2.y + self.hover_margin,
+                ),
+                EdgeBoundingBox(
+                    index=3,
+                    l=self.v_point3.x - self.hover_margin,
+                    r=self.v_point3.x + self.hover_margin,
+                    t=self.v_point3.y - self.hover_margin,
+                    b=self.v_point3.y + self.hover_margin,
+                ),
+                EdgeBoundingBox(
+                    index=4,
+                    l=self.v_point4.x - self.hover_margin,
+                    r=self.v_point4.x + self.hover_margin,
+                    t=self.v_point4.y - self.hover_margin,
+                    b=self.v_point4.y + self.hover_margin,
+                ),
+            ]
+
             self.v_edges.update(
                 {
-                    "r_l": self.v_rotation.x - self.hover_margin,
-                    "r_r": self.v_rotation.x + self.hover_margin,
-                    "r_t": self.v_rotation.y - self.hover_margin,
-                    "r_b": self.v_rotation.y + self.hover_margin,
-                }
-            )
-            self.v_edges.update(
-                {
-                    "mid_1_l": (self.v_point1.x + self.v_point2.x) / 2 - self.hover_margin,
-                    "mid_1_r": (self.v_point1.x + self.v_point2.x) / 2 + self.hover_margin,
-                    "mid_1_t": (self.v_point1.y + self.v_point2.y) / 2 - self.hover_margin,
-                    "mid_1_b": (self.v_point1.y + self.v_point2.y) / 2 + self.hover_margin,
-                    "mid_2_l": (self.v_point2.x + self.v_point3.x) / 2 - self.hover_margin,
-                    "mid_2_r": (self.v_point2.x + self.v_point3.x) / 2 + self.hover_margin,
-                    "mid_2_t": (self.v_point2.y + self.v_point3.y) / 2 - self.hover_margin,
-                    "mid_2_b": (self.v_point2.y + self.v_point3.y) / 2 + self.hover_margin,
-                    "mid_3_l": (self.v_point3.x + self.v_point4.x) / 2 - self.hover_margin,
-                    "mid_3_r": (self.v_point3.x + self.v_point4.x) / 2 + self.hover_margin,
-                    "mid_3_t": (self.v_point3.y + self.v_point4.y) / 2 - self.hover_margin,
-                    "mid_3_b": (self.v_point3.y + self.v_point4.y) / 2 + self.hover_margin,
-                    "mid_4_l": (self.v_point4.x + self.v_point1.x) / 2 - self.hover_margin,
-                    "mid_4_r": (self.v_point4.x + self.v_point1.x) / 2 + self.hover_margin,
-                    "mid_4_t": (self.v_point4.y + self.v_point1.y) / 2 - self.hover_margin,
-                    "mid_4_b": (self.v_point4.y + self.v_point1.y) / 2 + self.hover_margin,
-                    "1_l": self.v_point1.x - self.hover_margin,
-                    "1_r": self.v_point1.x + self.hover_margin,
-                    "1_t": self.v_point1.y - self.hover_margin,
-                    "1_b": self.v_point1.y + self.hover_margin,
-                    "2_l": self.v_point2.x - self.hover_margin,
-                    "2_r": self.v_point2.x + self.hover_margin,
-                    "2_t": self.v_point2.y - self.hover_margin,
-                    "2_b": self.v_point2.y + self.hover_margin,
-                    "3_l": self.v_point3.x - self.hover_margin,
-                    "3_r": self.v_point3.x + self.hover_margin,
-                    "3_t": self.v_point3.y - self.hover_margin,
-                    "3_b": self.v_point3.y + self.hover_margin,
-                    "4_l": self.v_point4.x - self.hover_margin,
-                    "4_r": self.v_point4.x + self.hover_margin,
-                    "4_t": self.v_point4.y - self.hover_margin,
-                    "4_b": self.v_point4.y + self.hover_margin,
+                    gui.HOVER_ROTATION: rotation,
+                    gui.HOVER_LINE: midpoints,
+                    gui.HOVER_EDGE: vertices
                 }
             )
 
@@ -1429,8 +1461,9 @@ class RectangleMixin(DragMixin):
         """
         Check if the given position is on/near a selection edge or inside the selection.
 
-        :return: (tuple) the first element is False if not hovering, or the type of hover.
-            The second element is the index of the v_point if the edit mode is EDIT_MODE_POINT.
+        :return:
+           hover_type (HOVER_*): the type/location of hover, or HOVER_NONE if not hovering,
+           edge: the index of the v_point involved, if the edit mode is EDIT_MODE_POINT. Otherwise None.
 
         """
 
@@ -1438,26 +1471,15 @@ class RectangleMixin(DragMixin):
 
             vx, vy = vpos
 
-            if (
-                self.v_edges["r_l"] < vx < self.v_edges["r_r"] and
-                self.v_edges["r_t"] < vy < self.v_edges["r_b"]
-            ):
-                return gui.HOVER_ROTATION, None
+            # If the cursor position is near the edges
+            for hover, edges in self.v_edges.items():
+                for edge in edges:
+                    if edge.l < vx < edge.r and edge.t < vy < edge.b:
+                        if hover == gui.HOVER_LINE:
+                            self.hover_direction = self.update_hover_direction(edge.index)
+                        return hover, edge.index
 
-            for i in range(1, 5):
-                if (
-                    self.v_edges[f"mid_{i}_l"] < vx < self.v_edges[f"mid_{i}_r"] and
-                    self.v_edges[f"mid_{i}_t"] < vy < self.v_edges[f"mid_{i}_b"]
-                ):
-                    self.hover_direction = self.update_hover_direction(i)
-                    return gui.HOVER_LINE, i
-                elif (
-                    self.v_edges[f"{i}_l"] < vx < self.v_edges[f"{i}_r"] and
-                    self.v_edges[f"{i}_t"] < vy < self.v_edges[f"{i}_b"]
-                ):
-                    return gui.HOVER_EDGE, i
-
-            # If position outside outer box
+            # If the cursor position is inside the rectangle
             if point_in_polygon(
                 vpos,
                 [self.v_point1, self.v_point2, self.v_point3, self.v_point4]
@@ -1551,7 +1573,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
         self.edit_v_start_pos = None  # The view port coordinates where a drag/edit originated
         self.edit_hover = None  # What edge is being edited (gui.HOVER_*)
         self.edit_mode = edit_mode
-        self.edit_v_point_idx = None
+        self.edit_v_point_idx = None  # Index of the edge being moved (int)
 
         self.hover = gui.HOVER_NONE
         self.hover_margin = 10  # px
@@ -1562,27 +1584,23 @@ class LineEditingMixin(ClickMixin, DragMixin):
         # This attribute can be used to see if the canvas has shifted or scaled
         self.last_shiftscale = None
 
-        # Dict which contains l, r, t, b coordinates of each v_point according to the hover margin
-        self.v_edges = {}
+        # Dict in which key is the gui.HOVER_* type and value is a list of EdgeBoundingBox
+        # associated to the hover type
+        self.v_edges: Dict[int, List[EdgeBoundingBox]] = {}
 
         # TODO: Move these to the super classes
         self.colour = conversion.hex_to_frgba(colour)
         self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
         self.center = Vec(center)
         self.rotation = 0  # radians
+        # The rotation point in view coordinates
+        # Hovering over this point's bounding box will result in the hover selection
+        # as gui.HOVER_ROTATION. This will enable start_rotation and update_rotation methods
         self.v_rotation = Vec(center)
 
     def rotate_v_points(self, angle: float) -> None:
         for idx, point in enumerate(self.v_points):
-            self.v_points[idx] = self.rotate_v_point(point, angle)
-
-    def rotate_v_point(self, point: Vec, angle: float) -> Vec:
-        """Rotate a point (x, y) by an angle around the center point."""
-        dx = point.x - self.center.x
-        dy = point.y - self.center.y
-        x_new = self.center.x + dx * math.cos(angle) - dy * math.sin(angle)
-        y_new = self.center.y + dx * math.sin(angle) + dy * math.cos(angle)
-        return Vec(x_new, y_new)
+            self.v_points[idx] = point.rotate(angle, self.center)
 
     def stop_selection(self):
         """End the creation of the current selection."""
@@ -1679,45 +1697,58 @@ class LineEditingMixin(ClickMixin, DragMixin):
 
     def _calc_center(self):
         """Calculate the center of selection."""
-        xmin, ymin, xmax, ymax = util.get_polygon_bbox(self.v_points)
-        self.center = Vec((xmin + xmax) / 2, (ymin + ymax) / 2)
+        centroid_x = statistics.mean(p.x for p in self.v_points)
+        centroid_y = statistics.mean(p.y for p in self.v_points)
+        self.center = Vec(centroid_x, centroid_y)
 
     def _calc_edges(self):
         """Calculate the l, r, t, b coordinates of each edge according to the hover margin."""
         if self.right_click_finished:
 
             if self.edit_mode == EDIT_MODE_POINT:
+                self._calc_center()
                 # Rotation point near the first point
                 v_point_0 = self.v_points[0]
-                v_point_1 = self.v_points[1]
-                angle = math.atan2(v_point_1.y - v_point_0.y, v_point_1.x - v_point_0.x)
+                angle = math.atan2(v_point_0.y - self.center.y, v_point_0.x - self.center.x)
                 self.v_rotation = Vec(
-                    v_point_0.x - 2 * self.hover_margin * math.cos(angle),
-                    v_point_0.y - 2 * self.hover_margin * math.sin(angle),
+                    v_point_0.x + 2 * self.hover_margin * math.cos(angle),
+                    v_point_0.y + 2 * self.hover_margin * math.sin(angle),
                 )
+                rotation = [
+                    EdgeBoundingBox(
+                        l=self.v_rotation.x - self.hover_margin,
+                        r=self.v_rotation.x + self.hover_margin,
+                        t=self.v_rotation.y - self.hover_margin,
+                        b=self.v_rotation.y + self.hover_margin,
+                    )
+                ]
+
+                vertices = []
+                for idx, point in enumerate(self.v_points):
+                    vertices.append(
+                        EdgeBoundingBox(
+                            index=idx,
+                            l=point.x - self.hover_margin,
+                            r=point.x + self.hover_margin,
+                            t=point.y - self.hover_margin,
+                            b=point.y + self.hover_margin,
+                        )
+                    )
+
                 self.v_edges.update(
                     {
-                        "r_l": self.v_rotation.x - self.hover_margin,
-                        "r_r": self.v_rotation.x + self.hover_margin,
-                        "r_t": self.v_rotation.y - self.hover_margin,
-                        "r_b": self.v_rotation.y + self.hover_margin,
+                        gui.HOVER_ROTATION: rotation,
+                        gui.HOVER_EDGE: vertices,
                     }
                 )
-                # Vertices
-                for idx, point in enumerate(self.v_points):
-                    self.v_edges.update({
-                        f"x{idx}_l": point.x - self.hover_margin,
-                        f"x{idx}_r": point.x + self.hover_margin,
-                        f"y{idx}_t": point.y - self.hover_margin,
-                        f"y{idx}_b": point.y + self.hover_margin,
-                    })
 
     def get_hover(self, vpos) -> Tuple[int, Optional[int]]:
         """
         Check if the given position is on/near a selection edge or inside the selection.
 
-        :return: (tuple) the first element is False if not hovering, or the type of hover.
-            The second element is the index of the v_point if the edit mode is EDIT_MODE_POINT.
+        :return:
+           hover_type (HOVER_*): the type/location of hover, or HOVER_NONE if not hovering,
+           edge: the index of the v_point involved, if the edit mode is EDIT_MODE_POINT. Otherwise None.
 
         """
         if self.v_edges:
@@ -1725,17 +1756,10 @@ class LineEditingMixin(ClickMixin, DragMixin):
             vx, vy = vpos
 
             if self.edit_mode == EDIT_MODE_POINT:
-                for idx, _ in enumerate(self.v_points):
-                    if (
-                            self.v_edges[f"x{idx}_l"] < vx < self.v_edges[f"x{idx}_r"] and
-                            self.v_edges[f"y{idx}_t"] < vy < self.v_edges[f"y{idx}_b"]
-                    ):
-                        return gui.HOVER_EDGE, idx
-                if (
-                    self.v_edges["r_l"] < vx < self.v_edges["r_r"] and
-                    self.v_edges["r_t"] < vy < self.v_edges["r_b"]
-                ):
-                    return gui.HOVER_ROTATION, None
+                for hover, edges in self.v_edges.items():
+                    for edge in edges:
+                        if edge.l < vx < edge.r and edge.t < vy < edge.b:
+                            return hover, edge.index
 
             if point_in_polygon(vpos, self.v_points):
                 return gui.HOVER_SELECTION, None

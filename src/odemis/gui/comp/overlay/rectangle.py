@@ -22,7 +22,7 @@ This file is part of Odemis.
 import odemis.gui as gui
 from odemis.util.raster import point_in_polygon
 from odemis.gui.comp.overlay._constants import LINE_WIDTH_THIN, LINE_WIDTH_THICK
-from odemis.gui.comp.overlay.base import SEL_MODE_NONE, DragMixin, Vec, WorldOverlay
+from odemis.gui.comp.overlay.base import SEL_MODE_NONE, SEL_MODE_ROTATION, DragMixin, Vec, WorldOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.comp.overlay.world_select import RectanglePointsSelectOverlay
 
@@ -38,13 +38,30 @@ class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
         RectanglePointsSelectOverlay.__init__(self, cnvs, colour)
         EditableShape.__init__(self, cnvs)
 
-    def copy_shape(self, shape, shift):
-        if not isinstance(shape, RectangleOverlay):
-            raise ValueError("Shape to be copied is not RectangleOverlay!")
-        self.p_point1 = shape.p_point1 + shift
-        self.p_point2 = shape.p_point2 + shift
-        self.p_point3 = shape.p_point3 + shift
-        self.p_point4 = shape.p_point4 + shift
+    def copy(self):
+        """
+        :returns: (RectangleOverlay) a new instance of RectangleOverlay with necessary copied attributes.
+
+        """
+        shape = RectangleOverlay(self.cnvs)
+        shape.colour = self.colour
+        shape.p_point1 = self.p_point1
+        shape.p_point2 = self.p_point2
+        shape.p_point3 = self.p_point3
+        shape.p_point4 = self.p_point4
+        shape._points = self._points.copy()
+        shape._phys_to_view()
+        shape.points.value = shape._points
+        return shape
+
+    def move_to(self, pos):
+        """Move the shape's center to a physical position."""
+        current_pos  = self.get_position()
+        shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
+        self.p_point1 += shift
+        self.p_point2 += shift
+        self.p_point3 += shift
+        self.p_point4 += shift
         self._phys_to_view()
         self._points = self.get_physical_sel()
         self.points.value = self._points
@@ -99,7 +116,9 @@ class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
                 if self._points:
                     pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
                     self.selected.value = point_in_polygon(pos, self._points)
-                    if self.selected.value:
+                    # The rotation point is outside the shape and cannot be captured by selection VA
+                    # Also update the physical selection and points VA if the selection mode is SEL_MODE_ROTATION
+                    if self.selected.value or self.selection_mode == SEL_MODE_ROTATION:
                         self.set_physical_sel(self._points)
                         self.points.value = self._points
 
@@ -119,14 +138,14 @@ class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
         else:
             WorldOverlay.on_motion(self, evt)
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0, dash=True):
         """Draw the selection as a rectangle. Exactly the same as parent function except that
         it has an adaptive line width (wider if the overlay is active) and it always shows the
         size label of the selected rectangle."""
         flag = self.active.value and self.selected.value
         line_width = LINE_WIDTH_THICK if flag else LINE_WIDTH_THIN
 
-        RectanglePointsSelectOverlay.draw(self, ctx, shift, scale, line_width, dash=True)
+        RectanglePointsSelectOverlay.draw(self, ctx, shift, scale, line_width, dash=dash)
         # show size label if ROA is selected
         if self.p_point1 and self.p_point2 and self.p_point3 and self.p_point4 and flag:
             # Important: We need to use the physical positions, in order to draw

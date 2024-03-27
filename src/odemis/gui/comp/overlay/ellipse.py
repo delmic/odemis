@@ -48,15 +48,32 @@ class EllipseOverlay(RectangleOverlay):
         """
         super().__init__(cnvs, colour)
 
-    def copy_shape(self, shape, shift):
-        if not isinstance(shape, EllipseOverlay):
-            raise ValueError("Shape to be copied is not EllipseOverlay!")
-        self.p_point1 = shape.p_point1 + shift
-        self.p_point2 = shape.p_point2 + shift
-        self.p_point3 = shape.p_point3 + shift
-        self.p_point4 = shape.p_point4 + shift
+    def copy(self):
+        """
+        :returns: (EllipseOverlay) a new instance of EllipseOverlay with necessary copied attributes.
+
+        """
+        shape = EllipseOverlay(self.cnvs)
+        shape.colour = self.colour
+        shape.p_point1 = self.p_point1
+        shape.p_point2 = self.p_point2
+        shape.p_point3 = self.p_point3
+        shape.p_point4 = self.p_point4
+        shape._points = self._points.copy()
+        shape._phys_to_view()
+        shape.points.value = shape._points
+        return shape
+
+    def move_to(self, pos):
+        """Move the shape's center to a physical position."""
+        current_pos  = self.get_position()
+        shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
+        self.p_point1 += shift
+        self.p_point2 += shift
+        self.p_point3 += shift
+        self.p_point4 += shift
+        self._points = [p + shift for p in self._points]
         self._phys_to_view()
-        self.cnvs.update_drawing()
         self.points.value = self._points
 
     def is_point_in_shape(self, point):
@@ -73,6 +90,7 @@ class EllipseOverlay(RectangleOverlay):
         Check if left click was in ellipse. If so, activate the overlay. Otherwise, deactivate.
         """
         if self.active.value:
+            is_rotation = self.selection_mode == SEL_MODE_ROTATION
             # If the Diagonal points are not the same means the rectangle has been created
             if self.p_point1 != self.p_point3:
                 # Activate/deactivate region
@@ -81,7 +99,9 @@ class EllipseOverlay(RectangleOverlay):
                 if rectangle_points:
                     pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
                     self.selected.value = point_in_polygon(pos, rectangle_points)
-                    if self.selected.value:
+                    # The rotation point is outside the shape and cannot be captured by selection VA
+                    # Also update the physical selection if the selection mode is SEL_MODE_ROTATION
+                    if self.selected.value or is_rotation:
                         self.set_physical_sel(rectangle_points)
 
             # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
@@ -92,11 +112,13 @@ class EllipseOverlay(RectangleOverlay):
 
             # Set the points VA after drawing because draw() gathers the points
             self.cnvs.update_drawing()
-            if self.selected.value:
+            # The rotation point is outside the shape and cannot be captured by selection VA
+            # Update the points VA if the selection mode is SEL_MODE_ROTATION
+            if self.selected.value or is_rotation:
                 self.points.value = self._points
         WorldOverlay.on_left_up(self, evt)
 
-    def draw(self, ctx, shift=(0, 0), scale=1.0):
+    def draw(self, ctx, shift=(0, 0), scale=1.0, dash=True):
         """Draw the selection as a ellipse."""
         self._points.clear()
         flag = self.active.value and self.selected.value
@@ -115,15 +137,16 @@ class EllipseOverlay(RectangleOverlay):
 
             # draws the dotted line
             ctx.set_line_width(line_width)
-            ctx.set_dash([2])
+            if dash:
+                ctx.set_dash([2])
             ctx.set_line_join(cairo.LINE_JOIN_MITER)
             ctx.set_source_rgba(*self.colour)
             # Calculate the center of the ellipse
             ellipse_center_x = (b_point1.x + b_point3.x) / 2
             ellipse_center_y = (b_point1.y + b_point3.y) / 2
             # Calculate the side lengths to find the semi-major and semi-minor axis
-            side_length1 = math.sqrt((b_point1.x - b_point2.x)**2 + (b_point1.y - b_point2.y)**2)
-            side_length2 = math.sqrt((b_point1.x - b_point4.x)**2 + (b_point1.y - b_point4.y)**2)
+            side_length1 = math.hypot(b_point1.x - b_point2.x, b_point1.y - b_point2.y)
+            side_length2 = math.hypot(b_point1.x - b_point4.x, b_point1.y - b_point4.y)
             # Fixed semi-major axis
             a = side_length1 / 2
             # Fixed semi-minor axis
@@ -148,7 +171,7 @@ class EllipseOverlay(RectangleOverlay):
                     else:
                         ctx.line_to(*point)
                     p_point = self.cnvs.buffer_to_phys(point, offset)
-                    self._points.append(p_point)
+                    self._points.append(Vec(p_point))
                 ctx.close_path()
                 ctx.stroke()
 
@@ -157,7 +180,7 @@ class EllipseOverlay(RectangleOverlay):
 
             # show size label if ROA is selected
             if flag:
-                self.draw_side_labels(ctx, b_point1=b_point1, b_point2=b_point2, b_point4=b_point4)
+                self.draw_side_labels(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Draw the rotation label
             if self.selection_mode == SEL_MODE_ROTATION:

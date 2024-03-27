@@ -177,8 +177,9 @@ class ImportExportROAPlugin(Plugin):
                     (roa_coordinates[2], roa_coordinates[3]),  # xmax, ymax
                     (roa_coordinates[2], roa_coordinates[1]),  # xmax, ymin
                 ]
-                rectangle_overlay.points.value = points
                 rectangle_overlay.set_physical_sel(points)
+                rectangle_overlay._points = points
+                rectangle_overlay.points.value = points
             self._cnvs.reset_default_cursor()
 
     def _write_data_to_csv_file(self, filepath: str) -> None:

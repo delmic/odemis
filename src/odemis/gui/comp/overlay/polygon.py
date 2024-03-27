@@ -45,20 +45,29 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         LineEditingMixin.__init__(self, colour)
         EditableShape.__init__(self, cnvs)
 
-        self._label = self.add_label("", colour=self.colour, align=wx.ALIGN_CENTRE_HORIZONTAL)
-        self._rotation_label = self.add_label(
-            "", colour=self.colour, align=wx.ALIGN_CENTRE_HORIZONTAL
-        )
+        self._label = self.add_label("", align=wx.ALIGN_CENTRE_HORIZONTAL)
+        self._rotation_label = self.add_label("", align=wx.ALIGN_CENTRE_HORIZONTAL)
         self.v_point.subscribe(self._on_v_point)
 
-    def copy_shape(self, shape, shift):
-        if not isinstance(shape, PolygonOverlay):
-            raise ValueError("Shape to be copied is not PolygonOverlay!")
-        self._points = shape._points.copy()
-        for i in range(len(self._points)):
-            self._points[i] += shift
-        self._finished = shape._finished
-        self.v_points = [0] * len(self._points)
+    def copy(self):
+        """
+        :returns: (PolygonOverlay) a new instance of PolygonOverlay with necessary copied attributes.
+
+        """
+        shape = PolygonOverlay(self.cnvs)
+        shape.colour = self.colour
+        shape.v_points = self.v_points.copy()
+        shape._finished = self._finished
+        shape._points = self._points.copy()
+        shape._phys_to_view()
+        shape.points.value = shape._points
+        return shape
+
+    def move_to(self, pos):
+        """Move the shape's center to a physical position."""
+        current_pos  = self.get_position()
+        shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
+        self._points = [p + shift for p in self._points]
         self._phys_to_view()
         self.points.value = self._points
 
@@ -95,13 +104,16 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
 
     def on_left_up(self, evt):
         if self.active.value:
+            is_rotation = self.selection_mode == SEL_MODE_ROTATION
             LineEditingMixin._on_left_up(self, evt)
             if self.right_click_finished:
                 self._phys_to_view()
                 offset = self.cnvs.get_half_buffer_size()
                 p_point = Vec(self.cnvs.view_to_phys(evt.Position, offset))
                 self.selected.value = self.is_point_in_shape(p_point)
-                if self.selected.value:
+                # The rotation point is outside the shape and cannot be captured by selection VA
+                # Also update the points VA if the selection mode is SEL_MODE_ROTATION
+                if self.selected.value or is_rotation:
                     self.points.value = self._points
             self.cnvs.update_drawing()
         WorldOverlay.on_left_up(self, evt)
@@ -163,7 +175,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
     def draw_rotation_label(self, ctx):
         self._rotation_label.text = units.readable_str(math.degrees(self.rotation), "°", sig=4)
         self._rotation_label.pos = self.cnvs.view_to_buffer(self.center)
-        self._rotation_label.colour = self.colour
+        self._rotation_label.background = (0, 0, 0)  # black
         self._rotation_label.draw(ctx)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4, dash=True):
@@ -244,14 +256,12 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                         self._label.font_size = 9
                     else:
                         self._label.font_size = 14
-                self._label.colour = (1, 1, 1)  # white
                 self._label.background = (0, 0, 0)  # background
                 self._label.draw(ctx)
             else:
                 ctx.close_path()
                 ctx.stroke()
                 self._calc_edges()
-                # Draw the rotation point after calculating the edges
                 self.draw_edges(ctx)
                 # Draw the rotation label
                 if self.selection_mode == SEL_MODE_ROTATION:
