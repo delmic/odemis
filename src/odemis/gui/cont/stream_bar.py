@@ -24,6 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import functools
 import gc
 import logging
+import os
 from collections import OrderedDict
 import threading
 import time
@@ -33,11 +34,12 @@ import wx
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimodel
 from odemis import model
+from odemis.acq.stream_settings import StreamSettingsConfig
 from odemis.acq.stream import StaticStream, FastEMOverviewStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.stream import StreamController
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, get_home_folder
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
@@ -1198,6 +1200,53 @@ class SecomStreamsController(StreamBarController):
     Controls the streams for the SECOM and DELPHI live view
     """
 
+    def __init__(self, *args, **kwargs):
+        dir = os.path.join(get_home_folder(), u".config/odemis")
+        file_path = os.path.abspath(os.path.join(dir, f"stream_settings.json"))
+        max_entries = 10  # Maximum number most recent settings to display
+        # Initialize a file to save acquired streams
+        self.stream_settings = StreamSettingsConfig(file_path, max_entries)
+        # self.stream_settings must be defined before super() to add new streams
+        super().__init__(*args, **kwargs)
+
+    def update_stream_settings(self):
+        """
+        Update the recently used stream setting when the stream settings are updated during an acquisition
+        """
+        streams = [s.stream for s in self.stream_controllers]
+        self.stream_settings.update_entries(streams)
+
+        if self.stream_settings.config_data:
+            acq_names = sorted(self.stream_settings.entries)
+            # remove the old list of settings and then update the menu list with the updated stream settings
+            for index, label in enumerate(list(self.menu_actions)):
+                self.remove_action(label)
+            for label in acq_names:
+                call_label = functools.partial(self._addFluoWithSettings, label)
+                self.add_action(label, call_label)
+
+    def _addFluoWithSettings(self, label, **kwargs):
+        """
+        Set the Fluostream attributes to the selected acquired stream panel setting
+        :param label: the name of stream used to locate the stream settings in the settings file
+        """
+        stream = acqstream.FluoStream(
+            label,
+            self._main_data_model.ccd,
+            self._main_data_model.ccd.data,
+            self._main_data_model.light,
+            self._main_data_model.light_filter,
+            focuser=self._main_data_model.focus,
+            opm=self._main_data_model.opm,
+            detvas={"exposureTime"},
+        )
+        # set the settings for the stream from a saved settings in the JSON file
+        self.stream_settings.apply_settings(stream, label)
+
+        self._ensure_power_non_null(stream)
+
+        return self._add_stream(stream, **kwargs)
+
     def _createAddStreamActions(self):
         """ Create the compatible "add stream" actions according to the current microscope.
 
@@ -1225,7 +1274,15 @@ class SecomStreamsController(StreamBarController):
 
             # TODO: how to know it's _fluorescent_ microscope?
             # => multiple source? filter?
-            self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
+            # Add most recently used settings from a JSON file
+            if self.stream_settings.config_data:
+                acq_names = sorted(self.stream_settings.entries)
+                for label in acq_names:
+                    call_label = functools.partial(self._addFluoWithSettings, label)
+                    self.add_action(label, call_label, fluor_capable)
+            else:
+                # Add default preset option if no old setting is available
+                self.add_action("Filtered colour", self._userAddFluo, fluor_capable)
 
         # Bright-field & Dark-field are almost identical but for the emitter
         def brightfield_capable():
