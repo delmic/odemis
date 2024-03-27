@@ -30,13 +30,13 @@ import time
 from datetime import datetime, timedelta
 
 
-def guess_pattern(fn, is_count=True):
+def guess_pattern(fn, detect_count=True):
     """
     Generates a filename pattern form a given filename. The function detects certain
     formats of dates, time, and counters. It returns a string with replacement fields which
     can be used in create_filename to provide an updated version of the filename.
     :param fn: (string) filename (may include path and extension)
-    :param is_count: (boolean) by default True, if count is the name is to be detected, else False
+    :param detect_count: (boolean) by default True, if count is the name is to be detected, else False
     return:
         fn_ptn: (string) filename pattern (without path and extension)
         cnt: (string) counter
@@ -104,7 +104,7 @@ def guess_pattern(fn, is_count=True):
 
     # Detect count
     cnt = "001"  # will be used in case cnt pattern is added afterwards
-    if is_count:
+    if detect_count:
         cnt_ptn = r'\d{1,5}'
         cnt_m = None
         for m in re.finditer(cnt_ptn, fn_ptn):

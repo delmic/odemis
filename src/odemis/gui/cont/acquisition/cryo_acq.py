@@ -81,7 +81,7 @@ class CryoAcquiController(object):
         self._zStackActive = self._tab_data.zStackActive
 
         # Find the function pattern without detecting the count
-        self._config.fn_ptn, _ = guess_pattern(self._filename.value, is_count=False)
+        self._config.fn_ptn, _ = guess_pattern(self._filename.value, detect_count=False)
 
         # hide/show some widgets at initialization
         self._panel.gauge_cryosecom_acq.Hide()
@@ -298,9 +298,9 @@ class CryoAcquiController(object):
         :param filename: filename given by user
         """
         path_base, ext = splitext(filename)
-        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
-        feature_name = local_tab.tab_data_model.main.currentFeature.value.name.value
-        feature_status = local_tab.tab_data_model.main.currentFeature.value.status.value
+        feature = self._tab_data.main.currentFeature.value
+        feature_name = feature.name.value
+        feature_status = feature.status.value
 
         path, basename = os.path.split(path_base)
         ptn = f"{basename}-{feature_name}-{feature_status}-{{cnt}}"
@@ -545,7 +545,7 @@ class CryoAcquiController(object):
         new_filename = ShowAcquisitionFileDialog(self._panel, current_filename)
         if new_filename is not None:
             self._filename.value = new_filename
-            self._config.fn_ptn, _ = guess_pattern(new_filename, is_count=False)
+            self._config.fn_ptn, _ = guess_pattern(new_filename, detect_count=False)
             logging.debug("Generated filename pattern '%s'", self._config.fn_ptn)
 
     def _get_wavelength_vas(self, st):
