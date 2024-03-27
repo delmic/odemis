@@ -51,7 +51,9 @@ KWARGS_SHRK_SIM = dict(name="sr193", role="spectrograph", device="fake",
                        slits={1: ["slit-in", "force_max"], 3: "slit-monochromator"},
                        bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"},
                        drives_shutter=[1.57],
-                       accessory="slitleds")
+                       accessory="slitleds",
+                       check_move={"flip-out": False, "wavelength": True},
+                       )
 
 # Control unit used for PMT testing
 KWARGS_PMT = dict(name="test", role="pmt", port="/dev/fake")
