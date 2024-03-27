@@ -93,6 +93,32 @@ class TestFilenameSuggestions(unittest.TestCase):
                 fullfn = os.path.join(PATH, fn) + ext
                 self.assertEqual(guess_pattern(fullfn), ptn)
 
+        # test when count is not detected and, by default, set to '001'
+        fn_ptns = {
+                   'test-123': ('test-123', '001'),
+                   '%stest-123' % date: ('{datelng}test-123', '001'),
+                   '123-test-%s' % date: ('123-test-{datelng}', '001'),
+                   'test-123 %s--' % timelng_hyphen: ('test-123 {timelng_hyphen}--', '001'),
+                   'test-123-%s' % timeshrt_colon: ('test-123-{timeshrt_colon}', '001'),
+                   'test-%s-123-' % timelng_colon: ('test-{timelng_colon}-123-', '001'),
+                   '%s%s-acquisition' % (date, timelng): ('{datelng}{timelng}-acquisition', '001'),
+                   'test-0070': ('test-0070', '001'),
+                   '4580-test-%s' % dshrtrev: ('4580-test-{dshrtrev}', '001'),
+                   '4580-test:%s' % dshrtrev_hyphen: ('4580-test:{dshrtrev_hyphen}', '001'),
+                   '%s%s' % (daterev, timelng): ('{daterev}{timelng}', '001'),
+                   'test2-45': ('test2-45', '001'),
+                   'test 1980-08-23': ('test 1980-08-23', '001'),  # a date, but not *now*
+                   'test': ('test', '001'),
+                   '%s-cell5' % current_year: ('{year}-cell5', '001'),
+                   '%s-{cell}{cnt}' % current_year: ('{year}-{{cell}}{{cnt}}', '001')
+                    }
+
+        for fn, ptn in fn_ptns.items():
+            for ext in EXTS:
+                self.assertEqual(guess_pattern(fn, detect_count=False), ptn)
+                fullfn = os.path.join(PATH, fn) + ext
+                self.assertEqual(guess_pattern(fullfn, detect_count=False), ptn)
+
     def test_create_filename(self):
         # Test some time related patterns later, so that the right time is used
         fn_ptns = {

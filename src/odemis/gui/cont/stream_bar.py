@@ -2037,6 +2037,7 @@ class CryoAcquiredStreamsController(CryoStreamsController):
                                    view=self._feature_view)
         return sc
 
+    @call_in_wx_main
     def _on_current_feature_changes(self, feature):
         """
         Handle switching the acquired streams appropriate to the current feature
