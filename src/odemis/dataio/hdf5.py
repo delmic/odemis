@@ -413,7 +413,7 @@ def _add_image_info(group, dataset, image):
                                 "it will not be saved: %s", ex)
 
         # Wavelength (for spectrograms)
-        if "C" in dims and model.MD_WL_LIST in image.metadata:
+        if "C" in dims:
             try:
                 wll = spectrum.get_wavelength_per_pixel(image)
                 # list or polynomial of degree > 2 => store the values of each
@@ -430,6 +430,8 @@ def _add_image_info(group, dataset, image):
                 _h5svi_set_state(group["DimensionScaleC"], numpy.uint(ST_REPORTED))
                 cpos = dims.index("C")
                 dataset.dims[cpos].attach_scale(group["DimensionScaleC"])
+            except KeyError:
+                pass  # No wavelength information => it's fine, we just don't save it
             except Exception as ex:
                 logging.warning("Failed to record wavelength information, "
                                 "it will not be saved: %s", ex)
