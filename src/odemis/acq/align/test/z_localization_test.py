@@ -25,6 +25,7 @@ import os
 import re
 import unittest
 import warnings
+from concurrent.futures._base import CancelledError
 
 import odemis
 from odemis import model
@@ -202,6 +203,29 @@ class TestMeasureZ(unittest.TestCase):
 
         # Check it's not a super odd value: < 10µm
         self.assertLessEqual(abs(zshift), 10e-6)
+
+    def test_measure_z_cancel(self):
+        """
+        Test the cancellation process of measure_z.
+        """
+        # Note: the simulator image is not proper, so measure_z will return odd value
+        # with a warning.
+
+        # Ask to locate shift from the center (but within FoV)
+        pos = self.stage.position.value
+        fov = comp.compute_camera_fov(self.ccd)
+        pos = pos["x"] + fov[0] / 3, pos["y"] - fov[1] / 4
+
+        fms = stream.FluoStream("fluo", self.ccd, self.ccd.data,
+                               self.light, self.filter, focuser=self.focus)
+
+        angle = min(self.stigmator.getMetadata()[model.MD_CALIB].keys())
+
+        f = measure_z(self.stigmator, angle, pos, fms, logpath="test-measurez.ome.tiff")
+        f.cancel()
+        with self.assertRaises(CancelledError):
+            zshift, warning = f.result()
+        self.assertTrue(f.cancelled())
 
     def test_measure_z_bad_angle(self):
         """

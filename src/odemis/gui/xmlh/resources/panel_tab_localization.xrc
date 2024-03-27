@@ -350,6 +350,21 @@
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
+                                  <object class="ImageToggleButton" name="menu_localization_streams">
+                                    <icon>../../img/icon/arr_down_s.png</icon>
+                                    <height>24</height>
+                                    <size>20,24</size>
+                                    <face_colour>def</face_colour>
+                                    <label></label>
+                                    <fg>#1A1A1A</fg>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxRIGHT</flag>
+                                  <border>1</border>
+                                </object>
+                                <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_z_localization">
                                     <height>24</height>
                                     <label>Locate Z...</label>
@@ -360,7 +375,7 @@
                                     <bg>#000000</bg>
                                   </object>
                                   <flag>wxRIGHT</flag>
-                                  <border>10</border>
+                                  <border>2</border>
                                 </object>
                                 <object class="sizeritem">
                                   <object class="wxStaticText" name="lbl_z_localization">
