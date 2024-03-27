@@ -700,5 +700,43 @@ class GetBestDtypeForAccTestCase(unittest.TestCase):
         self.assertEqual(idtype, numpy.float64)
 
 
+class LineFunctionsTestCase(unittest.TestCase):
+
+    def test_slope_of_line(self):
+        # Test non-vertical line with positive slope
+        self.assertAlmostEqual(util.slope_of_line((0, 0), (1, 2)), 2.0)
+
+        # Test non-vertical line with negative slope
+        self.assertAlmostEqual(util.slope_of_line((0, 0), (-1, 2)), -2.0)
+
+        # Test vertical line
+        self.assertEqual(util.slope_of_line((1, 1), (1, 2)), math.inf)
+
+        # Test horizontal line
+        self.assertAlmostEqual(util.slope_of_line((0, 0), (2, 0)), 0.0)
+
+    def test_intercept_of_line(self):
+        # Test non-vertical line with positive slope
+        self.assertAlmostEqual(util.intercept_of_line((1, 2), 2.0), 0)
+
+        # Test non-vertical line with negative slope
+        self.assertAlmostEqual(util.intercept_of_line((-1, 2), -2.0), 0)
+
+        # Test vertical line
+        self.assertEqual(util.intercept_of_line((1, 1), math.inf), 1)
+
+    def test_project_point_on_line(self):
+        # Test non-vertical line with positive slope
+        self.assertTupleEqual(util.project_point_on_line((1, 2), 2.0, 0.0), (1, 2))
+
+        # Test non-vertical line with negative slope
+        self.assertTupleEqual(util.project_point_on_line((-1, 2), -2.0, 0.0), (-1, 2))
+
+        # Test vertical line
+        self.assertTupleEqual(util.project_point_on_line((0, 0), math.inf, 1.0), (1.0, 0.0))
+
+        # Test horizontal line
+        self.assertTupleEqual(util.project_point_on_line((2, 3), 0.0, 1.0), (2.0, 1.0))
+
 if __name__ == "__main__":
     unittest.main()

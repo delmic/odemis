@@ -20,12 +20,12 @@ This file is part of Odemis.
 
 """
 from abc import ABCMeta, abstractmethod
-from typing import Tuple
+from typing import Tuple, List, Union
 
 import wx
 
 from odemis import model, util
-from odemis.gui.comp.overlay.base import WorldOverlay
+from odemis.gui.comp.overlay.base import WorldOverlay, Vec
 
 class EditableShape(metaclass=ABCMeta):
     """
@@ -42,12 +42,12 @@ class EditableShape(metaclass=ABCMeta):
         # The points VA is set to _points if the shape is selected
         self.points = model.ListVA()
         # Useful for internal points manipulation
-        self._points = []
+        self._points: List[Vec] = []
         self.cnvs = cnvs
 
     def get_bounding_box(self) -> Tuple[float, float, float, float]:
         """Get the shape's bounding box."""
-        return util.get_polygon_bbox(self.points.value)
+        return util.get_polygon_bbox(self._points)
 
     def get_position(self) -> Tuple[float, float]:
         """Get the shape's position."""
@@ -77,14 +77,18 @@ class EditableShape(metaclass=ABCMeta):
         pass
 
     @abstractmethod
-    def copy_shape(self, shape, shift: Tuple[float, float]):
-        """
-        Copy a shape's attributes and shift it.
+    def copy(self):
+        """Return a new instance of EditableShape with necessary copied attributes."""
+        pass
 
-        :param shape: the shape whose specific attributes needs to be copied.
-        :param shift: the shift in (x, y).
+    @abstractmethod
+    def move_to(self, pos: Union[Tuple[float, float], Vec]):
+        """Move the shape's center to a physical position."""
+        pass
 
-        """
+    @abstractmethod
+    def refresh(self):
+        """Refresh the shape's points VA after copy or move_to operation."""
         pass
 
 
@@ -174,24 +178,20 @@ class ShapesOverlay(WorldOverlay):
         self._shapes.append(shape)
         self.cnvs.add_world_overlay(shape)
         self.new_shape._set_value(shape, force_write=True)
-        self._selected_shape = shape
+        return shape
 
     def _copy_shape(self, evt):
         """Copy a selected shape to evt.Position as the center."""
-        # Create a new shape instance since copy.deepcopy() for shape_cls does not work
-        shape = self.shape_cls(self.cnvs)
+        p_event_pos = self.cnvs.view_to_phys(
+            evt.Position, self.cnvs.get_half_buffer_size()
+        )
+        shape = self._shape_to_copy.copy()
+        shape.move_to(p_event_pos)
         self._shapes.append(shape)
         self.cnvs.add_world_overlay(shape)
         self.new_shape._set_value(shape, force_write=True)
-        # Find the shift to evt.Position
-        pos = self._shape_to_copy.get_position()
-        current_pos = self.cnvs.view_to_phys(
-            evt.Position, self.cnvs.get_half_buffer_size()
-        )
-        shift_x = current_pos[0] - pos[0]
-        shift_y = current_pos[1] - pos[1]
-        # Copy the shape and shift it
-        shape.copy_shape(self._shape_to_copy, (shift_x, shift_y))
+        # Finally refresh the shape's points VA
+        shape.refresh()
 
     def on_left_down(self, evt):
         if not self.active.value:
@@ -204,7 +204,7 @@ class ShapesOverlay(WorldOverlay):
         else:
             self._selected_shape = self._get_shape(evt)
             if self._selected_shape is None:
-                self._create_new_shape()
+                self._selected_shape = self._create_new_shape()
             self._selected_shape.active.value = True
             self._selected_shape.on_left_down(evt)
         WorldOverlay.on_left_down(self, evt)

@@ -38,13 +38,25 @@ class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
         RectanglePointsSelectOverlay.__init__(self, cnvs, colour)
         EditableShape.__init__(self, cnvs)
 
-    def copy_shape(self, shape, shift):
-        if not isinstance(shape, RectangleOverlay):
-            raise ValueError("Shape to be copied is not RectangleOverlay!")
-        self.p_point1 = shape.p_point1 + shift
-        self.p_point2 = shape.p_point2 + shift
-        self.p_point3 = shape.p_point3 + shift
-        self.p_point4 = shape.p_point4 + shift
+    def copy(self):
+        shape = RectangleOverlay(self.cnvs)
+        shape.colour = self.colour
+        shape.p_point1 = self.p_point1
+        shape.p_point2 = self.p_point2
+        shape.p_point3 = self.p_point3
+        shape.p_point4 = self.p_point4
+        shape._points = self._points.copy()
+        return shape
+
+    def move_to(self, pos):
+        current_pos  = self.get_position()
+        shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
+        self.p_point1 += shift
+        self.p_point2 += shift
+        self.p_point3 += shift
+        self.p_point4 += shift
+
+    def refresh(self):
         self._phys_to_view()
         self._points = self.get_physical_sel()
         self.points.value = self._points

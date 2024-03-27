@@ -31,7 +31,7 @@ import wx
 from odemis.gui.comp.overlay.base import (EDIT_MODE_BOX, SEL_MODE_CREATE,
                                           SEL_MODE_EDIT, SEL_MODE_ROTATION,
                                           SelectionMixin, Vec, WorldOverlay,
-                                          RectangleMixin)
+                                          RectangleEditingMixin)
 
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
@@ -244,19 +244,29 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     # END Event Handlers
 
 
-class RectanglePointsSelectOverlay(WorldOverlay, RectangleMixin):
+class RectanglePointsSelectOverlay(WorldOverlay, RectangleEditingMixin):
+    """
+    A class for creating a rectangular selection overlay based on points.
 
+    This overlay allows defining a rectangular selection by clicking and dragging on the
+    canvas. The selected rectangle can be manipulated by dragging its edges or rotating it.
+
+    """
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR, center=(0, 0)):
         WorldOverlay.__init__(self, cnvs)
-        RectangleMixin.__init__(self, colour, center)
+        RectangleEditingMixin.__init__(self, colour, center)
 
         self.p_point1 = None
         self.p_point2 = None
         self.p_point3 = None
         self.p_point4 = None
 
-        self._side1_label = self.add_label("", colour=(0.8, 0.8, 0.8), align=wx.ALIGN_RIGHT)
-        self._side2_label = self.add_label("", colour=(0.8, 0.8, 0.8), align=wx.ALIGN_RIGHT)
+        # Labels for the bottom and right side length of the rectangle
+        # Call draw_side_labels to use them
+        self._side1_label = self.add_label("", align=wx.ALIGN_RIGHT)
+        self._side2_label = self.add_label("", align=wx.ALIGN_RIGHT)
+        # Label for the rotation angle of the rectangle
+        # Call draw_rotation_label to use it
         self._rotation_label = self.add_label(
             "", colour=self.colour, align=wx.ALIGN_CENTRE_HORIZONTAL
         )
@@ -328,7 +338,7 @@ class RectanglePointsSelectOverlay(WorldOverlay, RectangleMixin):
     def on_left_down(self, evt):
         """ Start drag action if enabled, otherwise call super method so event will propagate """
         if self.active.value:
-            RectangleMixin._on_left_down(self, evt)
+            RectangleEditingMixin._on_left_down(self, evt)
             self._view_to_phys()
             self.cnvs.update_drawing()
         else:
@@ -337,7 +347,7 @@ class RectanglePointsSelectOverlay(WorldOverlay, RectangleMixin):
     def on_left_up(self, evt):
         """ End drag action if enabled, otherwise call super method so event will propagate """
         if self.active.value:
-            RectangleMixin._on_left_up(self, evt)
+            RectangleEditingMixin._on_left_up(self, evt)
             self._view_to_phys()
             self.cnvs.update_drawing()
         else:
@@ -416,7 +426,6 @@ class RectanglePointsSelectOverlay(WorldOverlay, RectangleMixin):
             (b_xmax_ymin.y + b_xmin_ymin.y) / 2 + 8,
         )
         self._side1_label.text = side1_length
-        self._side1_label.colour = (1, 1, 1)  # white
         self._side1_label.background = (0, 0, 0)  # black
         self._side1_label.deg = math.degrees(side1_angle)
         self._side1_label.draw(ctx)
@@ -426,7 +435,6 @@ class RectanglePointsSelectOverlay(WorldOverlay, RectangleMixin):
             (b_xmax_ymax.y + b_xmax_ymin.y) / 2 + 8,
         )
         self._side2_label.text = side2_length
-        self._side1_label.colour = (1, 1, 1)  # white
         self._side2_label.background = (0, 0, 0)  # black
         self._side2_label.deg = math.degrees(side2_angle)
         self._side2_label.draw(ctx)

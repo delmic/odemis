@@ -48,15 +48,28 @@ class EllipseOverlay(RectangleOverlay):
         """
         super().__init__(cnvs, colour)
 
-    def copy_shape(self, shape, shift):
-        if not isinstance(shape, EllipseOverlay):
-            raise ValueError("Shape to be copied is not EllipseOverlay!")
-        self.p_point1 = shape.p_point1 + shift
-        self.p_point2 = shape.p_point2 + shift
-        self.p_point3 = shape.p_point3 + shift
-        self.p_point4 = shape.p_point4 + shift
+    def copy(self):
+        shape = EllipseOverlay(self.cnvs)
+        shape.colour = self.colour
+        shape.p_point1 = self.p_point1
+        shape.p_point2 = self.p_point2
+        shape.p_point3 = self.p_point3
+        shape.p_point4 = self.p_point4
+        shape._points = self._points.copy()
+        return shape
+
+    def move_to(self, pos):
+        current_pos  = self.get_position()
+        shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
+        self.p_point1 += shift
+        self.p_point2 += shift
+        self.p_point3 += shift
+        self.p_point4 += shift
+        for i in range(len(self._points)):
+            self._points[i] += shift
+
+    def refresh(self):
         self._phys_to_view()
-        self.cnvs.update_drawing()
         self.points.value = self._points
 
     def is_point_in_shape(self, point):
@@ -148,7 +161,7 @@ class EllipseOverlay(RectangleOverlay):
                     else:
                         ctx.line_to(*point)
                     p_point = self.cnvs.buffer_to_phys(point, offset)
-                    self._points.append(p_point)
+                    self._points.append(Vec(p_point))
                 ctx.close_path()
                 ctx.stroke()
 
@@ -157,7 +170,7 @@ class EllipseOverlay(RectangleOverlay):
 
             # show size label if ROA is selected
             if flag:
-                self.draw_side_labels(ctx, b_point1=b_point1, b_point2=b_point2, b_point4=b_point4)
+                self.draw_side_labels(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Draw the rotation label
             if self.selection_mode == SEL_MODE_ROTATION:

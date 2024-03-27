@@ -51,14 +51,21 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         )
         self.v_point.subscribe(self._on_v_point)
 
-    def copy_shape(self, shape, shift):
-        if not isinstance(shape, PolygonOverlay):
-            raise ValueError("Shape to be copied is not PolygonOverlay!")
-        self._points = shape._points.copy()
+    def copy(self):
+        shape = PolygonOverlay(self.cnvs)
+        shape.colour = self.colour
+        shape.v_points = self.v_points.copy()
+        shape._finished = self._finished
+        shape._points = self._points.copy()
+        return shape
+
+    def move_to(self, pos):
+        current_pos  = self.get_position()
+        shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
         for i in range(len(self._points)):
             self._points[i] += shift
-        self._finished = shape._finished
-        self.v_points = [0] * len(self._points)
+
+    def refresh(self):
         self._phys_to_view()
         self.points.value = self._points
 
@@ -251,7 +258,6 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                 ctx.close_path()
                 ctx.stroke()
                 self._calc_edges()
-                # Draw the rotation point after calculating the edges
                 self.draw_edges(ctx)
                 # Draw the rotation label
                 if self.selection_mode == SEL_MODE_ROTATION:
