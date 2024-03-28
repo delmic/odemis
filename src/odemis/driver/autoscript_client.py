@@ -239,9 +239,22 @@ class FIBSEM(model.HwComponent):
                 f"Successfully connected to autoscript server with software version {self._swVersion} and hardware"
                 f"version {self._hwVersion}")
         except CommunicationError as err:
+            import msgpack
+            info = f"""PYRO 5: {pkg_resources.get_distribution('Pyro5').version}, 
+            msgpack-numpy: {pkg_resources.get_distribution('msgpack-numpy').version}, 
+            msgpack_numpy_file: {msgpack_numpy.__file__},
+            msgpack version: {pkg_resources.get_distribution('msgpack').version}
+            msgpack_file: {msgpack.__file__}
+
+            This is likely a dependencies issue:
+            make sure you have the following matching versions of msgpack and msgpack-numpy installed:
+            msgpack==0.5.6, msgpack-numpy==0.4.4
+            or
+            msgpack==1.0.3 msgpack-numpy==0.4.8
+            """
             raise HwError("Failed to connect to autoscript server '%s'. Check that the "
                           "uri is correct and autoscript server is"
-                          " connected to the network. %s" % (address, err))
+                          " connected to the network. %s %s" % (address, err, info))
         except OSError as err:
             raise HwError("XT server reported error: %s." % (err,))
 
@@ -2051,41 +2064,46 @@ class Stage(model.Actuator):
                     self.parent.move_stage_absolute(pos)
                 time.sleep(0.1)  # It takes a little while before the stage is being reported as moving
 
+                
+                # TODO: these movements are blocking, so we can't report progress with self._updatePosition()?
+                # how to work around this?
+
+
                 # Wait until the move is over.
                 # Don't check for future._must_stop because anyway the stage will
                 # stop moving, and so it's nice to wait until we know the stage is
                 # not moving.
-                moving = True
-                tstart = time.time()
-                last_pos_update = 0
-                while moving:
-                    # Take the opportunity to update .position (every 100 ms)
-                    now = time.time()
-                    if now - last_pos_update > 0.1:
-                        self._updatePosition()
-                        last_pos_update = now
+                # moving = True
+                # tstart = time.time()
+                # last_pos_update = 0
+                # while moving:
+                #     # Take the opportunity to update .position (every 100 ms)
+                #     now = time.time()
+                #     if now - last_pos_update > 0.1:
+                #         self._updatePosition()
+                #         last_pos_update = now
 
-                    if time.time() > tstart + timeout:
-                        self.parent.stop_stage_movement()
-                        logging.error("Timeout after submitting stage move. Aborting move.")
-                        break
+                #     if time.time() > tstart + timeout:
+                #         self.parent.stop_stage_movement()
+                #         logging.error("Timeout after submitting stage move. Aborting move.")
+                #         break
 
-                    # Wait for a little while so that we do not keep using the CPU all the time.
-                    time.sleep(20e-3)
-                    moving = self.parent.stage_is_moving()
-                    if not moving:
-                        # Be a little careful, because sometimes, half-way through a move
-                        # the stage is reported not moving for a short while (usually,
-                        # when one axis finished moving, and another is about to start).
-                        self._updatePosition()
-                        logging.debug("Confirming the stage really stopped")
+                #     # Wait for a little while so that we do not keep using the CPU all the time.
+                #     time.sleep(20e-3)
+                #     moving = self.parent.stage_is_moving()
+                #     if not moving:
+                #         # Be a little careful, because sometimes, half-way through a move
+                #         # the stage is reported not moving for a short while (usually,
+                #         # when one axis finished moving, and another is about to start).
+                #         self._updatePosition()
+                #         logging.debug("Confirming the stage really stopped")
 
-                        time.sleep(20e-3)
-                        moving = self.parent.stage_is_moving()
-                        if moving:
-                            logging.warning("Stage reported stopped but moving again, will wait longer")
-                else:
-                    logging.debug("Stage move completed")
+                #         time.sleep(20e-3)
+                #         moving = self.parent.stage_is_moving()
+                #         if moving:
+                #             logging.warning("Stage reported stopped but moving again, will wait longer")
+                # else:
+                #     logging.debug("Stage move completed")
 
                 # If it was cancelled, Abort() has stopped the stage before, and
                 # we still have waited until the stage stopped moving. Now let
