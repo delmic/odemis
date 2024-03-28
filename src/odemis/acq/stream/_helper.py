@@ -20,17 +20,20 @@ You should have received a copy of the GNU General Public License along with Ode
 
 
 from abc import abstractmethod
-from concurrent.futures._base import CancelledError
 from functools import wraps
 import logging
 import math
+import time
+
 import numbers
 import numpy
+import wx
+
 from odemis import model
 from odemis.acq import align
+from odemis.gui.comp import popup
 from odemis.model import VigilantAttributeBase, MD_POL_NONE
 from odemis.util import img, almost_equal, get_best_dtype_for_acc, angleres
-import time
 
 from ._base import Stream, UNDEFINED_ROI, POL_POSITIONS
 from ._live import LiveStream
@@ -697,7 +700,9 @@ class CCDSettingsStream(RepetitionStream):
 
 
 class SpectrumSettingsStream(CCDSettingsStream):
-    """ A Spectrum stream. The live view is just the current raw spectrum (wherever the e-beam is)."""
+    """
+    A Spectrum stream. The live view is just the current raw spectrum (wherever the e-beam is).
+    """
     def __init__(self, name, detector, dataflow, emitter, light=None, **kwargs):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_SPECTRUM
@@ -718,22 +723,22 @@ class SpectrumSettingsStream(CCDSettingsStream):
         # TODO: grating/cw as VAs (from the spectrometer)
 
         if self.light:
-            # FIXME: part for getting power on the spectrum stream
             # Current channel index to be used for channel's power update
-            # current_exc = self._get_current_excitation()
-            # self._channel_idx = emitter.spectra.value.index(current_exc)
             self._channel_idx = 0
 
-            # Current power VA representing power for one 'currently selected' channel only
+            # set a channel index if an emitter consists of multiple spectra
+            if self._emitter.role != "e-beam":
+                current_exc = self._get_current_excitation()
+                self._channel_idx = emitter.spectra.value.index(current_exc)
+
             cp_range = tuple(r[self._channel_idx] for r in self.light.power.range)
-            # TODO: put the power on 1% at default instead of the current value
+            # keep the current power setting for the VA
             self.power = model.FloatContinuous(self.light.power.value[self._channel_idx], range=cp_range,
                                                unit=self.light.power.unit)
             self.power.clip_on_range = True
             self.power.subscribe(self._onPower)
-            #TODO: disable the power slider on default, if onActive is triggered enable it
-
-    # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
+            if model.hasVA(self.light, "interlockTriggered"):
+                self.light.interlockTriggered.subscribe(self._on_interlock_change)
 
     def _get_current_excitation(self):
         """
@@ -758,6 +763,27 @@ class SpectrumSettingsStream(CCDSettingsStream):
             pwr = list(self.light.power.range[0])
             pwr[self._channel_idx] = value
             self.light.power.value = pwr
+
+    def _on_interlock_change(self, value):
+        """
+        Some form of notification to the user to inform about a change in interlock status.
+        :param value: current interlockTriggered VA value
+        """
+        logging.warning(f"Interlock status changed from {not value} -> "
+                        f"{value}")
+
+        if value:
+            popup.show_message(wx.GetApp().main_frame,
+                               title="Laser safety",
+                               message=f"Laser was suspended automatically due to interlock trigger.",
+                               timeout=10.0,
+                               level=logging.WARNING)
+        else:
+            popup.show_message(wx.GetApp().main_frame,
+                               title="Laser safety",
+                               message=f"Laser interlock trigger is reset to normal.",
+                               timeout=10.0,
+                               level=logging.WARNING)
 
     def _updateImage(self):
         if not self.raw:

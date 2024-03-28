@@ -111,10 +111,10 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         self._anchor_raw = []  # data of the anchor region
 
         # Emitter should be the same for all the streams
-        # self._emitter = s0._emitter
-        # for s in streams[1:]:
-        #     if self._emitter != s.emitter:
-        #         raise ValueError("Streams %s and %s have different emitters" % (s0, s))
+        self._emitter = s0._emitter
+        for s in streams[1:]:
+            if self._emitter != s.emitter:
+                raise ValueError("Streams %s and %s have different emitters" % (s0, s))
 
         # Get ROA from the first stream with this info
         for s in streams:
