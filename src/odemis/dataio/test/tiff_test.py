@@ -543,7 +543,7 @@ class TestTiffIO(unittest.TestCase):
                  (2, 3, 256, 512),
                  (1, 1, 256, 512)
                  ]
-        self.checkImageJMetadata(sizes, num_channels=1, num_frames=1, num_slices=1)
+        self.checkImageJMetadata(sizes, num_channels=3, num_frames=1, num_slices=1)
 
         sizes = [(1, 1, 256, 512),
                  (1, 1, 1, 256, 512),
@@ -556,7 +556,7 @@ class TestTiffIO(unittest.TestCase):
                  (3, 5, 256, 512),
                  (1, 5, 256, 512)
                  ]
-        self.checkImageJMetadata(sizes, num_channels=2, num_frames=3, num_slices=5)
+        self.checkImageJMetadata(sizes, num_channels=3, num_frames=3, num_slices=5)
 
         sizes = [(3, 1, 1, 256, 512),
                  (1, 1, 1, 256, 512),
@@ -567,7 +567,7 @@ class TestTiffIO(unittest.TestCase):
         sizes = [(40, 1, 10, 300, 400),
                  (40, 1, 10, 300, 400)
                  ]
-        self.checkImageJMetadata(sizes, num_channels=40, num_frames=1, num_slices=10)
+        self.checkImageJMetadata(sizes, num_channels=2, num_frames=1, num_slices=10)
 
 #    @skip("simple")
     def testExportRead(self):
@@ -1241,7 +1241,7 @@ class TestTiffIO(unittest.TestCase):
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
-                     model.MD_DESCRIPTION: "green dye",
+                     model.MD_DESCRIPTION: "red dye",
                      model.MD_ACQ_DATE: time.time() + 2,
                      model.MD_BPP: 12,
                      model.MD_BINNING: (1, 1),  # px, px
@@ -1257,7 +1257,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_SHEAR_COR: 0.003,
                     },
                     ]
-        # create 3 greyscale images of same size
+        # create 4 greyscale images of same size
         size = (512, 256)
         dtype = numpy.dtype("uint16")
         ldata = []
@@ -2210,6 +2210,102 @@ class TestTiffIO(unittest.TestCase):
         with self.assertRaises(AttributeError):
             # the image is not tiled
             rdata.content[0].getTile(0, 0, 0)
+
+    def testWriteImageJMultiZStack(self):
+        """
+        Checks the reading of FM images from multiple channels, such that is compatible with ImageJ written format
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "blue dye",
+                     model.MD_ACQ_DATE: time.time() + 1,
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
+                     model.MD_POS: (13.7e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_IN_WL: (500e-9, 522e-9),  # m
+                     model.MD_OUT_WL: (400e-9, 450e-9), # m
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "green dye",
+                     model.MD_ACQ_DATE: time.time() + 2,
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1), # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
+                     model.MD_POS: (13.7e-3, -30e-3), # m
+                     model.MD_EXP_TIME: 1, # s
+                     model.MD_IN_WL: (590e-9, 620e-9),  # m
+                     model.MD_OUT_WL: (520e-9, 550e-9), # m
+                    },
+                    {model.MD_SW_VERSION: "1.0-test",
+                     model.MD_HW_NAME: "fake hw",
+                     model.MD_DESCRIPTION: "red dye",
+                     model.MD_ACQ_DATE: time.time() + 2,
+                     model.MD_BPP: 12,
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1,  # s
+                     model.MD_IN_WL: (600e-9, 630e-9),  # m
+                     model.MD_OUT_WL: (620e-9, 650e-9),  # m
+                    },
+                    ]
+        # create 4 greyscale images of same size
+        size = (300, 400, 10, 1)  # X, Y, Z, T
+        dtype = numpy.dtype("uint16")
+        ldata = []
+        for i, md in enumerate(metadata):
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), md.copy())
+            a[:, :, 0, 0] = i
+            a[:, :, i*20:i*20+10, i*20:i*20+10] = 1000  # "watermark" it
+            ldata.append(a)
+
+        # export
+        tiff.export(FILENAME, ldata)
+
+        # The multi-channel z stack must belong to same group
+        image_groups = tiff._findImageGroups(ldata)
+        self.assertEqual(len(image_groups), 1)
+
+        # In OME information, C channel changes fastest, then Z and lastly T, For e.g.
+        #             <TiffData IFD="0" FirstC="0" FirstT="0" FirstZ="0" PlaneCount="1" />
+        #             <TiffData IFD="1" FirstC="1" FirstT="0" FirstZ="0" PlaneCount="1" />
+        #             <TiffData IFD="2" FirstC="2" FirstT="0" FirstZ="0" PlaneCount="1" />
+        #             <TiffData IFD="3" FirstC="0" FirstT="0" FirstZ="1" PlaneCount="1" />
+        #             <TiffData IFD="4" FirstC="1" FirstT="0" FirstZ="1" PlaneCount="1" />
+        #             <TiffData IFD="5" FirstC="2" FirstT="0" FirstZ="1" PlaneCount="1" />
+        ometxt = tiff._convertToOMEMD(ldata)
+        root = ET.fromstring(ometxt)
+        # Check for first 6 ifds
+        ifd_max = 6
+        first_z = [0, 0, 0, 1, 1, 1]
+        first_c = [0, 1, 2, 0, 1, 2]
+        for ind, element in enumerate(root.iter('TiffData')):
+            tiffdata = element.attrib
+            if tiffdata["IFD"] < ifd_max:
+                self.assertEqual(tiffdata["IFD"], ind)
+                self.assertEqual(tiffdata["FirstC"], first_c[ind])
+                self.assertEqual(tiffdata["FirstT"], 0)
+                self.assertEqual(tiffdata["FirstZ"], first_z[ind])
+                self.assertEqual(tiffdata["Plane"], 1)
+            else:
+                break
+
+        # check it's here
+        st = os.stat(FILENAME) # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            shape = ldata[i].shape
+            # Pad the shape with 1s to always get 5 dimensions
+            res =(1,) * (5 - len(shape)) + shape
+            self.assertEqual(im.shape, res)
 
     def testAcquisitionDataTIFFLargerFile(self):
 

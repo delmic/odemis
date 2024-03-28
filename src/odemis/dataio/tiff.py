@@ -1199,7 +1199,7 @@ def _findImageGroups(das):
     # FIXME: never do it for pyramidal images for now, as we don't support reading
     # them back?
     # We consider images to be part of the same group if they have:
-    # * signs to be an optical image
+    # * signs to be an FM image
     # * same shape
     # * metadata that show they were acquired by the same instrument
     groups = dict()
@@ -1208,14 +1208,15 @@ def _findImageGroups(das):
 
     for da in das:
         # check if it can be part of the current group (compare just to the previous DA)
+        dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim::])
         if (prev_da is None
-            or da.shape[0] != 1  # If C != 1 => not possible to merge (C is always first dimension)
+            or ("C" in dims and da.shape[dims.index("C")] != 1)  # If C != 1 => not possible to merge (C is always first dimension)
+            or (da.shape[-2] != 1 and len(da.shape) == 2)  # thumbnail image of format YX
             or (model.MD_IN_WL not in da.metadata or model.MD_OUT_WL not in da.metadata)
             or prev_da.shape != da.shape
             or prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None)
             or prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
             or prev_da.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
-            or prev_da.metadata.get(model.MD_LIGHT_POWER) != da.metadata.get(model.MD_LIGHT_POWER)
             or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
             or prev_da.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
             or prev_da.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
@@ -1546,14 +1547,21 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
                 s = 1
             rep_hdim.append(s)
 
-    for index in numpy.ndindex(*rep_hdim):
+    # hdims = CTZ
+    # rep_hdims = CTZ
+    # swap to TZC (for ImageJ)
+    hdims_j = [hdims[1], hdims[2], hdims[0]]
+    rep_hdim_j = [rep_hdim[1], rep_hdim[2], rep_hdim[0]]
+
+    logging.debug(f"Will scan the dimension {hdims_j} of size {rep_hdim_j}")
+    for index in numpy.ndindex(*rep_hdim_j):
         if fname is not None:
             tde = ET.SubElement(pixels, "TiffData", attrib={
                         # Since we have multiple files ifd is 0
                         "IFD": "%d" % subid,
-                        "FirstC": "%d" % index[hdims.index("C")],
-                        "FirstT": "%d" % index[hdims.index("T")],
-                        "FirstZ": "%d" % index[hdims.index("Z")],
+                        "FirstC": "%d" % index[hdims_j.index("C")],
+                        "FirstT": "%d" % index[hdims_j.index("T")],
+                        "FirstZ": "%d" % index[hdims_j.index("Z")],
                         "PlaneCount": "1"
                         })
             f_name = ET.SubElement(tde, "UUID", attrib={
@@ -1562,9 +1570,9 @@ def _addImageElement(root, das, ifd, rois, fname=None, fuuid=None):
         else:
             tde = ET.SubElement(pixels, "TiffData", attrib={
                                     "IFD": "%d" % (ifd + subid),
-                                    "FirstC": "%d" % index[hdims.index("C")],
-                                    "FirstT": "%d" % index[hdims.index("T")],
-                                    "FirstZ": "%d" % index[hdims.index("Z")],
+                                    "FirstC": "%d" % index[hdims_j.index("C")],
+                                    "FirstT": "%d" % index[hdims_j.index("T")],
+                                    "FirstZ": "%d" % index[hdims_j.index("Z")],
                                     "PlaneCount": "1"
                                     })
         subid += 1
@@ -1780,7 +1788,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
             if thumbnail.shape[0] in (3, 4):
                 dims = "CYX"
             else:
-                dims = "YXC" # The most likely actually
+                dims = "YXC"  # The most likely actually
             thumbnail.metadata[model.MD_DIMS] = dims
             logging.debug("Add MD_DIMS = %s to thumbnail metadata", thumbnail.metadata[model.MD_DIMS])
         alldata = [thumbnail] + ldata
@@ -1854,83 +1862,112 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
 #        //Write this sub-IFD:
 #        TIFFWriteDirectory(created_TIFF);
 
+    groups = _findImageGroups(ldata)
+    sorted_groups = sorted(groups.items(), key=operator.itemgetter(0))
+    # Extract ImageJ compatible Image description based on the first group dimension
+    imagej_description = extract_imagej_metadata(sorted_groups[0][1])
+
     if multiple_files:
         groups = _findImageGroups(alldata)
         sorted_x = sorted(groups.items(), key=operator.itemgetter(0))
         # Only get the corresponding data for this file
-        ldata = sorted_x[file_index][1]
-
-    # Extract ImageJ compatible Image description
-    imagej_description = extract_imagej_metadata(ldata)
+        sorted_groups = [sorted_x[file_index]]
 
     # TODO: to keep the code simple, we should just first convert the DAs into
     # 2D or 3D DAs and put it in an dict original DA -> DAs
-    for data in ldata:
-        # TODO: see if we need to set FILETYPE_PAGE + Page number for each image? data?
-        tags = _convertToTiffTag(data.metadata)
-        if ometxt:  # save OME tags if not yet done
-            # If thumbnail is present, the tiff file is not compatible with ImageJ
-            f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, imagej_description.encode('ascii') + ometxt)
-            ometxt = None
 
-        # if metadata indicates YXC format just handle it as RGB
-        if data.metadata.get(model.MD_DIMS) == 'YXC' and data.shape[-1] in (3, 4):
-            write_rgb = True
-            hdim = data.shape[:-3]
-        # TODO: handle RGB for C at any position before and after XY, but iif TZ=11
-        # for data > 2D: write as a sequence of 2D images or RGB images
-        elif data.ndim == 5 and data.shape[0] == 3:  # RGB
-            # Write an RGB image, instead of 3 images along C
-            write_rgb = True
-            hdim = data.shape[1:3]
-            data = numpy.rollaxis(data, 0, -2) # move C axis near YX
-        else:
+    # Write the OME metadata + ImageJ metadata on the first image (only)
+    # If thumbnail is present, the tiff file is not compatible with ImageJ
+    if ometxt:
+        f.SetField(T.TIFFTAG_IMAGEDESCRIPTION, imagej_description.encode('ascii') + ometxt)
+
+    for fifd, das in sorted_groups:
+        if len(das) == 0:
+            continue  # Something is wrong
+        elif len(das) == 1:
+            data = das[0]
+            # Just normal output
+            tags = _convertToTiffTag(data.metadata)
+            # if metadata indicates YXC format just handle it as RGB
+            if data.metadata.get(model.MD_DIMS) == 'YXC' and data.shape[-1] in (3, 4):
+                write_rgb = True
+                hdim = data.shape[:-3]
+            # TODO: handle RGB for C at any position before and after XY, but iif TZ=11
+            # for data > 2D: write as a sequence of 2D images or RGB images
+            elif data.ndim == 5 and data.shape[0] == 3:  # RGB
+                # Write an RGB image, instead of 3 images along C
+                write_rgb = True
+                hdim = data.shape[1:3]
+                # CTZYX -> TZCYX
+                data = numpy.moveaxis(data, 0, 2)  # move C axis near YX
+            elif data.ndim == 5:
+                write_rgb = False
+                # CTZYX -> TZCYX  (for ImajeJ compatible ordering)
+                data = numpy.moveaxis(data, 0, 2)
+                hdim = data.shape[:-2]
+            else:  # YX
+                write_rgb = False
+                hdim = data.shape[:-2]
+
+            for i in numpy.ndindex(*hdim):
+                # Save metadata (before the image)
+                for key, val in tags.items():
+                    try:
+                        f.SetField(key, val)
+                    except Exception:
+                        logging.exception("Failed to store tag %s with value '%s'", key, val)
+                if data.dtype in [numpy.int64, numpy.uint64]:
+                    c = None  # libtiff doesn't support compression on these types
+                else:
+                    c = compression
+                write_image(f, data[i], write_rgb=write_rgb, compression=c, pyramid=pyramid)
+
+        else:  # len(das) > 1 => list of DataArrays to represent the C dimension
+            # the shape of all das are same: 1TZYX
+            # len(das) is to be used as C
+
+            data = das[0]
+            assert data.shape[0] == 1
             write_rgb = False
-            hdim = data.shape[:-2]
+            # 1TZYX
+            hdim = data.shape[:-2]  # 1TZ
 
-        for i in numpy.ndindex(*hdim):
-            # Save metadata (before the image)
-            for key, val in tags.items():
-                try:
-                    f.SetField(key, val)
-                except Exception:
-                    logging.exception("Failed to store tag %s with value '%s'", key, val)
-            if data[i].dtype in [numpy.int64, numpy.uint64]:
-                c = None # libtiff doesn't support compression on these types
-            else:
-                c = compression
-            write_image(f, data[i], write_rgb=write_rgb, compression=c, pyramid=pyramid)
+            for i in numpy.ndindex(*hdim):
+                for data in das:  # for ImageJ compatible ordering
+                    tags = _convertToTiffTag(data.metadata)
+                    # Save metadata (before the image)
+                    for key, val in tags.items():
+                        try:
+                            f.SetField(key, val)
+                        except Exception:
+                            logging.exception("Failed to store tag %s with value '%s'", key, val)
+                    if data.dtype in [numpy.int64, numpy.uint64]:
+                        c = None  # libtiff doesn't support compression on these types
+                    else:
+                        c = compression
+                    write_image(f, data[i], write_rgb=write_rgb, compression=c, pyramid=pyramid)
 
 
 def extract_imagej_metadata(ldata) -> str:
     """
     Create ImageJ compatible metadata that is added to the ImageDescription identifier for the tiff files.
-    :param ldata: (list of DataArray) list of 2D data of int or float. Should have at least one array
+    :param ldata: (list of DataArray) list numpy array, all of the same dimensions. Should have at least one array
     :return (str): metadata compatible with ImageJ
     """
-    # Check the CTZYX dimensions of the first DataArray
-    size = ldata[0].shape
+    shape = ldata[0].shape
     # Pad the shape with 1s to always get 5 dimensions
-    res = (1,) * (5 - len(size)) + size
-    num_channels = res[-5]
-
-    # Add to "channels" if other DataArray(s) have the same TZYX dimension.
-    for data in ldata[1:]:
-        next_shape = data.shape
-        next_res = (1,) * (5 - len(next_shape)) + next_shape
-        if next_res == res and res[-5] == 1:
-            num_channels += 1
-        else:
-            # Rest of Tiff data is not compatible with ImageJ
-            break
+    res = list((1,) * (5 - len(shape)) + shape)
+    if len(ldata) > 1:
+        res[-5] = len(ldata)
 
     # Define relevant ImageJ identifiers
+    # The IFDs must be stored in the proper order (XY, channels, slices, frames)
     md = {
         "ImageJ": "1.11a",
-        "images": num_channels * res[-3] * res[-4],
-        "channels": num_channels,
-        "slices": res[-3],
-        "frames": res[-4],
+        "images": res[-3] * res[-4] * res[-5],
+        "channels": res[-5],  # C, fastest changing dimension
+        "slices": res[-3],  # Z, second fastest dimension
+        "frames": res[-4],  # T, slowest changing dimension
         "hyperstack": "true",
         "unit": 'cm'
     }
