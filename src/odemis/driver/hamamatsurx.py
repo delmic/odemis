@@ -600,6 +600,11 @@ class StreakUnit(model.HwComponent):
         parent.DevParamSet(self.location, "Trig. slope", "Rising")
         parent.DevParamSet(self.location, "Shutter", "Closed")
 
+        # Refresh regularly the values, from the hardware, starting from now
+        self._updateSettings()
+        self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Streak unit settings polling")
+        self._va_poll.start()
+
         # parent.DevParamGet(self.location, "Trig. status")  # read only
 
         # Ready: Is displayed when the system is ready to receive a trigger signal.
@@ -640,6 +645,36 @@ class StreakUnit(model.HwComponent):
         self.shutter = model.BooleanVA(shutter, setter=self._setShutter)
 
         # read-only VAs TODO: Trig. Mode, Trig. level, Trig. slope?
+
+    def _updateSettings(self) -> None:
+        """
+        Read all the current streak unit settings from the RemoteEx and reflect them on the VAs
+        """
+        logging.debug("Updating streak unit settings")
+        try:
+            timeRange = self.GetTimeRange()
+            if timeRange != self.timeRange.value:
+                self.timeRange._value = timeRange
+                self.timeRange.notify(timeRange)
+
+            gain = self.GetMCPGain()
+            if gain != self.MCPGain.value:
+                self.MCPGain._value = gain
+                self.MCPGain.notify(gain)
+                logging.debug("MCP Gain synced with RemoteEx.")
+
+            mode = self.GetStreakMode()
+            if mode != self.streakMode.value:
+                self.streakMode._value = mode
+                self.streakMode.notify(mode)
+
+            pllMode = self.GetPLLMode()
+            if pllMode != self.phaseLocked.value:
+                self.phaseLocked._value = pllMode
+                self.phaseLocked.notify(pllMode)
+
+        except Exception:
+            logging.exception("Unexpected failure when polling streak unit settings")
 
     def GetPLLMode(self):
         """
@@ -885,6 +920,11 @@ class DelayGenerator(model.HwComponent):
         # Note: trigger rate (repetition rate) corresponds to the ebeam blanking frequency (read only in RemoteEx)
         self._metadata[model.MD_TRIGGER_RATE] = int(self.parent.DevParamGet(self.location, "Repetition Rate")[0])
 
+        # Refresh regularly the values, from the hardware, starting from now
+        self._updateSettings()
+        self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Delay generator settings polling")
+        self._va_poll.start()
+
         # VAs
         self._subscribers = []
         devparamslist = parent.DevParamsList()
@@ -975,6 +1015,25 @@ class DelayGenerator(model.HwComponent):
         range_time = (min_time, max_time)
 
         return range_time
+
+    def _updateSettings(self) -> None:
+        """
+        Read all the current delay generator settings from the RemoteEx and reflect them on the VAs
+        """
+        logging.debug("Updating streak unit settings")
+        try:
+            delaynameremoteex = ["Delay A", "Delay B", "Delay C", "Delay D", "Delay E", "Delay F", "Delay G", "Delay H"]
+            delayvas = ["triggerDelay", "delayB", "delayC", "delayD", "delayE", "delayF", "delayG", "delayH"]
+            for i in range(0, 7):
+                if hasattr(self, delayvas[i]):
+                    delayva = getattr(self, delayvas[i])
+                    delayre = self.GetDelayByName(delaynameremoteex[i])
+                    if delayva._value != delayre:
+                        delayva = getattr(self, delayva)
+                        delayva._value = delayre
+
+        except Exception:
+            logging.exception("Unexpected failure when polling delay generator settings")
 
 
 class StreakCamera(model.HwComponent):
