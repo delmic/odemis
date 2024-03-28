@@ -269,18 +269,18 @@ class FIBSEM(model.HwComponent):
         #     raise KeyError("SEM was not given any scanner as child. "
         #                    "One of 'scanner', 'fib-scanner' or 'mb-scanner' need to be included as child")
 
-        # has_detector = "detector" in children
-        # has_fib_detector = "fib-detector" in children
+        has_detector = "detector" in children
+        has_fib_detector = "fib-detector" in children
 
-        # if "scanner" in children: # TODO: rename to sem-scanner
-        #     kwargs = children["scanner"]
-        #     self._scanner = Scanner(parent=self, daemon=daemon, channel="electron", has_detector=has_detector, **kwargs)
-        #     self.children.value.add(self._scanner)
+        if "scanner" in children: # TODO: rename to sem-scanner
+            kwargs = children["scanner"]
+            self._scanner = Scanner(parent=self, daemon=daemon, channel="electron", has_detector=has_detector, **kwargs)
+            self.children.value.add(self._scanner)
 
-        # if "fib-scanner" in children:
-        #     kwargs = children["fib-scanner"]
-        #     self._fib_scanner = Scanner(parent=self, daemon=daemon, channel="ion", has_detector=has_fib_detector, **kwargs)
-        #     self.children.value.add(self._fib_scanner)
+        if "fib-scanner" in children:
+            kwargs = children["fib-scanner"]
+            self._fib_scanner = Scanner(parent=self, daemon=daemon, channel="ion", has_detector=has_fib_detector, **kwargs)
+            self.children.value.add(self._fib_scanner)
 
         # create the stage child, if requested
         if "stage" in children:
@@ -300,15 +300,15 @@ class FIBSEM(model.HwComponent):
         #     self._focus = Focus(parent=self, daemon=daemon, **ckwargs)
         #     self.children.value.add(self._focus)
 
-        # if "detector" in children:
-        #     ckwargs = children["detector"]
-        #     self._detector = Detector(parent=self, daemon=daemon, channel="electron", **ckwargs)
-        #     self.children.value.add(self._detector)
+        if "detector" in children:
+            ckwargs = children["detector"]
+            self._detector = Detector(parent=self, daemon=daemon, channel="electron", **ckwargs)
+            self.children.value.add(self._detector)
         
-        # if "fib-detector" in children:
-        #     ckwargs = children["fib-detector"]
-        #     self._fib_detector = Detector(parent=self, daemon=daemon, channel="ion", **ckwargs)
-        #     self.children.value.add(self._fib_detector)
+        if "fib-detector" in children:
+            ckwargs = children["fib-detector"]
+            self._fib_detector = Detector(parent=self, daemon=daemon, channel="ion", **ckwargs)
+            self.children.value.add(self._fib_detector)
 
     def transfer_latest_package(self, data: bytes) -> None:
         """
@@ -530,6 +530,12 @@ class FIBSEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_scan_mode(channel)
 
+    def scan_mode_info(self, channel: str) -> list:
+        """Returns: (dict) the unit and range of the scan mode."""
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            return self.server.scan_mode_info(channel)
+        
     def set_reduced_area(self, reduced_area: dict, channel: str) -> None:
         """
         Specify a selected area in the scan field area.
@@ -554,7 +560,7 @@ class FIBSEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.set_ebeam_spotsize(spotsize, channel)
+            self.server.set_spotsize(spotsize, channel)
 
     def get_spotsize(self, channel: str) -> float:
         """Returns: (float) the current spotsize of the selected beam (unitless)."""
@@ -793,7 +799,7 @@ class FIBSEM(model.HwComponent):
         """Returns: (dict) the unit and range of the rotation."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.rotation_info(channel)
+            return self.server.scan_rotation_info(channel)
 
     def set_resolution(self, resolution: list, channel: str) -> None:
         """
@@ -829,11 +835,11 @@ class FIBSEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.turn_beam_on(state, channel)
 
-    def get_beam_is_on(self):
+    def beam_is_on(self, channel: str):
         """Returns True if the beam is on and False if the beam is off."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.get_beam_is_on()
+            return self.server.beam_is_on(channel)
 
 #### CHANNEL CONTROL
 
@@ -1226,7 +1232,7 @@ class Scanner(model.Emitter):
         """
         model.Emitter.__init__(self, name, role, parent=parent, **kwargs)
 
-        self.channel = channel  # Name of the electron channel used.
+        self.channel = channel  # name of the channel used
 
         # will take care of executing auto contrast/brightness and auto stigmator asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -1244,7 +1250,8 @@ class Scanner(model.Emitter):
         self.dwellTime.clip_on_range = True
 
         voltage_info = self.parent.high_voltage_info(self.channel)
-        init_voltage = numpy.clip(self.parent.get_high_voltage(self.channel), voltage_info['range'][0], voltage_info['range'][1])
+        init_voltage = numpy.clip(self.parent.get_high_voltage(self.channel), 
+                            voltage_info['range'][0], voltage_info['range'][1])
         self.accelVoltage = model.FloatContinuous(
             init_voltage,
             voltage_info["range"],
@@ -1253,7 +1260,7 @@ class Scanner(model.Emitter):
         )
 
         beam_current_info = self.parent.beam_current_info(self.channel)
-        self.accelVoltage = model.FloatContinuous(
+        self.beamCurrent = model.FloatContinuous(
             value=self.parent.get_beam_current(self.channel),
             range=beam_current_info["range"],
             unit=beam_current_info["unit"],
@@ -1269,12 +1276,13 @@ class Scanner(model.Emitter):
             setter=self._setBlanker,
             choices=blanker_choices)
 
-        spotsize_info = self.parent.spotsize_info(self.channel)
-        self.spotSize = model.FloatContinuous(
-            self.parent.get_spotsize(self.channel),
-            spotsize_info["range"],
-            unit=spotsize_info["unit"],
-            setter=self._setSpotSize)
+        if self.channel == "electron":
+            spotsize_info = self.parent.spotsize_info(self.channel)
+            self.spotSize = model.FloatContinuous(
+                self.parent.get_spotsize(self.channel),
+                spotsize_info["range"],
+                unit=spotsize_info["unit"],
+                setter=self._setSpotSize)
 
         beam_shift_info = self.parent.beam_shift_info(self.channel)
         range_x = beam_shift_info["range"]["x"]
@@ -1298,13 +1306,13 @@ class Scanner(model.Emitter):
         self.horizontalFoV = model.FloatContinuous(
             fov,
             unit=scanning_size_info["unit"],
-            range=scanning_size_info["range"]["x"],
+            range=scanning_size_info["range"],
             setter=self._setHorizontalFoV)
         self.horizontalFoV.subscribe(self._onHorizontalFoV)
 
         mag = self._hfw_nomag / fov
-        mag_range_max = self._hfw_nomag / scanning_size_info["range"]["x"][0]
-        mag_range_min = self._hfw_nomag / scanning_size_info["range"]["x"][1]
+        mag_range_max = self._hfw_nomag / scanning_size_info["range"][0]
+        mag_range_min = self._hfw_nomag / scanning_size_info["range"][1]
         self.magnification = model.FloatContinuous(mag, unit="",
                                                    range=(mag_range_min, mag_range_max),
                                                    readonly=True)
@@ -1315,8 +1323,8 @@ class Scanner(model.Emitter):
         self._updateDepthOfField()
 
         if has_detector:
-            rng = self.parent.resolution_info(self.channel)["range"]
-            self._shape = (rng["x"][1], rng["y"][1])
+            rng = ((768, 512), (6144, 4096))
+            self._shape = (rng[1][0], rng[1][1])
             # pixelSize is the same as MD_PIXEL_SIZE, with scale == 1
             # == smallest size/ between two different ebeam positions
             pxs = (fov / self._shape[0],
@@ -1327,10 +1335,8 @@ class Scanner(model.Emitter):
             # fixed to full frame, with the exceptions of the resolutions which
             # are a different aspect ratio from the shape are "more than full frame".
             # So it's read-only and updated when the scale is updated.
-            resolution = tuple(self.parent.get_resolution(self.channel))
-            res_choices = set(r for r in RESOLUTIONS
-                              if (rng["x"][0] <= r[0] <= rng["x"][1] and rng["y"][0] <= r[1] <= rng["y"][1])
-                             )
+            resolution = self.parent.get_resolution(self.channel)
+            res_choices = set(r for r in RESOLUTIONS)
             self.resolution = model.VAEnumerated(resolution, res_choices, unit="px", readonly=True)
             self._resolution = resolution
 
@@ -1625,13 +1631,13 @@ class Detector(model.Detector):
         detector_type = self.parent.get_detector_type(self.channel)
         self.detector_type = model.StringEnumerated(
             detector_type,
-            choices=self.parent.detector_type_info(self.channel)["choices"],
+            choices=set(self.parent.detector_type_info(self.channel)["choices"]),
             setter=self._setDetectorType)
         
         detector_mode = self.parent.get_detector_mode(self.channel)
         self.detector_mode = model.StringEnumerated(
             detector_mode,
-            choices=self.parent.detector_mode_info(self.channel)["choices"],
+            choices=set(self.parent.detector_mode_info(self.channel)["choices"]),
             setter=self._setDetectorMode)
         
         self._genmsg = queue.Queue()  # GEN_*
@@ -1642,24 +1648,24 @@ class Detector(model.Detector):
         self._va_poll = util.RepeatingTimer(5, self._updateSettings, "Settings polling detector")
         self._va_poll.start()
 
-    # def terminate(self):
-    #     if self._generator:
-    #         self.stop_generate()
-    #         self._genmsg.put(GEN_TERM)
-    #         self._generator.join(5)
-    #         self._generator = None
+    def terminate(self):
+        if self._generator:
+            self.stop_generate()
+            self._genmsg.put(GEN_TERM)
+            self._generator.join(5)
+            self._generator = None
 
-    # def start_generate(self):
-    #     self._genmsg.put(GEN_START)
-    #     if not self._generator or not self._generator.is_alive():
-    #         logging.info("Starting acquisition thread")
-    #         self._generator = threading.Thread(target=self._acquire,
-    #                                            name="autoscript acquisition thread")
-    #         self._generator.start()
+    def start_generate(self):
+        self._genmsg.put(GEN_START)
+        if not self._generator or not self._generator.is_alive():
+            logging.info("Starting acquisition thread")
+            self._generator = threading.Thread(target=self._acquire,
+                                               name="autoscript acquisition thread")
+            self._generator.start()
 
-    # def stop_generate(self):
-    #     self._scanner.finishScan()
-    #     self._genmsg.put(GEN_STOP)
+    def stop_generate(self):
+        self.stop_acquisition()
+        self._genmsg.put(GEN_STOP)
 
     def _acquire(self):
         """
@@ -1672,21 +1678,40 @@ class Detector(model.Detector):
                 self._acq_wait_start()
                 logging.debug("Preparing acquisition")
                 while True:
-                    # if self._acq_should_stop():
-                        # break
+                    if self._acq_should_stop():
+                        break
                     # TODO When switching e-beam <--> FIB, handle calling finishScan on the old scanner and
                     #  prepareForScan on the new scanner.
-                    self._scanner.prepareForScan()
+                    # self._scanner.prepareForScan()
                     # self.parent.set_channel_state(self._scanner.channel, True)
                     # The channel needs to be stopped to acquire an image, therefore immediately stop the channel.
                     # self.parent.set_channel_state(self._scanner.channel, False)
 
                     md = self._scanner._metadata.copy()
                     if hasattr(self._scanner, "dwellTime"):
-                        md[model.MD_DWELL_TIME] = self._scanner.dwellTime.value
+                        md[model.MD_BEAM_DWELL_TIME] = self._scanner.dwellTime.value
                     if hasattr(self._scanner, "rotation"):
-                        md[model.MD_ROTATION] = self._scanner.rotation.value
-
+                        md[model.MD_BEAM_SCAN_ROTATION] = self._scanner.rotation.value
+                    # if hasattr(self._scanner, "spotSize"):
+                    #     md[model.MD_BEAM_SPOT_DIAM] = self._scanner.spotSize.value
+                    if hasattr(self._scanner, "accelVoltage"):
+                        md[model.MD_BEAM_VOLTAGE] = self._scanner.accelVoltage.value
+                    # if hasattr(self._scanner, "beamCurrent"):
+                    #     md[model.MD_BEAM_CURRENT] = self._scanner.beamCurrent.value
+                    # if hasattr(self._scanner, "shift"):
+                    #     md[model.MD_BEAM_SHIFT] = self._scanner.shift.value
+                    # if hasatter(self._scanner, "horizontalFoV"):
+                    #     md[model.MD_BEAM_FIELD_OF_VIEW] = self._scanner.horizontalFoV.value
+                    # if hasattr(self._scanner, "magnification"):
+                    #     md[model.MD_LENS_MAG] = self._scanner.magnification.value
+                        
+                    # TODO: this causes timeout?
+                    # stage_position = self.parent._stage.position.value
+                    stage = model.getComponent(role="stage-bare")
+                    stage_position = stage.position.value
+                    md[model.MD_STAGE_POSITION_RAW] = stage_position
+                    md[model.MD_POS] = (stage_position["x"], stage_position["y"])
+                        
                     # Estimated time for an acquisition is the dwell time times the total amount of pixels in the image.
                     if hasattr(self._scanner, "dwellTime") and hasattr(self._scanner, "resolution"):
                         n_pixels = self._scanner.resolution.value[0] * self._scanner.resolution.value[1]
@@ -1713,6 +1738,7 @@ class Detector(model.Detector):
                     da = DataArray(image, md)
                     logging.debug("Notify dataflow with new image.")
                     self.data.notify(da)
+                    break  # TODO: make this work properly, only acquires single images at the momenet
             logging.debug("Acquisition stopped")
         except TerminationRequested:
             logging.debug("Acquisition thread requested to terminate")
@@ -1740,53 +1766,53 @@ class Detector(model.Detector):
         self.parent.stop_acquisition(self._scanner.channel)
 
 
-    # def _acq_should_stop(self, timeout=None):
-    #     """
-    #     Indicate whether the acquisition should now stop or can keep running.
-    #     Non blocking.
-    #     Note: it expects that the acquisition is running.
+    def _acq_should_stop(self, timeout=None):
+        """
+        Indicate whether the acquisition should now stop or can keep running.
+        Non blocking.
+        Note: it expects that the acquisition is running.
 
-    #     return (bool): True if needs to stop, False if can continue
-    #     raise TerminationRequested: if a terminate message was received
-    #     """
-    #     try:
-    #         if timeout is None:
-    #             msg = self._get_acq_msg(block=False)
-    #         else:
-    #             msg = self._get_acq_msg(timeout=timeout)
-    #     except queue.Empty:
-    #         # No message so no need to stop
-    #         return False
+        return (bool): True if needs to stop, False if can continue
+        raise TerminationRequested: if a terminate message was received
+        """
+        try:
+            if timeout is None:
+                msg = self._get_acq_msg(block=False)
+            else:
+                msg = self._get_acq_msg(timeout=timeout)
+        except queue.Empty:
+            # No message so no need to stop
+            return False
 
-    #     if msg == GEN_TERM:
-    #         raise TerminationRequested()
-    #     elif msg == GEN_STOP:
-    #         return True
-    #     else:
-    #         logging.warning("Skipped message: %s", msg)
-    #         return False
+        if msg == GEN_TERM:
+            raise TerminationRequested()
+        elif msg == GEN_STOP:
+            return True
+        else:
+            logging.warning("Skipped message: %s", msg)
+            return False
 
-    # def _acq_wait_data(self, timeout=0):
-    #     """
-    #     Block until data or a stop message is received.
-    #     Note: it expects that the acquisition is running.
+    def _acq_wait_data(self, timeout=0):
+        """
+        Block until data or a stop message is received.
+        Note: it expects that the acquisition is running.
 
-    #     timeout (0<=float): how long to wait to check (use 0 to not wait)
-    #     return (bool): True if needs to stop, False if data is ready
-    #     raise TerminationRequested: if a terminate message was received
-    #     """
-    #     tend = time.time() + timeout
-    #     t = time.time()
-    #     logging.debug("Waiting for %g s:", tend - t)
-    #     while self.parent.get_channel_state(self._scanner.channel) != XT_STOP:
-    #         t = time.time()
-    #         if t > tend:
-    #             raise TimeoutError("Acquisition timeout after %g s" % timeout)
+        timeout (0<=float): how long to wait to check (use 0 to not wait)
+        return (bool): True if needs to stop, False if data is ready
+        raise TerminationRequested: if a terminate message was received
+        """
+        tend = time.time() + timeout
+        t = time.time()
+        logging.debug("Waiting for %g s:", tend - t)
+        while self.parent.get_imaging_state(self._scanner.channel) != "Idle":
+            t = time.time()
+            if t > tend:
+                raise TimeoutError("Acquisition timeout after %g s" % timeout)
 
-    #         if self._acq_should_stop(timeout=0.1):
-    #             return True
+            if self._acq_should_stop(timeout=0.1):
+                return True
 
-    #     return False  # Data received
+        return False  # Data received
 
     def _acq_wait_start(self):
         """
@@ -1796,7 +1822,7 @@ class Detector(model.Detector):
         raise TerminationRequested: if a terminate message was received
         """
         while True:
-            return True # TODO: implement this properly
+            # return True # TODO: implement this properly
             msg = self._get_acq_msg(block=True)
             if msg == GEN_TERM:
                 raise TerminationRequested()
@@ -1806,18 +1832,18 @@ class Detector(model.Detector):
             # Duplicate Stop
             logging.debug("Skipped message %s as acquisition is stopped", msg)
 
-    # def _get_acq_msg(self, **kwargs):
-    #     """
-    #     Read one message from the acquisition queue
-    #     return (str): message
-    #     raises queue.Empty: if no message on the queue
-    #     """
-    #     msg = self._genmsg.get(**kwargs)
-    #     if msg in (GEN_START, GEN_STOP, GEN_TERM):
-    #         logging.debug("Acq received message %s", msg)
-    #     else:
-    #         logging.warning("Acq received unexpected message %s", msg)
-    #     return msg
+    def _get_acq_msg(self, **kwargs):
+        """
+        Read one message from the acquisition queue
+        return (str): message
+        raises queue.Empty: if no message on the queue
+        """
+        msg = self._genmsg.get(**kwargs)
+        if msg in (GEN_START, GEN_STOP, GEN_TERM):
+            logging.debug("Acq received message %s", msg)
+        else:
+            logging.warning("Acq received unexpected message %s", msg)
+        return msg
 
     def _updateSettings(self):
         """
