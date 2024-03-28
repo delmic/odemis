@@ -419,7 +419,12 @@ class StreamPanelHeader(wx.Control):
         else:  # Can't find the colour => it's custom tint
             if isinstance(colour, tuple):
                 self.colormap_choices[TINT_CUSTOM_TEXT] = colour
-                self.combo_colormap.SetClientData(self._colormap_customtint_idx, colour)
+                # sometimes switching to a custom color will throw a C/C++ wrapper runtime error
+                # this can be ignored and won't affect the colormap selected
+                try:
+                    self.combo_colormap.SetClientData(self._colormap_customtint_idx, colour)
+                except RuntimeError:
+                    pass
             else:
                 logging.warning("Got unknown colormap, which is not a tint: %s", colour)
 
