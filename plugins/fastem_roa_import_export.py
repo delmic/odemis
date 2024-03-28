@@ -27,6 +27,8 @@ import logging
 from typing import List, Union
 import wx
 
+from odemis import util
+from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.plugin import Plugin
 
 
@@ -67,6 +69,7 @@ class ImportExportROAPlugin(Plugin):
         try:
             fastem_main_tab = main_app.main_data.getTabByName("fastem_main")
             self._acquisition_tab = fastem_main_tab.acquisition_tab
+            self._cnvs = fastem_main_tab.vp.canvas
         except LookupError:
             logging.debug(
                 "Not loading Import Export ROAs tool since acquisition tab is not present."
@@ -155,17 +158,29 @@ class ImportExportROAPlugin(Plugin):
                     float(roa[CSVFieldnames.ROC_3_COORDINATES_B.value]),
                 )
                 project_ctrl.regions_calib_2.value[int(roc_2_name)].name.value = roc_2_name
-                project_ctrl.regions_calib_2.value[
-                    int(roc_2_name)
-                ].coordinates.value = roc_2_coordinates
+                project_ctrl.regions_calib_2.value[int(roc_2_name)].coordinates.value = (
+                    roc_2_coordinates
+                )
                 project_ctrl.regions_calib_3.value[int(roc_3_name)].name.value = roc_3_name
-                project_ctrl.regions_calib_3.value[
-                    int(roc_3_name)
-                ].coordinates.value = roc_3_coordinates
-                # ROA button click to create the controller
-                roa_ctrl = project_ctrl._on_btn_roa(None, name=roa_name)
-                # Finally assign the ROA coordinates value to draw the ROA
-                roa_ctrl.model.coordinates.value = roa_coordinates
+                project_ctrl.regions_calib_3.value[int(roc_3_name)].coordinates.value = (
+                    roc_3_coordinates
+                )
+                # Create and add a rectangle overlay
+                rectangle_overlay = RectangleOverlay(self._cnvs)
+                self._cnvs.add_world_overlay(rectangle_overlay)
+                rectangle_overlay.active.value = True
+                project_ctrl.add_roa(rectangle_overlay, name=roa_name)
+                # Finally assign the rectangle coordinates value to draw it
+                # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
+                points = [
+                    (roa_coordinates[0], roa_coordinates[1]),  # xmin, ymin
+                    (roa_coordinates[2], roa_coordinates[1]),  # xmax, ymin
+                    (roa_coordinates[0], roa_coordinates[3]),  # xmin, ymax
+                    (roa_coordinates[2], roa_coordinates[3]),  # xmax, ymax
+                ]
+                rectangle_overlay.points.value = points
+                rectangle_overlay.set_physical_sel(roa_coordinates)
+            self._cnvs.reset_default_cursor()
 
     def _write_data_to_csv_file(self, filepath: str) -> None:
         """
@@ -187,7 +202,8 @@ class ImportExportROAPlugin(Plugin):
                 roas = project_ctrl.model.roas.value
                 for roa in roas:
                     data[CSVFieldnames.ROA_NAME.value] = roa.name.value
-                    roa_coordinates = roa.coordinates.value
+                    # Convert points to coordinates (xmin, ymin, xmax, ymax) or (l, t, r, b)
+                    roa_coordinates = util.get_polygon_bbox(roa.points.value)
                     data[CSVFieldnames.ROA_COORDINATES_L.value] = roa_coordinates[0]
                     data[CSVFieldnames.ROA_COORDINATES_T.value] = roa_coordinates[1]
                     data[CSVFieldnames.ROA_COORDINATES_R.value] = roa_coordinates[2]
@@ -221,6 +237,7 @@ class ImportExportROAPlugin(Plugin):
         try:
             data = self._get_data_from_csv_file(filepath)
             self._update_project_list(data)
+            self._cnvs.request_drawing_update()
         except Exception as ex:
             logging.exception("Failure importing ROAs")
             wx.MessageBox(

@@ -53,7 +53,9 @@ TOOL_RO_ANCHOR = 10  # Select the region of the anchor region for drift correcti
 # Auto-focus is handle by a separate VA, still needs an ID for the button
 TOOL_AUTO_FOCUS = 11  # Run auto focus procedure on the (active) stream
 TOOL_FEATURE = 12  # Create new feature or move selected one
-
+TOOL_RECTANGLE = 13  # Create new rectangle or move selected one
+TOOL_ELLIPSE = 14  # Create new ellipse or move selected one
+TOOL_POLYGON = 15  # Create new polygon or move selected one
 
 ALL_TOOL_MODES = {
     TOOL_NONE,

@@ -22,6 +22,12 @@ A DataArray of shape ``(512x256)`` would mean a grayscale image of 256 x 512 px
 Storing and reading data
 ------------------------
 
+.. figure:: dataio_uml.*
+    :width: 100 %
+    :align: center
+
+    UML class diagram of the dataio components.
+
 The ``dataio`` module provides simple function to store and read back data in
 Python. For each supported file format (currently, OME-TIFF and HDF5), there is
 a dedicated submodule (respectively, dataio.tiff, and dataio.hdf5). Each module

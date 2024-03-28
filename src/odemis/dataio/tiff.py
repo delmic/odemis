@@ -2743,7 +2743,8 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
     try:
         # beam metadata
         beam_type = tfs_md["Beam"]["beam"]
-        md[model.MD_ROTATION] = float(tfs_md[beam_type]["scanrotation"])
+        # tmp: disable scan rotation metadata, as it is inconsistent with how odemis displays images
+        md[model.MD_ROTATION] = 0  # float(tfs_md[beam_type]["scanrotation"])
         md[model.MD_EBEAM_VOLTAGE] = float(tfs_md[beam_type]["hv"])
         md[model.MD_EBEAM_CURRENT] = float(tfs_md[beam_type]["beamcurrent"])
 

@@ -178,3 +178,12 @@ def configure_detector(detector, roc2, roc3):
         logging.warning("Region of calibration doesn't have cell translation parameters.")
     else:
         detector.cellTranslation.value = cell_translation
+
+
+def configure_multibeam(multibeam):
+    """
+    :param multibeam: (technolution.EBeamScanner) The multibeam scanner component that needs to be configured.
+    """
+    multibeam_md = multibeam.getMetadata()
+    multibeam.scanOffset.value = multibeam_md[model.MD_SCAN_OFFSET_CALIB]
+    multibeam.scanAmplitude.value = multibeam_md[model.MD_SCAN_AMPLITUDE_CALIB]

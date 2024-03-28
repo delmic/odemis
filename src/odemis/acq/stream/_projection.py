@@ -1577,7 +1577,11 @@ class PixelTemporalSpectrumProjection(RGBProjection):
         try:
             data = self._computeSpec()
             if data is not None:
-                self.image.value = self._project2RGB(data, self.stream.tint.value)
+                tint = self.stream.tint.value
+                if tint == TINT_FIT_TO_RGB:
+                    # Not supported for this view => fallback to greyscale
+                    tint = (255, 255, 255)
+                self.image.value = self._project2RGB(data, tint)
             else:
                 self.image.value = None
 
@@ -1660,7 +1664,11 @@ class PixelAngularSpectrumProjection(RGBProjection):
         try:
             data = self._computeSpec()
             if data is not None:
-                self.image.value = self._project2RGB(data, self.stream.tint.value)
+                tint = self.stream.tint.value
+                if tint == TINT_FIT_TO_RGB:
+                    # Not supported for this view => fallback to greyscale
+                    tint = (255, 255, 255)
+                self.image.value = self._project2RGB(data, tint)
             else:
                 self.image.value = None
         except Exception:

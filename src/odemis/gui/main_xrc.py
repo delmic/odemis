@@ -329,6 +329,7 @@ class xrcpnl_tab_correlation(wx.Panel):
         self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
         self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
         self.ctrl_enable_correlation = xrc.XRCCTRL(self, "ctrl_enable_correlation")
+        self.ctrl_auto_resize_view = xrc.XRCCTRL(self, "ctrl_auto_resize_view")
         self.cmb_correlation_reference = xrc.XRCCTRL(self, "cmb_correlation_reference")
         self.cmb_correlation_stream = xrc.XRCCTRL(self, "cmb_correlation_stream")
         self.dx_step_cntrl = xrc.XRCCTRL(self, "dx_step_cntrl")
@@ -3402,20 +3403,33 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                               <border>5</border>
                               <flag>wxEXPAND</flag>
                             </object>
-                            <object class="sizeritem">
-                              <object class="wxCheckBox" name="ctrl_enable_correlation">
-                                <label>Correlaton Enabled</label>
-                                <fg>#E5E5E5</fg>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP|wxLEFT</flag>
-                              <border>5</border>
-                            </object>
+                            
                             <object class="sizeritem">
                               <object class="wxFlexGridSizer">
+                                <object class="sizeritem">
+                                <object class="wxCheckBox" name="ctrl_enable_correlation">
+                                  <label>Correlaton Enabled</label>
+                                  <fg>#E5E5E5</fg>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <option>0</option>
+                                <flag>wxTOP|wxLEFT</flag>
+                                <border>5</border>
+                              </object>
+                              <object class="sizeritem">
+                                <object class="wxCheckBox" name="ctrl_auto_resize_view">
+                                  <label>Auto Resize Overlay</label>
+                                  <fg>#E5E5E5</fg>
+                                  <XRCED>
+                                    <assign_var>1</assign_var>
+                                  </XRCED>
+                                </object>
+                                <option>0</option>
+                                <flag>wxTOP|wxLEFT</flag>
+                                <border>5</border>
+                              </object>
                                 <object class="sizeritem">
                                     <object class="wxStaticText">
                                       <label>Reference Frame</label>
@@ -3553,7 +3567,7 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                                   </object>
                                 </object>
                                 <cols>2</cols>
-                                <rows>6</rows>
+                                <rows>7</rows>
                                 <vgap>10</vgap>
                                 <hgap>10</hgap>
                                 <growablecols>1</growablecols>

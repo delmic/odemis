@@ -47,7 +47,8 @@ import odemis.gui.comp.canvas as canvas
 from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
 from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
 from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
-from odemis.gui.comp.overlay.fastem import FastEMROAOverlay, FastEMROCOverlay, FastEMBackgroundOverlay
+from odemis.gui.comp.overlay.ellipse import EllipseOverlay
+from odemis.gui.comp.overlay.fastem import FastEMROCOverlay, FastEMBackgroundOverlay
 from odemis.gui.comp.overlay.focus import FocusOverlay
 from odemis.gui.comp.overlay.gadget import GadgetOverlay
 from odemis.gui.comp.overlay.history import HistoryOverlay
@@ -58,7 +59,10 @@ from odemis.gui.comp.overlay.play_icon import PlayIconOverlay
 from odemis.gui.comp.overlay.point_select import PointSelectOverlay
 from odemis.gui.comp.overlay.points import PointsOverlay
 from odemis.gui.comp.overlay.polar import PolarOverlay
+from odemis.gui.comp.overlay.polygon import PolygonOverlay
+from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 from odemis.gui.comp.overlay.repetition_select import RepetitionSelectOverlay
+from odemis.gui.comp.overlay.shapes import ShapesOverlay
 from odemis.gui.comp.overlay.spectrum_line_select import SpectrumLineSelectOverlay
 from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
 from odemis.gui.comp.overlay.text_view import TextViewOverlay
@@ -1800,6 +1804,9 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
 
     def __init__(self, *args, **kwargs):
         super().__init__(*args, **kwargs)
+        # List of overlays which handles creation, editing and removal of a shape class which
+        # is a subclass of EditableShape class
+        self.shapes_overlay = []
 
     def add_background_overlay(self, rectangles):
         """
@@ -1809,27 +1816,18 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         self.add_world_overlay(bg_overlay)
         return bg_overlay
 
-    def add_roa_overlay(self, coordinates, colour=gui.SELECTION_COLOUR):
+    def remove_shape(self, shape):
         """
-        coordinates (TupleContinuousVA): VA of 4 floats representing region of acquisition coordinates
-        colour (str): border colour of ROA overlay, given as string of hex code
+        :param shape: (EditableShape) shape to be deleted
         """
-        roa_overlay = FastEMROAOverlay(self, coordinates, colour=colour)
-        self.add_world_overlay(roa_overlay)
-        # Always activate after creating, otherwise the code to select the region in
-        # FastEMROAOverlay.on_left_down will never be called.
-        roa_overlay.active.value = True
-        return roa_overlay
-
-    def remove_overlay(self, overlay):
-        """
-        overlay (FastEMROAOverlay or FastEMROAOverlay): overlay to be deleted
-        """
-        overlay.active.value = False  # deactivating the overlay avoids weird behaviour
-        self.remove_world_overlay(overlay)
+        for overlay in self.shapes_overlay:
+            overlay.remove_shape(shape)
+        # To handle removal of calibration shape and rectangle shape from import/export ROA plugin,
+        # always remove shape from the world overlay
+        self.remove_world_overlay(shape)
         wx.CallAfter(self.request_drawing_update)
 
-    def add_calibration_overlay(self, coordinates, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
+    def add_calibration_shape(self, coordinates, label, sample_bbox, colour=gui.FG_COLOUR_WARNING):
         """
         coordinates (TupleContinuousVA): VA of 4 floats representing region of calibration coordinates
         label (str): label for the overlay (typically a number 1-9)
@@ -1876,3 +1874,18 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
     def setView(self, view, tab_data):
         super().setView(view, tab_data)
         view.show_crosshair.value = False
+
+        if guimodel.TOOL_RECTANGLE in tab_data.tool.choices:
+            rectangles_overlay = ShapesOverlay(self, RectangleOverlay, guimodel.TOOL_RECTANGLE, tab_data.tool)
+            self.add_world_overlay(rectangles_overlay)
+            self.shapes_overlay.append(rectangles_overlay)
+
+        if guimodel.TOOL_ELLIPSE in tab_data.tool.choices:
+            ellipses_overlay = ShapesOverlay(self, EllipseOverlay, guimodel.TOOL_ELLIPSE, tab_data.tool)
+            self.add_world_overlay(ellipses_overlay)
+            self.shapes_overlay.append(ellipses_overlay)
+
+        if guimodel.TOOL_POLYGON in tab_data.tool.choices:
+            polygon_overlay = ShapesOverlay(self, PolygonOverlay, guimodel.TOOL_POLYGON, tab_data.tool)
+            self.add_world_overlay(polygon_overlay)
+            self.shapes_overlay.append(polygon_overlay)

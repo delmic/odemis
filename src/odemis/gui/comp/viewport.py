@@ -906,6 +906,8 @@ class ARLiveViewport(LiveViewport):
 
     def _on_stream_update(self, _):
         """ Hide the play icon overlay if no stream are present """
+        if self._view is None:  # In case it's called after being destroyed
+            return
         show = len(self._view.stream_tree) > 0
         self.canvas.play_overlay.show = show
 
@@ -952,6 +954,8 @@ class EKLiveViewport(LiveViewport):
 
     def _on_stream_update(self, _):
         """ Hide the play icon overlay if no stream are present """
+        if self._view is None:  # In case it's called after being destroyed
+            return
         show = len(self._view.stream_tree) > 0
         self.canvas.play_overlay.show = show
 

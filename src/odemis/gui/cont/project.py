@@ -38,6 +38,7 @@ from odemis.gui import FG_COLOUR_RADIO_INACTIVE, FG_COLOUR_BUTTON
 from odemis.gui.comp.fastem import FastEMProjectPanel, FastEMROAPanel, FastEMCalibrationPanel
 from odemis.gui.conf.file import AcquisitionConfig
 from odemis.gui.util import call_in_wx_main
+import odemis.util.conversion as conversion
 from odemis.util.filename import make_unique_name
 
 # Blue, cyan, yellow, purple, magenta, red
@@ -59,17 +60,20 @@ class FastEMProjectListController(object):
         self._main_data_model = tab_data.main
         self._project_list = project_list
         self._viewport = viewport
+        # New shape overlay creation
+        for overlay in self._viewport.canvas.shapes_overlay:
+            overlay.new_shape.subscribe(self._on_new_shape)
 
         self.project_ctrls = {}  # dict FastEMProjectController --> int
         self._project_list.btn_add_project.Bind(wx.EVT_BUTTON, self._add_project)
 
         # Always show one project by default
-        self._add_project(None)
+        self._add_project(None, collapse=False)
 
         tab_data.main.is_acquiring.subscribe(self._on_is_acquiring)  # enable/disable project panel
 
     # already running in main GUI thread as it receives event from GUI
-    def _add_project(self, _, name=None):
+    def _add_project(self, _, name=None, collapse=True):
         # Get the smallest number that is not already in use. It's a bit challenging because projects can be
         # deleted, so we might have project 2 in colour red, but project 1 in blue has been deleted, so the
         # next project (which is now again the second project) should not use red again.
@@ -80,6 +84,8 @@ class FastEMProjectListController(object):
         logging.debug("Creating new project %s.", name)
         colour = FASTEM_PROJECT_COLOURS[(num - 1) % len(FASTEM_PROJECT_COLOURS)]
         project_ctrl = FastEMProjectController(name, colour, self._tab_data_model, self._project_list, self._viewport)
+        project_ctrl.panel._header.Bind(wx.EVT_LEFT_UP, self._on_project_panel_header)
+        project_ctrl.panel.collapse(collapse)
 
         # Add the project model to tab_data
         self.project_ctrls[project_ctrl] = num
@@ -89,6 +95,13 @@ class FastEMProjectListController(object):
         project_ctrl.panel.btn_remove.Bind(wx.EVT_BUTTON, lambda evt: self._remove_project(evt, project_ctrl))
 
         return project_ctrl
+
+    def _on_project_panel_header(self, event):
+        for project_ctrl in self.project_ctrls.keys():
+            if event.GetEventObject() == project_ctrl.panel._header:
+                project_ctrl.panel.collapse(False)
+            else:
+                project_ctrl.panel.collapse(True)
 
     # already running in main GUI thread as it receives event from GUI
     def _remove_project(self, _, project_ctrl):
@@ -116,6 +129,14 @@ class FastEMProjectListController(object):
         :param mode: (bool) Whether the system is currently acquiring or not acquiring.
         """
         self._project_list.Enable(not mode)
+
+    def _on_new_shape(self, shape):
+        """Callback on a new shape creation."""
+        for project_ctrl in self.project_ctrls.keys():
+            # Add ROA to the project whose panel is not collapsed
+            if not project_ctrl.panel.collapsed:
+                project_ctrl.add_roa(shape)
+                return
 
 
 class FastEMProjectController(object):
@@ -146,7 +167,6 @@ class FastEMProjectController(object):
         # Create the panel and add it to the project list. Subscribe to the controls.
         self.panel = FastEMProjectPanel(project_list, name=name)
         project_list.add_project_panel(self.panel)
-        self.panel.btn_add_roa.Bind(wx.EVT_BUTTON, self._on_btn_roa)
         # Listen to both enter and kill focus event to make sure the text is really updated
         self.panel.txt_ctrl.Bind(wx.EVT_KILL_FOCUS, self._on_text)
         self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)
@@ -168,16 +188,15 @@ class FastEMProjectController(object):
             self.panel.txt_ctrl.SetValue(txt)
         evt.Skip()
 
-    # already running in main GUI thread as it receives event from GUI
-    def _on_btn_roa(self, _, name=None):
+    def add_roa(self, shape, name=None):
         # Two-step process: Instantiate FastEM object here, but wait until first ROA is selected until
         # further processing. The process can still be aborted by clicking in the viewport without dragging.
         # In the callback to the ROI, the ROI creation will be completed or aborted.
         self._project_bar.enable_buttons(False)
 
-        # Deactivate all ROAs
+        # Deselect all ROAs
         for roa_ctrl in self.roa_ctrls.keys():
-            roa_ctrl.overlay.active.value = False
+            roa_ctrl.shape.selected.value = False
 
         # Minimum index that has not yet been deleted, find the first index which is not in the existing indices
         num = next(idx for idx, n in enumerate(sorted(self.roa_ctrls.values()) + [0], 1) if idx != n)
@@ -185,34 +204,28 @@ class FastEMProjectController(object):
             name = "ROA-%s" % num
         name = make_unique_name(name, [roa.name.value for roa in self.model.roas.value])
         # better guess for parameters after region is selected in _add_roa_ctrl
-        roa_ctrl = FastEMROAController(name, None, None, self.colour, self._tab_data, self.panel, self._viewport)
+        roa_ctrl = FastEMROAController(name, None, None, self.colour, self._tab_data, self.panel, self._viewport, shape)
         self.roa_ctrls[roa_ctrl] = num
         sub_callback = partial(self._add_roa_ctrl, roa_ctrl=roa_ctrl)
         self._roa_coord_sub_callback[roa_ctrl] = sub_callback
-        roa_ctrl.model.coordinates.subscribe(sub_callback)
-        return roa_ctrl
+        roa_ctrl.model.points.subscribe(sub_callback)
 
     # already running in main GUI thread as it receives event from GUI
     def _on_btn_remove(self, _, roa_ctrl):
         self.remove_roa_ctrl(roa_ctrl)
 
-    @call_in_wx_main # call in main thread as changes in GUI are triggered
-    def _add_roa_ctrl(self, coords, roa_ctrl):
-        roa_ctrl.model.coordinates.unsubscribe(self._roa_coord_sub_callback[roa_ctrl])
+    def _add_roa_ctrl(self, points, roa_ctrl):
+        roa_ctrl.model.points.unsubscribe(self._roa_coord_sub_callback[roa_ctrl])
 
         # Abort ROA creation if nothing was selected
-        if coords == acqstream.UNDEFINED_ROI:
+        if len(points) == 0:
             logging.debug("Aborting ROA creation.")
-            self._viewport.canvas.remove_overlay(roa_ctrl.overlay)
+            self._viewport.canvas.remove_shape(roa_ctrl.shape)
             del self.roa_ctrls[roa_ctrl]
+            del self._roa_coord_sub_callback[roa_ctrl]
         else:
             # Create the panel
             roa_ctrl.create_panel()
-
-            # Improve parameters guess
-            num = self._find_closest_scintillator(coords)
-            roa_ctrl.model.roc_2.value = self.regions_calib_2.value[num]
-            roa_ctrl.model.roc_3.value = self.regions_calib_3.value[num]
 
             # Add the ROA model to project model
             self.model.roas.value.append(roa_ctrl.model)
@@ -233,8 +246,8 @@ class FastEMProjectController(object):
         roa_ctrl.panel.Destroy()
         self.panel.fit_panels()
 
-        # Remove overlay
-        self._viewport.canvas.remove_overlay(roa_ctrl.overlay)
+        # Remove shape
+        self._viewport.canvas.remove_shape(roa_ctrl.shape)
 
         # Remove model
         self.model.roas.value.remove(roa_ctrl.model)
@@ -243,31 +256,13 @@ class FastEMProjectController(object):
         del self.roa_ctrls[roa_ctrl]
         del self._roa_coord_sub_callback[roa_ctrl]
 
-    def _find_closest_scintillator(self, coordinates):
-        """
-        Find the closest scintillator for the provided region of acquisition (ROA) coordinates.
-        :param coordinates: (float, float, float, float) xmin (left), ymin (top), xmax (right), ymax (bottom)
-                            coordinates in m.
-        :return: (int) Name (key) of closest scintillator in the ._tab_data.scintillator_positions dictionary.
-        """
-        roi_x, roi_y = (coordinates[2] + coordinates[0]) / 2, (coordinates[1] + coordinates[3]) / 2
-        mindist = 1  # distances always lower 1
-        closest = None
-        for num, (sc_x, sc_y) in self._tab_data.main.scintillator_positions.items():
-            # scintillators are rectangular, use maximum instead of euclidean distance
-            dist = max(abs(roi_x - sc_x), abs(roi_y - sc_y))
-            if dist < mindist:
-                mindist = dist
-                closest = num
-        return closest
-
 
 class FastEMROAController(object):
     """
     Controller for a single region of acquisition (ROA).
     """
 
-    def __init__(self, name, roc_2, roc_3, colour, tab_data, project_panel, viewport):
+    def __init__(self, name, roc_2, roc_3, colour, tab_data, project_panel, viewport, shape):
         """
         :param name: (str) The default name for the ROA.
         :param roc_2: (FastEMROC): The region of calibration corresponding to the ROA.
@@ -276,6 +271,7 @@ class FastEMROAController(object):
         :param tab_data: (FastEMAcquisitionGUIData) The tab data model.
         :param project_panel: (FastEMProjectPanel) The corresponding project panel.
         :param viewport: (FastEMMainViewport) The acquisition view.
+        :param shape: (EditableShape) An editable shape.
         """
         self._tab_data = tab_data
         self._project_panel = project_panel
@@ -284,11 +280,10 @@ class FastEMROAController(object):
         # Read the overlap from the acquisition configuration
         acqui_conf = AcquisitionConfig()
 
-        self.model = FastEMROA(name, acqstream.UNDEFINED_ROI, roc_2, roc_3,
+        self.model = FastEMROA(name, roc_2, roc_3,
                                self._tab_data.main.asm, self._tab_data.main.multibeam,
                                self._tab_data.main.descanner, self._tab_data.main.mppc,
                                acqui_conf.overlap)
-        self.model.coordinates.subscribe(self._on_coordinates)
         self.model.roc_2.subscribe(self._on_roc)
         self.model.roc_3.subscribe(self._on_roc)
 
@@ -296,10 +291,10 @@ class FastEMROAController(object):
         # (cf discussion in FastEMProjectController), create panel with .create_panel().
         self.panel = None
 
-        logging.debug("Creating overlay for ROA '%s'.", name)
-        canvas = self._viewport.canvas
-        self.overlay = canvas.add_roa_overlay(self.model.coordinates, colour)
-        self.overlay.active.subscribe(self._on_overlay_active)
+        self.shape = shape
+        self.shape.colour = conversion.hex_to_frgba(colour)
+        self.shape.points.subscribe(self._on_shape_points)
+        self.shape.selected.subscribe(self._on_shape_selected)
 
     def create_panel(self):
         """
@@ -318,18 +313,19 @@ class FastEMROAController(object):
         self.panel.txt_ctrl.Bind(wx.EVT_TEXT_ENTER, self._on_text)
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
-    def _on_overlay_active(self, active):
+    def _on_shape_selected(self, selected):
         if self.panel:
-            if active:
-                logging.debug("Activating ROA '%s'.", self.model.name.value)
+            if selected:
+                logging.debug("Selected ROA '%s'.", self.model.name.value)
                 self.panel.activate()
             else:
-                logging.debug("Deactivating ROA '%s'.", self.model.name.value)
+                logging.debug("Deselected ROA '%s'.", self.model.name.value)
                 self.panel.deactivate()
 
-    def _on_coordinates(self, coords):
-        # Purely for logging
-        logging.debug("ROA '%s' coordinates changed to %s.", self.model.name.value, coords)
+    def _on_shape_points(self, points):
+        """Assign the shape points value to ROA model's points"""
+        self.model.points.value = points
+        self._find_closest_scintillator(self.shape.get_position())
 
     @call_in_wx_main  # call in main thread as changes in GUI are triggered
     def _on_roc(self, roc):
@@ -365,6 +361,23 @@ class FastEMROAController(object):
 
         evt.Skip()
 
+    def _find_closest_scintillator(self, position):
+        """
+        Find the closest scintillator for the provided region of acquisition (ROA) position.
+        :param position: (float, float) the position of the ROA.
+        """
+        roi_x, roi_y = position
+        mindist = 1  # distances always lower 1
+        closest = None
+        for num, (sc_x, sc_y) in self._tab_data.main.scintillator_positions.items():
+            # scintillators are rectangular, use maximum instead of euclidean distance
+            dist = max(abs(roi_x - sc_x), abs(roi_y - sc_y))
+            if dist < mindist:
+                mindist = dist
+                closest = num
+        self.model.roc_2.value = self._tab_data.calibrations[CALIBRATION_2].regions.value[closest]
+        self.model.roc_3.value = self._tab_data.calibrations[CALIBRATION_3].regions.value[closest]
+
 
 class FastEMROCController(object):
     """
@@ -392,7 +405,7 @@ class FastEMROCController(object):
         # Get ROC model (exists already in tab data) and change coordinates
         self.calib_model = calib_model
 
-        self.overlay = None
+        self.shape = None
 
     def fit_view_to_bbox(self):
         """
@@ -409,24 +422,24 @@ class FastEMROCController(object):
         # wx.callAfter: then don't need decorator to run it in main GUI thread
         wx.CallAfter(cnvs.fit_to_bbox, [xmin - 5 * size[0], ymin - 5 * size[1], xmax + 5 * size[0], ymax + 5 * size[1]])
 
-    def create_calibration_overlay(self):
+    def create_calibration_shape(self):
         """
-        Create the calibration region (ROC) overlay.
+        Create the calibration region (ROC) shape.
         """
-        if self.overlay is None:
-            self.overlay = self._viewport.canvas.\
-                add_calibration_overlay(self.calib_model.coordinates,
-                                        self.calib_model.name.value,
-                                        self._sample_bbox,
-                                        colour=self.calib_model.colour)
+        if self.shape is None:
+            self.shape = self._viewport.canvas.\
+                add_calibration_shape(self.calib_model.coordinates,
+                                      self.calib_model.name.value,
+                                      self._sample_bbox,
+                                      colour=self.calib_model.colour)
 
-    def remove_calibration_overlay(self):
+    def remove_calibration_shape(self):
         """
-        Remove the calibration region (ROC) overlay.
+        Remove the calibration region (ROC) shape.
         """
-        if self.overlay:
-            self._viewport.canvas.remove_overlay(self.overlay)
-            self.overlay = None
+        if self.shape:
+            self._viewport.canvas.remove_shape(self.shape)
+            self.shape = None
 
 
 class FastEMCalibrationRegionsController(object):
@@ -490,12 +503,12 @@ class FastEMCalibrationRegionsController(object):
 
             roc_ctrl.calib_model.coordinates.value = (xmin, ymin, xmax, ymax)
             roc_ctrl.fit_view_to_bbox()  # Zoom to calibration region
-            roc_ctrl.create_calibration_overlay()
+            roc_ctrl.create_calibration_shape()
         else:
             # reset coordinates for ROC to undefined and remove overlay
             roc_ctrl.calib_model.coordinates.value = acqstream.UNDEFINED_ROI
             roc_ctrl.calib_model.parameters.clear()
-            roc_ctrl.remove_calibration_overlay()
+            roc_ctrl.remove_calibration_shape()
         # update ROC buttons
         self._update_buttons()
 
@@ -513,7 +526,7 @@ class FastEMCalibrationRegionsController(object):
             if num in active_scintillators:
                 b.Enable(True)  # always enable the button when the scintillator is active
                 roc_ctrl = self.roc_ctrls[num]
-                if roc_ctrl.overlay:
+                if roc_ctrl.shape:
                     b.SetLabel("OK")
                     b.SetForegroundColour(roc_ctrl.calib_model.colour)
                 else:
@@ -536,7 +549,7 @@ class FastEMCalibrationRegionsController(object):
                 # reset coordinates for ROC to undefined and remove overlay
                 roc_ctrl = self.roc_ctrls[num]
                 roc_ctrl.calib_model.coordinates.value = acqstream.UNDEFINED_ROI
-                roc_ctrl.remove_calibration_overlay()
+                roc_ctrl.remove_calibration_shape()
 
         # update ROC buttons
         self._update_buttons()

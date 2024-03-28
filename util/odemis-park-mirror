@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 # Attempt to park the mirror of the SPARCv2, even if no backend is running
-'''
+"""
 Created on October 2015
 
 @author: Éric Piel
@@ -18,16 +18,20 @@ PURPOSE. See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
-'''
+"""
 
 import argparse
 import logging
-import Pyro4
-from odemis import model
-from odemis.driver import tmcm
+import os
 import sys
 import time
 
+import Pyro4
+
+from odemis import model
+from odemis.driver import tmcm
+
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to real HW
 
 # Standard way to configure the TMCM board handling the Redux stage
 REDUX_KWARGS = {
@@ -38,6 +42,12 @@ REDUX_KWARGS = {
     "refproc": "Standard",
     "refswitch": {"s": 0, "l": 0},
 }
+
+if TEST_NOHW:
+    # Test using the simulator
+    REDUX_KWARGS["port"] = "/dev/fake6"
+    REDUX_KWARGS["address"] = None
+
 
 def park(mirror):
     # Need to park in two moves: first S, then L
