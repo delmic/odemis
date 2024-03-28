@@ -418,6 +418,21 @@ class TestHamamatsurxCam(unittest.TestCase):
         with self.assertRaises(IndexError):
             self.delaybox.triggerDelay.value = -1
 
+    def test_Shutter(self):
+        """Test Shutter state VA of streak unit."""
+        # set shutter VA
+        self.streakunit.shutter.value = False
+        time.sleep(0.5)  # give it some time to actually change the value
+        prev_shutter = self.streakunit.shutter.value
+        # change shutter VA
+        self.streakunit.shutter.value = True
+        time.sleep(0.5)  # give it some time to actually change the value
+        cur_shutter = self.streakunit.shutter.value
+        # compare previous and current gain
+        self.assertNotEqual(prev_shutter, self.streakunit.shutter.value)
+        # check shutter-VA reports the same value as RemoteEx
+        remoteEx_shutter = self.streakunit.GetShutter()
+        self.assertEqual(cur_shutter, remoteEx_shutter)
 
     ### Streakunit #####################################################
     def test_StreakMode(self):

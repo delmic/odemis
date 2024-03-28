@@ -14,6 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 """
+
 import collections
 import functools
 import threading
@@ -597,6 +598,7 @@ class StreakUnit(model.HwComponent):
         # [Volt] Input and indication of the trigger level for the vertical sweep.
         parent.DevParamSet(self.location, "Trig. level", 1)  # TODO check what value needed regarding HW
         parent.DevParamSet(self.location, "Trig. slope", "Rising")
+        parent.DevParamSet(self.location, "Shutter", "Closed")
 
         # parent.DevParamGet(self.location, "Trig. status")  # read only
 
@@ -634,6 +636,9 @@ class StreakUnit(model.HwComponent):
         # is set in the setter of the timeRange VA
         self.timeRangeFactor = None
 
+        shutter = self.GetShutter()
+        self.shutter = model.BooleanVA(shutter, setter=self._setShutter)
+
         # read-only VAs TODO: Trig. Mode, Trig. level, Trig. slope?
 
     def GetPLLMode(self):
@@ -669,6 +674,34 @@ class StreakUnit(model.HwComponent):
         else:
             self.parent.DevParamSet(self.location, "PLL Mode", "Unlocked")
         logging.debug("Phase-locked loop mode is set to: %s", value)
+
+        return value
+
+    def GetShutter(self) -> bool:
+        """
+        Get the current value from the trigger delay HW (RemoteEx: delay A).
+        :return: (bool) current state of the shutter
+        """
+        shutter_raw = self.parent.DevParamGet(self.location, "Shutter")  # returns a list
+        if shutter_raw[0] == "Open":
+            shutter = True
+            self.state._set_value(model.ST_RUNNING, force_write=True)
+        elif shutter_raw[0] == "Closed":
+            shutter = False
+        else:
+            logging.warning("Unexpected streak mode %s", shutter_raw)
+            shutter = False  # safer!
+
+        return shutter
+
+    def _setShutter(self, value: bool) -> bool:
+        """
+        Updates the shutter state VA.
+        :param value: value to be set
+        :return: (bool) shutter state
+        """
+        self.parent.DevParamSet(self.location, "Shutter", "Open" if value else "Closed")
+        logging.debug("Reporting mechanical shutter state: %s.", value)
 
         return value
 
