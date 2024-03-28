@@ -61,11 +61,34 @@ MD_LENS_NA = "Lens numerical aperture"  # float (ratio), numerical aperture
 MD_LENS_RI = "Lens refractive index"  # float (ratio), refractive index
 MD_FILTER_NAME = "Filter name"  # str, product name of the light filter
 # TODO: might need to merge DWELL_TIME and EXP_TIME into INTEGRATION_TIME: the time each pixel receive energy
+
+
 # + SCANNED_DIMENSIONS: list of dimensions which were scanned instead of being acquired simultaneously
-MD_DWELL_TIME = "Pixel dwell time"  # s (float), time the electron beam spends per pixel
-MD_EBEAM_VOLTAGE = "Electron beam acceleration voltage"  # V (float), voltage used to accelerate the electron beam
-MD_EBEAM_CURRENT = "Electron beam emission current"  # A (float), emission current of the electron beam (typically, the probe current is a bit smaller and the spot diameter is linearly proportional)
-MD_EBEAM_SPOT_DIAM = "Electron beam spot diameter"  # m (float), approximate diameter of the electron beam spot (typically function of the current)
+MD_BEAM_SCAN_ROTATION = "Beam scan rotation"  # rad (float) rotation of the beam scan
+# scan rotation is a subset of MD_ROTATION which is also influenced by stage rotation
+MD_BEAM_STIGMATOR = "Beam stigmator"  # (m, m) stigmator values
+MD_BEAM_SHIFT = "Beam shift"  # (m, m) shift of the beam
+MD_BEAM_SOURCE_TILT = "Beam source tilt"  # (m, m) tilt of the beam source
+MD_BEAM_WORKING_DISTANCE = "Beam working distance"  # m (float), working distance of the beam
+MD_BEAM_FIELD_OF_VIEW = "Beam field of view"  # m (float), horizontal field of view of the beam
+MD_BEAM_SCANNING_MODE = "Beam scanning mode"  # str, mode of the beam scanning
+MD_BEAM_DWELL_TIME = "Pixel dwell time"  # s (float), time the beam spends per pixel
+MD_BEAM_VOLTAGE = "Electron beam acceleration voltage"  # V (float), voltage used to accelerate the beam
+MD_BEAM_CURRENT = "Electron beam emission current"  # A (float), emission current of the beam
+# (typically, the probe current is a bit smaller and the spot diameter is linearly proportional)
+MD_BEAM_SPOT_DIAM = "Electron beam spot diameter"  # m (float), approximate diameter of the beam spot
+MD_BEAM_COLUMN_TILT = "Beam column tilt"  # (rad) tilt of the beam column
+
+# deprecated: use MD_BEAM_* instead
+MD_DWELL_TIME = MD_BEAM_DWELL_TIME
+MD_EBEAM_VOLTAGE = MD_BEAM_VOLTAGE
+MD_EBEAM_CURRENT = MD_BEAM_CURRENT
+MD_EBEAM_SPOT_DIAM = MD_BEAM_SPOT_DIAM
+
+# FIB-SEM metadata
+# position of the stage (in m or rad) for each axis in the chamber (raw hardware values)
+MD_STAGE_POSITION_RAW = "Stage position raw"  # dict of str -> float,
+MD_SAMPLE_PRE_TILT = "Sample pre-tilt"  # (rad) pre-tilt of the sample stage / shuttle (tilt)
 
 MD_STREAK_TIMERANGE = "Streak Time Range"  # (s) Time range for one streak/sweep
 MD_STREAK_MCPGAIN = "Streak MCP Gain"  # (int) Multiplying gain for microchannel plate

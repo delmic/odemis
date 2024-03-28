@@ -455,16 +455,19 @@ class Detector(model.Detector):
             trans = scanner.pixelToPhy(pxs_pos)
             updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
 
+            # Extra translation to simulate stage movement in case of stage scanning
+            stage_shift = phy_pos[0] / pxs[0], -phy_pos[1] / pxs[1]  # Y goes opposite
+
             shape = self.fake_img.shape
             # Simulate shift and drift
             center = (shape[1] / 2 - shi[0] / pxs[0] - self.current_drift,
                       shape[0] / 2 - shi[1] / pxs[1] + self.current_drift)
 
             # First and last index (eg, 0 -> 255)
-            ltrb = [center[0] + pxs_pos[0] - (res[0] / 2) * scale[0],
-                    center[1] + pxs_pos[1] - (res[1] / 2) * scale[1],
-                    center[0] + pxs_pos[0] + ((res[0] / 2) - 1) * scale[0],
-                    center[1] + pxs_pos[1] + ((res[1] / 2) - 1) * scale[1]
+            ltrb = [center[0] + pxs_pos[0] + stage_shift[0] - (res[0] / 2) * scale[0],
+                    center[1] + pxs_pos[1] + stage_shift[1] - (res[1] / 2) * scale[1],
+                    center[0] + pxs_pos[0] + stage_shift[0] + ((res[0] / 2) - 1) * scale[0],
+                    center[1] + pxs_pos[1] + stage_shift[1] + ((res[1] / 2) - 1) * scale[1]
                     ]
             # If the shift caused the image to go out of bounds, limit it
             if ltrb[0] < 0:

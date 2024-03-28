@@ -354,6 +354,9 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         current_position = self.getCurrentPostureLabel()
         end_pos = None
 
+        # Note: all grid positions need to have rx, rz axes to be able to transform
+        # this is not the case by default, and needs to be added in the metadata
+
         if target_pos_lbl == LOADING:
             end_pos = stage_md[model.MD_FAV_POS_DEACTIVE]
         elif current_position in [LOADING, SEM_IMAGING]:
@@ -370,6 +373,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 if current_position == LOADING:
                     # if at loading and fm is pressed, choose grid1 by default
                     sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+                    sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
                     fm_target_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
                 elif current_position == SEM_IMAGING:
                     fm_target_pos = self._transformFromSEMToMeteor(self.stage.position.value)
@@ -377,9 +381,11 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         elif current_position == FM_IMAGING:
             if target_pos_lbl == GRID_1:
                 sem_grid1_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_1]]
+                sem_grid1_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
                 end_pos = self._transformFromSEMToMeteor(sem_grid1_pos)
             elif target_pos_lbl == GRID_2:
                 sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+                sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
                 end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
             elif target_pos_lbl == SEM_IMAGING:
                 end_pos = self._transformFromMeteorToSEM(self.stage.position.value)

@@ -20,6 +20,8 @@ from ctypes import *
 import ctypes
 import logging
 import math
+from typing import Optional, Dict
+
 from odemis import model
 import odemis
 from odemis.driver import andorcam2
@@ -294,8 +296,11 @@ class Shamrock(model.Actuator):
     Note: we don't handle changing turret (live).
     """
     def __init__(self, name, role, device, camera=None, accessory=None,
-                 slitleds_settle_time=1e-3, slits=None, bands=None, rng=None,
-                 fstepsize=1e-6, drives_shutter=None, dependencies=None, **kwargs):
+                 slitleds_settle_time=1e-3, slits=None,
+                 bands=None, rng=None,
+                 fstepsize=1e-6, drives_shutter=None, dependencies=None,
+                 check_move: Optional[Dict[str, bool]] = None,
+                 **kwargs):
         """
         device (0<=int or str): if int, device number, if str serial number or
           "fake" to use the simulator
@@ -328,6 +333,9 @@ class Shamrock(model.Actuator):
         dependencies (None or dict str -> HwComponent): if the key starts with
           "led_prot", it will set the .protection to True any time that the
           slit leds could be turned on.
+        :param check_move: Name of the axis -> bool: If True (default), after move, raise an error if
+        that position is not the expected one. If False, if the position is not the expected one,
+        just log a warning. Note: for now, only some axes are actually checked (flipper and band)
         """
         # From the documentation:
         # If controlling the shamrock through I²C it is important that both the
@@ -551,6 +559,13 @@ class Shamrock(model.Actuator):
                 if drives_shutter:
                     raise ValueError("Device has no shutter, but drives_shutter provided")
                 logging.info("No shutter is present")
+
+            self._check_move = {} if check_move is None else check_move
+            for axis, check in self._check_move.items():
+                if axis not in axes:
+                    raise ValueError(f"check_move uses axis {axis}, which is not present")
+                if not isinstance(check, bool):
+                    raise ValueError(f"check_move[{axis}] should be a bool, but got {check}")
 
             # provides a ._axes
             model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
@@ -1296,12 +1311,6 @@ class Shamrock(model.Actuator):
         with self._hw_access:
             logging.debug("Moving flipper %d to pos %d", flipper, port)
             self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
-            if self.GetFlipperMirror(flipper) != port:
-                logging.warning("Flipper %d doesn't seem to have moved yet to pos %d, trying again",
-                                flipper, port)
-                self._dll.ShamrockSetFlipperMirror(self._device, flipper, port)
-                if self.GetFlipperMirror(flipper) != port:
-                    raise IOError(f"Flipper {flipper} failed to move to pos {port}")
 
     @callWithReconnect
     def GetFlipperMirror(self, flipper):
@@ -1616,11 +1625,13 @@ class Shamrock(model.Actuator):
             elif axis == "wavelength":
                 actions.append((axis, self._doSetWavelengthAbs, p))
             elif axis == "band":
-                actions.append((axis, self._doSetFilter, p))
+                check = self._check_move.get(axis, True)
+                actions.append((axis, self._doSetFilter, p, check))
             elif axis == "focus":
                 actions.append((axis, self._doSetFocusAbs, p))
             elif axis == "flip-out":
-                actions.append((axis, self._doSetFlipper, OUTPUT_FLIPPER, p))
+                check = self._check_move.get(axis, True)
+                actions.append((axis, self._doSetFlipper, OUTPUT_FLIPPER, p, check))
             elif axis in self._slit_names.values():
                 sid = [k for k, v in self._slit_names.items() if v == axis][0]
                 actions.append((axis, self._doSetSlitAbs, sid, p))
@@ -1728,9 +1739,14 @@ class Shamrock(model.Actuator):
         self._storeFocus()
         self._updatePosition()
 
-    def _doSetFilter(self, pos):
+    def _doSetFilter(self, pos: int, check: bool):
         self.SetFilter(pos)
         self._updatePosition()
+        if self.position.value["band"] != pos:
+            if check:
+                raise IOError(f"Filter wheel didn't move to requested pos {pos}")
+            else:
+                logging.warning("Filter wheel didn't move to pos %d, now at %d", pos, self.position.value["band"])
 
     def _doSetSlitRel(self, sid, shift):
         """
@@ -1761,15 +1777,28 @@ class Shamrock(model.Actuator):
         self.SetAutoSlitWidth(sid, width)
         self._updatePosition()
 
-    def _doSetFlipper(self, flipper, pos):
+    def _doSetFlipper(self, flipper: int, pos: int, check: bool):
         """
         Change the flipper position to one of the two positions
         """
         v = FLIPPER_TO_PORT[pos]
+
         self.SetFlipperMirror(flipper, v)
+        if self.GetFlipperMirror(flipper) != v:
+            logging.warning("Flipper %d doesn't seem to have moved yet to pos %d, trying again",
+                            flipper, v)
+            self.SetFlipperMirror(flipper, v)
+            actual_v = self.GetFlipperMirror(flipper)
+            if actual_v != v:
+                if check:
+                    raise IOError(f"Flipper {flipper} failed to move to pos {v}")
+                else:
+                    logging.warning(f"Flipper {flipper} doesn't seem to have moved to pos {v}, now at {actual_v}")
+
         if flipper == OUTPUT_FLIPPER:
             self._updateShutterMode(pos)
             self._restoreFocus()
+
         # Note: That function _only_ changes the mirror position.
         # It doesn't update the turret position, based on the (new) detector offset
         # => Force it by moving an "empty" move
