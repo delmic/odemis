@@ -222,6 +222,12 @@ class FIBSEM(model.HwComponent):
             Time in seconds the client should wait for a response from the server.
         """
 
+        # print versions of msgpack, msgpack-numpy, pyro
+        print("msgpack version: %s", pkg_resources.get_distribution("msgpack").version)
+        print("msgpack-numpy version: %s", pkg_resources.get_distribution("msgpack-numpy").version)
+        print("Pyro5 version: %s", pkg_resources.get_distribution("Pyro5").version)
+        print("Pyro4 version: %s", pkg_resources.get_distribution("Pyro4").version)
+
         model.HwComponent.__init__(self, name, role, daemon=daemon, **kwargs)
         self._proxy_access = threading.Lock()
         try:
