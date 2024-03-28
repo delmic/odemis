@@ -104,7 +104,7 @@ class MicroscopePostureManager:
         """
         pass
 
-    def cryoSwitchSamplePosition(self, target: int):
+    def cryoSwitchSamplePosition(self, target: int, target_pos: dict = None):
         """
         Provide the ability to switch between different positions, without bumping into anything.
         :param target: (int) target position either one of the constants: LOADING, IMAGING,
@@ -118,11 +118,11 @@ class MicroscopePostureManager:
         f._task_lock = threading.Lock()
         f._running_subf = model.InstantaneousFuture()
         # Run in separate thread
-        executeAsyncTask(f, self._doCryoSwitchSamplePosition, args=(f, target))
+        executeAsyncTask(f, self._doCryoSwitchSamplePosition, args=(f, target, target_pos))
         return f
 
     @abstractmethod
-    def _doCryoSwitchSamplePosition(self, future, target_pos: int):
+    def _doCryoSwitchSamplePosition(self, future, target: int, target_pos: dict = None):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
@@ -525,7 +525,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
 
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target: int, target_pos: dict = None):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
@@ -555,7 +555,8 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
-            target_pos = self.getTargetPosition(target)
+            if target_pos is None:
+                target_pos = self.getTargetPosition(target)
 
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
@@ -823,7 +824,7 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
         # Return transformed_pos (containing the new x, y, m, rx, rm coordinates, as well as the unchanged z coordinate)
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target: int, target_pos: dict = None):
         try:
             try:
                 target_name = POSITION_NAMES[target]
@@ -850,7 +851,8 @@ class MeteorZeiss1PostureManager(MeteorPostureManager):
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
-            target_pos = self.getTargetPosition(target)
+            if target_pos is None:
+                target_pos = self.getTargetPosition(target)
 
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
@@ -1142,7 +1144,7 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # Return transformed_pos (containing the new x, y, z, rx, rz coordinates, as well as the unchanged z coordinate)
         return transformed_pos
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target: int, target_pos: dict = None):
         try:
             try:
                 target_name = POSITION_NAMES[target]
@@ -1169,7 +1171,8 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
                 logging.warning(f"Requested move to the same position as current: {target_name}")
 
             # get the set point position
-            target_pos = self.getTargetPosition(target)
+            if target_pos is None:
+                target_pos = self.getTargetPosition(target)
 
             # If at some "weird" position, it's quite unsafe. We consider the targets
             # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
@@ -1355,7 +1358,7 @@ class MimasPostureManager(MicroscopePostureManager):
         # None of the above -> unknown position
         return UNKNOWN
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target: int, target_pos: dict = None):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
@@ -1371,7 +1374,10 @@ class MimasPostureManager(MicroscopePostureManager):
             stage_md = self.stage.getMetadata()
             align_md = self.align.getMetadata()
             stage_imaging_rng = stage_md[model.MD_POS_ACTIVE_RANGE]
-            stage_target_pos = self.getTargetPosition(target)
+            if target_pos is None:
+                stage_target_pos = self.getTargetPosition(target)
+            else:
+                stage_target_pos = target_pos
             aligner_fib = align_md[model.MD_FAV_POS_DEACTIVE]
             aligner_optical = align_md[model.MD_FAV_POS_ACTIVE]
             stage_referenced = all(self.stage.referenced.value.values())
@@ -1583,7 +1589,7 @@ class EnzelPostureManager(MicroscopePostureManager):
         # None of the above -> unknown position
         return UNKNOWN
 
-    def _doCryoSwitchSamplePosition(self, future, target):
+    def _doCryoSwitchSamplePosition(self, future, target: int, target_pos: dict = None):
         """
         Do the actual switching procedure for cryoSwitchSamplePosition
         :param future: cancellable future of the move
@@ -1601,7 +1607,10 @@ class EnzelPostureManager(MicroscopePostureManager):
             align_md = self.align.getMetadata()
             align_deactive = align_md[model.MD_FAV_POS_DEACTIVE]
             stage_referenced = all(self.stage.referenced.value.values())
-            target_position = self.getTargetPosition(target)
+            if target_pos is None:
+                target_position = self.getTargetPosition(target)
+            else:
+                target_position = target_pos
             current_pos = self.stage.position.value
             # To hold the sub moves to run if normal ordering failed
             fallback_submoves = [{'x', 'y', 'z'}, {'rx', 'rz'}]
