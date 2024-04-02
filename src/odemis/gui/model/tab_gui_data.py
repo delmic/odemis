@@ -362,6 +362,97 @@ class CryoLocalizationGUIData(CryoGUIData):
                     config.fn_count)
 
 
+class CryoFIBSEMGUIData(CryoGUIData):
+    """ Represent an interface used to only show the current data from the microscope.
+
+    It it used for handling CryoSECOM systems.
+
+    """
+
+    def __init__(self, main):
+        super().__init__(main)
+
+        # Current tool selected (from the toolbar)
+        tools = {TOOL_NONE, TOOL_RULER}
+        # Update the tool selection with the new tool list
+        self.tool.choices = tools
+        # VA for autofocus procedure mode
+        self.autofocus_active = BooleanVA(False)
+        # the zstack minimum range below current focus position
+        self.zMin = model.FloatContinuous(
+            value=-10e-6, range=(-1000e-6, 0), unit="m")
+        # the zstack maximum range above current focus position
+        self.zMax = model.FloatContinuous(
+            value=10e-6, range=(0, 1000e-6), unit="m")
+        # the distance between two z-levels
+        self.zStep = model.FloatContinuous(
+            value=1e-6, range=(-100e-6, 100e-6), unit="m")
+        # for enabling/disabling z-stack acquisition
+        self.zStackActive = model.BooleanVA(value=False)
+        # the streams to acquire among all streams in .streams
+        self.acquisitionStreams = model.ListVA()
+        # the static overview map streams, among all streams in .streams
+        self.overviewStreams = model.ListVA()
+        # for the filename
+        config = conf.get_acqui_conf()
+        self.filename = model.StringVA(create_filename(
+            config.pj_last_path, config.fn_ptn,
+            config.last_extension,
+            config.fn_count))
+        self.main.project_path.subscribe(self._on_project_path_change)
+        # Add zPos VA to control focus on acquired view
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.zPos.clip_on_range = True
+        self.streams.subscribe(self._on_stream_change, init=True)
+
+        if main.stigmator:
+            # stigmator should have a "MD_CALIB" containing a dict[float, dict],
+            # where the key is the stigmator angle (rad), and the value contains
+            # the calibration to pass to z_localization.determine_z_position().
+            calib = main.stigmator.getMetadata().get(MD_CALIB)
+            if calib:
+                angles = frozenset(calib.keys())
+                rng = main.stigmator.axes["rz"].range
+                for a in angles:
+                    if not rng[0] <= a <= rng[1]:
+                        raise ValueError(f"stigmator MD_CALIB has angle {a} outside of range {rng}.")
+
+                self.stigmatorAngle = model.FloatEnumerated(min(angles), choices=angles)
+            else:
+                logging.warning("stigmator component present, but no MD_CALIB, Z localization will be disabled")
+
+    def _updateZParams(self):
+        # Calculate the new range of z pos
+        # NB: this is a copy of AnalysisGUIData._updateZParams
+        limits = []
+
+        for s in self.streams.value:
+            if model.hasVA(s, "zIndex"):
+                metadata = s.getRawMetadata()[0]  # take only the first
+                zcentre = metadata[model.MD_POS][2]
+                zstep = metadata[model.MD_PIXEL_SIZE][2]
+                limits.append(zcentre - s.zIndex.range[1] * zstep / 2)
+                limits.append(zcentre + s.zIndex.range[1] * zstep / 2)
+
+        if len(limits) > 1:
+            self.zPos.range = (min(limits), max(limits))
+            logging.debug("Z stack display range updated to %f - %f, ZPos: %f",
+                          self.zPos.range[0], self.zPos.range[1], self.zPos.value)
+        else:
+            self.zPos.range = (0, 0)
+
+    def _on_stream_change(self, _):
+        self._updateZParams()
+
+    def _on_project_path_change(self, _):
+        config = conf.get_acqui_conf()
+        self.filename.value = create_filename(
+                    config.pj_last_path, config.fn_ptn,
+                    config.last_extension,
+                    config.fn_count)
+
+
+
 class CryoCorrelationGUIData(CryoGUIData):
     """ Represent an interface used to correlate multiple streams together.
 

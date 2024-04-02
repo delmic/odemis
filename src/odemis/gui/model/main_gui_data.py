@@ -135,6 +135,8 @@ class MainGUIData(object):
         "descanner": "descanner",
         "mppc": "mppc",
         "ion-beam": "ion_beam",
+        "electron-detector": "sed",
+        "ion-detector": "sed", 
         "ebeam-shift": "beamshift",
         "diagnostic-ccd": "ccd",
         "det-rotator": "det_rotator",
@@ -287,7 +289,7 @@ class MainGUIData(object):
                 if self.role == "enzel":
                     required_roles += ["ion-beam", "se-detector-ion"]
             elif self.role == "meteor":
-                required_roles += ["light", "stage", "focus"]
+                required_roles += ["light", "stage", "focus", "e-beam", "electron-detector", "ion-beam", "ion-detector"]
             elif self.role == "mimas":
                 required_roles += ["light", "stage", "focus", "align", "ion-beam"]
             elif self.role in ("sparc", "sparc2"):

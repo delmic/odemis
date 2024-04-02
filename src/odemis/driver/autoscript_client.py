@@ -1301,18 +1301,18 @@ class Scanner(model.Emitter):
             unit=rotation_info["unit"],
             setter=self._setRotation)
 
-        scanning_size_info = self.parent.field_of_view_info(self.channel)
+        fov_info = self.parent.field_of_view_info(self.channel)
         fov = self.parent.get_field_of_view(self.channel)
         self.horizontalFoV = model.FloatContinuous(
             fov,
-            unit=scanning_size_info["unit"],
-            range=scanning_size_info["range"],
+            unit=fov_info["unit"],
+            range=fov_info["range"],
             setter=self._setHorizontalFoV)
         self.horizontalFoV.subscribe(self._onHorizontalFoV)
 
         mag = self._hfw_nomag / fov
-        mag_range_max = self._hfw_nomag / scanning_size_info["range"][0]
-        mag_range_min = self._hfw_nomag / scanning_size_info["range"][1]
+        mag_range_max = self._hfw_nomag / fov_info["range"][0]
+        mag_range_min = self._hfw_nomag / fov_info["range"][1]
         self.magnification = model.FloatContinuous(mag, unit="",
                                                    range=(mag_range_min, mag_range_max),
                                                    readonly=True)
