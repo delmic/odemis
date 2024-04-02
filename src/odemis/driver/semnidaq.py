@@ -39,7 +39,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # SED : AI1/AI GND = pins 33/32
 # BSD : AI2/AI GND = pins 65/64
 #
-# To install the NI driver, here is a summarry of the commands needed:
+# To install the NI driver, here is a summary of the commands needed:
 # Download from https://www.ni.com/nl-nl/support/documentation/supplemental/18/downloading-and-installing-ni-driver-software-on-linux-desktop.html
 # sudo apt install ./ni-ubuntu2004-drivers-stream.deb
 # sudo apt update
@@ -1905,7 +1905,7 @@ class Scanner(model.Emitter):
         :param frame_ttl: digital output channels (on port0) to indicate the beginning
         of a frame, not including the settling time. It goes high on the first
         pixel of the frame, and goes down at the end of the last pixel.
-        :param scanning_ttl (None or dict of int -> (bool, Optional[str], bool))):
+        :param scanning_ttl (None or dict of int -> (bool, bool, Optional[str])):
         List of digital output ports to indicate the ebeam is scanning or not.
         * First argument is "high_auto": if True, it is set to high when scanning,
         with False, the output is inverted.
