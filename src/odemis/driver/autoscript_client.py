@@ -1267,14 +1267,14 @@ class Scanner(model.Emitter):
             setter=self._setCurrent
         )
 
-        blanker_choices = {True: 'blanked', False: 'unblanked'}
-        if has_detector:
-            blanker_choices[None] = 'auto'
+        # blanker_choices = {True: 'blanked', False: 'unblanked'}
+        # if has_detector:
+        #     blanker_choices[None] = 'auto'
 
-        self.blanker = model.VAEnumerated(
-            None if has_detector else self.parent.beam_is_blanked(self.channel),
-            setter=self._setBlanker,
-            choices=blanker_choices)
+        # self.blanker = model.VAEnumerated(
+        #     None if has_detector else self.parent.beam_is_blanked(self.channel),
+        #     setter=self._setBlanker,
+        #     choices=blanker_choices)
 
         if self.channel == "electron":
             spotsize_info = self.parent.spotsize_info(self.channel)
@@ -1293,6 +1293,17 @@ class Scanner(model.Emitter):
             cls=(int, float),
             unit=beam_shift_info["unit"],
             setter=self._setBeamShift)
+
+        stigmator_info = self.parent.stigmator_info(self.channel)
+        range_x = stigmator_info["range"]["x"]
+        range_y = stigmator_info["range"]["y"]
+        self.stigmator = model.TupleContinuous(
+            self.parent.get_stigmator(self.channel),
+            ((range_x[0], range_y[0]), (range_x[1], range_y[1])),
+            cls=(float, float),
+            unit=stigmator_info["unit"],
+            setter=self._setStigmator)
+
 
         rotation_info = self.parent.scan_rotation_info(self.channel)
         self.rotation = model.FloatContinuous(
@@ -1352,8 +1363,8 @@ class Scanner(model.Emitter):
             # Just to make some code happy
             self.translation = model.VigilantAttribute((0, 0), unit="px", readonly=True)
 
-        emode = self._isExternal()
-        self.external = model.BooleanVA(emode, setter=self._setExternal)
+        # emode = self._isExternal()
+        # self.external = model.BooleanVA(emode, setter=self._setExternal)
 
         # Refresh regularly the values, from the hardware, starting from now
         self._updateSettings()
@@ -1366,21 +1377,21 @@ class Scanner(model.Emitter):
         """
         logging.debug("Updating SEM settings")
         try:
-            external = self._isExternal()
-            if external != self.external.value:
-                self.external._value = external
-                self.external.notify(external)
+            # external = self._isExternal()
+            # if external != self.external.value:
+            #     self.external._value = external
+            #     self.external.notify(external)
             # Read dwellTime and resolution settings from the SEM and reflects them on the VAs only
             # when external is False i.e. the scan mode is 'full_frame'.
             # If external is True i.e. the scan mode is 'external' the dwellTime and resolution are
             # disabled and hence no need to reflect settings on the VAs.
-            if not self.external.value:
-                dwell_time = self.parent.get_dwell_time(self.channel)
-                if dwell_time != self.dwellTime.value:
-                    self.dwellTime._value = dwell_time
-                    self.dwellTime.notify(dwell_time)
-                if self._has_detector:
-                    self._updateResolution()
+            # if not self.external.value:
+            dwell_time = self.parent.get_dwell_time(self.channel)
+            if dwell_time != self.dwellTime.value:
+                self.dwellTime._value = dwell_time
+                self.dwellTime.notify(dwell_time)
+            if self._has_detector:
+                self._updateResolution()
             voltage = self.parent.get_high_voltage(self.channel)
             v_range = self.accelVoltage.range
             if not v_range[0] <= voltage <= v_range[1]:
@@ -1389,11 +1400,11 @@ class Scanner(model.Emitter):
             if voltage != self.accelVoltage.value:
                 self.accelVoltage._value = voltage
                 self.accelVoltage.notify(voltage)
-            blanked = self.parent.beam_is_blanked(self.channel)  # blanker status on the HW
+            # blanked = self.parent.beam_is_blanked(self.channel)  # blanker status on the HW
             # if blanker is in auto mode (None), don't care about HW status (self-regulated)
-            if self.blanker.value is not None and blanked != self.blanker.value:
-                self.blanker._value = blanked
-                self.blanker.notify(blanked)
+            # if self.blanker.value is not None and blanked != self.blanker.value:
+            #     self.blanker._value = blanked
+            #     self.blanker.notify(blanked)
             spot_size = self.parent.get_spotsize(self.channel)
             if spot_size != self.spotSize.value:
                 self.spotSize._value = spot_size
@@ -1469,8 +1480,8 @@ class Scanner(model.Emitter):
         self.parent.set_dwell_time(dwell_time, channel=self.channel)
         # Cannot set the dwell_time on the parent if the scan mode is 'external'
         # hence return the requested value itself
-        if self._isExternal():
-            return dwell_time
+        # if self._isExternal():
+            # return dwell_time
         return self.parent.get_dwell_time(self.channel)
 
     def _setVoltage(self, voltage: float) -> float:
@@ -1513,6 +1524,10 @@ class Scanner(model.Emitter):
         self.parent.set_beam_shift(x=beam_shift[0], y=beam_shift[1], channel=self.channel)
         return self.parent.get_beam_shift(self.channel)
 
+    def _setStigmator(self, stigmator):
+        self.parent.set_stigmator(x=stigmator[0], y=stigmator[1], channel=self.channel)
+        return self.parent.get_stigmator(self.channel)
+
     def _setRotation(self, rotation):
         self.parent.set_scan_rotation(rotation, channel=self.channel)
         return self.parent.get_scan_rotation(self.channel)
@@ -1543,32 +1558,32 @@ class Scanner(model.Emitter):
         """The dwell time range is dependent on the magnification/horizontalFoV, the range whenever the fov updates."""
         self.dwellTime._set_range(self.parent.dwell_time_info(self.channel)["range"])
 
-    def _isExternal(self):
-        """
-        :return:
-        bool, True if the scan mode is 'external', False if the scan mode is different than 'external'.
-        """
-        return self.parent.get_scan_mode(self.channel).lower() == "external"
+    # def _isExternal(self):
+    #     """
+    #     :return:
+    #     bool, True if the scan mode is 'external', False if the scan mode is different than 'external'.
+    #     """
+    #     return self.parent.get_scan_mode(self.channel).lower() == "external"
 
-    def _setExternal(self, external):
-        """
-        Switching between internal and external control of the SEM.
-        :param external: (bool) True is external, False is full frame mode.
-        :return: (bool) True if the scan mode should be 'external'.
-                        False if the scan mode should be internally controlled by the SEM.
-        """
-        scan_mode = "external" if external else "full_frame"
-        self.parent.set_scan_mode(scan_mode, channel=self.channel)
-        # The dwellTime and scale VA setter can only reflect changes on the SEM server side (parent)
-        # after the external VA is set to False i.e. 'full_frame'
-        if not external:
-            if self.dwellTime.value != self.parent.get_dwell_time(self.channel):
-                # Set the VA value again to reflect changes on the parent
-                self.dwellTime.value = self.dwellTime.value
-            if self.resolution.value != tuple(self.parent.get_resolution(self.channel)):
-                # Set the VA value again to reflect changes on the parent
-                self.scale.value = self.scale.value
-        return external
+    # def _setExternal(self, external):
+    #     """
+    #     Switching between internal and external control of the SEM.
+    #     :param external: (bool) True is external, False is full frame mode.
+    #     :return: (bool) True if the scan mode should be 'external'.
+    #                     False if the scan mode should be internally controlled by the SEM.
+    #     """
+    #     scan_mode = "external" if external else "full_frame"
+    #     self.parent.set_scan_mode(scan_mode, channel=self.channel)
+    #     # The dwellTime and scale VA setter can only reflect changes on the SEM server side (parent)
+    #     # after the external VA is set to False i.e. 'full_frame'
+    #     if not external:
+    #         if self.dwellTime.value != self.parent.get_dwell_time(self.channel):
+    #             # Set the VA value again to reflect changes on the parent
+    #             self.dwellTime.value = self.dwellTime.value
+    #         if self.resolution.value != tuple(self.parent.get_resolution(self.channel)):
+    #             # Set the VA value again to reflect changes on the parent
+    #             self.scale.value = self.scale.value
+    #     return external
 
     def prepareForScan(self):
         """
