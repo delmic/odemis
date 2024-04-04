@@ -75,7 +75,7 @@ import warnings
 import weakref
 from collections.abc import Iterable
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Set
+from typing import Any, Dict, List, Optional, Tuple, Set, Union
 
 import nidaqmx  # Tested with 0.9.0-dev (August 2023), modified to accept
 import numpy
@@ -2938,14 +2938,14 @@ class CountingDetector(model.Detector):
 # Copied from semcomedi
 class SEMDataFlow(model.DataFlow):
 
-    def __init__(self, detector: Optional[AnalogDetector | CountingDetector],
+    def __init__(self, detector: Union[AnalogDetector, CountingDetector],
                  sem: AnalogSEM, inverted=False):
         """
         detector: the detector that the dataflow corresponds to
         sem: the SEM
         inverted: whether the data values must be inverted
         """
-        model.DataFlow.__init__(self)
+        super().__init__()
         self.component = weakref.ref(detector)
         self._sem = weakref.proxy(sem)
 
