@@ -233,7 +233,7 @@ class Instantiator(object):
     """
 
     def __init__(self, inst_file, settings_file=None, container=None, create_sub_containers=False,
-                 dry_run=False, strict_children: bool = True):
+                 dry_run=False, strict_children: bool = False):
         """
         inst_file (file): opened file that contains the YAML
         settings_file (file or None): opened settings file in YAML format.
