@@ -1276,13 +1276,13 @@ class Scanner(model.Emitter):
         #     setter=self._setBlanker,
         #     choices=blanker_choices)
 
-        if self.channel == "electron":
-            spotsize_info = self.parent.spotsize_info(self.channel)
-            self.spotSize = model.FloatContinuous(
-                self.parent.get_spotsize(self.channel),
-                spotsize_info["range"],
-                unit=spotsize_info["unit"],
-                setter=self._setSpotSize)
+        # if self.channel == "electron":
+            # spotsize_info = self.parent.spotsize_info(self.channel)
+            # self.spotSize = model.FloatContinuous(
+            #     self.parent.get_spotsize(self.channel),
+            #     spotsize_info["range"],
+            #     unit=spotsize_info["unit"],
+            #     setter=self._setSpotSize)
 
         beam_shift_info = self.parent.beam_shift_info(self.channel)
         range_x = beam_shift_info["range"]["x"]
@@ -1405,10 +1405,10 @@ class Scanner(model.Emitter):
             # if self.blanker.value is not None and blanked != self.blanker.value:
             #     self.blanker._value = blanked
             #     self.blanker.notify(blanked)
-            spot_size = self.parent.get_spotsize(self.channel)
-            if spot_size != self.spotSize.value:
-                self.spotSize._value = spot_size
-                self.spotSize.notify(spot_size)
+            # spot_size = self.parent.get_spotsize(self.channel)
+            # if spot_size != self.spotSize.value:
+            #     self.spotSize._value = spot_size
+            #     self.spotSize.notify(spot_size)
             beam_shift = self.parent.get_beam_shift(self.channel)
             if beam_shift != self.shift.value:
                 self.shift._value = beam_shift
@@ -1516,9 +1516,9 @@ class Scanner(model.Emitter):
             self.parent.unblank_beam(self.channel)
         return self.parent.beam_is_blanked(self.channel)
 
-    def _setSpotSize(self, spotsize):
-        self.parent.set_spotsize(spotsize, channel=self.channel)
-        return self.parent.get_spotsize(self.channel)
+    # def _setSpotSize(self, spotsize):
+    #     self.parent.set_spotsize(spotsize, channel=self.channel)
+    #     return self.parent.get_spotsize(self.channel)
 
     def _setBeamShift(self, beam_shift):
         self.parent.set_beam_shift(x=beam_shift[0], y=beam_shift[1], channel=self.channel)
@@ -2021,9 +2021,9 @@ class Stage(model.Actuator):
         if "z" not in rng:
             rng["z"] = stage_info["range"]["z"]
         if "rx" not in rng:
-            rng["rx"] = stage_info["range"]["t"]
+            rng["rx"] = stage_info["range"]["T"]
         if "rz" not in rng:
-            rng["rz"] = stage_info["range"]["r"]
+            rng["rz"] = stage_info["range"]["R"]
 
         axes_def = {
             "x": model.Axis(unit=stage_info["unit"]["x"], range=rng["x"]),
@@ -2031,7 +2031,7 @@ class Stage(model.Actuator):
             "z": model.Axis(unit=stage_info["unit"]["z"], range=rng["z"]),
             "rx": model.Axis(unit=stage_info["unit"]["t"], range=rng["rx"]),
             "rz": model.Axis(unit=stage_info["unit"]["r"], range=rng["rz"]),
-        }
+        } # TODO: make these axis and unit arguments consistent
 
         model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def,
                                 **kwargs)
@@ -2180,6 +2180,8 @@ class Stage(model.Actuator):
             Relative shift to move the stage to per axes in m for 'x', 'y', 'z' in rad for 'rx', 'rz'.
             Axes are 'x', 'y', 'z', 'rx' and 'rz'.
         """
+        if "coordinate_system" in shift:
+            shift.pop("coordinate_system") # TODO: better integrate with _checkMove, assume always RAW?
         if not shift:
             return model.InstantaneousFuture()
         self._checkMoveRel(shift)
@@ -2204,6 +2206,8 @@ class Stage(model.Actuator):
             Absolute position to move the stage to per axes in m for 'x', 'y', 'z' in rad for 'rx', 'rz'.
             Axes are 'x', 'y', 'z', 'rx' and 'rz'.
         """
+        if "coordinate_system" in pos:
+            pos.pop("coordinate_system") # TODO: better integrate with _checkMove, assume always RAW?
         if not pos:
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
