@@ -48,6 +48,7 @@ class CryoZLocalizationController(object):
     """
     Controller to handle the Z localization for the ENZEL/METEOR with a stigmator.
     """
+
     def __init__(self, tab_data, panel, tab):
         self._panel = panel
         self._tab_data = tab_data
@@ -142,23 +143,20 @@ class CryoZLocalizationController(object):
         self._panel.btn_z_localization.Enable(has_feature and not is_acquiring or is_runnning)
 
     def _on_streams(self, streams):
-        # update selected_stream, so that it's a valid one
-        s = [s for s in self._tab_data.streams.value if isinstance(s, FluoStream)]
-        if s:
-            for i, stream in enumerate(s):
-                if self._selected_stream == stream:
-                    break
-            else:
-                self._selected_stream = next(s for s in self._tab_data.streams.value if isinstance(s, FluoStream))
+        if self._selected_stream in streams:
+            return  # Everything is fine
+        # Find a good stream (or None if no stream)
+        self._selected_stream = next((s for s in streams if isinstance(s, FluoStream)), None)
 
     def _create_stream_menu(self, evt):
         """Display active list of streams in the menu and check the selected stream when toggle button is clicked"""
         menu = wx.Menu()
-        s = [s for s in self._tab_data.streams.value if isinstance(s, FluoStream)]
+        # Get the list of streams from stream controller to keep the display order of streams in menu,
+        # same as, display order of streams in the "Streams" panel
+        streams = [stream_cont.stream for stream_cont in self._tab.streambar_controller.stream_controllers if
+                   isinstance(stream_cont.stream, FluoStream)]
         self._menu_to_stream = {}
-        # Keep the display order of streams in menu, same as,
-        # Display order in the "Streams" panel in the Localization Tab
-        for i, stream in reversed(list(enumerate(s))):
+        for stream in streams:
             label = stream.name.value
             menu_id = wx.Window.NewControlId()
             menu_item = wx.MenuItem(menu, menu_id, label, kind=wx.ITEM_RADIO)
@@ -167,8 +165,11 @@ class CryoZLocalizationController(object):
             menu.Append(menu_item)
             menu_item.Check(stream == self._selected_stream)
 
+        # Blocking function, which returns only once when
+        # The user has selected a stream, or closed the menu
         self._panel.menu_localization_streams.PopupMenu(menu,
-                                                       (0, self._panel.menu_localization_streams.GetSize().GetHeight()))
+                                                        (
+                                                        0, self._panel.menu_localization_streams.GetSize().GetHeight()))
         self._panel.menu_localization_streams.SetToggle(False)
 
     def _on_stream_selection(self, evt):
@@ -177,8 +178,8 @@ class CryoZLocalizationController(object):
         self._selected_stream = self._menu_to_stream[menu_id]
 
     def _on_z_localization(self, evt):
-        """Start or cancel the locazation methon when the butten is clicked"""
-        # Check if the localization method is done
+        """Start or cancel the localization method when the button is clicked"""
+        # If localization is running, cancel it, otherwise start one
         if self._acq_future.done():
             self._start_z_localization()
         else:

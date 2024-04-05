@@ -22,7 +22,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import threading
 import logging
 import math
-from concurrent.futures._base import CancelledError
+from concurrent.futures import CancelledError
 
 import numpy
 from Pyro4.futures import FINISHED, CANCELLED, RUNNING
@@ -284,6 +284,7 @@ def _do_measure_z(f: ProgressiveFuture, stigmator, angle: float, pos: Tuple[floa
                 raise CancelledError
             f.running_subf = acqmng.acquire([stream])
         data, ex = f.running_subf.result(timeout=600)
+
         im = data[0]
         if len(data) != 1:
             logging.warning("Unexpected extra DataArray from acquisition: %s", data)
@@ -310,6 +311,9 @@ def _do_measure_z(f: ProgressiveFuture, stigmator, angle: float, pos: Tuple[floa
             exporter.export(logpath, data + [sub_im])
 
         # Call the localization
+        with f._task_lock:
+            if f._task_state == CANCELLED:
+                raise CancelledError
         zshift, warning = determine_z_position(sub_im, calib)
 
         logging.debug("Located feature Z shifted by %s m", zshift)
@@ -320,12 +324,9 @@ def _do_measure_z(f: ProgressiveFuture, stigmator, angle: float, pos: Tuple[floa
         raise
 
     finally:
-        f.running_subf = stigmator.moveAbs({"rz": 0})
-        f.running_subf.result(timeout=600)
-        with f._task_lock:
-            if f._task_state == CANCELLED:
-                raise CancelledError()
-            f._task_state = FINISHED
+        f = stigmator.moveAbs({"rz": 0})
+        f.result(timeout=600)
+        f._task_state = FINISHED
 
 
 def _cancel_localization(future) -> bool:
@@ -334,7 +335,7 @@ def _cancel_localization(future) -> bool:
     :param future: the future that will be executing the task
     :return: True if it successfully cancelled (stopped) the future
     """
-    logging.debug("Canceling localization procedure...")
+    logging.debug("Cancelling localization procedure...")
     with future._task_lock:
         if future._task_state == FINISHED:
             return False
