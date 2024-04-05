@@ -598,7 +598,14 @@ class StreakUnit(model.HwComponent):
         # [Volt] Input and indication of the trigger level for the vertical sweep.
         parent.DevParamSet(self.location, "Trig. level", 1)  # TODO check what value needed regarding HW
         parent.DevParamSet(self.location, "Trig. slope", "Rising")
-        parent.DevParamSet(self.location, "Shutter", "Closed")
+
+        devparamslist = parent.DevParamsList()
+        # only add the shutter parameter if it is possible to control the shutter via software
+        if "Shutter" in devparamslist:
+            parent.DevParamSet(self.location, "Shutter", "Closed")
+
+            shutter = self.GetShutter()
+            self.shutter = model.BooleanVA(shutter, setter=self._setShutter)
 
         # Refresh regularly the values, from the hardware, starting from now
         self._updateSettings()
@@ -641,9 +648,6 @@ class StreakUnit(model.HwComponent):
         # is set in the setter of the timeRange VA
         self.timeRangeFactor = None
 
-        shutter = self.GetShutter()
-        self.shutter = model.BooleanVA(shutter, setter=self._setShutter)
-
         # read-only VAs TODO: Trig. Mode, Trig. level, Trig. slope?
 
     def _updateSettings(self) -> None:
@@ -668,10 +672,17 @@ class StreakUnit(model.HwComponent):
                 self.streakMode._value = mode
                 self.streakMode.notify(mode)
 
-            pllMode = self.GetPLLMode()
-            if pllMode != self.phaseLocked.value:
-                self.phaseLocked._value = pllMode
-                self.phaseLocked.notify(pllMode)
+            # update only if the VA exists
+            if self.phaseLocked and self.phaseLocked.value:
+                pllMode = self.GetPLLMode()
+                if pllMode != self.phaseLocked.value:
+                    self.phaseLocked._value = pllMode
+                    self.phaseLocked.notify(pllMode)
+
+            shutter = self.GetShutter()
+            if self.shutter and shutter != self.shutter.value:
+                self.shutter._value = shutter
+                self.shutter.notify(shutter)
 
         except Exception:
             logging.exception("Unexpected failure when polling streak unit settings")
@@ -724,7 +735,7 @@ class StreakUnit(model.HwComponent):
         elif shutter_raw[0] == "Closed":
             shutter = False
         else:
-            logging.warning("Unexpected streak mode %s", shutter_raw)
+            logging.warning("Unexpected shutter mode %s", shutter_raw)
             shutter = False  # safer!
 
         return shutter
@@ -736,7 +747,9 @@ class StreakUnit(model.HwComponent):
         :return: (bool) shutter state
         """
         self.parent.DevParamSet(self.location, "Shutter", "Open" if value else "Closed")
-        logging.debug("Reporting mechanical shutter state: %s.", value)
+        logging.debug("Setting shutter to: %s.", value)
+
+        time.sleep(0.15)  # make sure the shutter movement is done
 
         return value
 
@@ -1024,8 +1037,8 @@ class DelayGenerator(model.HwComponent):
         try:
             delaynameremoteex = ["Delay A", "Delay B", "Delay C", "Delay D", "Delay E", "Delay F", "Delay G", "Delay H"]
             delayvas = ["triggerDelay", "delayB", "delayC", "delayD", "delayE", "delayF", "delayG", "delayH"]
-            for i in range(0, 7):
-                if hasattr(self, delayvas[i]):
+            for i, delayva in enumerate(delayvas):
+                if hasattr(self, delayva):
                     delayva = getattr(self, delayvas[i])
                     delayre = self.GetDelayByName(delaynameremoteex[i])
                     if delayva._value != delayre:

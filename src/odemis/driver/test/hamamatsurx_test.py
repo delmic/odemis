@@ -422,7 +422,6 @@ class TestHamamatsurxCam(unittest.TestCase):
         """Test Shutter state VA of streak unit."""
         # set shutter VA
         self.streakunit.shutter.value = False
-        time.sleep(0.5)  # give it some time to actually change the value
         prev_shutter = self.streakunit.shutter.value
         # change shutter VA
         self.streakunit.shutter.value = True
