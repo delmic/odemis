@@ -168,6 +168,7 @@ class SpectrumArbitraryScanOrderPlugin(Plugin):
         if not (microscope and main_data.role.startswith("sparc") and main_data.spectrometers):
             logging.info("%s plugin cannot load as the microscope is not a SPARC with spectrometer",
                          self.name)
+            return
 
         self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
         stctrl = self._tab.streambar_controller
