@@ -47,6 +47,7 @@ from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttribut
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
 from odemis.util import units
 from odemis.util.comp import generate_zlevels
+from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 
 
@@ -78,6 +79,9 @@ class CryoAcquiController(object):
         self._filename = self._tab_data.filename
         self._acquiStreams = self._tab_data.acquisitionStreams
         self._zStackActive = self._tab_data.zStackActive
+
+        # Find the function pattern without detecting the count
+        self._config.fn_ptn, _ = guess_pattern(self._filename.value, detect_count=False)
 
         # hide/show some widgets at initialization
         self._panel.gauge_cryosecom_acq.Hide()
@@ -201,6 +205,8 @@ class CryoAcquiController(object):
         Called when the acquisition process is
         done, failed or canceled
         """
+        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
+        local_tab.tab_data_model.select_current_position_feature()
         self._acq_future = None
         self._gauge_future_conn = None
         self._tab_data.main.is_acquiring.value = False
@@ -286,6 +292,21 @@ class CryoAcquiController(object):
         data = future.result()
         self._display_acquired_data(data)
 
+    def _add_feature_info_filename(self, filename: str) -> str:
+        """
+        Add feature name, feature status and the counter at the end of the filename.
+        :param filename: filename given by user
+        """
+        path_base, ext = splitext(filename)
+        feature = self._tab_data.main.currentFeature.value
+        feature_name = feature.name.value
+        feature_status = feature.status.value
+
+        path, basename = os.path.split(path_base)
+        ptn = f"{basename}-{feature_name}-{feature_status}-{{cnt}}"
+
+        return create_filename(path, ptn, ext, count="001")
+
     def _export_data(self, data, thumb_nail):
         """
         Called to export the acquired data.
@@ -294,6 +315,7 @@ class CryoAcquiController(object):
         """
         filename = self._filename.value
         if data:
+            filename = self._add_feature_info_filename(filename)
             exporter = dataio.get_converter(self._config.last_format)
             exporter.export(filename, data, thumb_nail)
             logging.info(u"Acquisition saved as file '%s'.", filename)
@@ -523,7 +545,7 @@ class CryoAcquiController(object):
         new_filename = ShowAcquisitionFileDialog(self._panel, current_filename)
         if new_filename is not None:
             self._filename.value = new_filename
-            self._config.fn_ptn, self._config.fn_count = guess_pattern(new_filename)
+            self._config.fn_ptn, _ = guess_pattern(new_filename, detect_count=False)
             logging.debug("Generated filename pattern '%s'", self._config.fn_ptn)
 
     def _get_wavelength_vas(self, st):

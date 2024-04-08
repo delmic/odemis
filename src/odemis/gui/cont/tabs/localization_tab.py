@@ -435,7 +435,6 @@ class LocalizationTab(Tab):
         # get the top right view port
         view = self.tab_data_model.views.value[1]
         self.tab_data_model.focussedView.value = view
-        self.tab_data_model.select_current_position_feature()
         for s in data_to_static_streams(data):
             if self.tab_data_model.main.currentFeature.value:
                 s.name.value = self.tab_data_model.main.currentFeature.value.name.value + " - " + s.name.value
