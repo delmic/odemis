@@ -41,12 +41,11 @@ STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKU
 STREAK_CHILDREN_NO_DELAYBOX = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT}
 STREAK_CHILDREN_NO_READOUT_CAM = {"streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
 
-KWARGS_STREAKCAM = dict(name="streak cam", role="ccd", host="192.168.42.76", port=1001,
-                        children=STREAK_CHILDREN) # 172.16.4.2
-KWARGS_STREAKCAM_NO_DELAYBOX = dict(name="streak cam", role="ccd", host="192.168.42.76", port=1001,
-                                    children=STREAK_CHILDREN_NO_DELAYBOX) # 172.16.4.2
-KWARGS_STREAKCAM_NO_READOUT_CAM = dict(name="streak cam", role="ccd", host="192.168.42.76", port=1001,
-                                       children=STREAK_CHILDREN_NO_READOUT_CAM) # 172.16.4.2
+KWARGS_STREAKCAM = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001, children=STREAK_CHILDREN)
+KWARGS_STREAKCAM_NO_DELAYBOX = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001,
+                                    children=STREAK_CHILDREN_NO_DELAYBOX)
+KWARGS_STREAKCAM_NO_READOUT_CAM = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001,
+                                       children=STREAK_CHILDREN_NO_READOUT_CAM)
 
 # test with spectrograph
 CLASS_SPECTROGRAPH = andorshrk.Shamrock
@@ -132,32 +131,32 @@ class TestHamamatsurxNoReadoutCamera(unittest.TestCase):
             if child.name == CONFIG_DELAYBOX["name"]:
                 cls.delaybox = child
 
-        cls.delaybox.updateMetadata({model.MD_TIME_RANGE_TO_DELAY:
-            {
-                1.e-9: 7.99e-9,
-                2.e-9: 9.63e-9,
-                5.e-9: 33.2e-9,
-                10.e-9: 45.9e-9,
-                20.e-9: 66.4e-9,
-                50.e-9: 102e-9,
-                100.e-9: 169e-9,
-                200.e-9: 302e-9,
-                500.e-9: 731e-9,
-                1.e-6: 1.39e-6,
-                2.e-6: 2.69e-6,
-                5.e-6: 7.02e-6,
-                10.e-6: 13.8e-6,
-                20.e-6: 26.7e-6,
-                50.e-6: 81.6e-6,
-                100.e-6: 161e-6,
-                200.e-6: 320e-6,
-                500.e-6: 798e-6,
-                1.e-3: 1.62e-3,
-                2.e-3: 3.18e-3,
-                5.e-3: 7.88e-3,
-                10.e-3: 15.4e-3,
-            }
-        })
+        # cls.delaybox.updateMetadata({model.MD_TIME_RANGE_TO_DELAY:
+        #     {
+        #         1.e-9: 7.99e-9,
+        #         2.e-9: 9.63e-9,
+        #         5.e-9: 33.2e-9,
+        #         10.e-9: 45.9e-9,
+        #         20.e-9: 66.4e-9,
+        #         50.e-9: 102e-9,
+        #         100.e-9: 169e-9,
+        #         200.e-9: 302e-9,
+        #         500.e-9: 731e-9,
+        #         1.e-6: 1.39e-6,
+        #         2.e-6: 2.69e-6,
+        #         5.e-6: 7.02e-6,
+        #         10.e-6: 13.8e-6,
+        #         20.e-6: 26.7e-6,
+        #         50.e-6: 81.6e-6,
+        #         100.e-6: 161e-6,
+        #         200.e-6: 320e-6,
+        #         500.e-6: 798e-6,
+        #         1.e-3: 1.62e-3,
+        #         2.e-3: 3.18e-3,
+        #         5.e-3: 7.88e-3,
+        #         10.e-3: 15.4e-3,
+        #     }
+        # })
 
     @classmethod
     def tearDownClass(cls):
@@ -758,7 +757,7 @@ class TestHamamatsurxCamWithSpectrograph(unittest.TestCase):
         STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT,
                            "delaybox": CONFIG_DELAYBOX}
 
-        cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="192.168.42.76", # 192.168.56.103 172.16.4.2
+        cls.streakcam = hamamatsurx.StreakCamera("streak cam", "streakcam", host="172.16.4.2",
                                                  port=1001, children=STREAK_CHILDREN,
                                                  dependencies={"spectrograph": cls.spectrograph})
 

@@ -25,7 +25,6 @@ user interface.
 
 """
 
-from past.builtins import long
 from abc import ABCMeta
 from collections.abc import Iterable
 import locale
@@ -212,11 +211,11 @@ class SettingsController(metaclass=ABCMeta):
             else:
                 # Still try to beautify a bit if it's a number
                 if (
-                    isinstance(value, (int, long, float)) or
+                    isinstance(value, (int, float)) or
                     (
                         isinstance(value, Iterable) and
                         len(value) > 0 and
-                        isinstance(value[0], (int, long, float))
+                        isinstance(value[0], (int, float))
                     )
                 ):
                     nice_str = readable_str(value, sig=3)
@@ -897,17 +896,17 @@ class StreakCamAlignSettingsController(SettingsBarController):
         entry_timeRange.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
         self.ctrl_timeRange = entry_timeRange.value_ctrl
 
-        entry_triggerDelay = create_setting_entry(self.panel_streak, "Trigger delay",
-                                                  self.streak_delay.triggerDelay,
-                                                  self.streak_delay,
-                                                  conf={"control_type": odemis.gui.CONTROL_FLT,
-                                                        "label": "Trigger delay",
-                                                        "tooltip": "Change the trigger delay value to "
-                                                                   "center the image."},
-                                                  change_callback=self._onUpdateTriggerDelayMD)
-
-        entry_triggerDelay.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
-        self.ctrl_triggerDelay = entry_triggerDelay.value_ctrl
+        # entry_triggerDelay = create_setting_entry(self.panel_streak, "Trigger delay",
+        #                                           self.streak_delay.triggerDelay,
+        #                                           self.streak_delay,
+        #                                           conf={"control_type": odemis.gui.CONTROL_FLT,
+        #                                                 "label": "Trigger delay",
+        #                                                 "tooltip": "Change the trigger delay value to "
+        #                                                            "center the image."},
+        #                                           change_callback=self._onUpdateTriggerDelayMD)
+        #
+        # entry_triggerDelay.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+        # self.ctrl_triggerDelay = entry_triggerDelay.value_ctrl
 
         entry_magnification = create_setting_entry(self.panel_streak, "Magnification",
                                                    self.streak_lens.magnification,
@@ -929,48 +928,48 @@ class StreakCamAlignSettingsController(SettingsBarController):
         self.panel.btn_open_streak_calib_file.Bind(wx.EVT_BUTTON, self._onOpenCalibFile)
         self.panel.btn_save_streak_calib_file.Bind(wx.EVT_BUTTON, self._onSaveCalibFile)
 
-    def _onUpdateTriggerDelayMD(self, evt):
-        """
-        Callback method for trigger delay ctrl GUI element.
-        Overwrites the triggerDelay value in the MD after a new value was requested via the GUI.
-        """
-        evt.Skip()
-        cur_timeRange = self.streak_unit.timeRange.value
-        requested_triggerDelay = self.ctrl_triggerDelay.GetValue()
-        # get a copy of  MD
-        trigger2delay_MD = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+    # def _onUpdateTriggerDelayMD(self, evt):
+    #     """
+    #     Callback method for trigger delay ctrl GUI element.
+    #     Overwrites the triggerDelay value in the MD after a new value was requested via the GUI.
+    #     """
+    #     evt.Skip()
+    #     cur_timeRange = self.streak_unit.timeRange.value
+    #     requested_triggerDelay = self.ctrl_triggerDelay.GetValue()
+    #     # get a copy of  MD
+    #     trigger2delay_MD = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+    #
+    #     # check if key already exists (prevent creating new key due to floating point issues)
+    #     key = util.find_closest(cur_timeRange, trigger2delay_MD.keys())
+    #     if util.almost_equal(key, cur_timeRange):
+    #         # Replace the current delay value with the requested for an already existing timeRange in the dict.
+    #         # This avoid duplication of keys, which are only different because of floating point issues.
+    #         trigger2delay_MD[key] = requested_triggerDelay
+    #     else:
+    #         trigger2delay_MD[cur_timeRange] = requested_triggerDelay
+    #         logging.warning("A new entry %s was added to MD_TIME_RANGE_TO_DELAY, "
+    #                         "which is not in the device .timeRange choices.", cur_timeRange)
+    #
+    #     # check the number of keys in the dict is same as choices for VA
+    #     if len(trigger2delay_MD.keys()) != len(self.streak_unit.timeRange.choices):
+    #         logging.warning("MD_TIME_RANGE_TO_DELAY has %d entries, while the device .timeRange has %d choices.",
+    #                         len(trigger2delay_MD.keys()), len(self.streak_unit.timeRange.choices))
+    #
+    #     self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: trigger2delay_MD})
+    #     # Note: updateMetadata should here never raise an exception as the UnitFloatCtrl already
+    #     # catches errors regarding type and out-of-range inputs
+    #
+    #     # update txt displayed in GUI
+    #     self._onUpdateTriggerDelayGUI("Calibration not saved yet", odemis.gui.FG_COLOUR_WARNING)
 
-        # check if key already exists (prevent creating new key due to floating point issues)
-        key = util.find_closest(cur_timeRange, trigger2delay_MD.keys())
-        if util.almost_equal(key, cur_timeRange):
-            # Replace the current delay value with the requested for an already existing timeRange in the dict.
-            # This avoid duplication of keys, which are only different because of floating point issues.
-            trigger2delay_MD[key] = requested_triggerDelay
-        else:
-            trigger2delay_MD[cur_timeRange] = requested_triggerDelay
-            logging.warning("A new entry %s was added to MD_TIME_RANGE_TO_DELAY, "
-                            "which is not in the device .timeRange choices.", cur_timeRange)
-
-        # check the number of keys in the dict is same as choices for VA
-        if len(trigger2delay_MD.keys()) != len(self.streak_unit.timeRange.choices):
-            logging.warning("MD_TIME_RANGE_TO_DELAY has %d entries, while the device .timeRange has %d choices.",
-                            len(trigger2delay_MD.keys()), len(self.streak_unit.timeRange.choices))
-
-        self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: trigger2delay_MD})
-        # Note: updateMetadata should here never raise an exception as the UnitFloatCtrl already
-        # catches errors regarding type and out-of-range inputs
-
-        # update txt displayed in GUI
-        self._onUpdateTriggerDelayGUI("Calibration not saved yet", odemis.gui.FG_COLOUR_WARNING)
-
-    def _onUpdateTriggerDelayGUI(self, text, colour=odemis.gui.FG_COLOUR_EDIT):
-        """
-        Updates the GUI elements regarding the new trigger delay value.
-        :parameter text (str): the text to show
-        :parameter colour (wx.Colour): the colour to use
-        """
-        self.panel.txt_StreakCalibFilename.Value = text
-        self.panel.txt_StreakCalibFilename.SetForegroundColour(colour)
+    # def _onUpdateTriggerDelayGUI(self, text, colour=odemis.gui.FG_COLOUR_EDIT):
+    #     """
+    #     Updates the GUI elements regarding the new trigger delay value.
+    #     :parameter text (str): the text to show
+    #     :parameter colour (wx.Colour): the colour to use
+    #     """
+    #     self.panel.txt_StreakCalibFilename.Value = text
+    #     self.panel.txt_StreakCalibFilename.SetForegroundColour(colour)
 
     def _onOpenCalibFile(self, event):
         """
@@ -996,26 +995,26 @@ class StreakCamAlignSettingsController(SettingsBarController):
         filename = dialog.GetFilename()
 
         # read file
-        try:
-            tr2d = calibration.read_trigger_delay_csv(path,
-                                                      self.streak_unit.timeRange.choices,
-                                                      self.streak_delay.triggerDelay.range)
-        except ValueError as error:
-            self._onUpdateTriggerDelayGUI("Error while loading file!", odemis.gui.FG_COLOUR_HIGHLIGHT)
-            logging.error("Failed loading %s: %s", filename, error)
-            return
-
-        # update the MD: overwrite the complete dict
-        self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: tr2d})
-
-        # update triggerDelay shown in GUI
-        cur_timeRange = self.streak_unit.timeRange.value
-        # find the corresponding trigger delay
-        key = util.find_closest(cur_timeRange, tr2d.keys())
-        # Note: no need to check almost_equal again as we do that already when loading the file
-        self.streak_delay.triggerDelay.value = tr2d[key]  # set the new value
-
-        self._onUpdateTriggerDelayGUI(filename)  # update txt displayed in GUI
+        # try:
+        #     tr2d = calibration.read_trigger_delay_csv(path,
+        #                                               self.streak_unit.timeRange.choices,
+        #                                               self.streak_delay.triggerDelay.range)
+        # except ValueError as error:
+        #     self._onUpdateTriggerDelayGUI("Error while loading file!", odemis.gui.FG_COLOUR_HIGHLIGHT)
+        #     logging.error("Failed loading %s: %s", filename, error)
+        #     return
+        #
+        # # update the MD: overwrite the complete dict
+        # self.streak_delay.updateMetadata({model.MD_TIME_RANGE_TO_DELAY: tr2d})
+        #
+        # # update triggerDelay shown in GUI
+        # cur_timeRange = self.streak_unit.timeRange.value
+        # # find the corresponding trigger delay
+        # key = util.find_closest(cur_timeRange, tr2d.keys())
+        # # Note: no need to check almost_equal again as we do that already when loading the file
+        # self.streak_delay.triggerDelay.value = tr2d[key]  # set the new value
+        #
+        # self._onUpdateTriggerDelayGUI(filename)  # update txt displayed in GUI
 
     def _onSaveCalibFile(self, event):
         """
@@ -1046,9 +1045,9 @@ class StreakCamAlignSettingsController(SettingsBarController):
             filename += ".csv"
             path += ".csv"
 
-        # get a copy of the triggerDelay dict from MD
-        tr2d = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
-        calibration.write_trigger_delay_csv(path, tr2d)
-
-        # update txt displayed in GUI
-        self._onUpdateTriggerDelayGUI(filename)
+        # # get a copy of the triggerDelay dict from MD
+        # tr2d = self.streak_delay.getMetadata()[model.MD_TIME_RANGE_TO_DELAY]
+        # calibration.write_trigger_delay_csv(path, tr2d)
+        #
+        # # update txt displayed in GUI
+        # self._onUpdateTriggerDelayGUI(filename)
