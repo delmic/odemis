@@ -29,6 +29,7 @@ from odemis import model
 
 try:
     from fastem_calibrations.autofocus_multiprobe import AutofocusMultiprobe
+    from fastem_calibrations.autofocus_sem import AutofocusSEM
     from fastem_calibrations.autostigmation import Autostigmation
     from fastem_calibrations.cell_translation import CellTranslation
     from fastem_calibrations.dark_offset_correction import DarkOffsetCorrection
@@ -63,6 +64,7 @@ except ImportError as err:
     ScanAmplitude = None
     CellTranslation = None
     Autostigmation = None
+    AutofocusSEM = None
 
     fastem_calibrations = False
 
@@ -88,6 +90,7 @@ class Calibrations(Enum):
     SCAN_AMPLITUDE_FINAL = ScanAmplitude
     CELL_TRANSLATION = CellTranslation
     AUTOSTIGMATION = Autostigmation
+    SEM_AUTOFOCUS = AutofocusSEM
 
 
 def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations, stage_pos=None):
