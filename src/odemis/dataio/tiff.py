@@ -1902,7 +1902,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
                 data = numpy.moveaxis(data, 0, 2)  # move C axis near YX
             elif data.ndim == 5:
                 write_rgb = False
-                # CTZYX -> TZCYX  (for ImajeJ compatible ordering)
+                # CTZYX -> TZCYX  (for ImageJ compatible ordering)
                 data = numpy.moveaxis(data, 0, 2)
                 hdim = data.shape[:-2]
             else:  # YX
@@ -1922,15 +1922,13 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
                     c = compression
                 write_image(f, data[i], write_rgb=write_rgb, compression=c, pyramid=pyramid)
 
-        else:  # len(das) > 1 => list of DataArrays to represent the C dimension
-            # the shape of all das are same: 1TZYX
+        else:
+            # len(das) > 1 => list of DataArrays to represent the C dimension
+            # the shape of all das are same: 1TZYX, or ZYX, or TZYX
             # len(das) is to be used as C
 
-            data = das[0]
-            assert data.shape[0] == 1
             write_rgb = False
-            # 1TZYX
-            hdim = data.shape[:-2]  # 1TZ
+            hdim = das[0].shape[:-2]  # 1TZ or TZ or Z
 
             for i in numpy.ndindex(*hdim):
                 for data in das:  # for ImageJ compatible ordering
