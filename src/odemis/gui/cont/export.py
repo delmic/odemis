@@ -115,6 +115,7 @@ class ExportController(object):
         enabled = (len(streams) > 0)
         self._main_frame.menu_item_export_as.Enable(enabled)
         self._tab_panel.btn_export.Enable(enabled)
+        self._tab_panel.btn_export.SetLabel(f"Export Image ({len(streams)})")
 
     def on_export(self, event):
         """
