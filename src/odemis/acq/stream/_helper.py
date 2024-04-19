@@ -27,11 +27,9 @@ import time
 
 import numbers
 import numpy
-import wx
 
 from odemis import model
 from odemis.acq import align
-from odemis.gui.comp import popup
 from odemis.model import VigilantAttributeBase, MD_POL_NONE
 from odemis.util import img, almost_equal, get_best_dtype_for_acc, angleres
 
@@ -702,11 +700,14 @@ class CCDSettingsStream(RepetitionStream):
 class SpectrumSettingsStream(CCDSettingsStream):
     """
     A Spectrum stream. The live view is just the current raw spectrum (wherever the e-beam is).
+    The light argument determines if there is a light source (component with role=light) that is
+    to be used in the Spectrum stream.
+    If so the user can control the power of the source through a slider bar on the stream.
     """
     def __init__(self, name, detector, dataflow, emitter, light=None, **kwargs):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_SPECTRUM
-        self._light = light
+        self.light = light
         super(SpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
@@ -726,64 +727,41 @@ class SpectrumSettingsStream(CCDSettingsStream):
             # Current channel index to be used for channel's power update
             self._channel_idx = 0
 
-            # set a channel index if an emitter consists of multiple spectra
-            if self._emitter.role != "e-beam":
-                current_exc = self._get_current_excitation()
-                self._channel_idx = emitter.spectra.value.index(current_exc)
-
-            cp_range = tuple(r[self._channel_idx] for r in self.light.power.range)
+            pwr_range = tuple(r[self._channel_idx] for r in self.light.power.range)
             # keep the current power setting for the VA
-            self.power = model.FloatContinuous(self.light.power.value[self._channel_idx], range=cp_range,
+            self.power = model.FloatContinuous(self.light.power.value[self._channel_idx], range=pwr_range,
                                                unit=self.light.power.unit)
-            self.power.clip_on_range = True
             self.power.subscribe(self._onPower)
-            if model.hasVA(self.light, "interlockTriggered"):
-                self.light.interlockTriggered.subscribe(self._on_interlock_change)
-
-    def _get_current_excitation(self):
-        """
-        Determine the current excitation based on hardware settings
-        return (None or 5 floats): tuple of the current excitation, or None if
-        the light is completely off.
-        """
-        # The current excitation is the band which has the highest intensity
-        intens = self._emitter.power.value
-        m = max(intens)
-        if m == 0:
-            return None
-        i = intens.index(m)
-        return self._emitter.spectra.value[i]
 
     def _onPower(self, value):
         """
-        Update the emitter power with the current channel value
-        :param value: current channel value
+        Update the light power with the current channel value if the stream is active/playing.
+        :param value (float): current channel value
         """
         if self.is_active.value:
             pwr = list(self.light.power.range[0])
             pwr[self._channel_idx] = value
             self.light.power.value = pwr
 
-    def _on_interlock_change(self, value):
-        """
-        Some form of notification to the user to inform about a change in interlock status.
-        :param value: current interlockTriggered VA value
-        """
-        logging.warning(f"Interlock status changed from {not value} -> "
-                        f"{value}")
-
-        if value:
-            popup.show_message(wx.GetApp().main_frame,
-                               title="Laser safety",
-                               message=f"Laser was suspended automatically due to interlock trigger.",
-                               timeout=10.0,
-                               level=logging.WARNING)
+    def _onActive(self, active):
+        if active:
+            if self.light:
+                # Call _onPower to update the power of the light
+                self._onPower(self.power.value)
+            super()._onActive(active)
         else:
-            popup.show_message(wx.GetApp().main_frame,
-                               title="Laser safety",
-                               message=f"Laser interlock trigger is reset to normal.",
-                               timeout=10.0,
-                               level=logging.WARNING)
+            super()._onActive(active)
+            self._stop_light()
+
+    def _stop_light(self):
+        """
+        Ensures the light is turned off (temporarily)
+        """
+        if self.light is None:
+            return
+
+        # set the light power to the minimum of the range, in most cases this is 0.0
+        self.light.power.value = self.light.power.range[0]
 
     def _updateImage(self):
         if not self.raw:

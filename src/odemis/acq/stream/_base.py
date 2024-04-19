@@ -296,10 +296,6 @@ class Stream(object):
         return self._emitter
 
     @property
-    def light(self):
-        return self._light
-
-    @property
     def detector(self):
         return self._detector
 

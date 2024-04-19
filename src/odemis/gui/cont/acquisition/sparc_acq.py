@@ -41,6 +41,7 @@ from odemis.acq import acqmng, stream
 from odemis.acq.stream import UNDEFINED_ROI, ScannedTCSettingsStream, ScannedTemporalSettingsStream, \
     TemporalSpectrumSettingsStream, AngularSpectrumSettingsStream
 from odemis.gui import conf
+from odemis.gui.comp import popup
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, EllipsisAnimator
@@ -65,13 +66,11 @@ class SparcAcquiController(object):
         self._main_data_model = tab_data.main
         self._tab_panel = tab_panel
         self._streambar_controller = streambar_controller
-        self._acquisition_info = {}  # info priority value (int): (info lvl (int), info message (str))
-        self._interlockTrigger = False  # local/private bool to track interlock status
+        self._interlockTriggered = False  # local/private bool to track interlock status
 
-        if model.getComponent(role="light"):
-            if model.hasVA(self._main_data_model.light, "interlockTriggered"):
-                # subscribe to the VA and initialize the warning status
-                self._main_data_model.light.interlockTriggered.subscribe(self.on_change_status)
+        if model.hasVA(self._main_data_model.light, "interlockTriggered"):
+            # subscribe to the VA and initialize the warning status
+            self._main_data_model.light.interlockTriggered.subscribe(self.on_interlock_change)
 
         # For file selection
         self.conf = conf.get_acqui_conf()
@@ -166,11 +165,6 @@ class SparcAcquiController(object):
     def on_preparation(self, _):
         self.update_acquisition_time()
 
-    def check_acquire_button(self):
-        self.btn_acquire.Enable(self._roa.value != UNDEFINED_ROI and
-                                not self._main_data_model.is_preparing.value and
-                                not self._interlockTrigger)
-
     def _onStreams(self, streams):
         """
         Called when streams are added/deleted. Used to listen to settings change
@@ -220,8 +214,35 @@ class SparcAcquiController(object):
             self.conf.fn_ptn, self.conf.fn_count = guess_pattern(new_name)
             logging.debug("Generated filename pattern '%s'", self.conf.fn_ptn)
 
-    def on_change_status(self, _):
-        # just to call update_acquisition_time without additional arguments
+    def on_interlock_change(self, value):
+        """
+        If the connected interlock status changes, the label on the acquisition panel has to
+        be updated. Either the status is not triggered and the notification label will not be
+        visible or the status is triggered and the user is notified through the label.
+        Update the label status through calling update_acquisition_time() without any arguments.
+        :param value (BooleanVA): current interlockTriggered VA value
+        """
+        if value == self._interlockTriggered:
+            # if the value did not change in respect to the previous value
+            return
+
+        logging.warning(f"Interlock status changed from {not value} -> "
+                        f"{value}")
+
+        if value:
+            popup.show_message(wx.GetApp().main_frame,
+                               title="Laser safety",
+                               message=f"Laser was suspended automatically due to interlock trigger.",
+                               timeout=10.0,
+                               level=logging.WARNING)
+        else:
+            popup.show_message(wx.GetApp().main_frame,
+                               title="Laser safety",
+                               message=f"Laser interlock trigger is reset to normal.",
+                               timeout=10.0,
+                               level=logging.WARNING)
+
+        self._interlockTriggered = value
         self.update_acquisition_time()
 
     @wxlimit_invocation(1)  # max 1/s
@@ -236,55 +257,40 @@ class SparcAcquiController(object):
         if self._main_data_model.is_acquiring.value:
             return
 
-        if self._main_data_model.is_preparing.value:
-            self._acquisition_info[2] = (logging.INFO, u"Optical path is being reconfigured…")
-            self._ellipsis_animator = EllipsisAnimator(self._acquisition_info[2][1], self.lbl_acqestimate)
+        lvl = None  # icon status shown
+
+        if self._interlockTriggered:
+            txt = u"Laser interlock triggered."
+            lvl = logging.WARN
+        elif self._main_data_model.is_preparing.value:
+            txt = u"Optical path is being reconfigured…"
+            self._ellipsis_animator = EllipsisAnimator(txt, self.lbl_acqestimate)
             self._ellipsis_animator.start()
-        else:
-            if self._acquisition_info.get(2):
-                self._acquisition_info.pop(2)
-
-        if self._roa.value == UNDEFINED_ROI:
+            lvl = logging.INFO
+        elif self._roa.value == UNDEFINED_ROI:
             # TODO: update the default text to be the same
-            self._acquisition_info[1] = (logging.WARN, u"Region of acquisition needs to be selected")
+            txt = u"Region of acquisition needs to be selected"
+            lvl = logging.WARN
         else:
-            if self._acquisition_info.get(1):
-                self._acquisition_info.pop(1)
+            streams = self._tab_data_model.acquisitionStreams
 
-        if self._main_data_model.light.interlockTriggered.value:
-            self._acquisition_info[5] = (logging.WARN, u"Laser interlock triggered.")
-            self._interlockTrigger = True
-        else:
-            if self._acquisition_info.get(5):
-                self._acquisition_info.pop(5)
-                self._interlockTrigger = False
-
-        # check if the acquire button needs enabling or disabling
-        self.check_acquire_button()
-
-        # set the standard acquisition values
-        streams = self._tab_data_model.acquisitionStreams
-        has_folds = len(streams) > len(acqmng.foldStreams(streams))
-        acq_time = acqmng.estimateTime(streams)
-        acq_time = math.ceil(acq_time)  # overestimate the rounding a bit
-        txt = u"Estimated time is {}."
-        txt = txt.format(units.readable_time(acq_time))
-        self._acquisition_info[0] = (logging.NOTSET, txt)
-
-        # sort and select the first one in the list to show
-        self._acquisition_info = dict(reversed(sorted(self._acquisition_info.items())))
-        item_index = list(self._acquisition_info.keys())[0]
-
-        if self._acquisition_info[item_index][0] == 0:
+            has_folds = len(streams) > len(acqmng.foldStreams(streams))
             self.lbl_fold_acq.Show(has_folds)
             self.bmp_fold_acq_info.Show(has_folds)
 
-        logging.debug("Updating status message %s, with level %s",
-                      self._acquisition_info[item_index][1],
-                      self._acquisition_info[item_index][0])
+            acq_time = acqmng.estimateTime(streams)
+            acq_time = math.ceil(acq_time)  # round a bit pessimistic
+            txt = u"Estimated time is {}."
+            txt = txt.format(units.readable_time(acq_time))
 
-        self.lbl_acqestimate.SetLabel(self._acquisition_info[item_index][1])
-        self._show_status_icons(self._acquisition_info[item_index][0])
+        # check if the acquire button needs enabling or disabling
+        self.btn_acquire.Enable(self._roa.value != UNDEFINED_ROI and
+                                not self._main_data_model.is_preparing.value and
+                                not self._interlockTriggered)
+
+        logging.debug("Updating status message %s, with level %s", txt, lvl)
+        self.lbl_acqestimate.SetLabel(txt)
+        self._show_status_icons(lvl)
 
     def _show_status_icons(self, lvl):
         # update status icon to show the logging level

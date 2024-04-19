@@ -27,7 +27,6 @@ If not, see http://www.gnu.org/licenses/.
 
 import logging
 import time
-from collections import namedtuple
 from dataclasses import dataclass
 from threading import Thread
 from typing import List, Tuple, Dict, Optional
