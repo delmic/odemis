@@ -3206,11 +3206,12 @@ class FakeAndorV2DLL(object):
             if not triggered:
                 raise AndorV2Error(20024, "No new data, simulated acquisition aborted")
 
-        # Uncomment to simulate a camera with hardware trigger not receiving any trigger
-        # elif self._trigger_mode == AndorV2DLL.TM_EXTERNAL:
-        #     # Pretend it never comes in
-        #     time.sleep(timeout)
-        #     raise AndorV2Error(20024, "No new data, simulated acquisition aborted")
+        elif self._trigger_mode == AndorV2DLL.TM_EXTERNAL:
+            # Pretends trigger immediately arrived, so acquisition starts just now
+            pass
+            # Uncomment to simulate when hardware trigger is never received
+            # time.sleep(timeout)
+            # raise AndorV2Error(20024, "No new data, simulated acquisition aborted")
 
         # Wait till image is acquired
         left = self.acq_end - time.time()
