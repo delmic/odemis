@@ -197,6 +197,8 @@ class TestCompositedSpectrometer(unittest.TestCase):
 
         f.result() # wait for the position to be set
 
+        self._data = queue.Queue()
+
     def tearDown(self):
         # put back VAs
         self.spectrometer.binning.value = self._orig_binning
@@ -492,8 +494,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.spectrometer.binning.value = binning
         self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
 
-        self._data = queue.Queue()
-
         # Every time an acquisition starts, the ComponsitedSpectrometer
         # automatically configures the CCD to use full vertical binning, unless
         # the CCD doesn't support this. The simulated CCD supports full vertical
@@ -544,8 +544,6 @@ class TestCompositedSpectrometer(unittest.TestCase):
         self.spectrometer.binning.value = binning
         self.spectrometer.resolution.value = self.spectrometer.resolution.range[1]
         self.spectrometer.updateMetadata({model.MD_WL_LIST: [0]})
-
-        self._data = queue.Queue()
 
         orig_res = self.spectrometer.resolution.value
         self.spectrometer.data.subscribe(self.receive_spec_data)
@@ -600,6 +598,37 @@ class TestCompositedSpectrometer(unittest.TestCase):
             logging.error("Shape is %s but wl has len %d", d.shape, len(wl))
 
         logging.debug("Received data of shape %s", d.shape)
+
+    def test_synchronized_acq(self):
+        """
+        Check that acquisition with trigger work too, the same way as directly from the CCD
+        """
+        # Check that changing the max_discard also changes the original DataFlow (default is 100, but 80 is pretty much the same)
+        self.spectrometer.data.max_discard = 80
+        self.assertEqual(self.spectrometer.data.max_discard, 80)
+        self.assertEqual(self.detector.data.max_discard, 80)
+
+        exp = 0.1  # s
+        self.spectrometer.exposureTime.value = exp
+
+        self.spectrometer.data.synchronizedOn(self.spectrometer.softwareTrigger)
+        # Synchronized acquisition should force max_discard to 0 (on the CCD and the spectrometer)
+        self.assertEqual(self.detector.data.max_discard, 0)
+        self.assertEqual(self.spectrometer.data.max_discard, 0)
+
+        self.spectrometer.data.subscribe(self.receive_spec_data)
+        try:
+            self.spectrometer.softwareTrigger.notify()
+            d = self._data.get(timeout=exp * 2 + 1)
+            self.assertEqual(d.shape[1], self.spectrometer.resolution.value[0])
+        finally:
+            self.spectrometer.data.unsubscribe(self.receive_spec_data)
+            self.spectrometer.data.synchronizedOn(None)
+
+        # If not synchronized, max_discard should be back to normal (100 by default)
+        self.assertGreater(self.detector.data.max_discard, 0)
+        self.assertGreater(self.spectrometer.data.max_discard, 0)
+
 
 if __name__ == '__main__':
     unittest.main()

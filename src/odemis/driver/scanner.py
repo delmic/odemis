@@ -283,6 +283,16 @@ class CompositedDataflow(model.DataFlow):
         self._external_dataflow = external_detector.data
         self._composited_scanner = composited_scanner
 
+    # Wrap max_discard to reflect the value of the original DataFlow
+    @property
+    def max_discard(self):
+        return self._external_dataflow.max_discard
+
+    @max_discard.setter
+    def max_discard(self, value):
+        self._external_dataflow.max_discard = value
+        model.DataFlow.max_discard.fset(self, value)  # This calls the super of the property setter
+
     def start_generate(self):
         """
         Sets the scan mode to "external" and subscribes self.notify to the external dataflow
@@ -309,3 +319,6 @@ class CompositedDataflow(model.DataFlow):
         Wrapper to pass synchronization requests to the external dataflow
         """
         self._external_dataflow.synchronizedOn(event)
+        # Don't call super(), as it only updates max_discard. Instead, we update max_discard based
+        # on the value decided by the original DataFlow.
+        model.DataFlow.max_discard.fset(self, self._external_dataflow.max_discard)  # This calls the super of max_discard.setter

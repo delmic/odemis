@@ -560,7 +560,13 @@ class RemoteTest(unittest.TestCase):
         dfs = self.comp.datas
         dfe.reset()
 
+        # max_discard is normally > 0, to automatically drop data if it's coming too fast
+        self.assertGreater(dfs.max_discard, 0)
+
         dfs.synchronizedOn(self.comp.startAcquire)
+        # max_discard should automatically be set to 0 when synchronized
+        self.assertEqual(dfs.max_discard, 0)
+
         dfs.subscribe(self.receive_data)
 
         time.sleep(0.2) # long enough to be after the first data if it generates data
@@ -587,6 +593,9 @@ class RemoteTest(unittest.TestCase):
         dfs.synchronizedOn(None)
         time.sleep(0.1)
         self.assertEqual(number, self.count)
+
+        # max_discard should be set back to the original value after being unsynchronized
+        self.assertGreater(dfs.max_discard, 0)
 
     def test_hw_trigger(self):
         """
@@ -1178,6 +1187,8 @@ class SynchronizableDataFlow(model.DataFlow):
         self._thread_must_stop.set()
 
     def synchronizedOn(self, event):
+        super().synchronizedOn(event)
+
         if self._sync_event == event:
             return
 

@@ -2146,4 +2146,5 @@ class StreakCameraDataFlow(model.DataFlow):
         """
         Synchronize the dataflow.
         """
+        super().synchronizedOn(event)
         self._sync(event)

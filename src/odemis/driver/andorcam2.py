@@ -676,6 +676,7 @@ class AndorCam2(model.DigitalCamera):
             # and discard the rest. When False it will try to pass every frame
             # acquired (only works reliably if the frame rate is only temporarily too high).
             self.dropOldFrames = model.BooleanVA(True)
+            self.dropOldFrames.subscribe(self._onDropOldFrames)  # To update DataFlow.max_discard
 
             # Clara: 0 = conventional (less noise), 1 = Extended Near Infra-Red => 0
             # iXon Ultra: 0 = EMCCD (more sensitive), 1 = conventional (bigger well) => 0
@@ -1735,6 +1736,9 @@ class AndorCam2(model.DigitalCamera):
                 (PCB.value, Decode.value, CameraFirmwareVersion.value,
                  CameraFirmwareBuild.value, eprom.value, coffile.value))
 
+    def _onDropOldFrames(self, drop):
+        self.data.update_max_discard()
+
     def _setBinning(self, value):
         """
         value (2-tuple of int)
@@ -2663,9 +2667,23 @@ class AndorCam2DataFlow(model.DataFlow):
         """
         model.DataFlow.__init__(self)
         self._sync_event = None # synchronization Event
-        self._sync_lock = threading.Lock()  # To ensure only one sync change at a time
         self.component = weakref.ref(camera)
-        self._prev_max_discard = self._max_discard
+        self._max_discard_default = self.max_discard
+
+    def update_max_discard(self):
+        """
+        Update the maximum number of images that can be discarded.
+        This is based on the current settings, and the synchronization mode.
+        """
+        comp = self.component()
+        if comp is None:
+            # Camera has been deleted, it's all fine, this DataFlow will be gone soon too
+            return
+
+        if self._sync_event or not comp.dropOldFrames.value:
+            self.max_discard = 0
+        else:
+            self.max_discard = self._max_discard_default
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
@@ -2692,9 +2710,11 @@ class AndorCam2DataFlow(model.DataFlow):
         (Currently it will automatically be adjusted after the current image)
         event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
-        The DataFlow can be synchronize only with one Event at a time.
+        The DataFlow can be synchronized only with one Event at a time.
         """
         with self._sync_lock:
+            # Don't call super() because we have our own fancy way to update max_discard
+
             if self._sync_event == event:
                 return
 
@@ -2704,15 +2724,9 @@ class AndorCam2DataFlow(model.DataFlow):
 
             if self._sync_event:
                 self._sync_event.unsubscribe(comp)
-                self.max_discard = self._prev_max_discard
 
             self._sync_event = event
             if self._sync_event:
-                # If the DF is synchronized, the subscribers probably don't want to
-                # skip some data => disable discarding data
-                self._prev_max_discard = self._max_discard
-                # TODO: does it help? I'm pretty sure that 0MQ doesn't really change any behaviour
-                self.max_discard = 0
                 if issubclass(self._sync_event.get_type(), model.HwTrigger):
                     # Special case for the hardware trigger: we don't actually synchronize
                     # the data flow, as the camera itself will receive the event.
@@ -2722,6 +2736,10 @@ class AndorCam2DataFlow(model.DataFlow):
                     self._sync_event.subscribe(comp)
             else:  # Non synchronized
                 comp.set_trigger(False)
+
+            # If the DF is synchronized, the subscribers probably don't want to
+            # skip some data => disable discarding data
+            self.update_max_discard()
 
 # Only for testing/simulation purpose
 # Very rough version that is just enough so that if the wrapper behaves correctly,

@@ -589,6 +589,7 @@ class SEMDataFlow(model.DataFlow):
         event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         """
+        super().synchronizedOn(event)
         if self._sync_event == event:
             return
 

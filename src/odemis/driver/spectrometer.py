@@ -239,6 +239,16 @@ class SpecDataFlow(model.DataFlow):
         # generating).
         self._beg_metadata = {}  # Metadata (more or less) at the beginning of the acquisition
 
+    # Wrap max_discard to reflect the value of the original DataFlow
+    @property
+    def max_discard(self):
+        return self._ccddf.max_discard
+
+    @max_discard.setter
+    def max_discard(self, value):
+        self._ccddf.max_discard = value
+        model.DataFlow.max_discard.fset(self, value)  # This calls the super of the property setter
+
     def start_generate(self):
         logging.debug("Activating Spectrometer acquisition")
         self.active = True
@@ -250,10 +260,12 @@ class SpecDataFlow(model.DataFlow):
         self._ccddf.unsubscribe(self._newFrame)
         self.active = False
         logging.debug("Spectrometer acquisition finished")
-        # TODO: tell the component that it's over?
 
     def synchronizedOn(self, event):
         self._ccddf.synchronizedOn(event)
+        # Don't call super(), as it only updates max_discard. Instead, we update max_discard based
+        # on the value decided by the original DataFlow.
+        model.DataFlow.max_discard.fset(self, self._ccddf.max_discard)  # This calls the super of max_discard.setter
 
     def _newFrame(self, df, data):
         """
