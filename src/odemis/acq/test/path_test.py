@@ -1332,6 +1332,11 @@ class SecomPathTestCase(unittest.TestCase):
     def tearDownClass(cls):
         del cls.optmngr  # To garbage collect it
 
+    def setUp(self):
+        # Set the fan speed to on, as we expect in the tests, because the OPM uses the
+        # fan speed at init to use with "best quality".
+        self.ccd.fanSpeed.value = 1
+
     def test_set_acq_quality(self):
         sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
 
