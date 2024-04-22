@@ -681,8 +681,13 @@ class Stream(object):
             # before updating va
             va.unsubscribe(self._axisvaupdaters[va_name])
             # update va
-            va.value = axpos
-            logging.info("Updating local axis %s to position %s", va_name, axpos)
+            axpos_clipped = va.clip(axpos)  # In case the axis went out of range
+            va.value = axpos_clipped
+            if axpos == axpos_clipped:
+                logging.info("Updating local axis %s to position %s", va_name, axpos)
+            else:
+                logging.warning("Updating local axis %s to clipped position %s (actual pos = %s)",
+                                va_name, axpos_clipped, axpos)
             va.subscribe(self._axisvaupdaters[va_name])
 
         return pos
