@@ -417,7 +417,12 @@ class TMCLController(model.Actuator):
             if sw_rng is not None:
                 if not sw_rng[0] <= 0 <= sw_rng[1]:
                     raise ValueError("Range of axis %d doesn't include 0: %s" % (i, sw_rng))
-                phy_rng = (max(phy_rng[0], sw_rng[0]), min(phy_rng[1], sw_rng[1]))
+                # Adjust the range to be a multiple of the ustepsize. This way, if a move goes
+                # precisely to the limit, the position reported will be exactly the limit... otherwise
+                # it might end up being rounded (a tiny bit) outside of the range, which would be confusing.
+                sw_rng_round = [round(r / sz) * sz for r in sw_rng]
+                phy_rng = (max(phy_rng[0], sw_rng_round[0]),
+                           min(phy_rng[1], sw_rng_round[1]))
                 self._ref_max_length[i] = phy_rng[1] - phy_rng[0]
             else:
                 # For safety, for referencing timeout, consider that the range
