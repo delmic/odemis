@@ -93,7 +93,8 @@ class Calibrations(Enum):
     SEM_AUTOFOCUS = AutofocusSEM
 
 
-def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator, calibrations, stage_pos=None):
+def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
+          se_detector, ebeam_focus, calibrations, stage_pos=None):
     """
     Start a calibration task for a given list of calibrations.
 
@@ -105,7 +106,9 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
             aligned with the x and y axes of the multiprobe and the multibeam scanner. Must have x, y and z axes.
     :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
-    :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
+    :param det_rotator: (model.Actuator) K-mirror controller. Must have a rotational (rz) axis.
+    :param se_detector: (model.Detector) single beam secondary electron detector.
+    :param ebeam_focus: (model.Actuator) SEM focus control.
     :param calibrations: (list[Calibrations]) List of calibrations that should be run.
     :param stage_pos: (float, float) Stage position where the calibration should be run. If None,
                       the calibration is run at the current stage position.
@@ -121,7 +124,7 @@ def align(scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_ro
 
     # Create a task that runs the calibration and alignments.
     task = CalibrationTask(f, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
-                           calibrations, stage_pos)
+                           se_detector, ebeam_focus, calibrations, stage_pos)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -148,7 +151,7 @@ class CalibrationTask(object):
     """
 
     def __init__(self, future, scanner, multibeam, descanner, detector, stage, ccd, beamshift, det_rotator,
-                 calibrations, stage_pos):
+                 se_detector, ebeam_focus, calibrations, stage_pos):
         """
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled.
                        (Exception or None): Exception raised during the calibration or None.
@@ -161,7 +164,9 @@ class CalibrationTask(object):
             aligned with the x and y axes of the multiprobe and the multibeam scanner. Must have x, y and z axes.
         :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
         :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
-        :param det_rotator: (actuator) K-mirror controller. Must have a rotational (rz) axis.
+        :param det_rotator: (model.Actuator) K-mirror controller. Must have a rotational (rz) axis.
+        :param se_detector: (model.Detector) single beam secondary electron detector.
+        :param ebeam_focus: (model.Actuator) SEM focus control.
         :param calibrations: (list[Calibrations]) List of calibrations that should be run.
         :param stage_pos: (float, float) Stage position where the calibration should be run in meter. If None,
                       the calibration is run at the current stage position.
@@ -176,6 +181,8 @@ class CalibrationTask(object):
         self._ccd = ccd
         self._beamshift = beamshift
         self._det_rotator = det_rotator
+        self._se_detector = se_detector
+        self._ebeam_focus = ebeam_focus
         self._future = future
 
         self.calibrations = calibrations
@@ -221,7 +228,9 @@ class CalibrationTask(object):
             "mppc": self._detector,
             "stage": self._stage,
             "diagnostic-ccd": self._ccd,
-            "det-rotator": self._det_rotator
+            "det-rotator": self._det_rotator,
+            "se-detector": self._se_detector,
+            "ebeam-focus": self._ebeam_focus,
         }
 
         # Get the estimated time for all requested calibrations.

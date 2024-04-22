@@ -45,7 +45,6 @@ class FastEMOverviewTab(Tab):
         # Acquisition Controller
         #   Takes care of the acquisition and acquisition selection buttons.
 
-
         self.tab_data = guimod.FastEMOverviewGUIData(main_data)
         super().__init__(name, button, panel, main_frame, self.tab_data)
 
@@ -119,6 +118,8 @@ class FastEMOverviewTab(Tab):
             self.tab_data.main.ccd,
             self.tab_data.main.beamshift,
             self.tab_data.main.det_rotator,
+            self.tab_data.main.sed,
+            self.tab_data.main.ebeam_focus,
             calibrations=[Calibrations.OPTICAL_AUTOFOCUS],
         )
         f.add_done_callback(self._on_optical_autofocus_done)  # also handles cancelling and exceptions
@@ -197,6 +198,8 @@ class FastEMOverviewTab(Tab):
             self.tab_data.main.ccd,
             self.tab_data.main.beamshift,
             self.tab_data.main.det_rotator,
+            self.tab_data.main.sed,
+            self.tab_data.main.ebeam_focus,
             calibrations=[Calibrations.SEM_AUTOFOCUS],
         )
         f.add_done_callback(self._on_autofunction_done)

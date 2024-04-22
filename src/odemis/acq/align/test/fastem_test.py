@@ -73,6 +73,8 @@ class TestFastEMCalibration(unittest.TestCase):
         cls.ccd = model.getComponent(role="diagnostic-ccd")
         cls.beamshift = model.getComponent(role="ebeam-shift")
         cls.det_rotator = model.getComponent(role="det-rotator")
+        cls.se_detector = model.getComponent(role="se-detector")
+        cls.ebeam_focus = model.getComponent(role="ebeam-focus")
 
     def setUp(self):
         self.good_focus = -70e-6  # position where the image of the multiprobe is displayed in focus [m]
@@ -94,7 +96,7 @@ class TestFastEMCalibration(unittest.TestCase):
 
         # Run auto focus
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
-                         self.beamshift, self.det_rotator, calibrations)
+                         self.beamshift, self.det_rotator, self.se_detector, self.ebeam_focus, calibrations)
 
         try:
             config = f.result(timeout=900)
@@ -119,7 +121,7 @@ class TestFastEMCalibration(unittest.TestCase):
 
         # Run image translation pre-align
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
-                         self.beamshift, self.det_rotator, calibrations)
+                         self.beamshift, self.det_rotator, self.se_detector, self.ebeam_focus, calibrations)
 
         config = f.result(timeout=900)
 
@@ -158,7 +160,7 @@ class TestFastEMCalibration(unittest.TestCase):
 
         # Run the calibrations
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
-                         self.beamshift, self.det_rotator, calibrations)
+                         self.beamshift, self.det_rotator, self.se_detector, self.ebeam_focus, calibrations)
 
         config = f.result(timeout=900)
 
@@ -179,7 +181,7 @@ class TestFastEMCalibration(unittest.TestCase):
 
         calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
-                         self.beamshift, self.det_rotator, calibrations)
+                         self.beamshift, self.det_rotator, self.se_detector, self.ebeam_focus, calibrations)
 
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
@@ -208,7 +210,7 @@ class TestFastEMCalibration(unittest.TestCase):
 
         calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
         f = fastem.align(self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.ccd,
-                         self.beamshift, self.det_rotator, calibrations)
+                         self.beamshift, self.det_rotator, self.se_detector, self.ebeam_focus, calibrations)
 
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
