@@ -5,16 +5,6 @@
 SPARC2-VisNIR-TR: {
     class: Microscope,
     role: sparc2,
-    children: ["SEM E-beam", "SEM Detector", "Calibration Light",
-               "Optical Path Properties", "Spectrometer Selector",
-               "Camera", "VisNIR Spectrometer", "IR Camera", "IR Spectrometer",
-               "Spectrograph", "Fiber align",
-               "Time Correlator", "Photon counter sync", "Photon counter signal",
-               "Spec Filter Wheel", "Spec CCD Flipper", "Spectrograph focus",
-               "Mirror Actuators", "Mirror Actuators in XY referential", "Slit",
-               "Lens1 Mover", "Lens2 Switch",
-               "TC Filter Wheel", "TC Optical Density Filter", "Shutter 0", "Shutter 1",
-               "CL Detector",],
 }
 
 # Light (lamp with known spectrum)
@@ -164,7 +154,8 @@ SPARC2-VisNIR-TR: {
         address: null,
         axes: ["l1", "l2", "spec-sel", "fiby", "slit"],
         # These values only need to be roughly correct
-        ustepsize: [25.1e-9, 25.1e-9, 25.1e-9, 5.86e-9, 5.e-9], # m/µstep
+        ustepsize: [25.1e-6, 25.1e-6, 25.1e-6, 5.86e-6, 5.e-6], # m/µstep
+        rng: [[-0.001, 0.1], [-0.001, 0.1], [-0.001, 0.1], [-0.001, 0.01], [-0.01, 0.01]],  # very rough ranges, which should be correct for any module
         unit: ["m", "m", "m", "m", "m"],
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "spec-sel": 4, "fiby": 4},
@@ -372,7 +363,7 @@ SPARC2-VisNIR-TR: {
         # These values only need to be roughly correct
         # od: 2.72e-5 rad/ustep, 0.04 -> 4 od = 270° (/360°) -> 2.286e-5 od/ustep
         ustepsize: [2.286e-05, 3.392e-5], # od/µstep, rad/µstep
-        rng: [[-0.99999075, 3.00000925], null],
+        rng: [[-1.02, 2.94], [-14, 14]],
         unit: ["od", "rad"],
         refproc: "Standard",
         refswitch: {"fw": 0, "od": 0},
@@ -421,8 +412,9 @@ SPARC2-VisNIR-TR: {
     init: {
         axis_name: "od",
         # position when referenced (adjusted to be a multiple of the actuator stepsize)
-        offset: -3.00000925, # od
-        ref_start: 2.8 #  a little before the reference (inverted axis)
+        offset: -2.98, # od
+        ref_start: 2.78, #  a little before the reference (inverted axis)
+        ref_period: null,  # (number of moves before forcing a referencing) never automatically reference the axis
     },
     affects: ["Time Correlator", "Photon counter sync", "Photon counter signal", "CL Detector"],
 }
