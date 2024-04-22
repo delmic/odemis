@@ -1398,6 +1398,9 @@ class FastScanningDetector(RepetitionStream):
     def _onResolution(self, value):
         self._updateAcquisitionTime()
 
+    def _onSppChange(self, value):
+        self._detector.spp._set_value(value, force_write=True)
+
 
 class CLSettingsStream(FastScanningDetector):
     """
@@ -1450,6 +1453,31 @@ class EBICSettingsStream(FastScanningDetector):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_EM
         super().__init__(name, detector, dataflow, emitter, **kwargs)
+
+
+class DigitalEBICStream(FastScanningDetector):
+    """
+    A special EBIC stream, typically with a EBIC (current) as a detector and its own scanner.
+    It's physically very similar to the SEM stream, but as we want to select just a region
+    it's in practice similar to the CLSettingStream.
+
+    In live view, the ROI is not applied, but the pixelSize is.
+
+    This stream makes it possible to acquire an image simultaneously with the
+    SED in live view, but as a requirement they would need to align dwell time/resolution.
+    """
+    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+        """
+        emtvas: don't put resolution or scale
+        """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_EBIC
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
+
+        if model.hasVA(self._detector, "spp"):
+            self.spp = model.IntContinuous(self._detector.spp.value, (1, 10))
+            self.spp.subscribe(self._onSppChange)
+
 
 # Maximum allowed overlay difference in electron coordinates.
 # Above this, the find overlay procedure will consider an error occurred and

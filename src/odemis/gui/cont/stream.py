@@ -147,6 +147,11 @@ class StreamController(object):
 
             self.add_setting_entry(name, va, comp, conf)
 
+        if hasattr(stream, "spp"):
+            va = self.stream.spp
+            name = "spp"
+            self.add_setting_entry(name, va, self.stream.detector)
+
         # Add local hardware settings to the stream panel
         self._add_hw_setting_controls()
 

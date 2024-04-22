@@ -60,6 +60,7 @@ MD_LENS_MAG = "Lens magnification"  # float (ratio), magnification factor
 MD_LENS_NA = "Lens numerical aperture"  # float (ratio), numerical aperture
 MD_LENS_RI = "Lens refractive index"  # float (ratio), refractive index
 MD_FILTER_NAME = "Filter name"  # str, product name of the light filter
+MD_DT_CORR = "Dwell time correction for EBIC"  # correction time needed for the EBIC component if not synchronized well
 # TODO: might need to merge DWELL_TIME and EXP_TIME into INTEGRATION_TIME: the time each pixel receive energy
 
 
@@ -126,6 +127,7 @@ MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
 MD_AT_EK = "AR Spectrum"
 MD_AT_TEMPORAL = "Temporal"
 MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
+MD_AT_EBIC = "Electron beam induced current"
 
 BAND_PASS_THROUGH = "pass-through"  # Special "filter" name when there is no filter: all light passes
 

@@ -1019,6 +1019,20 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
             }),
         )),
+    stream.DigitalEBICStream:
+        OrderedDict((
+            # Display the adjusted pixelsize (pixelsize * scale) with the hw VAs.
+            # Resolution and DT should be hidden
+            ("pixelSize", {
+                "control_type": odemis.gui.CONTROL_READONLY,
+                #"control_type": odemis.gui.CONTROL_NONE,
+            }),
+            ("spp", {
+                "control_type": odemis.gui.CONTROL_COMBO,
+                "label": "samples per pixel",
+                "tooltip": "Number of samples per pixel in the image",
+            }),
+        )),
 }
 
 
