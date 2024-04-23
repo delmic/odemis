@@ -2156,8 +2156,10 @@ class Stage(model.Actuator):
     moving the TFS stage and updating the position.
     """
 
-    def __init__(self, name: str, role: str, parent: model.HwComponent, rng: dict = None, **kwargs) -> None:
-        parent.set_raw_coordinate_system(raw=True)
+    def __init__(self, name: str, role: str, parent: model.HwComponent, rng: dict = None, use_raw_coordinates: int = 0,
+                 **kwargs) -> None:
+        raw = True if use_raw_coordinates == 1 else False
+        parent.set_raw_coordinate_system(raw)
         if rng is None:
             rng = {}
         stage_info = parent.stage_info()
