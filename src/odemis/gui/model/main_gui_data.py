@@ -391,7 +391,7 @@ class MainGUIData(object):
             return
 
         ts = []
-        for c in self.microscope.children.value:
+        for c in self.microscope.alive.value:
             # Actuators have an .axes roattribute
             if not isinstance(c.axes, Mapping):
                 continue
