@@ -4,65 +4,35 @@
 METEOR-Sim: {
     class: Microscope,
     role: meteor,
-    children: [
-        "Stage",
-        "Meteor Stage",
-        "Optical Objective",
-        "Optical Focus",
-        "Light Source",
-        "Filter Wheel",
-        "Camera",
-        "EBeam",
-    ],
 }
 
 "SEM": {
-    class: simsem.SimSEM,
+    class: xt_client.SEM,
     role: null,
     init: {
-           image: "simsem-fake-output.h5", # any large 16 bit image is fine
+           address: "PYRO:Microscope@localhost:4242",
+           # image: "simsem-fake-output.h5", # any large 16 bit image is fine
     },
     children: {
         scanner: "EBeam",
-               detector0: "SE Detector",
-               focus: "EBeam Focus",
+        stage: "Stage",
     }
 }
 
 "EBeam": {
     # Internal child of SimSEM, so no class
     role: e-beam,  # Not required for the meteor
-    init: {},
-    affects: ["SE Detector"],
-}
-
-"EBeam Focus": {
-    # role: ebeam-focus,
-    role: null,
-    init: {},
-    affects: ["EBeam"]
-}
-
-"SE Detector": {
-    # Internal child of SimSEM, so no class
-    # role: se-detector,
-    role: null,
-    init: {},
+    init: {
+        hfw_nomag: 0.1,
+    },
 }
 
 # Normally provided by the SEM
 "Stage": {
-    class: tmcm.TMCLController,
+    # class: xt_client.Stage,
     role: stage-bare,
     init: {
-        use_raw_coordinates: 1, # 0 or 1 
-        port: "/dev/fake6",
-        address: null,
-        axes: ["x", "y", "z", "rx", "rz"],
-        ustepsize: [1.e-7, 1.e-7, 1.e-7, 1.2e-5, 1.2e-5], # unit/µstep
-        rng: [[-0.1, 0.1], [-0.05, 0.05], [-0.05, 0.1], [-2, 2], [0, 6.28]],
-        unit: ["m", "m", "m", "rad", "rad"],
-        refproc: "Standard",
+        raw: 1, # 0 or 1 
     },
     metadata: {
         # Loading position:
@@ -93,7 +63,7 @@ METEOR-Sim: {
     },
     init: {
       axes: [ "y", "z" ], # name of the axes in the dependency, mapped to x,y (if identity transformation)
-      rotation: 0.8034946943806713, # rad , -45° # same as ROTATION value in Stage component
+      rotation: 0.8034946943806713, # rad , 45° # same as ROTATION value in Stage component
     },
 }
 
