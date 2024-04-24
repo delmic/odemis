@@ -27,7 +27,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import Pyro4
 import logging
 import numpy
-from odemis.model import _metadata
+from odemis.model import _metadata, _vattributes
 from odemis.util import inspect_getmembers
 from odemis.util.weak import WeakMethod, WeakRefLostError
 import os
@@ -724,6 +724,7 @@ class Event(EventBase):
     """
     def __init__(self):
         self._listeners = set() # object (None -> None)
+        self.affects = _vattributes.ListVA()  # list of names (str) of component
 
     def hasListeners(self):
         """
@@ -773,7 +774,8 @@ class Event(EventBase):
         """
         Equivalent to __getstate__() of the proxy version
         """
-        return Pyro4.core.pyroObjectSerializer(self)[2]
+        proxy_state = Pyro4.core.pyroObjectSerializer(self)[2]
+        return (proxy_state, _vattributes.dump_vigilant_attributes(self))
 
 
 class HwTrigger(Event):
@@ -796,10 +798,13 @@ class EventProxy(EventBase, Pyro4.Proxy):
 
     def __getstate__(self):
         # must permit to recreate a proxy to a data-flow in a different container
-        return Pyro4.Proxy.__getstate__(self)
+        proxy_state = Pyro4.Proxy.__getstate__(self)
+        return (proxy_state, _vattributes.dump_vigilant_attributes(self))
 
     def __setstate__(self, state):
-        Pyro4.Proxy.__setstate__(self, state)
+        proxy_state, vas = state
+        Pyro4.Proxy.__setstate__(self, proxy_state)
+        _vattributes.load_vigilant_attributes(self, vas)
 
 
 def unregister_events(self):
