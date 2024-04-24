@@ -626,6 +626,18 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
 
+        # Another tricky dwell time for DO
+        for dt in [0.009020000447332858, 0.010080000057816505, 0.011010000233352184, 0.018860000613331793, 0.02920000020414591]:
+            self.scanner.dwellTime.value = dt  # s
+            self.scanner.scale.value = 8, 8  # Doesn't really matter for DO
+            self.scanner.resolution.value = (2, 4)
+            exp_shape, exp_pxs, _ = self.compute_expected_metadata()
+            da = self.sed.data.get()
+            self.assertEqual(da.shape, exp_shape)
+            self.assertIn(model.MD_DWELL_TIME, da.metadata)
+            self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+
+
     def test_acquisition_counter(self):
         self.scanner.dwellTime.value = 10e-06  # s
         self.scanner.scale.value = 8, 8
@@ -704,6 +716,21 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertEqual(da.shape, exp_shape)
         self.assertIn(model.MD_DWELL_TIME, da.metadata)
         self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+
+    def test_acquisition_sparc(self):
+        """
+        Test acquisitions for SPARC spectrum data
+        """
+        self.scanner.dwellTime.value = 0.5e-3
+        self.scanner.scale.value = (1, 1)  # => res is max
+        self.scanner.resolution.value = (128, 50)
+        exp_shape, exp_pxs, _ = self.compute_expected_metadata()
+        da = self.sed.data.get()
+        self.assertEqual(da.shape, exp_shape)
+        self.assertIn(model.MD_DWELL_TIME, da.metadata)
+        self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
+        for i in range(da.shape[0]):
+            print("%d th line average: %s" % (i, da[i, :].mean(),))
 
     def test_acquisition_long_dt(self):
         """
