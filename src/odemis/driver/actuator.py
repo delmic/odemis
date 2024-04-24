@@ -294,8 +294,8 @@ class MultiplexActuator(model.Actuator):
         # Check if z value is changed when moving only in x and y
         # Function changed for testing purpose
         old_z_pos = self.position.value["z"]
-        logging.debug(f"Moving the stage from old position x: {self.position.value["x"]}, "
-                      f"y:{self.position.value["y"]}, z:{self.position.value["z"]}")
+        logging.debug("Moving the stage from old position x: %s y:%s, z:%s", self.position.value["x"],
+                      self.position.value["y"], self.position.value["z"])
         if self._executor:
             f = self._executor.submit(self._doMoveAbs, pos, **kwargs)
         else:
@@ -304,8 +304,8 @@ class MultiplexActuator(model.Actuator):
             assert not cmv
             f = dep.moveAbs(move, **kwargs)
         new_z_pos = self.position.value["z"]
-        logging.debug(f"Moved the stage to new position x: {self.position.value["x"]}, "
-                      f"y:{self.position.value["y"]}, z:{self.position.value["z"]}")
+        logging.debug("Moved the stage to new position x: %s y:%s, z:%s", self.position.value["x"],
+                      self.position.value["y"], self.position.value["z"])
         delta_z = new_z_pos - old_z_pos
         if pos.get("z", 0) == 0:
             logging.debug(f"The z was not requested to move, change in z from {old_z_pos} to {new_z_pos} by {delta_z}")

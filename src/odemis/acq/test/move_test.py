@@ -45,6 +45,7 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 METEOR_TFS1_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
+METEOR_TFS2_CONFIG = CONFIG_PATH + "sim/meteor-tfs2-sim.odm.yaml"
 METEOR_ZEISS1_CONFIG = CONFIG_PATH + "sim/meteor-zeiss-sim.odm.yaml"
 METEOR_TESCAN1_CONFIG = CONFIG_PATH + "sim/meteor-tescan-sim.odm.yaml"
 MIMAS_CONFIG = CONFIG_PATH + "sim/mimas-sim.odm.yaml"
@@ -615,6 +616,98 @@ class TestMeteorZeiss1Move(TestMeteorTFS1Move):
         estimated_beta = math.atan2(new_stage_pos["m"] - old_stage_pos["m"], new_stage_pos["y"] - old_stage_pos["y"])
         self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
                                                                    "the FM imaging grid 1 area.")
+
+
+class TestMeteorTFS2Move(TestMeteorTFS1Move):
+    """
+    Test the MeteorPostureManager functions for TFS 2
+    """
+    MIC_CONFIG = METEOR_TFS2_CONFIG
+    ROTATION_AXES = {'rx', 'rz'}
+
+    def test_moving_in_grid1_fm_imaging_area_after_loading(self):
+        """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
+        super().test_moving_in_grid1_fm_imaging_area_after_loading()
+
+        # move in the same imaging mode using linked YM stage
+        old_stage_pos = self.stage.position.value
+        self.linked_stage.moveRel({"y": 1e-3}).result()
+        new_stage_pos = self.stage.position.value
+
+        # the stage moved in the right direction if the pre-tilt angle was maintained at 26-degrees
+        beta = 0.8034946943806713  # 45-degrees in radians
+        # TODO this is not a proper test, because in the simulator for the raw z
+        # the xt_client should be tested
+        # the movement in z should increase while going up
+        # because raw is positive from the chamber floor to the sample plane
+        # TODO simulator test
+        # TODO hardware test
+        estimated_beta = math.atan2(new_stage_pos["z"] - old_stage_pos["z"], new_stage_pos["y"] - old_stage_pos["y"])
+        self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
+                                                                   "the FM imaging grid 1 area.")
+
+    def test_moving_from_grid1_to_grid2_in_fm_imaging_Area(self):
+        meteor_stage_md = self.linked_stage.getMetadata()
+        self.linked_stage.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': -2.4472740404152816e-05}})
+        fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE, None)
+
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move to the fm imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+
+        # check z in fm when moving in FM mode
+        self.assertAlmostEqual(self.linked_stage.position.value["z"], fav_pos_active["z"], places=5)
+
+        # now the grid is grid1 by default
+        current_grid = self.posture_manager.getCurrentGridLabel()
+        self.assertEqual(GRID_1, current_grid)
+
+        # update zfm, move the stage in (x or y in FM) and check zfm
+        self.linked_stage.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': -2.2272740404152816e-05}})
+        fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE, None)
+        # move to the grid2
+        f = self.posture_manager.cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_grid = self.posture_manager.getCurrentGridLabel()
+        self.assertEqual(GRID_2, current_grid)
+        # check if z in fm is updated when moving in FM mode
+        self.assertAlmostEqual(self.linked_stage.position.value["z"], fav_pos_active["z"], places=5)
+
+        # make sure we are still in fm imaging area
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
+
+    def test_moving_from_sem_to_fm(self):
+        meteor_stage_md = self.linked_stage.getMetadata()
+        fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE, None)
+
+        # move to loading position
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the sem imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move to the fm imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # check z in fm when moving in FM mode
+        self.assertEqual(self.linked_stage.position.value["z"], fav_pos_active["z"])
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
 
 
 class TestMeteorTescan1Move(TestMeteorTFS1Move):
