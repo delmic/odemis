@@ -534,8 +534,8 @@ class FastEMAcquiController(object):
 
         # The user should focus manually before an acquisition, thus the current
         # position is saved as "good focus"
-        self._main_data_model.focus.updateMetadata(
-            {model.MD_FAV_POS_ACTIVE: self._main_data_model.focus.position.value}
+        self._main_data_model.ebeam_focus.updateMetadata(
+            {model.MD_FAV_POS_ACTIVE: self._main_data_model.ebeam_focus.position.value}
         )
 
         # Acquire ROAs for all projects
@@ -565,6 +565,7 @@ class FastEMAcquiController(object):
                                    self._main_data_model.mppc, self._main_data_model.stage,
                                    self._main_data_model.scan_stage, self._main_data_model.ccd,
                                    self._main_data_model.beamshift, self._main_data_model.lens,
+                                   self._main_data_model.sed, self._main_data_model.ebeam_focus,
                                    pre_calibrations=pre_calib, save_full_cells=self.save_full_cells.value,
                                    settings_obs=self._main_data_model.settings_obs)
                 t = estimate_acquisition_time(roa, pre_calibrations)

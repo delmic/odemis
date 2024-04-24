@@ -366,7 +366,7 @@ def estimate_acquisition_time(roa, pre_calibrations=None):
 
 
 def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
-            pre_calibrations=None, save_full_cells=False, settings_obs=None):
+            se_detector, ebeam_focus, pre_calibrations=None, save_full_cells=False, settings_obs=None):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -407,8 +407,8 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stag
 
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
-    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, roa, path,
-                           pre_calibrations, save_full_cells, settings_obs, f)
+    task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
+                           se_detector, ebeam_focus, roa, path, pre_calibrations, save_full_cells, settings_obs, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -425,7 +425,8 @@ class AcquisitionTask(object):
     An ROA consists of multiple single field images.
     """
 
-    def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens, roa, path,
+    def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
+                 se_detector, ebeam_focus, roa, path,
                  pre_calibrations, save_full_cells, settings_obs, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
@@ -467,6 +468,8 @@ class AcquisitionTask(object):
         self._ccd = ccd
         self._beamshift = beamshift
         self._lens = lens
+        self._se_detector = se_detector
+        self._ebeam_focus = ebeam_focus
         self._roa = roa  # region of acquisition object
         self._roc2 = roa.roc_2.value  # object for region of calibration 2
         self._roc3 = roa.roc_3.value  # object for region of calibration 3
@@ -699,6 +702,7 @@ class AcquisitionTask(object):
                                               self._descanner, self._detector,
                                               self._stage, self._ccd,
                                               self._beamshift, None,  # no need for the detector rotator
+                                              self._se_detector, self._ebeam_focus,
                                               calibrations=pre_calibrations)
 
         try:
