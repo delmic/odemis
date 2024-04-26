@@ -2097,9 +2097,9 @@ class AndorCam2(model.DigitalCamera):
         new_image_settings = self._binning + self._image_rect
         if prev_image_settings != new_image_settings:
             # Note: we could try to switch to full vertical binning when the binning is set to be
-            # full vertical. It reduces the readout time (by up to ~8ms) but it also limits the minimum
-            # exposure time. So it get really complex hard to only activate when useful.
-            # TODO: compare the exposure time with and without FVB, and accept FVB if it's the same.
+            # fully vertical. It reduces the readout time (by up to ~8ms) but it also limits the minimum
+            # exposure time. However, it's also not compatible with external triggering, which is
+            # typically what we use when fast acquisition rate is needed. So, for now, we don't use it.
             # if self._image_rect[2] == 1 and self._image_rect[3] == self._binning[1]:
             #     self.atcore.SetReadMode(AndorV2DLL.RM_FULL_VERTICAL_BINNING)
             #     logging.debug("Setting full vertical binning")
