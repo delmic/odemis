@@ -622,7 +622,9 @@ class ConvertStage:
     # Most functions are taken from ConvertStage class in actuator.py
     # This class is used to read stage coordinates from one reference to another and do not actually
     # move the stage.
-    def __init__(self, rotation=0, scale=None, translation=None, shear=None):
+    def __init__(self, dependency, axes, rotation=0, scale=None, translation=None, shear=None):
+        self._dependency = dependency
+        self._axes_dep = {"x": axes[0], "y": axes[1]}
         meteor_stage = model.getComponent(role='stage')
         meteor_stage_md = meteor_stage.getMetadata()
         if scale is None:
@@ -632,15 +634,30 @@ class ConvertStage:
         if shear is None:
             shear = (0, 0)
 
+        self.axes = {"x": copy.deepcopy(self._dependency.axes[axes[0]]),
+                    "y": copy.deepcopy(self._dependency.axes[axes[1]])}
+
         self.fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE, None)
+
         self.scale = scale
         self.translation = translation
         self.rotation = rotation
         self.shear = shear
-        # if self.fav_pos_active is None:
-        #     self.fav_pos_active = {} # find a new value
-
         self._updateConversion()
+        self._updateAxesRange()
+
+        for axis, dependency in self._axes_dep.items():
+            if dependency == "z":
+                axis_range = self.axes[axis].range
+                safe_active_z = sum(axis_range) / 2
+        logging.debug("The calculated favorite active position in active range in z is %s m (%s m, %s m)",
+                      safe_active_z, axis_range[0], axis_range[1])
+        # if self.fav_pos_active is None:
+        #     self.fav_pos_active = {"z": safe_active_z}
+        # elif self.fav_pos_active["z"] >= axis_range[1] or self.fav_pos_active["z"] <= axis_range[0]:
+        #     logging.warning("The favorite active position in z : %s is outside (%s m, %s m) range", self.fav_pos_active["z"], axis_range[0], axis_range[1])
+        #     logging.debug("Set favorite active position in z to %s m", safe_active_z)
+        #     self.fav_pos_active = {"z": safe_active_z}
 
     def _get_rot_matrix(self, invert=False):
         if invert:
@@ -703,28 +720,42 @@ class ConvertStage:
         vpos = self._convertPosFromdep(vpos_dep, absolute=absolute)
         return {"x": vpos[0], "y": vpos[1]}
 
-    def get_dep_vector_fav_pos(self, dep_val, fav_pos_active, axes=None):
-        if axes is None:
-            axes = ["y", "z"]
-        if self.fav_pos_active is None:
-            self.fav_pos_active = fav_pos_active
-            logging.debug("Set favorite position active in z at %s m", self.fav_pos_active["z"])
-
+    def get_dep_vector_fav_pos(self, dep_val):
         # select the axes which undergo transformation
         # the transformation is rotation on y and z axes
         # map y and z axes onto x and y for conversion
-        # TODO how to get linked axes information, is it important?
-        # TODO y and z should not be hardcoded
-        map_dep_pos = {"x": dep_val[axes[0]], "y": dep_val[axes[1]]}
+        if self.fav_pos_active is None:
+            return None
+        map_dep_pos = {"x": dep_val[self._axes_dep["x"]], "y": dep_val[self._axes_dep["y"]]}
         convert_pos = self._get_convert_pos_vector(map_dep_pos)
         convert_pos["y"] = self.fav_pos_active["z"]
         map_dep_pos = self._get_dep_pos_vector(convert_pos)
 
         # remap the x and y values to the original dependent stage axes
-        dep_val[axes[0]] = map_dep_pos["x"]
-        dep_val[axes[1]] = map_dep_pos["y"]
+        dep_val[self._axes_dep["x"]] = map_dep_pos["x"]
+        dep_val[self._axes_dep["y"]] = map_dep_pos["y"]
 
         return dep_val
+
+    def _updateAxesRange(self):
+        """
+        Calculate the axes range of position VA from the given range of dep's.
+        """
+        # Calculate rectangular border points on the given range
+        min_x, max_x = self.axes["x"].range
+        min_y, max_y = self.axes["y"].range
+        coordinates = [[min_x, min_y],
+                       [min_x, max_y],
+                       [max_x, min_y],
+                       [max_x, max_y]]
+
+        # Calculate range based on the conversion
+        new_coordinates = list(map(self._convertPosFromdep, coordinates))
+
+        # Update default axes range
+        new_range = numpy.array(new_coordinates, dtype=float)
+        self.axes["x"].range = (min(new_range[:, 0]), max(new_range[:, 0]))
+        self.axes["y"].range = (min(new_range[:, 1]), max(new_range[:, 1]))
 
 
 class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
@@ -739,10 +770,10 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         self.rotation = stage_md[model.MD_ROTATION_COR]  # pre-tilt of the shuttle
         # Instantiate a class to convert stage axes such that the imaging plane in the new axes
         # moves perpendicular to the objective axis by keeping a fixed distance
-        self.convert_stage = ConvertStage(self.rotation)
+        self.convert_stage = ConvertStage(self.stage, ["y", "z"], self.rotation)
         # Enable the correction in SEM mode when switched from FM mode
-        self.sem_cor = True
-        self.sem_stage_pos_pre = {} # previous stage position in SEM before switching to FM
+        self.sem_cor = False
+        self.sem_stage_pos_pre = None # previous stage position in SEM before switching to FM
 
     # Note: this transformation consists of translation of along x and y
     # axes, and 7 degrees rotation around rx, and 180 degree rotation around rz.
@@ -791,10 +822,12 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         # In FM mode, observe the features on sample stage
         # at a preferred position (fav_pos_active) such that the distance
         # between sample plane and objective lens is kept constant
-        fav_pos_active = {"z": (transformed_pos["y"] * math.sin(self.rotation) +
-                                transformed_pos["z"] * math.cos(self.rotation))}
-        transformed_pos = self.convert_stage.get_dep_vector_fav_pos(transformed_pos, fav_pos_active)
+        # fav_pos_active = {"z": (transformed_pos["y"] * math.sin(self.rotation) +
+        #                         transformed_pos["z"] * math.cos(self.rotation))}
+        transformed_pos_fav = self.convert_stage.get_dep_vector_fav_pos(transformed_pos)
 
+        if transformed_pos_fav is not None:
+            transformed_pos = transformed_pos_fav
         # check if the transformed position is within the FM imaging range
         if not isInRange(transformed_pos, stage_md[model.MD_FM_IMAGING_RANGE], {'x', 'y'}):
             # only log warning, because transforms are used to get current position too
@@ -849,7 +882,8 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         if self.sem_cor:
             # When y increases then z also increases
             # Therefore the change in z is added to the previous value
-            transformed_pos["z"] = (transformed_pos["z"] +
+            if self.sem_stage_pos_pre is not None:
+                transformed_pos["z"] = (transformed_pos["z"] -
                                     (transformed_pos["y"] - self.sem_stage_pos_pre["y"]) * math.tan(self.rotation))
 
         # check if the transformed position is within the SEM imaging range
