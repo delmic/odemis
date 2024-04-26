@@ -1015,6 +1015,10 @@ class OverviewAcquisition(object):
 
         :returns: (DataArray) The complete overview image.
         """
+        logging.debug("Referencing stage axes x and y.")
+        f = stage.reference({"x", "y"})
+        f.result(timeout=180)
+
         # Get the current immersion mode value before configuring the scanner.
         # This value is set back after acquireTiledArea future's result.
         current_immersion_mode = stream.emitter.immersion.value
