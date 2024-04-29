@@ -625,8 +625,8 @@ class ConvertStage:
     def __init__(self, dependency, axes, rotation=0, scale=None, translation=None, shear=None):
         self._dependency = dependency
         self._axes_dep = {"x": axes[0], "y": axes[1]}
-        meteor_stage = model.getComponent(role='stage')
-        meteor_stage_md = meteor_stage.getMetadata()
+        self.meteor_stage = model.getComponent(role='stage')
+        meteor_stage_md = self.meteor_stage.getMetadata()
         if scale is None:
             scale = (1, 1)
         if translation is None:
@@ -699,25 +699,16 @@ class ConvertStage:
         # Offset between origins of the coordinate systems
         self._O = numpy.array(self.translation, dtype=float)
 
-    def _get_dep_pos_vector(self, pos_val, absolute=True):
+    def _get_dep_pos_vector(self, pos_val):
         """Get dependent stage axes position from the convert stage position"""
-        # if absolute:
-        #     cpos = self.position.value
-        #     vpos = pos_val.get("x", cpos["x"]), pos_val.get("y", cpos["y"])
-        # else:
         vpos = pos_val.get("x", 0), pos_val.get("y", 0)
-        vpos_dep = self._convertPosTodep(vpos, absolute=absolute)
+        vpos_dep = self._convertPosTodep(vpos)
         return {"x": vpos_dep[0], "y": vpos_dep[1]}
 
-    def _get_convert_pos_vector(self, dep_val, absolute=True):
+    def _get_convert_pos_vector(self, dep_val):
         """Get convert stage axes position from dependant stage axes position"""
-        # if absolute:
-        #     # cpos = self.position.value
-        #     vpos_dep = dep_val.get("x", 0), dep_val.get("y", 0)
-        # else:
         vpos_dep = dep_val.get("x", 0), dep_val.get("y", 0)
-        # TODO check how it is used
-        vpos = self._convertPosFromdep(vpos_dep, absolute=absolute)
+        vpos = self._convertPosFromdep(vpos_dep)
         return {"x": vpos[0], "y": vpos[1]}
 
     def get_dep_vector_fav_pos(self, dep_val):
@@ -728,6 +719,8 @@ class ConvertStage:
             return None
         map_dep_pos = {"x": dep_val[self._axes_dep["x"]], "y": dep_val[self._axes_dep["y"]]}
         convert_pos = self._get_convert_pos_vector(map_dep_pos)
+        meteor_stage_md = self.meteor_stage.getMetadata()
+        self.fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE)
         convert_pos["y"] = self.fav_pos_active["z"]
         map_dep_pos = self._get_dep_pos_vector(convert_pos)
 
@@ -879,12 +872,15 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         # Due to the pre-tilt in the shuttle, the z axis is corrected
         # for a change in y axis
         # todo check the sign (-ve or +ve)
+        # As from measurement in SEM, when y increases then raw z decreases
         if self.sem_cor:
             # When y increases then z also increases
             # Therefore the change in z is added to the previous value
             if self.sem_stage_pos_pre is not None:
                 transformed_pos["z"] = (transformed_pos["z"] -
                                     (transformed_pos["y"] - self.sem_stage_pos_pre["y"]) * math.tan(self.rotation))
+            else:
+                logging.warning(f"SEM position is not corrected when coming back from FM pos {pos}")
 
         # check if the transformed position is within the SEM imaging range
         if not isInRange(transformed_pos, stage_md[model.MD_SEM_IMAGING_RANGE], {'x', 'y'}):
