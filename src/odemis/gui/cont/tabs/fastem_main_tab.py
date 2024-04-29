@@ -184,6 +184,21 @@ class FastEMMainTab(Tab):
         # pause live stream if working on set of tools
         self.tab_data_model.tool.subscribe(self._on_tool)
 
+    def query_terminate(self):
+        """
+        Show a confirmation pop-up when the user tries to close Odemis.
+        :return: (bool) True to proceed with termination, False for canceling
+        """
+        box = wx.MessageDialog(
+            self.main_frame,
+            "Do you want to close Odemis?",
+            caption="Closing Odemis",
+            style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER,
+        )
+        box.SetYesNoLabels("&Close Window", "&Cancel")
+        ans = box.ShowModal()  # Waits for the window to be closed
+        return ans == wx.ID_YES
+
     def on_pnl_user_settings_size(self, _):
         """Handle the wx.EVT_SIZE event for pnl_user_settings"""
         self.user_settings_panel.panel.SetSize(
