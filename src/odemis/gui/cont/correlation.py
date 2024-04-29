@@ -244,6 +244,9 @@ class CorrelationController(object):
             # move selected stream to position
             self._move_stream_to_pos(p_pos)
 
+        elif self._tab_data_model.tool.value == guimod.TOOL_RULER:
+            logging.debug(f"Ruler is active, passing event to gadget overlay")
+            active_canvas.gadget_overlay.on_left_down(evt)  # ruler is active, pass event to ruler
         else:
             logging.debug("invalid correlation event, passing event to canvas")
             active_canvas.on_left_down(evt)       # super event passthrough
