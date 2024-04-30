@@ -784,7 +784,6 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         """
 
         stage_md = self.stage.getMetadata()
-        self.sem_stage_pos_pre = pos
         transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
         fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
@@ -888,6 +887,95 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
             logging.warning(f"Transformed position {transformed_pos} is outside SEM imaging range")
 
         return transformed_pos
+
+    def _doCryoSwitchSamplePosition(self, future, target):
+        """
+        Do the actual switching procedure for cryoSwitchSamplePosition
+        :param future: cancellable future of the move
+        :param target: (int) target position either one of the constants: LOADING, SEM_IMAGING, FM_IMAGING.
+        """
+        try:
+            try:
+                target_name = POSITION_NAMES[target]
+            except KeyError:
+                raise ValueError(f"Unknown target '{target}'")
+
+            # Create axis->pos dict from target position given smaller number of axes
+            filter_dict = lambda keys, d: {key: d[key] for key in keys}
+
+            # get the meta data
+            focus_md = self.focus.getMetadata()
+            focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
+            focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
+            # To hold the ordered sub moves list
+            sub_moves = []  # list of tuples (component, position)
+
+            # get the current label
+            current_label = self.getCurrentPostureLabel()
+            current_name = POSITION_NAMES[current_label]
+
+            if current_label == target:
+                logging.warning(f"Requested move to the same position as current: {target_name}")
+
+            # get the set point position
+            target_pos = self.getTargetPosition(target)
+
+            # If at some "weird" position, it's quite unsafe. We consider the targets
+            # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
+            # by SEM_IMAGING and then go to the actual requested position.
+            if current_label == UNKNOWN:
+                logging.warning("Moving stage while current position is unknown.")
+                if target not in (LOADING, SEM_IMAGING):
+                    logging.debug("Moving first to SEM_IMAGING position")
+                    target_pos_sem = self.getTargetPosition(SEM_IMAGING)
+                    if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
+                        sub_moves.append((self.focus, focus_deactive))
+                    sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos_sem)))
+                    sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos_sem)))
+
+            if target in (GRID_1, GRID_2):
+                # The current mode doesn't change. Only X/Y/Z should move (typically
+                # only X/Y). In the same mode, GRID 1/2, the rx/rz values should not change
+                # TODO: probably a better way would be to forbid grid switching if not in SEM/FM imaging posture
+                sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+            elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
+                # save rotation and tilt in SEM before switching to FM imaging
+                # to restore rotation and tilt while switching back from FM -> SEM
+                if current_label == SEM_IMAGING and target == FM_IMAGING:
+                    self.sem_stage_pos_pre = self.stage.position.value
+                    current_value = self.stage.position.value
+                    self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
+                                                                             'rz': current_value['rz']}})
+                # Park the focuser for safety
+                if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
+                    sub_moves.append((self.focus, focus_deactive))
+
+                # Move translation axes, then rotational ones
+                sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+
+                if target == FM_IMAGING:
+                    # Engage the focuser
+                    sub_moves.append((self.focus, focus_active))
+            else:
+                raise ValueError(f"Unsupported move to target {target_name}")
+
+            # run the moves
+            logging.info("Moving from position {} to position {}.".format(current_name, target_name))
+            for component, sub_move in sub_moves:
+                self._run_sub_move(future, component, sub_move)
+
+        except CancelledError:
+            logging.info("CryoSwitchSamplePosition cancelled.")
+        except Exception:
+            logging.exception("Failure to move to {} position.".format(target_name))
+            raise
+        finally:
+            with future._task_lock:
+                if future._task_state == CANCELLED:
+                    raise CancelledError()
+                future._task_state = FINISHED
 
 
 class MeteorZeiss1PostureManager(MeteorPostureManager):
