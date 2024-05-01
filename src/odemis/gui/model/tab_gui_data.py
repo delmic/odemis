@@ -373,7 +373,7 @@ class CryoCorrelationGUIData(CryoGUIData):
         super().__init__(main)
 
         # Current tool selected (from the toolbar)
-        tools = {TOOL_NONE}
+        tools = {TOOL_NONE, TOOL_RULER}
         # Update the tool selection with the new tool list
         self.tool.choices = tools
 
