@@ -1,3 +1,18 @@
+odemis (3.4.2-1) bionic; urgency=medium
+
+  * New version 3.4.2
+  * Main new changes and features:
+    -
+  * Other improvements and bug fixes:
+    - fix error moving between grids while in fm imaging mode
+    - driver andorshrk: allow to not complain if an axis fails to move
+    - bug reporter also log USB tree
+    - fix for PixelAngularSpectrumProjection failing to project with Fit-to-RGB tint
+    - odemis-park-mirror: support simulation
+    - fix "Stop all axes" action not working
+
+ -- Thera Pals <pals@delmic.com>  Wed, 01 May 2024 10:56:52 +0200
+
 odemis (3.4.1-1) bionic; urgency=medium
 
   * New version 3.4.1
