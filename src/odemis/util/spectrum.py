@@ -70,6 +70,10 @@ def get_wavelength_per_pixel(da):
     # MD_WL_LIST has priority
     try:
         wl = da.metadata[model.MD_WL_LIST]
+        if wl is None or len(wl) == 0:
+            # This is an indirect way to remove metadata (because it's not possible to delete keys
+            # from a component metadata)
+            raise KeyError("Empty MD_WL_LIST metadata")
 
         if len(wl) != da.shape[ci]:
             raise ValueError("Length of wavelength list does not match length of wavelength data.")

@@ -2092,6 +2092,7 @@ class CryoAcquiredStreamsController(CryoStreamsController):
         self._feature_view.addStream(stream)
         sc = self._add_stream_cont(stream, show_panel=True, static=self.static_mode,
                                    view=self._feature_view)
+        sc.stream_panel.show_remove_btn(True)
         return sc
 
     @call_in_wx_main

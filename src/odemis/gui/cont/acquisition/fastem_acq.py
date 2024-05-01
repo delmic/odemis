@@ -532,25 +532,34 @@ class FastEMAcquiController(object):
             self._main_data_model.descanner.scanOffset.value = scan_offset
             self._main_data_model.mppc.data.get(dataContent="empty")
 
+        # The user should focus manually before an acquisition, thus the current
+        # position is saved as "good focus"
+        self._main_data_model.focus.updateMetadata(
+            {model.MD_FAV_POS_ACTIVE: self._main_data_model.focus.position.value}
+        )
+
         # Acquire ROAs for all projects
         fs = {}
         pre_calibrations = [Calibrations.OPTICAL_AUTOFOCUS, Calibrations.IMAGE_TRANSLATION_PREALIGN]
-        pre_calib_plus = [Calibrations.OPTICAL_AUTOFOCUS,
-                          Calibrations.AUTOSTIGMATION,
-                          Calibrations.IMAGE_TRANSLATION_PREALIGN]
 
-        # Read the period with which to run autostigmation, if the value is 5 it should run for
+        # Read the period with which to run autostigmation and autofocus, if the value is 5 it should run for
         # ROAs with index 0, 5, 10, etc., if the value is 0 it should never run autostigmation
         acqui_conf = AcquisitionConfig()
         autostig_period = math.inf if acqui_conf.autostig_period == 0 else acqui_conf.autostig_period
-        logging.debug(f"Will run autostigmation every {autostig_period} sections.")
+        autofocus_period = math.inf if acqui_conf.autofocus_period == 0 else acqui_conf.autofocus_period
+        logging.debug(f"Will run autostigmation every {autostig_period} sections "
+                      f"and autofocus every {autofocus_period} sections.")
 
         for p in self._tab_data_model.projects.value:
             for idx, roa in enumerate(p.roas.value):
-                if idx == 0 or idx % autostig_period != 0:
-                    pre_calib = pre_calibrations
-                else:
-                    pre_calib = pre_calib_plus
+                pre_calib = pre_calibrations.copy()
+                if idx == 0:
+                    pass
+                if idx > 0:
+                    if idx % autostig_period == 0:
+                        pre_calib.append(Calibrations.AUTOSTIGMATION)
+                    if idx % autofocus_period == 0:
+                        pre_calib.append(Calibrations.SEM_AUTOFOCUS)
                 f = fastem.acquire(roa, p.name.value, self._main_data_model.ebeam,
                                    self._main_data_model.multibeam, self._main_data_model.descanner,
                                    self._main_data_model.mppc, self._main_data_model.stage,
@@ -651,6 +660,7 @@ class FastEMCalibrationController:
                                self._main_data_model.descanner, self._main_data_model.mppc,
                                self._main_data_model.stage, self._main_data_model.ccd,
                                self._main_data_model.beamshift, self._main_data_model.det_rotator,
+                               self._main_data_model.sed, self._main_data_model.ebeam_focus,
                                calibrations=self.calibration.calibrations.value)
 
         f.add_done_callback(self._on_calibration_done)  # also handles cancelling and exceptions
@@ -809,6 +819,7 @@ class FastEMScintillatorCalibrationController(FastEMCalibrationController):
                                            self._main_data_model.descanner, self._main_data_model.mppc,
                                            self._main_data_model.stage, self._main_data_model.ccd,
                                            self._main_data_model.beamshift, self._main_data_model.det_rotator,
+                                           self._main_data_model.sed, self._main_data_model.ebeam_focus,
                                            calibrations=self.calibration.calibrations.value, stage_pos=roc_center)
                     t = align.fastem.estimate_calibration_time(self.calibration.calibrations.value)
                     # also handles cancelling and exceptions

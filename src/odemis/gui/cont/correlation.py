@@ -276,8 +276,7 @@ class CorrelationController(object):
             dr = math.radians(self._panel.dr_step_cntrl.GetValue())
             dpx = self._panel.dpx_step_cntrl.GetValue() / 100
         else:
-            dx = self._panel.dx_step_cntrl.GetValue()
-            dy = self._panel.dy_step_cntrl.GetValue()
+            dx = dy = self._panel.dxy_step_cntrl.GetValue()
 
         logging.debug(f"key: {key}, shift: {shift_mod}")
         logging.debug(f"dx: {dx}, dy: {dy}, dr: {dr}, dpx: {dpx}")

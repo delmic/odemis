@@ -328,12 +328,12 @@ class xrcpnl_tab_correlation(wx.Panel):
         self.pnl_correlation_streams = xrc.XRCCTRL(self, "pnl_correlation_streams")
         self.fp_meteor_correlation = xrc.XRCCTRL(self, "fp_meteor_correlation")
         self.pnl_meteor_correlation = xrc.XRCCTRL(self, "pnl_meteor_correlation")
+        self.lbl_instructions_correlation = xrc.XRCCTRL(self, "lbl_instructions_correlation")
         self.ctrl_enable_correlation = xrc.XRCCTRL(self, "ctrl_enable_correlation")
         self.ctrl_auto_resize_view = xrc.XRCCTRL(self, "ctrl_auto_resize_view")
         self.cmb_correlation_reference = xrc.XRCCTRL(self, "cmb_correlation_reference")
         self.cmb_correlation_stream = xrc.XRCCTRL(self, "cmb_correlation_stream")
-        self.dx_step_cntrl = xrc.XRCCTRL(self, "dx_step_cntrl")
-        self.dy_step_cntrl = xrc.XRCCTRL(self, "dy_step_cntrl")
+        self.dxy_step_cntrl = xrc.XRCCTRL(self, "dxy_step_cntrl")
         self.dr_step_cntrl = xrc.XRCCTRL(self, "dr_step_cntrl")
         self.dpx_step_cntrl = xrc.XRCCTRL(self, "dpx_step_cntrl")
         self.btn_reset_correlation = xrc.XRCCTRL(self, "btn_reset_correlation")
@@ -3392,8 +3392,8 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                           <object class="wxBoxSizer">
                             <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
-                              <object class="wxStaticText">
-                                <label>Instructions: \n    Select a stream to move. \n    Shift + Left Click to Move the Stream.\n    Use the arrow keys to move Up/Down and Left/Right. \n    Shift + Arrow Keys to control Rotation and Scale. </label>
+                              <object class="wxStaticText" name="lbl_instructions_correlation">
+                                <label>Instructions: \n    Select a reference frame. \n    Select a stream to move. \n    Use the Controls to adjust the stream's position, rotation and scale. \n\nControls:\n    Use Shift + Left Click to Move the Stream to a position.\n    Use the Arrow keys to move the stream.\n    Use Shift + Left / Right Arrow Keys to control Rotation.\n    Use Shift + Up / Down Arrow Keys to control Scale.\n </label>
                                 <fg>#E5E5E5</fg>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -3463,44 +3463,19 @@ u\xb5\x17\x8a\x0c\xe7\xc1\xb6w\x88\x1c\x954\xf4\xc1\xd1\x0f\x96\xdeN>1M\
                                     <fg>#2FA7D4</fg>
                                     <bg>#333333</bg>
                                     <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
-                                    <tooltip>Select a stream to move. Shift + Left Click to Move the Stream, Use the arrow keys to move, Shift + Arrow Keys to control Rotation and Scale.</tooltip>
+                                    <tooltip>Select a stream to move. Shift + Left Click to Move the Stream.  Use the arrow keys to move the stream. Use Shift + Left / Right Arrow Keys to control Rotation. Use Shift + Up / Down Arrow Keys to control scale.</tooltip>
                                   </object>
                                 </object>
                                 <object class="sizeritem">
                                   <object class="wxStaticText">
-                                    <label>X Step Size</label>
+                                    <label>Translation Step Size</label>
                                     <fg>#E5E5E5</fg>
                                   </object>
                                   <flag>wxALIGN_CENTRE_VERTICAL</flag>
                                   <border>10</border>
                                 </object>
                                 <object class="sizeritem">
-                                  <object class="UnitFloatCtrl" name="dx_step_cntrl">
-                                    <value>1e-6</value>
-                                    <key_step>0.000001</key_step>
-                                    <min>0</min>
-                                    <max>10</max>
-                                    <unit>m</unit>
-                                    <accuracy>3</accuracy>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                    <font>
-                                      <size>9</size>
-                                    </font>
-                                    <bg>#333333</bg>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>Y Step Size</label>
-                                    <fg>#E5E5E5</fg>
-                                  </object>
-                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="UnitFloatCtrl" name="dy_step_cntrl">
+                                  <object class="UnitFloatCtrl" name="dxy_step_cntrl">
                                     <value>1e-6</value>
                                     <key_step>0.000001</key_step>
                                     <min>0</min>

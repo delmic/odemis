@@ -30,7 +30,7 @@ import inspect
 import logging
 import math
 import numbers
-from odemis import model, dataio, util
+from odemis import model, util
 import odemis
 from odemis.util import units, inspect_getmembers
 from odemis.util.conversion import convert_to_object
@@ -793,6 +793,7 @@ def acquire(comp_name, dataflow_names, filename):
     dataflow_names (list of string): name of each dataflow to access
     filename (str): name of the output file (format depends on the extension)
     """
+    from odemis import dataio  # Only import it here, as it's quite slow (~0.5s), and not used in other cases
     component = get_detector(comp_name)
 
     # check the dataflow exists

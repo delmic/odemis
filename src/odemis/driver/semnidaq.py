@@ -421,8 +421,8 @@ class AnalogSEM(model.HwComponent):
                         logging.debug("Checking period osr + 1: %s * %s = %s",
                                       ai_period_post, ai_sub_osr_accepted_post, ao_period_post)
                         if (ao_period_post <= ao_period
-                            and self._is_period_valid(ao_task, ao_period)
-                            and (not do_task.do_channels or self._is_period_valid(do_task, ao_period / 2))
+                            and self._is_period_valid(ao_task, ao_period_post)
+                            and (not do_task.do_channels or self._is_period_valid(do_task, ao_period_post / 2))
                         ):
                             ai_sub_osr_accepted = ai_sub_osr_accepted_post
                             ao_period = ao_period_post
@@ -576,7 +576,12 @@ class Acquirer:
         self._ao_task = None
         self._ao_data_next_sample = 0
         self._ao_data = None
-        self._min_ao_buffer_n = self._scanner.get_hw_buf_size()
+        # It is not very clear what is the relationship between the hw buffer and the "samples transferred"
+        # events, but on the PCI 6361, if the number of events is < hw buffer size / 2, the events are
+        # never triggered. However, the buffer size returned is 4095, which is oddly not a multiple of 2.
+        # Adding just 1 to round to 4096 seems to work. Maybe that's just a coincidence, but until we need
+        # to support other hardware, that's good enough to make it work.
+        self._min_ao_buffer_n = self._scanner.get_hw_buf_size() + 1
 
         self._do_task = None
         self._do_data_next_sample = 0
@@ -1158,7 +1163,8 @@ class Acquirer:
         # no interruption can disturb the write).
         # As CI uses the same buffer size, it's best to just use the same period as AI.
         ao_buffer_n = min(max(self._min_ao_buffer_n, int((ai_buffer_n * ao_osr) // ai_osr)), ao_samples_n)
-        logging.debug("Using a AO buffer of %s samples (%s s) => %g buffers per frame",
+        logging.debug("Using a AO buffer (min = %s) of %s samples (%s s) => %g buffers per frame",
+                      self._min_ao_buffer_n,
                       ao_buffer_n, ao_buffer_n / acq_settings.ao_sample_rate,
                       ao_samples_n / ao_buffer_n)
 
@@ -1166,7 +1172,7 @@ class Acquirer:
 
         # Note: creating and configuring the tasks can take up to 30ms!
         ci_tasks = []
-        with nidaqmx.Task() as ao_task, nidaqmx.Task() as do_task, nidaqmx.Task() as ai_task:
+        with nidaqmx.Task("AO") as ao_task, nidaqmx.Task("DO") as do_task, nidaqmx.Task("AI") as ai_task:
             self._scanner.configure_ao_task(ao_task)
             self._ao_task = ao_task
 
@@ -1177,10 +1183,14 @@ class Acquirer:
                 self._do_task = None
 
             if ao_buffer_n < ao_samples_n:
+                # Note: it seems the event doesn't always actually gets triggered. The number of
+                # events matter. At least, if it's less than 2048, it doesn't seem to work on the
+                # 6361. Maybe also need to have it a multiple of the board buffer size?
                 # TODO: instead of relying on the callback, we could push the new data at the same
                 # time as the AI is read. It's mostly just a matter of using a buffer of the right size.
-                logging.debug("Will push new AO data every %s s",
-                              (ao_buffer_n // 2) / acq_settings.ao_sample_rate)
+                logging.debug("Will push new AO data every %s s (%s samples)",
+                              (ao_buffer_n // 2) / acq_settings.ao_sample_rate,
+                              ao_buffer_n // 2)
                 on_ao_data_consumed = functools.partial(self._on_ao_data_consumed, continuous=continuous)
                 ao_task.register_every_n_samples_transferred_from_buffer_event(ao_buffer_n // 2,
                                                                                on_ao_data_consumed)
@@ -1207,7 +1217,7 @@ class Acquirer:
             # CI tasks
             for d in counting_dets:
                 # needs one task per counter => create a new task for each counter
-                ci_task = nidaqmx.Task()
+                ci_task = nidaqmx.Task(f"CI {d.name}")
                 d.configure_ci_task(ci_task)
                 ci_tasks.append(ci_task)
 

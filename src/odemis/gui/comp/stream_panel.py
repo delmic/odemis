@@ -40,7 +40,7 @@ from odemis.gui.comp.slider import UnitFloatSlider, VisualRangeSlider, UnitInteg
 from odemis.gui.comp.stream_bar import StreamBar
 from odemis.gui.comp.text import SuggestTextCtrl, UnitFloatCtrl, FloatTextCtrl, UnitIntegerCtrl
 from odemis.gui.evt import StreamRemoveEvent, StreamVisibleEvent, StreamPeakEvent
-from odemis.gui.util import call_in_wx_main
+from odemis.gui.util import call_in_wx_main, ignore_dead
 from odemis.gui.util.widgets import VigilantAttributeConnector
 from odemis.model import TINT_FIT_TO_RGB, TINT_RGB_AS_IS
 import wx
@@ -406,6 +406,7 @@ class StreamPanelHeader(wx.Control):
             self.label_change_callback(self.ctrl_label.GetValue())
 
     @call_in_wx_main
+    @ignore_dead
     def _on_colormap_value(self, colour):
         """ Update the colormap selector to reflect the provided colour """
         # determine which value to select
@@ -807,6 +808,12 @@ class StreamPanel(wx.Panel):
         self.gb_sizer.Add(lbl_ctrl, (self.num_rows, 0),
                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         return lbl_ctrl
+
+    def Destroy(self):
+        super().Destroy()
+
+        if self.stream.tint:
+            self.stream.tint.unsubscribe(self._header._on_colormap_value)
 
     @control_bookkeeper
     def add_autobc_ctrls(self):

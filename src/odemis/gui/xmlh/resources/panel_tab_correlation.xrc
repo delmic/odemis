@@ -258,8 +258,8 @@
                           <object class="wxBoxSizer">
                             <orient>wxVERTICAL</orient>
                             <object class="sizeritem">
-                              <object class="wxStaticText">
-                                <label>Instructions: \n    Select a stream to move. \n    Shift + Left Click to Move the Stream.\n    Use the arrow keys to move Up/Down and Left/Right. \n    Shift + Arrow Keys to control Rotation and Scale. </label>
+                              <object class="wxStaticText" name="lbl_instructions_correlation">
+                                <label>Instructions: \n    Select a reference frame. \n    Select a stream to move. \n    Use the Controls to adjust the stream's position, rotation and scale. \n\nControls:\n    Use Shift + Left Click to Move the Stream to a position.\n    Use the Arrow keys to move the stream.\n    Use Shift + Left / Right Arrow Keys to control Rotation.\n    Use Shift + Up / Down Arrow Keys to control Scale.\n </label>
                                 <fg>#E5E5E5</fg>
                                 <XRCED>
                                   <assign_var>1</assign_var>
@@ -329,44 +329,19 @@
                                     <fg>#2FA7D4</fg>
                                     <bg>#333333</bg>
                                     <style>wxBORDER_NONE|wxCB_DROPDOWN|wxCB_READONLY|wxTE_PROCESS_ENTER</style>
-                                    <tooltip>Select a stream to move. Shift + Left Click to Move the Stream, Use the arrow keys to move, Shift + Arrow Keys to control Rotation and Scale.</tooltip>
+                                    <tooltip>Select a stream to move. Shift + Left Click to Move the Stream.  Use the arrow keys to move the stream. Use Shift + Left / Right Arrow Keys to control Rotation. Use Shift + Up / Down Arrow Keys to control scale.</tooltip>
                                   </object>
                                 </object>
                                 <object class="sizeritem">
                                   <object class="wxStaticText">
-                                    <label>X Step Size</label>
+                                    <label>Translation Step Size</label>
                                     <fg>#E5E5E5</fg>
                                   </object>
                                   <flag>wxALIGN_CENTRE_VERTICAL</flag>
                                   <border>10</border>
                                 </object>
                                 <object class="sizeritem">
-                                  <object class="UnitFloatCtrl" name="dx_step_cntrl">
-                                    <value>1e-6</value>
-                                    <key_step>0.000001</key_step>
-                                    <min>0</min>
-                                    <max>10</max>
-                                    <unit>m</unit>
-                                    <accuracy>3</accuracy>
-                                    <XRCED>
-                                      <assign_var>1</assign_var>
-                                    </XRCED>
-                                    <font>
-                                      <size>9</size>
-                                    </font>
-                                    <bg>#333333</bg>
-                                  </object>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="wxStaticText">
-                                    <label>Y Step Size</label>
-                                    <fg>#E5E5E5</fg>
-                                  </object>
-                                  <flag>wxALIGN_CENTRE_VERTICAL</flag>
-                                  <border>10</border>
-                                </object>
-                                <object class="sizeritem">
-                                  <object class="UnitFloatCtrl" name="dy_step_cntrl">
+                                  <object class="UnitFloatCtrl" name="dxy_step_cntrl">
                                     <value>1e-6</value>
                                     <key_step>0.000001</key_step>
                                     <min>0</min>
