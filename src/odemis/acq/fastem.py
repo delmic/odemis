@@ -536,9 +536,12 @@ class AcquisitionTask(object):
             # outside the ROA, therefore temporarily set the overlap to zero.
             overlap_init = self._roa.overlap
             self._roa.overlap = 0
-            # Move the stage to the tile with index (-1, -1), to ensure the autofocus and image translation pre-align
-            # are done to the top left of the first field, outside the region of acquisition to limit beam damage.
-            self.field_idx = (-1, -1)
+            # Move the stage such that the pre-calibrations are done to the left of the top left field,
+            # outside the region of acquisition to limit beam damage.
+            fi = numpy.array(self._roa.field_indices)
+            # col, row => row 0 is the top of the ROA and the lowest column value is the most left field
+            min_col = numpy.min(fi[fi[:, 1] == 0], axis=0)[0]
+            self.field_idx = (min_col - 1, 0)  # one to the left of the top-left field
             self.pre_calibrate(self._pre_calibrations)
             self._roa.overlap = overlap_init  # set back the overlap to the initial value
 
