@@ -387,6 +387,8 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stag
     :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
     :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
     :param lens: (static.OpticalLens) Optical lens component.
+    :param se_detector: (model.Detector) single beam secondary electron detector.
+    :param ebeam_focus: (model.Actuator) SEM focus control.
     :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA acquisition.
                              Default is None.
     :param save_full_cells: (bool) If True save the full cell images instead of cropping them
@@ -441,6 +443,8 @@ class AcquisitionTask(object):
         :param ccd: (model.DigitalCamera) A camera object of the diagnostic camera.
         :param beamshift: (tfsbc.BeamShiftController) Component that controls the beamshift deflection.
         :param lens: (static.OpticalLens) Optical lens component.
+        :param se_detector: (model.Detector) single beam secondary electron detector.
+        :param ebeam_focus: (model.Actuator) SEM focus control.
         :param roa: (FastEMROA) The acquisition region object to be acquired (megafield).
         :param path: (str) Path on the external storage where the image data is stored. Here, it is possible
                     to specify sub-directories (such as acquisition date and project name) additional to the main
