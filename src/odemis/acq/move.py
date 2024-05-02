@@ -719,8 +719,7 @@ class ConvertStage:
             return None
         map_dep_pos = {"x": dep_val[self._axes_dep["x"]], "y": dep_val[self._axes_dep["y"]]}
         convert_pos = self._get_convert_pos_vector(map_dep_pos)
-        meteor_stage_md = self.meteor_stage.getMetadata()
-        self.fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE)
+        self.fav_pos_active = self.meteor_stage.getMetadata().get(model.MD_FAV_POS_ACTIVE)
         convert_pos["y"] = self.fav_pos_active["z"]
         map_dep_pos = self._get_dep_pos_vector(convert_pos)
 
