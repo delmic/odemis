@@ -315,6 +315,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
     """
     MIC_CONFIG = METEOR_TFS1_CONFIG
     ROTATION_AXES = {'rx', 'rz'}
+
     @classmethod
     def setUpClass(cls):
         testing.start_backend(cls.MIC_CONFIG)
@@ -640,19 +641,15 @@ class TestMeteorTFS2Move(TestMeteorTFS1Move):
         # check z in fm when moving in FM mode
         self.assertAlmostEqual(self.linked_stage.position.value["z"], fav_pos_active_orig["z"], places=5)
 
-        # the stage moved in the right direction if the pre-tilt angle was maintained at 26-degrees
-        beta = 0.8034946943806713  # 45-degrees in radians
+        # check if the stage moves in the right direction with the given pre-tilt
+        beta = self.stage.getMetadata().get(model.MD_ROTATION_COR)
 
         estimated_beta = math.atan2(new_stage_pos["z"] - old_stage_pos["z"], new_stage_pos["y"] - old_stage_pos["y"])
-        self.assertAlmostEqual(beta, estimated_beta, places=5, msg="The stage moved in the wrong direction in "
+        # estimated beta depends on the flatness of the grid and how the shuttle was loaded in the grid
+        self.assertAlmostEqual(beta, estimated_beta, places=2, msg="The stage moved in the wrong direction in "
                                                                    "the FM imaging grid 1 area.")
 
-    def test_moving_from_grid1_to_grid2_in_fm_imaging_Area(self):
-
-        # todo check zfm in hardware
-        #-0.0017951474872928566 , -2.4472740404152816e-05, grid 2 zfm 0.0017706747468887037
-        meteor_stage_md = self.linked_stage.getMetadata()
-        self.linked_stage.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': 0.0017706747468887037}})
+    def test_update_imaging_plane_in_fm_imaging(self):
         fav_pos_active_orig = self.linked_stage.getMetadata().get(model.MD_FAV_POS_ACTIVE, None)
 
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
@@ -671,16 +668,8 @@ class TestMeteorTFS2Move(TestMeteorTFS1Move):
         self.assertEqual(GRID_1, current_grid)
 
         # update zfm, move the stage in (x or y in FM) and check zfm
-        # todo check zfm in hardware
         self.linked_stage.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': fav_pos_active_orig["z"] + 20e-06}})
-        fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE, None)
-        # move to the grid2
-        # get the range for zfm - add the function in move.py and if it exceeds - choose a safe default value
-        # inactivate z fm?
-        logging.debug("Meteor stage position at GRID 1 x: %s y:%s, z:%s", self.linked_stage.position.value["x"],
-                      self.linked_stage.position.value["y"], self.linked_stage.position.value["z"])
-        logging.debug("Stage-bare position at GRID 1 x: %s y:%s, z:%s", self.stage.position.value["x"],
-                      self.stage.position.value["y"], self.stage.position.value["z"])
+        fav_pos_active = self.linked_stage.getMetadata().get(model.MD_FAV_POS_ACTIVE, None)
         f = self.posture_manager.cryoSwitchSamplePosition(GRID_2)
         f.result()
         current_grid = self.posture_manager.getCurrentGridLabel()
@@ -698,18 +687,10 @@ class TestMeteorTFS2Move(TestMeteorTFS1Move):
 
         self.linked_stage.updateMetadata({model.MD_FAV_POS_ACTIVE: fav_pos_active_orig})
 
-
-        # ask, what test can be done to see that direction of z axis is inverted?
-        # workflow of users has improved - final test
-        # check zfm range
-        # setup for sim, hardware and no hardware
-        # # test sem correction from FM to sem movement, signs?, cant do
-
-    # For hardware tests
     def test_log_linked_stage_positions(self):
-        # todo check zfm in hardware
-        # -0.0017951474872928566 , -2.4472740404152816e-05, grid 2 zfm - -0.0017706747468887037
-        self.linked_stage.updateMetadata({model.MD_FAV_POS_ACTIVE: {'z': 0.0017951474872928566}})
+        # In simulator the Z of Meteor stage values are stable but not in hardware
+        # log values in hardware to check the stability of z in meteor stage
+        # Ideally the z of meteor stage should be same for different values in FM imaging
         meteor_stage_md = self.linked_stage.getMetadata()
         fav_pos_active_orig = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE, None)
 
@@ -734,30 +715,6 @@ class TestMeteorTFS2Move(TestMeteorTFS1Move):
             self.linked_stage.moveAbs({"y": self.linked_stage.position.value["y"] + 0.6e-03/n}).result()
             logging.debug("Stage position in GRID 1 x: %s y:%s, z:%s", self.linked_stage.position.value["x"],
                           self.linked_stage.position.value["y"], self.linked_stage.position.value["z"])
-
-    def test_moving_from_sem_to_fm(self):
-        meteor_stage_md = self.linked_stage.getMetadata()
-        fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE, None)
-
-        # move to loading position
-        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
-        f.result()
-        # move the stage to the sem imaging area
-        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
-        f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
-        self.assertEqual(SEM_IMAGING, current_imaging_mode)
-        # move to the fm imaging area
-        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
-        f.result()
-        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
-        self.assertEqual(FM_IMAGING, current_imaging_mode)
-        # check z in fm when moving in FM mode
-        self.assertEqual(self.linked_stage.position.value["z"], fav_pos_active["z"])
-        # check the values of tilt and rotation
-        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
-        for axis in self.ROTATION_AXES:
-            self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
 
     def test_unknown_label_at_initialization(self):
         pass
