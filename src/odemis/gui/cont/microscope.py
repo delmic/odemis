@@ -1522,6 +1522,9 @@ class FastEMStateController(object):
         current_vacuum = self._main_data.chamber.position.value["vacuum"]
         if current_vacuum == self._vacuum_pos:
             self._main_data.chamberState.value = CHAMBER_VACUUM
+            logging.debug("Referencing stage axes x and y.")
+            f = self._main_data.stage.reference({"x", "y"})
+            f.result(timeout=180)
         elif current_vacuum == self._vented_pos:
             self._main_data.chamberState.value = CHAMBER_VENTED
         else:
