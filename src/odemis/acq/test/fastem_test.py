@@ -304,6 +304,8 @@ class TestFastEMAcquisition(unittest.TestCase):
         cls.ccd = model.getComponent(role="diagnostic-ccd")
         cls.beamshift = model.getComponent(role="ebeam-shift")
         cls.lens = model.getComponent(role="lens")
+        cls.se_detector = model.getComponent(role="se-detector")
+        cls.ebeam_focus = model.getComponent(role="ebeam-focus")
 
         # Normally the beamshift MD_CALIB is set when running the calibrations.
         # Set it here explicitly because we do not run the calibrations in these test cases.
@@ -355,7 +357,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         path_storage = "test_project_megafield"
         f = fastem.acquire(roa, path_storage,
                            self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.scan_stage,
-                           self.ccd, self.beamshift, self.lens)
+                           self.ccd, self.beamshift, self.lens, self.se_detector, self.ebeam_focus)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -399,7 +401,8 @@ class TestFastEMAcquisition(unittest.TestCase):
         path_storage = "test_project_field_indices"
         f = fastem.acquire(roa, path_storage,
                            self.scanner, self.multibeam, self.descanner, self.mppc,
-                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens)
+                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
+                           self.se_detector, self.ebeam_focus)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -443,7 +446,8 @@ class TestFastEMAcquisition(unittest.TestCase):
         path_storage = "test_project_progress"
         f = fastem.acquire(roa, path_storage,
                            self.scanner, self.multibeam, self.descanner, self.mppc,
-                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens)
+                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
+                           self.se_detector, self.ebeam_focus)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
@@ -491,7 +495,8 @@ class TestFastEMAcquisition(unittest.TestCase):
         path_storage = "test_project_cancel"
         f = fastem.acquire(roa, path_storage,
                            self.scanner, self.multibeam, self.descanner, self.mppc,
-                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens)
+                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
+                           self.se_detector, self.ebeam_focus)
         f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
@@ -544,7 +549,8 @@ class TestFastEMAcquisition(unittest.TestCase):
         path_storage = "test_project_stage_move"
         f = fastem.acquire(roa, path_storage,
                            self.scanner, self.multibeam, self.descanner, self.mppc,
-                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens)
+                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
+                           self.se_detector, self.ebeam_focus)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -607,7 +613,8 @@ class TestFastEMAcquisition(unittest.TestCase):
         path_storage = "test_project_stage_move_rot_cor"
         f = fastem.acquire(roa, path_storage,
                            self.scanner, self.multibeam, self.descanner, self.mppc,
-                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens)
+                           self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
+                           self.se_detector, self.ebeam_focus)
         data, e = f.result()
 
         self.assertIsNone(e)  # check no exceptions were returned
@@ -652,6 +659,8 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         cls.ccd = model.getComponent(role="diagnostic-ccd")
         cls.beamshift = model.getComponent(role="ebeam-shift")
         cls.lens = model.getComponent(role="lens")
+        cls.se_detector = model.getComponent(role="se-detector")
+        cls.ebeam_focus = model.getComponent(role="ebeam-focus")
 
         cls.beamshift.shift.value = (0, 0)
         cls.stage.reference({"x", "y"}).result()
@@ -692,6 +701,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.scan_stage, self.ccd,
                                           self.beamshift, self.lens,
+                                          self.se_detector, self.ebeam_focus,
                                           roa, path=None, pre_calibrations=None,
                                           save_full_cells=False, future=None,
                                           settings_obs=None)
@@ -775,6 +785,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.scan_stage, self.ccd,
                                           self.beamshift, self.lens,
+                                          self.se_detector, self.ebeam_focus,
                                           roa, path=None, pre_calibrations=None,
                                           save_full_cells=False, future=None,
                                           settings_obs=None)
@@ -854,6 +865,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
+                                      self.se_detector, self.ebeam_focus,
                                       roa, path=None, pre_calibrations=None,
                                       save_full_cells=True, future=None,
                                       settings_obs=None)
@@ -931,6 +943,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
+                                      self.se_detector, self.ebeam_focus,
                                       roa, path=None, pre_calibrations=None,
                                       save_full_cells=False, future=None, settings_obs=None)
         # Set the _pos_first_tile, which would normally be set in the run function.
@@ -984,6 +997,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
+                                      self.se_detector, self.ebeam_focus,
                                       roa, path=None, pre_calibrations=None,
                                       save_full_cells=False, future=None, settings_obs=None)
 
@@ -1037,6 +1051,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.scan_stage, self.ccd,
                                           self.beamshift, self.lens,
+                                          self.se_detector, self.ebeam_focus,
                                           roa, path=None, pre_calibrations=None,
                                           save_full_cells=False, future=None,
                                           settings_obs=None)
@@ -1064,6 +1079,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
+                                      self.se_detector, self.ebeam_focus,
                                       roa, path=None, pre_calibrations=None,
                                       save_full_cells=False, future=None,
                                       settings_obs=settings_obs)
@@ -1104,6 +1120,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
+                                      self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=False, future=Mock(),
                                       settings_obs=settings_obs)
@@ -1114,6 +1131,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
+                                      self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=True, future=Mock(),
                                       settings_obs=settings_obs)
@@ -1179,6 +1197,9 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         cls.lens = Mock()
         cls.lens.magnification.value = 10
 
+        cls.se_detector = Mock()
+        cls.ebeam_focus = Mock()
+
         cls.beamshift = Mock()
         cls.beamshift.shift.value = [1, 1]
 
@@ -1217,6 +1238,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
+                                      self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=False, future=Mock(),
                                       settings_obs=settings_obs)
@@ -1235,6 +1257,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
+                                      self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=True, future=Mock(),
                                       settings_obs=settings_obs)
