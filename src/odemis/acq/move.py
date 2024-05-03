@@ -652,12 +652,6 @@ class ConvertStage:
                 safe_active_z = sum(axis_range) / 2
         logging.debug("The calculated favorite active position in active range in z is %s m (%s m, %s m)",
                       safe_active_z, axis_range[0], axis_range[1])
-        # if self.fav_pos_active is None:
-        #     self.fav_pos_active = {"z": safe_active_z}
-        # elif self.fav_pos_active["z"] >= axis_range[1] or self.fav_pos_active["z"] <= axis_range[0]:
-        #     logging.warning("The favorite active position in z : %s is outside (%s m, %s m) range", self.fav_pos_active["z"], axis_range[0], axis_range[1])
-        #     logging.debug("Set favorite active position in z to %s m", safe_active_z)
-        #     self.fav_pos_active = {"z": safe_active_z}
 
     def _get_rot_matrix(self, invert=False):
         if invert:
@@ -711,12 +705,22 @@ class ConvertStage:
         vpos = self._convertPosFromdep(vpos_dep)
         return {"x": vpos[0], "y": vpos[1]}
 
-    def get_dep_vector_fav_pos(self, dep_val):
+    def get_dep_vector_fav_pos(self, dep_val, fav_pos_active=None):
+        """
+        Get the convert stage values based on dependent stage values by fixing the convert stage axes to a defined
+        plane given by fav_pos_active.
+        :param dep_val: (dict str -> float) stage coordinates of the dependedent axes
+        :param fav_pos_active: (dict str -> float) Modify convert stage values of dependent axes based on favorite
+         active position, specified by z axis of convert stage
+        :return: (dict str -> float) resultant convert stage axes based on fav_pos_active
+        """
+        if self.fav_pos_active is None:
+            self.fav_pos_active = fav_pos_active
+            logging.debug(f"Set {model.MD_FAV_POS_ACTIVE} to {self.fav_pos_active}")
+            self.meteor_stage.updateMetadata({model.MD_FAV_POS_ACTIVE: self.fav_pos_active})
         # select the axes which undergo transformation
         # the transformation is rotation on y and z axes
         # map y and z axes onto x and y for conversion
-        if self.fav_pos_active is None:
-            return None
         map_dep_pos = {"x": dep_val[self._axes_dep["x"]], "y": dep_val[self._axes_dep["y"]]}
         convert_pos = self._get_convert_pos_vector(map_dep_pos)
         self.fav_pos_active = self.meteor_stage.getMetadata().get(model.MD_FAV_POS_ACTIVE)
@@ -765,7 +769,22 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         self.convert_stage = ConvertStage(self.stage, ["y", "z"], self.rotation)
         # Enable the correction in SEM mode when switched from FM mode
         self.sem_cor = False
-        self.sem_stage_pos_pre = None # previous stage position in SEM before switching to FM
+        self.sem_stage_pos_pre = None  # previous stage position in SEM before switching to FM
+        self.fav_pos_active = None
+        self.update_fav_pos_active()
+
+    def update_fav_pos_active(self):
+        """
+        In FM mode, observe the features on sample stage at a preferred plane defined by fav_pos_active
+        such that the sample plan in FM moves in a defined 2D plane
+        """
+        # calculate favorite position from the centre of grid 2
+        stage_md = self.stage.getMetadata()
+        sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+        sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+        end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
+        self.fav_pos_active = {"z": (end_pos["y"] * math.sin(self.rotation) +
+                                end_pos["z"] * math.cos(self.rotation))}
 
     # Note: this transformation consists of translation of along x and y
     # axes, and 7 degrees rotation around rx, and 180 degree rotation around rz.
@@ -810,12 +829,8 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
 
         transformed_pos.update(fm_pos_active)
 
-        # In FM mode, observe the features on sample stage
-        # at a preferred position (fav_pos_active) such that the distance
-        # between sample plane and objective lens is kept constant
-        # fav_pos_active = {"z": (transformed_pos["y"] * math.sin(self.rotation) +
-        #                         transformed_pos["z"] * math.cos(self.rotation))}
-        transformed_pos_fav = self.convert_stage.get_dep_vector_fav_pos(transformed_pos)
+        # In FM mode, observe the features on sample on a fixed imaging plane
+        transformed_pos_fav = self.convert_stage.get_dep_vector_fav_pos(transformed_pos, self.fav_pos_active)
 
         if transformed_pos_fav is not None:
             transformed_pos = transformed_pos_fav

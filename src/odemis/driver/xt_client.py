@@ -2165,10 +2165,10 @@ class Stage(model.Actuator):
         self.offset = {"x": 0, "y": 0}
         # update the offset if raw stage coordinates are read
         self._get_offset_raw_coordinate_system()
-        parent.set_raw_coordinate_system(self.raw)
+        self.parent.set_raw_coordinate_system(self.raw)
         if rng is None:
             rng = {}
-        stage_info = parent.stage_info()
+        stage_info = self.parent.stage_info()
         if "x" not in rng:
             rng["x"] = stage_info["range"]["x"]
         if "y" not in rng:
@@ -2188,7 +2188,7 @@ class Stage(model.Actuator):
             "rz": model.Axis(unit=stage_info["unit"]["r"], range=rng["rz"]),
         }
 
-        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def,
+        model.Actuator.__init__(self, name, role, parent=self.parent, axes=axes_def,
                                 **kwargs)
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
