@@ -1160,7 +1160,7 @@ class RectangleEditingMixin(DragMixin):
 
         self.colour = conversion.hex_to_frgba(colour)
         self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
-        self.center = Vec(center)
+        self.v_center = Vec(center)
         self.rotation = 0  # radians
         # The rotation point in view coordinates
         # Hovering over this point's bounding box will result in the hover selection
@@ -1290,21 +1290,21 @@ class RectangleEditingMixin(DragMixin):
 
     def start_rotation(self):
         self._calc_center()
-        dx = self.center.x - self.drag_v_start_pos.x
-        dy = self.center.y - self.drag_v_start_pos.y
+        dx = self.v_center.x - self.drag_v_start_pos.x
+        dy = self.v_center.y - self.drag_v_start_pos.y
         self.rotation = math.atan2(dy, dx) % (2 * math.pi)
         self.selection_mode = SEL_MODE_ROTATION
 
     def update_rotation(self):
         current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
-        dx = self.center.x - current_pos.x
-        dy = self.center.y - current_pos.y
+        dx = self.v_center.x - current_pos.x
+        dy = self.v_center.y - current_pos.y
         current_rotation = math.atan2(dy, dx) % (2 * math.pi)
         diff_angle = current_rotation - self.rotation
-        self.v_point1 = self.v_point1.rotate(diff_angle, self.center)
-        self.v_point2 = self.v_point2.rotate(diff_angle, self.center)
-        self.v_point3 = self.v_point3.rotate(diff_angle, self.center)
-        self.v_point4 = self.v_point4.rotate(diff_angle, self.center)
+        self.v_point1 = self.v_point1.rotate(diff_angle, self.v_center)
+        self.v_point2 = self.v_point2.rotate(diff_angle, self.v_center)
+        self.v_point3 = self.v_point3.rotate(diff_angle, self.v_center)
+        self.v_point4 = self.v_point4.rotate(diff_angle, self.v_center)
         self.rotation = current_rotation
 
     def start_drag(self):
@@ -1349,14 +1349,14 @@ class RectangleEditingMixin(DragMixin):
         if self.v_point1 and self.v_point3:
             center_x = (self.v_point1.x + self.v_point3.x) / 2
             center_y = (self.v_point1.y + self.v_point3.y) / 2
-            self.center = Vec(center_x, center_y)
+            self.v_center = Vec(center_x, center_y)
 
     def _calc_edges(self):
         """ Calculate the inner and outer edges of the selection according to the hover margin """
 
         if self.v_point1 and self.v_point2 and self.v_point3 and self.v_point4:
             self._calc_center()
-            angle = math.atan2(self.v_point1.y - self.center.y, self.v_point1.x - self.center.x)
+            angle = math.atan2(self.v_point1.y - self.v_center.y, self.v_point1.x - self.v_center.x)
             self.v_rotation = Vec(
                 self.v_point1.x + 2 * self.hover_margin * math.cos(angle),
                 self.v_point1.y + 2 * self.hover_margin * math.sin(angle),
@@ -1591,7 +1591,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
         # TODO: Move these to the super classes
         self.colour = conversion.hex_to_frgba(colour)
         self.highlight = conversion.hex_to_frgba(gui.FG_COLOUR_HIGHLIGHT)
-        self.center = Vec(center)
+        self.v_center = Vec(center)
         self.rotation = 0  # radians
         # The rotation point in view coordinates
         # Hovering over this point's bounding box will result in the hover selection
@@ -1600,7 +1600,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
 
     def rotate_v_points(self, angle: float) -> None:
         for idx, point in enumerate(self.v_points):
-            self.v_points[idx] = point.rotate(angle, self.center)
+            self.v_points[idx] = point.rotate(angle, self.v_center)
 
     def stop_selection(self):
         """End the creation of the current selection."""
@@ -1650,15 +1650,15 @@ class LineEditingMixin(ClickMixin, DragMixin):
 
     def start_rotation(self):
         self._calc_center()
-        dx = self.center.x - self.drag_v_start_pos.x
-        dy = self.center.y - self.drag_v_start_pos.y
+        dx = self.v_center.x - self.drag_v_start_pos.x
+        dy = self.v_center.y - self.drag_v_start_pos.y
         self.rotation = math.atan2(dy, dx) % (2 * math.pi)
         self.selection_mode = SEL_MODE_ROTATION
 
     def update_rotation(self):
         current_pos = Vec(self.cnvs.clip_to_viewport(self.drag_v_end_pos))
-        dx = self.center.x - current_pos.x
-        dy = self.center.y - current_pos.y
+        dx = self.v_center.x - current_pos.x
+        dy = self.v_center.y - current_pos.y
         current_rotation = math.atan2(dy, dx) % (2 * math.pi)
         diff_angle = current_rotation - self.rotation
         self.rotate_v_points(diff_angle)
@@ -1699,7 +1699,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
         """Calculate the center of selection."""
         centroid_x = statistics.mean(p.x for p in self.v_points)
         centroid_y = statistics.mean(p.y for p in self.v_points)
-        self.center = Vec(centroid_x, centroid_y)
+        self.v_center = Vec(centroid_x, centroid_y)
 
     def _calc_edges(self):
         """Calculate the l, r, t, b coordinates of each edge according to the hover margin."""
@@ -1709,7 +1709,7 @@ class LineEditingMixin(ClickMixin, DragMixin):
                 self._calc_center()
                 # Rotation point near the first point
                 v_point_0 = self.v_points[0]
-                angle = math.atan2(v_point_0.y - self.center.y, v_point_0.x - self.center.x)
+                angle = math.atan2(v_point_0.y - self.v_center.y, v_point_0.x - self.v_center.x)
                 self.v_rotation = Vec(
                     v_point_0.x + 2 * self.hover_margin * math.cos(angle),
                     v_point_0.y + 2 * self.hover_margin * math.sin(angle),

@@ -439,7 +439,7 @@ class RectanglePointsSelectOverlay(WorldOverlay, RectangleEditingMixin):
 
     def draw_rotation_label(self, ctx):
         self._rotation_label.text = units.readable_str(math.degrees(self.rotation), "°", sig=4)
-        self._rotation_label.pos = self.cnvs.view_to_buffer(self.center)
+        self._rotation_label.pos = self.cnvs.view_to_buffer(self.v_center)
         self._rotation_label.background = (0, 0, 0)  # black
         self._rotation_label.draw(ctx)
 
