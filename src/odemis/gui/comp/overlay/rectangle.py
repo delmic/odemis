@@ -19,12 +19,22 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from enum import IntEnum
+from typing import Dict, Any
+
 import odemis.gui as gui
 from odemis.util.raster import point_in_polygon
 from odemis.gui.comp.overlay._constants import LINE_WIDTH_THIN, LINE_WIDTH_THICK
 from odemis.gui.comp.overlay.base import SEL_MODE_NONE, SEL_MODE_ROTATION, DragMixin, Vec, WorldOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.comp.overlay.world_select import RectanglePointsSelectOverlay
+
+
+class RectangleStateKeys(IntEnum):
+    P_POINT1 = 1
+    P_POINT2 = 2
+    P_POINT3 = 3
+    P_POINT4 = 4
 
 
 class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
@@ -45,13 +55,7 @@ class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
         """
         shape = RectangleOverlay(self.cnvs)
         shape.colour = self.colour
-        shape.p_point1 = self.p_point1
-        shape.p_point2 = self.p_point2
-        shape.p_point3 = self.p_point3
-        shape.p_point4 = self.p_point4
-        shape._points = self._points.copy()
-        shape._phys_to_view()
-        shape.points.value = shape._points
+        shape.restore_state(self.get_state())
         return shape
 
     def move_to(self, pos):
@@ -62,6 +66,26 @@ class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
         self.p_point2 += shift
         self.p_point3 += shift
         self.p_point4 += shift
+        self._phys_to_view()
+        self._points = self.get_physical_sel()
+        self.points.value = self._points
+
+    def get_state(self):
+        """Get the current state of the shape."""
+        state = {
+            RectangleStateKeys.P_POINT1: self.p_point1,
+            RectangleStateKeys.P_POINT2: self.p_point2,
+            RectangleStateKeys.P_POINT3: self.p_point3,
+            RectangleStateKeys.P_POINT4: self.p_point4,
+        }
+        return state
+
+    def restore_state(self, state: Dict[RectangleStateKeys, Any]):
+        """Restore the shape to a given state."""
+        self.p_point1 = state[RectangleStateKeys.P_POINT1]
+        self.p_point2 = state[RectangleStateKeys.P_POINT2]
+        self.p_point3 = state[RectangleStateKeys.P_POINT3]
+        self.p_point4 = state[RectangleStateKeys.P_POINT4]
         self._phys_to_view()
         self._points = self.get_physical_sel()
         self.points.value = self._points

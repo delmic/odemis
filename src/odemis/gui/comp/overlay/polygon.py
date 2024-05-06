@@ -19,8 +19,10 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+from enum import IntEnum
 import logging
 import math
+from typing import Dict, Any
 
 import cairo
 import wx
@@ -31,6 +33,12 @@ from odemis.gui.comp.overlay.base import SEL_MODE_ROTATION, LineEditingMixin, Ve
 from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
 from odemis.util.raster import point_in_polygon
+
+
+class PolygonStateKeys(IntEnum):
+    V_POINTS = 1
+    FINISHED_PRIVATE = 2
+    POINTS_PRIVATE = 3
 
 
 class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
@@ -56,11 +64,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         """
         shape = PolygonOverlay(self.cnvs)
         shape.colour = self.colour
-        shape.v_points = self.v_points.copy()
-        shape._finished = self._finished
-        shape._points = self._points.copy()
-        shape._phys_to_view()
-        shape.points.value = shape._points
+        shape.restore_state(self.get_state())
         return shape
 
     def move_to(self, pos):
@@ -68,6 +72,23 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         current_pos  = self.get_position()
         shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
         self._points = [p + shift for p in self._points]
+        self._phys_to_view()
+        self.points.value = self._points
+
+    def get_state(self):
+        """Get the current state of the shape."""
+        state = {
+            PolygonStateKeys.V_POINTS: self.v_points.copy(),
+            PolygonStateKeys.FINISHED_PRIVATE: self._finished,
+            PolygonStateKeys.POINTS_PRIVATE: self._points.copy(),
+        }
+        return state if self.right_click_finished else {}
+
+    def restore_state(self, state: Dict[PolygonStateKeys, Any]):
+        """Restore the shape to a given state."""
+        self.v_points = state[PolygonStateKeys.V_POINTS]
+        self._finished = state[PolygonStateKeys.FINISHED_PRIVATE]
+        self._points = state[PolygonStateKeys.POINTS_PRIVATE]
         self._phys_to_view()
         self.points.value = self._points
 

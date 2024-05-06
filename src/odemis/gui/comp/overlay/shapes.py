@@ -20,12 +20,17 @@ This file is part of Odemis.
 
 """
 from abc import ABCMeta, abstractmethod
-from typing import Tuple, List, Union
+from collections import deque
+from enum import IntEnum
+import logging
+from typing import Tuple, List, Union, Dict, Any
 
 import wx
 
 from odemis import model, util
 from odemis.gui.comp.overlay.base import WorldOverlay, Vec
+
+UNDO_STACK_DEPTH = 25
 
 
 class EditableShape(metaclass=ABCMeta):
@@ -90,6 +95,16 @@ class EditableShape(metaclass=ABCMeta):
         """Move the shape's center to a physical position."""
         pass
 
+    @abstractmethod
+    def get_state(self):
+        """Get the current state of the shape."""
+        pass
+
+    @abstractmethod
+    def restore_state(self, state: Dict[IntEnum, Any]):
+        """Restore the shape to a given state."""
+        pass
+
 
 class ShapesOverlay(WorldOverlay):
     """
@@ -114,6 +129,12 @@ class ShapesOverlay(WorldOverlay):
         self._selected_shape = None
         self._shape_to_copy = None
         self._shapes = []
+        # History of shape's states
+        # Stack is a Tuple[EditableShape, Dict[IntEnum, Any]] of the shape and its state
+        self._undo_stack = deque(maxlen=UNDO_STACK_DEPTH)
+        self._redo_stack = deque(maxlen=UNDO_STACK_DEPTH)
+        self._undo_action = False
+        self._redo_action = False
         if tool and tool_va:
             self.tool = tool
             tool_va.subscribe(self._on_tool, init=True)
@@ -211,7 +232,13 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_char(evt)
 
-        if self._selected_shape:
+        if evt.GetKeyCode() == wx.WXK_CONTROL_Z:
+            self._undo_action = True
+            self.undo()
+        elif evt.GetKeyCode() == wx.WXK_CONTROL_Y:
+            self._redo_action = True
+            self.redo()
+        elif self._selected_shape:
             if evt.GetKeyCode() == wx.WXK_DELETE:
                 self.remove_shape(self._selected_shape)
             elif evt.GetKeyCode() == wx.WXK_ESCAPE:
@@ -237,8 +264,56 @@ class ShapesOverlay(WorldOverlay):
         self._selected_shape = self._get_shape(evt)
         if self._selected_shape:
             self._selected_shape.on_left_up(evt)
+            state = self._selected_shape.get_state()
+            if state:
+                shape_state = (self._selected_shape, state)
+                if not self._undo_stack or self._undo_stack[-1] != shape_state:
+                    self._undo_stack.append(shape_state)
+                    self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
         else:
             WorldOverlay.on_left_up(self, evt)
+
+    def undo(self):
+        """Undo the last action."""
+        if self._undo_stack:
+            # If the redo stack is empty or if the previous action was redo
+            # correct the off by 1 shape's state by popping it and not restoring the state
+            if not self._redo_stack or self._redo_action:
+                shape_state = self._undo_stack.pop()
+                self._redo_stack.append(shape_state)
+                self._redo_action = False
+            if self._undo_stack:
+                shape_state = self._undo_stack.pop()
+                self._redo_stack.append(shape_state)
+                shape = shape_state[0]
+                state = shape_state[1]
+                shape.restore_state(state)
+                self.cnvs.request_drawing_update()
+        else:
+            logging.info(
+                "No undo action for %s at %s.", self.__class__.__name__, hex(id(self))
+            )
+
+    def redo(self):
+        """Redo the last undone action."""
+        if self._redo_stack:
+            # If the undo stack is empty or if the previous action was undo
+            # correct the off by 1 shape's state by popping it and not restoring the state
+            if not self._undo_stack or self._undo_action:
+                shape_state = self._redo_stack.pop()
+                self._undo_stack.append(shape_state)
+                self._undo_action = False
+            if self._redo_stack:
+                shape_state = self._redo_stack.pop()
+                self._undo_stack.append(shape_state)
+                shape = shape_state[0]
+                state = shape_state[1]
+                shape.restore_state(state)
+                self.cnvs.request_drawing_update()
+        else:
+            logging.info(
+                "No redo action for %s at %s.", self.__class__.__name__, hex(id(self))
+            )
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, dash=False):
         """Draw all the shapes."""
