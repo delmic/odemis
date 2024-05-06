@@ -199,6 +199,14 @@ class ShapesOverlay(WorldOverlay):
             if shape.selected.value and shape != self._selected_shape:
                 shape.selected.value = False
 
+    def _unbind_shape_events(self, shape: EditableShape):
+        """Unbind shape's events bound to the canvas."""
+        shape.cnvs.Unbind(wx.EVT_LEFT_DOWN, handler=shape.on_left_down)
+        shape.cnvs.Unbind(wx.EVT_LEFT_UP, handler=shape.on_left_up)
+        shape.cnvs.Unbind(wx.EVT_RIGHT_DOWN, handler=shape.on_right_down)
+        shape.cnvs.Unbind(wx.EVT_RIGHT_UP, handler=shape.on_right_up)
+        shape.cnvs.Unbind(wx.EVT_MOTION, handler=shape.on_motion)
+
     def _on_tool(self, selected_tool):
         """Update the overlay when it's active and tools change."""
         self.active.value = selected_tool == self.tool
@@ -238,6 +246,7 @@ class ShapesOverlay(WorldOverlay):
     def _create_new_shape(self):
         """Create a new shape."""
         shape = self.shape_cls(self.cnvs)
+        self._unbind_shape_events(shape)
         self._shapes.append(shape)
         self.new_shape._set_value(shape, force_write=True)
         return shape
@@ -246,6 +255,7 @@ class ShapesOverlay(WorldOverlay):
         """Copy a selected shape to a view position as the center."""
         # Copy the shape
         shape = self._shape_to_copy.copy()
+        self._unbind_shape_events(shape)
         self._shapes.append(shape)
         self.new_shape._set_value(shape, force_write=True)
         # Move the copied shape to a view position
