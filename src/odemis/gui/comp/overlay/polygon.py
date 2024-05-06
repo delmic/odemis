@@ -31,7 +31,6 @@ from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
 from odemis.gui.comp.overlay.base import SEL_MODE_ROTATION, LineEditingMixin, Vec, WorldOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
-from odemis.util.raster import point_in_polygon
 
 
 class PolygonState:
@@ -109,11 +108,14 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
             for idx, point in enumerate(self._points):
                 self.v_points[idx] = Vec(self.cnvs.phys_to_view(point, offset))
 
-    def is_point_in_shape(self, point):
+    def is_point_in_shape(self, v_point):
         # A polygon should have atleast 2 points after on_right_up
-        if len(self._points) > 2:
-            return point_in_polygon(point, self._points)
-        return False
+        if self.right_click_finished:
+            if len(self._points) > 2:
+                hover, _ = self.get_hover(v_point)
+                return bool(hover)
+            return False
+        return True
 
     def on_left_down(self, evt):
         if self.active.value and self.selected.value:
@@ -128,9 +130,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
             LineEditingMixin._on_left_up(self, evt)
             if self.right_click_finished:
                 self._phys_to_view()
-                offset = self.cnvs.get_half_buffer_size()
-                p_point = Vec(self.cnvs.view_to_phys(evt.Position, offset))
-                self.selected.value = self.is_point_in_shape(p_point)
+                self.selected.value = self.is_point_in_shape(evt.Position)
                 # The rotation point is outside the shape and cannot be captured by selection VA
                 # Also update the points VA if the selection mode is SEL_MODE_ROTATION
                 if self.selected.value or is_rotation:
@@ -194,7 +194,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
 
     def draw_rotation_label(self, ctx):
         self._rotation_label.text = units.readable_str(math.degrees(self.rotation), "°", sig=4)
-        self._rotation_label.pos = self.cnvs.view_to_buffer(self.center)
+        self._rotation_label.pos = self.cnvs.view_to_buffer(self.v_center)
         self._rotation_label.background = (0, 0, 0)  # black
         self._rotation_label.draw(ctx)
 
