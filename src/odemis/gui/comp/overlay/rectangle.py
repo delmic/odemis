@@ -22,9 +22,8 @@ This file is part of Odemis.
 from typing import Optional
 
 import odemis.gui as gui
-from odemis.util.raster import point_in_polygon
 from odemis.gui.comp.overlay._constants import LINE_WIDTH_THIN, LINE_WIDTH_THICK
-from odemis.gui.comp.overlay.base import SEL_MODE_NONE, SEL_MODE_ROTATION, DragMixin, Vec, WorldOverlay
+from odemis.gui.comp.overlay.base import SEL_MODE_NONE, DragMixin, Vec, WorldOverlay
 from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.comp.overlay.world_select import RectanglePointsSelectOverlay
 
@@ -88,9 +87,10 @@ class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
         self._points = self.get_physical_sel()
         self.points.value = self._points
 
-    def is_point_in_shape(self, point):
+    def is_point_in_shape(self, v_point):
         if self._points:
-            return point_in_polygon(point, self._points)
+            hover, _ = self.get_hover(v_point)
+            return bool(hover)
         return False
 
     def on_left_down(self, evt):
@@ -136,11 +136,8 @@ class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
                 self._view_to_phys()
                 self._points = self.get_physical_sel()
                 if self._points:
-                    pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-                    self.selected.value = point_in_polygon(pos, self._points)
-                    # The rotation point is outside the shape and cannot be captured by selection VA
-                    # Also update the physical selection and points VA if the selection mode is SEL_MODE_ROTATION
-                    if self.selected.value or self.selection_mode == SEL_MODE_ROTATION:
+                    self.selected.value = self.is_point_in_shape(evt.Position)
+                    if self.selected.value:
                         self.set_physical_sel(self._points)
                         self.points.value = self._points
 
