@@ -2220,24 +2220,24 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_DESCRIPTION: "blue dye",
                      model.MD_ACQ_DATE: time.time() + 1,
                      model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 1), # px, px
-                     model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
-                     model.MD_POS: (13.7e-3, -30e-3), # m
-                     model.MD_EXP_TIME: 1.2, # s
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1.2,  # s
                      model.MD_IN_WL: (500e-9, 522e-9),  # m
-                     model.MD_OUT_WL: (400e-9, 450e-9), # m
+                     model.MD_OUT_WL: (400e-9, 450e-9),  # m
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
                      model.MD_DESCRIPTION: "green dye",
                      model.MD_ACQ_DATE: time.time() + 2,
                      model.MD_BPP: 12,
-                     model.MD_BINNING: (1, 1), # px, px
-                     model.MD_PIXEL_SIZE: (1e-6, 1e-6), # m/px
-                     model.MD_POS: (13.7e-3, -30e-3), # m
-                     model.MD_EXP_TIME: 1, # s
+                     model.MD_BINNING: (1, 1),  # px, px
+                     model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                     model.MD_POS: (13.7e-3, -30e-3),  # m
+                     model.MD_EXP_TIME: 1,  # s
                      model.MD_IN_WL: (590e-9, 620e-9),  # m
-                     model.MD_OUT_WL: (520e-9, 550e-9), # m
+                     model.MD_OUT_WL: (520e-9, 550e-9),  # m
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -2252,8 +2252,11 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_OUT_WL: (620e-9, 650e-9),  # m
                     },
                     ]
-        # create 4 greyscale images of same size
-        size = (300, 400, 10, 1)  # X, Y, Z, T
+        # create 3 greyscale images with Z stacks of same size
+        # define total number in Z and C
+        nb_z = 10
+        nb_c = len(metadata)
+        size = (300, 400, nb_z, 2, 1)  # X, Y, Z, T
         dtype = numpy.dtype("uint16")
         ldata = []
         for i, md in enumerate(metadata):
@@ -2278,23 +2281,26 @@ class TestTiffIO(unittest.TestCase):
         #             <TiffData IFD="5" FirstC="2" FirstT="0" FirstZ="1" PlaneCount="1" />
         ometxt = tiff._convertToOMEMD(ldata)
         root = ET.fromstring(ometxt)
-        # Check for first 6 ifds
+        # Check the content of first 6 ifds
         ifd_max = 6
-        first_z = [0, 0, 0, 1, 1, 1]
-        first_c = [0, 1, 2, 0, 1, 2]
-        for ind, element in enumerate(root.iter('TiffData')):
+        combinations_zc = []
+        for i in range(nb_z):
+            for j in range(nb_c):
+                combinations_zc.append((i, j))
+
+        tiff_data_elements = root.findall('.//{http://www.openmicroscopy.org/Schemas/OME/2012-06}TiffData')
+        for ind, element in enumerate(tiff_data_elements):
             tiffdata = element.attrib
-            if tiffdata["IFD"] < ifd_max:
-                self.assertEqual(tiffdata["IFD"], ind)
-                self.assertEqual(tiffdata["FirstC"], first_c[ind])
-                self.assertEqual(tiffdata["FirstT"], 0)
-                self.assertEqual(tiffdata["FirstZ"], first_z[ind])
-                self.assertEqual(tiffdata["Plane"], 1)
+            if int(tiffdata["IFD"]) < ifd_max:
+                self.assertTrue((int(tiffdata["FirstZ"]), int(tiffdata["FirstC"])) in combinations_zc)
+                self.assertEqual(int(tiffdata["IFD"]), ind)
+                self.assertEqual(int(tiffdata["FirstT"]), 0)
+                self.assertEqual(int(tiffdata["PlaneCount"]), 1)
             else:
                 break
 
         # check it's here
-        st = os.stat(FILENAME) # this test also that the file is created
+        st = os.stat(FILENAME)  # this test also that the file is created
         self.assertGreater(st.st_size, 0)
 
         # check data
@@ -2304,7 +2310,7 @@ class TestTiffIO(unittest.TestCase):
         for i, im in enumerate(rdata):
             shape = ldata[i].shape
             # Pad the shape with 1s to always get 5 dimensions
-            res =(1,) * (5 - len(shape)) + shape
+            res = (1,) * (5 - len(shape)) + shape
             self.assertEqual(im.shape, res)
 
     def testAcquisitionDataTIFFLargerFile(self):

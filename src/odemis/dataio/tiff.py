@@ -1210,8 +1210,8 @@ def _findImageGroups(das):
         # check if it can be part of the current group (compare just to the previous DA)
         dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim::])
         if (prev_da is None
-            or ("C" in dims and da.shape[dims.index("C")] != 1)  # If C != 1 => not possible to merge (C is always first dimension)
-            or (da.shape[-2] != 1 and len(da.shape) == 2)  # thumbnail image of format YX
+            or da.shape[0] != 1  # If C != 1 => not possible to merge (C is always first dimension) or it is a
+                # greyscale YX image
             or (model.MD_IN_WL not in da.metadata or model.MD_OUT_WL not in da.metadata)
             or prev_da.shape != da.shape
             or prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None)
