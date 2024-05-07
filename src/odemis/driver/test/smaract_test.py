@@ -583,7 +583,7 @@ class TestMCS2(unittest.TestCase):
         # Test relative moves
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 1e-3, 'y':-1e-3}
+        shift = {'x': 1e-3, 'y': -1e-3}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
@@ -718,6 +718,184 @@ class TestMCS2(unittest.TestCase):
 
         testfile.close()
         os.remove(file_name)
+
+
+CONFIG_1DOF = {"name": "1DOF",
+        "role": "stage",
+        "ref_on_init": True,
+        "locator": "network:sn:MCS2-00006678",
+        # "locator": "fake",
+        "speed": 0.003,
+        "accel": 0.003,
+        #"hold_time": 1.0,
+        #"pos_deactive_after_ref": True,
+        #"param_file": None,
+        "axes": {
+            'z': {
+                'range': [-20e-3, 20e-3],
+                'unit': 'm',
+                'channel': 0,
+            },
+        },
+}
+
+if TEST_NOHW:
+    CONFIG_1DOF['locator'] = 'fake'
+
+
+class TestMCS2_1DOF(unittest.TestCase):
+    """
+    Tests cases for the SmarAct MCS2 controller
+    """
+
+    @classmethod
+    def setUpClass(cls):
+        cls.dev = smaract.MCS2(**CONFIG_1DOF)
+
+        while not cls.dev.referenced.value:
+            time.sleep(0.1)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dev.terminate()
+
+    def test_simple(self):
+        self.assertEqual(set(self.dev.axes.keys()), {"z"})
+
+    def test_out_of_range(self):
+        """
+        Test sending a position that is out of range.
+        """
+        pos = {'z': -21e-3}
+        with self.assertRaises(ValueError):
+            self.dev.moveAbs(pos).result()
+
+    def test_move_abs(self):
+        pos1 = {'z': -13.0e-3}
+        pos2 = {'z': -13.01e-3}  # move by -10 um
+        pos3 = {'z': -13.02e-3}  # move by -20 um
+        pos4 = {'z': -12.09e-3}  # move by 10 um
+        pos5 = {'z': -12.08e-3}  # move by 20 um
+
+        self.dev.moveAbs(pos1).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
+        self.dev.moveAbs(pos2).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
+        self.dev.moveAbs(pos3).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
+        self.dev.moveAbs(pos3).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
+        self.dev.moveAbs(pos3).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos5, **COMP_ARGS)
+        logging.debug(self.dev.position.value)
+
+    def test_move_cancel(self):
+        # Test cancellation by cancelling the future
+        self.dev.moveAbs({'z': -13.0e-3}).result()
+        new_pos = {'z': -14.0e-3}
+        f = self.dev.moveAbs(new_pos)
+        f.cancel()
+
+        difference = new_pos['z'] - self.dev.position.value['z']
+        self.assertNotEqual(round(difference, 5), 0)
+
+        # Test cancellation by stopping
+        self.dev.moveAbs({'z': -13.0e-3}).result()
+        new_pos = {'z': -14.0e-3}
+        f = self.dev.moveAbs(new_pos)
+        time.sleep(0.05)
+        self.dev.stop()
+
+        difference = new_pos['z'] - self.dev.position.value['z']
+        self.assertNotEqual(round(difference, 4), 0)
+
+    def test_move_rel(self):
+        # Test relative moves
+        self.dev.moveAbs({'z': -13.0e-3}).result()
+        old_pos = self.dev.position.value
+        shift = {'z': -1e-3}
+        self.dev.moveRel(shift).result()
+        new_pos = self.dev.position.value
+
+        testing.assert_pos_almost_equal(smaract.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
+
+        # Test several relative moves and ensure they are queued up.
+        old_pos = self.dev.position.value
+        shift = {'z': -0.000001}
+        self.dev.moveRel(shift)
+        self.dev.moveRel(shift)
+        self.dev.moveRel(shift).result()
+
+        new_pos = smaract.add_coord(smaract.add_coord(smaract.add_coord(old_pos, shift), shift), shift)
+        testing.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
+
+    def test_reference_cancel(self):
+        """Test canceling referencing"""
+        axes = set(self.dev.axes.keys())
+        # First, reference it
+        f = self.dev.reference(axes)
+        f.result()
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        f = self.dev.reference(axes)
+        time.sleep(0.1)
+        f.cancel()
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertFalse(i)
+
+    def test_reference(self):
+        axes = set(self.dev.axes.keys())
+        f = self.dev.reference(axes)
+        f.result()
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        # TODO: some hardware have fancy multi-marks, which means that the referencing
+        # doesn't necessarily end-up at 0, and everytime the axis is referenced
+        # it can end up at a different mark.
+        # testing.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
+
+        # Try again, after a move
+        shift = {'z': -1e-3}
+        self.dev.moveRel(shift).result()
+        pos_move = dict(self.dev.position.value)
+
+        f = self.dev.reference(axes)
+        f.result()
+        pos_refd = dict(self.dev.position.value)
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        # Check that at least the position changed
+        self.assertNotEqual(pos_move["z"], pos_refd["z"])
+
+    def test_reference_and_deactivate_move(self):
+        # Set a deactive position and check to be sure that the controller moves to this location
+        # after a reference move
+        de_pos = {'z': -13.0e-3}
+        self.dev.updateMetadata({model.MD_FAV_POS_DEACTIVE: de_pos})
+
+        f = self.dev.reference(set(self.dev.axes.keys()))
+        f.result()
+
+        testing.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
+
+    def test_auto_update_function(self):
+        self.dev.moveAbs({"z":-13.0e-3}).result()
+        pos_before_move = self.dev.position.value
+        rel_move = {"z": 5e-6}
+        expected_pos = pos_before_move.copy()
+        expected_pos["z"] += rel_move["z"]
+        self.dev.moveRel(rel_move).result()
+        # the position updater function is called every 1 sec, wait a bit more.
+        time.sleep(2)
+        pos_after_move = self.dev.position.value
+        testing.assert_pos_almost_equal(expected_pos, pos_after_move, **COMP_ARGS)
+
 
 
 CONFIG_Picoscale = {"name": "Stage Metrology",
