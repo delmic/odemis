@@ -720,6 +720,7 @@ class TestMCS2(unittest.TestCase):
         os.remove(file_name)
 
 
+# Configuration to mostly test the Optical focus Component
 CONFIG_1DOF = {"name": "1DOF",
         "role": "stage",
         "ref_on_init": True,
@@ -742,16 +743,20 @@ CONFIG_1DOF = {"name": "1DOF",
 if TEST_NOHW:
     CONFIG_1DOF['locator'] = 'fake'
 
+SAFE_Z = -13.0e-3  # deactive position for the actuator
+SMALL_STEP = -10.0e-6  # small step to move from the deactive position
+BIG_STEP = -1.0e-3  # big step to move from the deactive position
+REF_Z = 0  # Referencing position used for calling referencing move
+
 
 class TestMCS2_1DOF(unittest.TestCase):
     """
-    Tests cases for the SmarAct MCS2 controller
+    Tests cases for the SmarAct MCS2 controller in 1DOF
     """
-
     @classmethod
     def setUpClass(cls):
         cls.dev = smaract.MCS2(**CONFIG_1DOF)
-
+        # make sure the actuator is moved to the reference position
         while not cls.dev.referenced.value:
             time.sleep(0.1)
 
@@ -771,11 +776,11 @@ class TestMCS2_1DOF(unittest.TestCase):
             self.dev.moveAbs(pos).result()
 
     def test_move_abs(self):
-        pos1 = {'z': -13.0e-3}
-        pos2 = {'z': -13.01e-3}  # move by -10 um
-        pos3 = {'z': -13.02e-3}  # move by -20 um
-        pos4 = {'z': -12.09e-3}  # move by 10 um
-        pos5 = {'z': -12.08e-3}  # move by 20 um
+        pos1 = {'z': SAFE_Z}
+        pos2 = {'z': SAFE_Z + SMALL_STEP}  # move by -10 um from pos1
+        pos3 = {'z': SAFE_Z + 2 * SMALL_STEP}  # move by -20 um from pos1
+        pos4 = {'z': SAFE_Z - SMALL_STEP}  # move by 10 um from pos1
+        pos5 = {'z': SAFE_Z + 2 * SMALL_STEP}  # move by 20 um from pos1
 
         self.dev.moveAbs(pos1).result()
         testing.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
@@ -783,16 +788,16 @@ class TestMCS2_1DOF(unittest.TestCase):
         testing.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
         self.dev.moveAbs(pos3).result()
         testing.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
-        self.dev.moveAbs(pos3).result()
+        self.dev.moveAbs(pos4).result()
         testing.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
-        self.dev.moveAbs(pos3).result()
+        self.dev.moveAbs(pos5).result()
         testing.assert_pos_almost_equal(self.dev.position.value, pos5, **COMP_ARGS)
         logging.debug(self.dev.position.value)
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
-        self.dev.moveAbs({'z': -13.0e-3}).result()
-        new_pos = {'z': -14.0e-3}
+        self.dev.moveAbs({'z': SAFE_Z}).result()
+        new_pos = {'z': SAFE_Z + BIG_STEP}
         f = self.dev.moveAbs(new_pos)
         f.cancel()
 
@@ -800,8 +805,8 @@ class TestMCS2_1DOF(unittest.TestCase):
         self.assertNotEqual(round(difference, 5), 0)
 
         # Test cancellation by stopping
-        self.dev.moveAbs({'z': -13.0e-3}).result()
-        new_pos = {'z': -14.0e-3}
+        self.dev.moveAbs({'z': SAFE_Z}).result()
+        new_pos = {'z': SAFE_Z + BIG_STEP}
         f = self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         self.dev.stop()
@@ -811,9 +816,9 @@ class TestMCS2_1DOF(unittest.TestCase):
 
     def test_move_rel(self):
         # Test relative moves
-        self.dev.moveAbs({'z': -13.0e-3}).result()
+        self.dev.moveAbs({'z': SAFE_Z}).result()
         old_pos = self.dev.position.value
-        shift = {'z': -1e-3}
+        shift = {'z': BIG_STEP}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
@@ -853,13 +858,8 @@ class TestMCS2_1DOF(unittest.TestCase):
         for a, i in self.dev.referenced.value.items():
             self.assertTrue(i)
 
-        # TODO: some hardware have fancy multi-marks, which means that the referencing
-        # doesn't necessarily end-up at 0, and everytime the axis is referenced
-        # it can end up at a different mark.
-        # testing.assert_pos_almost_equal(self.dev.position.value, {'x': 0, 'y': 0, 'z': 0}, **COMP_ARGS)
-
         # Try again, after a move
-        shift = {'z': -1e-3}
+        shift = {'z': BIG_STEP}
         self.dev.moveRel(shift).result()
         pos_move = dict(self.dev.position.value)
 
@@ -876,7 +876,7 @@ class TestMCS2_1DOF(unittest.TestCase):
     def test_reference_and_deactivate_move(self):
         # Set a deactive position and check to be sure that the controller moves to this location
         # after a reference move
-        de_pos = {'z': -13.0e-3}
+        de_pos = {'z': REF_Z}
         self.dev.updateMetadata({model.MD_FAV_POS_DEACTIVE: de_pos})
 
         f = self.dev.reference(set(self.dev.axes.keys()))
@@ -885,7 +885,8 @@ class TestMCS2_1DOF(unittest.TestCase):
         testing.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
 
     def test_auto_update_function(self):
-        self.dev.moveAbs({"z":-13.0e-3}).result()
+        """Check if position VA is updated when it is changed"""
+        self.dev.moveAbs({"z": SAFE_Z}).result()
         pos_before_move = self.dev.position.value
         rel_move = {"z": 5e-6}
         expected_pos = pos_before_move.copy()
