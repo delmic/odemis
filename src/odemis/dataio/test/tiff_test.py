@@ -2211,9 +2211,10 @@ class TestTiffIO(unittest.TestCase):
             # the image is not tiled
             rdata.content[0].getTile(0, 0, 0)
 
-    def testWriteImageJMultiZStack(self):
+    def testWriteImageJMultiZStackSeries(self):
         """
-        Checks the reading of FM images from multiple channels, such that is compatible with ImageJ written format
+        Checks the xml information of FM images from multiple channels in Z and time series, such that is compatible
+         with ImageJ format.
         """
         metadata = [{model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -2254,15 +2255,16 @@ class TestTiffIO(unittest.TestCase):
                     ]
         # create 3 greyscale images with Z stacks of same size
         # define total number in Z and C
-        nb_z = 10
+        nb_z = 2
         nb_c = len(metadata)
-        size = (300, 400, nb_z, 2, 1)  # X, Y, Z, T
+        nb_t = 2
+        size = (300, 400, nb_z, nb_t, 1)  # X, Y, Z, T, C
         dtype = numpy.dtype("uint16")
         ldata = []
         for i, md in enumerate(metadata):
             a = model.DataArray(numpy.zeros(size[::-1], dtype), md.copy())
-            a[:, :, 0, 0] = i
-            a[:, :, i*20:i*20+10, i*20:i*20+10] = 1000  # "watermark" it
+            a[:, :, :, 0, 0] = i
+            a[:, :, :, i*20:i*20+10, i*20:i*20+10] = 1000  # "watermark" it
             ldata.append(a)
 
         # export
@@ -2272,29 +2274,32 @@ class TestTiffIO(unittest.TestCase):
         image_groups = tiff._findImageGroups(ldata)
         self.assertEqual(len(image_groups), 1)
 
-        # In OME information, C channel changes fastest, then Z and lastly T, For e.g.
+        # In xml information for ImageJ, C=3 channel changes fastest, then Z=2 and lastly T=2, For e.g.
         #             <TiffData IFD="0" FirstC="0" FirstT="0" FirstZ="0" PlaneCount="1" />
         #             <TiffData IFD="1" FirstC="1" FirstT="0" FirstZ="0" PlaneCount="1" />
         #             <TiffData IFD="2" FirstC="2" FirstT="0" FirstZ="0" PlaneCount="1" />
         #             <TiffData IFD="3" FirstC="0" FirstT="0" FirstZ="1" PlaneCount="1" />
         #             <TiffData IFD="4" FirstC="1" FirstT="0" FirstZ="1" PlaneCount="1" />
         #             <TiffData IFD="5" FirstC="2" FirstT="0" FirstZ="1" PlaneCount="1" />
+        #             <TiffData IFD="6" FirstC="0" FirstT="1" FirstZ="0" PlaneCount="1" />
+        #             <TiffData IFD="7" FirstC="1" FirstT="1" FirstZ="0" PlaneCount="1" />
+        #             <TiffData IFD="8" FirstC="2" FirstT="1" FirstZ="0" PlaneCount="1" />
         ometxt = tiff._convertToOMEMD(ldata)
         root = ET.fromstring(ometxt)
         # Check the content of first 6 ifds
-        ifd_max = 6
+        ifd_max = 9
         combinations_zc = []
         for i in range(nb_z):
             for j in range(nb_c):
-                combinations_zc.append((i, j))
+                for k in range(nb_t):
+                    combinations_zc.append((i, j, k))
 
         tiff_data_elements = root.findall('.//{http://www.openmicroscopy.org/Schemas/OME/2012-06}TiffData')
         for ind, element in enumerate(tiff_data_elements):
             tiffdata = element.attrib
             if int(tiffdata["IFD"]) < ifd_max:
-                self.assertTrue((int(tiffdata["FirstZ"]), int(tiffdata["FirstC"])) in combinations_zc)
+                self.assertTrue((int(tiffdata["FirstZ"]), int(tiffdata["FirstC"]), int(tiffdata["FirstT"])) in combinations_zc)
                 self.assertEqual(int(tiffdata["IFD"]), ind)
-                self.assertEqual(int(tiffdata["FirstT"]), 0)
                 self.assertEqual(int(tiffdata["PlaneCount"]), 1)
             else:
                 break
