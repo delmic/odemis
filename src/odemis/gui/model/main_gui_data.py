@@ -25,7 +25,7 @@ from itertools import chain
 import logging
 import math
 import threading
-from typing import Dict, Tuple
+from typing import Dict, Tuple, List, Optional
 
 from odemis import model
 from odemis.acq import path, acqmng
@@ -529,6 +529,13 @@ class CryoMainGUIData(MainGUIData):
         self.sample_rel_bbox = self.SAMPLE_USABLE_BBOX_TEM_GRID
 
 
+class Sample:
+    def __init__(self):
+        self.positions: Dict[int, Tuple[float, float]] = {}
+        self.sizes: Dict[int, Tuple[float, float]] = {}
+        self.layout: List[List[Optional[int]]] = []
+
+
 class FastEMMainGUIData(MainGUIData):
     """
     Data common to all FastEM tabs.
@@ -569,6 +576,7 @@ class FastEMMainGUIData(MainGUIData):
             raise TypeError(
                 "Layout could not be determined from stage's MD_SAMPLE_CENTERS metadata,"
                 "check if the sample centers values are correct.")
+        self.samples: Dict[str, Sample] = {}
         for row_idx, row in enumerate(layout):
             for column_idx, name in enumerate(row):
                 try:
