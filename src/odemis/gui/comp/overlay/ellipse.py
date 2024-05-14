@@ -19,9 +19,8 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from enum import IntEnum
 import math
-from typing import Dict, Any
+from typing import Optional
 
 import cairo
 
@@ -40,12 +39,14 @@ from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 NUM_ARCS_FACTOR = 3
 
 
-class EllipseStateKeys(IntEnum):
-    P_POINT1 = 1
-    P_POINT2 = 2
-    P_POINT3 = 3
-    P_POINT4 = 4
-    POINTS_PRIVATE = 5
+class EllipseState:
+    def __init__(self, ellipse_overlay) -> None:
+        self.p_point1 = ellipse_overlay.p_point1
+        self.p_point2 = ellipse_overlay.p_point2
+        self.p_point3 = ellipse_overlay.p_point3
+        self.p_point4 = ellipse_overlay.p_point4
+        self._points = ellipse_overlay._points.copy()
+
 
 class EllipseOverlay(RectangleOverlay):
     """Overlay representing one ellipse."""
@@ -79,24 +80,21 @@ class EllipseOverlay(RectangleOverlay):
         self._phys_to_view()
         self.points.value = self._points
 
-    def get_state(self):
+    def get_state(self) -> Optional[EllipseState]:
         """Get the current state of the shape."""
-        state = {
-            EllipseStateKeys.P_POINT1: self.p_point1,
-            EllipseStateKeys.P_POINT2: self.p_point2,
-            EllipseStateKeys.P_POINT3: self.p_point3,
-            EllipseStateKeys.P_POINT4: self.p_point4,
-            EllipseStateKeys.POINTS_PRIVATE: self._points.copy(),
-        }
-        return state
+        # Only return the state if the ellipse creation is finished
+        # By doing so avoid storing an undo action during ellipse creation
+        if self.p_point1 != self.p_point3:
+            return EllipseState(self)
+        return None
 
-    def restore_state(self, state: Dict[EllipseStateKeys, Any]):
+    def restore_state(self, state: EllipseState):
         """Restore the shape to a given state."""
-        self.p_point1 = state[EllipseStateKeys.P_POINT1]
-        self.p_point2 = state[EllipseStateKeys.P_POINT2]
-        self.p_point3 = state[EllipseStateKeys.P_POINT3]
-        self.p_point4 = state[EllipseStateKeys.P_POINT4]
-        self._points = state[EllipseStateKeys.POINTS_PRIVATE]
+        self.p_point1 = state.p_point1
+        self.p_point2 = state.p_point2
+        self.p_point3 = state.p_point3
+        self.p_point4 = state.p_point4
+        self._points = state._points
         self._phys_to_view()
         self.points.value = self._points
 

@@ -19,8 +19,7 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from enum import IntEnum
-from typing import Dict, Any
+from typing import Optional
 
 import odemis.gui as gui
 from odemis.util.raster import point_in_polygon
@@ -30,11 +29,12 @@ from odemis.gui.comp.overlay.shapes import EditableShape
 from odemis.gui.comp.overlay.world_select import RectanglePointsSelectOverlay
 
 
-class RectangleStateKeys(IntEnum):
-    P_POINT1 = 1
-    P_POINT2 = 2
-    P_POINT3 = 3
-    P_POINT4 = 4
+class RectangleState:
+    def __init__(self, rectangle_overlay) -> None:
+        self.p_point1 = rectangle_overlay.p_point1
+        self.p_point2 = rectangle_overlay.p_point2
+        self.p_point3 = rectangle_overlay.p_point3
+        self.p_point4 = rectangle_overlay.p_point4
 
 
 class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
@@ -70,22 +70,20 @@ class RectangleOverlay(RectanglePointsSelectOverlay, EditableShape):
         self._points = self.get_physical_sel()
         self.points.value = self._points
 
-    def get_state(self):
+    def get_state(self) -> Optional[RectangleState]:
         """Get the current state of the shape."""
-        state = {
-            RectangleStateKeys.P_POINT1: self.p_point1,
-            RectangleStateKeys.P_POINT2: self.p_point2,
-            RectangleStateKeys.P_POINT3: self.p_point3,
-            RectangleStateKeys.P_POINT4: self.p_point4,
-        }
-        return state
+        # Only return the state if the rectangle creation is finished
+        # By doing so avoid storing an undo action during rectangle creation
+        if self.p_point1 != self.p_point3:
+            return RectangleState(self)
+        return None
 
-    def restore_state(self, state: Dict[RectangleStateKeys, Any]):
+    def restore_state(self, state: RectangleState):
         """Restore the shape to a given state."""
-        self.p_point1 = state[RectangleStateKeys.P_POINT1]
-        self.p_point2 = state[RectangleStateKeys.P_POINT2]
-        self.p_point3 = state[RectangleStateKeys.P_POINT3]
-        self.p_point4 = state[RectangleStateKeys.P_POINT4]
+        self.p_point1 = state.p_point1
+        self.p_point2 = state.p_point2
+        self.p_point3 = state.p_point3
+        self.p_point4 = state.p_point4
         self._phys_to_view()
         self._points = self.get_physical_sel()
         self.points.value = self._points
