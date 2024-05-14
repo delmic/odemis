@@ -277,6 +277,7 @@ class xrcpnl_fastem_user_settings(wx.Panel):
         self.btn_ebeam = xrc.XRCCTRL(self, "btn_ebeam")
         self.pressure_label = xrc.XRCCTRL(self, "pressure_label")
         self.selection_panel = xrc.XRCCTRL(self, "selection_panel")
+        self.user_settings_panel = xrc.XRCCTRL(self, "user_settings_panel")
 
 
 
@@ -2986,6 +2987,31 @@ IEND\xaeB`\x82'''
                 <flag>wxTOP|wxEXPAND</flag>
                 <border>5</border>
               </object>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="CaptionBar">
+                      <label>USER SETTINGS</label>
+                      <fg>#1A1A1A</fg>
+                    </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="user_settings_panel">
+                      <bg>#333333</bg>
+                      <fg>#999999</fg>
+                      <size>300,600</size>
+                      <flag>wxTOP|wxEXPAND</flag>
+                    </object>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
             </object>
             <object class="spacer">
               <option>1</option>
