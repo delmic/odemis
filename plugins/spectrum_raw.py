@@ -321,6 +321,7 @@ class SpectrumRawPlugin(Plugin):
         if not (microscope and main_data.ccd and main_data.spectrograph and main_data.role.startswith("sparc")):
             logging.info("%s plugin cannot load as the microscope is not a SPARC with CCD",
                          self.name)
+            return
 
         self._tab = self.main_app.main_data.getTabByName("sparc_acqui")
         stctrl = self._tab.streambar_controller
