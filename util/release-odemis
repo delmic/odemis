@@ -102,6 +102,7 @@ git push --tags upstream
 # Go to package directory, and build the debian package
 cd ~/development/pkg-native/odemis
 
+git fetch
 git checkout $VBRANCH
 git pull
 
