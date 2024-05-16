@@ -81,9 +81,7 @@
                             <object class="sizeritem">
                               <object class="wxStaticText" name="lbl_optical_autofocus">
                                 <label>Optical Autofocus</label>
-                                <font>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
+                                <fg>#DDDDDD</fg>
                               </object>
                               <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
                               <border>5</border>
@@ -105,9 +103,7 @@
                             <object class="sizeritem">
                               <object class="wxStaticText" name="lbl_sem_autofocus">
                                 <label>SEM Autofocus</label>
-                                <font>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
+                                <fg>#DDDDDD</fg>
                               </object>
                               <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
                               <border>5</border>
@@ -129,9 +125,7 @@
                             <object class="sizeritem">
                               <object class="wxStaticText" name="lbl_autobrightness_contrast">
                                 <label>Auto-brigtness/contrast</label>
-                                <font>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
+                                <fg>#DDDDDD</fg>
                               </object>
                               <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
                               <border>5</border>
