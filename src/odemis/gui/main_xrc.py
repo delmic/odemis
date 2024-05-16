@@ -7622,9 +7622,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                             <object class="sizeritem">
                               <object class="wxStaticText" name="lbl_optical_autofocus">
                                 <label>Optical Autofocus</label>
-                                <font>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
+                                <fg>#DDDDDD</fg>
                               </object>
                               <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
                               <border>5</border>
@@ -7646,9 +7644,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                             <object class="sizeritem">
                               <object class="wxStaticText" name="lbl_sem_autofocus">
                                 <label>SEM Autofocus</label>
-                                <font>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
+                                <fg>#DDDDDD</fg>
                               </object>
                               <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
                               <border>5</border>
@@ -7670,9 +7666,7 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                             <object class="sizeritem">
                               <object class="wxStaticText" name="lbl_autobrightness_contrast">
                                 <label>Auto-brigtness/contrast</label>
-                                <font>
-                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-                                </font>
+                                <fg>#DDDDDD</fg>
                               </object>
                               <flag>wxALL|wxALIGN_CENTRE_VERTICAL</flag>
                               <border>5</border>
