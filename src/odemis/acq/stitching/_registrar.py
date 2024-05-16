@@ -645,8 +645,16 @@ class GlobalShiftRegistrar(ShiftRegistrar):
             return exp_tile_dist_px, 0
         # Normalized cross correlation (values between -1 and 1)
         ncc = (covar / (st_dev[0] * st_dev[1]))
-        overlap = numpy.abs(
-            numpy.subtract(tile.shape[::-1], numpy.abs(exp_tile_dist_px)))  # tile.shape is YX, so reverse it
+
+        # The axis with the largest exp_tile_dist_px is the axis along which the tiles are shifted.
+        shifted_axis = numpy.argmax(exp_tile_dist_px)
+        # tile.shape is YX, so reverse it
+        overlap = numpy.abs(numpy.subtract(tile.shape[::-1], numpy.abs(exp_tile_dist_px)))[shifted_axis]
+        # Typically, the side of the overlapping area of the non-shifted axis is longer than that of the shifted axis.
+        # Because of that the measured shift along that axis can be very high. It is expected that along the
+        # non-shifted axis the measured shift is close to zero and along the shifted axis it should be smaller than the
+        # overlap. To prevent unrealistically large shifts the expected tile position is returned if the measured shift
+        # along one of the axis is higher than the overlap.
         if numpy.any(numpy.abs(meas_tile_dist_px) > overlap):
             logging.info(f"Calculated shift {meas_tile_dist_px} is larger than the overlap size {overlap}, "
                          f"using expected position instead.")
