@@ -539,18 +539,7 @@ class AcquisitionTask(object):
         self._pos_first_tile = self.get_pos_first_tile()
 
         if self._pre_calibrations:
-            # The pre-calibrations should run on a position that lies a full field
-            # outside the ROA, therefore temporarily set the overlap to zero.
-            overlap_init = self._roa.overlap
-            self._roa.overlap = 0
-            # Move the stage such that the pre-calibrations are done to the left of the top left field,
-            # outside the region of acquisition to limit beam damage.
-            fi = numpy.array(self._roa.field_indices)
-            # col, row => row 0 is the top of the ROA and the lowest column value is the most left field
-            min_col = numpy.min(fi[fi[:, 1] == 0], axis=0)[0]
-            self.field_idx = (min_col - 1, 0)  # one to the left of the top-left field
             self.pre_calibrate(self._pre_calibrations)
-            self._roa.overlap = overlap_init  # set back the overlap to the initial value
 
         # set the sub-directories (<user>/<project-name>/<roa-name>)
         # FIXME use username from GUI when that is implemented
@@ -699,6 +688,17 @@ class AcquisitionTask(object):
         if not fastem_calibrations:
             raise ModuleNotFoundError("Need fastem_calibrations repository to run pre-calibrations.")
 
+        # The pre-calibrations should run on a position that lies a full field
+        # outside the ROA, therefore temporarily set the overlap to zero.
+        overlap_init = self._roa.overlap
+        self._roa.overlap = 0
+        # Move the stage such that the pre-calibrations are done to the left of the top left field,
+        # outside the region of acquisition to limit beam damage.
+        fi = numpy.array(self._roa.field_indices)
+        # col, row => row 0 is the top of the ROA and the lowest column value is the most left field
+        min_col = numpy.min(fi[fi[:, 1] == 0], axis=0)[0]
+        self.field_idx = (min_col - 1, 0)  # one to the left of the top-left field
+
         logging.debug("Start pre-calibration.")
         pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
 
@@ -717,7 +717,8 @@ class AcquisitionTask(object):
         except CancelledError:
             logging.debug("Cancelled acquisition pre-calibrations.")
             raise
-
+        finally:
+            self._roa.overlap = overlap_init  # set back the overlap to the initial value
         logging.debug("Finish pre-calibration.")
 
     def image_received(self, dataflow, data):
