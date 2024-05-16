@@ -32,7 +32,7 @@ from odemis.gui.evt import EVT_KNOB_PRESS
 from odemis.gui.model import CHAMBER_PUMPING
 from odemis.gui.util import call_in_wx_main, img
 from odemis.gui.util.img import insert_tile_to_image, merge_screen
-from odemis.model import (MD_POS, MD_PIXEL_SIZE, DataArray, MD_DIMS,
+from odemis.model import (MD_POS, MD_PIXEL_SIZE, DataArray, DataArrayShadow, MD_DIMS,
                           MD_AT_OVV_FULL, MD_AT_OVV_TILES, MD_AT_HISTORY,
                           MD_POS_ACTIVE_RANGE, MD_DESCRIPTION)
 from odemis.util import limit_invocation, comp
@@ -582,8 +582,11 @@ class OverviewController(object):
             logging.debug("Acquired overview image %s FoV: %s",
                           da.metadata.get(MD_DESCRIPTION, ""), getBoundingBox(da))
 
-        # Store the data somewhere, so that it's possible to open it full size later
-        self._save_overview(das)
+        # If it's DataArrayShadows, we convert them to DataArrays, to keep the rest
+        # of the code simple (as insert_tile_to_image expects DataArrays).
+        # TODO: detect that the RGBSpatialProjection has a .mpp and .rect, and adjust them
+        # based on the background settings.
+        das = [da.getData() if isinstance(da, DataArrayShadow) else da for da in das]
 
         # Convert each DataArray to a Stream + Projection, so that we can display it
         streams = udataio.data_to_static_streams(das)
@@ -635,18 +638,6 @@ class OverviewController(object):
             # Keep a reference
             self._bkg_ovv_subs[p] = add_bkg_ovv
             p.image.subscribe(add_bkg_ovv, init=True)
-
-    def _save_overview(self, das):
-        """
-        Save a set of DataArrays into a single TIFF file
-        das (list of DataArrays)
-        """
-        fn = create_filename(self.conf.last_path, "{datelng}-{timelng}-overview",
-                             ".ome.tiff")
-        # We could use find_fittest_converter(), but as we always use tiff, it's not needed
-        tiff.export(fn, das, pyramid=True)
-        popup.show_message(self._tab.main_frame, "Overview saved", "Stored in %s" % (fn,),
-                           timeout=3)
 
 
 class ViewButtonController(object):
