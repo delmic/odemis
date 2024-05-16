@@ -176,5 +176,8 @@ class StreamSettingsConfig:
                 # Special handling for attributes that need to be converted to tuples
                 elif isinstance(current_value, list) and all(isinstance(x, (int, float)) for x in current_value):
                     current_value = tuple(current_value)
-                # Set the attribute value
-                getattr(stream, key).value = current_value
+                try:
+                    # Set the attribute value
+                    getattr(stream, key).value = current_value
+                except Exception as e:
+                    logging.warning(f"Error in applying the stream settings for {key}: {e}")
