@@ -140,9 +140,9 @@ class StreamPanelHeader(wx.Control):
     def _add_remove_btn(self):
         """ Add a button for stream removal """
         btn_rem = buttons.ImageButton(self,
-                                      bitmap=img.getBitmap("icon/ico_rem_str.png"),
+                                      bitmap=img.getBitmap("icon/ico_clear.png"),
                                       size=self.BUTTON_SIZE)
-        btn_rem.bmpHover = img.getBitmap("icon/ico_rem_str_h.png")
+        btn_rem.bmpHover = img.getBitmap("icon/ico_clear_h.png")
         btn_rem.SetToolTip("Remove stream")
         self._add_ctrl(btn_rem)
         return btn_rem
