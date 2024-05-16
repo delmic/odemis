@@ -1,3 +1,44 @@
+odemis (3.5.0-1) bionic; urgency=medium
+
+  * New version: 3.5
+  * Main new changes and features:
+    - Display the most recently used settings of stream panels on (METEOR)
+    - Make filenames of saved features more intuitive on (METEOR)
+    - Tool to draw rectangles, ellipses, and polygons (FASTEM)
+    - New pwrmccdaq driver for the Diligent MCC DAQ 1208LS (SPARC)
+    - Plugin that creates the selection item that allows to save the full cell images (FASTEM)
+    - New Mirror actuator interlock plugin (SPARC)
+    - New semnidaq driver: control a SEM via the NI-DAQ API
+    - Plugin for angular spectrum 2D (SPARC)
+  * Other improvements and bug fixes:
+    - Add ruler tool to correlation tab (METEOR)
+    - Move galvos to extrema when running at the start of each acquisition (FASTEM)
+    - Integrate SEM autofocusing in the pre-calibrations (FASTEM)
+    - Change location of fastem pre-calibrations (FASTEM)
+    - Reference the stage before overview image as well as after reloading the sample holder (FASTEM)
+    - Plugin to control e-beam blanker
+    - Driver andorshrk: allow to not complain if an axis fails to move (SPARC)
+  * Improvements and bug fixes already present in the v3.4 branch:
+    - fix error moving between grids while in fm imaging mode
+    - driver andorshrk: allow to not complain if an axis fails to move
+    - bug reporter also log USB tree
+    - fix for PixelAngularSpectrumProjection failing to project with Fit-to-RGB tint
+    - odemis-park-mirror: support simulation
+    - fix "Stop all axes" action not working
+    - fix xt_client external VA failed when no detector is used
+    - Increase timeout of xt autostigmation
+    - adjust "\0" -> "\x00" because "\0" is deprecated
+    - gui marking_line fails to show value if value is 0
+    - gui NavigablePlotViewport could fail to zoom in/out if data contains only the same value
+    - driver simcam: on long exposure simulate properly over-exposure
+    - fastem save full cell images, set values after calibration values are applied.
+    - fix fastem autostig period for idx 0
+    - increase pixel scaling step size limits in correlation tab Meteor
+    - correlation tab Meteor should passthrough arrow controls when correlation enabled is unchecked
+    - allow duplicate metadata keys in tfs metadata parser
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Thu, 16 May 2024 13:22:17 +0200
+
 odemis (3.4.0-1) bionic; urgency=medium
 
   * New version 3.4
