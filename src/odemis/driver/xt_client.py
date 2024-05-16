@@ -358,8 +358,8 @@ class SEM(model.HwComponent):
                     update.show()
                 else:
                     logging.warning("{} is a bad file in {} not transferring latest package.".format(ret, package.path))
-        except Exception as err:
-            logging.exception(err)
+        except Exception:
+            logging.warning("Failure during transfer latest xtadapter package (non critical)", exc_info=True)
 
     def move_stage(self, position: Dict[str, float], rel: bool = False) -> None:
         """
