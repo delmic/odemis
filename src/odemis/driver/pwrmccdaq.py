@@ -27,7 +27,6 @@ If not, see http://www.gnu.org/licenses/.
 
 import logging
 import time
-from collections import namedtuple
 from dataclasses import dataclass
 from threading import Thread
 from typing import List, Tuple, Dict, Optional
@@ -443,7 +442,7 @@ class MCCDeviceSimulator:
 
         DIO_port = self._return_port_status(port_number, read=True)
 
-        return DIO_port[bit]
+        return int(DIO_port[bit])
 
     def DBitOut(self, port_number, bit, value):
         """
@@ -458,7 +457,7 @@ class MCCDeviceSimulator:
             raise ValueError("Value to set should be either 0 or 1")
 
         DIO_port = self._return_port_status(port_number, read=False)
-        DIO_port[bit] = value
+        DIO_port[bit] = bool(value)
 
     def AOut(self, channel, value):
         """

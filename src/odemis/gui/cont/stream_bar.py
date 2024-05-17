@@ -1777,6 +1777,7 @@ class SparcStreamsController(StreamBarController):
             detector,
             detector.data,
             main_data.ebeam,
+            main_data.light,
             sstage=main_data.scan_stage,
             opm=self._main_data_model.opm,
             axis_map=axes,

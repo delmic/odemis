@@ -20,17 +20,18 @@ You should have received a copy of the GNU General Public License along with Ode
 
 
 from abc import abstractmethod
-from concurrent.futures._base import CancelledError
 from functools import wraps
 import logging
 import math
+import time
+
 import numbers
 import numpy
+
 from odemis import model
 from odemis.acq import align
 from odemis.model import VigilantAttributeBase, MD_POL_NONE
 from odemis.util import img, almost_equal, get_best_dtype_for_acc, angleres
-import time
 
 from ._base import Stream, UNDEFINED_ROI, POL_POSITIONS
 from ._live import LiveStream
@@ -697,15 +698,16 @@ class CCDSettingsStream(RepetitionStream):
 
 
 class SpectrumSettingsStream(CCDSettingsStream):
-    """ A Spectrum stream.
-
-    The live view is just the current raw spectrum (wherever the ebeam is).
-
     """
-
-    def __init__(self, name, detector, dataflow, emitter, **kwargs):
+    A Spectrum stream. The live view is just the current raw spectrum (wherever the e-beam is).
+    The light argument determines if there is a light source (component with role=light) that is
+    to be used in the Spectrum stream.
+    If so the user can control the power of the source through a slider bar on the stream.
+    """
+    def __init__(self, name, detector, dataflow, emitter, light=None, **kwargs):
         if "acq_type" not in kwargs:
             kwargs["acq_type"] = model.MD_AT_SPECTRUM
+        self.light = light
         super(SpectrumSettingsStream, self).__init__(name, detector, dataflow, emitter, **kwargs)
         # For SPARC: typical user wants density a bit lower than SEM
         self.pixelSize.value *= 6
@@ -721,7 +723,45 @@ class SpectrumSettingsStream(CCDSettingsStream):
 
         # TODO: grating/cw as VAs (from the spectrometer)
 
-    # onActive: same as the standard LiveStream (ie, acquire from the dataflow)
+        if self.light:
+            # Current channel index to be used for channel's power update
+            self._channel_idx = 0
+
+            pwr_range = tuple(r[self._channel_idx] for r in self.light.power.range)
+            # keep the current power setting for the VA
+            self.power = model.FloatContinuous(self.light.power.value[self._channel_idx], range=pwr_range,
+                                               unit=self.light.power.unit)
+            self.power.subscribe(self._onPower)
+
+    def _onPower(self, value):
+        """
+        Update the light power with the current channel value if the stream is active/playing.
+        :param value (float): current channel value
+        """
+        if self.is_active.value:
+            pwr = list(self.light.power.range[0])
+            pwr[self._channel_idx] = value
+            self.light.power.value = pwr
+
+    def _onActive(self, active):
+        if active:
+            if self.light:
+                # Call _onPower to update the power of the light
+                self._onPower(self.power.value)
+            super()._onActive(active)
+        else:
+            super()._onActive(active)
+            self._stop_light()
+
+    def _stop_light(self):
+        """
+        Ensures the light is turned off (temporarily)
+        """
+        if self.light is None:
+            return
+
+        # set the light power to the minimum of the range, in most cases this is 0.0
+        self.light.power.value = self.light.power.range[0]
 
     def _updateImage(self):
         if not self.raw:

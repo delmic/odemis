@@ -129,18 +129,23 @@ class StreamController(object):
         if hasattr(stream, "power"):
             va = self.stream.power
             name = "power"
-            if self.stream.emitter:
+            if hasattr(self.stream, "light"):
+                comp = self.stream.light
+            else:
+                comp = self.stream.emitter
+
+            if comp is not None:
                 hw_settings = self.tab_data_model.main.hw_settings_config
-                emitter_conf = get_hw_config(self.stream.emitter, hw_settings)
+                emitter_conf = get_hw_config(comp, hw_settings)
             else:
                 emitter_conf = {}
 
             conf = emitter_conf.get(name)
             if conf is not None:
                 logging.debug("%s emitter configuration found for %s", name,
-                              self.stream.emitter.role)
+                              comp.role)
 
-            self.add_setting_entry(name, va, self.stream.emitter, conf)
+            self.add_setting_entry(name, va, comp, conf)
 
         # Add local hardware settings to the stream panel
         self._add_hw_setting_controls()
