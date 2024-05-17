@@ -198,11 +198,6 @@ received).
 
         Registers a function (callable) which will receive new version of the data every time it is available with the metadata. The format of the callback is callback(dataflow, dataarray), with dataflow the dataflow which calls it and dataarray the new data coming (which should not be modified, as other subscribers might receive the same object). It returns nothing.
 
-    .. TODO: optionally a “recommended update rate” which indicates how often we want data update maximum?
-
-    .. TODO: optionally indicate whether the subscriber wants all the data, or only 
-        cares about the last one generated.
-
     .. py:method:: unsubscribe(callback)
 
         Unregister a given callback. Can be called from the callback itself.
@@ -223,9 +218,12 @@ received).
         If None is passed, no synchronization is taking place.
         See :py:class:`Event` for more information on synchronization.
 
-    .. py:attribute:: parent
+    .. py:attribute:: max_discard
 
-        The component which owns this data-flow.
+        (int) number of DataArray (or "frame") which can be discarded in a row if it comes
+        in too fast to be handled by the subscribers.
+        Setting it to 0 indicates that no data should be discarded (unless there
+        is a huge memory usage).
 
 
     The rest of the methods are private and should only be used by the DataFlow 
@@ -273,6 +271,11 @@ Each listener has a separate queue, which ensures it will never miss the fact an
     .. py:method:: notify()
 
         Indicates an event has just occurred. Only to be done by the owner of the event.
+
+    .. py:attribute:: affects
+
+        *(VA, list of str)* Names of the components that are receiving the event
+        physically. This is mainly intended to be used for hardware triggers.
 
 
 Future

@@ -952,7 +952,6 @@ class SEMDataFlow(model.DataFlow):
 
         self._sync_event = None  # event to be synchronised on, or None
         self._evtq = None  # a Queue to store received events (= float, time of the event)
-        self._prev_max_discard = self._max_discard
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
@@ -991,12 +990,12 @@ class SEMDataFlow(model.DataFlow):
         event (model.Event or None): event to synchronize with. Use None to
           disable synchronization.
         """
+        super().synchronizedOn(event)
         if self._sync_event == event:
             return
 
         if self._sync_event:
             self._sync_event.unsubscribe(self)
-            self.max_discard = self._prev_max_discard
             if not event:
                 self._evtq.put(None)  # in case it was waiting for this event
 
@@ -1005,8 +1004,6 @@ class SEMDataFlow(model.DataFlow):
             # if the df is synchronized, the subscribers probably don't want to
             # skip some data
             self._evtq = queue.Queue()  # to be sure it's empty
-            self._prev_max_discard = self._max_discard
-            self.max_discard = 0
             self._sync_event.subscribe(self)
 
     @oneway

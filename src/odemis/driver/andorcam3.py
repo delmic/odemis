@@ -2006,7 +2006,6 @@ class AndorCam3DataFlow(model.DataFlow):
         model.DataFlow.__init__(self)
         self.component = weakref.ref(camera)
         self._sync_event = None # synchronization Event
-        self._prev_max_discard = self._max_discard
 
 #    def get(self):
 #        # TODO if camera is already acquiring, wait for the coming picture
@@ -2044,6 +2043,7 @@ class AndorCam3DataFlow(model.DataFlow):
           disable synchronization.
         The DataFlow can be synchronized only with one Event at a time.
         """
+        super().synchronizedOn(event)
         if self._sync_event == event:
             return
 
@@ -2059,7 +2059,6 @@ class AndorCam3DataFlow(model.DataFlow):
 
         if self._sync_event:
             self._sync_event.unsubscribe(comp)
-            self.max_discard = self._prev_max_discard
         else:
             # report problem if the acquisition was started without expecting synchronization
             assert (not comp.acquire_thread or
@@ -2068,10 +2067,6 @@ class AndorCam3DataFlow(model.DataFlow):
 
         self._sync_event = event
         if self._sync_event:
-            # if the df is synchronized, the subscribers probably don't want to
-            # skip some data
-            self._prev_max_discard = self._max_discard
-            self.max_discard = 0
             self._sync_event.subscribe(comp)
 
 

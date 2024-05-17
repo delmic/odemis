@@ -421,8 +421,10 @@ class SimpleDataFlow(model.DataFlow):
             self._evtq.put(None)  # in case it was waiting for an event
 
     def synchronizedOn(self, event):
+        super().synchronizedOn(event)
         if self._sync_event == event:
             return
+
         if self._sync_event:
             self._sync_event.unsubscribe(self)
             if not event:

@@ -19,6 +19,7 @@ PURPOSE. See the GNU General Public License for more details.
 You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
+
 # Provides data-flow: an object that can contain a large array of data regularly
 # updated. Typically it is used to transmit video (sequence of images). It does it
 # losslessly and with metadata attached (see _metadata for the conventional ones).
@@ -32,6 +33,7 @@ from odemis.util.weak import WeakMethod, WeakRefLostError
 import os
 import threading
 import time
+import weakref
 import zmq
 
 from . import _core
@@ -192,7 +194,7 @@ class DataFlowBase(object):
 
 # DataFlow object to create on the server (in a component)
 class DataFlow(DataFlowBase):
-    def __init__(self, max_discard=100): # XXX max_discard=100
+    def __init__(self, max_discard=100):
         """
         max_discard (int): mount of messages that can be discarded in a row if
                             a new one is already available. 0 to keep (notify)
@@ -201,19 +203,24 @@ class DataFlow(DataFlowBase):
         """
         DataFlowBase.__init__(self)
         # different from ._listeners for notify() to do different things
-        self._remote_listeners = set() # any unique string works
+        self._remote_listeners = set()  # any unique string works
+        self._sync_lock = threading.RLock()  # To ensure only one sync change at a time
+        self._was_synchronized = False
 
-        self._global_name = None # to be filled when registered
+        self._global_name = None  # to be filled when registered
         self._ctx = None
         self.pipe = None
+
         self._max_discard = max_discard
+        self._max_discard_orig = max_discard  # Used when switching between synchronized and not
+        self._max_discard_last_update = None  # Value when last updated (when there are no remote listeners)
 
     def _getproxystate(self):
         """
         Equivalent to __getstate__() of the proxy version
         """
         proxy_state = Pyro4.core.pyroObjectSerializer(self)[2]
-        return proxy_state, _core.dump_roattributes(self), self.max_discard
+        return proxy_state, _core.dump_roattributes(self)
 
     @property
     def max_discard(self):
@@ -222,39 +229,61 @@ class DataFlow(DataFlowBase):
     @max_discard.setter
     def max_discard(self, value):
         self._max_discard = value
-        # TODO: for now it doesn't make sense to update the HWM, as 0MQ needs to
-        # unbind/bind, but that looses current subscriptions.
-        # self._update_pipe_hwm()
+        self._update_pipe_hwm()
+
+    # getter & setter for the remote proxy (only!)
+    def _get_max_discard(self):
+        return self.max_discard
+
+    def _set_max_discard(self, value):
+        self.max_discard = value
 
     def _update_pipe_hwm(self):
         """
         updates the high water mark option of OMQ pipe according to max_discard
         """
-        if self.pipe is None:
+        if (self._max_discard == self._max_discard_last_update
+            or self.pipe is None
+           ):
             return
 
         # When discarding, allow a bit of delay, but nothing more: if more than
-        # 2 (=2x3) msg already queued, the _newest_ one will be dropped.
+        # 2 DataArray (= 2*3 msg) already queued, the _newest_ one will be dropped.
+        # The best would be to drop the _oldest_ messages.
+        # Note: before ZMQ 4.2, it was necessary to unbind/bind the pipe to update the HWM, however,
+        # this automatically drops all subscribers. And sometimes, even if there are no subscribers,
+        # it crashes ZMQ. From ZMQ 4.2, it's possible to change the HWM without rebinding.
+        hwm = 6 if self._max_discard else 3000
+        self.pipe.sndhwm = hwm
+        self._max_discard_last_update = self._max_discard
+        logging.debug("Updating 0MQ HWM to %d on %s (max_discard = %s)",
+                       hwm, self._global_name, self._max_discard)
+
         # TODO: in ZMQ v4, ZMQ_CONFLATE allows to have a queue of 1 message
         # containing only the newest message. That sounds closer to what we
         # need (though, currently multi-part messages are not supported).
-        # The best would be to drop the _oldest_ messages.
-        hwm = 6 if self._max_discard else 10000
-        if hasattr(self.pipe, "sndhwm"):  # zmq v3+
-            self.pipe.sndhwm = hwm
-        else:  # zmq v2
-            self.pipe.hwm = hwm
 
-#         # HWM is only updated after rebinding, but 0MQ v2 doesn't allow rebinding
-#         # and with v3+ rebinding losses the current subscriptions.
-#         if self._global_name:
-#             if zmq.zmq_version_info()[0] <= 2:
-#                 logging.info("Cannot update HWM on 0MQ v2")
-#             else:
-#                 logging.debug("Rebinding connection due to HWM change to %d on %s",
-#                               hwm, self._global_name)
-#                 self.pipe.unbind("ipc://" + self._global_name)
-#                 self.pipe.bind("ipc://" + self._global_name)
+    def synchronizedOn(self, event):
+        """
+        Changes the configuration of the DataFlow so that an acquisition starts just after
+        (as close as possible) the event is triggered.
+        Behaviour is unspecified if the acquisition is already running.
+        A DataFlow can only wait for one event (or none).
+        event (Event or None): event to synchronize with. Use None to disable synchronization.
+        See the Event class for more information on synchronization.
+        """
+        with self._sync_lock:
+            is_synchronized = event is not None
+            if is_synchronized == self._was_synchronized:
+                return  # No change
+
+            self._was_synchronized = is_synchronized
+            if is_synchronized:
+                self._max_discard_orig = self.max_discard
+                self.max_discard = 0
+                logging.debug("Dataflow %s is synchronized on an event, will not discard data", self._global_name)
+            else:
+                self.max_discard = self._max_discard_orig
 
     def _register(self, daemon):
         """
@@ -264,6 +293,9 @@ class DataFlow(DataFlowBase):
         is not enough.
         daemon (Pyro4.Daemon): daemon used to share this object
         """
+        if zmq.zmq_version_info()[0] <= 2:
+            raise NotImplementedError("0MQ v2 is not supported anymore, upgrade to 0MQ v3+")
+
         daemon.register(self)
 
         # create a zmq pipe to publish the data
@@ -273,7 +305,7 @@ class DataFlow(DataFlowBase):
         self._ctx = zmq.Context(1)
         self.pipe = self._ctx.socket(zmq.PUB)
         self.pipe.linger = 1 # don't keep messages more than 1s after close
-        self._update_pipe_hwm()
+        self._update_pipe_hwm()  # will not unbind/bind, as global_name is not set yet
 
         uri = daemon.uriFor(self)
         # uri.sockname is the file name of the pyro daemon (with full path)
@@ -371,6 +403,10 @@ class DataFlow(DataFlowBase):
             if count_before > 0 and count_after == 0:
                 self.stop_generate()
 
+            if len(self._remote_listeners) == 0:
+                # It's the right moment to unbind/rebind the pipe
+                self._update_pipe_hwm()
+
     def notify(self, data):
         # publish the data remotely
         if self.pipe and len(self._remote_listeners) > 0:
@@ -412,13 +448,9 @@ class DataFlow(DataFlowBase):
 class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
     # init is as light as possible to reduce creation overhead in case the
     # object is actually never used
-    def __init__(self, uri, max_discard=100): # XXX max_discard = 100
+    def __init__(self, uri):
         """
         uri : see Proxy
-        max_discard (int): amount of messages that can be discarded in a row if
-                            a new one is already available. 0 to keep (notify)
-                            all the messages (dangerous if callback is slower
-                            than the generator).
         Note: there is no reason to create a proxy explicitly!
         """
         Pyro4.Proxy.__init__(self, uri)
@@ -426,19 +458,26 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         # Should be unique among all the subscribers of the real DataFlow
         self._proxy_name = "%x/%x" % (os.getpid(), id(self))
         DataFlowBase.__init__(self)
-        self.max_discard = max_discard
 
         self._ctx = None
         self._commands = None
         self._thread = None
 
+    @property
+    def max_discard(self):
+        return self._get_max_discard()
+
+    @max_discard.setter
+    def max_discard(self, value):
+        self._set_max_discard(value)
+
     def __getstate__(self):
         # must permit to recreate a proxy to a data-flow in a different container
         proxy_state = Pyro4.Proxy.__getstate__(self)
-        return proxy_state, _core.dump_roattributes(self), self.max_discard
+        return proxy_state, _core.dump_roattributes(self)
 
     def __setstate__(self, state):
-        proxy_state, roattributes, self.max_discard = state
+        proxy_state, roattributes = state
         Pyro4.Proxy.__setstate__(self, proxy_state)
         _core.load_roattributes(self, roattributes)
 
@@ -449,6 +488,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         self._ctx = None
         self._commands = None
         self._thread = None
+        self._is_synchronized = False
 
     # .get() is a direct remote call
 
@@ -461,7 +501,7 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         self._ctx = zmq.Context(1) # apparently 0MQ reuse contexts
         self._commands = self._ctx.socket(zmq.PAIR)
         self._commands.bind("inproc://" + self._global_name)
-        self._thread = SubscribeProxyThread(self.notify, self._global_name, self.max_discard, self._ctx)
+        self._thread = SubscribeProxyThread(self, self._global_name, self._ctx)
         self._thread.start()
 
     def start_generate(self):
@@ -510,21 +550,19 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
 
 
 class SubscribeProxyThread(threading.Thread):
-    def __init__(self, notifier, uri, max_discard, zmq_ctx):
+    def __init__(self, df_proxy, uri, zmq_ctx):
         """
-        notifier (callable): method to call when a new array arrives
+        df_proxy: the DataFlowProxy which uses this thread
         uri (string): unique string to identify the connection
-        max_discard (int)
         zmq_ctx (0MQ context): available 0MQ context to use
         """
-        threading.Thread.__init__(self, name="zmq for dataflow " + uri)
+        super().__init__(name="zmq for dataflow " + uri)
         self.daemon = True
         self.uri = uri
-        self.max_discard = max_discard
         self._ctx = zmq_ctx
-        # don't keep strong reference to notifier so that it can be garbage
-        # collected normally and it will let us know then that we can stop
-        self.w_notifier = WeakMethod(notifier)
+        # don't keep strong reference to DataFlowProxy so that it can be garbage
+        # collected normally and this will let us know then that we can stop
+        self.weak_df = weakref.proxy(df_proxy)
 
         # create a zmq synchronised channel to receive _commands
         self._commands = zmq_ctx.socket(zmq.PAIR)
@@ -532,19 +570,11 @@ class SubscribeProxyThread(threading.Thread):
 
         # create a zmq subscription to receive the data
         self._data = zmq_ctx.socket(zmq.SUB)
-        # TODO find out if it does something and if it does, depend on max_discard
-        # (for now, we just set it to 0, the default, to never discard messages)
-        if hasattr(self._data, "rcvhwm"):  # zmq v3+
-            self._data.rcvhwm = 0
-        else:  # zmq v2
-            self._data.hwm = 0
+        # Don't automatically discard messages on 0MQ as it's hard to change live (based on max_discard)
+        # and also as we receive 3 messages per DataArray that would be very unreliable.
+        # Instead, we will discard the DataArray in the thread itself (based on the max_discard).
+        self._data.rcvhwm = 0
         self._data.connect("ipc://" + uri)
-
-        # TODO: we need a more advance support for max_discards to be able to
-        # ensure all the data is received when the client needs it.
-        # API should be either:
-        #  *  .max_discard = XXX (= per dataflow)
-        #  * .subscribe(callback, discard=True) (per subscriber)
 
     def run(self):
         """
@@ -557,7 +587,11 @@ class SubscribeProxyThread(threading.Thread):
             poller = zmq.Poller()
             poller.register(self._commands, zmq.POLLIN)
             poller.register(self._data, zmq.POLLIN)
-            discarded = 0
+
+            # Maximum number of messages discarded in a row.
+            # Read from the remote DataFlow when the subscription is started.
+            max_discard = 0
+            discarded = 0  # Number of messages discarded in a row
             while True:
                 socks = dict(poller.poll())
 
@@ -566,7 +600,8 @@ class SubscribeProxyThread(threading.Thread):
                     message = self._commands.recv()
                     if message == b"SUB":
                         self._data.setsockopt(zmq.SUBSCRIBE, b'')
-                        logging.debug("Subscribed to remote dataflow %s", self.uri)
+                        max_discard = self.weak_df.max_discard
+                        logging.debug("Subscribed to remote dataflow %s, with max_discard = %s", self.uri, max_discard)
                         self._commands.send(b"SUBD")
                     elif message == b"UNSUB":
                         self._data.setsockopt(zmq.UNSUBSCRIBE, b'')
@@ -580,34 +615,37 @@ class SubscribeProxyThread(threading.Thread):
 
                 # receive data
                 if self._data in socks:
-                    # TODO: be more resilient if wrong data is received (can
-                    # block forever)
+                    # TODO: be more resilient if wrong data is received (can block forever)
                     array_format = self._data.recv_pyobj()
                     array_md = self._data.recv_pyobj()
                     array_buf = self._data.recv(copy=False)
                     # logging.debug("Received new DataArray over ZMQ for %s", self.uri)
                     # more fresh data already?
-                    if (self._data.getsockopt(zmq.EVENTS) & zmq.POLLIN and
-                        discarded < self.max_discard):
+                    if (discarded < max_discard
+                        and self._data.getsockopt(zmq.EVENTS) & zmq.POLLIN
+                       ):
                         discarded += 1
                         # logging.debug("Discarding object received as a newer one is available")
                         continue
+                    # Don't log here, because if we are discarding message it's because we are running
+                    # out of time, and logging is slow.
                     # TODO: only log the accumulated number every second, to avoid log flooding
-#                     if discarded:
-#                         logging.debug("Dataflow %s dropped %d arrays", self.uri, discarded)
+                    if discarded:
+                        logging.warning("Dataflow %s dropped %d arrays", self.uri, discarded)
                     discarded = 0
                     # TODO: any need to use zmq.utils.rebuffer.array_from_buffer()?
                     if len(array_buf):
                         array = numpy.frombuffer(array_buf, dtype=array_format["dtype"])
-                    else: # frombuffer doesn't support zero length array
+                    else:  # frombuffer doesn't support zero length array
                         array = numpy.empty((0,), dtype=array_format["dtype"])
                     array.shape = array_format["shape"]
                     darray = DataArray(array, metadata=array_md)
+                    self.weak_df.notify(darray)
 
-                    try:
-                        self.w_notifier(darray)
-                    except WeakRefLostError:
-                        return  # It's a sign there is nothing left to do
+        except ReferenceError:  # The DataFlow(Proxy) is gone
+            # => stop this thread too
+            logging.debug("Dataflow proxy %s is gone, stopping the subscription thread", self.uri)
+            return
         except Exception:
             if logging:
                 logging.exception("Ending ZMQ thread due to exception")

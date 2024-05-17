@@ -1488,19 +1488,15 @@ class UEyeDataFlow(model.DataFlow):
           disable synchronization.
         The DataFlow can be synchronized only with one Event at a time.
         """
+        super().synchronizedOn(event)
         if self._sync_event == event:
             return
 
         if self._sync_event:
             self._sync_event.unsubscribe(self._detector)
-            self.max_discard = self._prev_max_discard
 
         self._sync_event = event
         if self._sync_event:
-            # if the df is synchronized, the subscribers probably don't want to
-            # skip some data
-            self._prev_max_discard = self._max_discard
-            self.max_discard = 0
             self._detector.set_trigger(True)
             self._sync_event.subscribe(self._detector)
         else:
