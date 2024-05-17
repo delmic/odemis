@@ -267,6 +267,11 @@ class StreamBar(wx.Panel):
             # Prematurely stop listening to the Destroy event, to only refit the
             # (empty) bar once, after all streams are gone.
             p.Unbind(wx.EVT_WINDOW_DESTROY, source=p, handler=self.on_streamp_destroy)
+            # So call the destroy handler explicitly. Needs to be done *before* it's actually destroyed.
+            on_destroy = self._on_destroy_callbacks.pop(p, None)
+            if on_destroy:
+                on_destroy()
+
             self.remove_stream_panel(p)
 
         self.fit_streams()

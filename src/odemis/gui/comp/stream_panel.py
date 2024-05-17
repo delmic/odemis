@@ -809,12 +809,6 @@ class StreamPanel(wx.Panel):
                           flag=wx.ALL | wx.ALIGN_CENTER_VERTICAL, border=5)
         return lbl_ctrl
 
-    def Destroy(self):
-        super().Destroy()
-
-        if self.stream.tint:
-            self.stream.tint.unsubscribe(self._header._on_colormap_value)
-
     @control_bookkeeper
     def add_autobc_ctrls(self):
         """ Create and return controls needed for (auto) brightness and contrast manipulation """
