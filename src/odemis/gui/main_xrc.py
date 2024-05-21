@@ -734,6 +734,7 @@ class xrcpnl_tab_localization(wx.Panel):
         self.btn_go_to_feature = xrc.XRCCTRL(self, "btn_go_to_feature")
         self.ctrl_feature_z = xrc.XRCCTRL(self, "ctrl_feature_z")
         self.btn_use_current_z = xrc.XRCCTRL(self, "btn_use_current_z")
+        self.menu_localization_streams = xrc.XRCCTRL(self, "menu_localization_streams")
         self.btn_z_localization = xrc.XRCCTRL(self, "btn_z_localization")
         self.lbl_z_localization = xrc.XRCCTRL(self, "lbl_z_localization")
         self.gauge_z_localization = xrc.XRCCTRL(self, "gauge_z_localization")
@@ -8725,6 +8726,21 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                             <object class="sizeritem">
                               <object class="wxBoxSizer">
                                 <object class="sizeritem">
+                                  <object class="ImageToggleButton" name="menu_localization_streams">
+                                    <icon>______img_icon_arr_down_s_png</icon>
+                                    <height>24</height>
+                                    <size>20,24</size>
+                                    <face_colour>def</face_colour>
+                                    <label/>
+                                    <fg>#1A1A1A</fg>
+                                    <XRCED>
+                                      <assign_var>1</assign_var>
+                                    </XRCED>
+                                  </object>
+                                  <flag>wxRIGHT</flag>
+                                  <border>1</border>
+                                </object>
+                                <object class="sizeritem">
                                   <object class="ImageTextButton" name="btn_z_localization">
                                     <height>24</height>
                                     <label>Locate Z...</label>
@@ -8735,7 +8751,7 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                     <bg>#000000</bg>
                                   </object>
                                   <flag>wxRIGHT</flag>
-                                  <border>10</border>
+                                  <border>2</border>
                                 </object>
                                 <object class="sizeritem">
                                   <object class="wxStaticText" name="lbl_z_localization">
@@ -9340,6 +9356,17 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
 "\x0c`\x09\xcd\x16p<\xc0\xe0O\x86f\x06\xaa\x01\x00\x07s?\xea["x\xa5\x00\
 \x00\x00\x00IEND\xaeB`\x82'''
 
+    ______img_icon_arr_down_s_png = b'''\
+\x89PNG\x0d
+\x1a
+\x00\x00\x00\x0dIHDR\x00\x00\x00\x10\x00\x00\x00\x10\x08\x04\x00\x00\x00\
+\xb5\xfa7\xea\x00\x00\x00rIDAT(\x91c`\x18R@\x98A\x9eA\x0e\x0ee\x18\x18\xd1\
+\x15\x941\xfcG\x82g\x188P\xa5\x99\x18\x94\x18.\x01%\xfeA\x15\xb81\xb0\xa1\
+\x9b\xc0\xcd\x10\xc6\xf0\x07*=\x8dA\x14\x9b+\xe4\x19\xd6\x81\xa5\x1f2\x98\
+1\xb0`S\xc0\xc6\xe0\xc9\xf0\x09hJ\x07\x83\x00.\x9f\xf03,`\xb8\xc7\xa0\x01\
+t\x11\x0e\xc0\xc2\xa0\xc3\x10\xca\xc0\x85K\x1ab\x0d\x27n\xfd\xe4\x01\x00\
+A\xb7\x1c}\xd5\xe9\xa4\xa3\x00\x00\x00\x00IEND\xaeB`\x82'''
+
     ______img_icon_ico_acqui_png = b'''\
 \x89PNG\x0d
 \x1a
@@ -9404,6 +9431,7 @@ C/7\xc8\x17\xc9\xc0\xb1\x17\x87u:\xd0\xf6W\xce\xec\xe2\xc0\xfc\x19\x8f\xe6\
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/panel_tab_localization_xrc', bytearray(panel_tab_localization_xrc.encode('utf-8')))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/______img_icon_ico_chevron_up_png', bytearray(______img_icon_ico_chevron_up_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/______img_icon_ico_trash_png', bytearray(______img_icon_ico_trash_png))
+    wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/______img_icon_arr_down_s_png', bytearray(______img_icon_arr_down_s_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/______img_icon_ico_acqui_png', bytearray(______img_icon_ico_acqui_png))
     wx.MemoryFSHandler.AddFile('XRC/panel_tab_localization/______img_icon_ico_sem_png', bytearray(______img_icon_ico_sem_png))
     __res.Load('memory:XRC/panel_tab_localization/panel_tab_localization_xrc')

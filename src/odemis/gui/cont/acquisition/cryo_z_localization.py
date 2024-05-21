@@ -33,11 +33,12 @@ from concurrent.futures._base import CancelledError
 
 import wx
 
+from odemis import model
+from odemis.acq.align import z_localization
 from odemis.acq.stream import FluoStream
 from odemis.gui import conf
 from odemis.gui.comp import popup
 from odemis.gui.util import call_in_wx_main
-from odemis.acq.align import z_localization
 from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector
 from odemis.util import units
 from odemis.util.filename import create_filename
@@ -47,6 +48,7 @@ class CryoZLocalizationController(object):
     """
     Controller to handle the Z localization for the ENZEL/METEOR with a stigmator.
     """
+
     def __init__(self, tab_data, panel, tab):
         self._panel = panel
         self._tab_data = tab_data
@@ -72,6 +74,14 @@ class CryoZLocalizationController(object):
 
         # Connect the button and combobox
         self._panel.btn_z_localization.Bind(wx.EVT_BUTTON, self._on_z_localization)
+        self._localization_btn_label = self._panel.btn_z_localization.GetLabel()
+
+        # Connect menu for stream selection for Localization z
+        self._acq_future = model.InstantaneousFuture()
+        self._menu_to_stream = {}
+        self._selected_stream = None
+        self._panel.menu_localization_streams.Bind(wx.EVT_BUTTON, self._create_stream_menu)
+        self._tab_data.streams.subscribe(self._on_streams, init=True)
 
         # Fill the combobox with the available stigmator angles
         for angle in sorted(tab_data.stigmatorAngle.choices):
@@ -85,8 +95,6 @@ class CryoZLocalizationController(object):
             va_2_ctrl=self._cmb_stig_angle_set,
             ctrl_2_va=self._cmb_stig_angle_get
         )
-
-        self._acq_future = None  # Acquisition future, if running
         self._acq_future_connector = None  # ProgressiveFutureConnector, if running
 
         # TODO: listen to the current stream, to update the time estimation
@@ -124,21 +132,65 @@ class CryoZLocalizationController(object):
         # Only possible to run the function iff:
         # * A feature is selected
         # * Not acquiring
+        # * Localization process is running
         # * TODO: there is a FluoStream
         has_feature = self._tab_data.main.currentFeature.value is not None
         is_acquiring = self._tab_data.main.is_acquiring.value
-        self._panel.btn_z_localization.Enable(has_feature and not is_acquiring)
+        # While running the localization method
+        # button turns in cancel button
+        is_runnning = not self._acq_future.done()
 
+        self._panel.btn_z_localization.Enable(has_feature and not is_acquiring or is_runnning)
+
+    def _on_streams(self, streams):
+        if self._selected_stream in streams:
+            return  # Everything is fine
+        # Find a good stream (or None if no stream)
+        self._selected_stream = next((s for s in streams if isinstance(s, FluoStream)), None)
+
+    def _create_stream_menu(self, evt):
+        """Display active list of streams in the menu and check the selected stream when toggle button is clicked"""
+        menu = wx.Menu()
+        # Get the list of streams from stream controller to keep the display order of streams in menu,
+        # same as, display order of streams in the "Streams" panel
+        streams = [stream_cont.stream for stream_cont in self._tab.streambar_controller.stream_controllers if
+                   isinstance(stream_cont.stream, FluoStream)]
+        self._menu_to_stream = {}
+        for stream in streams:
+            label = stream.name.value
+            menu_id = wx.Window.NewControlId()
+            menu_item = wx.MenuItem(menu, menu_id, label, kind=wx.ITEM_RADIO)
+            menu.Bind(wx.EVT_MENU, self._on_stream_selection, id=menu_id)
+            self._menu_to_stream[menu_id] = stream
+            menu.Append(menu_item)
+            menu_item.Check(stream == self._selected_stream)
+
+        # Blocking function, which returns only once when
+        # The user has selected a stream, or closed the menu
+        self._panel.menu_localization_streams.PopupMenu(menu,
+                                                        (
+                                                        0, self._panel.menu_localization_streams.GetSize().GetHeight()))
+        self._panel.menu_localization_streams.SetToggle(False)
+
+    def _on_stream_selection(self, evt):
+        """Get and save the stream option when an aption is selected in the pop-up menu"""
+        menu_id = evt.GetId()
+        self._selected_stream = self._menu_to_stream[menu_id]
 
     def _on_z_localization(self, evt):
+        """Start or cancel the localization method when the button is clicked"""
+        # If localization is running, cancel it, otherwise start one
+        if self._acq_future.done():
+            self._start_z_localization()
+        else:
+            self._acq_future.cancel()
+
+    def _start_z_localization(self):
         """
         Called on button press, to start the localization
         """
-
-        # Pick the last FM stream (TODO: make that more obvious to the user)
-        try:
-            s = next(s for s in self._tab_data.streams.value if isinstance(s, FluoStream))
-        except StopIteration:
+        s = self._selected_stream
+        if s is None:
             raise ValueError("No FM stream available to acquire a image of the the feature")
 
         # The button is disabled when no feature is selected, but better check
@@ -164,10 +216,12 @@ class CryoZLocalizationController(object):
         # The angles of stigmatorAngle should come from MD_CALIB, so it's relatively safe
         angle = self._tab_data.stigmatorAngle.value
 
-        # TODO: Convert the "locate Z" button to "cancel", once the function supports cancelling
         self._acq_future = z_localization.measure_z(self._stigmator, angle, pos, s, logpath=fn)
+        self._panel.btn_z_localization.SetLabel("Cancel")
+
         self._acq_future_connector = ProgressiveFutureConnector(self._acq_future,
                                                                 self._panel.gauge_z_localization)
+
         self._acq_future.add_done_callback(self._on_measure_z_done)
 
     @call_in_wx_main
@@ -176,6 +230,9 @@ class CryoZLocalizationController(object):
         Called when measure_z() is completed (can also happen if cancelled or failed)
         """
         try:
+            self._panel.btn_z_localization.Enable(True)
+            self._panel.btn_z_localization.SetLabel(self._localization_btn_label)
+
             zshift, warning = f.result()
 
             # focus position: the base for the shift computed by the z localization
@@ -201,7 +258,6 @@ class CryoZLocalizationController(object):
             else:
                 f = self._tab_data.main.focus.moveAbs({"z": zpos})
                 # Don't wait for it to be complete, the user will notice anyway
-
         except CancelledError:
             logging.debug("Z localization cancelled")
         finally:
