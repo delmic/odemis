@@ -45,7 +45,7 @@ SCANNER_CONFIG = {
         # the beam here.
         "blanker": False,
         "immersion": False,  # disable to get a larger field of view
-        "horizontalFoV": 1.5e-3,  # maximum FoV without seeing the pole-piece (with T1, immersion off).
+        "horizontalFoV": 2.0e-3,  # maximum FoV without seeing the pole-piece (with T1, immersion off).
         # XT usually uses a rectangular ratio for the resolution such as 1536 x 1024. Thus, for a fixed FoV the maximum
         # width is reached earlier, but the heights could be in principle still increased. By using a more square
         # aspect ratio, it is possible to increase the physically scanned area per tile and thus reduce the number
