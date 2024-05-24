@@ -1759,6 +1759,7 @@ class SparcStreamsController(StreamBarController):
 
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
+                "iris-in": ("iris-in", spg),
                 "slit-in": ("slit-in", spg),
                }
 
@@ -1815,6 +1816,7 @@ class SparcStreamsController(StreamBarController):
 
         axes = {"wavelength": ("wavelength", spectrograph),
                 "grating": ("grating", spectrograph),
+                "iris-in": ("iris-in", spectrograph),
                 "slit-in": ("slit-in", spectrograph),
                 "filter": ("band", main_data.light_filter),
                 }
@@ -1843,7 +1845,7 @@ class SparcStreamsController(StreamBarController):
 
     def addTemporalSpectrum(self):
         """
-        Create a temporal spectrum stream and add to to all compatible viewports
+        Create a temporal spectrum stream and add to all compatible viewports
         """
 
         main_data = self._main_data_model
@@ -1858,6 +1860,7 @@ class SparcStreamsController(StreamBarController):
 
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
+                "iris-in": ("iris-in", spg),
                 "slit-in": ("slit-in", spg)}
 
         axes = self._filter_axes(axes)
@@ -1898,6 +1901,7 @@ class SparcStreamsController(StreamBarController):
 
         axes = {"wavelength": ("wavelength", spg),
                 "grating": ("grating", spg),
+                "iris-in": ("iris-in", spg),
                 "slit-in": ("slit-in", spg),
                 "slit-monochromator": ("slit-monochromator", spg),
                }
