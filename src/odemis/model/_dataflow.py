@@ -488,7 +488,6 @@ class DataFlowProxy(DataFlowBase, Pyro4.Proxy):
         self._ctx = None
         self._commands = None
         self._thread = None
-        self._is_synchronized = False
 
     # .get() is a direct remote call
 
