@@ -492,10 +492,34 @@ HW_SETTINGS_CONFIG = {
             }),
         )),
     "cl-detector": {
-            "gain": {
-                "accuracy": 3,
-            },
+        "gain": {
+            "accuracy": 3,
         },
+    },
+    "ebic-detector": {
+        "numberOfChannels": {
+            "label": "Number of channels",
+            "control_type": odemis.gui.CONTROL_COMBO,
+        },
+        "spp": {
+            "label": "Samples per pixel",
+            "control_type": odemis.gui.CONTROL_RADIO,
+            "tooltip": "Number of samples per pixel",
+        },
+        "resolution": {
+            # Read-only it shouldn't be changed by the user, but it should be visible
+            "control_type": odemis.gui.CONTROL_READONLY,
+            "accuracy": None,  # never simplify the numbers
+        },
+        "binning": {
+            # None, it should not be changed
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+        "repetition": {
+            # None, it should not be changed
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
+    },
     r"photo-detector.*":
         OrderedDict((
             ("gain", {
@@ -1019,20 +1043,17 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
             }),
         )),
-    stream.DigitalEBICStream:
-        OrderedDict((
-            # Display the adjusted pixelsize (pixelsize * scale) with the hw VAs.
-            # Resolution and DT should be hidden
-            ("pixelSize", {
-                "control_type": odemis.gui.CONTROL_READONLY,
-                #"control_type": odemis.gui.CONTROL_NONE,
-            }),
-            ("spp", {
-                "control_type": odemis.gui.CONTROL_COMBO,
-                "label": "samples per pixel",
-                "tooltip": "Number of samples per pixel in the image",
-            }),
-        )),
+    # stream.DigitalEBICStream:
+    #     OrderedDict((
+    #         ("chan_num", {
+    #             "control_type": odemis.gui.CONTROL_COMBO,
+    #         }),
+    #         ("spp", {
+    #             "label": "samples per pixel",
+    #             "control_type": odemis.gui.CONTROL_SLIDER,
+    #             "tooltip": "Number of samples per pixel in the image",
+    #         }),
+    #     )),
 }
 
 

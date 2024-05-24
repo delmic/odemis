@@ -1398,9 +1398,6 @@ class FastScanningDetector(RepetitionStream):
     def _onResolution(self, value):
         self._updateAcquisitionTime()
 
-    def _onSppChange(self, value):
-        self._detector.spp._set_value(value, force_write=True)
-
 
 class CLSettingsStream(FastScanningDetector):
     """
@@ -1474,10 +1471,15 @@ class DigitalEBICStream(FastScanningDetector):
             kwargs["acq_type"] = model.MD_AT_EBIC
         super().__init__(name, detector, dataflow, emitter, **kwargs)
 
-        if model.hasVA(self._detector, "spp"):
-            self.spp = model.IntContinuous(self._detector.spp.value, (1, 10))
-            self.spp.subscribe(self._onSppChange)
+        self._ebic = detector
 
+        self.repetition.subscribe(self.onRepetitionChange)
+        # if model.hasVA(self._detector, "spp"):
+        #     self.spp = model.IntContinuous(self._detector.spp.value, (1, 10))
+        #     self.spp.subscribe(self._onSppChange)
+
+    def onRepetitionChange(self, value):
+        self.detector.repetition.value = value
 
 # Maximum allowed overlay difference in electron coordinates.
 # Above this, the find overlay procedure will consider an error occurred and
