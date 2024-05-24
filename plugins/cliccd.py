@@ -39,36 +39,35 @@ class SEMCLCCDStream(SEMCCDMDStream):
 
     def _preprocessData(self, n, data, i):
         """
-        return (int): mean of the data
+        return: mean of the data (if CCD)
         """
         # We only care about the CCD data
-        if n < len(self.streams) - 1:
-            return super(SEMCLCCDStream, self)._preprocessData(n, data, i)
+        if n == len(self.streams) - 1:
+            # Computing the sum or the mean is theoretically equivalent, but the sum
+            # provides gigantic values while the mean gives values in the same order
+            # as in the original data. Note that we cannot use the original dtype
+            # because if it's an integer it will likely cause quantisation (as a
+            # large part of the image received is identical for all the e-beam
+            # positions scanned).
+            data = data.mean()
 
-        # Computing the sum or the mean is theoretically equivalent, but the sum
-        # provides gigantic values while the mean gives values in the same order
-        # as in the original data. Note that we cannot use the original dtype
-        # because if it's an integer it will likely cause quantisation (as a
-        # large part of the image received is identical for all the e-beam
-        # positions scanned).
-        return data.mean()
+        return super()._preprocessData(n, data, i)
 
-    def _assembleLiveData(self, n, raw_data, px_idx, rep, pol_idx):
+    def _assembleLiveData(self, n, raw_data, px_idx, px_pos, rep, pol_idx=0):
         if n != self._ccd_idx:
-            return super(SEMCLCCDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+            return super()._assembleLiveData(n, raw_data, px_idx, px_pos, rep, pol_idx)
 
         if pol_idx > len(self._live_data[n]) - 1:
             # New polarization => new DataArray
             md = raw_data.metadata.copy()
-            # Compute metadata based on SEM metadata
-            semmd = self._live_data[0][pol_idx].metadata
-            # handle sub-pixels (aka fuzzing)
-            md[MD_PIXEL_SIZE] = (semmd[MD_PIXEL_SIZE][0] * self._emitter.resolution.value[0],
-                                 semmd[MD_PIXEL_SIZE][1] * self._emitter.resolution.value[1])
-            md[MD_POS] = self._live_data[0][pol_idx].metadata[MD_POS]
-            md[MD_DIMS] = "YX"
-            md[MD_DESCRIPTION] = self._streams[n].name.value
-            # Make sure it doesn't contain metadata related to AR
+            # Compute metadata to match the SEM metadata
+            center, pxs = self._get_center_pxs(rep, (1, 1), self._pxs, px_pos)
+            md.update({MD_POS: center,
+                       MD_PIXEL_SIZE: pxs,
+                       MD_DIMS: "YX",
+                       MD_DESCRIPTION: self._streams[n].name.value})
+
+            # Remove any metadata related to AR & Spectrometry
             for k in (model.MD_AR_POLE, model.MD_AR_MIRROR_BOTTOM, model.MD_AR_MIRROR_TOP,
                       model.MD_AR_FOCUS_DISTANCE, model.MD_AR_HOLE_DIAMETER, model.MD_AR_PARABOLA_F,
                       model.MD_AR_XMAX, model.MD_ROTATION, model.MD_WL_LIST):
@@ -82,7 +81,7 @@ class SEMCLCCDStream(SEMCCDMDStream):
 
 class CLiCCDPlugin(Plugin):
     name = "CL intensity CCD"
-    __version__ = "1.2"
+    __version__ = "1.3"
     __author__ = u"Éric Piel"
     __license__ = "GPLv2"
 
