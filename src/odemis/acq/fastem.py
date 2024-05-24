@@ -366,7 +366,8 @@ def estimate_acquisition_time(roa, pre_calibrations=None):
 
 
 def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
-            se_detector, ebeam_focus, pre_calibrations=None, save_full_cells=False, settings_obs=None):
+            se_detector, ebeam_focus, pre_calibrations=None, save_full_cells=False, settings_obs=None,
+            spot_grid_thresh=0.5):
     """
     Start a megafield acquisition task for a given region of acquisition (ROA).
 
@@ -396,6 +397,8 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stag
     :param settings_obs: (SettingsObserver) VAs of all components of which some will be
                          integrated in the acquired ROA as metadata. Default is None,
                          if None the metadata will not be updated.
+    :param spot_grid_thresh: (0<float<=1) Relative threshold on the minimum intensity of spots in the
+        diagnostic camera image, calculated as `max(image) * spot_grid_thresh`.
 
     :return: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future is
              a tuple that contains:
@@ -410,7 +413,8 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stag
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
     task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
-                           se_detector, ebeam_focus, roa, path, pre_calibrations, save_full_cells, settings_obs, f)
+                           se_detector, ebeam_focus, roa, path, pre_calibrations, save_full_cells, settings_obs,
+                           spot_grid_thresh, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
 
@@ -429,7 +433,7 @@ class AcquisitionTask(object):
 
     def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
                  se_detector, ebeam_focus, roa, path,
-                 pre_calibrations, save_full_cells, settings_obs, future):
+                 pre_calibrations, save_full_cells, settings_obs, spot_grid_thresh, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
         :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
@@ -457,6 +461,8 @@ class AcquisitionTask(object):
                                to the effective cell size.
         :param settings_obs: (SettingsObserver) VAs of all components of which some will be
                              integrated in the acquired ROA as metadata. If None the metadata will not be updated.
+        :param spot_grid_thresh: (0<float<=1) Relative threshold on the minimum intensity of spots in the
+            diagnostic camera image, calculated as `max(image) * spot_grid_thresh`.
         :param future: (ProgressiveFuture) Acquisition future object, which can be cancelled. The result of the future
                         is a tuple that contains:
                             (model.DataArray): The acquisition data, which depends on the value of the
@@ -483,6 +489,7 @@ class AcquisitionTask(object):
         self._save_full_cells = save_full_cells
         self._pre_calibrations_future = None
         self._settings_obs = settings_obs
+        self._spot_grid_thresh = spot_grid_thresh
 
         # save the initial multibeam resolution, because the resolution will get updated if save_full_cells is True
         self._old_res = self._multibeam.resolution.value
@@ -832,7 +839,7 @@ class AcquisitionTask(object):
         # asap=False: wait until new image is acquired (don't read from buffer)
         ccd_image = self._ccd.data.get(asap=False)
         tform, error = estimate_grid_orientation_from_img(ccd_image, (8, 8), SimilarityTransform, sigma,
-                                                          threshold_rel=0.5)
+                                                          threshold_rel=self._spot_grid_thresh)
         logging.debug(f"Found center of grid at {tform.translation}, error: {error}.")
 
         # Determine the shift of the spots, by subtracting the good multiprobe position from the average (center)
