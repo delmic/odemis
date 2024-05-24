@@ -231,7 +231,7 @@ class AnalogSEM(model.HwComponent):
             HwError: if the installation has some issue
         """
         # Normally does nothing, but will fail if NI-DAQmx is not ready
-        canary_cmd = [sys.executable, "-c", "import nidaqmx; nidaqmx.system.System.local().devices"]
+        canary_cmd = [sys.executable, "-c", "import nidaqmx; all(nidaqmx.system.System.local().devices)"]
         process = subprocess.run(canary_cmd)
         return_code = process.returncode
 
