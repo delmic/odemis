@@ -428,8 +428,7 @@ Typically they are used to configure the device to a specific mode (e.g., change
         valid but the rules are not to be precisely known by the client (e.g.,
         the exposure time of a CCD component, in which case the setter will 
         accept any positive value but return the actual value set).
-    :param str unit: the unit of the value. The convention is to set *None* when
-        unknown or meaningless and "" if it is a unit-less ratio.
+    :param str unit: the unit of the value.
 
     .. py:attribute:: value
 
@@ -445,7 +444,7 @@ Typically they are used to configure the device to a specific mode (e.g., change
         
         Note: if the VA is readonly, it is still possible for the owner to change
         the value. This can be done either by calling ._set_value(val, force_write=True),
-        or by directly changing ._value (but in which case netheir the setter,
+        or by directly changing ._value (but in which case neither the setter,
         nor notify() are called).
 
     .. py:method:: subscribe(callback)
@@ -473,6 +472,8 @@ Typically they are used to configure the device to a specific mode (e.g., change
     
         *(ro, str)*: The unit of the value. The convention is to express measured
         quantities whenever possible in SI units (e.g., m, rad, C, s).
+        If it is a unit-less ratio, it is set to "", and if the unit is unknown or
+        meaningless it is to set *None*.
      
     The following method can be used by the VigilantAttribute implementations
 
