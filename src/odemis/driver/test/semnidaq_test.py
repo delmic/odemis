@@ -85,9 +85,18 @@ CONFIG_SCANNER = {
         2: [True, True, "external"],  # High when scanning, High when VA set to True
         3: [False, True, "blanker"],  # Low when scanning, High when VA set to True
     },
-    "pixel_ttl": [0, 7],
-    "line_ttl": [1],
-    "frame_ttl": [6],
+    "image_ttl": {
+         "pixel": {
+             "ports": [0, 7],
+             "affects": ["IR Camera", "UV Camera"],
+        },
+        "line": {
+             "ports": [1],
+        },
+        "frame": {
+             "ports": [6],
+        },
+    },
 }
 
 # For loop-back testing (currently on the breadboard):
@@ -127,9 +136,9 @@ class TestAnalogSEM(unittest.TestCase):
                 cls.counter = child
 
         # Compute the fast TTL masks, for the waveform checks
-        cls.pixel_bit = sum(1 << c for c in CONFIG_SCANNER["pixel_ttl"])
-        cls.line_bit = sum(1 << c for c in CONFIG_SCANNER["line_ttl"])
-        cls.frame_bit = sum(1 << c for c in CONFIG_SCANNER["frame_ttl"])
+        cls.pixel_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["pixel"]["ports"])
+        cls.line_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["line"]["ports"])
+        cls.frame_bit = sum(1 << c for c in CONFIG_SCANNER["image_ttl"]["frame"]["ports"])
 
     @classmethod
     def tearDownClass(cls) -> None:

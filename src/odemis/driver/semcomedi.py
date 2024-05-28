@@ -293,7 +293,7 @@ class SEMComedi(model.HwComponent):
             raise ValueError("SEMComedi device '%s' was not given a 'scanner' child" % device)
         self._scanner = Scanner(parent=self, daemon=daemon, **ckwargs)
         self.children.value.add(self._scanner)
-        # for scanner.newPosition
+        # for scanner.newPixel
         self._new_position_thread = None
         self._new_position_thread_pipe = [] # list to communicate with the current thread
 
@@ -987,8 +987,8 @@ class SEMComedi(model.HwComponent):
         # We write at the given period, and read "osr" samples for each pixel
         nrchans = len(rchannels)
 
-        if dpr > 1 or (self._scanner.newPosition.hasListeners() and period >= 1e-3):
-            # if the newPosition event is used, prefer the per pixel write/read
+        if dpr > 1 or (self._scanner.newPixel.hasListeners() and period >= 1e-3):
+            # if the newPixel event is used, prefer the per pixel write/read
             # as it's much more precise (albeit a bit slower). It just needs to
             # not be too costly (1 ms should be higher than the setup cost).
             force_per_pixel = True
@@ -1033,9 +1033,9 @@ class SEMComedi(model.HwComponent):
         Implementation of write_read_2d_data_raw by reading the input data n
           lines at a time.
         """
-        if self._scanner.newPosition.hasListeners() and margin > 0:
+        if self._scanner.newPixel.hasListeners() and margin > 0:
             # we don't support margin detection on multiple lines for
-            # newPosition trigger.
+            # newPixel trigger.
             maxlines = 1
 
         logging.debug(u"Reading %d lines at a time: %d samples/read every %g µs",
@@ -1246,7 +1246,7 @@ class SEMComedi(model.HwComponent):
         np_to_report = nwscans - settling_samples
         shift_report = settling_samples
         if settling_samples == 0:  # indicate a new ebeam position
-            self._scanner.newPosition.notify()
+            self._scanner.newPixel.notify()
             np_to_report -= 1
             shift_report += 1
 
@@ -1285,7 +1285,7 @@ class SEMComedi(model.HwComponent):
         data (2D numpy.ndarray of int): array to write (raw values)
           first dimension is along the time, second is along the channels
         settling_samples (int): number of first write samples used for the
-          settling of the beam, and so don't need to trigger newPosition
+          settling of the beam, and so don't need to trigger newPixel
         rest (boolean): if True, will add one more write to set to rest position
         return (2D numpy.array with dtype=device type)
             the raw data read (first dimension is data.shape[0] * osr) for each
@@ -1363,7 +1363,7 @@ class SEMComedi(model.HwComponent):
         shift_report = settling_samples
         if settling_samples == 0:
             # no margin => indicate a new ebeam position right now
-            self._scanner.newPosition.notify()
+            self._scanner.newPixel.notify()
             np_to_report -= 1
             shift_report += 1
 
@@ -1556,7 +1556,7 @@ class SEMComedi(model.HwComponent):
 
     def _start_new_position_notifier(self, n, start, period):
         """
-        Notify the newPosition Event n times with the given period.
+        Notify the newPixel Event n times with the given period.
         n (0 <= int): number of event notifications
         start (float): time for the first event (should be in the future)
         period (float): period between two events
@@ -1567,7 +1567,7 @@ class SEMComedi(model.HwComponent):
          separate thread).
         """
         # no need if no one's listening
-        if not self._scanner.newPosition.hasListeners():
+        if not self._scanner.newPixel.hasListeners():
             return
 
         if n <= 0:
@@ -1576,7 +1576,7 @@ class SEMComedi(model.HwComponent):
         if period < 10e-6:
             # don't even try: that's the time it'd take to have just one loop
             # doing nothing
-            logging.error(u"Cannot generate newPosition events at such a "
+            logging.error(u"Cannot generate newPixel events at such a "
                           u"small period of %s µs", period * 1e6)
             return
 
@@ -1606,10 +1606,10 @@ class SEMComedi(model.HwComponent):
             if pipe: # put anything in the pipe and it will mean it has to stop
                 logging.debug("npnotifier received cancel message")
                 return
-            self._scanner.newPosition.notify()
+            self._scanner.newPixel.notify()
 
         if failures:
-            logging.warning(u"Failed to trigger newPosition in time %d times, "
+            logging.warning(u"Failed to trigger newPixel in time %d times, "
                             u"last trigger was %g µs late.", failures, -left * 1e6)
 
     def _cancel_new_position_notifier(self):
@@ -2840,7 +2840,7 @@ class Scanner(model.Emitter):
         # event to allow another component to synchronize on the beginning of
         # a pixel position. Only sent during an actual pixel of a scan, not for
         # the beam settling time or when put to rest.
-        self.newPosition = model.Event()
+        self.newPixel = model.Event()
 
         self._prev_settings = [None, None, None, None] # resolution, scale, translation, margin
         self._scan_array = None # last scan array computed
