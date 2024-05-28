@@ -24,14 +24,17 @@ import unittest
 from unittest.case import skip
 from builtins import range
 
-logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG,
+                    format="%(asctime)s  %(levelname)-7s %(module)-15s: %(message)s",
+                    # force=True  # Overwrite the default logging set by importing other module (Py 3.8+)
+                    )
 
 # Export TEST_NOHW=1 to force using only the simulator and skipping test cases
 # needing real hardware
 TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 CLASS = nfpm.PM8742
-KWARGS = dict(name="test", role="fiber-align", address="autoip",
+KWARGS = dict(name="test", role="fiber-align", address="192.168.5.12",  # "autoip",
               axes=["x", "y"],
               stepsize=[33.e-9, 33.e-9],
               inverted=["x"])
@@ -91,23 +94,28 @@ class TestActuator(unittest.TestCase):
 #    @skip("faster")
     def test_simple(self):
         move = {'x': 0.1e-6}
-        self.dev.moveRel(move)
-        time.sleep(0.1) # wait for the move to finish
+        f = self.dev.moveRel(move)
+        time.sleep(0.1)  # wait for the move to finish
 
-        self.assertAlmostEqual(move["x"], self.dev.position.value["x"])
+        self.assertTrue(f.done())
+        self.assertAlmostEqual(self.orig_pos["x"] + move["x"], self.dev.position.value["x"])
+
+    def test_two_axes(self):
+        f = self.dev.moveRel({'x': 0.1e-6, 'y': 0.1e-6})
+        f.result()
 
     def test_sync(self):
         # For moves big enough, sync should always take more time than async
         delta = 0.0001 # s
 
-        move = {'x':100e-6}
+        move = {'x': 100e-6}
         start = time.time()
         f = self.dev.moveRel(move)
         dur_async = time.time() - start
         f.result()
         self.assertTrue(f.done())
 
-        move = {'x':-100e-6}
+        move = {'x': -100e-6}
         start = time.time()
         f = self.dev.moveRel(move)
         f.result() # wait
@@ -116,7 +124,7 @@ class TestActuator(unittest.TestCase):
 
         self.assertGreater(dur_sync, max(0, dur_async - delta), "Sync should take more time than async.")
 
-        move = {'x':0.1e-3}
+        move = {'x': 0.1e-3}
         f = self.dev.moveRel(move)
         # timeout = 0.001s should be too short for such a long move
         self.assertRaises(futures.TimeoutError, f.result, timeout=0.001)
@@ -134,21 +142,21 @@ class TestActuator(unittest.TestCase):
 
         f = self.dev.moveRel(move)
 
-        f.result() # wait
-        time.sleep(0.1) # make sure the listener has also received the info
+        f.result()  # wait
+        time.sleep(0.1)  # make sure the listener has also received the info
 
         # same, in the opposite direction
-        move = {'x':-1e-3}
+        move = {'x': -1e-3}
         self.direction = -1
         f = self.dev.moveRel(move)
-        f.result() # wait
+        f.result()  # wait
 
         self.dev.position.unsubscribe(self.pos_listener)
 
     def pos_listener(self, pos):
         diff_pos = pos["x"] - self.prev_pos["x"]
         if diff_pos == 0:
-            return # no update/change on X
+            return  # no update/change on X
 
         self.prev_pos = pos
 
@@ -168,13 +176,13 @@ class TestActuator(unittest.TestCase):
     def test_stop(self):
         self.dev.stop()
 
-        move = {'y':100e-6}
+        move = {'y': 100e-6}
         f = self.dev.moveRel(move)
         self.assertTrue(f.cancel())
         self.assertTrue(f.cancelled())
 
         # Try similar but with stop (should cancel every futures)
-        move = {'y':-100e-6}
+        move = {'y': -100e-6}
         f = self.dev.moveRel(move)
         self.dev.stop()
         time.sleep(0.01)
@@ -203,7 +211,7 @@ class TestActuator(unittest.TestCase):
     def test_cancel(self):
         # long moves
         move_forth = {'x': 0.1e-3}
-        move_back = {'x':-0.1e-3}
+        move_back = {'x': -0.1e-3}
         # test cancel during action
         f = self.dev.moveRel(move_forth)
         time.sleep(0.01) # to make sure the action is being handled

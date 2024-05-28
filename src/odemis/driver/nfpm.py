@@ -477,6 +477,15 @@ class PM8742(model.Actuator):
     def stop(self, axes=None):
         self._executor.cancel()
 
+        # To be sure, stop explicitly all the axes (requested)
+        if axes is None:
+            self.AbortMotion()
+        else:
+            # Abort motion doesn't support per axis, so use "soft" stop instead
+            for an in axes:
+                aid = self._name_to_axis[an]
+                self.StopMotion(aid)
+
     def _doMoveRel(self, future, pos):
         """
         Blocking and cancellable relative move
@@ -484,18 +493,14 @@ class PM8742(model.Actuator):
         pos (dict str -> float): axis name -> relative target position
         """
         with future._moving_lock:
-            end = 0 # expected end
-            moving_axes = set()
             for an, v in pos.items():
                 aid = self._name_to_axis[an]
-                moving_axes.add(aid)
                 steps = int(round(v / self._stepsize[aid - 1]))
                 self.MoveRel(aid, steps)
-                # compute expected end
+                # compute expected duration
                 dur = abs(steps) * self._stepsize[aid - 1] / self.speed.value[an]
-                end = max(time.time() + dur, end)
+                self._waitEndMove(future, an, aid, dur)
 
-            self._waitEndMove(future, moving_axes, end)
         logging.debug("move successfully completed")
 
     def _doMoveAbs(self, future, pos):
@@ -505,50 +510,42 @@ class PM8742(model.Actuator):
         pos (dict str -> float): axis name -> absolute target position
         """
         with future._moving_lock:
-            end = 0 # expected end
+            end = 0  # expected end
             old_pos = self._applyInversion(self.position.value)
-            moving_axes = set()
+
+            # Can only move one axis at a time (at least, the new "Tiva" version aka v3)
             for an, v in pos.items():
                 aid = self._name_to_axis[an]
-                moving_axes.add(aid)
                 steps = int(round(v / self._stepsize[aid - 1]))
                 self.MoveAbs(aid, steps)
-                # compute expected end
+                # compute expected duration
                 dur = abs(v - old_pos[an]) / self.speed.value[an]
-                end = max(time.time() + dur, end)
+                self._waitEndMove(future, an, aid, dur)
 
-            self._waitEndMove(future, moving_axes, end)
         logging.debug("move successfully completed")
 
-    def _waitEndMove(self, future, axes, end=0):
+    def _waitEndMove(self, future, axis_name, axis_id, duration):
         """
         Wait until all the given axes are finished moving, or a request to
         stop has been received.
         future (Future): the future it handles
         axes (set of int): the axes IDs to check
-        end (float): expected end time
+        end (float): expected move duration
         raise:
             CancelledError: if cancelled before the end of the move
         """
-        moving_axes = set(axes)
-
-        last_upd = time.time()
-        last_axes = moving_axes.copy()
+        now = time.time()
+        end = now + duration
+        last_upd = now
         try:
             while not future._must_stop.is_set():
-                for aid in moving_axes.copy(): # need copy to remove during iteration
-                    if self.IsMotionDone(aid):
-                        moving_axes.discard(aid)
-                if not moving_axes:
-                    # no more axes to wait for
+                if self.IsMotionDone(axis_id):
                     break
 
                 # Update the position from time to time (10 Hz)
-                if time.time() - last_upd > 0.1 or last_axes != moving_axes:
-                    last_names = set(n for n, i in self._name_to_axis.items() if i in last_axes)
-                    self._updatePosition(last_names)
+                if time.time() - last_upd > 0.1:
+                    self._updatePosition(axis_name)
                     last_upd = time.time()
-                    last_axes = moving_axes.copy()
 
                 # Wait half of the time left (maximum 0.1 s)
                 left = end - time.time()
@@ -557,10 +554,8 @@ class PM8742(model.Actuator):
 
                 # TODO: timeout if really too long
             else:
-                logging.debug("Move of axes %s cancelled before the end", axes)
-                # stop all axes still moving them
-                for i in moving_axes:
-                    self.StopMotion(i)
+                logging.debug("Move of axis %s cancelled before the end", axis_name)
+                self.StopMotion(axis_id)
                 future._was_stopped = True
                 raise CancelledError()
         except Exception:
@@ -569,7 +564,7 @@ class PM8742(model.Actuator):
             # Did everything really finished fine?
             self._checkError()
         finally:
-            self._updatePosition() # update (all axes) with final position
+            self._updatePosition(axis_name)  # update with final position
 
     def _cancelCurrentMove(self, future):
         """
@@ -691,6 +686,7 @@ class PM8742(model.Actuator):
         Scan the network for all the responding new focus controllers
         Note: it actually calls a separate executable because it relies on opening
           a network port which needs special privileges.
+        Note: it doesn't seem to work with the v3 hardware (Tiva).
         return (list of (str, str, int)): hostname, ip address, and port number
         """
         # Run the separate program via authbind
@@ -766,8 +762,8 @@ class IPAccesser(object):
     def sendOrderCommand(self, cmd, val=b"", axis=None):
         """
         Sends one command, and don't expect any reply
-        cmd (str): command to send
-        val (str): value to send (if any)
+        cmd (bytes): command to send
+        val (bytes): value to send (if any)
         axis (1<=int<=4 or None): axis number
         raises:
             IOError: if problem with sending/receiving data over the connection
@@ -791,8 +787,8 @@ class IPAccesser(object):
     def sendQueryCommand(self, cmd, val=b"", axis=None):
         """
         Sends one command, and don't expect any reply
-        cmd (byte str): command to send, without ?
-        val (byte str): value to send (if any)
+        cmd (bytes): command to send, without ?
+        val (bytes): value to send (if any)
         axis (1<=int<=4 or None): axis number
         raises:
             IOError: if problem with sending/receiving data over the connection
