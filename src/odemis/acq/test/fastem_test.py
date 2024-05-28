@@ -704,7 +704,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                           self.se_detector, self.ebeam_focus,
                                           roa, path=None, pre_calibrations=None,
                                           save_full_cells=False, future=None,
-                                          settings_obs=None)
+                                          settings_obs=None, spot_grid_thresh=0.5)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -788,7 +788,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                           self.se_detector, self.ebeam_focus,
                                           roa, path=None, pre_calibrations=None,
                                           save_full_cells=False, future=None,
-                                          settings_obs=None)
+                                          settings_obs=None, spot_grid_thresh=0.5)
 
             # Set the _pos_first_tile, which would normally be set in the run function.
             task._pos_first_tile = task.get_pos_first_tile()
@@ -868,7 +868,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.se_detector, self.ebeam_focus,
                                       roa, path=None, pre_calibrations=None,
                                       save_full_cells=True, future=None,
-                                      settings_obs=None)
+                                      settings_obs=None, spot_grid_thresh=0.5)
 
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
@@ -945,7 +945,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
                                       roa, path=None, pre_calibrations=None,
-                                      save_full_cells=False, future=None, settings_obs=None)
+                                      save_full_cells=False, future=None, settings_obs=None, spot_grid_thresh=0.5)
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
 
@@ -999,7 +999,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
                                       roa, path=None, pre_calibrations=None,
-                                      save_full_cells=False, future=None, settings_obs=None)
+                                      save_full_cells=False, future=None, settings_obs=None, spot_grid_thresh=0.5)
 
         self.descanner.updateMetadata({model.MD_SCAN_GAIN: (5000, 5000)})
 
@@ -1054,7 +1054,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                           self.se_detector, self.ebeam_focus,
                                           roa, path=None, pre_calibrations=None,
                                           save_full_cells=False, future=None,
-                                          settings_obs=None)
+                                          settings_obs=None, spot_grid_thresh=0.5)
 
             pos_first_tile_actual = task.get_pos_first_tile()
 
@@ -1082,7 +1082,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.se_detector, self.ebeam_focus,
                                       roa, path=None, pre_calibrations=None,
                                       save_full_cells=False, future=None,
-                                      settings_obs=settings_obs)
+                                      settings_obs=settings_obs, spot_grid_thresh=0.5)
 
         # Test that _create_acquisition_metadata() sets the settings from the selection
         acquisition_md = task._create_acquisition_metadata()
@@ -1123,7 +1123,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=False, future=Mock(),
-                                      settings_obs=settings_obs)
+                                      settings_obs=settings_obs, spot_grid_thresh=0.5)
         data, err = task.run()
         self.assertEqual(data[(0, 0)].shape, (6400, 6400))
 
@@ -1134,7 +1134,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=True, future=Mock(),
-                                      settings_obs=settings_obs)
+                                      settings_obs=settings_obs, spot_grid_thresh=0.5)
         data, err = task.run()
         self.assertEqual(data[(0, 0)].shape, (7200, 7200))
 
@@ -1241,7 +1241,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
                                       self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=False, future=Mock(),
-                                      settings_obs=settings_obs)
+                                      settings_obs=settings_obs, spot_grid_thresh=0.5)
 
         # image_received should be called as a side effect of calling data.next, this signals that the data is received
         def _image_received(*args, **kwargs):
@@ -1260,7 +1260,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
                                       self.se_detector, self.ebeam_focus,
                                       roa, path="test-path", pre_calibrations=None,
                                       save_full_cells=True, future=Mock(),
-                                      settings_obs=settings_obs)
+                                      settings_obs=settings_obs, spot_grid_thresh=0.5)
 
         data, err = task.run()
         self.assertEqual(data[(0, 0)].shape, (7200, 7200))

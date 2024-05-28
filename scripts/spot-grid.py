@@ -22,6 +22,7 @@ import wx.lib.wxcairo
 from odemis import dataio, model
 from odemis.cli.video_displayer import VideoDisplayer
 from odemis.driver import ueye
+from odemis.gui.conf.file import AcquisitionConfig
 from odemis.util.driver import BACKEND_RUNNING, get_backend_status
 from odemis.util.registration import estimate_grid_orientation_from_img, unit_gridpoints
 from odemis.util.transform import (
@@ -52,6 +53,7 @@ class VideoDisplayerGrid(VideoDisplayer):
         """
         self.app = ImageWindowApp(title, size, pixel_size)
         self.gridsize = (8, 8) if gridsize is None else gridsize
+        self.acqui_conf = AcquisitionConfig()
 
     def new_image(self, data):
         """
@@ -65,7 +67,7 @@ class VideoDisplayerGrid(VideoDisplayer):
                 self.gridsize,
                 AffineTransform,
                 sigma=1.45,
-                threshold_rel=0.5,
+                threshold_rel=self.acqui_conf.spot_grid_threshold,
             )
             grid = unit_gridpoints(self.gridsize, mode="ji")
             self.app.spots = tform_ji.apply(grid)
