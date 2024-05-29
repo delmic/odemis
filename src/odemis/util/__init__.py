@@ -26,6 +26,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import inspect
 import itertools
+import json
 import logging
 import math
 import queue
@@ -38,7 +39,7 @@ import weakref
 from collections.abc import Mapping
 from concurrent.futures import CancelledError
 from functools import wraps
-from typing import Iterable, Tuple, TypeVar
+from typing import Iterable, Tuple, TypeVar, Any, Optional
 
 import numpy
 from decorator import decorator
@@ -844,3 +845,35 @@ def project_point_on_line(
         x_projected = (point[0] + line_slope * (point[1] - line_intercept)) / (1 + line_slope**2)
         y_projected = line_slope * x_projected + line_intercept
     return (x_projected, y_projected)
+
+
+def read_json(file_path: str) -> Optional[Any]:
+    """
+    Read a json file.
+
+    :param file_path: The absolute file path of the json file.
+
+    """
+    try:
+        with open(file_path, "r") as file:
+            data = json.load(file)
+        return data
+    except FileNotFoundError:
+        logging.info("The json file at %s was not found.", file_path)
+    except Exception:
+        logging.exception("Failed to load json file at %s", file_path)
+
+
+def write_json(file_path: str, data: Any):
+    """
+    Write data to a json file.
+
+    :param file_path: The absolute file path of the json file.
+    :param data: The data which needs to be dumped.
+
+    """
+    try:
+        with open(file_path, "w") as file:
+            json.dump(data, file, indent=2)
+    except Exception:
+        logging.exception("Failed to write data to json file at %s", file_path)
