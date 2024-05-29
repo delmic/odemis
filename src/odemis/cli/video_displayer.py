@@ -104,8 +104,8 @@ class VideoDisplayer(object):
                 self.app.magn = disp_size[0] / rgb.shape[1]
             else:
                 self.app.magn = disp_size[1] / rgb.shape[0]
-            self.app.img.Rescale(rgb.shape[1] * self.app.magn,
-                                 rgb.shape[0] * self.app.magn,
+            self.app.img.Rescale(int(rgb.shape[1] * self.app.magn),
+                                 int(rgb.shape[0] * self.app.magn),
                                  rgb.shape[2])
         else:
             self.app.magn = 1
