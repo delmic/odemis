@@ -6,3 +6,4 @@ Exec=odemis-bug-report
 Terminal=false
 Type=Application
 Icon=dialog-warning
+Categories=System;
