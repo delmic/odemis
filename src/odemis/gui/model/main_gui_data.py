@@ -495,10 +495,14 @@ class CryoMainGUIData(MainGUIData):
 
 
 class Sample:
+    """Class representing a sample carrier / holder for FastEM."""
     def __init__(self):
+        self.name: str = ""
+        self.type: str = ""
+        # Key is scintillator number, value is the position
         self.positions: Dict[int, Tuple[float, float]] = {}
+        # Key is scintillator number, value is the size
         self.sizes: Dict[int, Tuple[float, float]] = {}
-        self.layout: List[List[Optional[int]]] = []
 
 
 class FastEMMainGUIData(MainGUIData):
@@ -541,23 +545,33 @@ class FastEMMainGUIData(MainGUIData):
             raise TypeError(
                 "Layout could not be determined from stage's MD_SAMPLE_CENTERS metadata,"
                 "check if the sample centers values are correct.")
+        self.current_sample = ""
         self.samples: Dict[str, Sample] = {}
         for row_idx, row in enumerate(layout):
             for column_idx, name in enumerate(row):
                 try:
-                    scintillator_number = int(name.split()[-1])
+                    parts = name.split(";")
+                    sample_info = parts[1].strip()
+                    scintillator_number = int(sample_info.split()[-1])
                 except Exception:
                     raise ValueError(
-                        "Name of the sample must have a number in second place, e.g. 'SAMPLE 1'")
+                        "Name of the sample must be of the format, e.g. 'SAMPLE_TYPE; SAMPLE 1'")
                 layout[row_idx][column_idx] = scintillator_number
-        sizes = {}
         for name, size in sample_sizes.items():
             try:
-                scintillator_number = int(name.split()[-1])
+                parts = name.split(";")
+                sample_type = parts[0].strip()
+                sample_info = parts[1].strip()
+                scintillator_number = int(sample_info.split()[-1])
             except Exception:
                 raise ValueError(
-                    "Name of the sample must have a number in second place, e.g. 'SAMPLE 1'")
-            sizes[scintillator_number] = size
+                    "Name of the sample must be of the format, e.g. 'SAMPLE_TYPE; SAMPLE 1'")
+            if sample_type not in self.samples:
+                self.samples[sample_type] = Sample()
+                self.samples[sample_type].name = name
+                self.samples[sample_type].type = sample_type
+            self.samples[sample_type].sizes[scintillator_number] = size
+        self.current_sample = list(self.samples.keys())[0]
         # SAMPLE_BACKGROUND contains the minx, miny, maxx, maxy positions of rectangles for
         # background from bottom-left position with a sample
         if model.MD_SAMPLE_BACKGROUND not in md:
@@ -570,15 +584,22 @@ class FastEMMainGUIData(MainGUIData):
         #  * .scintillator_layout (list of list of int): 2D layout of scintillator grid
         #  * .background (list of ltrb tuples): coordinates for background overlay,
         #    rectangles can be displayed in world overlay as grey bars, e.g. for simulating a sample carrier
-        self.scintillator_sizes = sizes
-        self.scintillator_positions = {}
         for name, center in centers.items():
             try:
-                scintillator_number = int(name.split()[-1])
+                parts = name.split(";")
+                sample_type = parts[0].strip()
+                sample_info = parts[1].strip()
+                scintillator_number = int(sample_info.split()[-1])
             except Exception:
                 raise ValueError(
-                    "Name of the sample must have a number in second place, e.g. 'SAMPLE 1'")
-            self.scintillator_positions[scintillator_number] = (minx + center[0], miny + center[1])
+                    "Name of the sample must be of the format, e.g. 'SAMPLE_TYPE; SAMPLE 1'")
+            if sample_type not in self.samples:
+                self.samples[sample_type] = Sample()
+                self.samples[sample_type].name = name
+                self.samples[sample_type].type = sample_type
+            self.samples[sample_type].positions[scintillator_number] = (minx + center[0], miny + center[1])
+        self.scintillator_sizes = self.samples[self.current_sample].sizes
+        self.scintillator_positions = self.samples[self.current_sample].positions
         self.scintillator_layout = layout
         self.background = []
         for rect in background:
