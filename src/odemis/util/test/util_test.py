@@ -21,6 +21,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import inspect
 from functools import partial
+import json
 import os
 import numpy.random
 import odemis
@@ -29,8 +30,9 @@ import logging
 import math
 from odemis.model import CancellableFuture
 from odemis.util import limit_invocation, TimeoutError, executeAsyncTask, \
-    perpendicular_distance, to_str_escape, timeout
+    perpendicular_distance, to_str_escape, timeout, read_json, write_json
 import time
+import tempfile
 import unittest
 import weakref
 
@@ -737,6 +739,99 @@ class LineFunctionsTestCase(unittest.TestCase):
 
         # Test horizontal line
         self.assertTupleEqual(util.project_point_on_line((2, 3), 0.0, 1.0), (2.0, 1.0))
+
+
+class TestJsonUtils(unittest.TestCase):
+
+    def test_read_json_success(self):
+        # Create a temporary file with JSON content
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file.write(b'{"key": "value"}')
+        temp_file.close()
+
+        # Read the JSON file
+        result = read_json(temp_file.name)
+
+        # Check if the result matches the expected output
+        self.assertEqual(result, {"key": "value"})
+
+        # Clean up the temporary file
+        os.remove(temp_file.name)
+
+    def test_read_json_file_not_found(self):
+        with self.assertLogs(level="INFO") as log:
+            # Try reading a non-existent file
+            result = read_json("non_existent_file.json")
+
+            # Check if the result is None
+            self.assertIsNone(result)
+
+            # Check if the log contains the expected info message
+            self.assertTrue(
+                any(
+                    "The json file at non_existent_file.json was not found." in message
+                    for message in log.output
+                )
+            )
+
+    def test_read_json_invalid_json(self):
+        # Create a temporary file with invalid JSON content
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file.write(b'{"key": "value"')  # Invalid JSON
+        temp_file.close()
+
+        with self.assertLogs(level="ERROR") as log:
+            # Read the JSON file
+            result = read_json(temp_file.name)
+
+            # Check if the result is None
+            self.assertIsNone(result)
+
+            # Check if the log contains the expected error message
+            self.assertTrue(
+                any("Failed to load json file at" in message for message in log.output)
+            )
+
+        # Clean up the temporary file
+        os.remove(temp_file.name)
+
+    def test_write_json_success(self):
+        # Create a temporary file
+        temp_file = tempfile.NamedTemporaryFile(delete=False)
+        temp_file.close()
+
+        # Data to write to the JSON file
+        data = {"key": "value"}
+
+        # Write the data to the JSON file
+        write_json(temp_file.name, data)
+
+        # Read the content back to check if it was written correctly
+        with open(temp_file.name, "r") as file:
+            content = json.load(file)
+
+        # Check if the content matches the original data
+        self.assertEqual(content, data)
+
+        # Clean up the temporary file
+        os.remove(temp_file.name)
+
+    def test_write_json_failure(self):
+        # Data to write to the JSON file
+        data = {"key": "value"}
+
+        with self.assertLogs(level="ERROR") as log:
+            # Try writing to a file in a non-existent directory
+            write_json("/non_existent_directory/file.json", data)
+
+            # Check if the log contains the expected error message
+            self.assertTrue(
+                any(
+                    "Failed to write data to json file" in message
+                    for message in log.output
+                )
+            )
+
 
 if __name__ == "__main__":
     unittest.main()
