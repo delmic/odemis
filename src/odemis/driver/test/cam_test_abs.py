@@ -291,6 +291,37 @@ class VirtualTestCam(metaclass=ABCMeta):
 
         self.assertEqual(self.left, 0)
 
+    def test_acquire_flow_no_drop(self):
+        """
+        Test fast acquisition without dropping frames
+        """
+        if not model.hasVA(self.camera, "dropOldFrames"):
+            self.skipTest("Camera doesn't support dropping old frames")
+
+        self.camera.dropOldFrames.value = False
+
+        # Reduce the resolution to speed up the acquisition
+        res = self.camera.resolution.value
+        self.camera.resolution.value = self.camera.resolution.clip((1, res[1]))
+        self.size = self.camera.resolution.value
+        logging.debug("Resolution set to %s", self.size)
+
+        # As fast as possible
+        exposure = self.camera.exposureTime.range[0]
+        self.camera.exposureTime.value = exposure
+
+        number = 100
+        self.left = number
+
+        self.camera.data.subscribe(self.receive_image)
+        for i in range(number):
+            # end early if it's already finished
+            if self.left == 0:
+                break
+            time.sleep(1 + exposure) # 1s per image should be more than enough in any case
+
+        self.assertEqual(self.left, 0)
+
 #    @unittest.skip("simple")
     def test_data_flow_with_va(self):
         exposure = 1.0 # long enough to be sure we can change VAs before the end
