@@ -22,24 +22,30 @@ If not, see http://www.gnu.org/licenses/.
 # to be used simultaneously with other signals such as SE/CL
 
 import logging
+import os
+import queue
 import threading
 import time
-from typing import Any
+import weakref
+from typing import Any, Optional
 
 import asyncio
 from asyncua import Client, Server, Node, ua
 from asyncua.common.methods import uamethod
 from asyncua.common.statemachine import State, StateMachine, Transition
 import numpy
+from scipy import ndimage
 
 import functions
 from constants import *
-from odemis import model
-from odemis.model import Detector
+from odemis import model, dataio
+from odemis.model import Detector, oneway
+from odemis.util import img
 
 
 class MightyEbic(Detector):
-    def __init__(self, name: str, role: str, device: str, port: int, channel: int, url: str, namespace: str, **kwargs):
+    def __init__(self, name: str, role: str, device: str, port: int,
+                 channel: int, url: str, namespace: str, **kwargs):
         """
         Initialize the EBIC controller
         :param name:
@@ -66,15 +72,42 @@ class MightyEbic(Detector):
         self.idx = None
         self.sub_handler = SubHandler()
         self._state = "Disconnected"
-        self._translation = (0, 0)
+        #self._translation = (0, 0)
         self._binning = (1, 1)
-        self._resolution = max_res_hw
+        #self._resolution = max_res_hw
         #self.init_done = False
         self.t_opc_connection = None
         self._error_msg = None
         self._simserver = None
         self.scan_time = None
         self.dwell_time = None
+        self.fake_img = None
+        self.current_drift = 0
+
+        # fake image setup
+        if self.device == "fake":
+            image = "simsem-fake-output.h5"
+            # ensure relative path is from this file
+            if not os.path.isabs(image):
+                image = os.path.join(os.path.dirname(__file__), image)
+            converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
+            # just for simulation of the data stream
+            new_img = img.ensure2DImage(converter.read_data(image)[0])  # is now (2048, 2048) -> restrict to res
+            new_img = numpy.array(new_img)
+            self.fake_img = img.rescale_hq(new_img, max_res)
+
+
+        # The shape is just one point, the depth
+        idt = numpy.iinfo(self.fake_img.dtype)
+        data_depth = idt.max - idt.min + 1
+        self._shape = (data_depth,)  # only one point
+
+        # 8 or 16 bits image
+        if data_depth == 255:
+            bpp = 8
+        else:
+            bpp = 16
+        self.bpp = model.IntEnumerated(bpp, {8, 16})
 
         try:
             self._start_opcclient_thread()
@@ -89,7 +122,7 @@ class MightyEbic(Detector):
         # higher spp will force a higher dwell_time
         self.oversampling = model.IntEnumerated(0, {0, 2, 4, 8, 16, 32, 64}, setter=self.on_oversampling_change)
         #self.oversampling.subscribe(self.on_oversampling_change)
-        self.binning = model.ResolutionVA((1, 1), ((1, 1), (1, 1)))
+        self.binning = model.ResolutionVA((1, 1), ((1, 1), (16, 16)))
         # the resolution of the scanner of the EBIC controller
         self.resolution = model.ResolutionVA(max_res, (min_res, max_res), unit="px")
         self.repetition = model.TupleVA((1, 1), unit="px", setter=self.on_repetition_change)
@@ -247,42 +280,18 @@ class MightyEbic(Detector):
         # TODO: only assign if state change = success
         self._state = req_state
 
-    def start_generate(self):
+    def start_acquire(self, callback):
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
             self._acquisition_thread = threading.Thread(target=self._acquire_thread,
-                    name="EBIC acquire flow thread")
+                                                        name="Simulated acquire flow thread",
+                                                        args=(callback,))
             self._acquisition_thread.start()
 
-    def stop_generate(self):
+    def stop_acquire(self):
         with self._acquisition_lock:
             with self._acquisition_init_lock:
                 self._acquisition_must_stop.set()
-
-    def _acquire_thread(self):
-        """
-        Thread that simulates the SEM acquisition. It calculates and updates the
-        center (e-beam) position based on the translation, imitates the delay according
-        to the dwell time and resolution and provides the new generated output to
-        the Dataflow.
-        """
-        try:
-            while not self._acquisition_must_stop.is_set():
-                dwelltime = self.parent._scanner.dwellTime.value
-                resolution = self.parent._scanner.resolution.value
-                duration = numpy.prod(resolution) * dwelltime
-                if self._acquisition_must_stop.wait(duration):
-                    break
-                # TODO: it's not a very proper simulation for multiple detectors,
-                # as in Odemis the convention for SEM is that the ebeam waits
-                # for _all_ the detectors to be ready before scanning.
-                self.data._waitSync()
-                #callback(self._simulate_image())
-        except Exception:
-            logging.exception("Unexpected failure during image acquisition")
-        finally:
-            logging.debug("Acquisition thread closed")
-            self._acquisition_must_stop.clear()
 
     def _wait_acquisition_stopped(self):
         """
@@ -298,6 +307,128 @@ class MightyEbic(Detector):
                 # Now let's hope everything is back to normal...
             # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
+
+    def _acquire_thread(self, callback):
+        """
+        Thread that simulates the SEM acquisition. It calculates and updates the
+        center (e-beam) position based on the translation, imitates the delay according
+        to the dwell time and resolution and provides the new generated output to
+        the Dataflow.
+        """
+        try:
+            while not self._acquisition_must_stop.is_set():
+                dwelltime = self.dwell_time.value
+                resolution = self.resolution.value
+                duration = numpy.prod(resolution) * dwelltime
+                if self._acquisition_must_stop.wait(duration):
+                    break
+                # TODO: it's not a very proper simulation for multiple detectors,
+                # as in Odemis the convention for SEM is that the ebeam waits
+                # for _all_ the detectors to be ready before scanning.
+                self.data._waitSync()
+                callback(self._simulate_image())
+        except Exception:
+            logging.exception("Unexpected failure during image acquisition")
+        finally:
+            logging.debug("Acquisition thread closed")
+            self._acquisition_must_stop.clear()
+
+    def _simulate_image(self):
+        """
+        Generates the fake output based on the translation, resolution and
+        current drift.
+        """
+        metadata = self._metadata.copy()
+        scanner = self.parent._scanner
+        metadata.update(scanner._metadata)
+        metadata.update(self._metadata)
+
+        with self._acquisition_init_lock:
+            logging.debug("Simulating an image")
+            pxs = scanner.pixelSize.value  # m/px
+
+            pxs_pos = scanner.translation.value
+            scale = scanner.scale.value
+            res = scanner.resolution.value
+            shi = scanner.shift.value
+
+            phy_pos = metadata.get(model.MD_POS, (0, 0))
+            trans = scanner.pixelToPhy(pxs_pos)
+            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+
+            shape = self.fake_img.shape
+            # Simulate shift and drift
+            center = (shape[1] / 2 - shi[0] / pxs[0] - self.current_drift,
+                      shape[0] / 2 - shi[1] / pxs[1] + self.current_drift)
+
+            # First and last index (eg, 0 -> 255)
+            ltrb = [center[0] + pxs_pos[0] - (res[0] / 2) * scale[0],
+                    center[1] + pxs_pos[1] - (res[1] / 2) * scale[1],
+                    center[0] + pxs_pos[0] + ((res[0] / 2) - 1) * scale[0],
+                    center[1] + pxs_pos[1] + ((res[1] / 2) - 1) * scale[1]
+                    ]
+            # If the shift caused the image to go out of bounds, limit it
+            if ltrb[0] < 0:
+                ltrb[0] = 0
+            elif ltrb[2] > shape[1] - 1:
+                ltrb[0] -= ltrb[2] - (shape[1] - 1)
+            if ltrb[1] < 0:
+                ltrb[1] = 0
+            elif ltrb[3] > shape[0] - 1:
+                ltrb[1] -= ltrb[3] - (shape[0] - 1)
+            assert(ltrb[0] >= 0 and ltrb[1] >= 0)
+
+            # compute each row and column that will be included
+            coord = ([int(round(ltrb[0] + i * scale[0])) for i in range(res[0])],
+                     [int(round(ltrb[1] + i * scale[1])) for i in range(res[1])])
+            sim_img = self.fake_img[numpy.ix_(coord[1], coord[0])] # copy
+
+            # reduce image depth if requested
+            bpp = self.bpp.value
+            if bpp < 16:
+                mind, maxd = sim_img.min(), sim_img.max()
+                maxf = 2 ** bpp - 1
+                b = maxf / max(1, (maxd - mind))
+                # Multiply by a float and drop to the original dtype
+                numpy.multiply(sim_img - mind, b, out=sim_img, casting="unsafe")
+                if bpp <= 8:
+                    sim_img = sim_img.astype(numpy.uint8)
+
+            metadata[model.MD_BPP] = bpp
+
+            if self.parent._focus:
+                # apply the defocus
+                pos = self.parent._focus.position.value['z']
+                dist = abs(pos - self.parent._focus._good_focus) * 1e4
+                sim_img = ndimage.gaussian_filter(sim_img, sigma=dist)
+
+            if not scanner.power.value:
+                sim_img[:] = 0
+            elif scanner.blanker.value:  # None (auto) and False (unblank) are handled the same here
+                # Leave a tiny bit of signal
+                numpy.multiply(sim_img, 0.001, out=sim_img, casting="unsafe")
+
+            # update fake output metadata
+            metadata[model.MD_POS] = updated_phy_pos
+            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
+            metadata[model.MD_ACQ_DATE] = time.time()
+            metadata[model.MD_ROTATION] = scanner.rotation.value
+            metadata[model.MD_DWELL_TIME] = scanner.dwellTime.value
+            metadata[model.MD_EBEAM_CURRENT] = scanner.probeCurrent.value
+            metadata[model.MD_EBEAM_VOLTAGE] = scanner.accelVoltage.value
+            return model.DataArray(sim_img, metadata)
+
+    # def _update_drift(self):
+    #     """
+    #     Periodically updates drift according to drift_factor and drift_period.
+    #     """
+    #     drift = self.current_drift + random.random() * self.drift_factor
+    #     if abs(drift) >= self.drift_bound:
+    #         # Make it bounce back
+    #         drift = math.copysign(1, drift) * (2 * self.drift_bound - abs(drift))
+    #         self.drift_factor = -self.drift_factor
+    #
+    #     self.current_drift = drift
 
     def get_dwell_time(self, OS=0, CH: int = 2, samples: int = 1, delay: float = 5e-8, trigger: bool = True) -> int:
         """Gets the dwell time of each pixel based on Channels, samples, delay and oversampling.
@@ -540,19 +671,67 @@ class MightyEbicSimulator:
 class EBICDataFlow(model.DataFlow):
     def __init__(self, detector):
         """
-        detector (Detector): the detector that the dataflow corresponds to
+        detector (semcomedi.Detector): the detector that the dataflow corresponds to
+        sem (semcomedi.SEMComedi): the SEM
         """
         model.DataFlow.__init__(self)
-        self._detector = detector
+        self.component = weakref.ref(detector)
+
         self._sync_event = None  # event to be synchronised on, or None
         self._evtq = None  # a Queue to store received events (= float, time of the event)
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
-        self._detector.start_generate()
+        try:
+            self.component().start_acquire(self.notify)
+        except ReferenceError:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            pass
 
     def stop_generate(self):
-        self._detector.stop_generate()
+        try:
+            self.component().stop_acquire()
+            # Note that after that acquisition might still go on for a short time
+        except ReferenceError:
+            # sem/component has been deleted, it's all fine, we'll be GC'd soon
+            pass
+
+    def synchronizedOn(self, event):
+        """
+        Synchronize the acquisition on the given event. Every time the event is
+          triggered, the scanner will start a new acquisition/scan.
+          The DataFlow can be synchronized only with one Event at a time.
+          However each DataFlow can be synchronized, separately. The scan will
+          only start once each active DataFlow has received an event.
+        event (model.Event or None): event to synchronize with. Use None to
+          disable synchronization.
+        """
+        super().synchronizedOn(event)
+        if self._sync_event == event:
+            return
+
+        if self._sync_event:
+            self._sync_event.unsubscribe(self)
+            if not event:
+                self._evtq.put(None)  # in case it was waiting for this event
+
+        self._sync_event = event
+        if self._sync_event:
+            # if the df is synchronized, the subscribers probably don't want to
+            # skip some data
+            self._evtq = queue.Queue()  # to be sure it's empty
+            self._sync_event.subscribe(self)
+
+    @oneway
+    def onEvent(self):
+        """
+        Called by the Event when it is triggered
+        """
+        if not self._evtq.empty():
+            logging.warning("Received synchronization event but already %d queued",
+                            self._evtq.qsize())
+
+        self._evtq.put(time.time())
 
     def _waitSync(self):
         """
