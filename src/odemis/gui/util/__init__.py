@@ -180,18 +180,11 @@ else:
 
 # Path functions
 
-def get_home_folder():
+def get_home_folder() -> str:
     """ Return the home directory of the user running the Odemis GUI
+    Note: it guarantees that the folder exists
     """
-    # fall-back to HOME
-    if sys.platform.startswith('linux'):
-        folder = os.path.expanduser(u"~")
-    elif sys.platform.startswith('win32'):
-        # expanduser(u) fails with non-ASCII usernames in Python2,
-        # see https://bugs.python.org/issue13207
-        # Import functions here because wintypes in ctypes library cannot be opened in linux
-        from odemis.gui.util.winknownpaths import get_path, FOLDERID
-        folder = get_path(FOLDERID.Profile)
+    folder = os.path.expanduser("~")
     if os.path.isdir(folder):
         return folder
 
@@ -199,9 +192,9 @@ def get_home_folder():
     return os.getcwd()
 
 
-def get_picture_folder():
+def get_picture_folder() -> str:
     """
-    return (unicode): a full path to the "Picture" user folder.
+    return: a full path to the "Picture" user folder.
     It tries to always return an existing folder.
     """
     if sys.platform.startswith('linux'):
@@ -217,8 +210,6 @@ def get_picture_folder():
             return folder
         # drop to default
     elif sys.platform.startswith('win32'):
-        # expanduser(u) fails with non-ASCII usernames in Python2,
-        # see https://bugs.python.org/issue13207
         # Import functions here because wintypes in ctypes library cannot be opened in linux
         from odemis.gui.util.winknownpaths import get_path, FOLDERID
         try:
@@ -230,12 +221,7 @@ def get_picture_folder():
         logging.warning("Platform not supported for picture folder")
 
     # fall-back to HOME
-    folder = os.path.expanduser(u"~")
-    if os.path.isdir(folder):
-        return folder
-
-    # last resort: current working directory should always be existing
-    return os.getcwd()
+    return get_home_folder()
 
 
 def formats_to_wildcards(formats2ext, include_all=False, include_any=False, suffix=" files"):
