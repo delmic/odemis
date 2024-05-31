@@ -2483,7 +2483,14 @@ class Stage(model.Actuator):
                             logging.debug("Waiting a little longer as position has not updated fully: %s != %s",
                                           current_pos, target_pos)
                     else:
-                        logging.debug("Waiting for position to update: %s == %s (for some axes)",
+                        if isNearPosition(current_pos=current_pos, target_position=target_pos,
+                                                          axes=axes_to_check, rot_axes=rotational_axes_to_check,
+                                                          atol_linear=tol_linear, atol_rotation=tol_rotation):
+                            logging.debug("Current position %s has not changed, but it is already near the target"
+                                          " position %s. Skipping the check.", current_pos, target_pos)
+                            break
+                        else:
+                            logging.debug("Waiting for position to update: %s == %s (for some axes)",
                                       orig_pos, current_pos)
 
                     if time.time() > expected_end_time:
