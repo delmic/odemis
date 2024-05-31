@@ -75,7 +75,7 @@ import warnings
 import weakref
 from collections.abc import Iterable
 from enum import Enum
-from typing import Any, Dict, List, Optional, Tuple, Set, Union
+from typing import Any, Dict, List, Optional, Tuple, Set, Union, Callable
 
 import nidaqmx  # Tested with 0.9.0-dev (August 2023), modified to accept
 import numpy
@@ -179,6 +179,8 @@ class AnalogSEM(model.HwComponent):
             raise ValueError(f"multi_detector_min_period must be between 0 and 1e-3, but is {multi_detector_min_period}")
         else:
             self._multi_detector_min_period = multi_detector_min_period
+
+        self.used_digital_channels: Set[Tuple[int, int]] = set()  # (port, line) pairs already used
 
         # create the scanner child "scanner" (must be before the detectors)
         try:
@@ -484,6 +486,21 @@ class AnalogSEM(model.HwComponent):
         logging.info(f"Period {period} not accepted, got {period_accepted}")
         return False
 
+    def get_available_do_channels(self, port_number: int) -> Set[int]:
+        """
+        Find the digital output channel (aka line) available on a given port, based on the
+        NI-DAQmx information about the hardware.
+        :param port_number: (0 <= int<= 8) the port number.
+        :return: the available channels
+        """
+        available_ports = set()
+        port_root = f"{self._device_name}/port{port_number}/line"
+        for dopc in self._nidev.do_lines:
+            if dopc.name.startswith(port_root):
+                available_ports.add(int(dopc.name[len(port_root):]))
+
+        return available_ports
+
 
 class AcquirerMessage(Enum):
     """
@@ -703,8 +720,9 @@ class Acquirer:
             logging.info("res = %s, dt = %s", self._scanner.resolution.value, self._scanner.dwellTime.value)
             # Restarting the detector acquisition will restart the thread
         finally:
+            # TODO: Not required, as the scanner will take care of changing the state when terminating
             try:
-                self._scanner.indicate_scan_state(False)
+                self._scanner.active_ttl_mng.indicate_state(False)
             except Exception:
                 logging.warning("Failed to indicate the end of the scan state", exc_info=True)
             logging.debug("acquisition thread closed")
@@ -714,7 +732,8 @@ class Acquirer:
         Run the acquisition code continuously until STOP or TERMINATE is requested
         """
         try:
-            self._scanner.indicate_scan_state(True)  # Blocks until the scan state is set
+            self._scanner.active_ttl_mng.indicate_state(True)
+            self._scanner.active_ttl_mng.wait_active()  # Blocks until the scan state is set
 
             while True:
                 # Any more messages to process? Some could have arrived in the meantime
@@ -747,7 +766,7 @@ class Acquirer:
             raise
 
         # Stopped.
-        # TODO: move to indicate_scan_state()
+        # TODO: move to indicate_state()
         # Indicate it on the fast TTLs
         if self._do_data_end is not None:
             try:
@@ -757,7 +776,7 @@ class Acquirer:
                 logging.exception("Failed to indicate the end of the fast TTLs")
         # Delay the state change to avoid too fast switch in case
         # a new acquisition starts soon after.
-        self._scanner.indicate_scan_state(False, delay=AFTER_SCAN_DELAY)
+        self._scanner.active_ttl_mng.indicate_state(False, delay=AFTER_SCAN_DELAY)
         logging.debug("End of the acquisition")
 
     def _get_ai_dtype(self, task: nidaqmx.Task) -> numpy.dtype:
@@ -1105,12 +1124,14 @@ class Acquirer:
         """
         analog_dets = [d for d in detectors if isinstance(d, AnalogDetector)]
         counting_dets = [d for d in detectors if isinstance(d, CountingDetector)]
+        dummy_det = None
 
         # The acquisition expects to have a AI task, so if no AI detector, just add a arbitrary one,
         # and no one will receive the data. (It uses a tiny bit more CPU but keeps the code simpler)
         if counting_dets and not analog_dets:
             adet = self._sem._analog_dets[0]
             logging.debug(f"Adding dummy AI detector {adet.name} as only CI detector was provided")
+            dummy_det = adet
             detectors.append(adet)
             analog_dets.append(adet)
 
@@ -1222,6 +1243,11 @@ class Acquirer:
                 ci_tasks.append(ci_task)
 
             self._ai_dtype = self._get_ai_dtype(ai_task)
+
+            for d in detectors:
+                if d is dummy_det:
+                    continue
+                d.active_ttl_mng.wait_active()  # Blocks until the TTLs have been set for "long enough"
 
             try:
                 self._acquire_frames(acq_settings,
@@ -1517,8 +1543,6 @@ class Acquirer:
                                     new_samples_n, samples_to_acquire)
 
                 logging.debug("Got another %s CI samples, over %s still to acquire", new_samples_n, samples_left_n)
-                logging.debug(
-                    f"ci_data[c] shape = {ci_data[c].shape}, ci_buffer shape: {ci_buffer[:new_samples_n].shape}")
                 ci_prev_samples_n[c], ci_prev_samples_sum[c] = self._downsample_data(ci_data[c],
                                                                                      acq_settings.res,
                                                                                      acq_settings.margin,
@@ -1863,6 +1887,253 @@ class Acquirer:
             numpy.add.reduce(buffer_osr, axis=2, out=subdata)
 
 
+class ActiveTTLManager:
+    """
+    Manage the "slow" TTL signals (digital output) to indicate the active state of a detector or
+    of the scanner.
+    Typically, it is set to active just before acquisition, and reset to inactive once the acquisition
+    is done. It supports to override the status of each TTL signal independently, via VAs.
+    It also supports a (different) delay before activating
+    """
+    def __init__(self,
+                 sem: AnalogSEM,
+                 parent: model.HwComponent,
+                 ttls: Dict[int, Tuple[bool, bool, Optional[str]]],
+                 activation_delay: float = 0,
+                 on_state_change_cb: Optional[Callable[[Optional[bool]], None]] = None,
+                 ):
+        self._sem = sem
+        self._parent = parent
+        self._on_state_change_cb = on_state_change_cb
+
+        if not 0 <= activation_delay < 1000:
+            raise ValueError("activation_delay %g s is not between 0 and 1000 s" % (activation_delay,))
+        self._activation_delay = activation_delay
+
+        self._ttls = {}  # NI Task -> high_auto (bool), high_enabled (bool), name (str)
+        self._ttl_setters = []  # To hold the partial VA setters
+        self._ttl_tasks = {}  # NI-DAQmx task to control the given D
+        self._ttl_lock = threading.Lock()  # Acquire to change the hw TTL state
+
+        # configure each channel for output
+        available_do_ports = sem.get_available_do_channels(port_number=0)  # for now, we only support channels on port 0
+        for c, v in ttls.items():
+            if not isinstance(v, Iterable) or len(v) != 3:
+                raise ValueError("ttls expects for each channel a "
+                                 "[boolean, boolean, name], but got %s" % (v,))
+            high_auto, high_enabled, vaname = v
+            if (not isinstance(high_auto, bool) or
+                not isinstance(high_enabled, bool) or
+                not (vaname is None or isinstance(vaname, str))
+               ):
+                raise ValueError("ttls expects for each channel a "
+                                 "[boolean, boolean, name], but got %s" % (v,))
+            if c not in available_do_ports:
+                raise ValueError("DAQ device '%s' does not have digital output %s, available ones: %s" %
+                                 (sem._device_name, c, sorted(available_do_ports)))
+
+            if (0, c) in sem.used_digital_channels:
+                raise ValueError(f"Port ({c}) requested for active state is already used")
+            sem.used_digital_channels.add((0, c))
+
+            task = nidaqmx.Task()
+            task.do_channels.add_do_chan(
+                f"{sem._device_name}/port0/line{c}", line_grouping=LineGrouping.CHAN_PER_LINE
+            )
+            self._ttls[task] = v
+            # Note: it's fine to have multiple channels assigned to the same VA
+            if vaname and not hasattr(parent, vaname):
+                setter = functools.partial(self._setTTLVA, vaname)
+                self._ttl_setters.append(setter)
+                # Create a VA with False (off), True (on) and None (auto, the default)
+                va = model.VAEnumerated(None, choices={False, True, None},
+                                        setter=setter)
+                setattr(parent, vaname, va)
+
+        self._active = True  # Current state. Start with True, so that it will be set explicitly to False when starting
+        self._state_ready = threading.Event()  # The state is True & waited long enough
+
+        if not ttls:
+            # No TTL to manage: short-cut a bit, to save time
+            self._state_ready.set()
+            self.indicate_state = self._indicate_state_empty
+            return
+
+        # Message format:
+        # * True to activate
+        # * float to deactivate (as time at which it should happen)
+        # * None to terminate
+        self._state_req = queue.Queue()
+        self._state_mng = threading.Thread(target=self._run, name=f"Active state manager {parent.name}")
+        self._state_mng.daemon = True
+        self._state_mng.start()
+
+        # At init, it's inactive
+        self.indicate_state(False)
+
+    def __del__(self):
+        if hasattr(self, "_ttls"):  # _ttls might be missing if the __init__ fails
+            for t in self._ttls:
+                t.close()
+
+    def terminate(self):
+        if hasattr(self, "_state_mng"):
+            self.indicate_state(False)
+            self._state_req.put(None)
+            self._state_mng.join(10)
+            del self._state_mng
+
+    def indicate_state(self, active: bool, delay: float = 0) -> None:
+        """
+        Indicate the acquisition state (via the digital output ports).
+        Non-blocking.
+        :param active: if True, indicate it's active, otherwise, indicate it's
+          parked.
+        :param delay: (0 <= float) time to the state to be set to False (if state
+        hasn't been requested to change to True in-between).
+        If active is set to True, it has to be 0.
+        """
+        if active:
+            if delay > 0:
+                raise ValueError("Cannot delay starting the scan")
+
+            self._state_req.put(True)
+
+        else:
+            self._state_req.put(time.time() + delay)
+
+    def _indicate_state_empty(self, active: bool, delay: float = 0) -> None:
+        """
+        Special version of indicate_state, when there is no TTL to manage.
+        """
+        pass
+
+    def wait_active(self) -> None:
+        """
+        Wait until the active state is reached.
+        It is assumed that the state was requested to be active (via indicate_state(True))
+        :raise: TimeoutError if the state is not reached within reasonable time (> 1s)
+        """
+        if not self._state_ready.wait(1 + self._activation_delay):
+            raise TimeoutError(f"Timeout waiting for the active state of {self._parent.name} to be reached")
+
+    def _setTTLVA(self, vaname: str, value: Optional[bool]) -> Optional[bool]:
+        """
+        Changes the TTL value of a TTL signal, based on the content of the VA
+        Non-blocking.
+        vaname: the name of the VA to change
+        value: (True, False or None)
+        return value
+        """
+        with self._ttl_lock:
+            for t, (high_auto, high_enabled, name) in self._ttls.items():
+                if name != vaname:
+                    continue
+                try:
+                    if value is None:
+                        # Put it as the _set_state would
+                        v = (high_auto == self._active)
+                    else:  # Use the value as is (and invert it if not high_enabled)
+                        v = (high_enabled == value)
+                    logging.debug("Setting digital output %s to %s", t.channel_names[0], v)
+                    t.write(v)
+                    # TODO: wait for _activation_delay if manually set to "active"? It might be handy
+                    # for the detectors, to wait for the protectin to be high before doing anything else.
+                    # For the scanner, it's probably not useful, as
+                    # Or maybe allow to specify it in the argument?
+                except nidaqmx.DaqError:
+                    logging.warning("Failed to change digital output %s to %s", t.channel_names[0], v, exc_info=True)
+
+        return value
+
+    def _run(self):
+        """
+        Main loop for the manager thread:
+        Switch on/off the active state based on the requests received
+        """
+        try:
+            q = self._state_req
+            stopt = None  # None if must be on, otherwise time to stop
+            while True:
+                # wait for a new message or for the time to stop the encoder
+                now = time.time()
+                if stopt is None or not q.empty():
+                    msg = q.get()
+                elif now < stopt:  # soon time to turn off the encoder
+                    timeout = stopt - now
+                    try:
+                        msg = q.get(timeout=timeout)
+                    except queue.Empty:
+                        # time to stop the encoder => just do the loop again
+                        continue
+                else:  # time to deactivate
+                    # the queue should be empty (with some high likelyhood)
+                    self._set_state(False)
+                    self._state_ready.clear()
+                    stopt = None
+                    # We now should have quite some time free, let's run the garbage collector.
+                    # Note that when starting the next acquisition, if a long time
+                    # has elapsed, the GC will immediately run. That would
+                    # probably not be necessary and we could avoid this by setting
+                    # the last GC time to the starting time. However, this is
+                    # also not a big deal as it runs while waiting for the hardware.
+                    # So we don't do it to avoid complexifying further the code.
+                    self._sem._gc_while_waiting(None)
+                    continue
+
+                # parse the new message
+                logging.debug("Decoding active state message %s", msg)
+                if msg is None:  # The end?
+                    if stopt is not None:
+                        # Should set the scan state to off soon, instead, immediately do it
+                        self._set_state(False)
+                    return
+                elif msg is True:  # turn on the scan state, and wait until ready
+                    self._set_state(True)
+                    self._state_ready.set()
+                    stopt = None
+                else:  # time at which to turn off the scan state
+                    if stopt is not None:
+                        stopt = min(msg, stopt)
+                    else:
+                        stopt = msg
+                    # Already move the e-beam back to the park position
+                if self._on_state_change_cb:
+                    self._on_state_change_cb(not isinstance(msg, float))  # float means inactive, True means Active
+
+        except Exception:
+            logging.exception(f"{self._state_mng.name} failed:")
+        finally:
+            logging.info(f"{self._state_mng.name} thread over")
+
+    def _set_state(self, active):
+        """
+        Indicate the ebeam active state (via the digital output ports)
+        active (bool): if True, indicate it's active, otherwise, indicate it's
+          parked.
+        """
+        with self._ttl_lock:
+            logging.debug("%s requested active state to %s, while it is at %s", self._state_mng.name, active, self._active)
+            if self._active == active:
+                return  # No need to update, if it's already correct
+
+            self._active = active
+            for t, (high_auto, high_enabled, name) in self._ttls.items():
+                if name and getattr(self._parent, name).value is not None:
+                    logging.debug("Skipping digital output %s set to manual", t.channel_names[0])
+                    continue
+                try:
+                    v = (high_auto == active)
+                    logging.debug("Automatic setting digital output %s to %s", t.channel_names[0], v)
+                    t.write(v)
+                except nidaqmx.DaqError:
+                    logging.warning("Failed to change digital output %s to %s", t.channel_names[0], v, exc_info=True)
+
+            if active and self._activation_delay:
+                logging.debug("Waiting for %g s for the active TTLs to be ready", self._activation_delay)
+                time.sleep(self._activation_delay)
+
+
 class Scanner(model.Emitter):
     """
     Represents the e-beam scanner
@@ -1878,8 +2149,8 @@ class Scanner(model.Emitter):
                  channels: List[int],
                  limits: List[List[float]],
                  park: Optional[List[float]] = None,
-                 scanning_ttl: Dict[int, List] = None,
-                 image_ttl: Optional[Dict[str, Dict[str, Any]]] = None,
+                 scanning_ttl: Optional[Dict[int, Tuple[bool, bool, Optional[str]]]] = None,
+                 image_ttl: Optional[Dict[int, Tuple[bool, bool, Optional[str]]]] = None,
                  settle_time: float = 0,
                  scan_active_delay: float = 0,
                  hfw_nomag: float = 0.1,
@@ -1918,7 +2189,7 @@ class Scanner(model.Emitter):
         to have multiple channels linked to the same VA.
         :param settle_time (0<=float<=1e-3): time in s for the signal to settle after
         each scan line, when scanning the whole field-of-view.
-        :param scan_active_delay (None or 0<=float): minimum time (s) to wait before starting
+        :param scan_active_delay (0<=float): minimum time (s) to wait before starting
         to scan, to "warm-up" when going from non-scanning state to scanning.
         :param hfw_nomag (0<float<=1): (theoretical) distance between horizontal borders
         (lower/upper limit in X) if magnification is 1 (in m)
@@ -1952,10 +2223,6 @@ class Scanner(model.Emitter):
                              % (settle_time, name))
         self._settle_time = settle_time
 
-        if scan_active_delay is not None and not 0 <= scan_active_delay < 1000:
-            raise ValueError("scan_active_delay %g s is not between 0 and 1000 s" % (scan_active_delay,))
-        self._scan_active_delay = scan_active_delay
-
         if len(parent._nidev.ao_physical_chans) < 2:
             raise ValueError("Device '%s' has only %d output channels, needs at least 2"
                              % (parent._device_name, len(parent._nidev.ao_physical_chans)))
@@ -1984,41 +2251,8 @@ class Scanner(model.Emitter):
         self._park_data = numpy.array(park, dtype=float)  # We write directly the voltage, so "float"
 
         # Manage the "slow" TTL signals
-        self._scanning_ttl = {}  # Task -> high_auto (bool), high_enabled (bool), name (str)
-        self._ttl_setters = []  # To hold the partial VA setters
-        self._ttl_tasks = {}  # NI-DAQmx task to control the given D
-        self._ttl_lock = threading.Lock()  # Acquire to change the hw TTL state
-
-        # configure each channel for output
-        available_do_ports = self._get_available_do_channels(port_number=0)
-        for c, v in scanning_ttl.items():
-            if not isinstance(v, Iterable) or len(v) != 3:
-                raise ValueError("scanning_ttl expects for each channel a "
-                                 "[boolean, boolean, name], but got %s" % (v,))
-            high_auto, high_enabled, vaname = v
-            if (not isinstance(high_auto, bool) or
-                not isinstance(high_enabled, bool) or
-                not (vaname is None or isinstance(vaname, str))
-               ):
-                raise ValueError("scanning_ttl expects for each channel a "
-                                 "[boolean, boolean, name], but got %s" % (v,))
-            if c not in available_do_ports:
-                raise ValueError("DAQ device '%s' does not have digital output %s, available ones: %s" %
-                                 (parent._device_name, c, sorted(available_do_ports)))
-
-            task = nidaqmx.Task()
-            task.do_channels.add_do_chan(
-                f"{parent._device_name}/port0/line{c}", line_grouping=LineGrouping.CHAN_PER_LINE
-            )
-            self._scanning_ttl[task] = v
-            # Note: it's fine to have multiple channels assigned to the same VA
-            if vaname and not hasattr(self, vaname):
-                setter = functools.partial(self._setTTLVA, vaname)
-                self._ttl_setters.append(setter)
-                # Create a VA with False (off), True (on) and None (auto, the default)
-                va = model.VAEnumerated(None, choices={False, True, None},
-                                        setter=setter)
-                setattr(self, vaname, va)
+        self.active_ttl_mng = ActiveTTLManager(parent, self, scanning_ttl or {}, scan_active_delay,
+                                               self._on_active_state_change)
 
         # Validate fast TTLs
         fast_do_channels = set()  # set of ints, to check all channels are unique
@@ -2029,6 +2263,7 @@ class Scanner(model.Emitter):
            ):
             raise ValueError(f"image_ttl should be a dict[str->dict], but got '{image_ttl}'")
 
+        available_do_ports = parent.get_available_do_channels(port_number=0)
         for ttl_type, ttl_info in image_ttl.items():
             if ttl_type not in ("pixel", "line", "frame"):
                 raise ValueError(f"image_ttl keys should be 'pixel', 'line' or 'frame', but got '{ttl_type}'")
@@ -2043,12 +2278,11 @@ class Scanner(model.Emitter):
                     raise ValueError("DAQ device '%s' does not have digital output %s requested for %s. Available ones: %s" %
                                      (parent._device_name, do_channel, ttl_type, sorted(available_do_ports)))
 
-                if do_channel in scanning_ttl:
+                if (0, do_channel) in parent.used_digital_channels:
                     raise ValueError(
-                        f"Port ({do_channel}) requested for {ttl_type} is already used by scanning_ttl")
+                        f"Port ({do_channel}) requested for {ttl_type} is already used")
+                parent.used_digital_channels.add((0, do_channel))
 
-                if do_channel in fast_do_channels:
-                    raise ValueError(f"Port {do_channel} requested for {ttl_type} is already used by another TTL")
                 fast_do_channels.add(do_channel)
 
         self._pixel_ttl = []
@@ -2069,15 +2303,6 @@ class Scanner(model.Emitter):
         # TODO: have a better way to indicate the channel number as it's limited to port0
         # while there is also port 1 & 2. Explicitly ask the full NI name? as "port1/line3"? Or as written on hardware "P1.3"?
         self._fast_do_names = ",".join(f"{self.parent._device_name}/port0/line{n}" for n in fast_do_channels)
-
-        # Manage the scanning state
-        self._scan_state_req = queue.Queue()
-        self._scan_state = True  # To force changing the digital output when the state go to False
-        self._scanning_ready = threading.Event()  # The scan_state is True & waited long enough
-        self._scanning_mng = threading.Thread(target=self._scan_state_mng_run, name="Scanning state manager")
-        self._scanning_mng.daemon = True
-        self._scanning_mng.start()
-        self.indicate_scan_state(False)
 
         # In theory the maximum resolution depends on the precision of the e-beam
         # coils in the scanner, and on the signal to drive it (voltage range,
@@ -2169,16 +2394,11 @@ class Scanner(model.Emitter):
             self._prepare_ao_task.close()
         if hasattr(self, "_park_task"):
             self._park_task.close()
-        if hasattr(self, "_scanning_ttl"):  # can happen to be False if the __init__ fails
-            for t in self._scanning_ttl:
-                t.close()
 
     def terminate(self):
-        if self._scanning_mng:
-            self.indicate_scan_state(False)
-            self._scan_state_req.put(None)
-            self._scanning_mng.join(10)
-            self._scanning_mng = None
+        super().terminate()
+        self.active_ttl_mng.terminate()
+        self._write_park_position()
 
     def get_hw_buf_size(self) -> int:
         """
@@ -2236,21 +2456,6 @@ class Scanner(model.Emitter):
             line_grouping=LineGrouping.CHAN_FOR_ALL_LINES,  # data array should be of shape (samples,)
         )
         logging.debug(f"Added DO channels: {self._fast_do_names}")
-
-    def _get_available_do_channels(self, port_number: int) -> Set[int]:
-        """
-        Find the digital output channel (aka line) available on a given port, based on the
-        NI-DAQmx information about the hardware.
-        :param port_number: (0 <= int<= 8) the port number.
-        :return: the available channels
-        """
-        available_ports = set()
-        port_root = f"{self.parent._device_name}/port{port_number}/line"
-        for dopc in self.parent._nidev.do_lines:
-            if dopc.name.startswith(port_root):
-                available_ports.add(int(dopc.name[len(port_root):]))
-
-        return available_ports
 
     @roattribute
     def channels(self):
@@ -2372,29 +2577,12 @@ class Scanner(model.Emitter):
                 max(min(value[1], max_tran[1]), -max_tran[1]))
         return tran
 
-    def _setTTLVA(self, vaname, value):
+    def _on_active_state_change(self, active):
         """
-        Changes the TTL value of a TTL signal
-        vaname (str)
-        value (True, False or None)
-        return value
+        Called when the active state of the e-beam changes
         """
-        with self._ttl_lock:
-            for t, (high_auto, high_enabled, name) in self._scanning_ttl.items():
-                if name != vaname:
-                    continue
-                try:
-                    if value is None:
-                        # Put it as the _set_scan_state would
-                        v = (high_auto == self._scan_state)
-                    else:  # Use the value as is (and invert it if not high_enabled)
-                        v = (high_enabled == value)
-                    logging.debug("Setting digital output %s to %s", t.channel_names[0], v)
-                    t.write(v)
-                except nidaqmx.DaqError:
-                    logging.warning("Failed to change digital output %s to %s", t.channel_names[0], v, exc_info=True)
-
-        return value
+        if not active:
+            self._write_park_position()
 
     def _write_park_position(self):
         """
@@ -2407,117 +2595,6 @@ class Scanner(model.Emitter):
             logging.debug("Park position set")
         except nidaqmx.DaqError:
             logging.warning("Failed to set to park position", exc_info=True)
-
-    def indicate_scan_state(self, scanning: bool, delay: float = 0) -> None:
-        """
-        Indicate the ebeam scanning state (via the digital output ports).
-        When changing to True, blocks until the scanning is ready.
-        :param scanning: if True, indicate it's scanning, otherwise, indicate it's
-          parked.
-        :param delay: (0 <= float) time to the state to be set to False (if state
-        hasn't been requested to change to True in-between).
-        If state is set to True, it has to be 0.
-        """
-        if scanning:
-            if delay > 0:
-                raise ValueError("Cannot delay starting the scan")
-
-            self._scan_state_req.put(True)
-            self._scanning_ready.wait()
-
-        else:
-            self._scan_state_req.put(time.time() + delay)
-
-    def _scan_state_mng_run(self):
-        """
-        Main loop for scan state manager thread:
-        Switch on/off the scan state based on the requests received
-        """
-        try:
-            q = self._scan_state_req
-            stopt = None  # None if must be on, otherwise time to stop
-            while True:
-                # wait for a new message or for the time to stop the encoder
-                now = time.time()
-                if stopt is None or not q.empty():
-                    msg = q.get()
-                elif now < stopt:  # soon time to turn off the encoder
-                    timeout = stopt - now
-                    try:
-                        msg = q.get(timeout=timeout)
-                    except queue.Empty:
-                        # time to stop the encoder => just do the loop again
-                        continue
-                else:  # time to stop
-                    # the queue should be empty (with some high likelyhood)
-                    # Normally parking the beam has already been done (when the message was received)
-                    # but just to be certain, do it again.
-                    self._write_park_position()
-                    self._set_scan_state(False)
-                    self._scanning_ready.clear()
-                    stopt = None
-                    # We now should have quite some time free, let's run the garbage collector.
-                    # Note that when starting the next acquisition, if a long time
-                    # has elapsed, the GC will immediately run. That would
-                    # probably not be necessary and we could avoid this by setting
-                    # the last GC time to the starting time. However, this is
-                    # also not a big deal as it runs while waiting for the hardware.
-                    # So we don't do it to avoid complexifying further the code.
-                    self.parent._gc_while_waiting(None)
-                    continue
-
-                # parse the new message
-                logging.debug("Decoding scanning state message %s", msg)
-                if msg is None:  # The end?
-                    if stopt is not None:
-                        # Should set the scan state to off soon, instead, immediately do it
-                        self._write_park_position()
-                        self._set_scan_state(False)
-                    return
-                elif msg is True:  # turn on the scan state, and wait until ready
-                    self._set_scan_state(True)
-                    self._scanning_ready.set()
-                    stopt = None
-                else:  # time at which to turn off the scan state
-                    if stopt is not None:
-                        stopt = min(msg, stopt)
-                    else:
-                        stopt = msg
-                    # Already move the e-beam back to the park position
-                    self._write_park_position()
-
-        except Exception:
-            logging.exception("Scanning state manager failed:")
-        finally:
-            logging.info("Scanning state manager thread over")
-
-    def _set_scan_state(self, scanning):
-        """
-        Indicate the ebeam scanning state (via the digital output ports)
-        scanning (bool): if True, indicate it's scanning, otherwise, indicate it's
-          parked.
-        """
-        with self._ttl_lock:
-            logging.debug("Requested scanning state to %s, while it is at %s", scanning, self._scan_state)
-            if self._scan_state == scanning:
-                return  # No need to update, if it's already correct
-
-            logging.debug("Updating scanning state to %s", scanning)
-            self._scan_state = scanning
-            for t, (high_auto, high_enabled, name) in self._scanning_ttl.items():
-                if name and getattr(self, name).value is not None:
-                    logging.debug("Skipping digital output %s set to manual", t.channel_names[0])
-                    continue
-                try:
-                    v = (high_auto == scanning)
-                    logging.debug("Automatic setting digital output %s to %s", t.channel_names[0], v)
-                    t.write(v)
-                except nidaqmx.DaqError:
-                    logging.warning("Failed to change digital output %s to %s", t.channel_names[0], v, exc_info=True)
-
-            if scanning and self._scan_active_delay:
-                logging.debug("Waiting for %g s for the beam to be ready", self._scan_active_delay)
-                time.sleep(self._scan_active_delay)
 
     # Waveform generation:
     # The goal is to generate the position of the e-beam in X and Y for the given dwell time and
@@ -2844,12 +2921,18 @@ class AnalogDetector(model.Detector):
 
     def __init__(self, name: str, role: str, parent: AnalogSEM,
                  channel: int,
-                 limits: List[float],
+                 limits: Tuple[float, float],
+                 active_ttl: Optional[Dict[int, Tuple[bool, bool, Optional[str]]]] = None,
+                 activation_delay: float = 0,
                  **kwargs):
         """
-        channel (0<= int): input channel from which to read
-        limits (2-tuple of number): min/max voltage to acquire (in V). If the
+        :param channel (0<= int): input channel from which to read
+        :param limits: min/max voltage to acquire (in V). If the
           first value > second value, the data is inverted (=reversed contrast)
+        :param active_ttl: digital output port to activate when the detector is active.
+        Same format as the Scanner scanning_ttl argument.
+        :param activation_delay (0<=float): minimum time (s) to wait when activating the detector
+        via the TTL. If there is no active_ttl, this has no effect.
         """
         # It will set up ._shape and .parent
         super().__init__(name, role, parent=parent, **kwargs)
@@ -2881,7 +2964,13 @@ class AnalogDetector(model.Detector):
         # Special event to request software unblocking on the scan
         self.softwareTrigger = model.Event()
 
+        self.active_ttl_mng = ActiveTTLManager(parent, self, active_ttl or {}, activation_delay)
+
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
+
+    def terminate(self):
+        super().terminate()
+        self.active_ttl_mng.terminate()
 
     def _get_analog_loopback_channel(self, ao_channel_name: str) -> str:
         """
@@ -2913,9 +3002,17 @@ class CountingDetector(model.Detector):
     the pulse frequency, the stronger the original signal is. E.g., a counting
     PMT.
     """
-    def __init__(self, name, role, parent, source, **kwargs):
+    def __init__(self, name: str, role: str, parent: AnalogSEM,
+                 source: int,
+                 active_ttl: Optional[Dict[int, Tuple[bool, bool, Optional[str]]]] = None,
+                 activation_delay: float = 0,
+                 **kwargs):
         """
-        source (0 <= int): PFI number, the input pin on which the signal is received
+        :param source (0 <= int): PFI number, the input pin on which the signal is received
+        :param active_ttl: digital output port to activate when the detector is active.
+        Same format as the Scanner scanning_ttl argument.
+        :param activation_delay (0<=float): minimum time (s) to wait when activating the detector
+        via the TTL. If there is no active_ttl, this has no effect.
         """
         # It will set up ._shape and .parent
         super().__init__(name, role, parent=parent, **kwargs)
@@ -2941,10 +3038,16 @@ class CountingDetector(model.Detector):
         self._shape = (maxdata + 1,)  # only one point
         self.data = SEMDataFlow(self, parent)
 
+        self.active_ttl_mng = ActiveTTLManager(parent, self, active_ttl or {}, activation_delay)
+
         # Special event to request software unblocking on the scan
         self.softwareTrigger = model.Event()
 
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_INTEGRATING
+
+    def terminate(self):
+        super().terminate()
+        self.active_ttl_mng.terminate()
 
     def configure_ci_task(self, task):
         # create a counter input channel using 'ctr0' to count
@@ -3002,6 +3105,7 @@ class SEMDataFlow(model.DataFlow):
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             return
 
+        comp.active_ttl_mng.indicate_state(True)
         try:
             self._sem._acquirer.add_detector(comp)
         except ReferenceError:
@@ -3014,6 +3118,7 @@ class SEMDataFlow(model.DataFlow):
             # sem/component has been deleted, it's all fine, we'll be GC'd soon
             return
 
+        comp.active_ttl_mng.indicate_state(False, delay=AFTER_SCAN_DELAY)
         try:
             self._sem._acquirer.remove_detector(comp)
             if self._sync_event:
