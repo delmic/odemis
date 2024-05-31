@@ -511,7 +511,7 @@ class UserSettingsPanel(wx.Panel):
 class FastEMUserSettingsPanel(object):
     """
     FastEM user settings panel contains pressure button, e-beam button,
-    panel to select the scintillators and the user seetings panel.
+    panel to select the scintillators and the user settings panel.
 
     During creation, the following controllers are created:
 
@@ -616,9 +616,9 @@ class FastEMUserSettingsPanel(object):
         CONTROL_CONFIG[USER_PROFILE].update(
             {"choices": list(self.user_profile_data.keys())}
         )
-        CONTROL_CONFIG[SCINTILLATOR_HOLDER] = {
-            "choices": list(self.main_data.samples.keys())
-        }
+        CONTROL_CONFIG[SCINTILLATOR_HOLDER].update(
+            {"choices": list(self.main_data.samples.keys())}
+        )
 
     def write_user_profile_data(self):
         write_json(self.user_profile_config_path, self.user_profile_data)
