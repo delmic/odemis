@@ -701,28 +701,37 @@ class AcquisitionTask(object):
         fi = numpy.array(self._roa.field_indices)
         # col, row => row 0 is the top of the ROA and the lowest column value is the most left field
         min_col = numpy.min(fi[fi[:, 1] == 0], axis=0)[0]
-        self.field_idx = (min_col - 1, 0)  # one to the left of the top-left field
 
         logging.debug("Start pre-calibration.")
-        pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
-
-        logging.debug(f"Moving to stage position x: {pos_hor}, y: {pos_vert}")
-        self._stage_scan.moveAbsSync({'x': pos_hor, 'y': pos_vert})
-
-        self._pre_calibrations_future = align(self._scanner, self._multibeam,
-                                              self._descanner, self._detector,
-                                              self._stage, self._ccd,
-                                              self._beamshift, None,  # no need for the detector rotator
-                                              self._se_detector, self._ebeam_focus,
-                                              calibrations=pre_calibrations)
-
         try:
-            self._pre_calibrations_future.result()  # wait for the calibrations to be finished
-        except CancelledError:
-            logging.debug("Cancelled acquisition pre-calibrations.")
-            raise
+            for i in range(3):  # try running the pre-calibrations 3 times
+                # Move 1/10th of a field to the top right
+                self.field_idx = (min_col - 1 + 0.1 * i, - i * 0.1)
+                pos_hor, pos_vert = self.get_abs_stage_movement()  # get the absolute position for the new tile
+                logging.debug(f"Moving to stage position x: {pos_hor}, y: {pos_vert}")
+                self._stage_scan.moveAbsSync({'x': pos_hor, 'y': pos_vert})
+                logging.debug(f"Will run pre-calibrations at field index {self.field_idx}")
+                try:
+                    self._pre_calibrations_future = align(self._scanner, self._multibeam,
+                                                          self._descanner, self._detector,
+                                                          self._stage, self._ccd,
+                                                          self._beamshift, None,  # no need for the detector rotator
+                                                          self._se_detector, self._ebeam_focus,
+                                                          calibrations=pre_calibrations)
+                    self._pre_calibrations_future.result()  # wait for the calibrations to be finished
+                    break  # if it successfully ran, do not try again
+                except CancelledError:
+                    logging.debug("Cancelled acquisition pre-calibrations.")
+                    raise
+                except Exception as err:
+                    if i == 2:
+                        raise ValueError(f"Pre-calibrations failed 3 times, with error {err}")
+                    else:
+                        logging.warning(f"Pre-calibration failed for ROA {self._roa.name.value} with error {err}, "
+                                        f"will try again.")
         finally:
             self._roa.overlap = overlap_init  # set back the overlap to the initial value
+
         logging.debug("Finish pre-calibration.")
 
     def image_received(self, dataflow, data):
