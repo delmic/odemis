@@ -934,6 +934,7 @@ class Shamrock(model.Actuator):
           wavelength, the values might be meaningless, and multiple 0 nm can be
           returned.
         return (list of floats of length npixels): wavelength in m
+        :raise: ValueError if pixel-to-wavelength is not meaningful for current position (ie, 0th order)
         """
         assert(0 < npixels)
         # Warning: if npixels <= 7, very weird/large values are returned (with SDK 2.100).
@@ -950,8 +951,13 @@ class Shamrock(model.Actuator):
         # it is necessary. For example, the SDK call can completely block if a
         # move is currently happening.
         with self._hw_access:
-            self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
-        logging.debug("Calibration info returned")
+            try:
+                self._dll.ShamrockGetCalibration(self._device, CalibrationValues, npixels)
+            except ShamrockError as ex:
+                # fails with 20249 if not grating mode (eg, mirror, or wavelength < 25nm)
+                if ex.errno == 20249:
+                    raise ValueError("Wavelength calibration not available for current position")
+                raise
         # Note: it just applies the polynomial, so you can end up with negative
         # values. We used to change all to 0, but that was even more confusing
         # because multiple bins were associated to 0.
@@ -1496,8 +1502,13 @@ class Shamrock(model.Actuator):
 
             self.SetNumberPixels(npixels)
             self.SetPixelWidth(pxs)
-            calib = self.GetCalibration(npixels)
-        if calib[-1] < 1e-9:
+            try:
+                calib = self.GetCalibration(npixels)
+            except ValueError as ex:
+                logging.info(str(ex))
+                calib = []
+
+        if not calib or calib[-1] < 1e-9:
             cw = self.position.value["wavelength"]
             logging.error("Calibration data doesn't seem valid, will use internal one (cw = %f nm): %s",
                           cw * 1e9, calib)
@@ -1560,14 +1571,29 @@ class Shamrock(model.Actuator):
         width (float): opening width in m
         return (float, float): minimum/maximum wavelength observed
         """
-        # Pretend we have a small CCD and look at the wavelength at the side
-        # Note: In theory, we could just say we have 2 pixels, but the SDK doesn't
-        # seem to put the center exactly at the center of the sensor (ie, it
-        # seems pixel npixels/2 get the center wavelength), and the SDK doesn't
-        # like resolutions < 8 anyway.
-        self.SetNumberPixels(10)
-        self.SetPixelWidth(width / 10)
-        calib = self.GetCalibration(10)
+        # If wavelength is 0, report very large range to indicate it's "all wavelengths"
+        cw = self.position.value["wavelength"]
+        if cw <= 1e-9:
+            return [0, 2000e-9]
+
+        with self._px2wl_lock:
+            cw = self.position.value["wavelength"]
+            if cw <= 1e-9:
+                return [0, 2000e-9]
+
+            # Pretend we have a small CCD and look at the wavelength at the side.
+            # Note: In theory, we could just say we have 2 pixels, but the SDK doesn't
+            # seem to put the center exactly at the center of the sensor (ie, it seems pixel
+            # npixels/2 has the center wavelength), and some old SDK versions didn't like
+            # resolutions < 8 anyway. (As of SDK 2.104, that now seems to work fine with 2 pixels)
+            self.SetNumberPixels(10)
+            self.SetPixelWidth(width / 10)
+            try:
+                calib = self.GetCalibration(10)
+            except ValueError as ex:
+                logging.info(str(ex))
+                return [0, 2000e-9]
+
         return calib[0], calib[-1]
 
     @isasync
