@@ -26,6 +26,7 @@ import wx
 
 from odemis.acq.stream import EMStream, FastEMSEMStream
 from odemis.gui import img, main_xrc
+from odemis.gui.comp.canvas import CAN_DRAG
 from odemis.gui.comp.viewport import FastEMMainViewport
 from odemis.gui.cont.fastem_user_settings_panel import FastEMUserSettingsPanel
 from odemis.gui.cont.tabs.tab_bar_controller import TabController
@@ -237,13 +238,19 @@ class FastEMMainTab(Tab):
         self.tb.enable(not mode)
 
     def _on_tool(self, selected_tool):
-        """Pause the SEM stream for a specific set of tools."""
+        """Disable canvas drag and pause the SEM stream for a specific set of tools."""
         if (
             selected_tool in (TOOL_RECTANGLE, TOOL_ELLIPSE, TOOL_POLYGON)
-            and self.tab_data_model.semStream.should_update.value
         ):
-            self.tab_data_model.semStream.is_active.value = False
-            self.tab_data_model.semStream.should_update.value = False
+            # Only let ShapesOverlay handle the dragging
+            # by doing so avoid the weird situation where the canvas is in a dragging state on tool change
+            if CAN_DRAG in self.vp.canvas.abilities:
+                self.vp.canvas.disable_drag()
+            if self.tab_data_model.semStream.should_update.value:
+                self.tab_data_model.semStream.is_active.value = False
+                self.tab_data_model.semStream.should_update.value = False
+        else:
+            self.vp.canvas.enable_drag()
 
     @classmethod
     def get_display_priority(cls, main_data):
