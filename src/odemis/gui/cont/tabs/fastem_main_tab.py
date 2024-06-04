@@ -237,13 +237,18 @@ class FastEMMainTab(Tab):
         self.tb.enable(not mode)
 
     def _on_tool(self, selected_tool):
-        """Pause the SEM stream for a specific set of tools."""
+        """Disable canvas drag and pause the SEM stream for a specific set of tools."""
         if (
             selected_tool in (TOOL_RECTANGLE, TOOL_ELLIPSE, TOOL_POLYGON)
-            and self.tab_data_model.semStream.should_update.value
         ):
-            self.tab_data_model.semStream.is_active.value = False
-            self.tab_data_model.semStream.should_update.value = False
+            # Only let ShapesOverlay handle the dragging
+            # by doing so avoid the weird situation where the canvas in a dragging state on tool change
+            self.vp.canvas.disable_drag()
+            if self.tab_data_model.semStream.should_update.value:
+                self.tab_data_model.semStream.is_active.value = False
+                self.tab_data_model.semStream.should_update.value = False
+        else:
+            self.vp.canvas.enable_drag()
 
     @classmethod
     def get_display_priority(cls, main_data):

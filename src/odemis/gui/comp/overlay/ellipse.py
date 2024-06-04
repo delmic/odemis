@@ -26,7 +26,7 @@ import cairo
 
 import odemis.gui as gui
 from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
-from odemis.gui.comp.overlay.base import SEL_MODE_NONE, SEL_MODE_ROTATION, Vec, WorldOverlay
+from odemis.gui.comp.overlay.base import SEL_MODE_NONE, SEL_MODE_ROTATION, Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
 
 # The circumference of an ellipse is divided by this factor to calculate number of
@@ -110,34 +110,31 @@ class EllipseOverlay(RectangleOverlay):
         """
         Check if left click was in ellipse. If so, activate the overlay. Otherwise, deactivate.
         """
-        if self.active.value:
-            # If the Diagonal points are not the same means the rectangle has been created
-            if self.p_point1 != self.p_point3:
-                # Activate/deactivate region
-                self._view_to_phys()
-                rectangle_points = self.get_physical_sel()
-                if rectangle_points:
-                    self.selected.value = self.is_point_in_shape(evt.Position)
-                    if self.selected.value:
-                        self.set_physical_sel(rectangle_points)
+        # If the Diagonal points are not the same means the rectangle has been created
+        if self.p_point1 != self.p_point3:
+            # Activate/deactivate region
+            self._view_to_phys()
+            rectangle_points = self.get_physical_sel()
+            if rectangle_points:
+                self.selected.value = self.is_point_in_shape(evt.Position)
+                if self.selected.value:
+                    self.set_physical_sel(rectangle_points)
 
-            # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
-            # that we need
-            self.clear_drag()
-            self.selection_mode = SEL_MODE_NONE
-            self.edit_hover = None
+        # SelectionMixin._on_left_up has some functionality which does not work here, so only call the parts
+        # that we need
+        self.clear_drag()
+        self.selection_mode = SEL_MODE_NONE
+        self.edit_hover = None
 
-            # Set the points VA after drawing because draw() gathers the points
-            self.cnvs.update_drawing()
-            if self.selected.value:
-                self.points.value = self._points
-        WorldOverlay.on_left_up(self, evt)
+        # Set the points VA after drawing because draw() gathers the points
+        self.cnvs.update_drawing()
+        if self.selected.value:
+            self.points.value = self._points
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, dash=True):
         """Draw the selection as a ellipse."""
         self._points.clear()
-        flag = self.active.value and self.selected.value
-        line_width = LINE_WIDTH_THICK if flag else LINE_WIDTH_THIN
+        line_width = LINE_WIDTH_THICK if self.selected.value else LINE_WIDTH_THIN
 
         if self.p_point1 and self.p_point2 and self.p_point3 and self.p_point4:
             # Important: We need to use the physical positions, in order to draw
@@ -194,7 +191,7 @@ class EllipseOverlay(RectangleOverlay):
                 self.draw_edges(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # show size label if ROA is selected
-            if flag:
+            if self.selected.value:
                 self.draw_side_labels(ctx, b_point1, b_point2, b_point3, b_point4)
 
             # Draw the rotation label

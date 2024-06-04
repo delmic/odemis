@@ -28,7 +28,7 @@ import wx
 
 import odemis.gui as gui
 from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
-from odemis.gui.comp.overlay.base import SEL_MODE_ROTATION, LineEditingMixin, Vec, WorldOverlay
+from odemis.gui.comp.overlay.base import SEL_MODE_ROTATION, LineEditingMixin, Vec, Label
 from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
 
@@ -39,7 +39,7 @@ class PolygonState:
         self._points = polygon_overlay._points.copy()
 
 
-class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
+class PolygonOverlay(EditableShape, LineEditingMixin):
     """Overlay representing one polygon."""
 
     def __init__(self, cnvs, colour=gui.SELECTION_COLOUR):
@@ -47,12 +47,31 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         :param: cnvs: canvas for the overlay.
         :param: colour (str): hex colour code for the polygon.
         """
-        WorldOverlay.__init__(self, cnvs)
-        LineEditingMixin.__init__(self, colour)
         EditableShape.__init__(self, cnvs)
+        LineEditingMixin.__init__(self, colour)
 
-        self._label = self.add_label("", align=wx.ALIGN_CENTRE_HORIZONTAL)
-        self._rotation_label = self.add_label("", align=wx.ALIGN_CENTRE_HORIZONTAL)
+        self._label = Label(
+            text="",
+            pos=(0, 0),
+            font_size=12,
+            flip=True,
+            align=wx.ALIGN_CENTRE_HORIZONTAL,
+            colour=(1.0, 1.0, 1.0),  # default to white
+            opacity=1.0,
+            deg=None,
+            background=None
+        )
+        self._rotation_label = Label(
+            text="",
+            pos=(0, 0),
+            font_size=12,
+            flip=True,
+            align=wx.ALIGN_CENTRE_HORIZONTAL,
+            colour=(1.0, 1.0, 1.0),  # default to white
+            opacity=1.0,
+            deg=None,
+            background=None
+        )
         self.v_point.subscribe(self._on_v_point)
 
     def copy(self):
@@ -118,49 +137,38 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         return True
 
     def on_left_down(self, evt):
-        if self.active.value and self.selected.value:
+        if self.selected.value:
             LineEditingMixin._on_left_down(self, evt)
             self.cnvs.update_drawing()
-        else:
-            WorldOverlay.on_left_down(self, evt)
 
     def on_left_up(self, evt):
-        if self.active.value:
-            is_rotation = self.selection_mode == SEL_MODE_ROTATION
-            LineEditingMixin._on_left_up(self, evt)
-            if self.right_click_finished:
-                self._phys_to_view()
-                self.selected.value = self.is_point_in_shape(evt.Position)
-                # The rotation point is outside the shape and cannot be captured by selection VA
-                # Also update the points VA if the selection mode is SEL_MODE_ROTATION
-                if self.selected.value or is_rotation:
-                    self.points.value = self._points
-            self.cnvs.update_drawing()
-        WorldOverlay.on_left_up(self, evt)
+        LineEditingMixin._on_left_up(self, evt)
+        if self.right_click_finished:
+            self._phys_to_view()
+            self.selected.value = self.is_point_in_shape(evt.Position)
+            # The rotation point is outside the shape and cannot be captured by selection VA
+            # Also update the points VA if the selection mode is SEL_MODE_ROTATION
+            if self.selected.value:
+                self.points.value = self._points
+        self.cnvs.update_drawing()
 
     def on_right_down(self, evt):
-        if self.active.value:
-            LineEditingMixin._on_right_down(self, evt)
-            self.cnvs.update_drawing()
-        else:
-            WorldOverlay.on_right_down(self, evt)
+        LineEditingMixin._on_right_down(self, evt)
+        self.cnvs.update_drawing()
 
     def on_right_up(self, evt):
-        if self.active.value:
-            LineEditingMixin._on_right_up(self, evt)
-            self._view_to_phys()
-            if len(self._points) <= 2:
-                logging.warning("Cannot create a polygon for less than 3 points.")
-                self.reset_click_mixin()
-                self._points.clear()
-            # Set initial value
-            self.points.value = self._points
-            self.cnvs.update_drawing()
-        else:
-            WorldOverlay.on_right_up(self, evt)
+        LineEditingMixin._on_right_up(self, evt)
+        self._view_to_phys()
+        if len(self._points) <= 2:
+            logging.warning("Cannot create a polygon for less than 3 points.")
+            self.reset_click_mixin()
+            self._points.clear()
+        # Set initial value
+        self.points.value = self._points
+        self.cnvs.update_drawing()
 
     def on_motion(self, evt):
-        if self.active.value and self.selected.value:
+        if self.selected.value:
             LineEditingMixin._on_motion(self, evt)
             if not self.dragging:
                 if self.hover == gui.HOVER_SELECTION:
@@ -174,8 +182,6 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
             else:
                 self._view_to_phys()
             self.cnvs.update_drawing()
-        else:
-            WorldOverlay.on_motion(self, evt)
 
     def draw_edges(self, ctx):
         # Draw the edit and rotation points
@@ -204,10 +210,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
             offset = self.cnvs.get_half_buffer_size()
 
             # draws the dotted line
-            if (self.active.value and self.selected.value):
-                line_width = LINE_WIDTH_THICK
-            else:
-                line_width = LINE_WIDTH_THIN
+            line_width = LINE_WIDTH_THICK if self.selected.value else LINE_WIDTH_THIN
 
             ctx.set_line_width(line_width)
             if dash:
@@ -278,6 +281,8 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
                         self._label.font_size = 14
                 self._label.background = (0, 0, 0)  # background
                 self._label.draw(ctx)
+                # calculate the center explicitly for ShapesOverlay _get_shape function, if polygon creation is not finished
+                self._calc_center()
             else:
                 ctx.close_path()
                 ctx.stroke()

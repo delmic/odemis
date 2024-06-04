@@ -153,13 +153,11 @@ class ShapesOverlay(WorldOverlay):
 
     def clear(self):
         """Remove all shapes and update canvas."""
-        self._activate_shapes(False)
         self._shapes.clear()
 
     def remove_shape(self, shape):
         """Remove the shape and update canvas."""
         if shape in self._shapes:
-            shape.active.value = False
             self._shapes.remove(shape)
             self.cnvs.request_drawing_update()
 
@@ -182,34 +180,15 @@ class ShapesOverlay(WorldOverlay):
         else:
             WorldOverlay.on_leave(self, evt)
 
-    def _activate_shapes(self, flag=True):
-        """Activate or de-activate the shapes."""
-        for shape in self._shapes:
-            shape.active.value = flag
-
-    def _deselected_shapes(self):
+    def _deselect_shapes(self):
         """Deselect shapes except the selected shape."""
         for shape in self._shapes:
             if shape.selected.value and shape != self._selected_shape:
                 shape.selected.value = False
 
-    def _unbind_shape_events(self, shape: EditableShape):
-        """Unbind shape's events bound to the canvas."""
-        shape.cnvs.Unbind(wx.EVT_LEFT_DOWN, handler=shape.on_left_down)
-        shape.cnvs.Unbind(wx.EVT_LEFT_UP, handler=shape.on_left_up)
-        shape.cnvs.Unbind(wx.EVT_RIGHT_DOWN, handler=shape.on_right_down)
-        shape.cnvs.Unbind(wx.EVT_RIGHT_UP, handler=shape.on_right_up)
-        shape.cnvs.Unbind(wx.EVT_MOTION, handler=shape.on_motion)
-
     def _on_tool(self, selected_tool):
         """Update the overlay when it's active and tools change."""
-        if selected_tool == self.tool:
-            self.active.value = True
-            self._activate_shapes(True)
-        else:
-            self.active.value = False
-            self._activate_shapes(False)
-            self.cnvs.reset_default_cursor()
+        self.active.value = selected_tool == self.tool
 
     def _get_shape(self, v_pos: Tuple[float, float]):
         """
@@ -231,7 +210,6 @@ class ShapesOverlay(WorldOverlay):
     def _create_new_shape(self):
         """Create a new shape."""
         shape = self.shape_cls(self.cnvs)
-        self._unbind_shape_events(shape)
         self._shapes.append(shape)
         self.new_shape._set_value(shape, force_write=True)
         return shape
@@ -240,7 +218,6 @@ class ShapesOverlay(WorldOverlay):
         """Copy a selected shape to a view position as the center."""
         # Copy the shape
         shape = self._shape_to_copy.copy()
-        self._unbind_shape_events(shape)
         self._shapes.append(shape)
         self.new_shape._set_value(shape, force_write=True)
         # Move the copied shape to a view position
@@ -265,9 +242,9 @@ class ShapesOverlay(WorldOverlay):
             if self._selected_shape is None:
                 self._selected_shape = self._create_new_shape()
                 self._is_new_shape = True
-            self._selected_shape.active.value = True
-            self._selected_shape.on_left_down(evt)
-            self._deselected_shapes()
+            if hasattr(self._selected_shape, "on_left_down"):
+                self._selected_shape.on_left_down(evt)
+            self._deselect_shapes()
         WorldOverlay.on_left_down(self, evt)
 
     def on_char(self, evt):
@@ -315,7 +292,7 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_left_up(evt)
 
-        if self._selected_shape:
+        if self._selected_shape and hasattr(self._selected_shape, "on_left_up"):
             self._selected_shape.on_left_up(evt)
             state = self._selected_shape.get_state()
             if state:
@@ -331,7 +308,7 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_right_down(evt)
 
-        if self._selected_shape:
+        if self._selected_shape and hasattr(self._selected_shape, "on_right_down"):
             self._selected_shape.on_right_down(evt)
         else:
             WorldOverlay.on_right_down(self, evt)
@@ -340,7 +317,7 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_right_up(evt)
 
-        if self._selected_shape:
+        if self._selected_shape and hasattr(self._selected_shape, "on_right_up"):
             self._selected_shape.on_right_up(evt)
         else:
             WorldOverlay.on_right_up(self, evt)
@@ -349,7 +326,7 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_motion(evt)
 
-        if self._selected_shape:
+        if self._selected_shape and hasattr(self._selected_shape, "on_motion"):
             self._selected_shape.on_motion(evt)
         else:
             WorldOverlay.on_motion(self, evt)
