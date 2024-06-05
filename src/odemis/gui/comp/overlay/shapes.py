@@ -20,12 +20,22 @@ This file is part of Odemis.
 
 """
 from abc import ABCMeta, abstractmethod
-from typing import Tuple, List, Union
+from collections import deque, namedtuple
+from enum import Enum
+import logging
+from typing import Tuple, List, Union, Deque
 
 import wx
 
 from odemis import model, util
 from odemis.gui.comp.overlay.base import WorldOverlay, Vec
+
+# The number of undo actions stored in the stack
+UNDO_STACK_DEPTH = 25
+# Named tuple for elements stored in undo and redo stacks
+ShapeState = namedtuple("ShapeState", ["shape", "state", "action"])
+# Enum class to store ShapeState's action
+Action = Enum("Action", ["EDIT", "CREATE", "DELETE"])
 
 
 class EditableShape(metaclass=ABCMeta):
@@ -90,6 +100,16 @@ class EditableShape(metaclass=ABCMeta):
         """Move the shape's center to a physical position."""
         pass
 
+    @abstractmethod
+    def get_state(self):
+        """Get the current state of the shape."""
+        pass
+
+    @abstractmethod
+    def restore_state(self, state):
+        """Restore the shape to a given state."""
+        pass
+
 
 class ShapesOverlay(WorldOverlay):
     """
@@ -111,9 +131,18 @@ class ShapesOverlay(WorldOverlay):
         self.shape_cls = shape_cls
         # VA which changes value upon new shape's creation
         self.new_shape = model.VigilantAttribute(None, readonly=True)
+        # True if latest action created a shape (for undo and redo)
+        self._is_new_shape = False
         self._selected_shape = None
         self._shape_to_copy = None
         self._shapes = []
+        # History of shape's states
+        # Stack is a Tuple[EditableShape, Dict[IntEnum, Any], bool] of the shape, its state and
+        # a flag stating if it was newly created
+        self._undo_stack: Deque[ShapeState] = deque(maxlen=UNDO_STACK_DEPTH)
+        self._redo_stack: Deque[ShapeState] = deque(maxlen=UNDO_STACK_DEPTH)
+        self._undo_action = False
+        self._redo_action = False
         if tool and tool_va:
             self.tool = tool
             tool_va.subscribe(self._on_tool, init=True)
@@ -129,6 +158,14 @@ class ShapesOverlay(WorldOverlay):
             shape.active.value = False
             self._shapes.remove(shape)
             self.cnvs.remove_world_overlay(shape)
+            self.cnvs.request_drawing_update()
+
+    def add_shape(self, shape):
+        """Add the shape and update canvas."""
+        if shape not in self._shapes:
+            self._shapes.append(shape)
+            self.cnvs.add_world_overlay(shape)
+            self.new_shape._set_value(shape, force_write=True)
             self.cnvs.request_drawing_update()
 
     def on_enter(self, evt):
@@ -189,19 +226,25 @@ class ShapesOverlay(WorldOverlay):
         # Move the copied shape to a view position
         p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
         shape.move_to(p_pos)
+        return shape
 
     def on_left_down(self, evt):
         if not self.active.value:
             return super().on_left_down(evt)
 
-        # Copy a selected shape
+        self._is_new_shape = False
+        # Copy the selected shape by pressing Ctrl + C
         if self._shape_to_copy:
-            self._copy_shape(evt.Position)
+            # Update the selected shape as the newly copied shape
+            # whose state can then be appended to undo stack
+            self._selected_shape = self._copy_shape(evt.Position)
+            self._is_new_shape = True
         # New or previously created shape
         else:
             self._selected_shape = self._get_shape(evt)
             if self._selected_shape is None:
                 self._selected_shape = self._create_new_shape()
+                self._is_new_shape = True
             self._selected_shape.active.value = True
             self._selected_shape.on_left_down(evt)
         WorldOverlay.on_left_down(self, evt)
@@ -211,9 +254,26 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_char(evt)
 
-        if self._selected_shape:
+        if evt.GetKeyCode() == wx.WXK_CONTROL_Z:
+            # NOTE There is no key code such as WXK_SHIFT_CONTROL_Z
+            # when Ctrl + Shift + Z is pressed, GetKeyCode() returns WXK_CONTROL_Z
+            # in addition to that one can check ShiftDown() flag for the Shift key
+            # Ctrl + Shift + Z
+            if evt.ShiftDown():
+                self._redo_action = True
+                self.redo()
+            # Ctrl + Z
+            else:
+                self._undo_action = True
+                self.undo()
+        elif self._selected_shape:
             if evt.GetKeyCode() == wx.WXK_DELETE:
-                self.remove_shape(self._selected_shape)
+                state = self._selected_shape.get_state()
+                if state:
+                    shape_state = ShapeState(self._selected_shape, state, Action.DELETE)
+                    self._undo_stack.append(shape_state)
+                    self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
+                    self.remove_shape(shape_state.shape)
             elif evt.GetKeyCode() == wx.WXK_ESCAPE:
                 # Unselect the selected shape
                 self._selected_shape.selected.value = False
@@ -237,8 +297,73 @@ class ShapesOverlay(WorldOverlay):
         self._selected_shape = self._get_shape(evt)
         if self._selected_shape:
             self._selected_shape.on_left_up(evt)
+            state = self._selected_shape.get_state()
+            if state:
+                action = Action.CREATE if self._is_new_shape else Action.EDIT
+                shape_state = ShapeState(self._selected_shape, state, action)
+                if not self._undo_stack or self._undo_stack[-1] != shape_state:
+                    self._undo_stack.append(shape_state)
+                    self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
         else:
             WorldOverlay.on_left_up(self, evt)
+
+    def undo(self):
+        """Undo the last action."""
+        if not self._undo_stack:
+            logging.info(
+                "No undo action for %s at %s.", self.__class__.__name__, hex(id(self))
+            )
+            return
+        # If an edit was just made (detected by an empty redo stack) or if a redo action was just performed,
+        # we need to revert to the state before the lastest one. Otherwise, we revert to the latest state.
+        if not self._redo_stack or self._redo_action:
+            self._redo_action = False
+            shape_state = self._undo_stack.pop()
+            self._redo_stack.append(shape_state)
+            if shape_state.action == Action.CREATE:
+                self.remove_shape(shape_state.shape)
+                return
+            elif shape_state.action == Action.DELETE:
+                self.add_shape(shape_state.shape)
+                return
+        if self._undo_stack:
+            shape_state = self._undo_stack.pop()
+            self._redo_stack.append(shape_state)
+            shape_state.shape.restore_state(shape_state.state)
+            if shape_state.action == Action.CREATE:
+                self.remove_shape(shape_state.shape)
+            elif shape_state.action == Action.DELETE:
+                self.add_shape(shape_state.shape)
+            self.cnvs.request_drawing_update()
+
+    def redo(self):
+        """Redo the last undone action."""
+        if not self._redo_stack:
+            logging.info(
+                "No redo action for %s at %s.", self.__class__.__name__, hex(id(self))
+            )
+            return
+        # If an undo action was just performed, we need to revert to the state before the lastest one.
+        # Otherwise, we revert to the latest state.
+        if self._undo_action:
+            self._undo_action = False
+            shape_state = self._redo_stack.pop()
+            self._undo_stack.append(shape_state)
+            if shape_state.action == Action.CREATE:
+                self.add_shape(shape_state.shape)
+                return
+            elif shape_state.action == Action.DELETE:
+                self.remove_shape(shape_state.shape)
+                return
+        if self._redo_stack:
+            shape_state = self._redo_stack.pop()
+            self._undo_stack.append(shape_state)
+            shape_state.shape.restore_state(shape_state.state)
+            if shape_state.action == Action.CREATE:
+                self.add_shape(shape_state.shape)
+            elif shape_state.action == Action.DELETE:
+                self.remove_shape(shape_state.shape)
+            self.cnvs.request_drawing_update()
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, dash=False):
         """Draw all the shapes."""

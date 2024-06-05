@@ -21,6 +21,7 @@ This file is part of Odemis.
 """
 import logging
 import math
+from typing import Optional
 
 import cairo
 import wx
@@ -31,6 +32,12 @@ from odemis.gui.comp.overlay.base import SEL_MODE_ROTATION, LineEditingMixin, Ve
 from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
 from odemis.util.raster import point_in_polygon
+
+
+class PolygonState:
+    def __init__(self, polygon_overlay) -> None:
+        self._finished = polygon_overlay._finished
+        self._points = polygon_overlay._points.copy()
 
 
 class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
@@ -56,11 +63,7 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         """
         shape = PolygonOverlay(self.cnvs)
         shape.colour = self.colour
-        shape.v_points = self.v_points.copy()
-        shape._finished = self._finished
-        shape._points = self._points.copy()
-        shape._phys_to_view()
-        shape.points.value = shape._points
+        shape.restore_state(self.get_state())
         return shape
 
     def move_to(self, pos):
@@ -68,6 +71,23 @@ class PolygonOverlay(WorldOverlay, LineEditingMixin, EditableShape):
         current_pos  = self.get_position()
         shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
         self._points = [p + shift for p in self._points]
+        self._phys_to_view()
+        self.points.value = self._points
+
+    def get_state(self) -> Optional[PolygonState]:
+        """Get the current state of the shape."""
+        # Only return the state if the polygon creation is finished
+        # By doing so avoid storing an undo action during polygon creation
+        if self.right_click_finished:
+            return PolygonState(self)
+        return None
+
+    def restore_state(self, state: PolygonState):
+        """Restore the shape to a given state."""
+        self._finished = state._finished
+        self._points = state._points
+        # The v_points will be calculated by _phys_to_view()
+        self.v_points = [None] * len(self._points)
         self._phys_to_view()
         self.points.value = self._points
 
