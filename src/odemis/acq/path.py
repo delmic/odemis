@@ -289,6 +289,17 @@ SPARC2_MODES = {
                                    #'z': "MD:" + model.MD_FAV_POS_ACTIVE
                                    },
                  }),
+            # TODO need to check properties and values
+            'tunnel-lens-align': (r"ccd.*",
+                   {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
+                    'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                    'filter': {'band': BAND_PASS_THROUGH},
+                    'spectrograph': {'grating': 'mirror', 'wavelength': 0},
+                    'slit-in-big': {'x': 'off'},  # closed
+                    'spec-ded-aligner': {'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                    'chamber-light': {'power': 'off'},
+                    #'brightlight-ext': {'power': 'on'},
+                    }),
          }
 
 # Currently not used as-is, mostly here to make guessMode() happy.

@@ -562,6 +562,7 @@ class Sparc2AlignTab(Tab):
             (panel.btn_align_fiber, "fiber-align"),
             (panel.btn_align_streakcam, "streak-align"),
             (panel.btn_align_light_in, "light-in-align"),
+            (panel.btn_align_tunnel_lens, "tunnel-lens-align"),
         ))
 
         # The GUI mode to the optical path mode (see acq.path.py)
@@ -574,6 +575,7 @@ class Sparc2AlignTab(Tab):
             "fiber-align": "fiber-align",
             "streak-align": "streak-align",
             "light-in-align": "light-in-align",
+            "tunnel-lens-align": "tunnel-lens-align",
         }
         # Note: ActuatorController automatically hides the unnecessary alignment panels, based on the axes present.
         for btn, mode in list(self._alignbtn_to_mode.items()):
@@ -814,6 +816,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_streak.Show(False)
             self.panel.pnl_spec_switch.Show(False)
             self.panel.pnl_light_aligner.Show(False)
+            self.panel.pnl_lens_tunnel.Show(False)
 
             self.panel.pnl_moi_settings.Show(True)
             self.panel.btn_bkg_acquire.Enable(True)
@@ -835,6 +838,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_streak.Show(False)
             self.panel.pnl_spec_switch.Show(False)
             self.panel.pnl_light_aligner.Show(False)
+            self.panel.pnl_lens_tunnel.Show(False)
 
             self.panel.pnl_moi_settings.Show(True)
             self.panel.btn_bkg_acquire.Enable(True)
@@ -854,6 +858,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_streak.Show(False)
             self.panel.pnl_spec_switch.Show(False)
             self.panel.pnl_light_aligner.Show(False)
+            self.panel.pnl_lens_tunnel.Show(False)
 
             self.panel.pnl_moi_settings.Show(False)
             # TODO: same as lens-align after focus change
@@ -870,6 +875,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_fibaligner.Show(False)
             self.panel.pnl_streak.Show(False)
             self.panel.pnl_spec_switch.Show(False)
+            self.panel.pnl_lens_tunnel.Show(False)
             # If light-aligner available, allow to adjust it in this view too,
             # as the lens 2 is active, which allows to further align the light input.
             if main.light_aligner:
@@ -898,6 +904,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_streak.Show(False)
             self.panel.pnl_spec_switch.Show(False)
             self.panel.pnl_light_aligner.Show(False)
+            self.panel.pnl_lens_tunnel.Show(False)
 
             self.panel.pnl_moi_settings.Show(False)
         elif mode == "fiber-align":
@@ -919,6 +926,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_spec_switch.Show(False)
             self.panel.pnl_light_aligner.Show(False)
             self.panel.pnl_streak.Show(False)
+            self.panel.pnl_lens_tunnel.Show(False)
 
             self.panel.pnl_moi_settings.Show(False)
 
@@ -941,6 +949,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_streak.Show(True)
             self.panel.pnl_spec_switch.Show(False)
             self.panel.pnl_light_aligner.Show(False)
+            self.panel.pnl_lens_tunnel.Show(False)
 
             self.panel.pnl_moi_settings.Show(False)
         elif mode == "light-in-align":
@@ -961,6 +970,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_fibaligner.Show(False)
             self.panel.pnl_streak.Show(False)
             self.panel.pnl_light_aligner.Show(True)
+            self.panel.pnl_lens_tunnel.Show(False)
             if main.spec_switch:
                 self.panel.pnl_spec_switch.Show(True)
                 self.panel.pnl_spec_switch.Enable(False)  # Wait until the spec-switch is engaged
@@ -969,6 +979,23 @@ class Sparc2AlignTab(Tab):
 
             self.panel.pnl_moi_settings.Show(False)
             f.add_done_callback(self._on_light_in_align_done)
+        elif mode == "tunnel-lens-align":
+            self.tab_data_model.focussedView.value = self.panel.vp_align_lens.view
+            if self._ccd_stream:
+                self._ccd_stream.should_update.value = True
+            if self._mirror_settings_controller:
+                self._mirror_settings_controller.enable(False)
+            self.panel.pnl_mirror.Show(False)
+            self.panel.pnl_lens_mover.Show(False)
+            self.panel.pnl_lens_switch.Show(False)
+            self.panel.pnl_focus.Show(True)
+            self.panel.pnl_fibaligner.Show(False)
+            self.panel.pnl_streak.Show(False)
+            self.panel.pnl_spec_switch.Show(False)
+            self.panel.pnl_light_aligner.Show(False)
+            self.panel.pnl_lens_tunnel.Show(True)
+
+            self.panel.pnl_moi_settings.Show(False)
         else:
             raise ValueError("Unknown alignment mode %s!" % mode)
 
@@ -1003,6 +1030,10 @@ class Sparc2AlignTab(Tab):
                 pages.append("doc/sparc2_light_in_fplm.html")
             else:  # default to ELIM
                 pages.append("doc/sparc2_light_in_elim.html")
+        elif mode == "tunnel-lens-align":
+            if self._focus_streams:
+                pages.append("doc/sparc2_autofocus.html")
+            pages.append("doc/sparc2_tunnel_lens.html")
         else:
             logging.warning("Could not find alignment documentation for mode %s requested." % mode)
 
@@ -1360,6 +1391,11 @@ class Sparc2AlignTab(Tab):
                 ss = self._focus_streams
                 btn = self.panel.btn_autofocus
                 gauge = self.panel.gauge_autofocus
+            elif align_mode == "tunnel-lens-align":
+                focus_mode = "spec-ded-focus"
+                ss = self._focus_streams
+                btn = self.panel.btn_autofocus
+                gauge = self.panel.gauge_autofocus
             elif align_mode == "fiber-align":
                 focus_mode = "spec-fiber-focus"
                 ss = []  # No stream to play
@@ -1387,7 +1423,7 @@ class Sparc2AlignTab(Tab):
             # Cancel task, if we reached here via the GUI cancel button
             self._autofocus_f.cancel()
 
-            if self._autofocus_align_mode in ("lens-align", "lens2-align"):
+            if self._autofocus_align_mode in ("lens-align", "lens2-align", "tunnel-lens-align"):
                 btn = self.panel.btn_autofocus
             elif self._autofocus_align_mode == "fiber-align":
                 btn = self.panel.btn_fib_autofocus

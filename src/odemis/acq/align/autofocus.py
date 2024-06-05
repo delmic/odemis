@@ -572,6 +572,9 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
     focuser = None
     if align_mode == "spec-focus":
         focuser = model.getComponent(role='focus')
+    # TODO check if this is necessary
+    elif align_mode == "spec-ded-focus":
+        focuser = model.getComponent(role='spec-ded-focus')
     elif align_mode == "spec-fiber-focus":
         # The "right" focuser is the one which affects the same detectors as the fiber-aligner
         aligner = model.getComponent(role='fiber-aligner')
@@ -786,7 +789,14 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
             raise CancelledError()
 
         logging.debug("Turning on the light")
-        bl = model.getComponent(role="brightlight")
+        if align_mode == "spec-ded-focus":
+            try:
+                bl = model.getComponent(role="brightlight-ext")
+            except KeyError:
+                logging.error("No light component found with role brightlight-ext")
+        else:
+            bl = model.getComponent(role="brightlight")
+
         _playStream(dets[0], streams)
         future._running_subf = light.turnOnLight(bl, dets[0])
         try:

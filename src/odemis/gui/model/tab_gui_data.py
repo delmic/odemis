@@ -571,6 +571,13 @@ class ActuatorGUIData(MicroscopyGUIData):
                   "light_aligner": (50e-6, [5e-6, 500e-6], "light_aligner", None),
                   "spec_switch": (50e-6, [5e-6, 500e-6], "spec_switch", None),
                   }
+        if main.spec_ded_aligner:
+            ss_def.update({
+                "spec_ded_aligner_x": (5e-6, [100e-9, 1e-4], "spec_ded_aligner", {"x"}),
+                "spec_ded_aligner_y": (5e-6, [100e-9, 1e-4], "spec_ded_aligner", {"y"}),
+                "spec_ded_aligner_z": (25e-6, [5e-6, 500e-6], "spec_ded_aligner", {"z"}),
+            })
+
         # Use mirror_xy preferably, and fallback to mirror
         if main.mirror_xy:
             # Typically for the SPARCv2
@@ -699,7 +706,8 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # Mode values are different from the modes of the OpticalPathManager
         amodes = [
                   "lens-align", "mirror-align", "lens2-align", "center-align",
-                  "ek-align", "streak-align", "fiber-align", "light-in-align"
+                  "ek-align", "streak-align", "fiber-align", "light-in-align",
+                  "tunnel-lens-align",
                  ]
 
         # VA for autofocus procedure mode
