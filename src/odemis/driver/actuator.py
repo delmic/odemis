@@ -36,6 +36,7 @@ import numpy
 from odemis import model, util
 from odemis.model import (CancellableThreadPoolExecutor, CancellableFuture,
                           isasync, MD_PIXEL_SIZE_COR, MD_ROTATION_COR, MD_POS_COR, roattribute)
+from odemis.util.driver import isNearPosition
 from odemis.util.transform import RigidTransform
 
 
@@ -663,6 +664,9 @@ class ConvertStage(model.Actuator):
                 logging.info("Axes %s of dependency are missing from .speed, so not providing it",
                              set(axes) - speed_axes)
 
+        # only enable for fibsem enabled systems TODO: confirm this is only for tfs
+        self.fibsem_enabled = any([c.role == "fibsem" for c in model.getComponents()])
+
     def _get_rot_matrix(self, invert=False):
         rotation = self._metadata[model.MD_ROTATION_COR]
         if invert:
@@ -765,12 +769,28 @@ class ConvertStage(model.Actuator):
 
     def _get_pos_vector(self, pos_val, absolute=True):
         """ Convert position dict into dependant axes position dict"""
+
+        def _at_sem_orientation():
+            """check if we are at the SEM orientation position."""
+
+            stage_bare = model.getComponent(role="stage-bare")
+            md = stage_bare.getMetadata()
+            sem_pos_active = md[model.MD_FAV_SEM_POS_ACTIVE]
+            pos = stage_bare.position.value
+
+            # check if the stage is near the sem orientation position
+            return isNearPosition(pos, sem_pos_active, {"rz"})
+
         if absolute:
             cpos = self.position.value
             vpos = pos_val.get("x", cpos["x"]), pos_val.get("y", cpos["y"])
         else:
             vpos = pos_val.get("x", 0), pos_val.get("y", 0)
         vpos_dep = self._convertPosTodep(vpos, absolute=absolute)
+
+        # flip the sign of the z-axis if needed (at SEM orientation position)
+        if self.fibsem_enabled and _at_sem_orientation():
+            vpos_dep[1] *= -1
         return {self._axes_dep["x"]: vpos_dep[0], self._axes_dep["y"]: vpos_dep[1]}
 
     @isasync
