@@ -1468,10 +1468,9 @@ class UEyeDataFlow(model.DataFlow):
         """
         detector (UEye): the detector that the dataflow corresponds to
         """
-        model.DataFlow.__init__(self)
+        super().__init__()
         self._detector = detector
         self._sync_event = None  # synchronization Event
-        self._prev_max_discard = self._max_discard
 
     # start/stop_generate are _never_ called simultaneously (thread-safe)
     def start_generate(self):
