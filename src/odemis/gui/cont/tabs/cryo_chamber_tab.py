@@ -40,7 +40,7 @@ from odemis import model
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
-    FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS
+    FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS, FIB_IMAGING
 from odemis.acq.stream import StaticStream
 from odemis.gui.comp.buttons import BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS, BTN_TOGGLE_COMPLETE
 from odemis.gui.cont.tabs.tab import Tab
@@ -161,8 +161,41 @@ class CryoChamberTab(Tab):
 
             # the meteor buttons
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
+                                  FIB_IMAGING: self.panel.btn_switch_fib_imaging, MILLING: self.panel.btn_switch_milling,
                                   GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
             self._grid_btns = (self.panel.btn_switch_grid1, self.panel.btn_switch_grid2)
+
+            # TODO: only enable new buttons for TFS_1
+
+            # panel.btn_switch_advanced.Show()
+            panel.pnl_meteor_stage.Show()
+            # milling angle
+            # shuttle pre-tilt
+            # position orientations
+            # how many should we let the user control?
+            stage_md = self._stage.getMetadata()
+
+            # but directly the rx value, so the name of the control should be updated
+            # Define axis connector to link milling angle to UI float ctrl
+            self.milling_connector = AxisConnector('rx', self._stage, panel.ctrl_rx, pos_2_ctrl=self._milling_angle_changed,
+                                                ctrl_2_pos=self._milling_ctrl_changed, events=wx.EVT_COMMAND_ENTER)
+            # Set the milling angle range according to rx axis range
+            try:
+                # shuttle pre-tilt
+                panel.ctrl_shuttle_pre_tilt.SetValueRange(0, 90)
+                pre_tilt_value = stage_md[model.MD_SAMPLE_PRE_TILT]
+                # milling tilt angle
+                rx_range = self._stage.axes['rx'].range
+                panel.ctrl_milling_angle.SetValueRange(*(math.degrees(r) for r in rx_range))
+                rx_value = stage_md[model.MD_FAV_MILL_POS_ACTIVE]['rx']
+                self.panel.ctrl_milling_angle.Value = readable_str(math.degrees(rx_value), unit="°", sig=3)
+                self.panel.ctrl_shuttle_pre_tilt.Value = readable_str(math.degrees(pre_tilt_value), unit="°", sig=3)
+            except KeyError:
+                raise ValueError('The stage is missing an rx axis.')
+            panel.ctrl_milling_angle.Bind(wx.EVT_CHAR, panel.ctrl_rx.on_char)
+
+            # TODO: dynamically add panels to the GUI for the different positions (rx, rz)
+            # TODO: disable extra buttons for non-TFS_1
 
         elif self._role == 'mimas':
             self._stage = self.tab_data_model.main.stage
@@ -701,8 +734,9 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             if (
-                self._target_position in [FM_IMAGING, SEM_IMAGING]
-                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING]
+                # TODO: there is better logic for this
+                self._target_position in [FM_IMAGING, SEM_IMAGING, FIB_IMAGING, MILLING]
+                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, FIB_IMAGING, MILLING]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None
