@@ -22,6 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 from itertools import chain
 import logging
 import math
+from typing import Optional
+
 from odemis import model
 from odemis.model import ComponentBase, DataFlowBase
 from odemis.util import img
@@ -261,7 +263,7 @@ class SpecDataFlow(model.DataFlow):
         self.active = False
         logging.debug("Spectrometer acquisition finished")
 
-    def synchronizedOn(self, event):
+    def synchronizedOn(self, event: Optional[model.Event]):
         # Trick: for the frameDuration VA, all the settings must be applied... but this normally
         # only happens when starting the acquisition. So we force the settings to be applied when
         # setting synchronization.
