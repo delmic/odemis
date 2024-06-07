@@ -777,6 +777,9 @@ class Sparc2AlignGUIData(ActuatorGUIData):
                 if not {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()):
                     raise ValueError("spec-switch should have FAV_POS_ACTIVE and FAV_POS_DEACTIVE")
 
+        if main.spec_ded_aligner is None:
+            amodes.remove("tunnel-lens-align")
+
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 
     def _getImagePixelSizeNoBinning(self) -> Tuple[float, float]:
