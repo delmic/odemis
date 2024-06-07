@@ -16,24 +16,24 @@ You should have received a copy of the GNU General Public License along with Ode
 '''
 # This is a driver for the Andor Shamrock & Kymera spectographs.
 
-from ctypes import *
 import ctypes
+import itertools
 import logging
 import math
-from typing import Optional, Dict
-
-from odemis import model
-import odemis
-from odemis.driver import andorcam2
-from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
-from odemis import util
-from odemis.util import driver, to_str_escape
 import os
 import signal
 import sys
 import threading
 import time
-import itertools
+from ctypes import *
+from typing import Optional, Dict, List, Tuple, Union  # Must be after ctypes
+
+import odemis
+from odemis import model
+from odemis import util
+from odemis.driver import andorcam2
+from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
+from odemis.util import driver, to_str_escape
 
 # Constants from ShamrockCIF.h
 ACCESSORYMIN = 0  # changed in the latest version (from 1->2)
@@ -276,6 +276,35 @@ SLIT_NAMES = {INPUT_SLIT_SIDE: "slit-in-side",  # Note: previously it was called
               OUTPUT_SLIT_DIRECT: "slit-out-direct",
              }
 
+# default names for the irises
+IRIS_NAMES = {
+    DIRECT_PORT: "iris-direct",
+    SIDE_PORT: "iris-side",
+}
+
+# Conversion factor from the opening values (in % from min to max opening) to the actual opening in m, roughly.
+# Experimentally, the full opening of the iris is ~20mm. Note the minimum opening is > 0 (there is still light).
+IRIS_OPENING_TO_M = 200e-6  # m, approximate
+IRIS_POS_MIN = 0
+IRIS_POS_MAX = 100
+
+def iris_hw_to_user(hw_value: int) -> float:
+    """
+    Convert the iris position as handled by the hardware (in percent) value to a user-friendly value.
+    :param hw_value: the hardware value (between 0 and 100)
+    :return: the iris opening in m (approximately)
+    """
+    return (hw_value + 1) * IRIS_OPENING_TO_M
+
+def iris_user_to_hw(user_value: float) -> int:
+    """
+    Convert the iris position from the user-friendly unit to value as used by the hardware (in percent)
+    :param user_value: the iris opening in m (approximately)
+    :return: the hardware value (between 0 and 100)
+    """
+    return int(round(user_value / IRIS_OPENING_TO_M)) - 1
+
+
 # The two values exported by the Odemis API for the flipper positions
 FLIPPER_TO_PORT = {0: DIRECT_PORT,
                    math.radians(90): SIDE_PORT}
@@ -295,47 +324,55 @@ class Shamrock(model.Actuator):
     it also work via the direct USB connection.
     Note: we don't handle changing turret (live).
     """
-    def __init__(self, name, role, device, camera=None, accessory=None,
-                 slitleds_settle_time=1e-3, slits=None,
-                 bands=None, rng=None,
-                 fstepsize=1e-6, drives_shutter=None, dependencies=None,
+    def __init__(self, name: str, role: str,
+                 device: Union[str, int],
+                 camera=None,
+                 accessory: Optional[str] = None,
+                 slitleds_settle_time: float = 1e-3,
+                 slits: Optional[Dict[int, Union[str, List[str]]]] = None,
+                 iris: Optional[Dict[int, str]] = None,
+                 bands: Optional[Dict[int, Union[List[float], str]]] = None,
+                 rng: Optional[Dict[str, Tuple[float, float]]] = None,
+                 fstepsize: float = 1e-6,
+                 drives_shutter: Optional[List[float]] = None,
+                 dependencies: Optional[Dict[str, model.HwComponent]] = None,
                  check_move: Optional[Dict[str, bool]] = None,
                  **kwargs):
         """
-        device (0<=int or str): if int, device number, if str serial number or
-          "fake" to use the simulator
-        camera (None or AndorCam2): Needed if the connection is done via the
-          I²C connector of the camera.
-        inverted (None): it is not allowed to invert the axes
-        slits (None, or dict int -> str, or dict int -> [str]): names of each slit,
-          for 1 to 4: in-side, in-direct, out-side, out-direct
-          Append "force_max" for a slit which requires to move to the maximum
-          value before going to the requested position. This is a workaround for
-          proper movement when the slit's reference switch doesn't work.
-        accessory (str or None): if "slitleds", then a TTL signal will be set to
-          high on line 1 whenever one of the slit leds might be turned on.
-        slitleds_settle_time (0 <= float): duration wait before (potentially)
-          turning on the slit leds. Useful to delay the move after the slitleds
-          interlock is set.
-        bands (None or dict 1<=int<=6 -> 2-tuple of floats > 0 or str):
-          wavelength range or name of each filter for the filter wheel from 1->6.
-          Positions without filters do not need to be defined.
-        fstepsize (0<float): size of one step on the focus actuator. Not very
-          important, mostly useful for providing to the user a rough idea of how
-          much the image will change after a move.
-        rng (dict str -> (float, float)): the min/max values for each axis.
-          They should within the standard hardware limits. If an axis is not
-          specified, the standard hardware limits are used.
-          For now it *only* works for the focus axis.
-        drives_shutter (list of float): flip-out angles for which the shutter
-          should be set to BNC (external) mode. Otherwise, the shutter is left
-          opened.
-        dependencies (None or dict str -> HwComponent): if the key starts with
-          "led_prot", it will set the .protection to True any time that the
-          slit leds could be turned on.
+        :param device (0<=int or str): if int, device number, if str serial number or
+        "fake" to use the simulator
+        :param camera (None or AndorCam2): Needed if the connection is done via the
+        I²C connector of the camera.
+        :param accessory: if "slitleds", then a TTL signal will be set to
+        high on line 1 whenever one of the slit leds might be turned on.
+        :param slitleds_settle_time (0 <= float): duration wait before (potentially)
+        turning on the slit leds. Useful to delay the move after the slitleds
+        interlock is set.
+        :param slits (None, or dict int -> str, or dict int -> [str]): names of each slit,
+        for 1 to 4: in-side, in-direct, out-side, out-direct
+        Append "force_max" for a slit which requires to move to the maximum
+        value before going to the requested position. This is a workaround for
+        proper movement when the slit's reference switch doesn't work.
+        :param iris: for each iris (0=direct, 1=side) -> axis name.
+        :param bands (None or dict 1<=int<=6 -> 2-tuple of floats > 0 or str):
+        wavelength range or name of each filter for the filter wheel from 1->6.
+        Positions without filters do not need to be defined.
+        :param rng (dict str -> (float, float)): the min/max values for each axis.
+        They should within the standard hardware limits. If an axis is not
+        specified, the standard hardware limits are used.
+        For now, it *only* works for the focus axis.
+        :param fstepsize (0<float): size of one step on the focus actuator. Not very
+        important, mostly useful for providing to the user a rough idea of how
+        much the image will change after a move.
+        :param drives_shutter: flip-out angles for which the shutter should be set
+        to BNC (external) mode. Otherwise, the shutter is left opened.
+        :param dependencies (None or dict str -> HwComponent): if the key starts with
+        "led_prot", it will set the .protection to True any time that the
+        slit leds could be turned on.
         :param check_move: Name of the axis -> bool: If True (default), after move, raise an error if
         that position is not the expected one. If False, if the position is not the expected one,
         just log a warning. Note: for now, only some axes are actually checked (flipper and band)
+        :param inverted: Must be None (or not passed), as it is not allowed to invert the axes.
         """
         # From the documentation:
         # If controlling the shamrock through I²C it is important that both the
@@ -374,6 +411,15 @@ class Shamrock(model.Actuator):
                     self._force_slit_max.add(i)
             else:
                 raise ValueError("Slit name should be string or a list of strings, but got %s" % (slitn,))
+
+        self._iris_names = IRIS_NAMES.copy()
+        iris = iris or {}
+        for i, irisn in iris.items():
+            if not 0 <= i <= 1:
+                raise ValueError(f"Iris number should be 0 or 1, but got {i}")
+            if not isinstance(irisn, str):
+                raise ValueError(f"Iris name should be string, but got {irisn}")
+            self._iris_names[i] = irisn
 
         self.Initialize()
         self._reconnecting = False
@@ -513,17 +559,31 @@ class Shamrock(model.Actuator):
                 else:
                     logging.info("Slit %d (%s) is not present", i, slitn)
 
+            # Add iris axes
+            for i, irisn in self._iris_names.items():
+                if self.IrisIsPresent(i):
+                    # We shift the values by one because the minimum position "0" is not fully closed.
+                    # It's approximate, but at least "1" indicates that it's still a bit open.
+                    rng = [iris_hw_to_user(v) for v in (IRIS_POS_MIN, IRIS_POS_MAX)]
+                    axes[irisn] = model.Axis(unit="m", range=rng)
+                    logging.info("Iris %d added as %s", i, irisn)
+                elif i in iris:  # If the user requested it, and it's not there, that's an error
+                    raise ValueError(f"Iris {i} ({irisn}) is not present")
+
             if self.FlipperMirrorIsPresent(OUTPUT_FLIPPER):
                 # The position values are arbitrary, but these are the one we
                 # typically use in Odemis for switching between two positions
-                axes["flip-out"] = model.Axis(unit="rad",
-                                              choices=set(FLIPPER_TO_PORT.keys())
-                                              )
+                axes["flip-out"] = model.Axis(unit="rad", choices=set(FLIPPER_TO_PORT.keys()))
                 logging.info("Adding out mirror flipper as flip-out")
                 self._sanitiesFlipper(OUTPUT_FLIPPER)
             else:
                 logging.info("Out mirror flipper is not present")
-            # TODO: support INPUT_FLIPPER
+
+            if self.FlipperMirrorIsPresent(INPUT_FLIPPER):
+                axes["flip-in"] = model.Axis(unit="rad", choices=set(FLIPPER_TO_PORT.keys()))
+                logging.info("Adding in mirror flipper as flip-in")
+            else:
+                logging.info("In mirror flipper is not present")
 
             # Associate the output port to the shutter position
             # TODO: have a RO VA to represent the position of the shutter?
@@ -1376,6 +1436,53 @@ class Shamrock(model.Actuator):
         self._dll.ShamrockAccessoryIsPresent(self._device, byref(present))
         return present.value != 0
 
+    # Iris management
+    # (Not documented anymore in the latest SDK, but still available. Probably just an error.)
+    @callWithReconnect
+    def IrisIsPresent(self, iris: int) -> bool:
+        """
+        Check if the given iris is present
+        :param iris: DIRECT_PORT or SIDE_PORT
+        :return: True if the given iris is present
+        """
+        if iris not in (DIRECT_PORT, SIDE_PORT):
+            raise ValueError(f"iris argument should be either DIRECT_PORT or SIDE_PORT, but got {iris}")
+
+        present = c_int()
+        self._dll.ATSpectrographIrisIsPresent(self._device, iris, byref(present))
+        return present.value != 0
+
+    @callWithReconnect
+    def SetIris(self, iris: int, value: int) -> None:
+        """
+        Sets iris position for the specified iris port.
+        :param iris: DIRECT_PORT or SIDE_PORT
+        :param value: 0 <= int <= 100
+        """
+        if iris not in (DIRECT_PORT, SIDE_PORT):
+            raise ValueError(f"iris argument should be either DIRECT_PORT or SIDE_PORT, but got {iris}")
+        if not isinstance(value, int) or not IRIS_POS_MIN <= value <= IRIS_POS_MAX:
+            raise ValueError(f"Iris position should be within {IRIS_POS_MIN}->{IRIS_POS_MAX}, but got {value}")
+
+        with self._hw_access:
+            logging.debug("Setting iris %d to %d", iris, value)
+            self._dll.ATSpectrographSetIris(self._device, iris, value)
+
+    @callWithReconnect
+    def GetIris(self, iris: int) -> int:
+        """
+        Gets the iris position for the specified port.
+        :param iris: DIRECT_PORT or SIDE_PORT
+        :return: iris opening: 0 <= int <= 100
+        """
+        if iris not in (DIRECT_PORT, SIDE_PORT):
+            raise ValueError(f"iris argument should be either DIRECT_PORT or SIDE_PORT, but got {iris}")
+
+        value = c_int()
+        with self._hw_access:
+            self._dll.ATSpectrographGetIris(self._device, iris, byref(value))
+        return value.value
+
     # Helper functions
     def _getGratingChoices(self):
         """
@@ -1423,10 +1530,15 @@ class Shamrock(model.Actuator):
             if name in self.axes:
                 pos[name] = self.GetAutoSlitWidth(i)
 
-        if "flip-out" in self.axes:
-            val = self.GetFlipperMirror(OUTPUT_FLIPPER)
-            userv = [k for k, v in FLIPPER_TO_PORT.items() if v == val][0]
-            pos["flip-out"] = userv
+        for i, name in self._iris_names.items():
+            if name in self.axes:
+                pos[name] = iris_hw_to_user(self.GetIris(i))
+
+        for n, name in ((OUTPUT_FLIPPER, "flip-out"), (INPUT_FLIPPER, "flip-in")):
+            if name in self.axes:
+                val = self.GetFlipperMirror(n)
+                userv = [k for k, v in FLIPPER_TO_PORT.items() if v == val][0]
+                pos[name] = userv
 
         self.position._set_value(pos, must_notify=must_notify, force_write=True)
 
@@ -1595,6 +1707,9 @@ class Shamrock(model.Actuator):
             elif axis in self._slit_names.values():
                 sid = [k for k, v in self._slit_names.items() if v == axis][0]
                 actions.append((axis, self._doSetSlitRel, sid, s))
+            elif axis in self._iris_names.values():
+                iris_id = [k for k, v in self._iris_names.items() if v == axis][0]
+                actions.append((axis, self._doSetIrisRel, iris_id, s))
             else:
                 raise NotImplementedError("Relative move of axis %s not supported" % (axis,))
 
@@ -1613,13 +1728,10 @@ class Shamrock(model.Actuator):
         self._checkMoveAbs(pos)
 
         # If grating needs to be changed, change it first, then the wavelength
-        ordered_axes = ("grating", "wavelength", "band", "focus", "flip-out") + tuple(self._slit_names.values())
+        ordered_axes = util.sorted_according_to(pos.keys(), ("grating", "wavelength"))
         actions = []
         for axis in ordered_axes:
-            try:
-                p = pos[axis]
-            except KeyError:
-                continue
+            p = pos[axis]
             if axis == "grating":
                 actions.append((axis, self._doSetGrating, p))
             elif axis == "wavelength":
@@ -1629,12 +1741,18 @@ class Shamrock(model.Actuator):
                 actions.append((axis, self._doSetFilter, p, check))
             elif axis == "focus":
                 actions.append((axis, self._doSetFocusAbs, p))
+            elif axis == "flip-in":
+                check = self._check_move.get(axis, True)
+                actions.append((axis, self._doSetFlipper, INPUT_FLIPPER, p, check))
             elif axis == "flip-out":
                 check = self._check_move.get(axis, True)
                 actions.append((axis, self._doSetFlipper, OUTPUT_FLIPPER, p, check))
             elif axis in self._slit_names.values():
                 sid = [k for k, v in self._slit_names.items() if v == axis][0]
                 actions.append((axis, self._doSetSlitAbs, sid, p))
+            elif axis in self._iris_names.values():
+                iris_id = [k for k, v in self._iris_names.items() if v == axis][0]
+                actions.append((axis, self._doSetIrisAbs, iris_id, p))
 
         f = self._executor.submit(self._doMultipleActions, actions)
         return f
@@ -1775,6 +1893,33 @@ class Shamrock(model.Actuator):
             self.SetAutoSlitWidth(sid, SLITWIDTHMAX * 1e-6)
 
         self.SetAutoSlitWidth(sid, width)
+        self._updatePosition()
+
+    def _doSetIrisRel(self, iris_id: int, shift: float):
+        """
+        Change the iris opening by a value
+        :param iris_id: iris ID
+        :param shift: change in opening size in m
+        """
+        cur_pos = self.GetIris(iris_id)
+        width = iris_hw_to_user(cur_pos) + shift
+        # it's only now that we can check the absolute position is allowed
+        n = self._iris_names[iris_id]
+        rng = self.axes[n].range
+        if not rng[0] <= width <= rng[1]:
+            raise ValueError("Position %f of axis '%s' not within range %f→%f" %
+                             (width, n, rng[0], rng[1]))
+
+        self._doSetIrisAbs(iris_id, width)
+
+    def _doSetIrisAbs(self, iris_id: int, width: float):
+        """
+        Change the iris opening to a value
+        iris_id (int): iris ID
+        width (float): new position in m
+        """
+        p = iris_user_to_hw(width)
+        self.SetIris(iris_id, p)
         self._updatePosition()
 
     def _doSetFlipper(self, flipper: int, pos: int, check: bool):
@@ -1972,10 +2117,13 @@ class FakeShamrockDLL(object):
                        3: 1000,
                       }
         # flippers: int (id) -> int (port number, 0 or 1)
-        self._flippers = {2: 0}
+        self._flippers = {INPUT_FLIPPER: DIRECT_PORT, OUTPUT_FLIPPER: DIRECT_PORT}
 
         # accessory: 2 lines -> int (0 or 1)
         self._accessory = [0, 0]
+
+        # iris: 2 iris (DIRECT_PORT, SIDE_PORT) -> int (0->100)
+        self._iris = {DIRECT_PORT: 10, SIDE_PORT: 50}
 
         # just for simulating the limitation of the iDus
         self._ccd = ccd
@@ -2254,6 +2402,35 @@ class FakeShamrockDLL(object):
         else:
             raise ShamrockError(20268, ShamrockDLL.err_code[20268])
 
+    def ATSpectrographIrisIsPresent(self, device, iris, p_present):
+        i = _val(iris)
+        present = _deref(p_present, c_int)
+        if i not in (0, 1):
+            raise ShamrockError(20268, ShamrockDLL.err_code[20267])
+
+        # Simulate the presence of the iris only on the direct port
+        if i == 0:
+            present.value = 1  # yes!
+        else:
+            present.value = 0  # no
+
+    def ATSpectrographSetIris(self, device, iris, value):
+        i = _val(iris)
+        v = _val(value)
+        if i not in (0, 1):
+            raise ShamrockError(20268, ShamrockDLL.err_code[20267])
+        if not 0 <= v <= 100:
+            raise ShamrockError(20268, ShamrockDLL.err_code[20268])
+
+        self._iris[i] = v
+
+    def ATSpectrographGetIris(self, device, iris, p_value):
+        i = _val(iris)
+        value = _deref(p_value, c_int)
+        if i not in (0, 1):
+            raise ShamrockError(20268, ShamrockDLL.err_code[20267])
+
+        value.value = self._iris[i]
 
 class AndorSpec(model.Detector):
     """
