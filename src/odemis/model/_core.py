@@ -442,7 +442,7 @@ def createNewContainer(name, validate=True, in_own_process=True):
                 # exitcode < 0 if ended by a signal
                 logging.warning("Container %s finished with exit code %d", name, xc)
                 # TODO: report the container (and all its component) are not alive
-                # anymore to the creator?
+                # anymore to the creator? => callback with the name and the exit code?
 
         wpt = threading.Thread(name="Waiter for container " + name, target=wait_process,
                                args=(p,))
