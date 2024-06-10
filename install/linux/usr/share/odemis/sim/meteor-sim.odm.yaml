@@ -24,8 +24,8 @@ METEOR-Sim: {
     },
     children: {
         scanner: "EBeam",
-               detector0: "SE Detector",
-               focus: "EBeam Focus",
+        detector0: "SE Detector",
+        focus: "EBeam Focus",
     }
 }
 
@@ -157,7 +157,7 @@ METEOR-Sim: {
         port: "/dev/fake6", # Simulator
         address: null, # Simulator
         axes: ["fw"],
-        ustepsize: [1.227184e-6], # [rad/µstep]
+        ustepsize: [1.227184e-3], # [rad/µstep]  fake value for simulator
         rng: [[-14, 7]], # rad, more than 0->2 Pi, in order to allow one extra rotation in both direction, when quickly switching
         unit: ["rad"],
         refproc: "Standard",
@@ -175,7 +175,7 @@ METEOR-Sim: {
             "fw": 50.e-3,  # rad
         },
     },
-    children: {"slave": "Optical Actuators"},
+    dependencies: {"slave": "Optical Actuators"},
 }
 
 "Filter Wheel": {
@@ -200,7 +200,6 @@ METEOR-Sim: {
     # TODO: a way to indicate the best filter to use during alignement and brightfield? via some metadata?
     affects: ["Camera"],
 }
-
 
 # CLS3252dsc-1
 "Optical Focus": {

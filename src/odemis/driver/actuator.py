@@ -92,7 +92,7 @@ class MultiplexActuator(model.Actuator):
         model.Actuator.__init__(self, name, role, axes=axes,
                                 dependencies=dependencies, **kwargs)
 
-        if len(self.dependencies.value) > 1:
+        if len(set(dependencies.values())) > 1:
             # will take care of executing axis move asynchronously
             self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
             # TODO: make use of the 'Cancellable' part (for now cancelling a running future doesn't work)

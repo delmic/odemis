@@ -547,7 +547,7 @@ class TestSEM(unittest.TestCase):
         self.events = 0 # reset
 
         # simulate the synchronizedOn() method of a DataFlow
-        self.scanner.newPosition.subscribe(self)
+        self.scanner.newPixel.subscribe(self)
 
         self.sed.data.subscribe(self.receive_image)
         for i in range(10):
@@ -563,7 +563,7 @@ class TestSEM(unittest.TestCase):
         # acquisition immediately after receiving the right number of images)
         self.assertEqual(self.events, numbert)
 
-        self.scanner.newPosition.unsubscribe(self)
+        self.scanner.newPixel.unsubscribe(self)
         self.sed.data.get()
         time.sleep(0.1)
         self.assertEqual(self.events, numbert)

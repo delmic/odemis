@@ -472,7 +472,12 @@ HW_SETTINGS_CONFIG = {
             ("grating", {}),
             ("slit-in", {
                 "label": "Input slit",
-                "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and worse resolution.",
+                "tooltip": "Opening size of the spectrograph input slit.\nA wide opening means more light and worse resolution.",
+            }),
+            ("iris-in", {
+                "label": "Input iris",
+                "tooltip": "Opening size of the spectrograph iris.\n"
+                           "Use full opening if possible, but reduce iris to minimize optical path length variation.",
             }),
         )),
     "slit-in-big":
@@ -766,6 +771,11 @@ STREAM_SETTINGS_CONFIG = {
                 "label": "Input slit",
                 "tooltip": u"Opening size of the spectrograph input slit.\nA wide opening means more light and a worse resolution.",
             }),
+            ("iris-in", {
+                "label": "Input iris",
+                "tooltip": "Opening size of the spectrograph iris.\n"
+                           "Use full opening if possible, but reduce iris to minimize optical path length variation.",
+            }),
             ("filter", {  # from filter
                 "choices": util.format_band_choices,
             }),
@@ -896,6 +906,11 @@ STREAM_SETTINGS_CONFIG = {
                 "label": "Input slit",
                 "tooltip": u"Opening size of the spectrograph input slit.\n"
                            u"A wide opening means more light and a worse resolution.",
+            }),
+            ("iris-in", {
+                "label": "Input iris",
+                "tooltip": "Opening size of the spectrograph iris.\n"
+                           "Use full opening if possible, but reduce iris to minimize optical path length variation.",
             }),
             ("filter", {  # from filter
                 "choices": util.format_band_choices,

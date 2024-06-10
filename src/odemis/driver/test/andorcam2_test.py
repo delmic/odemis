@@ -48,6 +48,7 @@ CLASS = andorcam2.AndorCam2
 KWARGS = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
               # emgains=[[10e6, 1, 50], [1e6, 1, 150]]  # For EM-CCDs
               hw_trigger_invert=True,
+              shutter_times=[50e-3, 50e-3],  # s, open & close
               )
 KWARGS_SIM = dict(name="camera", role="ccd", device=0, transpose=[2, -1],
                   emgains=[[10e6, 1, 50], [1e6, 1, 150]],

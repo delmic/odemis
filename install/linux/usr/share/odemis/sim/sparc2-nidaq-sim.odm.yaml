@@ -50,7 +50,7 @@ SPARC2: {
     class: semnidaq.AnalogSEM,
     role: null,
     init: {
-        device: "Dev1",
+        device: "Dev1",  # see nilsdev output
         multi_detector_min_period: 1.e-6,  # s, to limit sampling frequency when acquiring with multiple detector (and reduce cross-talk)
     },
     # more detectors can be added, if necessary
@@ -70,14 +70,16 @@ SPARC2: {
     role: e-beam,
     init: {
         channels: [1, 0],
-        limits: [[0, 5], [0, 3.2]],  # V
-        park: [0, 0], # V
-        max_res: [4096, 3072],  # px, 4:3 ratio
-        settle_time: 5.e-6, # s
-        scan_active_delay: 0.5, # s
-        hfw_nomag: 0.25, # m
-        # output ports -> True (high when scanning) or False (high when parked)
-        # + property name + True (high when set to True) or False (high when set to False)
+        limits: [[-2.8, 2.8], [4.0, -4.0]],  # V
+        park: [-3.0, -4.5], # V
+        max_res: [6144, 4096],  # px, to force the same ratio as the SEM (~8/7)
+        settle_time: 100.e-6,  # s
+        scan_active_delay: 0.01,  # s, time to wait before starting a new acquisition
+        hfw_nomag: 0.4,  # m
+        # scanning_ttl = output ports -> [high_auto, high_enabled, prop_name]
+        # * high_auto: True = high when scanning, False = high when parked
+        # * high_enabled: True = high when property set to True, False = high when set to False
+        # * prop_name: name of the property to control it (null to not show any property)
         # Digital output port mapping on the Delmic scanning box v2:
         # 0 = Relay
         # 1 = Open drain output (Y0.0)
@@ -89,9 +91,18 @@ SPARC2: {
             2: [True, True, "external"],  # High when scanning, High when VA set to True
             3: [False, True, "blanker"],  # Low when scanning, High when VA set to True
         },
-        pixel_ttl: [0, 7],
-        line_ttl: [1],
-        frame_ttl: [6],
+        image_ttl: {
+            pixel: {
+                 ports: [0, 7],
+                 affects: ["Spectrometer Vis-NIR", "Camera"],
+            },
+            line: {
+                 ports: [1],
+            },
+            frame: {
+                 ports: [6],
+            },
+        },
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan

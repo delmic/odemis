@@ -1,0 +1,107 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# Allows to connect and type commands to NewPort NewFocus controller.
+"""
+Created on 28 May 2024
+
+@author: Éric Piel
+
+Copyright © 2024 Éric Piel, Delmic
+
+nfterminal is free software: you can redistribute it and/or modify it under the terms
+of the GNU General Public License version 2 as published by the Free Software
+Foundation.
+
+nfterminal is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY;
+without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR
+PURPOSE. See the GNU General Public License for more details.
+
+You should have received a copy of the GNU General Public License along with
+nfterminal. If not, see http://www.gnu.org/licenses/.
+"""
+# To test:
+# ./util/nfterminal --log-level 2 --port /dev/fake
+
+import argparse
+import logging
+from odemis.driver import nfpm
+import readline  # Magically improves the interactive input editing
+import sys
+
+
+def repl(acc):
+    print("Type Ctrl+C to quit")  # Ctrl+D also works (EOFError)
+    try:
+        while True:
+            inp = input("> ")
+            try:
+                msg = inp.encode("ascii")
+                if "?" in inp:
+                    # All, and only, commands with a question mark are query commands (ie, expect a return message)
+                    cmd, val = msg.split(b"?", 1)
+                    res = acc.sendQueryCommand(cmd, val)
+                else:
+                    acc.sendOrderCommand(msg)
+                    res = None
+            except IOError as ex:
+                # Probably just timed out because it's an order command, which
+                # doesn't return anything => fine
+                logging.warning("Command didn't return any result: %s", ex)
+                continue
+
+            if res is not None:
+                print(res.decode("latin1"))
+    except (KeyboardInterrupt, EOFError):
+        print("")
+        return
+
+
+def main(args):
+    """
+    Handles the command line arguments
+    args is the list of arguments passed
+    return (int): value to return to the OS as program exit code
+    """
+
+    # arguments handling
+    parser = argparse.ArgumentParser(prog="nfterminal",
+                                     description="Read/write commands to NewFocus controller")
+
+    parser.add_argument("--log-level", dest="loglev", metavar="<level>", type=int,
+                        default=1, help="set verbosity level (0-2, default = 1)")
+
+    parser.add_argument('--address', dest="address", required=True,
+                        help="IP address (ex: autoip, or 192.168.95.5)")
+    # TODO: special option to check for error after every command?
+
+    options = parser.parse_args(args[1:])
+
+    # Set up logging before everything else
+    if options.loglev < 0:
+        logging.error("Log-level must be positive.")
+        return 127
+    loglev_names = (logging.WARNING, logging.INFO, logging.DEBUG)
+    loglev = loglev_names[min(len(loglev_names) - 1, options.loglev)]
+    logging.getLogger().setLevel(loglev)
+
+    try:
+        acc = nfpm.PM8742._openConnection(options.address)
+
+        repl(acc)
+        acc.terminate()
+    except ValueError as exp:
+        logging.error("%s", exp)
+        return 127
+    except IOError as exp:
+        logging.error("%s", exp)
+        return 129
+    except Exception:
+        logging.exception("Unexpected error while performing action.")
+        return 130
+
+    return 0
+
+
+if __name__ == '__main__':
+    ret = main(sys.argv)
+    exit(ret)

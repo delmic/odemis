@@ -567,7 +567,8 @@ class FastEMAcquiController(object):
                                    self._main_data_model.beamshift, self._main_data_model.lens,
                                    self._main_data_model.sed, self._main_data_model.ebeam_focus,
                                    pre_calibrations=pre_calib, save_full_cells=self.save_full_cells.value,
-                                   settings_obs=self._main_data_model.settings_obs)
+                                   settings_obs=self._main_data_model.settings_obs,
+                                   spot_grid_thresh=acqui_conf.spot_grid_threshold)
                 t = estimate_acquisition_time(roa, pre_calibrations)
                 fs[f] = t
 

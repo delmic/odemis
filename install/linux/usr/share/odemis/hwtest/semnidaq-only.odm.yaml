@@ -8,7 +8,10 @@ SEM: {
 "SEM ExtXY": {
     class: semnidaq.AnalogSEM,
     role: null,
-    init: {device: "Dev1"},  # see nilsdev
+    init: {
+        device: "Dev1",  # see nilsdev output
+        multi_detector_min_period: 1.e-6,  # s, to limit sampling frequency when acquiring with multiple detector (and reduce cross-talk)
+    },
     # more detectors can be added, if necessary
     children: {
         scanner: "SEM E-beam",
@@ -33,6 +36,10 @@ SEM: {
         settle_time: 100.e-6,  # s
         scan_active_delay: 0.01,  # s, time to wait before starting a new acquisition
         hfw_nomag: 0.4,  # m
+        # scanning_ttl = output ports -> [high_auto, high_enabled, prop_name]
+        # * high_auto: True = high when scanning, False = high when parked
+        # * high_enabled: True = high when property set to True, False = high when set to False
+        # * prop_name: name of the property to control it (null to not show any property)
         # Digital output port mapping on the Delmic scanning box v2:
         # 0 = Relay
         # 1 = Open drain output (Y0.0)
@@ -40,13 +47,21 @@ SEM: {
         # 3 = Digital Out 0
         # 4 = Status led
         scanning_ttl: {
-            4: [True, True, null],
+            4: [True, True, null],  # Status LED
             2: [True, True, "external"],  # High when scanning, High when VA set to True
             3: [False, True, "blanker"],  # Low when scanning, High when VA set to True
         },
-        pixel_ttl: [0],
-        line_ttl: [1],
-        frame_ttl: [6],
+        image_ttl: {
+            pixel: {
+                 ports: [0],
+            },
+            line: {
+                 ports: [1],
+            },
+            frame: {
+                 ports: [6],
+            },
+        },
     },
     properties: {
         scale: [4, 4], # (ratio) : start with a pretty fast scan
@@ -56,7 +71,7 @@ SEM: {
     affects: ["SE Detector", "Back-Scatter Detector"],
 }
 
-# Must be connected on AI 0/AI GND
+# Must be connected on AI1/AI9 (differential)
 "SE Detector": { # aka ETD
     role: se-detector,
     init: {
