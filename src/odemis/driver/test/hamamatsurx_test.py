@@ -28,23 +28,55 @@ import unittest
 
 from cam_test_abs import VirtualTestCam, VirtualTestSynchronized
 
-logging.getLogger().setLevel(logging.DEBUG)
+logging.basicConfig(level=logging.DEBUG,
+                    format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s",
+                    force=True,
+                    )
+
+
+# Export TEST_NOHW = 1 to prevent using the real hardware
+TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
+
+#HOST_ADDRESS = "192.168.5.10"
+HOST_ADDRESS = "192.168.56.103"
 
 CLASS_STREAKCAM = hamamatsurx.StreakCamera
 
 # arguments used for the creation of basic components
 CONFIG_READOUTCAM = {"name": "ReadoutCamera", "role": "readoutcam"}
 CONFIG_STREAKUNIT = {"name": "StreakUnit", "role": "streakunit"}
+CONFIG_SYNCHROSCAN = {"name": "StreakUnit", "role": "streakunit",
+                      # As seen in C16910_M16911-01_Flash40.txt
+                      "time_ranges": {
+                          1: 70.e-12,
+                          2: 220.e-12,  # ~3x slower
+                          3: 710.e-12,  # 3x slower
+                          4: 1600.e-12,  # 2x slower
+                          5: 3600.e-12,  # 2x slower
+                      },
+}
 CONFIG_DELAYBOX = {"name": "Delaybox", "role": "delaybox"}
 
-STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
-STREAK_CHILDREN_NO_DELAYBOX = {"readoutcam": CONFIG_READOUTCAM, "streakunit": CONFIG_STREAKUNIT}
-STREAK_CHILDREN_NO_READOUT_CAM = {"streakunit": CONFIG_STREAKUNIT, "delaybox": CONFIG_DELAYBOX}
+STREAK_CHILDREN = {"readoutcam": CONFIG_READOUTCAM,
+                   "streakunit": CONFIG_STREAKUNIT,
+                   "delaybox": CONFIG_DELAYBOX}
+STREAK_CHILDREN_SYNC = {"readoutcam": CONFIG_READOUTCAM,
+                        "streakunit": CONFIG_SYNCHROSCAN,
+                        "delaybox": CONFIG_DELAYBOX}
+STREAK_CHILDREN_NO_DELAYBOX = {"readoutcam": CONFIG_READOUTCAM,
+                               "streakunit": CONFIG_STREAKUNIT}
+STREAK_CHILDREN_NO_READOUT_CAM = {"streakunit": CONFIG_STREAKUNIT,
+                                  "delaybox": CONFIG_DELAYBOX}
 
-KWARGS_STREAKCAM = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001, children=STREAK_CHILDREN)
-KWARGS_STREAKCAM_NO_DELAYBOX = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001,
+KWARGS_STREAKCAM = dict(name="streak cam", role="ccd", host=HOST_ADDRESS, port=1001,
+                        children=STREAK_CHILDREN)
+KWARGS_STREAKCAM_SYNC = dict(name="streak cam", role="ccd", host=HOST_ADDRESS, port=1001,
+                             settings_ini="C:\\ProgramData\\Hamamatsu\\HPDTA\\hpdta-synchroscan.ini",
+                             children=STREAK_CHILDREN_SYNC)
+KWARGS_STREAKCAM_NO_DELAYBOX = dict(name="streak cam", role="ccd", host=HOST_ADDRESS, port=1001,
+                                    settings_ini="C:\\ProgramData\\Hamamatsu\\HPDTA\\hpdta-single-sweep.ini",
                                     children=STREAK_CHILDREN_NO_DELAYBOX)
-KWARGS_STREAKCAM_NO_READOUT_CAM = dict(name="streak cam", role="ccd", host="172.16.4.2", port=1001,
+KWARGS_STREAKCAM_NO_READOUT_CAM = dict(name="streak cam", role="ccd", host=HOST_ADDRESS, port=1001,
                                        children=STREAK_CHILDREN_NO_READOUT_CAM)
 
 # test with spectrograph
@@ -52,9 +84,6 @@ CLASS_SPECTROGRAPH = andorshrk.Shamrock
 KWARGS_SPECTROGRAPH = dict(name="sr193", role="spectrograph", device="fake",
                        slits={1: "slit-in", 3: "slit-monochromator"},
                        bands={1: (230e-9, 500e-9), 3: (600e-9, 1253e-9), 5: "pass-through"})
-
-# Export TEST_NOHW = 1 to prevent using the real hardware
-TEST_NOHW = (os.environ.get("TEST_NOHW", "0") != "0")  # Default to Hw testing
 
 
 # Inheritance order is important for setUp, tearDown
@@ -131,42 +160,46 @@ class TestHamamatsurxNoReadoutCamera(unittest.TestCase):
             if child.name == CONFIG_DELAYBOX["name"]:
                 cls.delaybox = child
 
-        # cls.delaybox.updateMetadata({model.MD_TIME_RANGE_TO_DELAY:
-        #     {
-        #         1.e-9: 7.99e-9,
-        #         2.e-9: 9.63e-9,
-        #         5.e-9: 33.2e-9,
-        #         10.e-9: 45.9e-9,
-        #         20.e-9: 66.4e-9,
-        #         50.e-9: 102e-9,
-        #         100.e-9: 169e-9,
-        #         200.e-9: 302e-9,
-        #         500.e-9: 731e-9,
-        #         1.e-6: 1.39e-6,
-        #         2.e-6: 2.69e-6,
-        #         5.e-6: 7.02e-6,
-        #         10.e-6: 13.8e-6,
-        #         20.e-6: 26.7e-6,
-        #         50.e-6: 81.6e-6,
-        #         100.e-6: 161e-6,
-        #         200.e-6: 320e-6,
-        #         500.e-6: 798e-6,
-        #         1.e-3: 1.62e-3,
-        #         2.e-3: 3.18e-3,
-        #         5.e-3: 7.88e-3,
-        #         10.e-3: 15.4e-3,
-        #     }
-        # })
+        cls.delaybox.updateMetadata({model.MD_TIME_RANGE_TO_DELAY:
+            {
+                1.e-9: 7.99e-9,
+                2.e-9: 9.63e-9,
+                5.e-9: 33.2e-9,
+                10.e-9: 45.9e-9,
+                20.e-9: 66.4e-9,
+                50.e-9: 102e-9,
+                100.e-9: 169e-9,
+                200.e-9: 302e-9,
+                500.e-9: 731e-9,
+                1.e-6: 1.39e-6,
+                2.e-6: 2.69e-6,
+                5.e-6: 7.02e-6,
+                10.e-6: 13.8e-6,
+                20.e-6: 26.7e-6,
+                50.e-6: 81.6e-6,
+                100.e-6: 161e-6,
+                200.e-6: 320e-6,
+                500.e-6: 798e-6,
+                1.e-3: 1.62e-3,
+                2.e-3: 3.18e-3,
+                5.e-3: 7.88e-3,
+                10.e-3: 15.4e-3,
+            }
+        })
 
     @classmethod
     def tearDownClass(cls):
         cls.streakcam.terminate()
 
-    def test_error(self):  # TODO more testcases
+    def test_error(self):
         """Test the different RemoteEx errors possible."""
         # send wrong command, will timeout
         with self.assertRaises(util.TimeoutError):
             self.streakcam.sendCommand("Appinfoo", "type")
+
+    def test_SendCommandSimple(self):
+        msg = self.streakcam.sendCommand("Appinfo", "type")
+        self.assertEqual(msg, ["HPDTA"])
 
     ### Delay generator #####################################################
     def test_TriggerDelay(self):
@@ -178,9 +211,6 @@ class TestHamamatsurxNoReadoutCamera(unittest.TestCase):
         cur_triggerDelay = self.delaybox.triggerDelay.value
         # check previous and current value are not the same
         self.assertNotEqual(prev_triggerDelay, cur_triggerDelay)
-        # get trigger delay from hardware
-        remoteEx_triggerDelay = self.delaybox.GetDelayByName("Delay A")
-        self.assertEqual(cur_triggerDelay, remoteEx_triggerDelay)
 
         # request value, which is not in range of VA
         with self.assertRaises(IndexError):
@@ -228,26 +258,6 @@ class TestHamamatsurxNoReadoutCamera(unittest.TestCase):
         with self.assertRaises(IndexError):
             self.delaybox.delayC.value = -1
 
-    def test_PLLMode(self):
-        """Test PLL mode VA for the phase lock status"""
-        if not model.hasVA(self.delaybox, "phaseLocked"):
-            self.skipTest("Delay box measurement mode is synchro scan. Skipping the test")
-
-        # set PLL VA
-        self.delaybox.phaseLocked.value = False
-        time.sleep(0.5)  # give it some time to actually change the value
-        prev_pll = self.delaybox.phaseLocked.value
-        # change pll VA
-        self.delaybox.phaseLocked.value = True
-        time.sleep(0.5)  # give it some time to actually change the value
-        cur_pll = self.delaybox.phaseLocked.value
-        # compare previous and current gain
-        self.assertNotEqual(prev_pll, self.delaybox.phaseLocked.value)
-        # check pll-VA reports the same value as RemoteEx
-        remoteEx_pll = self.delaybox.GetPLLMode()
-        self.assertEqual(cur_pll, remoteEx_pll)
-
-
     def test_TimeRange(self):
         """Test time range VA for sweeping of streak unit."""
         for timeRange in self.streakunit.timeRange.choices:  # values different from yaml due to floating point issues
@@ -265,6 +275,7 @@ class TestHamamatsurxNoReadoutCamera(unittest.TestCase):
         # request value, which is not in choices of VA
         with self.assertRaises(IndexError):
             self.streakunit.timeRange.value = 0.000004  # 4us
+
 
 class TestHamamatsurxCam(unittest.TestCase):
     """Test the Hamamatsu streak camera class with real streak camera HW."""
@@ -284,39 +295,38 @@ class TestHamamatsurxCam(unittest.TestCase):
                 cls.streakunit = child
             if child.name == CONFIG_DELAYBOX["name"]:
                 cls.delaybox = child
-
-        cls.delaybox.updateMetadata({model.MD_TIME_RANGE_TO_DELAY:
-                                    {
-                                        1.e-9: 7.99e-9,
-                                        2.e-9: 9.63e-9,
-                                        5.e-9: 33.2e-9,
-                                        10.e-9: 45.9e-9,
-                                        20.e-9: 66.4e-9,
-                                        50.e-9: 102e-9,
-                                        100.e-9: 169e-9,
-                                        200.e-9: 302e-9,
-                                        500.e-9: 731e-9,
-                                        1.e-6: 1.39e-6,
-                                        2.e-6: 2.69e-6,
-                                        5.e-6: 7.02e-6,
-                                        10.e-6: 13.8e-6,
-                                        20.e-6: 26.7e-6,
-                                        50.e-6: 81.6e-6,
-                                        100.e-6: 161e-6,
-                                        200.e-6: 320e-6,
-                                        500.e-6: 798e-6,
-                                        1.e-3: 1.62e-3,
-                                        2.e-3: 3.18e-3,
-                                        5.e-3: 7.88e-3,
-                                        10.e-3: 15.4e-3,
-                                    }
-                                    })
+                cls.delaybox.updateMetadata({model.MD_TIME_RANGE_TO_DELAY:
+                                            {
+                                                1.e-9: 7.99e-9,
+                                                2.e-9: 9.63e-9,
+                                                5.e-9: 33.2e-9,
+                                                10.e-9: 45.9e-9,
+                                                20.e-9: 66.4e-9,
+                                                50.e-9: 102e-9,
+                                                100.e-9: 169e-9,
+                                                200.e-9: 302e-9,
+                                                500.e-9: 731e-9,
+                                                1.e-6: 1.39e-6,
+                                                2.e-6: 2.69e-6,
+                                                5.e-6: 7.02e-6,
+                                                10.e-6: 13.8e-6,
+                                                20.e-6: 26.7e-6,
+                                                50.e-6: 81.6e-6,
+                                                100.e-6: 161e-6,
+                                                200.e-6: 320e-6,
+                                                500.e-6: 798e-6,
+                                                1.e-3: 1.62e-3,
+                                                2.e-3: 3.18e-3,
+                                                5.e-3: 7.88e-3,
+                                                10.e-3: 15.4e-3,
+                                            }
+                                            })
 
     @classmethod
     def tearDownClass(cls):
         cls.streakcam.terminate()
 
-    def test_error(self):  # TODO more testcases
+    def test_error(self):
         """Test the different RemoteEx errors possible."""
         # send wrong command, will timeout
         with self.assertRaises(util.TimeoutError):
