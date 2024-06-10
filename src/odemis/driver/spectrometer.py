@@ -262,6 +262,11 @@ class SpecDataFlow(model.DataFlow):
         logging.debug("Spectrometer acquisition finished")
 
     def synchronizedOn(self, event):
+        # Trick: for the frameDuration VA, all the settings must be applied... but this normally
+        # only happens when starting the acquisition. So we force the settings to be applied when
+        # setting synchronization.
+        if event is not None:
+            self.component._applyCCDSettings()
         self._ccddf.synchronizedOn(event)
         # Don't call super(), as it only updates max_discard. Instead, we update max_discard based
         # on the value decided by the original DataFlow.
