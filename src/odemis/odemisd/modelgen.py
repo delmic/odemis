@@ -679,6 +679,12 @@ class Instantiator(object):
         if "power_supplier" in args:
             f = args["power_supplier"].supply({name: True})
             f.result()
+        # Also turn on the children
+        for child_args in args.get("children", {}).values():
+            if "power_supplier" in child_args:
+                child_name = child_args["name"]
+                f = child_args["power_supplier"].supply({child_name: True})
+                f.result()
 
         if self.dry_run and not class_name == "Microscope":
             # mock class for everything but Microscope (because it is safe)
@@ -719,37 +725,6 @@ class Instantiator(object):
             if comp.name == name:
                 return comp
         raise LookupError("No component named '%s' found" % name)
-
-    def get_required_components(self, name):
-        """
-        Return all the components required (but not created) by the component for
-          instantiation
-        name (str): name of the component
-        return (set of str): the name of the components that will be required when
-          instantiating the given component, (not including the component itself)
-        """
-        ret = set()
-
-        attrs = self.ast[name]
-        dependencies = attrs.get("dependencies", {}).values()
-        for n in dependencies:
-            ret.add(n)
-            ret |= self.get_required_components(n)
-
-        try:
-            ret.add(attrs["power_supplier"])
-        except KeyError:
-            pass  # no power supplier
-
-        # Support legacy code
-        children = attrs.get("children", {}).values()
-        for n in children:
-            cattrs = self.ast[n]
-            if cattrs.get("creator") != name and n not in ret:
-                ret.add(n)
-                ret |= self.get_required_components(n)
-
-        return ret
 
     def get_children_names(self, name):
         """
@@ -971,10 +946,28 @@ class Instantiator(object):
                 continue
             if "power_supplier" in attrs:
                 psuname = attrs["power_supplier"]
-                logging.debug("%s has a power_supplier %s", n, psuname)
                 if psuname not in instantiated:
-                    logging.debug("Component %s is not instantiable yet", n)
+                    logging.debug("Component %s is not instantiable yet (needs %s)", n, psuname)
                     continue
+
+            # All the children should also have their dependencies instantiated
+            all_children_instantiable = True
+            for child in attrs.get("children", {}).values():
+                child_attrs = self.ast[child]
+                if child_attrs.get("creator") != n:  # Old style dependencies => skip
+                    continue
+                deps = list(child_attrs.get("dependencies", {}).values())
+                if "power_supplier" in child_attrs:  # the power supplier is just some special dependency
+                    deps.append(child_attrs["power_supplier"])
+                for name in deps:
+                    if name not in instantiated:
+                        logging.debug("Component %s is not instantiable yet (%s needs %s)", n, child, name)
+                        all_children_instantiable = False
+                        break
+            if not all_children_instantiable:
+                continue
+
+            # All its dependencies should be instantiated
             deps = list(attrs.get("dependencies", {}).values())
             # support legacy code
             deps += [c for c in attrs.get("children", {}).values() if self.ast[c].get("creator") != n]
