@@ -135,7 +135,53 @@
 												</object>
 												<flag>wxALL|wxEXPAND</flag>
 												<border>10</border>
+												<cellpos>1,1</cellpos>
+											</object>
+											<object class="sizeritem">
+												<object class="ProgressRadioButton" name="btn_switch_fib_imaging">
+													<icon>../../img/icon/ico_imaging.png</icon>
+													<icon_progress>../../img/icon/ico_imaging_orange.png</icon_progress>
+													<icon_on>../../img/icon/ico_imaging_green.png</icon_on>
+													<height>48</height>
+													<face_colour>def</face_colour>
+													<label>FIB</label>
+													<fg>#1A1A1A</fg>
+													<font>
+														<size>11</size>
+														<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+													</font>
+													<style>wxALIGN_CENTRE</style>
+													<hidden>1</hidden>
+													<XRCED>
+														<assign_var>1</assign_var>
+													</XRCED>
+												</object>
+												<flag>wxALL|wxEXPAND</flag>
+												<border>10</border>
 												<cellpos>0,1</cellpos>
+											</object>
+											<object class="sizeritem">
+												<object class="ProgressRadioButton" name="btn_switch_milling">
+													<icon>../../img/icon/ico_milling.png</icon>
+													<icon_progress>../../img/icon/ico_milling_orange.png</icon_progress>
+													<icon_on>../../img/icon/ico_milling_green.png</icon_on>
+													<height>48</height>
+													<face_colour>def</face_colour>
+													<label>MILLING</label>
+													<fg>#1A1A1A</fg>
+													<font>
+														<size>11</size>
+														<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+													</font>
+													<style>wxALIGN_CENTRE</style>
+													<hidden>1</hidden>
+													<XRCED>
+														<assign_var>1</assign_var>
+													</XRCED>
+												</object>
+												<flag>wxALL|wxEXPAND</flag>
+												<border>10</border>
+												<cellpos>1,0</cellpos>
 											</object>
 											<object class="sizeritem">
 												<object class="ProgressRadioButton" name="btn_switch_grid1">
@@ -158,7 +204,7 @@
 												</object>
 												<flag>wxALL|wxEXPAND</flag>
 												<border>10</border>
-												<cellpos>1,0</cellpos>
+												<cellpos>2,0</cellpos>
 											</object>
 											<object class="sizeritem">
 												<object class="ProgressRadioButton" name="btn_switch_grid2">
@@ -181,7 +227,7 @@
 												</object>
 												<flag>wxALL|wxEXPAND</flag>
 												<border>10</border>
-												<cellpos>1,1</cellpos>
+												<cellpos>2,1</cellpos>
 											</object>
 											<vgap>5</vgap>
 											<hgap>20</hgap>
@@ -823,7 +869,237 @@
 										<flag>wxBOTTOM|wxEXPAND</flag>
 										<border>5</border>
 									</object>
+									<object class="sizeritem">
+										<object class="wxPanel" name="pnl_meteor_stage">
+											<hidden>1</hidden>
+											<object class="wxBoxSizer">
+												<orient>wxVERTICAL</orient>
+												<object class="sizeritem">
+													<object class="wxStaticText">
+														<label>Stage</label>
+														<fg>#E5E5E5</fg>
+														<font>
+															<size>16</size>
+															<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+														</font>
+													</object>
+													<flag>wxBOTTOM|wxALL</flag>
+													<border>5</border>
+												</object>
+												<object class="sizeritem">
+													<object class="wxBoxSizer">
+														<object class="sizeritem">
+															<object class="wxStaticText" name="lbl_milling_angle">
+																<label>Milling Tilt Angle</label>
+																<fg>#BFBFBF</fg>
+																<XRCED>
+																	<assign_var>1</assign_var>
+																</XRCED>
+																<font>
+																	<size>12</size>
+																	<encoding>UTF-8</encoding>
+																</font>
+															</object>
+															<flag>wxTOP|wxLEFT</flag>
+															<border>25</border>
+														</object>
+														<object class="sizeritem">
+															<object class="UnitFloatCtrl" name="ctrl_milling_angle">
+																<size>-1,20</size>
+																<value>10</value>
 
+																<accuracy>3</accuracy>
+																<key_step>0.1</key_step>
+																<unit>°</unit>
+																<scale>linear</scale>
+																<accuracy>2</accuracy>
+																<font>
+																	<size>12</size>
+																	<encoding>UTF-8</encoding>
+																</font>
+																<style>wxBORDER_NONE</style>
+																<XRCED>
+																	<assign_var>1</assign_var>
+																</XRCED>
+															</object>
+															<orient>wxEXPAND</orient>
+															<flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+															<border>25</border>
+														</object>
+														<orient>wxHORIZONTAL</orient>
+													</object>
+													<flag>wxALIGN_LEFT</flag>
+												</object>
+												<object class="sizeritem">
+													<object class="wxBoxSizer">
+														<object class="sizeritem">
+															<object class="wxStaticText" name="lbl_shuttle_pre_tilt">
+																<label>Shuttle Pre-Tilt</label>
+																<fg>#BFBFBF</fg>
+																<XRCED>
+																	<assign_var>1</assign_var>
+																</XRCED>
+																<font>
+																	<size>12</size>
+																	<encoding>UTF-8</encoding>
+																</font>
+															</object>
+															<flag>wxTOP|wxLEFT</flag>
+															<border>25</border>
+														</object>
+														<object class="sizeritem">
+															<object class="UnitFloatCtrl" name="ctrl_shuttle_pre_tilt">
+																<size>-1,20</size>
+																<value>45</value>
+																<accuracy>3</accuracy>
+																<key_step>0.1</key_step>
+																<unit>°</unit>
+																<scale>linear</scale>
+																<accuracy>2</accuracy>
+																<font>
+																	<size>12</size>
+																	<encoding>UTF-8</encoding>
+																</font>
+																<style>wxBORDER_NONE</style>
+																<XRCED>
+																	<assign_var>1</assign_var>
+																</XRCED>
+															</object>
+															<orient>wxEXPAND</orient>
+															<flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+															<border>25</border>
+														</object>
+														<orient>wxHORIZONTAL</orient>
+													</object>
+													<flag>wxALIGN_LEFT</flag>
+												</object>
+												<object class="sizeritem">
+													<object class="wxGridBagSizer">
+														<object class="sizeritem">
+															<object class="wxStaticText" name="label_position">
+																<label>Position</label>
+																<fg>#E5E5E5</fg>
+																<font>
+																	<size>12</size>
+																	<weight>bold</weight>
+																	<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+																</font>
+																<flag>wxALIGN_CENTRE</flag>
+															</object>
+															<flag>wxALL|wxEXPAND</flag>
+															<border>10</border>
+															<cellpos>0,0</cellpos>
+														</object>
+														<object class="sizeritem">
+															<object class="wxStaticText" name="label_position_rx">
+																<label>Tilt (rx)</label>
+																<fg>#E5E5E5</fg>
+																<font>
+																	<size>12</size>
+																	<weight>bold</weight>
+																	<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+																</font>
+																<flag>wxALIGN_CENTRE</flag>
+															</object>
+															<flag>wxALL|wxEXPAND</flag>
+															<border>10</border>
+															<cellpos>0,1</cellpos>
+														</object>
+														<object class="sizeritem">
+															<object class="wxStaticText" name="label_position_rz">
+																<label>Rotation (rz)</label>
+																<fg>#E5E5E5</fg>
+																<font>
+																	<size>12</size>
+																	<weight>bold</weight>
+																	<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+																</font>
+																<flag>wxALIGN_CENTRE</flag>
+															</object>
+															<flag>wxALL|wxEXPAND</flag>
+															<border>10</border>
+															<cellpos>0,2</cellpos>
+														</object>
+														<object class="sizeritem">
+															<object class="wxStaticText" name="lbl_sem_pos">
+																<label>SEM IMAGING</label>
+																<fg>#BFBFBF</fg>
+																<XRCED>
+																	<assign_var>1</assign_var>
+																</XRCED>
+																<font>
+																	<size>12</size>
+																	<encoding>UTF-8</encoding>
+																</font>
+															</object>
+															<flag>wxTOP|wxLEFT</flag>
+															<border>25</border>
+															<cellpos>1,0</cellpos>
+														</object>
+														<object class="sizeritem">
+															<object class="UnitFloatCtrl" name="ctrl_sem_rx">
+																<size>-1,20</size>
+																<value>25</value>
+
+																<accuracy>3</accuracy>
+																<key_step>0.1</key_step>
+																<unit>°</unit>
+																<scale>linear</scale>
+																<accuracy>2</accuracy>
+																<font>
+																	<size>12</size>
+																	<encoding>UTF-8</encoding>
+																</font>
+																<style>wxBORDER_NONE</style>
+																<XRCED>
+																	<assign_var>1</assign_var>
+																</XRCED>
+															</object>
+															<orient>wxEXPAND</orient>
+															<flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+															<border>25</border>
+															<cellpos>1,1</cellpos>
+														</object>
+														<object class="sizeritem">
+															<object class="UnitFloatCtrl" name="ctrl_sem_rz">
+																<size>-1,20</size>
+																<value>99</value>
+
+																<accuracy>3</accuracy>
+																<key_step>0.1</key_step>
+																<unit>°</unit>
+																<scale>linear</scale>
+																<accuracy>2</accuracy>
+																<font>
+																	<size>12</size>
+																	<encoding>UTF-8</encoding>
+																</font>
+																<style>wxBORDER_NONE</style>
+																<XRCED>
+																	<assign_var>1</assign_var>
+																</XRCED>
+															</object>
+															<orient>wxEXPAND</orient>
+															<flag>wxLEFT|wxTOP|wxBOTTOM</flag>
+															<border>25</border>
+															<cellpos>1,2</cellpos>
+														</object>																												
+													</object>
+												</object>
+												<flag>wxALIGN_LEFT</flag>
+											</object>
+											<fg>#E5E5E5</fg>
+											<bg>#444444</bg>
+											<hidden>0</hidden>
+											<XRCED>
+												<assign_var>2</assign_var>
+											</XRCED>
+											<border>10</border>
+											<flag>wxALIGN_CENTRE</flag>
+										</object>
+										<flag>wxBOTTOM|wxEXPAND</flag>
+										<border>5</border>
+									</object>
 								</object>
 								<fg>#E5E5E5</fg>
 								<bg>#444444</bg>
