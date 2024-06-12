@@ -31,6 +31,7 @@ from .enzel_align_tab import EnzelAlignTab
 from .fastem_acquisition_tab import FastEMAcquisitionTab
 from .fastem_overview_tab import FastEMOverviewTab
 from .fastem_main_tab import FastEMMainTab
+from .fibsem_tab import FibsemTab
 from .localization_tab import LocalizationTab
 from .mimas_align_tab import MimasAlignTab
 from .secom_align_tab import SecomAlignTab

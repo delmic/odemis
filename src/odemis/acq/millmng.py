@@ -13,6 +13,7 @@ import threading
 import time
 from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
+from typing import List
 
 import numpy
 import yaml
@@ -23,6 +24,7 @@ from odemis.acq.acqmng import acquire
 from odemis.acq.drift import AnchoredEstimator
 from odemis.acq.feature import CryoFeature
 from odemis.acq.move import MILLING, MicroscopePostureManager
+from odemis.acq.milling.tasks import MillingTaskSettings, MillingTask
 from odemis.acq.orsay_milling import mill_rectangle
 from odemis.acq.stitching._tiledacq import MOVE_SPEED_DEFAULT
 from odemis.acq.stream import UNDEFINED_ROI
@@ -555,3 +557,26 @@ def estimate_milling_time(*args, **kwargs) -> float:
     """
     milling_task = MillingRectangleTask(None, *args, **kwargs)
     return milling_task.estimate_milling_time()
+
+
+
+def mill_patterns(settings: MillingTaskSettings) -> futures.Future:
+    """
+    Run Mill patterns.
+    :param settings: (MillingTaskSettings) Settings for the milling task
+    :return: ProgressiveFuture
+    """
+    # Create a progressive future with running sub future
+    future = model.ProgressiveFuture()
+    # create acquisition task
+    milling_task = MillingTask(future, settings)
+    # add the ability of cancelling the future during execution
+    future.task_canceller = milling_task.cancel
+
+    # set the progress of the future (TODO: fix dummy time estimate)
+    future.set_end_time(time.time() + 10 * len(settings.patterns))
+
+    # assign the acquisition task to the future
+    executeAsyncTask(future, milling_task.run)
+
+    return future
