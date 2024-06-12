@@ -580,3 +580,159 @@ def mill_patterns(settings: MillingTaskSettings) -> futures.Future:
     executeAsyncTask(future, milling_task.run)
 
     return future
+
+from odemis.acq.align.shift import MeasureShift
+from pprint import pprint
+import matplotlib.pyplot as plt
+from concurrent import futures
+
+from odemis.acq.milling.feature import CryoLamellaFeature
+from odemis.dataio import find_fittest_converter
+
+class AutomatedMillingManager(object):
+
+
+    def __init__(self, future, project, stage, sem_stream, fib_stream, fm_stream, task_list):
+        
+        self.stage = stage
+        self.sem_stream = sem_stream
+        self.fib_stream = fib_stream
+        self.fm_stream = fm_stream
+        self.ion_beam = fib_stream.emitter
+        self.focus = fm_stream.focuser
+        self.project = project
+        self.task_list = task_list
+        self._exporter = find_fittest_converter("filename.ome.tiff")
+
+        self._future = future
+        if future is not None:
+            self._future.running_subf = model.InstantaneousFuture()
+            self._future._task_lock = threading.Lock()
+
+
+
+    def cancel(self, future: 'Future') -> bool:
+        """
+        Canceler of milling task.
+        :param future: the future that will be executing the task
+        :return: True if it successfully cancelled (stopped) the future
+        """
+        logging.debug("Canceling milling procedure...")
+
+        with future._task_lock:
+            if future._task_state == FINISHED:
+                return False
+            future._task_state = CANCELLED
+            future.running_subf.cancel()
+            logging.debug("Milling procedure cancelled.")
+        return True
+
+    def run(self):
+
+        self.posture_manager = MicroscopePostureManager(model.getMicroscope())
+
+        workflows = ["MILLING", "IMAGING"] # TODO
+        for task_num, task_name in enumerate(self.task_list, 1):
+            print(f"Starting {task_name} for {len(self.project.features)} features...")
+            task_num = f"{task_num:02d}"
+            feature: CryoLamellaFeature
+            for name, feature in self.project.features.items():
+                
+                feature_name = feature.name.value
+                print(f"Feature: {feature.name.value}")
+                print(f"Position: {feature.position.value}")
+                print(f"Previous Status: {feature.status.value}")
+                print("--" * 10)
+                print(f"Starting {task_name} for {feature.name.value}")
+                
+                # move to position
+                self._future.running_subf = self.stage.moveAbs(feature.position.value) # TODO: make this move safer using posture manager
+                self._future.running_subf.result()
+
+                self._future.msg = f"Moved to {feature.name.value}"
+                self._future.set_progress()
+
+                # reset beam shift
+                self.ion_beam.shift.value = (0, 0)
+
+                # beam shift alignment
+                self._future.running_subf = acquire([self.fib_stream])
+                data, _ = self._future.running_subf.result()
+                new_image = data[0]
+
+                # roll data by a random amount
+                import random
+                x, y = random.randint(0, 100), random.randint(0, 100)
+                new_image = numpy.roll(new_image, [x, y], axis=[0, 1])
+                print(f"Shifted image by {x}, {y} pixels")
+
+                align_filename = os.path.join(feature.path, f"{feature_name}-{task_num}-{task_name}-Alignment-FIB.ome.tiff").replace(" ", "-") # TODO: make unique
+                self._exporter.export(align_filename, new_image)       
+
+                ref_image = feature.reference_image # load from directory?
+                def align_reference_image(ref_image, new_image, scanner):
+                    shift_px = MeasureShift(ref_image, new_image, 10)
+                    # shift_px = (1, 1)
+                    pixelsize = ref_image.metadata[model.MD_PIXEL_SIZE]
+                    shift_m = (shift_px[0] * pixelsize[0], shift_px[1] * pixelsize[1])
+
+                    previous_shift = scanner.shift.value
+                    print(f"Previous: {previous_shift}, Shift: {shift_m}")
+                    shift = (shift_m[0] + previous_shift[0], shift_m[1] + previous_shift[1])  # m
+                    scanner.shift.value = shift
+                    print(f"Shift: {scanner.shift.value}")
+
+                align_reference_image(ref_image, new_image, scanner=self.ion_beam)
+
+                # mill patterns
+                task = feature.milling_tasks[task_name]
+                self._future.msg = f"Start Milling Task: {task_name} ({len(task.patterns)} Patterns) for {feature.name.value}"
+                self._future.set_progress()
+
+                print(f"Starting Milling Task: {task}")
+                self._future.running_subf = mill_patterns(task)
+                self._future.running_subf.result()
+
+                # acquire images
+                self._future.running_subf = acquire([self.sem_stream, self.fib_stream])
+                data, ex = self._future.running_subf.result()
+                sem_image, fib_image = data
+
+                # save images
+                sem_filename = os.path.join(feature.path, f"{feature_name}-{task_num}-{task_name}-Finished-SEM.ome.tiff").replace(" ", "-") # TODO: make unique 
+                fib_filename = os.path.join(feature.path, f"{feature_name}-{task_num}-{task_name}-Finished-FIB.ome.tiff").replace(" ", "-") # TODO: make unique
+                self._exporter.export(sem_filename, sem_image)
+                self._exporter.export(fib_filename, fib_image)       
+
+
+                # move to flm position
+                # TODO: use pm to move to flm position
+                print(f"Moving to FLM position for {feature.name.value}")
+                # set objective position
+                self._future.running_subf = self.focus.moveAbs({"z": feature.focus_position.value})
+                self._future.running_subf.result()
+
+                # TODO: get fm acquisition settings ?
+
+                # acquire fm z-stack
+                self._future.running_subf = acquire([self.fm_stream])
+                data, ex = self._future.running_subf.result()
+                fm_image = data
+                # save flm image
+                fm_filename = os.path.join(feature.path, f"{feature_name}-{task_num}-{task_name}-Finished-FLM.ome.tiff").replace(" ", "-")
+                self._exporter.export(fm_filename, fm_image)
+
+                # plot images
+                fig, ax = plt.subplots(1, 3, figsize=(10, 5))
+                ax[0].imshow(sem_image, cmap="gray")
+                ax[1].imshow(fib_image, cmap="gray")
+                ax[2].imshow(fm_image[0], cmap="gray")
+                plt.show()
+
+                # update status
+                feature.status.value = task_name
+
+                print(f"Finished {task_name} for {feature.name.value}")
+
+                # save project
+                self.project.save()

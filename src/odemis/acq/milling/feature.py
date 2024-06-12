@@ -11,7 +11,7 @@ class CryoLamellaFeature(object):
     def __init__(self, name: str, position: dict, 
                  milling_tasks: Dict[str, MillingTaskSettings], 
                  status: str,
-                 config: dict = {}, 
+                 config: dict = None, 
                  alignment: dict = None,
                  focus_position: float = 0.0,): 
         self.name = model.StringVA(name)
