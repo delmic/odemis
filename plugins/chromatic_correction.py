@@ -1,20 +1,13 @@
-# Get the streams
-# Calculate the transformation matrix
-# Get 4 values for each channel
-# update the streams
-# save it
-# display in the analysis tab
-
 # -*- coding: utf-8 -*-
-'''
-Created on 10 April 2017
+"""
+Created on June 13, 2025
 
-@author: Guilherme Stiebler
+@author: Karishma Kumar
 
-Gives ability to automatically place a EM image so that it's aligned with
-another one (already present).
+Gives ability to provide charomatic correction in x and y based on the given streams in the
+localisation tab.
 
-Copyright © 2017 Éric Piel, Delmic
+Copyright © 2024 Karishma Kumar, Delmic
 
 This file is part of Odemis.
 
@@ -27,14 +20,15 @@ Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not,
 see http://www.gnu.org/licenses/.
-'''
+"""
+
 import copy
 
 import cv2
 import numpy
-import yaml
-from libtiff import TIFF
 import wx
+import yaml
+from scipy.spatial.distance import cdist
 
 from odemis import model, dataio
 from odemis.acq.acqmng import SettingsObserver, acquireZStack
@@ -42,13 +36,8 @@ from odemis.acq.stream import StaticFluoStream, FluoStream
 from odemis.gui.plugin import Plugin
 from odemis.util.comp import generate_zlevels
 from odemis.util.transform import AffineTransform
-from scipy.spatial.distance import cdist
 
-
-def read_tiff_image(file_path):
-    tif = TIFF.open(file_path, mode='r')
-    image = tif.read_image()
-    return image
+BEAD_DIAMETER = 10 * numpy.sqrt(2)  # the length of the square that fits in the bead circle
 
 
 def process_image(image):
@@ -67,11 +56,13 @@ def process_image(image):
     # Find contours
     contours, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     centers = []
+    # size of the square based on diameter
+    length = BEAD_DIAMETER / numpy.sqrt(2)
     for contour in contours:
         # Calculate the bounding box for each contour
         x, y, w, h = cv2.boundingRect(contour)
         # Filter out small contours
-        if w >= 10 and h >= 10:
+        if w >= length and h >= length:
             # Calculate moments for each contour
             M = cv2.moments(contour)
             if M['m00'] != 0:
@@ -85,13 +76,11 @@ def find_corresponding_points(centers1, centers2, max_distance):
     """
     Find corresponding points in two sets of points that are within a specified maximum distance.
 
-    Args:
-        centers1 (np.ndarray): Nx2 array of points (x, y) in the first image.
-        centers2 (np.ndarray): Mx2 array of points (x, y) in the second image.
-        max_distance (float): Maximum allowable distance for point pairs.
-
-    Returns:
-        list of tuples: Corresponding point pairs (index1, index2).
+    :param centers1: (np.ndarray) Nx2 array of points (x, y) in the first image.
+    :param centers2: (np.ndarray) Mx2 array of points (x, y) in the second image.
+    :param max_distance: (float) Maximum allowable distance for point pairs.
+    :returns:
+        pairs: (list of tuples) Corresponding point pairs (index1, index2).
     """
     # Calculate pairwise distances
     distances = cdist(centers1, centers2)
@@ -129,7 +118,6 @@ class ChromaticCorrectionPlugin(Plugin):
         scont.stream_panel.show_remove_btn(True)
 
     def start(self):
-        #TODO
         tab_data = self.main_app.main_data.tab.value.tab_data_model
         self.new = []
         self.ref = []
@@ -168,16 +156,13 @@ class ChromaticCorrectionPlugin(Plugin):
 
         # Compute transformation between reference channel and other channels
         trans_per_channel = {}  # stores transformation values per channel
-        # self.ref = read_tiff_image('/home/dev/Downloads/FOV1_green.tif')
         _, centers_ref = process_image(self.ref)
         centers1 = numpy.array(centers_ref)
         for i, im in enumerate(self.new):
             # Find corresponding points
             _, centers_new = process_image(im)
-            # mip_image = read_tiff_image('/home/dev/Downloads/FOV1_red.tif')
-            # _, centers_new = process_image(mip_image)
             centers2 = numpy.array(centers_new)
-            max_distance = 10 * numpy.sqrt(2)
+            max_distance = BEAD_DIAMETER
             corresponding_pairs = find_corresponding_points(centers1, centers2, max_distance)
 
             # Extract the matching points
@@ -224,9 +209,6 @@ class ChromaticCorrectionPlugin(Plugin):
                 }
 
                 # update metadata
-                # im.metadata[model.MD_PIXEL_SIZE_COR] = scale
-                # im.metadata[model.MD_POS_COR] = translation
-                # im.metadata[model.MD_ROTATION_COR] = rotation
                 im.metadata.update({model.MD_PIXEL_SIZE_COR: scale})
                 im.metadata.update({model.MD_POS_COR: translation})
                 im.metadata.update({model.MD_ROTATION_COR: rotation})
@@ -235,6 +217,6 @@ class ChromaticCorrectionPlugin(Plugin):
                 # save the image and display
                 self.show_static_stream(f"modified_{im.metadata[model.MD_DESCRIPTION]}_{i}", im)
 
-        # TODO : decide the location of transformation values
+        # TODO : decide the file location of transformation values
         with open('transformation_per_channel.yaml', 'w') as yaml_file:
             yaml.dump(trans_per_channel, yaml_file, default_flow_style=False)
