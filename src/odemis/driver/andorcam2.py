@@ -350,6 +350,16 @@ class AndorV2DLL(CDLL):
 20040: "DRV_TEMPERATURE_DRIFT",
 }
 
+# Used by GetTemperature()
+    temp_code = {
+20034: "off",
+20035: "not stabilized",
+20036: "stabilized",
+20037: "not reached",
+20040: "drift",
+}
+
+
     # Not all of them are actual error code, but having them is not a problem
     err_code = {
 20003: "DRV_VXDNOTINSTALLED",
@@ -832,7 +842,7 @@ class AndorCam2(model.DigitalCamera):
                 self.SetShutter(1, 0, 0, 0)
                 self._shutter_period = None
 
-            current_temp = self.GetTemperature()
+            current_temp, _ = self.GetTemperature()
             self.temperature = model.FloatVA(current_temp, unit=u"°C", readonly=True)
             self._metadata[model.MD_SENSOR_TEMP] = current_temp
             self.temp_timer = util.RepeatingTimer(10, self.updateTemperatureVA,
@@ -1188,16 +1198,15 @@ class AndorCam2(model.DigitalCamera):
 
         return maxh.value, maxv.value
 
-    def GetTemperature(self):
+    def GetTemperature(self) -> Tuple[int, int]:
         """
-        returns (int): the current temperature of the captor in °C
+        :returns:
+         temperature: the current temperature of the captor in °C
+         status: DRV_TEMPERATURE_* the status of the cooling
         """
         temp = c_int()
-        # It returns the status of the temperature via error code (stable,
-        # not yet reached...) but we don't care
         status = self.atcore.GetTemperature(byref(temp))
-        logging.debug("Temperature status is: %s", AndorV2DLL.ok_code[status])
-        return temp.value
+        return temp.value, status
 
     def GetTECStatus(self):
         """
@@ -1683,7 +1692,7 @@ class AndorCam2(model.DigitalCamera):
             return
 
         try:
-            temp = self.GetTemperature()
+            temp, status = self.GetTemperature()
         except AndorV2Error as ex:
             # Some cameras are not happy if reading temperature while acquiring
             # => just ignore, and hopefully next time will work
@@ -1695,7 +1704,7 @@ class AndorCam2(model.DigitalCamera):
         # it's read-only, so we change it only via _value
         self.temperature._value = temp
         self.temperature.notify(self.temperature.value)
-        logging.debug(u"Temp is %d°C", temp)
+        logging.debug("Temperature of %s is %d°C (%s)", self.name, temp, AndorV2DLL.temp_code[status])
 
     def _setFanSpeed(self, speed, force=False):
         """
@@ -2540,7 +2549,7 @@ class AndorCam2(model.DigitalCamera):
                     try:
                         if self.GetStatus() == AndorV2DLL.DRV_ACQUIRING:
                             self.atcore.AbortAcquisition()  # Need to stop acquisition to read temperature
-                        temp = self.GetTemperature()  # Best way to check the connection and status
+                        temp, _ = self.GetTemperature()  # Best way to check the connection and status
                     except AndorV2Error:  # Probably something really wrong the connection
                         temp = None
                     # -999°C means the camera is gone
