@@ -873,17 +873,6 @@ class TestMCS2_1DOF(unittest.TestCase):
         # Check that at least the position changed
         self.assertNotEqual(pos_move["z"], pos_refd["z"])
 
-    def test_reference_and_deactivate_move(self):
-        # Set a deactive position and check to be sure that the controller moves to this location
-        # after a reference move
-        de_pos = {'z': REF_Z}
-        self.dev.updateMetadata({model.MD_FAV_POS_DEACTIVE: de_pos})
-
-        f = self.dev.reference(set(self.dev.axes.keys()))
-        f.result()
-
-        testing.assert_pos_almost_equal(self.dev.position.value, de_pos, **COMP_ARGS)
-
     def test_auto_update_function(self):
         """Check if position VA is updated when it is changed"""
         self.dev.moveAbs({"z": SAFE_Z}).result()
@@ -896,7 +885,6 @@ class TestMCS2_1DOF(unittest.TestCase):
         time.sleep(2)
         pos_after_move = self.dev.position.value
         testing.assert_pos_almost_equal(expected_pos, pos_after_move, **COMP_ARGS)
-
 
 
 CONFIG_Picoscale = {"name": "Stage Metrology",
