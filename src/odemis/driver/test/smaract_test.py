@@ -23,6 +23,8 @@ import logging
 import math
 import tempfile
 
+import numpy
+
 from odemis.driver import smaract
 from odemis.util import testing
 import os
@@ -746,7 +748,6 @@ if TEST_NOHW:
 SAFE_Z = -13.0e-3  # deactive position for the actuator
 SMALL_STEP = -10.0e-6  # small step to move from the deactive position
 BIG_STEP = -1.0e-3  # big step to move from the deactive position
-REF_Z = 0  # Referencing position used for calling referencing move
 
 
 class TestMCS2_1DOF(unittest.TestCase):
@@ -793,6 +794,31 @@ class TestMCS2_1DOF(unittest.TestCase):
         self.dev.moveAbs(pos5).result()
         testing.assert_pos_almost_equal(self.dev.position.value, pos5, **COMP_ARGS)
         logging.debug(self.dev.position.value)
+
+    def test_move_in_z_range(self):
+        # Check if optical focus can move repeatedly in small steps
+        start_position = self.dev.position.value
+        logging.debug(f"the current z range value is {start_position}")
+        z_range = numpy.arrange(-10.e-6, 10.e+6, 50.e-9) + self.dev.position.value
+        for z in z_range:
+            self.dev.moveAbs(z).result()
+            testing.assert_pos_almost_equal(self.dev.position.value, z)
+
+        # move back to initial position
+        self.dev.moveAbs(start_position).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, start_position)
+        z_range = numpy.arrange(-6.e-6, +6.e+6, 50.e-9) + self.dev.position.value
+        for z in z_range:
+            self.dev.moveAbs(z).result()
+            testing.assert_pos_almost_equal(self.dev.position.value, z)
+
+        # move back to initial position
+        self.dev.moveAbs(start_position).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, start_position)
+        z_range = numpy.arrange(-4.e-6, +4.e+6, 50.e-9) + self.dev.position.value
+        for z in z_range:
+            self.dev.moveAbs(z).result()
+            testing.assert_pos_almost_equal(self.dev.position.value, z)
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
