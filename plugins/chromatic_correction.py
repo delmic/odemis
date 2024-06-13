@@ -32,16 +32,17 @@ import copy
 
 import cv2
 import numpy
+import yaml
 from libtiff import TIFF
-from scipy.spatial.distance import cdist
+import wx
 
-from odemis import model
+from odemis import model, dataio
 from odemis.acq.acqmng import SettingsObserver, acquireZStack
 from odemis.acq.stream import StaticFluoStream, FluoStream
 from odemis.gui.plugin import Plugin
-from odemis.model import DataArray
 from odemis.util.comp import generate_zlevels
 from odemis.util.transform import AffineTransform
+from scipy.spatial.distance import cdist
 
 
 def read_tiff_image(file_path):
@@ -111,86 +112,129 @@ class ChromaticCorrectionPlugin(Plugin):
         super(ChromaticCorrectionPlugin, self).__init__(microscope, main_app)
         self.addMenu("Data correction/Lateral chromatic correction", self.start)
 
+    def show_static_stream(self, filename: str, data: model.DataArray):
+        """
+        Save the given data, read and display in the analysis tab
+        :param filename: filename of the data array
+        :param data: value and metadata of the given data array
+        """
+        # display the reference in the analysis tab
+        analysis_tab = self.main_app.main_data.getTabByName('analysis')
+        # save the image
+        dataio.tiff.export(filename, data)
+        # Read the saved images and display
+        im_read = dataio.tiff.read_data(filename)
+        aligned_stream = StaticFluoStream(im_read[0].metadata[model.MD_DESCRIPTION], im_read[0])
+        scont = analysis_tab.stream_bar_controller.addStream(aligned_stream, add_to_view=True)
+        scont.stream_panel.show_remove_btn(True)
+
     def start(self):
+        #TODO
         tab_data = self.main_app.main_data.tab.value.tab_data_model
-        # stream_source  green
         self.new = []
         self.ref = []
-        centers_ref = []
-        centers_new = []
         levels = generate_zlevels(tab_data.main.focus,
                                   (-10e-06, 10e-06),
                                   5e-06)
-        mip_image = read_tiff_image('/home/dev/Downloads/FOV1_green.tif')
-        self.ref = mip_image
-        _, centers_ref = process_image(mip_image)
-        # zlevels = {stream: levels}
+
         non_static = [s for s in tab_data.streams.value
                       if isinstance(s, FluoStream)]
         zlevels = {s: levels for s in non_static}
         settings_observer = SettingsObserver(model.getComponents())
         acqui_task = acquireZStack(non_static, zlevels, settings_obs=settings_observer)
         das, e = acqui_task.result()
-        for i, stream in enumerate(tab_data.streams.value):
-            if isinstance(stream, StaticFluoStream):
-                mip_image = DataArray(mip_image, copy.copy(das[0].metadata))
-                # mip_image = numpy.amax(das, axis=0)
-                # dataio.tiff.export(f"tiff_secondary{i}.tiff", mip_image)
-                if stream.tint.value == (0, 255, 0):
-                    self.ref = mip_image
-                    # _, centers_ref = process_image(self.ref)
-                else:
-                    self.new.append(mip_image)
-                    # _, centers_new = process_image(mip_image)
-                    mip_image = read_tiff_image('/home/dev/Downloads/FOV1_red.tif')
-                    _, centers_new = process_image(mip_image)
-                    if True:  # self.ref:
-                        # Find corresponding points
-                        centers1 = numpy.array(centers_ref)
-                        centers2 = numpy.array(centers_new)
-                        max_distance = 10 * numpy.sqrt(2)
 
-                        corresponding_pairs = find_corresponding_points(centers1, centers2, max_distance)
+        if len(das) <= 1:
+            box = wx.MessageDialog(self.main_app.main_frame,
+                                   "Add minimum two streams. One of the streams must be green channel.",
+                                   "Failed to do chromatic correction", wx.OK | wx.ICON_STOP)
+            box.ShowModal()
+            box.Destroy()
+            return
 
-                        # Extract the matching points
-                        points1 = centers1[corresponding_pairs[:, 0]]
-                        points2 = centers2[corresponding_pairs[:, 1]]
+        # Calculate Maximum Intensity projection for all the present channels in the stream panel
+        for i, da in enumerate(das):
+            mip_image = model.DataArray(numpy.amax(da, axis=0), copy.copy(da.metadata))
+            dataio.tiff.export(f"{da.metadata[model.MD_DESCRIPTION]}_{i}", mip_image)
+            # All the channels will be corrected according to a reference colored channel
+            # green channel is selected as reference channel, Why? -> Ask Deniz
+            if da.metadata[model.MD_USER_TINT] == (0, 255, 0):
+                self.ref = mip_image
+            else:
+                self.new.append(mip_image)
 
-                        # Estimate the transformation matrix
-                        affine2 = AffineTransform.from_pointset(points1, points2)
-                        # Create a 3x3 identity matrix
-                        mat = numpy.eye(3)
-                        mat[:2, :2] = affine2.matrix
-                        mat[:2, 2] = affine2.translation
-                        ref_mat = numpy.eye(3)
-                        mat = ref_mat @ mat
-                        # Translation is the last column
-                        tx = mat[0, 2]
-                        ty = mat[1, 2]
-                        translation = numpy.array([tx, ty])
+        # Save and display the reference channel in the analysis tab
+        self.show_static_stream(f"modified_{self.ref.metadata[model.MD_DESCRIPTION]}_ref", self.ref)
 
-                        # Scale is the norm of the first two columns
-                        sx = numpy.linalg.norm(mat[:2, 0])
-                        sy = numpy.linalg.norm(mat[:2, 1])
-                        scale2 = numpy.array([sx, sy])
+        # Compute transformation between reference channel and other channels
+        trans_per_channel = {}  # stores transformation values per channel
+        # self.ref = read_tiff_image('/home/dev/Downloads/FOV1_green.tif')
+        _, centers_ref = process_image(self.ref)
+        centers1 = numpy.array(centers_ref)
+        for i, im in enumerate(self.new):
+            # Find corresponding points
+            _, centers_new = process_image(im)
+            # mip_image = read_tiff_image('/home/dev/Downloads/FOV1_red.tif')
+            # _, centers_new = process_image(mip_image)
+            centers2 = numpy.array(centers_new)
+            max_distance = 10 * numpy.sqrt(2)
+            corresponding_pairs = find_corresponding_points(centers1, centers2, max_distance)
 
-                        # Compute rotation
-                        rotation = numpy.arctan2(mat[1, 0] / sx, mat[0, 0] / sx)
+            # Extract the matching points
+            points1 = centers1[corresponding_pairs[:, 0]]
+            points2 = centers2[corresponding_pairs[:, 1]]
 
-                        # update metadata
-                        # set MD_PIXEL_SIZE_COR to 1/scale2
-                        stream.raw[0].metadata[model.MD_PIXEL_SIZE_COR] = (1 / scale2[0], 1 / scale2[1])
+            if len(corresponding_pairs) > 4:
+                # Estimate the transformation matrix
+                affine2 = AffineTransform.from_pointset(points1, points2)
+                mat = numpy.eye(3)
+                mat[:2, :2] = affine2.matrix
+                mat[:2, 2] = affine2.translation
+                ref_mat = numpy.eye(3)
+                mat = ref_mat @ mat
 
-                        # set MD_POS_COR to translation
-                        # sem_pos = sem_stream.raw[0].metadata[model.MD_POS]
-                        pixel_size = stream.raw[0].metadata[model.MD_PIXEL_SIZE]
-                        stream.raw[0].metadata[model.MD_POS_COR] = (tx * pixel_size[0], -ty * pixel_size[1])
+                # Scale is the norm of the first two columns
+                sx = numpy.linalg.norm(mat[:2, 0])
+                sy = numpy.linalg.norm(mat[:2, 1])
+                scale2 = numpy.array([sx, sy])
 
-                        # set MD_ROTATION_COR to rotation
-                        stream.raw[0].metadata[model.MD_ROTATION_COR] = -1  # rotation
+                # Compute rotation
+                rotation = numpy.arctan2(mat[1, 0] / sx, mat[0, 0] / sx)
 
-                        # Add a new stream panel (removable)
-                        analysis_tab = self.main_app.main_data.getTabByName('analysis')
-                        aligned_stream = StaticFluoStream(stream.name.value, stream.raw[0])
-                        scont = analysis_tab.stream_bar_controller.addStream(aligned_stream, add_to_view=True)
-                        scont.stream_panel.show_remove_btn(True)
+                # compute scale
+                scale = (1 / scale2[0], 1 / scale2[1])
+
+                # compute shear
+                a, b = mat[0, 0], mat[0, 1]
+                c, d = mat[1, 0], mat[1, 1]
+                shear = numpy.arctan2(a * c + b * d, scale[0] * scale[1])
+
+                # compute translation
+                tx = mat[0, 2]
+                ty = mat[1, 2]
+                pixel_size = im.metadata[model.MD_PIXEL_SIZE]
+                translation = (tx * pixel_size[0], -ty * pixel_size[1])
+
+                trans_per_channel[f"channel_{i}"] = {
+                    "tint": list(im.metadata[model.MD_USER_TINT]),
+                    "scale_cor": [float(scale[0]), float(scale[1])],
+                    "translation_cor": [float(translation[0]), float(translation[1])],
+                    "rotation_cor": float(rotation),
+                    "shear_cor": float(shear)
+                }
+
+                # update metadata
+                # im.metadata[model.MD_PIXEL_SIZE_COR] = scale
+                # im.metadata[model.MD_POS_COR] = translation
+                # im.metadata[model.MD_ROTATION_COR] = rotation
+                im.metadata.update({model.MD_PIXEL_SIZE_COR: scale})
+                im.metadata.update({model.MD_POS_COR: translation})
+                im.metadata.update({model.MD_ROTATION_COR: rotation})
+                im.metadata.update({model.MD_SHEAR_COR: shear})
+
+                # save the image and display
+                self.show_static_stream(f"modified_{im.metadata[model.MD_DESCRIPTION]}_{i}", im)
+
+        # TODO : decide the location of transformation values
+        with open('transformation_per_channel.yaml', 'w') as yaml_file:
+            yaml.dump(trans_per_channel, yaml_file, default_flow_style=False)
