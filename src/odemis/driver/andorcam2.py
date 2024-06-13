@@ -45,6 +45,7 @@ GEN_START = "S"  # Start acquisition
 GEN_STOP = "E"  # Don't acquire image anymore
 GEN_TERM = "T"  # Stop the generator
 GEN_RESYNC = "R"  # Synchronisation stopped
+GEN_SETTINGS = "U"  # Update hardware settings
 # There are also floats, which are used to indicate a trigger (containing the time the trigger was sent)
 
 # Type of software trigger to use
@@ -299,6 +300,7 @@ class AndorV2DLL(CDLL):
     RM_SINGLE_TRACK = 3
     RM_IMAGE = 4
 
+    # For SetAcquisitionMode()
     AM_SINGLE = 1
     AM_ACCUMULATE = 2
     AM_KINETIC = 3
@@ -313,6 +315,13 @@ class AndorV2DLL(CDLL):
     TM_EXTERNAL_FVB_EM = 9
     TM_SOFTWARE = 10  # Trigger sent via USB, via SendSoftwareTrigger()
     TM_EXTERNAL_CHARGESHIFTING = 12
+
+    # Shutter mode, for SetShutter*()
+    SHUTTER_AUTO = 0  # Automatically open and close the shutter during the exposure
+    SHUTTER_OPEN = 1  # Force open
+    SHUTTER_CLOSE = 2  # Force close
+    SHUTTER_FVB = 4  # Open for full vertical binning series
+    SHUTTER_SERIES = 5  # Open for any series
 
     @staticmethod
     def at_errcheck(result, func, args):
@@ -830,6 +839,8 @@ class AndorCam2(model.DigitalCamera):
                 ct = caps.CameraType
                 if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
                     # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
+                    # TODO: instead, force it open here, whether shutter_times is given or not,
+                    # and don't provide a shutterMinimumPeriod
                     self._shutter_period = maxexp.value
 
                 self.shutterMinimumPeriod = model.FloatContinuous(self._shutter_period,
@@ -839,7 +850,7 @@ class AndorCam2(model.DigitalCamera):
                 if shutter_times:
                     raise ValueError("No shutter found but shutter times defined")
                 # To make sure the (non-existent) shutter doesn't limit the exposure time
-                self.SetShutter(1, 0, 0, 0)
+                self.SetShutter(1, AndorV2DLL.SHUTTER_AUTO, 0, 0)
                 self._shutter_period = None
 
             current_temp, _ = self.GetTemperature()
@@ -1229,10 +1240,10 @@ class AndorCam2(model.DigitalCamera):
     def SetShutter(self, typ, mode, cltime, optime, extmode=None):
         """
         Configures the shutter opening.
-        Note: it automatically uses Shutter() or ShutterEx() when needed. It's
+        Note: it automatically uses SetShutter() or SetShutterEx() when needed. It's
         also fine to call if the camera doesn't support shutter config at all.
         typ (0 or 1): 0 = TTL low when opening, 1 = TTL high when opening
-        mode (0 <= int): 0 = auto, 1 = opened, 2 = closed... cf doc for more
+        mode (0 <= int): AndorV2DLL.SHUTTER_*, to indicate the state of the shutter
         cltime (0 <= float): time in second it takes to close the shutter
         optime (0 <= float): time in second it takes to open the shutter
         extmode (None or 0 <= int): same as mode, but for external shutter.
@@ -1240,6 +1251,7 @@ class AndorCam2(model.DigitalCamera):
         """
         cltime = int(cltime * 1e3)  # ms
         optime = int(optime * 1e3)  # ms
+        logging.debug("Shutter requested to %s", mode)
         if self.hasFeature(AndorCapabilities.FEATURES_SHUTTEREX):
             if extmode is None:
                 extmode = mode
@@ -1848,7 +1860,7 @@ class AndorCam2(model.DigitalCamera):
         value = self._transposeSizeFromUser(value)
         new_res = self.resolutionFitter(value)
         self._storeSize(new_res)
-        self._update_settings_if_not_acquiring()
+        self._should_apply_settings()
         return self._transposeSizeToUser(new_res)
 
     def resolutionFitter(self, size_req):
@@ -1905,7 +1917,7 @@ class AndorCam2(model.DigitalCamera):
         self.atcore.GetMaximumExposure(byref(maxexp))
         # we cache it until just before the next acquisition
         self._exposure_time = min(value, maxexp.value)
-        self._update_settings_if_not_acquiring()
+        self._should_apply_settings()
         return self._exposure_time
 
     def _setReadoutRate(self, value):
@@ -1913,18 +1925,18 @@ class AndorCam2(model.DigitalCamera):
         # Everything (within the choices) is fine, just need to update gain.
         self._readout_rate = value
         self.gain.value = self.gain.value  # Force checking it
-        self._update_settings_if_not_acquiring()
+        self._should_apply_settings()
         return value
 
     def _setShutterPeriod(self, period):
         self._shutter_period = period
-        self._update_settings_if_not_acquiring()
+        self._should_apply_settings()
         return period
 
     def setGain(self, value):
         # Just save, and the setting will be actually updated by _update_settings()
         self._gain = value
-        self._update_settings_if_not_acquiring()
+        self._should_apply_settings()
         return self._gain
 
     def _getMaxBPP(self):
@@ -1943,24 +1955,14 @@ class AndorCam2(model.DigitalCamera):
         assert(mbpp > 0)
         return mbpp
 
-    def _update_settings_if_not_acquiring(self):
+    def _should_apply_settings(self):
         """
-        Try to directly configure the camera, if it's not acquiring.
-        This way the .frameDuration value is updated
+        Report that the settings have changed and so should be used to reconfigure the camera, which
+        will happen "soon". If the acquisition is not running, that almost immediate, but if it's running,
+        it will be done after end of the current frame.
+        This way the .frameDuration value is updated.
         """
-        # See if the camera is acquiring: has hw_lock and status is acquiring
-        # If we fail to acquire the lock, it means the acquisition is ongoing
-        # so no need/not possible to update the settings. They will be updated next frame.
-        if self.hw_lock.acquire(timeout=0.1):
-            try:
-                if self.GetStatus() != AndorV2DLL.DRV_ACQUIRING:
-                    self._update_settings()
-            finally:
-                self.hw_lock.release()
-        else:
-            logging.debug("Cannot update HW settings immediately after VA update as acquisition is ongoing")
-            # TODO: might still need to update the settings at the end of the acquisition, in case
-            # the VAs were just changed before ending the acquisition?
+        self._genmsg.put(GEN_SETTINGS)
 
     def _need_update_settings(self):
         """
@@ -2014,6 +2016,7 @@ class AndorCam2(model.DigitalCamera):
             # self.atcore.SetFastExtTrigger(0)  # Disabled (default)
         elif trigger_mode == TRIG_SW:
             logging.debug("Using sw trigger for synchronized acquisition")
+            # Note: this increases the frame duration by ~7ms
             self.atcore.SetAcquisitionMode(AndorV2DLL.AM_VIDEO)
             self.atcore.SetTriggerMode(AndorV2DLL.TM_SOFTWARE)
         elif trigger_mode == TRIG_FAKE:
@@ -2023,15 +2026,17 @@ class AndorCam2(model.DigitalCamera):
 
         return trigger_mode
 
-    def _update_settings(self):
+    def _update_settings(self, acquiring: bool):
         """
         Commits the settings to the camera. Only the settings which have been
         modified are updated.
         Note: the acquisition must _not_ going on.
+        :param acquiring: whether the acquisition is currently running (in which case the shutter is controlled)
         return:
             res (int, int): resolution of the image to be acquired in X and Y (px, px)
             duration (float): expected time per frame (s)
             trigger_mode (TRIG_*):  type of trigger implementation to use
+            shutter_forced (bool): whether the shutter is forced to be open
         """
         (prev_image_settings, prev_exp_time, prev_readout_rate,
          prev_gain, prev_shut, prev_sync) = self._prev_settings
@@ -2133,14 +2138,16 @@ class AndorCam2(model.DigitalCamera):
         b, rect = new_image_settings[0:2], new_image_settings[2:]
         im_res = (rect[1] - rect[0] + 1) // b[0], (rect[3] - rect[2] + 1) // b[1]
 
-        # It's a little tricky because we decide whether to use or not the shutter
-        # based on exp and readout time, but setting the shutter clamps the
-        # exposure time.
+        # It's a little confusing, because the total frame duration depends on the shutter (times),
+        # while, the frame duration is one of the parameter that is used to decided whether we can
+        # use the shutter or not. => guess frame duration without shutter, without asking the SDK.
+        shutter_forced = False
         if self._shutter_period is not None:
-            # Activate shutter closure whenever needed:
-            # Shutter closes between exposures iif:
-            # * period between exposures is long enough (>0.1s): to ensure we don't burn the mechanism
-            # * readout time > exposure time/100 (when risk of smearing is possible)
+            # Activate shutter closure whenever needed.
+            # Shutter is disabled between exposures if any of these are true:
+            # * period between exposures is too short (ex: < 0.1s): to ensure we don't burn the mechanism
+            # * readout time < 1% of exposure time (ie, smearing wouldn't be noticeable)
+            # * binning is full vertical (smearing is not an issue)
             readout = im_res[0] * im_res[1] / self._readout_rate  # s
             tot_time = self._exposure_time + readout
             shutter_active = False
@@ -2157,11 +2164,17 @@ class AndorCam2(model.DigitalCamera):
                 shutter_active = True
 
             if shutter_active:
-                self.SetShutter(1, 0, self._shutter_cltime, self._shutter_optime)  # mode 0 = auto
-            else:
-                self.SetShutter(1, 1, 0, 0)
-                # Note that the shutter times limits the minimum exposure time
-                # => always try again setting exp time, in case shutter was active before
+                self.SetShutter(1, AndorV2DLL.SHUTTER_AUTO, self._shutter_cltime, self._shutter_optime)
+            elif acquiring:  # shutter should be open all the time (during acquisition)
+                self.SetShutter(1, AndorV2DLL.SHUTTER_OPEN, 0, 0)
+                time.sleep(self._shutter_optime)  # Wait enough time to be sure it's open
+                shutter_forced = True
+                # Note that the shutter times limits the minimum accumulate time (but not the exposure time)
+            else:  # shutter should stay open, but the acquisition is not active
+                # => Indicate the shutter is closed. It should already be closed, but that has the
+                # advantage of providing the same timing computation as when the shutter is always open
+                self.SetShutter(1, AndorV2DLL.SHUTTER_CLOSE, 0, 0)
+                shutter_forced = True
 
         # Exposure time should always be reset (after changing the acquisition mode)
         self.atcore.SetExposureTime(c_float(self._exposure_time))
@@ -2191,7 +2204,7 @@ class AndorCam2(model.DigitalCamera):
         self._prev_settings = [new_image_settings, self._exposure_time,
                                self._readout_rate, self._gain, self._shutter_period,
                                synchronized]
-        return im_res, duration, trigger_mode
+        return im_res, duration, trigger_mode, shutter_forced
 
     def _allocate_buffer(self, size):
         """
@@ -2243,7 +2256,7 @@ class AndorCam2(model.DigitalCamera):
             # To make sure the generator is not wait forever for a trigger
             logging.debug("Sending resynchronisation event")
             self._genmsg.put(GEN_RESYNC)
-            self._update_settings_if_not_acquiring()
+            self._should_apply_settings()
 
         logging.debug("Acquisition now set to synchronized mode %s", sync)
 
@@ -2273,7 +2286,7 @@ class AndorCam2(model.DigitalCamera):
         raises queue.Empty: if no message on the queue
         """
         msg = self._genmsg.get(**kwargs)
-        if (msg in (GEN_START, GEN_STOP, GEN_TERM, GEN_RESYNC) or
+        if (msg in (GEN_START, GEN_STOP, GEN_TERM, GEN_RESYNC, GEN_SETTINGS) or
               isinstance(msg, float)):
             logging.debug("Acq received message %s", msg)
         else:
@@ -2291,6 +2304,10 @@ class AndorCam2(model.DigitalCamera):
             msg = self._get_acq_msg(block=True)
             if msg == GEN_TERM:
                 raise TerminationRequested()
+            elif msg == GEN_SETTINGS:
+                if self._need_update_settings():
+                    self._update_settings(acquiring=False)
+                continue  # wait for more message
             elif msg == GEN_START:
                 return
 
@@ -2323,6 +2340,9 @@ class AndorCam2(model.DigitalCamera):
             elif msg == GEN_RESYNC:
                 # Indicate the acquisition mode (might) have changed
                 return GEN_RESYNC
+            elif msg == GEN_SETTINGS:
+                logging.debug("Skipping settings update as acquisition is running")
+                continue  # ignore it (cannot be updated during acquisition)
             else:  # Anything else shouldn't really happen
                 logging.warning("Skipped message %s as acquisition is waiting for data", msg)
 
@@ -2352,6 +2372,9 @@ class AndorCam2(model.DigitalCamera):
                 elif isinstance(msg, float):  # float = trigger
                     trigger = msg
                     break
+                elif msg == GEN_SETTINGS:
+                    logging.debug("Skipping settings update as acquisition is ready for trigger")
+                    continue  # ignore it (cannot be updated during acquisition)
                 else: # Anything else shouldn't really happen
                     logging.warning("Skipped message %s as acquisition is waiting for trigger", msg)
 
@@ -2430,6 +2453,7 @@ class AndorCam2(model.DigitalCamera):
         try:
             logging.debug("Starting acquisition")
             has_hw_lock = False
+            shutter_forced = False
             need_reconfig = True  # Always reconfigure when new acquisition starts
             failures = 0
             acq_frames = 0
@@ -2454,7 +2478,7 @@ class AndorCam2(model.DigitalCamera):
                         if ex.errno != 20073:  # DRV_IDLE == already aborted == not a big deal
                             raise
 
-                    im_res, duration, trigger_mode = self._update_settings()
+                    im_res, duration, trigger_mode, shutter_forced = self._update_settings(acquiring=True)
                     if not has_hw_lock:
                         self.hw_lock.acquire()
                         has_hw_lock = True
@@ -2490,6 +2514,10 @@ class AndorCam2(model.DigitalCamera):
                     # Trigger received => start the acquisition
                     self.atcore.SendSoftwareTrigger()
                 elif trigger_mode == TRIG_FAKE:
+                    # In theory, it's supposed to make the StartAcquisition(). In practice, it doesn't
+                    # seem to help much, but we still do it just in case it helps a little bit.
+                    self.atcore.PrepareAcquisition()
+
                     # Wait for trigger
                     msg = self._acq_wait_trigger()
                     if msg == GEN_RESYNC:
@@ -2587,6 +2615,12 @@ class AndorCam2(model.DigitalCamera):
                     if ex.errno != 20073:  # DRV_IDLE == already aborted == not a big deal
                         raise
 
+            # Force the shutter to be closed (in case it was forced open during acquisition)
+            if shutter_forced:
+                self.SetShutter(1, AndorV2DLL.SHUTTER_CLOSE, 0, 0)
+                # Wait enough time to be sure it's closed, before opening it again on next acquisition
+                time.sleep(self._shutter_cltime)
+
             if has_hw_lock:
                 self.hw_lock.release()
 
@@ -2603,7 +2637,6 @@ class AndorCam2(model.DigitalCamera):
             # Skip if we've already run the GC recently
             if self._num_no_gc < MAX_GC_SKIP:
                 return
-            logging.debug("num_gc = %s", self._num_no_gc)
 
             # The garbage collector with generation 2 takes ~40 ms, but gen 1 is a lot faster (< 1ms)
             if max_time < 0.1:
@@ -2635,7 +2668,7 @@ class AndorCam2(model.DigitalCamera):
                 # iXon Ultra: as we force it open, we need to force it close now
                 ct = self.GetCapabilities().CameraType
                 if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
-                    self.SetShutter(1, 2, 0, 0)  # mode 2 = close
+                    self.SetShutter(1, AndorV2DLL.SHUTTER_CLOSE, 0, 0)
             except Exception:
                 logging.info("Failed to close the shutter", exc_info=True)
 
@@ -3273,6 +3306,7 @@ class FakeAndorV2DLL(object):
         exposure.value = self.exposure
         # Accumulate is essentially exposure + read-out time... and add 1ms for simulating "overhead",
         # as in the real hardware.
+        # + opening/closing times of the shutter, if set to automatic (but we don't simulate that)
         accumulate.value = self.exposure + self._getReadout() + 1e-3
         kinetic.value = accumulate.value + self.kinetic
 
@@ -3290,6 +3324,9 @@ class FakeAndorV2DLL(object):
         self._first_frame = 0
         self._last_frame = 0
         self._begin_exposure()
+
+    def PrepareAcquisition(self):
+        pass
 
     def _WaitForAcquisition(self, timeout=None):
         # If SW trigger, first wait for trigger event
