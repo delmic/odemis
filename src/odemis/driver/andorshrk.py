@@ -749,25 +749,24 @@ class Shamrock(model.Actuator):
         logging.debug("Reconnecting spectrograph...")
         self.Close()
 
-        # In order to make reestablish the connection, we need to turn the power off and on again and then
-        # reinitialize.
-        logging.debug("Cycling power...")
+        # The most reliable way to reestablish the connection is to turn the power off & on and then reinitialize.
         if model.hasVA(self, 'powerSupply'):
+            logging.debug("Cycling power...")
             self.powerSupply.value = False
             time.sleep(2)  # wait a bit, otherwise the system doesn't notice
-            self.powerSupply.value = True
+            self.powerSupply.value = True  # Can be very long
             logging.debug("Cycling power complete.")
         else:
-            raise ValueError("Spectrograph doesn't have a power supplier, aborting reconnect.")
+            logging.error("Spectrograph doesn't have a power supplier, directly trying to reconnect.")
 
         # Initialization
-        self.Initialize()  # blocking, takes 2 min
+        self.Initialize()  # blocking, might take up to 2 min
 
         # Check if it's working
         # If the function is called on startup, we are not ready to call ._updatePosition yet
         try:
             self._updatePosition()
-            logging.debug("Restarting spectrograph after power cycling was successful.")
+            logging.debug("Reconnection to spectrograph successful.")
         except ShamrockError as ex:
             logging.error("Unable to restart spectrograph. Try to turn the power off and on again. Failed "
                           "with exception %s." % ex)
