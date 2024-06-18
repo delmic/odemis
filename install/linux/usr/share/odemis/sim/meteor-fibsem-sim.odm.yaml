@@ -5,7 +5,6 @@ METEOR-Sim: {
     class: Microscope,
     role: meteor,
     children: [
-        # "Stage",
         "Meteor Stage",
         "Optical Objective",
         "Optical Focus",
@@ -77,9 +76,7 @@ METEOR-Sim: {
     role: stage-bare,
     init: {
     },
-
     metadata: {
-
         # Loading position:
         FAV_POS_DEACTIVE: { 'rx': 0, 'rz': 1.9076449, 'x': -0.01529, 'y': 0.0506, 'z': 0.01975 },
         # XYZ ranges for SEM & METEOR

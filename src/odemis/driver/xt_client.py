@@ -230,6 +230,9 @@ class SEM(model.HwComponent):
             self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
+            if "adapter; autoscript" in self._swVersion:
+                raise HwError("The connected server is not an xt server, but an autoscript server. Please check the xt adapter configuration."
+                              "The server software version is '%s'." % self._swVersion)
             logging.debug(
                 f"Successfully connected to xtadapter with software version {self._swVersion} and hardware"
                 f"version {self._hwVersion}")

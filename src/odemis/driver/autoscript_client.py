@@ -2,6 +2,8 @@
 """
 Created on 20 Feb 2024
 
+@author: Patrick Cleeve
+
 Copyright © 2024 Delmic
 
 This file is part of Odemis.
@@ -27,7 +29,7 @@ import zipfile
 from concurrent.futures import CancelledError
 from typing import Optional, Union
 
-import msgpack
+import msgpack # only used for debug information
 import msgpack_numpy
 import notify2
 import numpy
@@ -110,6 +112,9 @@ class SEM(model.HwComponent):
             self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
+            if "adapter; autoscript" not in self._swVersion:
+                raise HwError("The connected server is not an autoscript server. Please check the xt adapter configuration."
+                              "The server software version is '%s'." % self._swVersion)
             logging.debug(
                 f"Successfully connected to autoscript server with software version {self._swVersion} and hardware"
                 f"version {self._hwVersion}")
@@ -188,19 +193,14 @@ class SEM(model.HwComponent):
         """Check if a latest xtadapter package is available and then transfer it."""
         try:
             package = None
-            bitness = re.search(r"bitness:\s*([\da-z]+)", self._swVersion)
-            bitness = bitness.group(1) if bitness is not None else None
-            adapter = "xtadapter"
-            if "xttoolkit" in self._swVersion:
-                adapter = "fastem-xtadapter"
             current_version = re.search(r"xtadapter:\s*([\d.]+)", self._swVersion)
             current_version = current_version.group(1) if current_version is not None else None
-            if current_version is not None and bitness is not None:
+            if current_version is not None:
                 package = check_latest_package(
                     directory=XT_INSTALL_DIR,
                     current_version=current_version,
-                    adapter=adapter,
-                    bitness=bitness,
+                    adapter="xtadapter",
+                    bitness='64',
                     is_zip=True,
                 )
             if package is not None:
@@ -277,7 +277,10 @@ class SEM(model.HwComponent):
 
     def set_default_stage_coordinate_system(self, coordinate_system: str) -> None:
         """
-        Set the default stage coordinate system.
+        Set the default stage coordinate system. (Raw, Specimen)
+        Raw: raw stage coordinates use the stage's encoder positions
+        Specimen: specimen coordinates use the linked-z coordinate system (which is based on
+                    the SEM working distance)
         :param coordinate_system: (str) Name of the coordinate system to set as default.
         """
         with self._proxy_access:
@@ -682,7 +685,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.resolution_info(channel)
 
-    def turn_beam_on(self, state: bool, channel: str) -> None:
+    def set_beam_power(self, state: bool, channel: str) -> None:
         """
         Turn the beam on or off.
         :param state: (bool) True to turn the beam on and False to turn the beam off.
@@ -693,7 +696,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.turn_beam_on(state, channel)
 
-    def beam_is_on(self, channel: str):
+    def get_beam_is_on(self, channel: str):
         """Returns True if the beam is on and False if the beam is off."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -762,7 +765,7 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.set_contrast(contrast, channel)
+            self.server.set_contrast(contrast, channel)
 
     def get_contrast(self, channel: str) -> float:
         """
@@ -788,7 +791,7 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            return self.server.set_brightness(brightness, channel)
+            self.server.set_brightness(brightness, channel)
 
     def get_brightness(self, channel: str) -> float:
         """
@@ -870,7 +873,6 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.start_acquisition(channel)
 
-
     def stop_acquisition(self, channel: str, wait_for_frame: bool = True) -> None:
         """
         Stop the acquisition of images.
@@ -883,9 +885,9 @@ class SEM(model.HwComponent):
 
     def get_imaging_state(self, channel:str) -> str:
         """
-        Get the state of the imaging.
+        Get the state of the imaging scan device (Error, Idle, Running, Paused).
         :param channel: (str) Name of one of the channels.
-        :return: (str) Name of the state the imaging is set to.
+        :return: (str) Name of the state the imaging device is set to.
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -1194,7 +1196,6 @@ class Scanner(model.Emitter):
             resolution = self.parent.get_resolution(self.channel)
             res_choices = set(r for r in RESOLUTIONS)
             self.resolution = model.VAEnumerated(resolution, res_choices, unit="px" , setter=self._setResolution)
-            self.resolution = model.VAEnumerated(resolution, res_choices, unit="px" , setter=self._setResolution)
 
             # (float, float) as a ratio => how big is a pixel, compared to pixelSize
             # it basically works the same as binning, but can be float.
@@ -1272,11 +1273,6 @@ class Scanner(model.Emitter):
 
         return value
 
-    def _setResolution(self, value: list) -> list:
-        self.parent.set_resolution(value, self.channel)
-        self._updateResolution() # to update scale -> pixelsize
-        return value
-    
     def _setResolution(self, value: list) -> list:
         self.parent.set_resolution(value, self.channel)
         self._updateResolution() # to update scale -> pixelsize
@@ -1914,7 +1910,7 @@ class Stage(model.Actuator):
         shift (dict): position in internal coordinates (ie, axes in the same
            direction as the hardware expects)
         """
-        # We don't check the target position fit the range, the xt-adapter will take care of that
+        # We don't check the target position fit the range, the autoscript-adapter will take care of that
         self._moveTo(future, shift, rel=True)
 
     @isasync
