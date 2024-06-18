@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-Created on June 13, 2025
+Created on June 13, 2024
 
 @author: Karishma Kumar
 
@@ -31,8 +31,8 @@ import yaml
 from scipy.spatial.distance import cdist
 
 from odemis import model, dataio
-from odemis.acq.acqmng import SettingsObserver, acquireZStack
-from odemis.acq.stream import StaticFluoStream, FluoStream
+from odemis.acq.acqmng import acquireZStack
+from odemis.acq.stream import FluoStream
 from odemis.gui.plugin import Plugin
 from odemis.util.comp import generate_zlevels
 from odemis.util.transform import AffineTransform
@@ -107,28 +107,25 @@ class ChromaticCorrectionPlugin(Plugin):
         :param filename: filename of the data array
         :param data: value and metadata of the given data array
         """
-        # display the reference in the analysis tab
-        analysis_tab = self.main_app.main_data.getTabByName('analysis')
         # save the image
         dataio.tiff.export(filename, data)
         # Read the saved images and display
-        im_read = dataio.tiff.read_data(filename)
-        aligned_stream = StaticFluoStream(im_read[0].metadata[model.MD_DESCRIPTION], im_read[0])
-        scont = analysis_tab.stream_bar_controller.addStream(aligned_stream, add_to_view=True)
-        scont.stream_panel.show_remove_btn(True)
+        analysis_tab = self.main_app.main_data.getTabByName('analysis')
+        self.main_app.main_data.tab.value = analysis_tab
+        analysis_tab.load_data(filename, extend=True)
 
     def start(self):
-        tab_data = self.main_app.main_data.tab.value.tab_data_model
-        self.new = []
-        self.ref = []
+        localization_tab = self.main_app.main_data.getTabByName("cryosecom-localization")
+        tab_data = localization_tab.tab_data_model
+        other_mip_streams = []
+        reference_mip_stream = []
         levels = generate_zlevels(tab_data.main.focus,
                                   (-10e-06, 10e-06),
                                   5e-06)
-
         non_static = [s for s in tab_data.streams.value
                       if isinstance(s, FluoStream)]
         zlevels = {s: levels for s in non_static}
-        settings_observer = SettingsObserver(model.getComponents())
+        settings_observer = tab_data.main.settings_obs
         acqui_task = acquireZStack(non_static, zlevels, settings_obs=settings_observer)
         das, e = acqui_task.result()
 
@@ -147,34 +144,35 @@ class ChromaticCorrectionPlugin(Plugin):
             # All the channels will be corrected according to a reference colored channel
             # green channel is selected as reference channel, Why? -> Ask Deniz
             if da.metadata[model.MD_USER_TINT] == (0, 255, 0):
-                self.ref = mip_image
+                reference_mip_stream = mip_image
             else:
-                self.new.append(mip_image)
+                other_mip_streams.append(mip_image)
 
         # Save and display the reference channel in the analysis tab
-        self.show_static_stream(f"modified_{self.ref.metadata[model.MD_DESCRIPTION]}_ref", self.ref)
+        self.show_static_stream(f"modified_{reference_mip_stream.metadata[model.MD_DESCRIPTION]}_ref",
+                                reference_mip_stream)
 
         # Compute transformation between reference channel and other channels
         trans_per_channel = {}  # stores transformation values per channel
-        _, centers_ref = process_image(self.ref)
-        centers1 = numpy.array(centers_ref)
-        for i, im in enumerate(self.new):
+        _, centers_ref = process_image(reference_mip_stream)
+        centers_ref = numpy.array(centers_ref)
+        for i, im in enumerate(other_mip_streams):
             # Find corresponding points
             _, centers_new = process_image(im)
-            centers2 = numpy.array(centers_new)
+            centers_new = numpy.array(centers_new)
             max_distance = BEAD_DIAMETER
-            corresponding_pairs = find_corresponding_points(centers1, centers2, max_distance)
+            corresponding_pairs = find_corresponding_points(centers_ref, centers_new, max_distance)
 
             # Extract the matching points
-            points1 = centers1[corresponding_pairs[:, 0]]
-            points2 = centers2[corresponding_pairs[:, 1]]
+            points1 = centers_ref[corresponding_pairs[:, 0]]
+            points2 = centers_new[corresponding_pairs[:, 1]]
 
-            if len(corresponding_pairs) > 4:
+            if len(corresponding_pairs) >= 4:
                 # Estimate the transformation matrix
-                affine2 = AffineTransform.from_pointset(points1, points2)
+                affine = AffineTransform.from_pointset(points1, points2)
                 mat = numpy.eye(3)
-                mat[:2, :2] = affine2.matrix
-                mat[:2, 2] = affine2.translation
+                mat[:2, :2] = affine.matrix
+                mat[:2, 2] = affine.translation
                 ref_mat = numpy.eye(3)
                 mat = ref_mat @ mat
 
@@ -200,12 +198,20 @@ class ChromaticCorrectionPlugin(Plugin):
                 pixel_size = im.metadata[model.MD_PIXEL_SIZE]
                 translation = (tx * pixel_size[0], -ty * pixel_size[1])
 
+                # stream settings
+                input_wl = im.metadata[model.MD_IN_WL]
+                output_wl = im.metadata[model.MD_OUT_WL]
+
                 trans_per_channel[f"channel_{i}"] = {
                     "tint": list(im.metadata[model.MD_USER_TINT]),
                     "scale_cor": [float(scale[0]), float(scale[1])],
                     "translation_cor": [float(translation[0]), float(translation[1])],
                     "rotation_cor": float(rotation),
-                    "shear_cor": float(shear)
+                    "shear_cor": float(shear),
+                    "excitation": [float(input_wl[0]), float(input_wl[1])],
+                    "emission": [float(output_wl[0]), float(output_wl[1])],
+                    "exposure time": float(im.metadata[model.MD_EXP_TIME]),
+                    "light power": float(im.metadata[model.MD_LIGHT_POWER])
                 }
 
                 # update metadata
