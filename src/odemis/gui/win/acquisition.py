@@ -657,7 +657,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             save_dir = self.conf.pj_last_path
 
         # feature flag to enable/disable FIBSEM mode (disabled until fibsem code is merged)
-        self.fibsem_mode = False # isinstance(orig_tab_data, guimodel.CryoFIBSEMGUIData)
+        self.fibsem_mode = isinstance(orig_tab_data, guimodel.CryoFIBSEMGUIData)
 
         # hide optical settings / stream panel when in fibsem mode
         self.fp_settings_secom_optical.Show(not self.fibsem_mode)

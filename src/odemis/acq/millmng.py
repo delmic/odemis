@@ -630,8 +630,8 @@ class AutomatedMillingManager(object):
     def run(self):
 
         self.posture_manager = MicroscopePostureManager(model.getMicroscope())
+        workflows = ["MILLING", "IMAGING"] # TODO: implement imaging workflow separately (fm acquisition)
 
-        workflows = ["MILLING", "IMAGING"] # TODO
         for task_num, task_name in enumerate(self.task_list, 1):
             print(f"Starting {task_name} for {len(self.project.features)} features...")
             task_num = f"{task_num:02d}"
@@ -707,12 +707,13 @@ class AutomatedMillingManager(object):
 
                 # move to flm position
                 # TODO: use pm to move to flm position
+                # TODO: move the fm acquisitions to the end of each task.
                 print(f"Moving to FLM position for {feature.name.value}")
                 # set objective position
                 self._future.running_subf = self.focus.moveAbs({"z": feature.focus_position.value})
                 self._future.running_subf.result()
 
-                # TODO: get fm acquisition settings ?
+                # TODO: get fm acquisition settings from where?
 
                 # acquire fm z-stack
                 self._future.running_subf = acquire([self.fm_stream])
