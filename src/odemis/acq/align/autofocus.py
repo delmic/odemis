@@ -843,6 +843,11 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
         ret = {}
         logging.debug("Running AutoFocusSpectrometer on %s, using %s, for the detectors %s, and using selector %s",
                       spgr, focuser, dets, selector)
+        # make sure the slit-in position is at the minimum when using an external spectrograph
+        if spgr.role == 'spectrograph-dedicated':
+            if spgr.position.value["slit-in"] != spgr.axes["slit-in"].range[0]:
+                spgr.moveAbsSync({"slit-in": spgr.axes["slit-in"].range[0]})
+
         try:
             future._running_subf = AutoFocusSpectrometer(spgr, focuser, dets, selector, streams)
             et = future._actions_time.pop(0)

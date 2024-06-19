@@ -36,6 +36,8 @@ from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
 from odemis.util import TimeoutError
 
 GRATING_NOT_MIRROR = "CONST:NOTMIRROR"  # A special string so that no grating position can be like this
+SLIT_MAX_OPEN = "CONST:SLITMAXOPEN"
+IRIS_MAX_OPEN = "CONST:SLITMAXOPEN"
 
 ACQ_QUALITY_FAST = 0
 ACQ_QUALITY_BEST = 1
@@ -288,18 +290,20 @@ SPARC2_MODES = {
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    #'z': "MD:" + model.MD_FAV_POS_ACTIVE
                                    },
-                 }),
-            # TODO need to check properties and values
-            'tunnel-lens-align': (r"ccd.*",
-                   {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
-                    'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
-                    'filter': {'band': BAND_PASS_THROUGH},
-                    'spectrograph': {'grating': 'mirror', 'wavelength': 0},
-                    'slit-in-big': {'x': 'off'},  # closed
-                    'spec-ded-aligner': {'z': "MD:" + model.MD_FAV_POS_ACTIVE},
-                    'chamber-light': {'power': 'off'},
-                    #'brightlight-ext': {'power': 'on'},
-                    }),
+                }),
+            'tunnel-lens-align': ("sp-ccd",
+                {'chamber-light': {'power': 'off'},
+                 'spec-selector': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # for the spec-ded aligner only z axis positions are stored, currently for one WL
+                 'spec-ded-aligner': {'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # for the spectrograph dedicated slit fully open and filter always on pass-through
+                 'spectrograph-dedicated': {'grating': 'mirror',
+                                            'wavelength': 0,
+                                            'slit-in': SLIT_MAX_OPEN,
+                                            'iris-direct': IRIS_MAX_OPEN,
+                                            },
+                 'spec-ded-det-selector': {'rx': 0.0},
+                }),
          }
 
 # Currently not used as-is, mostly here to make guessMode() happy.
@@ -737,8 +741,13 @@ class OpticalPathManager:
                         logging.debug("Using grating position as-is: '%s'", pos)
                         pass  # use pos as-is
                 elif axis == "slit-in":
+                    if pos == SLIT_MAX_OPEN:
+                        pos = comp.axes["slit-in"].range[1]
                     if mode in ALIGN_MODES and (comp_role, axis) not in self._stored:
                         self._stored[comp_role, axis] = comp.position.value[axis]
+                elif axis == "iris-direct":
+                    if pos == IRIS_MAX_OPEN:
+                        pos = comp.axes["iris-direct"].range[1]
                 elif hasattr(comp.axes[axis], "choices") and isinstance(comp.axes[axis].choices, dict):
                     choices = comp.axes[axis].choices
                     for key, value in choices.items():
