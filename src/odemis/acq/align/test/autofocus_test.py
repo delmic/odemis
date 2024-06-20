@@ -241,12 +241,7 @@ class TestSparc2AutoFocus(unittest.TestCase):
     @timeout(1000)
     def test_det_external(self):
         """
-        Test AutoFocus Spectrometer on SP-CCD with an external calibration light
-        The sequence of this autofocus procedure should be as follows:
-            Slit-in fully opened, so set position to max range
-            Set the wavelength to 0nm
-            Turn on the external brightlight
-            Just before the focussing starts set slit position to small
+        Test the AutoFocus with an external spectrometer using a sp-ccd with a dedicated calibration light.
         """
         self.focus_ext.moveAbs({"z": self._good_focus - 200e-6}).result()
 

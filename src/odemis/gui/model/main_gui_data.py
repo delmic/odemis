@@ -175,7 +175,7 @@ class MainGUIData(object):
         self.light_aligner = None  # actuator to move/calibrate the light aligner mirror (SPARCv2)
         self.light = None  # epi-fluorescence light (SECOM/DELPHI)
         self.brightlight = None  # special light for white illumination (SECOM) or calibration (SPARC)
-        self.brightlight_ext = None  # external light for white illumination, e.g. for FSLT (SPARCv2)
+        self.brightlight_ext = None  # external light for purple UV illumination, e.g. for FSLT (SPARCv2)
         self.backlight = None  # for dark field illumination (SECOM)
         self.light_filter = None  # emission light filter for SECOM/output filter for SPARC
         self.cl_filter = None  # light filter for SPARCv2 on the CL components

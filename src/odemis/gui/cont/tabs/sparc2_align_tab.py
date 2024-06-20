@@ -156,7 +156,7 @@ class Sparc2AlignTab(Tab):
             ),
             (self.panel.vp_align_lens_ext,
                 {
-                 "name": "Lens alignment tunnel",
+                 "name": "Lens alignment external",
                  "stream_classes": acqstream.CameraStream,
                 }
             ),
@@ -307,7 +307,7 @@ class Sparc2AlignTab(Tab):
                     self._addMoIEntries(self._ccd_spe_ext.stream_panel)
                     ccd_stream_ext.image.subscribe(self._onNewMoI)
 
-                    # To activate the SEM spot when the CCD plays
+                    # To activate the SEM spot when the external CCD plays
                     ccd_stream_ext.should_update.subscribe(self._on_ccd_stream_play)
 
         # For running autofocus (can only one at a time)
@@ -328,8 +328,7 @@ class Sparc2AlignTab(Tab):
                 if det.name in main_data.spec_ded_focus.affects.value:
                     ccd_focuser_ext = main_data.spec_ded_focus
 
-        # TODO: handle if there are two spectrometers with focus (but for now,
-        # there is no such system)
+        # check for internal and external spectrometers with focus
         if ccd_focuser:
             # Focus position axis -> AxisConnector
             z = main_data.focus.axes["z"]
@@ -406,6 +405,7 @@ class Sparc2AlignTab(Tab):
                 focus_stream.should_update.subscribe(self._ensureOneFocusStream)
 
             # Bind spectrograph available gratings to the focus panel gratings combobox
+            # use a wrapper class for the container argument to pass in create_axis_entry
             container = FocusPanelContainer(self.panel.cmb_focus_gratings_label, self.panel.cmb_focus_gratings)
             create_axis_entry(container, 'grating', main_data.spectrograph)
 
@@ -429,6 +429,7 @@ class Sparc2AlignTab(Tab):
                 focus_stream.should_update.subscribe(self._ensureOneFocusStream)
 
             # Bind spectrograph available gratings to the focus panel gratings combobox
+            # use a wrapper class for the container argument to pass in create_axis_entry
             container = FocusPanelContainer(self.panel.cmb_focus_gratings_label_ext, self.panel.cmb_focus_gratings_ext)
             create_axis_entry(container, 'grating', main_data.spectrograph_ded)
 
@@ -477,6 +478,8 @@ class Sparc2AlignTab(Tab):
             spect = main_data.spectrograph
             if main_data.streak_ccd.name in main_data.spectrograph_ded.affects.value:
                 spect = main_data.spectrograph_ded
+                self.panel.cmb_focus_detectors_ext.Append(main_data.streak_ccd.name)
+
 
             add_axis("grating", spect)
             add_axis("wavelength", spect)
@@ -691,12 +694,14 @@ class Sparc2AlignTab(Tab):
         tab_data.align_mode.subscribe(self._onAlignMode)
 
         self.panel.btn_manual_focus.Bind(wx.EVT_BUTTON, self._onManualFocus)
+        if main_data.spectrograph_ded:
+            self.panel.btn_manual_focus_ext.Bind(wx.EVT_BUTTON, self._onManualFocus_ext)
 
         if main_data.brightlight:
             # Make sure the calibration light is off
             main_data.brightlight.power.value = main_data.brightlight.power.range[0]
         if main_data.brightlight_ext:
-            # Make sure the calibration light of the FSLM is off if there is any present
+            # Make sure the external calibration light is off if there is any present
             main_data.brightlight_ext.power.value = main_data.brightlight_ext.power.range[0]
 
         # Bind moving buttons & keys
@@ -1054,10 +1059,17 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_mirror.Show(False)
             self.panel.pnl_lens_mover.Show(False)
             self.panel.pnl_lens_switch.Show(False)
-            self.panel.pnl_focus.Show(True)
-            self.panel.pnl_focus_ext.Show(False)
+            if main.spectrograph_ded and main.streak_ccd.name in main.spectrograph_ded.affects.value:
+                self.panel.pnl_focus_ext.Show(True)
+                self.panel.pnl_focus.Show(False)
+                self.panel.cmb_focus_detectors_ext.SetSelection(1)
+            else:
+                self.panel.pnl_focus.Show(True)
+                self.panel.pnl_focus_ext.Show(False)
             self.panel.btn_autofocus.Enable(False)
+            self.panel.btn_autofocus_ext.Enable(False)
             self.panel.gauge_autofocus.Enable(False)
+            self.panel.gauge_autofocus_ext.Enable(False)
             self.panel.pnl_fibaligner.Show(False)
             self.panel.pnl_streak.Show(True)
             self.panel.pnl_spec_switch.Show(False)
@@ -1065,7 +1077,7 @@ class Sparc2AlignTab(Tab):
             # show the lens panel but only allow moving the y axis
             if main.spec_ded_aligner:
                 self.panel.pnl_lens_tunnel.Show(True)
-                self._show_spec_ded_aligner_components()
+                self._show_spec_ded_aligner_components(False)
             else:
                 self.panel.pnl_lens_tunnel.Show(False)
 
@@ -1115,6 +1127,7 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_light_aligner.Show(False)
             self.panel.pnl_lens_tunnel.Show(True)
             self._show_spec_ded_aligner_components(True)  # adjust this panel to enable full control of all axes
+            self.panel.cmb_focus_detectors_ext.SetSelection(0)  # set the detector to the first in the list
 
             self.panel.pnl_moi_settings.Show(False)
         else:
@@ -1521,6 +1534,65 @@ class Sparc2AlignTab(Tab):
             self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
 
     @call_in_wx_main
+    def _onManualFocus_ext(self, event):
+        """
+        Called when manual focus btn receives an event.
+        """
+        main = self.tab_data_model.main
+        bl_ext = main.brightlight_ext
+        align_mode = self.tab_data_model.align_mode.value
+        gauge = self.panel.gauge_autofocus_ext
+        self._mf_future.cancel()  # In case it's still changing, immediately stop (the gauge)
+
+        if event.GetEventObject().GetValue():  # manual focus btn toggled
+            # Set the optical path according to the align mode
+            if align_mode == "streak-align":
+                opath = "streak-focus"
+            elif align_mode == "tunnel-lens-align":
+                opath = "spec-focus-ext"
+            else:
+                self._stream_controller.pauseStreams()
+                logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.",
+                                align_mode)
+                return
+
+            if align_mode == "streak-align":
+                # force wavelength 0
+                # TODO: Make sure it's the correct position on the workflow, maybe do it for all modes?
+                main.spectrograph_ded.moveAbsSync({"wavelength": 0})
+
+                self.panel.slider_focus_ext.Enable(True)
+                self.panel.cmb_focus_gratings_ext.Enable(True)
+                # Do no enable detector selection, as only the streak-ccd is available
+            elif align_mode == "tunnel-lens-align":
+                main.spectrograph_ded.moveAbsSync({"wavelength": 0,
+                                                   "slit-in": main.spectrograph_ded.axes["slit-in"].range[0]})
+                self._enableFocusComponents(manual=True, ccd_stream=False)
+                # Do no enable detector selection, as there can be streak-ccd connected as well
+                self.panel.cmb_focus_detectors.Enable(False)
+            else:
+                if align_mode in ("lens-align", "lens2-align", "light-in-align"):
+                    self._enableFocusComponents(manual=True, ccd_stream=False)
+                self._stream_controller.pauseStreams()
+                self.panel.btn_bkg_acquire.Enable(False)
+
+            self._mf_future = Sparc2ManualFocus(main.opm, bl_ext, opath, toggled=True)
+            self._mf_future.add_done_callback(self._onManualFocusReady_ext)
+            # Update GUI
+            self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
+        else:  # manual focus button is untoggled
+            # First pause the streams, so that image of the slit (almost closed) is the final image
+            self._stream_controller.pauseStreams()
+            # Go back to previous mode (=> open the slit & turn off the lamp)
+            # Get the optical path from align mode
+            opath = self._mode_to_opm[align_mode]
+
+            self._mf_future = Sparc2ManualFocus(main.opm, bl_ext, opath, toggled=False)
+            self._mf_future.add_done_callback(self._onManualFocusFinished)
+            # Update GUI
+            self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
+
+    @call_in_wx_main
     def _onManualFocusReady(self, future):
         """
         Called when starting manual focus is done
@@ -1533,6 +1605,20 @@ class Sparc2AlignTab(Tab):
         if align_mode != "streak-align" and self._focus_streams:
             istream = self.panel.cmb_focus_detectors.GetSelection()
             self._focus_streams[istream].should_update.value = True
+
+    @call_in_wx_main
+    def _onManualFocusReady_ext(self, future):
+        """
+        Called when starting manual focus is done
+        Make sure there's a shown focus stream, then enable/disable manual focus components
+        """
+        if future.cancelled():
+            return
+
+        align_mode = self.tab_data_model.align_mode.value
+        if align_mode != "streak-align" and self._focus_streams_ext:
+            istream = self.panel.cmb_focus_detectors_ext.GetSelection()
+            self._focus_streams_ext[istream].should_update.value = True
 
     def _onManualFocusFinished(self, future):
         """

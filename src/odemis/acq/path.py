@@ -37,7 +37,7 @@ from odemis.util import TimeoutError
 
 GRATING_NOT_MIRROR = "CONST:NOTMIRROR"  # A special string so that no grating position can be like this
 SLIT_MAX_OPEN = "CONST:SLITMAXOPEN"
-IRIS_MAX_OPEN = "CONST:SLITMAXOPEN"
+IRIS_MAX_OPEN = "CONST:IRISMAXOPEN"
 
 ACQ_QUALITY_FAST = 0
 ACQ_QUALITY_BEST = 1
@@ -349,7 +349,7 @@ MIMAS_MODES = {
 
 ALIGN_MODES = {'mirror-align', 'lens2-align', 'ek-align', 'chamber-view',
                'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus',
-               'streak-focus', "light-in-align"}
+               'streak-focus', "light-in-align", "tunnel-lens-align"}
 
 
 class OneTaskExecutor(ThreadPoolExecutor):
