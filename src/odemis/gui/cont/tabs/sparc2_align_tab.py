@@ -1379,8 +1379,8 @@ class Sparc2AlignTab(Tab):
             )
             speclines.tint.value = odemis.gui.FOCUS_STREAM_COLOR
             # Fixed values, known to work well for autofocus
-            speclines.detExposureTime.value = speclines.detExposureTime.clip(0.2)
-            self._setFullFoV(speclines, (2, 2))
+            speclines.detExposureTime.value = speclines.detExposureTime.clip(0.1)
+            self._setFullFoV(speclines, (2, 16))
             if model.hasVA(speclines, "detReadoutRate"):
                 try:
                     speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
