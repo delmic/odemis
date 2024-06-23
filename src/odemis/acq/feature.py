@@ -1,7 +1,10 @@
+import glob
 import json
+import logging
 import os
 
 from odemis import model
+from odemis.util.dataio import data_to_static_streams, open_acquisition
 
 # The current state of the feature
 FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = "Active", "Rough Milled", "Polished", "Discarded"
@@ -85,3 +88,34 @@ def read_features(project_dir):
         raise ValueError(f"Features file doesn't exists in this location. {filename}")
     with open(filename, 'r') as jsonfile:
         return json.load(jsonfile, cls=FeaturesDecoder)
+
+def load_project_data(path: str) -> dict:
+    """load meteor project data from a directory:
+    :param path (str): path to the project directory
+    :return (dict): dictionary containing the loaded data (features and overviews)
+    """
+
+    # load overview images
+    overview_filenames = glob.glob(os.path.join(path, "*overview*.ome.tiff"))
+    overview_data = []
+    for fname in overview_filenames:
+        # note: we only load the overview data, as the conversion to streams
+        # is done in the localisation_tab.add_overview_data which also
+        # handles assigning the streams throughout the gui
+        overview_data.extend(open_acquisition(fname))
+
+    features = []
+    try:
+        # read features
+        features = read_features(path)
+    except ValueError:
+        logging.warning("No features.json file found in the project directory.")
+
+    # load feature streams
+    for f in features:
+        # search dir for images matching f.name.value
+        stream_filenames = glob.glob(os.path.join(path, f"*{f.name.value}*.ome.tiff"))
+        for fname in stream_filenames:
+            f.streams.value.extend(data_to_static_streams(open_acquisition(fname)))
+
+    return {"overviews": overview_data, "features": features}

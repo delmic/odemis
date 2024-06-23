@@ -370,6 +370,7 @@ class xrcpnl_tab_cryosecom_chamber(wx.Panel):
         self.pnl_project = xrc.XRCCTRL(self, "pnl_project")
         self.txt_projectpath = xrc.XRCCTRL(self, "txt_projectpath")
         self.btn_change_folder = xrc.XRCCTRL(self, "btn_change_folder")
+        self.btn_load_project = xrc.XRCCTRL(self, "btn_load_project")
         self.pnl_switch_buttons = xrc.XRCCTRL(self, "pnl_switch_buttons")
         self.btn_switch_sem_imaging = xrc.XRCCTRL(self, "btn_switch_sem_imaging")
         self.btn_switch_fm_imaging = xrc.XRCCTRL(self, "btn_switch_fm_imaging")
@@ -3690,8 +3691,10 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 					<object class="wxBoxSizer">
 						<object class="sizeritem">
 							<object class="wxPanel" name="pnl_project">
-								<object class="wxBoxSizer">
-									<orient>wxVERTICAL</orient>
+								<object class="wxGridBagSizer">
+									<cols>2</cols>
+									<rows>3</rows>
+									<hgap>50</hgap>
 									<object class="sizeritem">
 										<object class="wxStaticText">
 											<label>Project</label>
@@ -3701,57 +3704,79 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
 												<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
 											</font>
 										</object>
-										<flag>wxBOTTOM|wxALL</flag>
-										<border>5</border>
+										<flag>wxALL|wxEXPAND</flag>
+										<border>10</border>
+										<cellpos>0,0</cellpos>
+										<cellspan>1,3</cellspan>
 									</object>
 									<object class="sizeritem">
-										<object class="wxBoxSizer">
-											<object class="sizeritem">
-												<object class="wxTextCtrl" name="txt_projectpath">
-													<size>-1,20</size>
-													<value>Select a destination file</value>
-													<fg>#2FA7D4</fg>
-													<bg>#4D4D4D</bg>
-													<style>wxBORDER_NONE|wxTE_READONLY</style>
-													<XRCED>
-														<assign_var>1</assign_var>
-													</XRCED>
-													<font>
-														<size>12</size>
-													</font>
-												</object>
-												<option>1</option>
-												<flag>wxEXPAND</flag>
-											</object>
-											<object class="sizeritem">
-												<object class="ImageTextButton" name="btn_change_folder">
-													<height>24</height>
-													<face_colour>blue</face_colour>
-													<label>New Project</label>
-													<fg>#1A1A1A</fg>
-													<font>
-														<size>14</size>
-														<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
-													</font>
-													<XRCED>
-														<assign_var>1</assign_var>
-													</XRCED>
-												</object>
-											</object>
-											<orient>wxHORIZONTAL</orient>
+										<object class="wxTextCtrl" name="txt_projectpath">
+											<!-- <size>-1,20</size> -->
+											<value>Select a destination file</value>
+											<fg>#2FA7D4</fg>
+											<bg>#4D4D4D</bg>
+											<proportion>1</proportion>
+											<style>wxBORDER_NONE|wxTE_READONLY</style>
+											<flag>wxEXPAND|wxALL</flag>
+											<XRCED>
+												<assign_var>1</assign_var>
+											</XRCED>
+											<font>
+												<size>12</size>
+											</font>
 										</object>
-										<flag>wxEXPAND</flag>
+										<option>1</option>
+										<flag>wxALL|wxEXPAND</flag>
+										<border>10</border>
+										<cellpos>1,0</cellpos>
+										<cellspan>1,3</cellspan>
 									</object>
-									<flag>wxEXPAND</flag>
+									<object class="sizeritem">
+										<object class="ImageTextButton" name="btn_change_folder">
+											<height>24</height>
+											<face_colour>blue</face_colour>
+											<label>New Project</label>
+											<fg>#1A1A1A</fg>
+											<font>
+												<size>14</size>
+												<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+											</font>
+											<XRCED>
+												<assign_var>1</assign_var>
+											</XRCED>
+										</object>
+										<flag>wxALL|wxEXPAND</flag>
+										<border>10</border>
+										<cellpos>2,0</cellpos>
+									</object>
+									<object class="sizeritem">
+										<object class="ImageTextButton" name="btn_load_project">
+											<height>24</height>
+											<face_colour>blue</face_colour>
+											<label>Load Project</label>
+											<fg>#1A1A1A</fg>
+											<font>
+												<size>14</size>
+												<sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+											</font>
+											<XRCED>
+												<assign_var>1</assign_var>
+											</XRCED>
+										</object>
+										<flag>wxALL|wxEXPAND</flag>
+										<border>10</border>
+										<cellpos>2,1</cellpos>												
+									</object>
+									<flag>wxALL|wxALIGN_CENTRE|wxEXPAND</flag>
 								</object>
-								<flag>wxEXPAND</flag>
+								<flag>wxALL|wxALIGN_CENTRE|wxEXPAND</flag>
 								<fg>#E5E5E5</fg>
 								<bg>#444444</bg>
 								<XRCED>
 									<assign_var>2</assign_var>
 								</XRCED>
 							</object>
-							<flag>wxBOTTOM|wxEXPAND</flag>
+							<flag>wxALL|wxALIGN_CENTRE|wxEXPAND</flag>
 							<border>5</border>
 						</object>
 						<orient>wxVERTICAL</orient>
