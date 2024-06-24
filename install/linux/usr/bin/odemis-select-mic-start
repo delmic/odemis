@@ -1,0 +1,60 @@
+#!/bin/bash
+: '
+This script is used when there are multiple modular configurations available for METEOR.
+It is recommended to combine it with the Exec= command of the Odemis.desktop file.
+However it could be used stand-alone if it is required.
+The syntax to run this script -> odemis-select-mic-start [target_files].
+The script is typically used for parsing configuration (.yaml) files which contain a "Microscope" class.
+Using this class microscope names are extracted and placed in a list.
+This list is presented to the user in the form of a (zenity) selection dialog window.
+After selection of the microscope configuration the right (yaml) file will be used to start Odemis.
+'
+# extract the arguments which were used to start this script
+args=( "$@" )
+
+for arg in "${args[@]}"; do
+    if test "$arg" == "--help"; then
+        # Display help on the argument usage
+        echo
+        echo "Syntax: odemis-select-mic-start [target_files]"
+        echo "arguments:"
+        echo "target_files      A selection of configuration files from a specific location."
+        echo "                  (e.g. /usr/share/odemis/sim/*meteor-main*.yaml)."
+        exit 0
+    fi
+done
+
+odemis-cli --check
+status=$?
+
+# check if the backend is already running or starting up
+if [ $status == 0 ] || [ $status == 3 ] ; then
+    # display an extra dialog for the user to make a choice cancel/restart backend/start gui only
+    reply=$(zenity --info --title="Odemis backend already running" --text "Restart with new backend or start GUI only" --ok-label="Cancel" --extra-button="Restart" --extra-button="GUI only" --width=300 --height=50)
+    if [ "$reply" == "Restart" ]; then
+        echo "Trying to stop the backend"
+        sudo odemis-stop
+    elif [ "$reply" == "GUI only" ]; then
+        echo "Trying to start the GUI"
+        odemis-gui
+        exit
+    else
+        exit
+    fi
+fi
+
+mic_list=()
+for fn in "${args[@]}"; do
+    # extract the microscope name by using this small Python script
+    # note: does not check for errors when parsing
+    mic_name="$(python3 -c "import sys; import yaml; from odemis.odemisd import modelgen; f = open('$fn'); d = yaml.load(f, modelgen.SafeLoader); print(next(n for n, d in d.items() if d.get('class') == 'Microscope'))" 2>/dev/null)"
+    mic_list+=("$fn")
+    mic_list+=("$mic_name")
+done
+
+# prompt the user with a list of microscope configurations to choose from
+selection="$(zenity --list --title "Odemis configuration starter" --list --text "Please select a configuration to start:" --column "" --column "" "${mic_list[@]}" --hide-header --width=300 --height=400 --hide-column 1 --print-column=1 2>/dev/null)"
+
+if test "$selection" != ""; then
+    odemis-start "$selection"
+fi
