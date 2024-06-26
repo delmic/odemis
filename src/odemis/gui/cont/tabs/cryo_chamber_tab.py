@@ -32,13 +32,14 @@ import wx
 
 from odemis.gui import conf
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
-from odemis.gui.win.acquisition import ShowChamberFileDialog
+from odemis.gui.win.acquisition import ShowChamberFileDialog, LoadProjectFileDialog
 from odemis.model import InstantaneousFuture
 from odemis.util.filename import guess_pattern, create_projectname
 
 from odemis import model
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
+from odemis.acq.feature import load_project_data
 from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
     FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS
 from odemis.acq.stream import StaticStream
@@ -83,8 +84,11 @@ class CryoChamberTab(Tab):
         # For project selection
         self.conf = conf.get_acqui_conf()
         self.btn_change_folder = self.panel.btn_change_folder
+        self.btn_load_project = self.panel.btn_load_project
         self.btn_change_folder.Bind(wx.EVT_BUTTON, self._on_change_project_folder)
+        self.btn_load_project.Bind(wx.EVT_BUTTON, self._load_project_data)
         self.txt_projectpath = self.panel.txt_projectpath
+        self.btn_load_project.Hide()
 
         # Create new project directory on starting the GUI
         self._create_new_dir()
@@ -163,6 +167,9 @@ class CryoChamberTab(Tab):
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
                                   GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
             self._grid_btns = (self.panel.btn_switch_grid1, self.panel.btn_switch_grid2)
+
+            # show load project button
+            self.btn_load_project.Show()
 
         elif self._role == 'mimas':
             self._stage = self.tab_data_model.main.stage
@@ -320,7 +327,7 @@ class CryoChamberTab(Tab):
         """
         self.conf.pj_last_path = new_dir
         self.conf.pj_ptn, self.conf.pj_count = guess_pattern(new_dir)
-        self.txt_projectpath.Value = self.conf.pj_last_path
+        self.txt_projectpath.Value = os.path.basename(self.conf.pj_last_path)
         self.tab_data_model.main.project_path.value = new_dir
         logging.debug("Generated project folder name pattern '%s'", self.conf.pj_ptn)
 
@@ -360,6 +367,81 @@ class CryoChamberTab(Tab):
             correlation_tab.clear_streams()
         except LookupError:
             logging.warning("Unable to find localization tab.")
+
+    def _load_project_data(self, evt: wx.Event):
+
+        # TODO: do not warn if there is no data (eg, at init)
+        box = wx.MessageDialog(self.main_frame,
+                               "This will clear the current project data from Odemis",
+                               caption="Reset Project", style=wx.YES_NO | wx.ICON_QUESTION | wx.CENTER)
+
+        box.SetYesNoLabels("&Reset Project", "&Cancel")
+        ans = box.ShowModal()  # Waits for the window to be closed
+        if ans == wx.ID_NO:
+            return
+
+        # select a project directory to load
+        proj_path = LoadProjectFileDialog(self.panel, self.conf.pj_last_path)
+        if proj_path is None: # Cancelled
+            return
+
+        logging.debug("Selected project folder %s", proj_path)
+
+        # Reset project, clear the data
+        self._reset_project_data()
+
+        # dont delete empty directories for now
+        # If the previous project is empty, it means the user never used it.
+        # (for instance, this happens just after starting the GUI and the user
+        # doesn't like the automatically chosen name)
+        # => Just automatically delete previous folder if empty.
+        # try:
+        #     if os.path.isdir(prev_dir) and not os.listdir(prev_dir):
+        #         logging.debug("Deleting empty project folder %s", prev_dir)
+        #         os.rmdir(prev_dir)
+        # except Exception:
+        #     # It might be just due to some access rights, let's not worry too much
+        #     logging.exception("Failed to delete previous project folder %s", prev_dir)
+
+        # change the project path in the config file
+        self._change_project_conf(proj_path)
+
+        # load project data
+        proj_data = load_project_data(proj_path)
+
+        if len(proj_data["features"]) == 0 and len(proj_data["overviews"]) == 0:
+            logging.warning("No data found in the project directory.")
+            box = wx.MessageDialog(self.main_frame,
+                               f"No data found in the selected directory: {proj_path}.",
+                               caption="No Project Data", style=wx.OK | wx.CENTER)
+
+            box.SetOKLabel("&OK")
+            ans = box.ShowModal()  # Waits for the window to be closed
+            return
+
+        # follow the order of the data loading in the localization tab
+        # load overview streams
+        localization_tab: LocalizationTab = self.tab_data_model.main.getTabByName("cryosecom-localization")
+        localization_tab.load_overview_data(data=proj_data["overviews"])
+
+        # load features
+        self.tab_data_model.main.features.value = proj_data["features"]
+        # TODO: feature streams don't have feature info saved in description, only in filename.
+        # we should insert the feature info into the description of the stream as well
+
+        # load acquired streams
+        f_streams = []
+        for f in self.tab_data_model.main.features.value:
+            f_streams.extend(f.streams.value)
+        localization_tab.tab_data_model.streams.value.extend(f_streams)
+
+        # log project data
+        logging.debug(f"Loaded project data from {proj_path}")
+        logging.debug(f"{len(self.tab_data_model.main.features.value)} features loaded.")
+        logging.debug(f"{len(proj_data['overviews'])} overviews loaded.")
+        logging.debug(f"{len(localization_tab.tab_data_model.streams.value)} streams loaded.")
+
+        return
 
     @call_in_wx_main
     def _update_progress_bar(self, pos):
