@@ -2,6 +2,7 @@
 : '
 This script is used when there are multiple modular configurations available for METEOR.
 It is recommended to combine it with the Exec= command of the Odemis.desktop file.
+Example -> Exec=bash -c "/usr/bin/odemis-select-mic-start /usr/share/odemis/*meteor-main*.yaml"
 However it could be used stand-alone if it is required.
 The syntax to run this script -> odemis-select-mic-start [target_files].
 The script is typically used for parsing configuration (.yaml) files which contain a "Microscope" class.
@@ -29,8 +30,9 @@ status=$?
 
 # check if the backend is already running or starting up
 if [ $status == 0 ] || [ $status == 3 ] ; then
-    # display an extra dialog for the user to make a choice cancel/restart backend/start gui only
-    reply=$(zenity --info --title="Odemis backend already running" --text "Restart with new backend or start GUI only" --ok-label="Cancel" --extra-button="Restart" --extra-button="GUI only" --width=300 --height=50)
+    # extract the running microscope file
+    mic_name="$(odemis list --machine | head -1 | cut -d $'\t' -f 1)"
+    reply=$(zenity --info --title="Odemis backend already running" --text "Restart with new backend or start GUI only\n\nactive: $mic_name" --ok-label="Cancel" --extra-button="Restart" --extra-button="GUI only" --width=300 --height=100)
     if [ "$reply" == "Restart" ]; then
         echo "Trying to stop the backend"
         sudo odemis-stop
