@@ -337,6 +337,7 @@ class Shamrock(model.Actuator):
                  drives_shutter: Optional[List[float]] = None,
                  dependencies: Optional[Dict[str, model.HwComponent]] = None,
                  check_move: Optional[Dict[str, bool]] = None,
+                 _dll: Optional[ShamrockDLL] = None,
                  **kwargs):
         """
         :param device (0<=int or str): if int, device number, if str serial number or
@@ -373,6 +374,8 @@ class Shamrock(model.Actuator):
         that position is not the expected one. If False, if the position is not the expected one,
         just log a warning. Note: for now, only some axes are actually checked (flipper and band)
         :param inverted: Must be None (or not passed), as it is not allowed to invert the axes.
+        :param _dll: only to be used by the ShamrockBus, to share the DLL between multiple instances.
+        If None, it will create a new DLL instance.
         """
         # From the documentation:
         # If controlling the shamrock through I²C it is important that both the
@@ -383,7 +386,10 @@ class Shamrock(model.Actuator):
         if kwargs.get("inverted", None):
             raise ValueError("Axis of spectrograph cannot be inverted")
 
-        if device == "fake":
+        self._is_dll_shared = (_dll is not None)
+        if _dll is not None:
+            self._dll = _dll
+        elif device == "fake":
             self._dll = FakeShamrockDLL(camera)
             device = 0
         else:
@@ -421,11 +427,14 @@ class Shamrock(model.Actuator):
                 raise ValueError(f"Iris name should be string, but got {irisn}")
             self._iris_names[i] = irisn
 
-        self.Initialize()
+        if not self._is_dll_shared:
+            self.Initialize()
         self._reconnecting = False
 
         try:
             if isinstance(device, str):
+                # When using a shared DLL, the device is always specified as an int (not serial number)
+                assert not self._is_dll_shared
                 self._device = self._findDevice(device)
             else:
                 nd = self.GetNumberDevices()
@@ -647,7 +656,8 @@ class Shamrock(model.Actuator):
             self._px2wl_lock = threading.Lock()
 
         except Exception:
-            self.Close()
+            if not self._is_dll_shared:
+                self.Close()
             raise
 
     def _setProtection(self, value):
@@ -712,15 +722,14 @@ class Shamrock(model.Actuator):
         """
         Initialise the currently selected device
         """
-        # Can take quite a lot of time due to the homing
-        logging.debug("Initialising Andor Shamrock...") # ~20s
+        # Can take quite a lot of time due to the homing (up to 2 minutes)
+        logging.debug("Initialising Andor Shamrock...")
         if self._is_via_camera:
             path = self._camera._initpath
         else:
             path = ""
 
-        if sys.version_info[0] >= 3:  # Python 3
-            path = os.fsencode(path)
+        path = os.fsencode(path)
 
         # TODO: Catch the signal and raise an HwError in case it took too long.
         # Unfortunately, as we are calling C code from Python it's really hard,
@@ -2075,6 +2084,115 @@ class Shamrock(model.Actuator):
 
         return dev
 
+class ShamrockBus(model.HwComponent):
+    """
+    Create several Shamrock children, sharing the same library instance
+    Used to instantiate multiple Andor spectrographs, as they cannot be instantiated separately.
+    """
+    def __init__(self, name: str, role: str, children: Dict[str, Dict], daemon=None, **kwargs):
+        """
+        :param name: name of the component
+        :param role: role of the component (typically not useful)
+        :param children: abritrary role -> arguments for Shamrock. The arguments must contain a "device"
+        argument with the serial number of the spectrograph (not just a number). "fake" is also possible,
+        in which case a simulator is used.
+        """
+        super().__init__(name, role, daemon=daemon, **kwargs)
+
+        # prepare the children definitions, by matching the serial numbers from "device" argument
+        # The simulated devices are separated, as they don't need the library
+        shamrocks = {}
+        simulated = []
+        for ckwargs in children.values():
+            try:
+                # device will be replaced by the device number once we find it
+                device = ckwargs.pop("device")
+            except KeyError:
+                raise ValueError(f"Missing 'device' argument in child component {kwargs['name']}")
+            if not isinstance(device, str):
+                raise ValueError(f"The 'device' argument should be a string, but got \"{device}\"")
+
+            if device == "fake":
+                simulated.append(ckwargs)
+            else:
+                shamrocks[device] = ckwargs
+
+        for ckwargs in simulated:
+            dev = Shamrock(device="fake", daemon=daemon, **ckwargs)
+            self.children.value.add(dev)
+
+        if shamrocks:
+            self._dll = ShamrockDLL()
+            self.Initialize()
+
+            try:
+                # scan the devices
+                sn_c = create_string_buffer(64)
+                for n in range(self.GetNumberDevices()):
+                    self._dll.ShamrockGetSerialNumber(n, sn_c)
+                    sn = sn_c.value.decode('latin1')
+                    if sn in shamrocks:
+                        # create the child
+                        logging.debug("Found matching Andor Shamrock with S/N %s", sn)
+                        ckwargs = shamrocks.pop(sn)
+                        dev = Shamrock(device=n, daemon=daemon, **ckwargs)
+                        self.children.value.add(dev)
+                    else:
+                        logging.info("Skipping Andor Shamrock with S/N %s", sn)
+
+                    # In (the unlikely) case we have found all the spectrographs we need, but there are
+                    # more spectrographs, stop early.
+                    if not shamrocks:
+                        break
+            except Exception:
+                # One of the child init went wrong, just clean up and pass on the bad news
+                self.terminate()
+                raise
+
+            # Did we find all the spectrographs? If not, fail completely, and allow the user to turn on
+            # or plug in the missing ones, and retry from scratch.
+            if shamrocks:
+                logging.warning("Failed to find some of the spectrographs, will disconnect from all of them")
+                self.terminate()
+                sns = ", ".join(shamrocks.keys())
+                raise HwError(f"Cannot find Andor Shamrock with S/N {sns}, check it is "
+                              "turned on and connected.")
+
+    def terminate(self):
+        for c in self.children.value:
+            c.terminate()
+        self.Close()
+        super().terminate()
+
+    def Initialize(self):
+        """
+        Initialise the currently selected device
+        """
+        # Can take quite a lot of time due to the homing (up to 2 minutes)
+        logging.debug("Initialising Andor Shamrock (for all spectrographs)...")
+        path = b""
+
+        # TODO: Catch the signal and raise an HwError in case it took too long.
+        # Unfortunately, as we are calling C code from Python it's really hard,
+        # because the GIL is hold on and won't let us call any python code anymore.
+        try:
+            # Prepare to get killed (via SIGALRM) in case it took too long,
+            # because Initialize() is buggy and can block forever if it's
+            # confused by the hardware.
+            # Note, SDK 2.100.30026+ has now a timeout of 2 minutes.
+            signal.setitimer(signal.ITIMER_REAL, 150)
+            self._dll.ShamrockInitialize(path)
+        finally:
+            signal.setitimer(signal.ITIMER_REAL, 0)
+
+    def Close(self):
+        self._dll.ShamrockClose()
+
+    def GetNumberDevices(self):
+        nodevices = c_int()
+        self._dll.ShamrockGetNumberDevices(byref(nodevices))
+        return nodevices.value
+
 
 # Only for testing/simulation purpose
 # Very rough version that is just enough so that if the wrapper behaves correctly,
@@ -2460,6 +2578,7 @@ class FakeShamrockDLL(object):
             raise ShamrockError(20268, ShamrockDLL.err_code[20267])
 
         value.value = self._iris[i]
+
 
 class AndorSpec(model.Detector):
     """
