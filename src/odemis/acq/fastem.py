@@ -627,12 +627,13 @@ class AcquisitionTask(object):
         Acquire the single field images that resemble the region of acquisition (ROA, megafield image).
         :param dataflow: (model.DataFlow) The dataflow on the detector.
         """
+        beam_shift_indices = self._calculate_beam_shift_cor_indices()
 
         total_field_time = self._detector.frameDuration.value + 1.5  # there is about 1.5 seconds overhead per field
         # The first field is acquired twice, so the timeout must be at least twice the total field time.
         # Use 5 times the total field time to have a wide margin.
         timeout = 5 * total_field_time + 2
-
+        beam_shift_failed = False
         # Acquire all single field images, which are automatically offloaded to the external storage.
         for field_idx in self._roa.field_indices:
             # Reset the event that waits for the image being received (puts flag to false).
@@ -642,16 +643,24 @@ class AcquisitionTask(object):
 
             self.move_stage_to_next_tile()  # move stage to next field image position
             self._scanner.blanker.value = False  # unblank the beam
-            # TODO remove the below temporary fix when a proper solution is found
-            # The temporary fix has been applied so that the ROAs acquisition can still continue upon failure
-            # of correcting the beam shift
-            try:
-                self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
-            except Exception:
-                logging.exception("Correcting the beam shift failed, check if the image quality is still good.")
-                # In case of failure save the ccd image
-                ccd_image = self._ccd.data.get(asap=False)
-                fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)
+
+            prev_beam_shift = self._beamshift.shift.value
+            if field_idx in beam_shift_indices or beam_shift_failed:
+                logging.debug(f"Will run beam shift correction for field index {field_idx}")
+                try:
+                    new_beam_shift = self.correct_beam_shift()
+                    # The difference in x or y should not be larger than 2 micrometers
+                    if any(map(lambda x, y: abs(x - y) > 2e-6, new_beam_shift, prev_beam_shift)):
+                        raise ValueError(
+                            "Difference in beam shift is larger than 2 µm, therefore it most likely failed."
+                        )
+                    beam_shift_failed = False
+                except Exception:
+                    logging.exception("Correcting the beam shift failed, check if the image quality is still good.")
+                    # In case of failure save the ccd image
+                    ccd_image = self._ccd.data.get(asap=False)
+                    fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)
+                    beam_shift_failed = True
 
             dataflow.next(field_idx)  # acquire the next field image.
 
@@ -838,6 +847,8 @@ class AcquisitionTask(object):
         beams are roughly centered on the mppc detector. Using the difference between the current beam positions and the
         good beam positions we calculate in what direction and how much to shift beams, such that they are always
         centered on the mppc detector.
+
+        :return: (float, float) the value of the beam shift after correction
         """
         pixel_size = self._ccd.pixelSize.value
         magnification = self._lens.magnification.value
@@ -879,6 +890,7 @@ class AcquisitionTask(object):
         self._beamshift.shift.value = (cur_beam_shift_pos + beam_shift_cor)
 
         logging.debug("New beam shift m: {}".format(self._beamshift.shift.value))
+        return self._beamshift.shift.value
 
     def _create_acquisition_metadata(self):
         """
@@ -899,6 +911,32 @@ class AcquisitionTask(object):
 
         self._detector.updateMetadata({model.MD_EXTRA_SETTINGS: json.dumps(selected_settings)})
         return selected_settings
+
+    def _calculate_beam_shift_cor_indices(self, n_beam_shifts=10):
+        """
+        Calculate for which indices to run the beam shift correction. The beam shift correction should run every
+        n sections, starting at the first field in a row. For polygonal sections there can be gaps in the indices,
+        the beam shift correction should then be run on the next possible section.
+        Example: If the beam shift correction should run every 3 sections for the indices [(1, 0), (2, 0), (8, 0)],
+        it should run for indices (1, 0) and (8, 0).
+
+        :param n_beam_shifts: (int) Every how many sections the beam shift correction should run.
+        """
+        # Sort indices by row first and then by column to enable row-wise processing
+        field_indices = sorted(self._roa.field_indices, key=lambda x: (x[1], x[0]))
+
+        beam_shift_indices = []
+        current_row = -1  # Initialize with an invalid row number to handle the first row properly
+        for idx in field_indices:
+            col, row = idx  # field indices are saved (col, row)
+            if row == current_row + 1:
+                # Always apply beam shift correction at the start of a new row
+                beam_shift_indices.append(idx)
+                current_row = row
+            elif col >= beam_shift_indices[-1][0] + n_beam_shifts:
+                # Apply beam shift correction after every n_beam_shifts for the rest of the row
+                beam_shift_indices.append(idx)
+        return beam_shift_indices
 
 
 ########################################################################################################################
