@@ -1046,6 +1046,13 @@ class Acquirer:
             logging.debug("AI buffer set to the size of a number of pixels")
             return max(2, int(period / pixel_dur) * acq_settings.ai_osr)  # samples
 
+        # Can we fit just one pixel if we extend a bit the period? If so, acquire one pixel at a time
+        # This is mainly to handle odd cases when the dwell time is just above the period (eg, 0.11 s)
+        # in which case we would end up reading a full buffer followed by a tiny bit of a second one.
+        if pixel_dur < (2 * period):
+            logging.debug("AI buffer set to the size of a single pixel")
+            return max(2, acq_settings.ai_osr)  # samples
+
         # OK... let's give up, even a pixel doesn't fit in a period, so just fit exactly the number of samples
         logging.debug("AI buffer set to less than a pixel")
         return min(max(2, int(acq_settings.ai_sample_rate * period)), acq_settings.ai_samples_n)
