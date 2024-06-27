@@ -756,7 +756,9 @@ class TestMCS2_1DOF(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        cls.dev = smaract.MCS2(**CONFIG_1DOF)
+        # cls.dev = smaract.MCS2(**CONFIG_1DOF)
+        cls.microscope = model.getMicroscope()
+        cls.dev = model.getComponent(role="focus")
         # make sure the actuator is moved to the reference position
         while not cls.dev.referenced.value:
             time.sleep(0.1)
@@ -799,7 +801,7 @@ class TestMCS2_1DOF(unittest.TestCase):
         # Check if optical focus can move repeatedly in small steps
         start_position = self.dev.position.value
         logging.debug(f"the current z range value is {start_position}")
-        z_range = numpy.arrange(-10.e-6, 10.e+6, 50.e-9) + self.dev.position.value
+        z_range = numpy.arange(-10.e-6, 10.e-6, 50.e-9) + self.dev.position.value
         for z in z_range:
             self.dev.moveAbs(z).result()
             testing.assert_pos_almost_equal(self.dev.position.value, z)
@@ -807,7 +809,7 @@ class TestMCS2_1DOF(unittest.TestCase):
         # move back to initial position
         self.dev.moveAbs(start_position).result()
         testing.assert_pos_almost_equal(self.dev.position.value, start_position)
-        z_range = numpy.arrange(-6.e-6, +6.e+6, 50.e-9) + self.dev.position.value
+        z_range = numpy.arange(-6.e-6, +6.e-6, 50.e-9) + self.dev.position.value
         for z in z_range:
             self.dev.moveAbs(z).result()
             testing.assert_pos_almost_equal(self.dev.position.value, z)
@@ -815,7 +817,7 @@ class TestMCS2_1DOF(unittest.TestCase):
         # move back to initial position
         self.dev.moveAbs(start_position).result()
         testing.assert_pos_almost_equal(self.dev.position.value, start_position)
-        z_range = numpy.arrange(-4.e-6, +4.e+6, 50.e-9) + self.dev.position.value
+        z_range = numpy.arange(-4.e-6, +4.e-6, 50.e-9) + self.dev.position.value
         for z in z_range:
             self.dev.moveAbs(z).result()
             testing.assert_pos_almost_equal(self.dev.position.value, z)
@@ -828,17 +830,18 @@ class TestMCS2_1DOF(unittest.TestCase):
         f.cancel()
 
         difference = new_pos['z'] - self.dev.position.value['z']
-        self.assertNotEqual(round(difference, 5), 0)
+        self.assertNotAlmostEqual(difference, 0, places=5)
 
         # Test cancellation by stopping
         self.dev.moveAbs({'z': SAFE_Z}).result()
         new_pos = {'z': SAFE_Z + BIG_STEP}
-        f = self.dev.moveAbs(new_pos)
+        self.dev.moveAbs(new_pos)
         time.sleep(0.05)
         self.dev.stop()
 
         difference = new_pos['z'] - self.dev.position.value['z']
-        self.assertNotEqual(round(difference, 4), 0)
+        self.assertNotAlmostEqual(difference, 0, places=4)
+        # self.assertNotAEqual(round(difference, 4), 0)
 
     def test_move_rel(self):
         # Test relative moves
