@@ -884,14 +884,13 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
 
         # Due to the pre-tilt in the shuttle, the z axis is corrected
         # for a change in y axis
-        # todo check the sign (-ve or +ve)
         # As from measurement in SEM, when y increases then raw z decreases
         if self.sem_cor:
-            # When y increases then z also increases
-            # Therefore the change in z is added to the previous value
+            # TODO the sem corr does not work, Z correction is not needed as SEM has higher
+            # depth of field by y correction is required, which is not clear "how to" yet
             if self.sem_stage_pos_pre is not None:
                 transformed_pos["z"] = (transformed_pos["z"] -
-                                    (transformed_pos["y"] - self.sem_stage_pos_pre["y"]) * math.tan(self.rotation))
+                                        (transformed_pos["y"] - self.sem_stage_pos_pre["y"]) * math.tan(self.rotation))
             else:
                 logging.warning(f"SEM position is not corrected when coming back from FM pos {pos}")
 
