@@ -78,7 +78,7 @@
                       <hgap>50</hgap>
                       <growablecols>1</growablecols>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="zstack_steps_label">
                           <label>ZStack steps</label>
                           <fg>#DDDDDD</fg>
                           <XRCED>
@@ -109,7 +109,7 @@
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="zstep_size_label">
                           <label>Zstep size</label>
                           <fg>#DDDDDD</fg>
                           <XRCED>
