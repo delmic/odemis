@@ -727,12 +727,8 @@ CONFIG_1DOF = {"name": "1DOF",
         "role": "stage",
         "ref_on_init": True,
         "locator": "network:sn:MCS2-00006678",
-        # "locator": "fake",
         "speed": 0.003,
         "accel": 0.003,
-        #"hold_time": 1.0,
-        #"pos_deactive_after_ref": True,
-        #"param_file": None,
         "axes": {
             'z': {
                 'range': [-20e-3, 20e-3],
@@ -745,9 +741,9 @@ CONFIG_1DOF = {"name": "1DOF",
 if TEST_NOHW:
     CONFIG_1DOF['locator'] = 'fake'
 
-SAFE_Z = -13.0e-3  # deactive position for the actuator
-SMALL_STEP = -10.0e-6  # small step to move from the deactive position
-BIG_STEP = -1.0e-3  # big step to move from the deactive position
+SAFE_Z = -600.0e-6  # deactive position for the actuator
+SMALL_STEP = -1.0e-6  # small step to move from the deactive position
+BIG_STEP = -10.0e-3  # big step to move from the deactive position
 
 
 class TestMCS2_1DOF(unittest.TestCase):
@@ -756,9 +752,7 @@ class TestMCS2_1DOF(unittest.TestCase):
     """
     @classmethod
     def setUpClass(cls):
-        # cls.dev = smaract.MCS2(**CONFIG_1DOF)
-        cls.microscope = model.getMicroscope()
-        cls.dev = model.getComponent(role="focus")
+        cls.dev = smaract.MCS2(**CONFIG_1DOF)
         # make sure the actuator is moved to the reference position
         while not cls.dev.referenced.value:
             time.sleep(0.1)
@@ -798,29 +792,29 @@ class TestMCS2_1DOF(unittest.TestCase):
         logging.debug(self.dev.position.value)
 
     def test_move_in_z_range(self):
-        # Check if optical focus can move repeatedly in small steps
+        # Check if optical focus can move repeatedly in small steps in different ranges
         start_position = self.dev.position.value
         logging.debug(f"the current z range value is {start_position}")
-        z_range = numpy.arange(-10.e-6, 10.e-6, 50.e-9) + self.dev.position.value
-        for z in z_range:
-            self.dev.moveAbs(z).result()
-            testing.assert_pos_almost_equal(self.dev.position.value, z)
+        z_range = numpy.arange(-10.e-6, 10.e-6, 50.e-9) + self.dev.position.value["z"]
+        for zval in z_range:
+            self.dev.moveAbs({"z":zval}).result()
+            self.assertAlmostEqual(self.dev.position.value["z"], zval, places=6)
 
         # move back to initial position
         self.dev.moveAbs(start_position).result()
-        testing.assert_pos_almost_equal(self.dev.position.value, start_position)
-        z_range = numpy.arange(-6.e-6, +6.e-6, 50.e-9) + self.dev.position.value
-        for z in z_range:
-            self.dev.moveAbs(z).result()
-            testing.assert_pos_almost_equal(self.dev.position.value, z)
+        self.assertAlmostEqual(self.dev.position.value["z"], start_position["z"], places=6)
+        z_range = numpy.arange(-7.e-6, 7.e-6, 50.e-9) + self.dev.position.value["z"]
+        for zval in z_range:
+            self.dev.moveAbs({"z":zval}).result()
+            self.assertAlmostEqual(self.dev.position.value["z"], zval, places=6)
 
         # move back to initial position
         self.dev.moveAbs(start_position).result()
-        testing.assert_pos_almost_equal(self.dev.position.value, start_position)
-        z_range = numpy.arange(-4.e-6, +4.e-6, 50.e-9) + self.dev.position.value
-        for z in z_range:
-            self.dev.moveAbs(z).result()
-            testing.assert_pos_almost_equal(self.dev.position.value, z)
+        self.assertAlmostEqual(self.dev.position.value["z"], start_position["z"], places=6)
+        z_range = numpy.arange(-6.e-6, 6.e-6, 50.e-9) + self.dev.position.value["z"]
+        for zval in z_range:
+            self.dev.moveAbs({"z":zval}).result()
+            self.assertAlmostEqual(self.dev.position.value["z"], zval, places=6)
 
     def test_move_cancel(self):
         # Test cancellation by cancelling the future
@@ -841,7 +835,6 @@ class TestMCS2_1DOF(unittest.TestCase):
 
         difference = new_pos['z'] - self.dev.position.value['z']
         self.assertNotAlmostEqual(difference, 0, places=4)
-        # self.assertNotAEqual(round(difference, 4), 0)
 
     def test_move_rel(self):
         # Test relative moves
