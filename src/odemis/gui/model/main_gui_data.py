@@ -386,6 +386,9 @@ class MainGUIData(object):
         # do directly access additional GUI information.
         self.tab = model.VAEnumerated(None, choices={None: ""})
 
+        # Indicate whether the gui is loaded as viewer
+        self.is_viewer = self.microscope is None
+
     def stopMotion(self):
         """
         Stops immediately every axis

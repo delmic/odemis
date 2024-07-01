@@ -71,7 +71,9 @@ class CorrelationController(object):
         # disable if no streams are present
         self._tab_data_model.streams.subscribe(self._on_correlation_streams_change, init=True)
         self._tab_data_model.streams.subscribe(self._update_correlation_cmb, init=True)
-        self._tab_data_model.streams.subscribe(self.add_to_localization_tab, init=False)
+        if not self._main_data_model.is_viewer:
+            # localisation tab doesn't exist in viewer
+            self._tab_data_model.streams.subscribe(self.add_to_localization_tab, init=False)
 
         # connect the correlation streams to the tab data
         self._panel.cmb_correlation_stream.Bind(wx.EVT_COMBOBOX, self._on_selected_stream_change)
@@ -334,7 +336,8 @@ class CorrelationController(object):
         self.fit_correlation_views_to_content()
 
         # update the localization tab
-        self.update_localization_tab(s)
+        if not self._main_data_model.is_viewer:
+            self.update_localization_tab(s)
 
     def fit_correlation_views_to_content(self, force: bool = False) -> None:
         # TODO: be more selective about which viewports to fit

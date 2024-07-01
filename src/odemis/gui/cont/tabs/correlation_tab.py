@@ -242,6 +242,8 @@ class CorrelationTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data) -> Optional[int]:
+        if main_data.is_viewer:
+            return 0 # low priority in viewer
         if main_data.role == "meteor":
             return 1
         else:
