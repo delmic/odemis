@@ -22,16 +22,13 @@ http://www.gnu.org/licenses/.
 import logging
 import math
 import queue
-import re
 import threading
 import time
-import zipfile
 from concurrent.futures import CancelledError
-from typing import Optional, Union
+from typing import Optional, Union, Dict, List, Tuple
 
 import msgpack # only used for debug information
 import msgpack_numpy
-import notify2
 import numpy
 import Pyro5.api
 import pkg_resources
@@ -42,7 +39,7 @@ from odemis import util
 from odemis.model import (CancellableFuture, CancellableThreadPoolExecutor,
                           DataArray, HwError, ProgressiveFuture,
                           StringEnumerated, isasync)
-from odemis.driver.xt_client import check_latest_package, XT_INSTALL_DIR
+from odemis.driver.xt_client import check_and_transfer_latest_package
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -92,16 +89,23 @@ class SEM(model.HwComponent):
     Microscope server is done via Pyro5. The component is a parent to the scanner, stage, focus, and detector components, and supports both SEM and FIB.
     """
 
-    def __init__(self, name, role, children, address, port: str ='4242', daemon=None,
+    def __init__(self, name, role, children, address, port: str = '4242', daemon=None,
                  **kwargs):
         """
         :param name: str, Name of the microscope.
         :param role: str, Role of the microscope.
         :param children: dict, Dictionary with the children of the microscope.
+            "sem-scanner": dict, SEM scanner child configuration (required).
+            "sem-focus": dict, SEM focus child configuration (optional).
+            "sem-detector": dict, SEM detector child configuration (optional).
+            "fib-scanner": dict, FIB scanner child configuration (required).
+            "fib-focus": dict, FIB focus child configuration (optional).
+            "fib-detector": dict, FIB detector child configuration (optional).
+            "stage": dict, Stage child configuration (optional).
+            Note: At least one of the required scanners types must be included as a child.
         :param address: str, server ip address for the microscope server (sim address is localhost)
         :param port: str, server port of the Microscope server, default is '4242'
-        :param timeout: float, Time in seconds the client should wait for a response from the server.
-        :param daemon: bool, If True, the server will be a daemon thread.
+        :param daemon: Pyro4.Daemon (or None), as defined in HwComponent.
         :param kwargs: dict, Additional keyword arguments.
         """
 
@@ -112,7 +116,7 @@ class SEM(model.HwComponent):
             self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
-            if "autoscript" not in self._swVersion:
+            if "adapter; autoscript" not in self._swVersion:
                 raise HwError("The connected server is not an autoscript server. Please check the xt adapter configuration."
                               "The server software version is '%s'." % self._swVersion)
             logging.debug(
@@ -127,7 +131,7 @@ class SEM(model.HwComponent):
 
         # Transfer latest xtadapter package if available
         # The transferred package will be a zip file in the form of bytes
-        # self.check_and_transfer_latest_package()  # TODO: enable this once the package is available
+        check_and_transfer_latest_package(self)  # TODO: enable this once the package is available
 
         # Create the scanner type child(ren)
         # Check if at least one of the required scanner types is instantiated
@@ -173,59 +177,6 @@ class SEM(model.HwComponent):
             ckwargs = children["fib-detector"]
             self._fib_detector = Detector(parent=self, daemon=daemon, channel="ion", **ckwargs)
             self.children.value.add(self._fib_detector)
-
-    def transfer_latest_package(self, data: bytes) -> None:
-        """
-        Transfer the latest xtadapter package.
-
-        Note:
-            Pyro has a 1 gigabyte message size limitation.
-            https://pyro5.readthedocs.io/en/latest/tipstricks.html#binary-data-transfer-file-transfer
-
-        :param data: The package's zip file data in bytes.
-
-        """
-        with self._proxy_access:
-            self.server._pyroClaimOwnership()
-            return self.server.transfer_latest_package(data)
-
-    def check_and_transfer_latest_package(self) -> None:
-        """Check if a latest xtadapter package is available and then transfer it."""
-        try:
-            package = None
-            current_version = re.search(r"xtadapter:\s*([\d.]+)", self._swVersion)
-            current_version = current_version.group(1) if current_version is not None else None
-            if current_version is not None:
-                package = check_latest_package(
-                    directory=XT_INSTALL_DIR,
-                    current_version=current_version,
-                    adapter="xtadapter",
-                    bitness='64',
-                    is_zip=True,
-                )
-            if package is not None:
-                # Check if it's a proper zip file
-                zip_file = zipfile.ZipFile(package.path)
-                ret = zip_file.testzip()
-                zip_file.close()
-                if ret is None:
-                    # Open the package's zip file as bytes and transfer them
-                    with open(package.path, mode="rb") as f:
-                        data = f.read()
-                    self.transfer_latest_package(data)
-                    # Notify the user that a newer xtadpater version is available
-                    notify2.init("Odemis")
-                    update = notify2.Notification(
-                        "Update Delmic XT Adapter", "Newer version {} is available on ThermoFisher Support PC.\n\n"
-                        "How to update?\n\n1. Full stop Odemis and close Delmic XT Adapter.\n2. Restart the Delmic XT Adapter "
-                        "to install it.".format(package.version))
-                    update.set_urgency(notify2.URGENCY_NORMAL)
-                    update.set_timeout(10000)    # 10 seconds
-                    update.show()
-                else:
-                    logging.warning("{} is a bad file in {} not transferring latest package.".format(ret, package.path))
-        except Exception as err:
-            logging.exception(err)
 
     def list_available_channels(self) -> list:
         """List all available channels
@@ -355,7 +306,6 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_chamber_state()
 
-
     def get_pressure(self):
         """Returns: (float) the chamber pressure in pascal, or -1 in case the system is vented."""
         with self._proxy_access:
@@ -371,18 +321,49 @@ class SEM(model.HwComponent):
 
 ##### BEAM CONTROL
 
+    def set_external_scan_mode(self, channel: str) -> None:
+        """Set the external scan mode."""
+        self.set_scan_mode(mode="external", channel=channel, value=None)
+
+    def set_full_frame_scan_mode(self, channel: str) -> None:
+        """Set the full frame scan mode."""
+        self.set_scan_mode(mode="full_frame", channel=channel, value=None)
+
+    def set_spot_scan_mode(self, channel: str, x: float, y: float) -> None:
+        """Set the spot scan mode."""
+        self.set_scan_mode(mode="spot", channel=channel, value={"x": x, "y": y})
+
+    def set_line_scan_mode(self, channel: str, position: float) -> None:
+        """Set the line scan mode."""
+        self.set_scan_mode(mode="line", channel=channel, value=position)
+
+    def set_crossover_scan_mode(self, channel: str) -> None:
+        """Set the crossover scan mode."""
+        self.set_scan_mode(mode="crossover", channel=channel, value=None)
+
+    def set_reduced_area_scan_mode(self, channel: str, left: float, top: float, width: float, height: float) -> None:
+        """Set the reduced area scan mode."""
+        self.set_scan_mode(mode="reduced_area", channel=channel,
+                           value={"left": left, "top": top, "width": width, "height": height})
+
     def set_scan_mode(self, mode: str, channel: str, value: Optional[Union[float, dict]] = None) -> None:
         """
         Set the scan mode.
-        :param mode: (str) Name of desired scan mode, one of: unknown, external, full_frame, spot, or line.
+        :param mode: (str) Name of desired scan mode, one of: crossover, external, reduced_area, full_frame, spot, or line.
         :param channel: (str) Name of the channel to set the scan mode for.
-        :param value: (float or dict) Value of the scan mode.
+        :param value: (float or dict) Value of the scan mode. The value is dependent on the scan mode.
+            mode = line:            value = float for position of line
+            mode = reduced_area:    value = dict with keys: left, top, width, height (0 - 1)
+            mode = spot:            value = dict with keys x, y (0 - 1)
+            mode = full_frame:      value = None
+            mode = external:        value = None
+            mode = crossover:       value = None
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_scan_mode(mode=mode, channel=channel, value=value)
 
-    def get_scan_mode(self, channel: str):
+    def get_scan_mode(self, channel: str) -> str:
         """
         Get the scan mode.
         :param channel: (str) Name of the channel to get the scan mode for.
@@ -392,13 +373,13 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_scan_mode(channel)
 
-    def scan_mode_info(self, channel: str) -> list:
-        """Returns: (dict) the unit and range of the scan mode."""
+    def scan_mode_info(self, channel: str) -> Dict[str, str]:
+        """Returns: (dict) the available scanning modes"""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.scan_mode_info(channel)
 
-    def set_reduced_area(self, reduced_area: dict, channel: str) -> None:
+    def set_selected_area(self, reduced_area: dict, channel: str) -> None:
         """
         Specify a selected area in the scan field area.
         :param reduced_area: (dict) the reduced area (left, top, width, height) as % of image (0 - 1).
@@ -406,7 +387,7 @@ class SEM(model.HwComponent):
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
-            self.server.set_selected_area(reduced_area, channel)
+            self.server.set_reduced_area(reduced_area, channel)
 
     def reset_reduced_area(self, channel: str) -> None:
         """Reset the selected area to select the entire image."""
@@ -584,14 +565,19 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return tuple(self.server.get_beam_shift(channel))
 
-    def set_beam_shift(self, x, y, channel: str) -> None:
-        """Set the current beam shift (DC coils position) values in meters."""
+    def set_beam_shift(self, x: float, y: float, channel: str) -> None:
+        """Set the beam shift values in metrers (absolute movement).
+        :param x: (float) the x value of the beam shift in meters.
+        :param y: (float) the y value of the beam shift in meters.
+        :param channel: (str) Name of the channel to set the beam shift for.
+        :return None
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.set_beam_shift(x, y, channel)
 
     def move_beam_shift(self, x: float, y: float, channel: str) -> None:
-        """Move the beam shift values in meters.
+        """Move the beam shift values in meters (relative movement).
         :param x_shift: (float) the x value of the beam shift in meters.
         :param y_shift: (float) the y value of the beam shift in meters.
         :param channel: (str) Name of the channel to move the beam shift for.
@@ -601,7 +587,10 @@ class SEM(model.HwComponent):
             self.server.move_beam_shift(x, y, channel)
 
     def beam_shift_info(self, channel: str) -> dict:
-        """Returns: (dict) the unit and xy-range of the beam shift (DC coils position)."""
+        """Returns: (dict) the unit and xy-range of the beam shift
+        :param channel: (str) Name of the channel to get the beam shift for.
+        :return: (dict) the unit and xy-range of the beam shift.
+        """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.beam_shift_info(channel)
@@ -673,7 +662,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_resolution(resolution, channel)
 
-    def get_resolution(self, channel: str) -> tuple:
+    def get_resolution(self, channel: str) -> Tuple[int, int]:
         """Returns the resolution of the image as (width, height)."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -696,7 +685,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.turn_beam_on(state, channel)
 
-    def get_beam_is_on(self, channel: str):
+    def get_beam_is_on(self, channel: str) -> bool:
         """Returns True if the beam is on and False if the beam is off."""
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -846,7 +835,7 @@ class SEM(model.HwComponent):
 
     def acquire_image(self, channel: str ) -> numpy.ndarray:
         """
-        Acquire an image from the detector.
+        Acquire an image from the detector (blocking).
         :param channel: (str) Name of one of the channels.
         :return: (numpy.ndarray) the acquired image.
         """
@@ -893,7 +882,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             return self.server.get_imaging_state(channel)
 
-    def set_scanning_filter(self, channel:str, filter_type: int, n_frames: int  = 1) -> None:
+    def set_scanning_filter(self, channel: str, filter_type: int, n_frames: int = 1) -> None:
         """
         Set the scanning filter for the detector.
         :param channel: (str) Name of one of the channels.
@@ -904,21 +893,21 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.set_scanning_filter(channel, filter_type, n_frames)
 
-    def get_scanning_filter(self, channel: str) -> dict:
+    def get_scanning_filter(self, channel: str) -> Dict[str, int]:
         """
         Get the scanning filter for the detector.
         :param channel: (str) Name of one of the channels.
-        :return: (dict) the scanning filter type and number of frames.
+        :return: (dict) the scanning filter type (filter_type) and number of frames (n_frames).
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             return self.server.get_scanning_filter(channel)
 
-    def get_scanning_filter_info(self, channel:str ) -> dict:
+    def get_scanning_filter_info(self, channel: str) -> List[str]:
         """
-        Get the scanning filter info for the detector.
-        :param channel: (str) Name of one of the channels.
-        :return: (dict) the scanning filter type and number of frames.
+        Get the available scanning filters for the detector.
+        :param channel: (str) Name of one of the detector channels.
+        :return: (list) the available scanning filters for the channel
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -927,7 +916,7 @@ class SEM(model.HwComponent):
 #### AUTO FUNCTIONS
 
     def run_auto_contrast_brightness(self, channel: str) -> None:
-        """Run auto contrast brightness function
+        """Run auto contrast brightness function (blocking)
         """
         with self._proxy_access:
             self.server._pyroClaimOwnership()
@@ -1442,15 +1431,15 @@ class Detector(model.Detector):
             unit=contrast_info["unit"],
             setter=self._setContrast)
 
-        detector_type = self.parent.get_detector_type(self.channel)
-        self.detector_type = model.StringEnumerated(
-            detector_type,
+        # detector type: ETD, TLD, etc.
+        self.type = model.StringEnumerated(
+            value=self.parent.get_detector_type(self.channel),
             choices=set(self.parent.detector_type_info(self.channel)["choices"]),
             setter=self._setDetectorType)
 
-        detector_mode = self.parent.get_detector_mode(self.channel)
-        self.detector_mode = model.StringEnumerated(
-            detector_mode,
+        # detector mode: SecondaryElectrons, BackscatterElectrons, etc
+        self.mode = model.StringEnumerated(
+            value=self.parent.get_detector_mode(self.channel),
             choices=set(self.parent.detector_mode_info(self.channel)["choices"]),
             setter=self._setDetectorMode)
 
@@ -1481,7 +1470,7 @@ class Detector(model.Detector):
             self._generator.start()
 
     def stop_generate(self):
-        self.stop_acquisition()
+        self.stop_acquisition(wait_for_frame=False)
         self._genmsg.put(GEN_STOP)
         # TODO: add a cancel once scanning is asynchronous
 
@@ -1499,7 +1488,7 @@ class Detector(model.Detector):
                     logging.debug("Start acquiring an image")
 
                     # HACK: from xt_client to prevent double scanning
-                    if self._acq_should_stop(timeout=0.2):
+                    if self._acq_should_stop(timeout=0.0):
                         logging.debug("Image acquisition should stop, exiting loop")
                         break
 
@@ -1537,8 +1526,28 @@ class Detector(model.Detector):
 
                     # Retrieve the image (scans image, blocks until the image is received)
                     image = self.parent.acquire_image(self._scanner.channel)
-                    # time.sleep(est_acq_time) # simulate acquisition time # simulator only
-                    # FIXME: BUG: double scanning? why?
+
+                    # non-blocking acquisition (disabled until hw testing)
+                    # logging.debug("Starting one image acquisition")
+
+                    # # start the acquisition
+                    # self.start_acquisition()
+                    # # stop the acquisition at the end of the frame
+                    # self.stop_acquisition(wait_for_frame=True)
+                    # # wait for the frame to be received, or timeout
+                    # try:
+                    #     if self._acq_wait_data(est_acq_time * 1.1):
+                    #         logging.debug("Stopping acquisition early")
+                    #         self.stop_acquisition(wait_for_frame=False)
+                    #         break
+                    # except TimeoutError as err:
+                    #     logging.error(err)
+                    #     self.stop_acquisition(wait_for_frame=False)
+                    #     break
+
+                    # # Retrieve the image
+                    # image = self.parent.get_last_image(self._scanner.channel, wait_for_frame=True)
+
                     md.update(self._metadata)
                     da = DataArray(image, md)
                     logging.debug("Notify dataflow with new image.")
@@ -1560,14 +1569,14 @@ class Detector(model.Detector):
 
         self.parent.start_acquisition(self._scanner.channel)
 
-    def stop_acquisition(self):
+    def stop_acquisition(self, wait_for_frame: bool = True):
         """Stop acquiring images"""
 
         if self.parent.get_imaging_state(self._scanner.channel) == "Idle":
             logging.info(f"Imaging state is already stopped for channel {self._scanner.channel}")
             return
 
-        self.parent.stop_acquisition(self._scanner.channel)
+        self.parent.stop_acquisition(self._scanner.channel, wait_for_frame=wait_for_frame)
 
 
     def _acq_should_stop(self, timeout=None):
@@ -1661,13 +1670,13 @@ class Detector(model.Detector):
             self.contrast._value = contrast
             self.contrast.notify(contrast)
         detector_type = self.parent.get_detector_type(self._scanner.channel)
-        if detector_type != self.detector_type.value:
-            self.detector_type._value = detector_type
-            self.detector_type.notify(detector_type)
+        if detector_type != self.type.value:
+            self.type._value = detector_type
+            self.type.notify(detector_type)
         detector_mode = self.parent.get_detector_mode(self._scanner.channel)
-        if detector_mode != self.detector_mode.value:
-            self.detector_mode._value = detector_mode
-            self.detector_mode.notify(detector_mode)
+        if detector_mode != self.mode.value:
+            self.mode._value = detector_mode
+            self.mode.notify(detector_mode)
 
     def _setBrightness(self, brightness):
         self.parent.set_brightness(brightness, self._scanner.channel)
@@ -1834,6 +1843,15 @@ class Stage(model.Actuator):
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Stage position polling")
         self._pos_poll.start()
 
+    def terminate(self):
+        if self._executor:
+            self._executor.cancel()
+            self._executor.shutdown()
+            self._executor = None
+        if self._pos_poll:
+            self._pos_poll.cancel()
+            self._pos_poll = None
+
     def _updatePosition(self):
         """
         update the position VA
@@ -1884,18 +1902,13 @@ class Stage(model.Actuator):
                     pos["t"] = pos.pop("rx")
                 if "rz" in pos.keys():
                     pos["r"] = pos.pop("rz")
-                # self.parent.move_stage(pos, rel=rel)
+                # movements are blocking
                 if rel:
                     self.parent.move_stage_relative(pos)
                 else:
                     self.parent.move_stage_absolute(pos)
-                time.sleep(0.1)  # It takes a little while before the stage is being reported as moving
 
-                # If it was cancelled, Abort() has stopped the stage before, and
-                # we still have waited until the stage stopped moving. Now let
-                # know the user that the move is not complete.
-                if future._must_stop.is_set():
-                    raise CancelledError()
+            # if the move is cancelled, an exception is raised on the server side
             except Exception:
                 if future._must_stop.is_set():
                     raise CancelledError()

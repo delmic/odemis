@@ -1,5 +1,7 @@
-# For now, this is esssentially just a FM microscope, as the FIB part is handled
-# separately by the SEM
+# To start the xtadapter in autoscript simulator mode:
+# cd path/to/xtlib-adapter/xtadapter
+# python server_sim_autoscript.py sim
+# the server will be started, and listening on localhost:4242
 
 METEOR-Sim: {
     class: Microscope,
