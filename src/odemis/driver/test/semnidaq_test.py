@@ -154,7 +154,8 @@ class TestAnalogSEM(unittest.TestCase):
         self.expected_shape = tuple(self.scanner.resolution.value[::-1])
         self.left = 1
         self.acq_dates = []  # floats
-        self.acq_done = threading.Event()
+        self.im_received = threading.Event()  # Set for each image received
+        self.acq_done = threading.Event()  # Set once all the images have been received
         self.left2 = 1
         self.acq_dates2 = []  # floats
         self.acq_done2 = threading.Event()
@@ -901,6 +902,35 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertTrue(done, f"Acquisition not completed within time. Still running after {duration}")
         self.assertGreaterEqual(duration, exp_duration, f"Acquisition ended too early: {duration}s")
 
+    def test_spot_mode_buffer_size(self):
+        """
+        Check acquisition of 1x1 pixels, with 0.1s dwell time (which is precisely the default AI buffer duration)
+        """
+        self.scanner.scale.value = 1, 1
+        self.scanner.resolution.value = 1, 1
+        self.scanner.dwellTime.value = 0.1
+
+        self.expected_shape = 1, 1
+        exp_duration = self.scanner.dwellTime.value * numpy.prod(self.expected_shape)
+
+        # Start/stop between each acquisition (point), to simulate the SPARC acquisition.
+        for i in range(5):
+            self.left = 100  # We'll stop by ourselves, while the next frame has already started
+            self.acq_dates = []
+            self.im_received.clear()
+            self.sed.data.subscribe(self.receive_image)
+
+            # Wait for 1 acquisition
+            start_t = time.time()
+            received = self.im_received.wait(timeout=1 + exp_duration * 1.3)
+            stop_t = time.time()
+            duration = stop_t - start_t
+            self.assertTrue(received, f"Acquisition not completed within time. Still running after {duration}")
+            self.assertGreaterEqual(duration, exp_duration, f"Acquisition ended too early: {duration}s")
+            self.sed.data.unsubscribe(self.receive_image)
+            self.assertEqual(len(self.acq_dates), 1)
+
+
     def test_acquire_two_flows(self):
         """
         Simple acquisition with two dataflows acquiring (more or less)
@@ -1030,6 +1060,7 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertEqual(image.shape, self.expected_shape)
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         self.acq_dates.append(image.metadata[model.MD_ACQ_DATE])
+        self.im_received.set()
         self.left -= 1
         if self.left <= 0:
             dataflow.unsubscribe(self.receive_image)
@@ -1042,7 +1073,6 @@ class TestAnalogSEM(unittest.TestCase):
         self.assertEqual(image.shape, self.expected_shape)
         self.assertIn(model.MD_DWELL_TIME, image.metadata)
         self.acq_dates2.append(image.metadata[model.MD_ACQ_DATE])
-        #        print "Received an image"
         self.left2 -= 1
         if self.left2 <= 0:
             dataflow.unsubscribe(self.receive_image2)

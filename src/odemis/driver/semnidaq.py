@@ -66,6 +66,7 @@ import functools
 import gc
 import logging
 import math
+import os
 import queue
 import subprocess
 import sys
@@ -168,6 +169,13 @@ class AnalogSEM(model.HwComponent):
             model.MD_SW_VERSION: self._swVersion,
             model.MD_HW_VERSION: self._hwVersion,
         }
+
+        try:
+            # Increase scheduling priority in order to reduce the chances of not reading/writing the
+            # data buffers frequently enough.
+            os.setpriority(os.PRIO_PROCESS, os.getpid(), -10)
+        except OSError as ex:
+            logging.warning("Failed to increase scheduling priority: %s. Might cause frame drops.", ex)
 
         if multi_detector_min_period is None:
             # Use the very minimum period of the board if not specified
@@ -742,9 +750,6 @@ class Acquirer:
                     self._settings_too_fast = not self._acquire_series(detectors, continuous=True)
         except ImmediateStop:
             logging.debug("Acquisition stopped immediately")
-        except Exception:
-            logging.exception("Failure during acquisition")
-            raise
 
         # Stopped.
         # TODO: move to indicate_scan_state()
@@ -1040,6 +1045,13 @@ class Acquirer:
             # Find a round number of pixels per period and convert back to samples
             logging.debug("AI buffer set to the size of a number of pixels")
             return max(2, int(period / pixel_dur) * acq_settings.ai_osr)  # samples
+
+        # Can we fit just one pixel if we extend a bit the period? If so, acquire one pixel at a time
+        # This is mainly to handle odd cases when the dwell time is just above the period (eg, 0.11 s)
+        # in which case we would end up reading a full buffer followed by a tiny bit of a second one.
+        if pixel_dur < (2 * period):
+            logging.debug("AI buffer set to the size of a single pixel")
+            return max(2, acq_settings.ai_osr)  # samples
 
         # OK... let's give up, even a pixel doesn't fit in a period, so just fit exactly the number of samples
         logging.debug("AI buffer set to less than a pixel")
