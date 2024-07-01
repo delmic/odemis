@@ -916,6 +916,12 @@ class AndorCam3(model.DigitalCamera):
             else:
                 status_str = ""
             logging.debug(u"Temp is %.2f°C%s", temp, status_str)
+
+            # Check if the status is "Fault" and set the state accordingly
+            if status == "Fault":
+                self.state._set_value(HwError("Camera Temperature fault detected"), force_write=True)
+                raise
+
         except ATError as exp:
             # This is a known error if the camera is turned off or disconnected.
             # We don't do anything, but at least we can hint the user something
