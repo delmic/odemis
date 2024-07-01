@@ -150,20 +150,20 @@ class ShapesOverlay(WorldOverlay):
     def clear(self):
         """Remove all shapes and update canvas."""
         self._activate_shapes(False)
-        self._shapes.clear()
+        self.shapes.value.clear()
 
     def remove_shape(self, shape):
         """Remove the shape and update canvas."""
-        if shape in self._shapes:
+        if shape in self.shapes.value:
             shape.active.value = False
-            self._shapes.remove(shape)
+            self.shapes.value.remove(shape)
             self.cnvs.remove_world_overlay(shape)
             self.cnvs.request_drawing_update()
 
     def add_shape(self, shape):
         """Add the shape and update canvas."""
-        if shape not in self._shapes:
-            self._shapes.append(shape)
+        if shape not in self.shapes.value:
+            self.shapes.value.append(shape)
             self.cnvs.add_world_overlay(shape)
             self.new_shape._set_value(shape, force_write=True)
             self.cnvs.request_drawing_update()
@@ -182,7 +182,7 @@ class ShapesOverlay(WorldOverlay):
 
     def _activate_shapes(self, flag=True):
         """Activate or de-activate the shapes."""
-        for shape in self._shapes:
+        for shape in self.shapes.value:
             shape.active.value = flag
 
     def _on_tool(self, selected_tool):
@@ -201,9 +201,9 @@ class ShapesOverlay(WorldOverlay):
         :return: the most appropriate shape.
             If no shape is found, it returns None.
         """
-        if self._shapes:
+        if self.shapes.value:
             pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
-            for shape in self._shapes[::-1]:
+            for shape in self.shapes.value[::-1]:
                 if shape.is_point_in_shape(pos):
                     return shape
         return None
@@ -211,7 +211,7 @@ class ShapesOverlay(WorldOverlay):
     def _create_new_shape(self):
         """Create a new shape."""
         shape = self.shape_cls(self.cnvs)
-        self._shapes.append(shape)
+        self.shapes.value.append(shape)
         self.cnvs.add_world_overlay(shape)
         self.new_shape._set_value(shape, force_write=True)
         return shape
@@ -220,7 +220,7 @@ class ShapesOverlay(WorldOverlay):
         """Copy a selected shape to a view position as the center."""
         # Copy the shape
         shape = self._shape_to_copy.copy()
-        self._shapes.append(shape)
+        self.shapes.value.append(shape)
         self.cnvs.add_world_overlay(shape)
         self.new_shape._set_value(shape, force_write=True)
         # Move the copied shape to a view position
@@ -367,7 +367,276 @@ class ShapesOverlay(WorldOverlay):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, dash=False):
         """Draw all the shapes."""
-        for shape in self._shapes:
+        for shape in self.shapes.value:
+            shape.draw(
+                ctx,
+                shift,
+                scale,
+                dash=dash,
+            )
+
+
+class MillingShapesOverlay(WorldOverlay):
+    """
+    Overlay that allows for the selection and deletion of a shape in physical coordinates.
+    It can handle multiple shapes. Specific for milling patterns.
+    """
+
+    def __init__(self, cnvs, shape_cls, tool=None, tool_va=None):
+        """
+        :param cnvs: canvas for the overlay.
+        :param shape_cls: (EditableShape) The shape class whose creation, editing and removal
+            will be handled by this class.
+        :param tool_va: (None or VA of value TOOL_*) New shapes can be created. If None, then
+            no shape can be added by the user.
+        """
+        if not issubclass(shape_cls, EditableShape):
+            raise ValueError("Not a subclass of EditableShape!")
+        WorldOverlay.__init__(self, cnvs)
+        self.shape_cls = shape_cls
+        # VA which changes value upon new shape's creation
+        self.new_shape = model.VigilantAttribute(None, readonly=True)
+        # True if latest action created a shape (for undo and redo)
+        self._is_new_shape = False
+        self._selected_shape = None
+        self._shape_to_copy = None
+        self.shapes = model.ListVA()
+
+        # History of shape's states
+        # Stack is a Tuple[EditableShape, Dict[IntEnum, Any], bool] of the shape, its state and
+        # a flag stating if it was newly created
+        self._undo_stack: Deque[ShapeState] = deque(maxlen=UNDO_STACK_DEPTH)
+        self._redo_stack: Deque[ShapeState] = deque(maxlen=UNDO_STACK_DEPTH)
+        self._undo_action = False
+        self._redo_action = False
+
+        if tool and tool_va:
+            self.tool = tool
+            tool_va.subscribe(self._on_tool, init=True)
+
+    def clear(self):
+        """Remove all shapes and update canvas."""
+        self._activate_shapes(False)
+        self.shapes.value.clear()
+
+    def remove_shape(self, shape):
+        """Remove the shape and update canvas."""
+        if shape in self.shapes.value:
+            shape.active.value = False
+            self.shapes.value.remove(shape)
+            self.cnvs.remove_world_overlay(shape)
+            self.cnvs.request_drawing_update()
+
+    def add_shape(self, shape):
+        """Add the shape and update canvas."""
+        if shape not in self.shapes.value:
+            self.shapes.value.append(shape)
+            self.cnvs.add_world_overlay(shape)
+            self.new_shape._set_value(shape, force_write=True)
+            self.cnvs.request_drawing_update()
+
+    def on_enter(self, evt):
+        if self.active.value:
+            self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
+        else:
+            WorldOverlay.on_enter(self, evt)
+
+    def on_leave(self, evt):
+        if self.active.value:
+            self.cnvs.reset_default_cursor()
+        else:
+            WorldOverlay.on_leave(self, evt)
+
+    def _activate_shapes(self, flag=True):
+        """Activate or de-activate the shapes."""
+        for shape in self.shapes.value:
+            shape.active.value = flag
+
+    def _on_tool(self, selected_tool):
+        """Update the overlay when it's active and tools change."""
+        if selected_tool == self.tool:
+            self.active.value = True
+            self._activate_shapes(True)
+        else:
+            self.active.value = False
+            self._activate_shapes(False)
+            self.cnvs.reset_default_cursor()
+
+    def _get_shape(self, evt):
+        """
+        Find a shape corresponding to the given on_left_down event position.
+        :return: the most appropriate shape.
+            If no shape is found, it returns None.
+        """
+        if self.shapes.value:
+            pos = self.cnvs.view_to_phys(evt.Position, self.cnvs.get_half_buffer_size())
+            for shape in self.shapes.value[::-1]:
+                if shape.is_point_in_shape(pos):
+                    return shape
+        return None
+
+    def _create_new_shape(self):
+        """Create a new shape."""
+        shape = self.shape_cls(self.cnvs)
+        self.shapes.value.append(shape)
+        self.cnvs.add_world_overlay(shape)
+        self.new_shape._set_value(shape, force_write=True)
+        return shape
+
+    def _copy_shape(self, v_pos: Tuple[float, float]):
+        """Copy a selected shape to a view position as the center."""
+        # Copy the shape
+        shape = self._shape_to_copy.copy()
+        self.shapes.value.append(shape)
+        self.cnvs.add_world_overlay(shape)
+        self.new_shape._set_value(shape, force_write=True)
+        # Move the copied shape to a view position
+        p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
+        shape.move_to(p_pos)
+        return shape
+
+    def on_left_down(self, evt):
+        if not self.active.value:
+            return super().on_left_down(evt)
+
+        self._is_new_shape = False
+        # Copy the selected shape by pressing Ctrl + C
+        if self._shape_to_copy:
+            # Update the selected shape as the newly copied shape
+            # whose state can then be appended to undo stack
+            self._selected_shape = self._copy_shape(evt.Position)
+            self._is_new_shape = True
+        # New or previously created shape
+        else:
+            self._selected_shape = self._get_shape(evt)
+            if self._selected_shape is None:
+                self._selected_shape = self._create_new_shape()
+                self._is_new_shape = True
+            self._selected_shape.active.value = True
+            self._selected_shape.on_left_down(evt)
+        WorldOverlay.on_left_down(self, evt)
+
+    def on_char(self, evt):
+        """Delete, unselect or copy the selected shape."""
+        if not self.active.value:
+            return super().on_char(evt)
+
+        if evt.GetKeyCode() == wx.WXK_CONTROL_Z:
+            # NOTE There is no key code such as WXK_SHIFT_CONTROL_Z
+            # when Ctrl + Shift + Z is pressed, GetKeyCode() returns WXK_CONTROL_Z
+            # in addition to that one can check ShiftDown() flag for the Shift key
+            # Ctrl + Shift + Z
+            if evt.ShiftDown():
+                self._redo_action = True
+                self.redo()
+            # Ctrl + Z
+            else:
+                self._undo_action = True
+                self.undo()
+        elif self._selected_shape:
+            if evt.GetKeyCode() == wx.WXK_DELETE:
+                state = self._selected_shape.get_state()
+                if state:
+                    shape_state = ShapeState(self._selected_shape, state, Action.DELETE)
+                    self._undo_stack.append(shape_state)
+                    self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
+                    self.remove_shape(shape_state.shape)
+            elif evt.GetKeyCode() == wx.WXK_ESCAPE:
+                # Unselect the selected shape
+                self._selected_shape.selected.value = False
+                # Stop copying the shape
+                self._shape_to_copy = None
+                self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
+                self.cnvs.request_drawing_update()
+            elif evt.GetKeyCode() == wx.WXK_CONTROL_C:
+                # Deselect the selected shape which will be copied
+                self._selected_shape.selected.value = False
+                self._shape_to_copy = self._selected_shape
+                self.cnvs.set_default_cursor(wx.CURSOR_BULLSEYE)
+                self.cnvs.request_drawing_update()
+        else:
+            WorldOverlay.on_char(self, evt)
+
+    def on_left_up(self, evt):
+        if not self.active.value:
+            return super().on_left_up(evt)
+
+        self._selected_shape = self._get_shape(evt)
+        if self._selected_shape:
+            self._selected_shape.on_left_up(evt)
+            state = self._selected_shape.get_state()
+            if state:
+                action = Action.CREATE if self._is_new_shape else Action.EDIT
+                shape_state = ShapeState(self._selected_shape, state, action)
+                if not self._undo_stack or self._undo_stack[-1] != shape_state:
+                    self._undo_stack.append(shape_state)
+                    self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
+        else:
+            WorldOverlay.on_left_up(self, evt)
+
+    def undo(self):
+        """Undo the last action."""
+        return # disabled
+        if not self._undo_stack:
+            logging.info(
+                "No undo action for %s at %s.", self.__class__.__name__, hex(id(self))
+            )
+            return
+        # If an edit was just made (detected by an empty redo stack) or if a redo action was just performed,
+        # we need to revert to the state before the lastest one. Otherwise, we revert to the latest state.
+        if not self._redo_stack or self._redo_action:
+            self._redo_action = False
+            shape_state = self._undo_stack.pop()
+            self._redo_stack.append(shape_state)
+            if shape_state.action == Action.CREATE:
+                self.remove_shape(shape_state.shape)
+                return
+            elif shape_state.action == Action.DELETE:
+                self.add_shape(shape_state.shape)
+                return
+        if self._undo_stack:
+            shape_state = self._undo_stack.pop()
+            self._redo_stack.append(shape_state)
+            shape_state.shape.restore_state(shape_state.state)
+            if shape_state.action == Action.CREATE:
+                self.remove_shape(shape_state.shape)
+            elif shape_state.action == Action.DELETE:
+                self.add_shape(shape_state.shape)
+            self.cnvs.request_drawing_update()
+
+    def redo(self):
+        """Redo the last undone action."""
+        return # disabled
+        if not self._redo_stack:
+            logging.info(
+                "No redo action for %s at %s.", self.__class__.__name__, hex(id(self))
+            )
+            return
+        # If an undo action was just performed, we need to revert to the state before the lastest one.
+        # Otherwise, we revert to the latest state.
+        if self._undo_action:
+            self._undo_action = False
+            shape_state = self._redo_stack.pop()
+            self._undo_stack.append(shape_state)
+            if shape_state.action == Action.CREATE:
+                self.add_shape(shape_state.shape)
+                return
+            elif shape_state.action == Action.DELETE:
+                self.remove_shape(shape_state.shape)
+                return
+        if self._redo_stack:
+            shape_state = self._redo_stack.pop()
+            self._undo_stack.append(shape_state)
+            shape_state.shape.restore_state(shape_state.state)
+            if shape_state.action == Action.CREATE:
+                self.add_shape(shape_state.shape)
+            elif shape_state.action == Action.DELETE:
+                self.remove_shape(shape_state.shape)
+            self.cnvs.request_drawing_update()
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0, dash=False):
+        """Draw all the shapes."""
+        for shape in self.shapes.value:
             shape.draw(
                 ctx,
                 shift,

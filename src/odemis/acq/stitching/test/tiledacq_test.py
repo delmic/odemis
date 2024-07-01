@@ -31,7 +31,7 @@ from odemis.acq import stream
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
     WEAVER_MEAN, acquireTiledArea, FocusingMethod
-from odemis.acq.stitching._tiledacq import TiledAcquisitionTask
+from odemis.acq.stitching._tiledacq import TiledAcquisitionTask, get_fov, get_tiled_areas, get_zstack_levels, compute_area_size, clip_tiling_area_to_range, SAMPLE_USABLE_BBOX_TEM_GRID
 from odemis.util import testing, img
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
 
@@ -39,6 +39,7 @@ logging.getLogger().setLevel(logging.DEBUG)
 
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
+METEOR_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
 
 
 class CRYOSECOMTestCase(unittest.TestCase):
@@ -544,6 +545,178 @@ class CRYOSECOMTestCase(unittest.TestCase):
         self.end = end
         self.updates += 1
 
+class TiledAcqUtilTestCase(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        testing.start_backend(METEOR_CONFIG)
+
+        # create some streams connected to the backend
+        cls.microscope = model.getMicroscope()
+        cls.ccd = model.getComponent(role="ccd")
+        cls.light = model.getComponent(role="light")
+        cls.focus = model.getComponent(role="focus")
+        cls.light_filter = model.getComponent(role="filter")
+        cls.stage = model.getComponent(role="stage")
+        cls.stage_bare = model.getComponent(role="stage-bare")
+
+        # Make sure the lens is referenced
+        cls.focus.reference({'z'}).result()
+        # The 5DoF stage is not referenced automatically, so let's do it now
+        stage_axes = set(cls.stage.axes.keys())
+        cls.stage.reference(stage_axes).result()
+
+        cls.ccd.exposureTime.value = 0.1  # s, go fast (but not too fast, to still get some signal)
+        fs1 = stream.FluoStream("fluo1", cls.ccd, cls.ccd.data,
+                                cls.light, cls.light_filter, focuser=cls.focus)
+        fs1.excitation.value = sorted(fs1.excitation.choices)[0]
+
+        fs2 = stream.FluoStream("fluo2", cls.ccd, cls.ccd.data,
+                                cls.light, cls.light_filter, focuser=cls.focus)
+        fs2.excitation.value = sorted(fs2.excitation.choices)[-1]
+        cls.fm_streams = [fs1, fs2]
+
+    def setUp(self):
+        # Make sure we start in focus position (easy with the simulator!)
+        focus_active_pos = self.focus.getMetadata()[model.MD_FAV_POS_ACTIVE]
+        self.focus.moveAbsSync(focus_active_pos)
+
+    def test_get_tiled_areas(self):
+        # test when inside range, not whole grid
+        pos = {"x": 0, "y": 0}
+        streams = [self.fm_streams[0]]
+        fov = get_fov(streams[0])
+        rng = {"x": (-0.1, 0.1), "y": (-0.1, 0.1)}
+        nx, ny = 5, 5
+        overlap = 0.1
+        areas = get_tiled_areas(pos=pos,
+                                 streams=streams,
+                                 tiles_nx=nx, tiles_ny=ny,
+                                 tiling_rng=rng,
+                                 overlap=overlap,
+                                 whole_grid=False)
+
+        w = nx * fov[0] * (1 - overlap)
+        h = ny * fov[1] * (1 - overlap)
+        numpy.testing.assert_array_almost_equal(areas[0], [-w/2, -h/2, w/2, h/2])
+
+        # test when outside range
+        pos = {"x": 0.2, "y": 0.2}
+        area = get_tiled_areas(pos=pos,
+                                 streams=streams,
+                                 tiles_nx=nx, tiles_ny=ny,
+                                 tiling_rng=rng,
+                                 overlap=overlap,
+                                 whole_grid=False)
+        self.assertEqual(area, [])
+
+        # test whole grid
+        selected_grids = ["GRID 1", "GRID 2"]
+        sample_centers_raw = self.stage_bare.getMetadata()[model.MD_SAMPLE_CENTERS]
+        sample_centers = {n: (v["x"], v["y"]) for n, v in sample_centers_raw.items()}
+        rel_bbox = SAMPLE_USABLE_BBOX_TEM_GRID
+        areas = get_tiled_areas(pos=pos,
+                                 streams=streams,
+                                 tiles_nx=nx, tiles_ny=ny,
+                                 tiling_rng=rng,
+                                 overlap=overlap,
+                                 whole_grid=True,
+                                 sample_centers=sample_centers,
+                                 rel_bbox=rel_bbox,
+                                 selected_grids=selected_grids,
+        )
+
+        computed_areas = []
+        for name, center in sample_centers.items():
+
+            computed_areas.append(
+                (center[0] + rel_bbox[0],
+                 center[1] + rel_bbox[1],
+                 center[0] + rel_bbox[2],
+                 center[1] + rel_bbox[3])
+        )
+        self.assertEqual(len(areas), len(selected_grids))
+        numpy.testing.assert_array_almost_equal(areas, computed_areas)
+
+    def test_compute_area_size(self):
+
+        # test when inside range
+        pos = {"x": 0, "y": 0}
+        streams = [self.fm_streams[0]]
+        fov = get_fov(streams[0])
+        rng = {"x": (-0.1, 0.1), "y": (-0.1, 0.1)}
+        nx, ny = 5, 5
+        overlap = 0.1
+        area = compute_area_size(pos=pos,
+                                 streams=streams,
+                                 tiles_nx=nx, tiles_ny=ny,
+                                 tiling_rng=rng,
+                                 overlap=overlap)
+
+        w = nx * fov[0] * (1 - overlap)
+        h = ny * fov[1] * (1 - overlap)
+        numpy.testing.assert_array_almost_equal(area, [-w/2, -h/2, w/2, h/2])
+
+        # test when outside range
+        pos = {"x": 0.2, "y": 0.2}
+        area = compute_area_size(pos=pos,
+                                 streams=streams,
+                                 tiles_nx=nx, tiles_ny=ny,
+                                 tiling_rng=rng,
+                                 overlap=overlap)
+        self.assertEqual(area, None)
+
+
+    def test_clip_tiling_area_to_range(self):
+        # test area when inside range
+        pos = {"x": 0, "y": 0}
+        tiling_range = {"x": (-100, 100), "y": (-100, 100)}
+        w, h = 50, 50
+        area = clip_tiling_area_to_range(w=w, h=h, pos=pos, tiling_rng=tiling_range)
+        numpy.testing.assert_array_almost_equal(area, [-25, -25, 25, 25])
+
+        # test area when cliping to range
+        pos = {"x": 0, "y": 0}
+        area = clip_tiling_area_to_range(w=500, h=500, pos=pos, tiling_rng=tiling_range)
+        numpy.testing.assert_array_almost_equal(area, [-100, -100, 100, 100])
+
+        # test when outside of range
+        pos = {"x": 500, "y": 500}
+        area = clip_tiling_area_to_range(w=100, h=100, pos=pos, tiling_rng=tiling_range)
+        self.assertEqual(area, None)
+
+    def test_get_zstack_levels(self):
+        focuser = self.focus
+
+        # return None when 1 zstep is provided
+        zlevels = get_zstack_levels(zsteps=1, zstep_size=None, focuser=focuser)
+        self.assertEqual(zlevels, None)
+
+        # assert raises error without focuser
+        with self.assertRaises(ValueError):
+            zlevels = get_zstack_levels(zsteps=3, zstep_size=10e-6, focuser=None)
+
+        # relative z levels
+        zlevels = get_zstack_levels(zsteps=3, zstep_size=10e-6, rel=True)
+        numpy.testing.assert_array_almost_equal(zlevels, [-15e-6, 0, 15e-6])
+
+        # absolute z levels
+        zlevels = get_zstack_levels(zsteps=3, zstep_size=10e-6, rel=False, focuser=focuser)
+        foc_z = focuser.position.value['z']
+        numpy.testing.assert_array_almost_equal(zlevels, [foc_z-15e-6, foc_z, foc_z+15e-6])
+
+        # shift z levels when outside focus range
+        frange = focuser.axes['z'].range
+        max_range = frange[1] - frange[0]
+        zlevels = get_zstack_levels(zsteps=10, zstep_size=max_range / 5, rel=False, focuser=focuser)
+        self.assertAlmostEqual(zlevels[0], frange[0])
+        self.assertAlmostEqual(zlevels[-1], frange[1])
+        self.assertEqual(len(zlevels), 10)
+
+        # shift z levels when outside focus range
+        focuser.moveAbs({"z": frange[0]}).result() # move to the minimum position
+        zlevels = get_zstack_levels(zsteps=10, zstep_size=10e-6 / 5, rel=False, focuser=focuser)
+        self.assertAlmostEqual(zlevels[0], frange[0]) # minimum z level should be at minimum position
 
 if __name__ == '__main__':
     unittest.main()

@@ -31,7 +31,7 @@ from odemis.gui.model._constants import (TOOL_NONE, VIEW_LAYOUT_ONE, VIEW_LAYOUT
                                          VIEW_LAYOUT_FULLSCREEN, TOOL_RULER, TOOL_ROA,
                                          TOOL_SPOT, STATE_OFF, STATE_ON, STATE_DISABLED,
                                          TOOL_FEATURE, TOOL_RO_ANCHOR, TOOL_POINT, TOOL_LINE,
-                                         TOOL_LABEL, TOOL_DICHO, VIEW_LAYOUT_VERTICAL,
+                                         TOOL_LABEL, TOOL_DICHO, TOOL_RECTANGLE, VIEW_LAYOUT_VERTICAL,
                                          Z_ALIGN, SEM_ALIGN, FLM_ALIGN)
 from odemis.util.filename import create_filename, make_unique_name
 from odemis import model
@@ -360,6 +360,61 @@ class CryoLocalizationGUIData(CryoGUIData):
                     config.pj_last_path, config.fn_ptn,
                     config.last_extension,
                     config.fn_count)
+
+
+class CryoFIBSEMGUIData(CryoGUIData):
+    """ Represent an interface used to control the FIBSEM.
+    It it used for METEOR systems.
+    """
+
+    def __init__(self, main):
+        super().__init__(main)
+
+        # Current tool selected (from the toolbar)
+        tools = {TOOL_NONE, TOOL_RULER, TOOL_RECTANGLE}
+        # Update the tool selection with the new tool list
+        self.tool.choices = tools
+        # VA for autofocus procedure mode
+        self.autofocus_active = BooleanVA(False)
+        # the streams to acquire among all streams in .streams
+        self.acquisitionStreams = model.ListVA()
+        # the static overview map streams, among all streams in .streams
+        self.overviewStreams = model.ListVA()
+        # for the filename
+        config = conf.get_acqui_conf()
+        self.filename = model.StringVA(create_filename(
+            config.pj_last_path, config.fn_ptn,
+            config.last_extension,
+            config.fn_count))
+        self.main.project_path.subscribe(self._on_project_path_change)
+     
+        # these are required for the acquisition controller
+        self.zMin = model.FloatContinuous(
+            value=-10e-6, range=(-1000e-6, 0), unit="m")
+        self.zMax = model.FloatContinuous(
+            value=10e-6, range=(0, 1000e-6), unit="m")
+        self.zStep = model.FloatContinuous(
+            value=1e-6, range=(-100e-6, 100e-6), unit="m")
+        self.zStackActive = model.BooleanVA(value=False)
+        self.zPos = model.FloatContinuous(0, range=(0, 0), unit="m")
+        self.zPos.clip_on_range = True
+
+        # milling patterns
+        self.patterns = model.ListVA()
+
+    def _updateZParams(self):
+        pass
+
+    def _on_stream_change(self, _):
+        pass
+
+    def _on_project_path_change(self, _):
+        config = conf.get_acqui_conf()
+        self.filename.value = create_filename(
+                    config.pj_last_path, config.fn_ptn,
+                    config.last_extension,
+                    config.fn_count)
+
 
 
 class CryoCorrelationGUIData(CryoGUIData):

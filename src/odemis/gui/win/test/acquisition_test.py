@@ -24,7 +24,7 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 import unittest
 import logging
-from odemis.gui.win.acquisition import OverviewAcquisitionDialog
+from odemis.acq.stitching._tiledacq import clip_tiling_area_to_range
 
 logging.getLogger().setLevel(logging.DEBUG)
 
@@ -42,7 +42,7 @@ class TestClipTilingArea(unittest.TestCase):
         ovv_rng = {'x': [-1e-3, 1e-3], 'y': [-1.1e-3, 1.1e-3]}
         pos = {"x": ovv_rng["x"][0] + 200e-6,
                "y": ovv_rng["y"][0] + 200e-6}
-        rect_pts = OverviewAcquisitionDialog.clip_tiling_area_to_range(w, h, pos, ovv_rng)
+        rect_pts = clip_tiling_area_to_range(w, h, pos, ovv_rng)
         # Note: the return rect_pts is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
         # check if the intersection happened
         self.assertAlmostEqual(rect_pts[0], ovv_rng["x"][0])
@@ -59,7 +59,7 @@ class TestClipTilingArea(unittest.TestCase):
         ovv_rng = {'x': [-1e-3, 1e-3], 'y': [-1.1e-3, 1.1e-3]}
         pos = {"x": ovv_rng["x"][0] + 200e-6,
                "y": ovv_rng["y"][0] + 200e-6}
-        rect_pts = OverviewAcquisitionDialog.clip_tiling_area_to_range(w, h, pos, ovv_rng)
+        rect_pts = clip_tiling_area_to_range(w, h, pos, ovv_rng)
         # Note: the return rect_pts is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
         # check if the intersection happened
         self.assertAlmostEqual(rect_pts[0], ovv_rng["x"][0])
@@ -76,7 +76,7 @@ class TestClipTilingArea(unittest.TestCase):
         ovv_rng = {'x': [-1e-3, 1e-3], 'y': [-1.1e-3, 1.1e-3]}
         pos = {"x": sum(ovv_rng["x"]) / 2,
                "y": sum(ovv_rng["y"]) / 2}
-        rect_pts = OverviewAcquisitionDialog.clip_tiling_area_to_range(w, h, pos, ovv_rng)
+        rect_pts = clip_tiling_area_to_range(w, h, pos, ovv_rng)
         # Note: the return rect_pts is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
         # check if the intersection area is the same as the tl and br of the requested area.
         # tl and br are found by the current position +/- half of the width and height
@@ -94,7 +94,7 @@ class TestClipTilingArea(unittest.TestCase):
         ovv_rng = {'x': [-1e-3, 1e-3], 'y': [-1.1e-3, 1.1e-3]}
         pos = {"x": sum(ovv_rng["x"]) / 2,
                "y": sum(ovv_rng["y"]) / 2}
-        rect_pts = OverviewAcquisitionDialog.clip_tiling_area_to_range(w, h, pos, ovv_rng)
+        rect_pts = clip_tiling_area_to_range(w, h, pos, ovv_rng)
         # Note: the return rect_pts is LBRT assuming y axis upwards, or LTRB assuming y axis downwards.
         # check if the intersection area is the same as the tl and br of the requested area.
         # tl and br are found by the current position +/- half of the width and height
