@@ -27,8 +27,8 @@ SPARC2: {
         delay: { # Time it takes before a component is accessible
             "Calibration Light": 0, # To turn on/off the light, it's immediate
             "CL PMT control unit": 0,
-            "Camera": 3,
-            "Spectrograph": 5,
+            "Camera": 2,
+            "Spectrograph": 2,
             "Optical Actuators": 1
         },
         init: { # Which component to power on from the very beginning (to save time)
@@ -164,7 +164,6 @@ SPARC2: {
     },
 }
 
-# In reality, this is a Zyla, but you need libandor3-dev to simulate an AndorCam3
 # Depending exactly on the configuration, it might also be used for spectrometer
 "Camera": {
     class: andorcam2.AndorCam2,
@@ -179,7 +178,7 @@ SPARC2: {
 
 "Spectrometer Vis-NIR": {
     class: spectrometer.CompositedSpectrometer,
-    role: spectrometer-integrated,
+    role: spectrometer,
     dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
     init: {
         transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
@@ -279,7 +278,7 @@ SPARC2: {
         address: null,
         axes: ["l1", "l2", "cl-sel", "fw", "slit"],
         # These values are adapted to make the simulator roughly the same speed
-        ustepsize: [25.1e-9, 25.1e-9, 26.1e-9, 3.392e-5, 5.e-9], # m/µstep, excepted for the fw: rad/µstep
+        ustepsize: [25.1e-8, 25.1e-8, 26.1e-8, 3.392e-4, 5.e-8], # m/µstep, excepted for the fw: rad/µstep (adjusted for the simulator)
         unit: ["m", "m", "m", "rad", "m"],
         refproc: "Standard",
         refswitch: {"l1": 0, "l2": 0, "cl-sel": 4, "fw": 4},

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-'''
+"""
 Created on 1 Sep 2023
 
 @author: Éric Piel
@@ -19,7 +19,7 @@ Public License for more details.
 
 You should have received a copy of the GNU General Public License along with Odemis. If not,
 see http://www.gnu.org/licenses/.
-'''
+"""
 
 import logging
 from collections import OrderedDict
@@ -196,9 +196,9 @@ class SEMSpectrumRawMDStream(SEMCCDMDStream):
     def _prepare(self):
         return self._sccd._prepare()
 
-    def _assembleLiveData(self, n, raw_data, px_idx, rep, pol_idx):
+    def _assembleLiveData(self, n, raw_data, px_idx, px_pos, rep, pol_idx=0):
         if n != self._ccd_idx:
-            return super()._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+            return super()._assembleLiveData(n, raw_data, px_idx, px_pos, rep, pol_idx)
 
         # Raw data format is YC, where Y is the CCD Y... but there is already the Y of the e-beam.
         # So we report it as a T dimension, which makes the data exporter happy and Odemis viewer happy.
@@ -209,27 +209,19 @@ class SEMSpectrumRawMDStream(SEMCCDMDStream):
         if pol_idx > len(self._live_data[n]) - 1:
             # New polarization => new DataArray
             md = raw_data.metadata.copy()
-            # Compute metadata based on SEM metadata
-            semmd = self._live_data[0][pol_idx].metadata
-            # handle sub-pixels (aka fuzzing)
-            md[MD_PIXEL_SIZE] = (semmd[MD_PIXEL_SIZE][0] * self._emitter.resolution.value[0],
-                                 semmd[MD_PIXEL_SIZE][1] * self._emitter.resolution.value[1])
-            md[MD_POS] = semmd[MD_POS]
+            # Compute metadata to match the SEM metadata
+            center, pxs = self._get_center_pxs(rep, (1, 1), self._pxs, px_pos)
+            md.update({MD_POS: center,
+                       MD_PIXEL_SIZE: pxs,
+                       MD_DIMS: "CTZYX",
+                       MD_DESCRIPTION: self._streams[n].name.value})
 
-            for k in (MD_ROTATION, MD_ROTATION_COR):
-                if k in semmd:
-                    md[k] = semmd[k]
-                else:
-                    md.pop(k, None)
-
-            md[MD_DIMS] = "CTZYX"
             # Note: MD_WL_LIST is normally present.
             if MD_WL_LIST in md and spec_res != len(md[MD_WL_LIST]):
                 # Not a big deal, can happen if wavelength = 0
                 logging.warning("MD_WL_LIST is length %s, while spectrum res is %s",
                               len(md[MD_WL_LIST]), spec_res)
 
-            md[MD_DESCRIPTION] = self._streams[n].name.value
             # Make sure it doesn't contain metadata related to AR
             for k in (model.MD_AR_POLE, model.MD_AR_MIRROR_BOTTOM, model.MD_AR_MIRROR_TOP,
                       model.MD_AR_FOCUS_DISTANCE, model.MD_AR_HOLE_DIAMETER, model.MD_AR_PARABOLA_F,
@@ -259,6 +251,7 @@ class SEMSpectrumRawMDStream(SEMCCDMDStream):
                 d.metadata[model.MD_DESCRIPTION] += " " + d.metadata[model.MD_POL_MODE]
 
         self._raw.extend(data)
+
 
 # To force the "Temporal Spectrum" view to show the live stream
 TemporalSpectrumStream.register(SpectrumRawSettingsStream)
@@ -308,9 +301,10 @@ SPECTRUM_RAW_CONFIG = OrderedDict((
     }),
 ))
 
+
 class SpectrumRawPlugin(Plugin):
     name = "Spectrum Raw acquisition"
-    __version__ = "1.0"
+    __version__ = "1.1"
     __author__ = u"Éric Piel"
     __license__ = "GPLv2"
 

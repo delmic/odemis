@@ -59,6 +59,7 @@ SPARC2POL_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
 SPARC2STREAK_CONFIG = CONFIG_PATH + "sim/sparc2-streakcam-sim.odm.yaml"
 SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
 TIME_CORRELATOR_CONFIG = CONFIG_PATH + "sim/sparc2-time-correlator-sim.odm.yaml"
+SPARC2_HWSYNC_CONFIG = CONFIG_PATH + "sim/sparc2-nidaq-sim.odm.yaml"
 
 RGBCAM_CLASS = simcam.Camera
 RGBCAM_KWARGS = dict(name="camera", role="overview", image="simcam-fake-overview.h5")
@@ -1218,11 +1219,11 @@ class SPARCTestCase(unittest.TestCase):
         f = sps.acquire()
 
         # Check if there is a live update in the setting stream.
-        time.sleep(1)  # Wait long enough so that there is a new image
+        time.sleep(3)  # Wait long enough so that there is a new image
         im1 = specs.image.value
         self.assertIsInstance(im1, model.DataArray)
         testing.assert_array_not_equal(im0, im1)
-        time.sleep(2)
+        time.sleep(6)
         im2 = specs.image.value
         testing.assert_array_not_equal(im1, im2)
 
@@ -3232,6 +3233,144 @@ class SPARC2StreakCameraTestCase(unittest.TestCase):
         self.assertEqual(cl_md[model.MD_USER_TINT], (255, 0, 0))  # from .tint
         self.assertEqual(cl_two_md[model.MD_USER_TINT], (0, 255, 0))  # from .tint
 
+
+class SPARC2HwSyncTestCase(unittest.TestCase):
+    """
+    Tests to be run with a (simulated) SPARCv2 using a hardware trigger between the
+    e-beam scanner and the CCD/spectrometer.
+    """
+    @classmethod
+    def setUpClass(cls):
+        testing.start_backend(SPARC2_HWSYNC_CONFIG)
+
+        # Find CCD & SEM components
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.cl = model.getComponent(role="cl-detector")
+        cls.spgp = model.getComponent(role="spectrograph")
+        cls.spec = model.getComponent(role="spectrometer")
+
+        cls.filter = model.getComponent(role="filter")
+
+    def _roiToPhys(self, repst):
+        """
+        Compute the (expected) physical position of a stream ROI
+        repst (RepetitionStream): the repetition stream with ROI
+        return:
+            pos (tuple of 2 floats): physical position of the center
+            pxs (tuple of 2 floats): pixel size in m
+            res (tuple of ints): number of pixels
+        """
+        res = repst.repetition.value
+        pxs = (repst.pixelSize.value,) * 2
+
+        # To compute pos, we need to convert the ROI to physical coordinates
+        roi = repst.roi.value
+        roi_center = ((roi[0] + roi[2]) / 2, (roi[1] + roi[3]) / 2)
+
+        try:
+            sem_center = repst.detector.getMetadata()[model.MD_POS]
+        except KeyError:
+            # no stage => pos is always 0,0
+            sem_center = (0, 0)
+        # TODO: pixelSize will be updated when the SEM magnification changes,
+        # so we might want to recompute this ROA whenever pixelSize changes so
+        # that it's always correct (but maybe not here in the view)
+        emt = repst.emitter
+        sem_width = (emt.shape[0] * emt.pixelSize.value[0],
+                     emt.shape[1] * emt.pixelSize.value[1])
+        # In physical coordinates Y goes up, but in ROI, Y goes down => "1-"
+        pos = (sem_center[0] + sem_width[0] * (roi_center[0] - 0.5),
+               sem_center[1] - sem_width[1] * (roi_center[1] - 0.5))
+
+        logging.debug("Expecting pos %s, pxs %s, res %s", pos, pxs, res)
+        return pos, pxs, res
+
+    def test_acq_spec(self):
+        """
+        Test short & long acquisition for Spectrometer
+        """
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam)
+        specs = stream.SpectrumSettingsStream("test spec", self.spec, self.spec.data, self.ebeam,
+                                              detvas={"exposureTime"})
+        sps = stream.SEMSpectrumMDStream("test sem-spec", [sems, specs])
+
+        specs.roi.value = (0.15, 0.6, 0.8, 0.8)
+
+        # Long acquisition (small rep to avoid being too long) > 0.1s
+        specs.detExposureTime.value = 0.3  # s
+        specs.repetition.value = (5, 6)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sps.estimateAcquisitionTime()
+        im0 = specs.image.value
+        start = time.time()
+        f = sps.acquire()
+
+        # Check if there is a live update in the setting stream.
+        time.sleep(3)  # Wait long enough so that there is a new image
+        im1 = specs.image.value
+        self.assertIsInstance(im1, model.DataArray)
+        testing.assert_array_not_equal(im0, im1)
+        time.sleep(6)
+        im2 = specs.image.value
+        testing.assert_array_not_equal(im1, im2)
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+        sem_da = sps.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        sp_da = sps.raw[1]
+        sshape = sp_da.shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+        sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
+        self.assertEqual(sp_dims, "CTZYX")
+
+        # Short acquisition (< 0.1s)
+        specs.detExposureTime.value = 0.01  # s
+        specs.repetition.value = (25, 60)
+        exp_pos, exp_pxs, exp_res = self._roiToPhys(specs)
+
+        # Start acquisition
+        timeout = 1 + 2.5 * sps.estimateAcquisitionTime()
+        start = time.time()
+        f = sps.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sps.raw))
+        sem_da = sps.raw[0]
+        self.assertEqual(sem_da.shape, exp_res[::-1])
+        sp_da = sps.raw[1]
+        sshape = sp_da.shape
+        self.assertEqual(len(sshape), 5)
+        self.assertGreater(sshape[0], 1)  # should have at least 2 wavelengths
+        sem_md = sem_da.metadata
+        spec_md = sp_da.metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], spec_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], spec_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(spec_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(spec_md[model.MD_PIXEL_SIZE], exp_pxs)
+        sp_dims = spec_md.get(model.MD_DIMS, "CTZYX"[-sp_da.ndim::])
+        self.assertEqual(sp_dims, "CTZYX")
+
+
 class SPARC2PolAnalyzerTestCase(unittest.TestCase):
     """
     Tests to be run with a (simulated) SPARCv2
@@ -3343,7 +3482,7 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
                 # Only checked with multiple polarization, as otherwise, there is
                 # only one image anyway.
                 for i in range(10):  # Wait long enough so that there is a new image
-                    time.sleep(1)
+                    time.sleep(3)
                     im1 = ars.image.value
                     if im1 is not im0:
                         logging.debug("Got image update after %d iteration", i)
@@ -3908,9 +4047,9 @@ class TimeCorrelatorTestCase(unittest.TestCase):
         f = sem_tc_stream.acquire()
 
         # Check if there is a live update in the setting stream.
-        time.sleep(2.0)
+        time.sleep(3)
         im1 = tc_stream.image.value
-        time.sleep(3.0)
+        time.sleep(6)
         im2 = tc_stream.image.value
 
         # wait until it's over
