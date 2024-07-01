@@ -140,6 +140,14 @@
             <assign_var>1</assign_var>
           </XRCED>
         </object>
+            <object class="wxMenuItem" name="menu_item_show_correlation">
+          <label>Show Correlation Tab</label>
+          <enabled>1</enabled>
+          <checkable>1</checkable>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
         <label>View</label>
       </object>
       <object class="wxMenu">

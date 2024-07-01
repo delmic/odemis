@@ -192,7 +192,8 @@ class TabBarController(TabController):
             if b not in buttons:
                 b.Hide()
 
-        if len(tabs) <= 1:  # No need for tab buttons at all
+        # hide tab buttons for viewer
+        if main_data.is_viewer:
             main_frame.pnl_tabbuttons.Hide()
 
         return tabs, default_tab

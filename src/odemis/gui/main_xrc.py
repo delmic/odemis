@@ -221,6 +221,7 @@ class xrcfr_main(wx.Frame):
         self.menu_item_cross = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_cross"))
         self.menu_item_interpolation = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_interpolation"))
         self.menu_item_rawpixel = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_rawpixel"))
+        self.menu_item_show_correlation = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_show_correlation"))
         self.menu_item_manual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_manual"))
         self.menu_item_devmanual = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_devmanual"))
         self.menu_item_inspect = self.GetMenuBar().FindItemById(xrc.XRCID("menu_item_inspect"))
@@ -2456,6 +2457,14 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
           <accel>Ctrl+U</accel>
           <checkable>1</checkable>
           <enabled>0</enabled>
+          <XRCED>
+            <assign_var>1</assign_var>
+          </XRCED>
+        </object>
+            <object class="wxMenuItem" name="menu_item_show_correlation">
+          <label>Show Correlation Tab</label>
+          <enabled>1</enabled>
+          <checkable>1</checkable>
           <XRCED>
             <assign_var>1</assign_var>
           </XRCED>

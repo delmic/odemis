@@ -149,6 +149,15 @@ class MenuController(object):
         # /Help/About
         main_frame.Bind(wx.EVT_MENU, self._on_about, id=main_frame.menu_item_about.GetId())
 
+        # add a toggle for correlation tab in viewer mode
+        if main_data.is_viewer:
+            main_frame.Bind(wx.EVT_MENU, self._on_show_correlation, id=main_frame.menu_item_show_correlation.GetId())
+        else:
+            # remove the menu item
+            menu = main_frame.menu_item_show_correlation.GetMenu()
+            menu.Remove(main_frame.menu_item_show_correlation)
+            main_frame.menu_item_show_correlation.Destroy()
+
     def _on_update(self, evt):
         import odemis.gui.util.updater as updater
         u = updater.WindowsUpdater()
@@ -475,3 +484,18 @@ class MenuController(object):
         """
         # TODO: use event?
         self._main_data.debug.value = self._main_frame.menu_item_debug.IsChecked()
+
+    def _on_show_correlation(self, evt):
+        """ Toggle display of the correlation tab and tab buttons """
+
+        show = self._main_frame.menu_item_show_correlation.IsChecked()
+
+        if show:
+            self._main_frame.pnl_tabbuttons.Show()
+            tab = self._main_data.getTabByName("meteor-correlation")
+        else:
+            self._main_frame.pnl_tabbuttons.Hide()
+            tab = self._main_data.getTabByName("analysis")
+
+        self._main_data.tab.value = tab
+        self._main_frame.Layout()
