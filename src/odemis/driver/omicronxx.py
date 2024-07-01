@@ -418,10 +418,12 @@ class DevxX(object):
             subdev (set of int): subdevices available
         """
         ans = self._getValue("GSI")
-        # Expects something like:
-        # GSI [m63] (optional) int (wl in nm) § int (power in mW)
+        # Follows this pattern:
+        # GSI [m int] (available sources, optional) int (wl in nm) § int (power in mW)
+        # So something like: GSI[m63]550§1564
+        # In some rare cases, the wl is followed by a few bytes at 0xff... so just ignore them
         try:
-            m = re.match(r"(\[m(?P<mdev>\d+)])?(?P<wl>\d+)\xa7(?P<power>\d+)", ans)
+            m = re.match(r"(\[m(?P<mdev>\d+)])?(?P<wl>\d+)\xff*\xa7(?P<power>\d+)", ans)
             mdev = m.group("mdev")
             if mdev is None:
                 mdev = 0 # None if no mdev bitmask
