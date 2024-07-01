@@ -1,3 +1,19 @@
+odemis (3.5.1-1) bionic; urgency=medium
+
+  * New version: 3.5.1
+  * Main bug fixes:
+    - Avoid error messages in the GUI about "dead objects" sometimes when changing the
+      stream settings.
+    - handle Omicron LedHUBs with odd characters in wavelength info (SECOM/METEOR)
+    - Setting a very small centre wavelength would sometimes incorrectly
+      leave the previous wavelength metadata (SPARC)
+    - Live detector tool image would not update if the image was bigger than
+      the screen
+    - spectrum_raw plugin shouldn't try to load in the Viewer (SPARC)
+    - Properly detect that the NI DAQ driver cannot be loaded
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Mon, 01 Jul 2024 16:22:11 +0200
+
 odemis (3.5.0-1) bionic; urgency=medium
 
   * New version: 3.5
