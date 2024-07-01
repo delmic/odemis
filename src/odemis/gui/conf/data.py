@@ -629,6 +629,12 @@ HW_SETTINGS_CONFIG_PER_ROLE = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
             },
         },
+        "monochromator": {
+            # protection is to be controlled automatically by the spectrograph to avoid light.
+            "protection": {
+                "control_type": odemis.gui.CONTROL_NONE,
+            },
+        },
     },
     "delphi": {
         # Some settings are continuous values, but it's more convenient to the user
