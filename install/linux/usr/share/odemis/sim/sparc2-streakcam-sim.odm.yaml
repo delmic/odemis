@@ -200,6 +200,7 @@ SPARC2: {
 "Streak Unit": {
     role: streak-unit,
     init: {
+#        settings_ini: "C:\ProgramData\Hamamatsu\HPDTA\SingleSweep.ini" # path of the .ini file for HPDTA to run
     },
     affects: ["Streak Readout CCD"],
 }
