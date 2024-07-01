@@ -30,7 +30,8 @@ CLASS = powerctrl.PowerControlUnit
 KWARGS = dict(name="test", role="power_control",
               pin_map={"sem": 0, "sed": 1},
               port="/dev/ttyPMT*",
-              # ids=[],
+              ids=[],
+              excluded_ids=["23a463a3040000c8"],
               check_power=True)
 if TEST_NOHW:
     # Test using the simulator
@@ -112,6 +113,10 @@ class TestPowerControl(unittest.TestCase):
     def tearDownClass(cls):
         cls.pcu.terminate()
         cls.sem.terminate()
+
+    def test_ids(self):
+        ids = self.pcu.memoryIDs.value
+        self.assertGreater(len(ids), 0)
 
     def test_send_cmd(self):
         # Send proper command

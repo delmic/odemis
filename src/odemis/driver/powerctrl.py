@@ -22,6 +22,8 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 import fcntl
 import glob
 import logging
+from typing import Optional, List, Tuple, Dict
+
 import numpy
 from odemis import model
 from odemis.model import isasync, CancellableThreadPoolExecutor, HwError
@@ -44,46 +46,64 @@ class PowerControlUnit(model.PowerSupplier):
     communication with the PCU firmware.
     '''
 
-    def __init__(self, name, role, port, pin_map=None, delay=None, init=None, ids=None,
-                 termination=None, check_power=True, **kwargs):
-        '''
-        port (str): port name
-        pin_map (dict of str -> int): names of the components
-          and the pin where the component is connected.
-        delay (dict str -> float): time to wait for each component after it is
-            turned on.
-        init (dict str -> boolean): turn on/off the corresponding component upon
-            initialization.
-        ids (list str): EEPROM ids expected to be detected during initialization.
-        check_power (bool): normally the power is checked by verifying that the
-          EEPROM IDs can be read. To disable this check, ids must be empty, and
-          check_power set to False. This allows to use hardware which is not
-          physically connected to EEPROMs.
-        termination (dict str -> bool/None): indicate for every component
-            if it should be turned off on termination (False), turned on (True)
-            or left as-is (None).
-        Raise an exception if the device cannot be opened
-        '''
-        if pin_map:
-            self.powered = list(pin_map.keys())
-        else:
-            self.powered = []
+    def __init__(self, name, role,
+                 port: str,
+                 pin_map: Optional[Dict[str, int]] = None,
+                 delay: Optional[Dict[str, float]] = None,
+                 init: Optional[Dict[str, bool]] = None,
+                 termination: Optional[Dict[str, Optional[bool]]] = None,
+                 ids: Optional[List[str]] = None,
+                 excluded_ids: Optional[List[str]] = None,
+                 check_power: bool = True,
+                 **kwargs):
+        """
+        :param port: port name
+        :param pin_map: names of the components and the pin where the component is connected.
+        :param delay (dict str -> float): time to wait for each component after it is turned on.
+        :param init: turn on/off the corresponding component upon initialization.
+        :param termination: indicate for every component whether it should be turned off on
+        termination (False), turned on (True) or left as-is (None).
+        :param ids: EEPROM ids expected to be detected during initialization.
+        All the IDs must be found. If not, another device is search for.
+        :param excluded_ids: EEPROM ids which must not be detected during initialization.
+        If any ID listed is detected, it will stop connection with the PCU, and look for another PCU...
+        until a PCU with none of these IDs is found.
+        :param check_power (bool): normally the power is checked by verifying that the
+        EEPROM IDs can be read. To disable this check, ids must be empty, and
+        check_power set to False. This allows to use hardware which is not
+        physically connected to EEPROMs.
+        :raise:
+        * ValueError if an argument is invalid
+        * HwError if the device cannot be opened
+        """
         model.PowerSupplier.__init__(self, name, role, **kwargs)
+
+        if pin_map:
+            self._powered = list(pin_map.keys())
+        else:
+            self._powered = []
 
         if not check_power and ids:
             raise ValueError(f"check_power can only be disabled if no ids are specified, but got {ids}")
 
         self._check_power = check_power
 
-        # TODO: catch errors and convert to HwError
+        required_ids = ids or []
+        if not all(isinstance(eid, str) and len(eid) >= 8 for eid in required_ids):
+            raise ValueError(f"ids must be a list of strings (of at least 8 chars), but got '{ids}'")
+
+        excluded_ids = excluded_ids or []
+        if not all(isinstance(eid, str) and len(eid) >= 8 for eid in excluded_ids):
+            raise ValueError(f"excluded_ids must be a list of strings (of at least 8 chars), but got '{excluded_ids}'")
+
         self._ser_access = threading.Lock()
 
         self._file = None
-        self._port = self._findDevice(port)  # sets ._serial and ._file
+        self._serial = None
+        self._port, self._idn = self._findDevice(port, required_ids, excluded_ids)  # sets ._serial and ._file
         logging.info("Found Power Control device on port %s", self._port)
-
-        # Get identification of the Power control device
-        self._idn = self._getIdentification()
+        if check_power:
+            self._getIdentities()  # Will fail with HwError if no power is provided
 
         driver_name = driver.getSerialDriver(self._port)
         self._swVersion = "serial driver: %s" % (driver_name,)
@@ -129,13 +149,6 @@ class PowerControlUnit(model.PowerSupplier):
                           (ex,))
 
         self.memoryIDs = model.VigilantAttribute(None, readonly=True, getter=self._getIdentities)
-
-        if ids:
-            mem_ids = self.memoryIDs.value
-            for eid in ids:
-                if eid not in mem_ids:
-                    raise HwError("EEPROM id %s was not detected. Make sure "
-                                  "all EEPROM components are connected." % (eid,))
 
     @isasync
     def supply(self, sup):
@@ -198,7 +211,7 @@ class PowerControlUnit(model.PowerSupplier):
         for pin in pins_updated:
             ans = self._sendCommand("PWR? " + str(pin))
             # Update all components that are connected to the same pin
-            to_update = [c for c in self.powered if pin == self._pin_map[c]]
+            to_update = [c for c in self._powered if pin == self._pin_map[c]]
             for c_update in to_update:
                 self._supplied[c_update] = (ans == "1")
 
@@ -342,27 +355,46 @@ class PowerControlUnit(model.PowerSupplier):
         ser.timeout = 5  # Sometimes the software-based USB can have some hiccups
         return ser
 
-    def _findDevice(self, ports):
+    def _findDevice(self, ports: str, required_ids: List[str], excluded_ids: List[str]) -> Tuple[str, str]:
         """
-        Look for a compatible device
-        ports (str): pattern for the port name
-        return (str): the name of the port used
-        It also sets ._serial and ._idn to contain the opened serial port, and
-        the identification string.
-        raises:
-            IOError: if no device are found
+        Look for a compatible device.
+        :param ports: pattern for the port name
+        :param required_ids: list of EEPROM IDs that must be found
+        :param excluded_ids: list of EEPROM IDs that must not be found
+        :return: the name of the port used, and the identification string reported by the device.
+        Note: It also sets ._serial and ._file to contain the opened serial port, and locking file
+        :raises:
+            HwError: if no device are found
         """
         # For debugging purpose
         if ports == "/dev/fake":
             self._serial = PowerControlSimulator(timeout=1)
-            return ports
+            self._file = None
+            idn = self._getIdentification()
+            return ports, idn
 
         if os.name == "nt":
             raise NotImplementedError("Windows not supported")
         else:
             names = glob.glob(ports)
 
+        # Just to clarify the error message if no matching device is found
+        error_no_power = False
+        error_missing_ids = False
+
         for n in names:
+            # Close the previous port if it was the wrong device
+            try:
+                if self._serial:
+                    self._serial.close()
+                    self._serial = None
+                if self._file:
+                    self._file.close()
+                    self._file = None
+            except Exception:
+                pass
+
+            # Open a serial connection to the device
             try:
                 self._file = open(n)  # Open in RO, just to check for lock
                 try:
@@ -380,19 +412,43 @@ class PowerControlUnit(model.PowerSupplier):
                     # => try again (now that it's flushed)
                     logging.info("Device answered by an error, will try again")
                     idn = self._getIdentification()
+
                 # Check that we connect to the right device
                 if not idn.startswith("Delmic Analog Power"):
                     logging.info("Connected to wrong device on %s, skipping.", n)
                     continue
-                return n
             except (IOError, PowerControlError):
                 # not possible to use this port? next one!
                 logging.debug("Skipping port %s which doesn't seem the right device", n)
                 continue
-        else:
-            raise HwError("Failed to find a Power Control device on ports '%s'. "
-                          "Check that the device is turned on and connected to "
-                          "the computer." % (ports,))
+
+            # Check which EEPROMs are connected
+            # (only if EEPROM IDs are requested as this can cause failures on some devices)
+            if required_ids or excluded_ids:
+                try:
+                    mem_ids = self._getIdentities()
+                except HwError:
+                    logging.info("Skipping port %s as EEPROMs cannot be read", n)
+                    error_no_power = True
+                    continue
+                logging.info("PCU on port %s is connected to EEPROMs: %s", n, mem_ids)
+                if not all(rid in mem_ids for rid in required_ids):
+                    logging.debug("Skipping port %s which doesn't have all required EEPROMs", n)
+                    error_missing_ids = True
+                    continue
+                if any(eid in mem_ids for eid in excluded_ids):
+                    logging.debug("Skipping port %s which has excluded EEPROMs", n)
+                    error_missing_ids = True
+                    continue
+            return n, idn
+        else:  # No matching device found
+            if error_no_power:
+                raise HwError("No power provided to the Power Control Unit.")
+            elif error_missing_ids:
+                raise HwError(f"No PCU with EEPROM IDs {required_ids} - {excluded_ids} found")
+            else:
+                raise HwError(f"Failed to find a PCU on ports '{ports}'. "
+                              "Check the USB and power connections.")
 
     @classmethod
     def scan(cls):
@@ -474,6 +530,7 @@ class PowerControlSimulator(object):
         # using read or write will fail after that
         del self._output_buf
         del self._input_buf
+        self._f.close()
 
     def _parseMessages(self):
         """
