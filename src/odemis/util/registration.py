@@ -42,6 +42,9 @@ from odemis.util.transform import (
     polar_to_cartesian,
 )
 
+scipy_version = tuple(map(int, scipy.__version__.split(".")))
+scipy_old_ckdtree = (scipy_version < (1, 6, 0))
+
 T = TypeVar("T", bound="GeometricTransform")
 
 
@@ -240,7 +243,14 @@ def nearest_neighbor_graph(ji: numpy.ndarray) -> SkewSymmetricAdjacencyGraph:
     # Find the closest 4 neighbors (excluding itself) for each point.
     tree = scipy.spatial.cKDTree(ji)
     # NOTE: Starting SciPy v1.6.0 the `n_jobs` argument will be renamed `workers`
-    distances, indices = tree.query(ji, k=5, n_jobs=-1)
+    # Ubuntu 20.04: v1.3.3 -> n_jobs
+    # Ubuntu 22.04: v1.8.0 -> workers or n_jobs
+    # Ubuntu 24.04: v1.11.4 -> workers
+    if scipy_old_ckdtree:
+        distances, indices = tree.query(ji, k=5, n_jobs=-1)
+    else:
+        distances, indices = tree.query(ji, k=5, workers=-1)
+
     distances = distances[:, 1:]  # exclude the point itself
     indices = indices[:, 1:]  # same
 
