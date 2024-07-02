@@ -25,7 +25,7 @@ import weakref
 from abc import abstractmethod, ABCMeta
 
 import Pyro4
-from future.moves.urllib.parse import quote
+from urllib.parse import quote
 from Pyro4.core import isasync
 
 import odemis
