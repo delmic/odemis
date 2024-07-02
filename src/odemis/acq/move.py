@@ -35,6 +35,7 @@ import scipy
 from odemis import model, util
 from odemis.util import executeAsyncTask
 from odemis.util.driver import ATOL_ROTATION_POS, isNearPosition, isInRange
+from odemis.util.transform import RigidTransform
 
 MAX_SUBMOVE_DURATION = 90  # s
 
@@ -66,6 +67,7 @@ SAFETY_MARGIN_3DOF = 200e-6  # m
 ATOL_ROTATION_TRANSFORM = 0.04   # rad ~2.5 deg
 ATOL_LINEAR_TRANSFORM = 5e-6    # 5 um
 
+
 class MicroscopePostureManager:
     def __new__(cls, microscope):
         role = microscope.role
@@ -81,6 +83,8 @@ class MicroscopePostureManager:
                 return super().__new__(MeteorZeiss1PostureManager)
             elif stage_version == "tfs_1":
                 return super().__new__(MeteorTFS1PostureManager)
+            elif stage_version == "tfs_2":
+                return super().__new__(MeteorTFS2PostureManager)
             elif stage_version == "tescan_1":
                 return super().__new__(MeteorTescan1PostureManager)
             else:
@@ -580,6 +584,379 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
                 # save rotation and tilt in SEM before switching to FM imaging
                 # to restore rotation and tilt while switching back from FM -> SEM
                 if current_label == SEM_IMAGING and target == FM_IMAGING:
+                    current_value = self.stage.position.value
+                    self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
+                                                                             'rz': current_value['rz']}})
+                # Park the focuser for safety
+                if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
+                    sub_moves.append((self.focus, focus_deactive))
+
+                # Move translation axes, then rotational ones
+                sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+
+                if target == FM_IMAGING:
+                    # Engage the focuser
+                    sub_moves.append((self.focus, focus_active))
+            else:
+                raise ValueError(f"Unsupported move to target {target_name}")
+
+            # run the moves
+            logging.info("Moving from position {} to position {}.".format(current_name, target_name))
+            for component, sub_move in sub_moves:
+                self._run_sub_move(future, component, sub_move)
+
+        except CancelledError:
+            logging.info("CryoSwitchSamplePosition cancelled.")
+        except Exception:
+            logging.exception("Failure to move to {} position.".format(target_name))
+            raise
+        finally:
+            with future._task_lock:
+                if future._task_state == CANCELLED:
+                    raise CancelledError()
+                future._task_state = FINISHED
+
+
+class ConvertStage:
+    # Most functions are taken from ConvertStage class in actuator.py
+    # This class is used to read stage coordinates from one reference to another and do not actually
+    # move the stage.
+    def __init__(self, dependency, axes, rotation=0, scale=None, translation=None, shear=None):
+        self._dependency = dependency
+        self._axes_dep = {"x": axes[0], "y": axes[1]}
+        self.meteor_stage = model.getComponent(role='stage')
+        meteor_stage_md = self.meteor_stage.getMetadata()
+        if scale is None:
+            scale = (1, 1)
+        if translation is None:
+            translation = (0, 0)
+        if shear is None:
+            shear = (0, 0)
+
+        self.axes = {"x": copy.deepcopy(self._dependency.axes[axes[0]]),
+                    "y": copy.deepcopy(self._dependency.axes[axes[1]])}
+
+        self.fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE, None)
+
+        self.scale = scale
+        self.translation = translation
+        self.rotation = rotation
+        self.shear = shear
+        self._updateConversion()
+        self._updateAxesRange()
+
+        for axis, dependency in self._axes_dep.items():
+            if dependency == "z":
+                axis_range = self.axes[axis].range
+                safe_active_z = sum(axis_range) / 2
+        logging.debug("The calculated favorite active position in active range in z is %s m (%s m, %s m)",
+                      safe_active_z, axis_range[0], axis_range[1])
+
+    def _get_rot_matrix(self, invert=False):
+        if invert:
+            self.rotation *= -1
+        return RigidTransform(rotation=self.rotation).matrix
+
+    def _convertPosFromdep(self, pos_dep, absolute=True):
+        # Object lens position vector
+        Q = numpy.array(pos_dep, dtype=float)
+        # Transform to coordinates in the reference frame of the sample stage
+        p = self._Mfromdep.dot(Q)
+        if absolute:
+            p -= self._O
+        return p.tolist()
+
+    def _convertPosTodep(self, pos, absolute=True):
+        # Sample stage position vector
+        P = numpy.array(pos, dtype=float)
+        if absolute:
+            P += self._O
+        # Transform to coordinates in the reference frame of the objective stage
+        q = self._Mtodep.dot(P)
+        return q.tolist()
+
+    def _updateConversion(self):
+
+        if len(self.shear) == 3:
+            # TODO update the shear matrix if shear is in the first or second axis
+            # The shear matrix is for the shear in the z axis
+            shear_matrix = numpy.array([[1, 0, 0], [0, 1, 0], [self.shear[0], self.shear[1], 1]])
+        else:
+            shear_matrix = numpy.array([[1, self.shear[0]], [self.shear[1], 1]])
+
+        # Scaling*Shearing*Rotation for convert back/forth between exposed and dep
+        scale_matrix = numpy.identity(len(self.scale)) * self.scale
+        self._Mtodep = scale_matrix @ shear_matrix @ self._get_rot_matrix()
+        self._Mfromdep = numpy.linalg.inv(self._Mtodep)
+
+        # Offset between origins of the coordinate systems
+        self._O = numpy.array(self.translation, dtype=float)
+
+    def _get_dep_pos_vector(self, pos_val):
+        """Get dependent stage axes position from the convert stage position"""
+        vpos = pos_val.get("x", 0), pos_val.get("y", 0)
+        vpos_dep = self._convertPosTodep(vpos)
+        return {"x": vpos_dep[0], "y": vpos_dep[1]}
+
+    def _get_convert_pos_vector(self, dep_val):
+        """Get convert stage axes position from dependant stage axes position"""
+        vpos_dep = dep_val.get("x", 0), dep_val.get("y", 0)
+        vpos = self._convertPosFromdep(vpos_dep)
+        return {"x": vpos[0], "y": vpos[1]}
+
+    def get_dep_vector_fav_pos(self, dep_val, fav_pos_active=None):
+        """
+        Get the convert stage values based on dependent stage values by fixing the convert stage axes to a defined
+        plane given by fav_pos_active.
+        :param dep_val: (dict str -> float) stage coordinates of the dependedent axes
+        :param fav_pos_active: (dict str -> float) Modify convert stage values of dependent axes based on favorite
+         active position, specified by z axis of convert stage
+        :return: (dict str -> float) resultant convert stage axes based on fav_pos_active
+        """
+        if self.fav_pos_active is None:
+            self.fav_pos_active = fav_pos_active
+            logging.debug(f"Set {model.MD_FAV_POS_ACTIVE} to {self.fav_pos_active}")
+            self.meteor_stage.updateMetadata({model.MD_FAV_POS_ACTIVE: self.fav_pos_active})
+        # select the axes which undergo transformation
+        # the transformation is rotation on y and z axes
+        # map y and z axes onto x and y for conversion
+        map_dep_pos = {"x": dep_val[self._axes_dep["x"]], "y": dep_val[self._axes_dep["y"]]}
+        convert_pos = self._get_convert_pos_vector(map_dep_pos)
+        self.fav_pos_active = self.meteor_stage.getMetadata().get(model.MD_FAV_POS_ACTIVE)
+        convert_pos["y"] = self.fav_pos_active["z"]
+        map_dep_pos = self._get_dep_pos_vector(convert_pos)
+
+        # remap the x and y values to the original dependent stage axes
+        dep_val[self._axes_dep["x"]] = map_dep_pos["x"]
+        dep_val[self._axes_dep["y"]] = map_dep_pos["y"]
+
+        return dep_val
+
+    def _updateAxesRange(self):
+        """
+        Calculate the axes range of position VA from the given range of dep's.
+        """
+        # Calculate rectangular border points on the given range
+        min_x, max_x = self.axes["x"].range
+        min_y, max_y = self.axes["y"].range
+        coordinates = [[min_x, min_y],
+                       [min_x, max_y],
+                       [max_x, min_y],
+                       [max_x, max_y]]
+
+        # Calculate range based on the conversion
+        new_coordinates = list(map(self._convertPosFromdep, coordinates))
+
+        # Update default axes range
+        new_range = numpy.array(new_coordinates, dtype=float)
+        self.axes["x"].range = (min(new_range[:, 0]), max(new_range[:, 0]))
+        self.axes["y"].range = (min(new_range[:, 1]), max(new_range[:, 1]))
+
+
+class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
+    def __init__(self, microscope):
+        super().__init__(microscope)
+        # Check required metadata used during switching
+        self.required_keys.add(model.MD_POS_COR)
+        self.check_stage_metadata(required_keys=self.required_keys)
+        if not {"x", "y", "rz", "rx"}.issubset(self.stage.axes):
+            raise KeyError("The stage misses 'x', 'y', 'rx' or 'rz' axes")
+        stage_md = self.stage.getMetadata()
+        self.rotation = stage_md[model.MD_ROTATION_COR]  # pre-tilt of the shuttle
+        # Instantiate a class to convert stage axes such that the imaging plane in the new axes
+        # moves perpendicular to the objective axis by keeping a fixed distance
+        self.convert_stage = ConvertStage(self.stage, ["y", "z"], self.rotation)
+        # Enable the correction in SEM mode when switched from FM mode
+        self.sem_cor = False
+        self.sem_stage_pos_pre = None  # previous stage position in SEM before switching to FM
+        self.fav_pos_active = None
+        self.update_fav_pos_active()
+
+    def update_fav_pos_active(self):
+        """
+        In FM mode, observe the features on sample stage at a preferred plane defined by fav_pos_active
+        such that the sample plan in FM moves in a defined 2D plane
+        """
+        # calculate favorite position from the centre of grid 2
+        stage_md = self.stage.getMetadata()
+        sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
+        sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
+        end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
+        self.fav_pos_active = {"z": (end_pos["y"] * math.sin(self.rotation) +
+                                end_pos["z"] * math.cos(self.rotation))}
+
+    # Note: this transformation consists of translation of along x and y
+    # axes, and 7 degrees rotation around rx, and 180 degree rotation around rz.
+    # The rotation angles are constant existing in "FM_POS_ACTIVE" metadata,
+    # but the translation are calculated based on the current position and some
+    # correction/shifting parameters existing in metadata "FM_POS_ACTIVE".
+    # This correction parameters can change every session. They are calibrated
+    # at the beginning of each run.
+    def _transformFromSEMToMeteor(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the SEM imaging area to the
+        meteor/FM imaging area.
+        :param pos: (dict str->float) the initial stage position.
+        :return: (dict str->float) the transformed position.
+        """
+
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+        pos_cor = stage_md[model.MD_POS_COR]
+        fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
+
+        # check if the stage positions have rz axes
+        if not ("rz" in pos and "rz" in fm_pos_active):
+            raise ValueError(f"The stage position does not have rz axis pos={pos}, fm_pos_active={fm_pos_active}")
+
+        # whether we need to rotate around the z axis (180deg)
+        has_rz = not isNearPosition(pos, fm_pos_active, {"rz"},
+                                    atol_rotation=ATOL_ROTATION_TRANSFORM)
+
+        # NOTE:
+        # if we are rotating around the z axis (180deg), we need to flip the x and y axes
+        # if we are not rotating around the z axis, we we only need to translate the x and y axes
+        # For the rotation case: pos_cor calibration data is multipled by 2x due to historical reasons
+        # it is the radius of rotation -> we need the diameter, therefore 2x
+        # TODO: remove the 2x multiplication when the calibration data is updated
+        if has_rz:
+            transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
+            transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
+        else:
+            transformed_pos["x"] = pos["x"] + pos_cor[0]
+            transformed_pos["y"] = pos["y"] + pos_cor[1]
+
+        transformed_pos.update(fm_pos_active)
+
+        # In FM mode, observe the features on sample on a fixed imaging plane
+        transformed_pos_fav = self.convert_stage.get_dep_vector_fav_pos(transformed_pos, self.fav_pos_active)
+
+        if transformed_pos_fav is not None:
+            transformed_pos = transformed_pos_fav
+        # check if the transformed position is within the FM imaging range
+        if not isInRange(transformed_pos, stage_md[model.MD_FM_IMAGING_RANGE], {'x', 'y'}):
+            # only log warning, because transforms are used to get current position too
+            logging.warning(f"Transformed position {transformed_pos} is outside FM imaging range")
+
+        return transformed_pos
+
+    # Note: this transformation also consists of translation and rotation.
+    # The translation is along x and y axes. They are calculated based on
+    # the current position and correction parameters which are calibrated every session.
+    # The rotation angles are 180 degree around rz axis, and a rotation angle
+    # around rx axis which should also be calibrated at the beginning of the run.
+    # The rx angle is actually the same as the milling angle.
+    def _transformFromMeteorToSEM(self, pos: Dict[str, float]) -> Dict[str, float]:
+        """
+        Transforms the current stage position from the meteor/FM imaging area
+        to the SEM imaging area.
+        :param pos: (dict str->float) the initial stage position.
+        :return: (dict str->float) the transformed stage position.
+        """
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+        pos_cor = stage_md[model.MD_POS_COR]
+        sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
+
+        # check if the stage positions have rz axes
+        if not ("rz" in pos and "rz" in sem_pos_active):
+            raise ValueError(f"The stage position does not have rz axis. pos={pos}, sem_pos_active={sem_pos_active}")
+
+        # whether we need to rotate around the z axis (180deg)
+        has_rz = not isNearPosition(pos, sem_pos_active, {"rz"},
+                                    atol_rotation=ATOL_ROTATION_TRANSFORM)
+
+        # NOTE:
+        # if we are rotating around the z axis (180deg), we need to flip the x and y axes
+        # if we are not rotating around the z axis, we we only need to translate the x and y axes
+        # For the rotation case: pos_cor calibration data is multipled by 2x due to historical reasons
+        # it is the radius of rotation -> we need the diameter, therefore 2x
+        # TODO: remove the 2x multiplication when the calibration data is updated
+        if has_rz:
+            transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
+            transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
+        else:
+            transformed_pos["x"] = pos["x"] - pos_cor[0]
+            transformed_pos["y"] = pos["y"] - pos_cor[1]
+
+        transformed_pos.update(sem_pos_active)
+
+        # Due to the pre-tilt in the shuttle, the z axis is corrected
+        # for a change in y axis
+        # As from measurement in SEM, when y increases then raw z decreases
+        if self.sem_cor:
+            # TODO the sem corr does not work, Z correction is not needed as SEM has higher
+            # depth of field by y correction is required, which is not clear "how to" yet
+            if self.sem_stage_pos_pre is not None:
+                transformed_pos["z"] = (transformed_pos["z"] -
+                                        (transformed_pos["y"] - self.sem_stage_pos_pre["y"]) * math.tan(self.rotation))
+            else:
+                logging.warning(f"SEM position is not corrected when coming back from FM pos {pos}")
+
+        # check if the transformed position is within the SEM imaging range
+        if not isInRange(transformed_pos, stage_md[model.MD_SEM_IMAGING_RANGE], {'x', 'y'}):
+            # only log warning, because transforms are used to get current position too
+            logging.warning(f"Transformed position {transformed_pos} is outside SEM imaging range")
+
+        return transformed_pos
+
+    def _doCryoSwitchSamplePosition(self, future, target):
+        """
+        Do the actual switching procedure for cryoSwitchSamplePosition
+        :param future: cancellable future of the move
+        :param target: (int) target position either one of the constants: LOADING, SEM_IMAGING, FM_IMAGING.
+        """
+        try:
+            try:
+                target_name = POSITION_NAMES[target]
+            except KeyError:
+                raise ValueError(f"Unknown target '{target}'")
+
+            # Create axis->pos dict from target position given smaller number of axes
+            filter_dict = lambda keys, d: {key: d[key] for key in keys}
+
+            # get the meta data
+            focus_md = self.focus.getMetadata()
+            focus_deactive = focus_md[model.MD_FAV_POS_DEACTIVE]
+            focus_active = focus_md[model.MD_FAV_POS_ACTIVE]
+            # To hold the ordered sub moves list
+            sub_moves = []  # list of tuples (component, position)
+
+            # get the current label
+            current_label = self.getCurrentPostureLabel()
+            current_name = POSITION_NAMES[current_label]
+
+            if current_label == target:
+                logging.warning(f"Requested move to the same position as current: {target_name}")
+
+            # get the set point position
+            target_pos = self.getTargetPosition(target)
+
+            # If at some "weird" position, it's quite unsafe. We consider the targets
+            # LOADING and SEM_IMAGING safe to go. So if not going there, first pass
+            # by SEM_IMAGING and then go to the actual requested position.
+            if current_label == UNKNOWN:
+                logging.warning("Moving stage while current position is unknown.")
+                if target not in (LOADING, SEM_IMAGING):
+                    logging.debug("Moving first to SEM_IMAGING position")
+                    target_pos_sem = self.getTargetPosition(SEM_IMAGING)
+                    if not isNearPosition(self.focus.position.value, focus_deactive, self.focus.axes):
+                        sub_moves.append((self.focus, focus_deactive))
+                    sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos_sem)))
+                    sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos_sem)))
+
+            if target in (GRID_1, GRID_2):
+                # The current mode doesn't change. Only X/Y/Z should move (typically
+                # only X/Y). In the same mode, GRID 1/2, the rx/rz values should not change
+                # TODO: probably a better way would be to forbid grid switching if not in SEM/FM imaging posture
+                sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
+                sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
+            elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
+                # save rotation and tilt in SEM before switching to FM imaging
+                # to restore rotation and tilt while switching back from FM -> SEM
+                if current_label == SEM_IMAGING and target == FM_IMAGING:
+                    self.sem_stage_pos_pre = self.stage.position.value
                     current_value = self.stage.position.value
                     self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
                                                                              'rz': current_value['rz']}})
