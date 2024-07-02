@@ -7,7 +7,7 @@ SPARC2: {
                "Camera", "Dedicated Spectrometer", "Fiber align", "Spectral Camera",
                "Spec CCD Flipper", "Integrated Spectrometer",
                "Mirror Actuators", "Mirror Actuators in XY referential", "Slit",
-               "Lens1 Mover", "Lens2 Switch"],
+               "Lens1 Mover", "Lens2 Switch", "Calibration Light External"],
 }
 
 # Light (lamp with known spectrum)
@@ -18,6 +18,14 @@ SPARC2: {
     affects: ["Camera"],
 }
 
+# Light (an external light source)
+"Calibration Light External": {
+    class: light.Light,
+    role: "brightlight-ext",
+    power_supplier: "Power Control Unit",
+    affects: ["Spectral Camera", "Dedicated Spectrometer"],
+}
+
 "Power Control Unit": {
     class: powerctrl.PowerControlUnit,
     role: "power-control",
@@ -26,7 +34,7 @@ SPARC2: {
         port: "/dev/fake", # for simulator
         pin_map: {"Calibration Light": 0,
                   "Camera": 4, "Spectral Camera": 5, "Integrated Spectrograph": 6,
-                  "Optical Actuators": 2},
+                  "Optical Actuators": 2, "Calibration Light External": 7},
         delay: { # Time it takes before a component is accessible
             "Calibration Light": 0, # To turn on/off the light, it's immediate
             "Camera": 1,

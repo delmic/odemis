@@ -178,7 +178,9 @@ class TestSparc2AutoFocus(unittest.TestCase):
         cls.ccd = model.getComponent(role="ccd")
         cls.spccd = model.getComponent(role="sp-ccd")
         cls.focus = model.getComponent(role="focus")
+        cls.focus_ext = model.getComponent(role="spec-ded-focus")
         cls.bl = model.getComponent(role="brightlight")
+        cls.bl_ext = model.getComponent(role="brightlight-ext")
         cls.spgr = model.getComponent(role="spectrograph")
         cls.spgr_ded = model.getComponent(role="spectrograph-dedicated")
         cls.aligner = model.getComponent(role="fiber-aligner")
@@ -186,6 +188,11 @@ class TestSparc2AutoFocus(unittest.TestCase):
         cls.optmngr = path.OpticalPathManager(cls.microscope)
         cls.specline_ccd = stream.BrightfieldStream("Spectrograph_line_ccd", cls.ccd, cls.ccd.data, cls.bl)
         cls.specline_spccd = stream.BrightfieldStream("Spectrograph_line_spccd", cls.spccd, cls.spccd.data, cls.bl)
+        cls.specline_spccd_ext = stream.BrightfieldStream(
+            "Spectrograph_line_spccd_ext",
+            cls.spccd,
+            cls.spccd.data,
+            cls.bl_ext)
 
         # The good focus position is the start up position
         cls._good_focus = cls.focus.position.value["z"]
@@ -230,6 +237,30 @@ class TestSparc2AutoFocus(unittest.TestCase):
             self.assertAlmostEqual(fpos, self._good_focus, 3)
 
         self.assertEqual(len(res.keys()), len(self.spgr.axes["grating"].choices))
+
+    @timeout(1000)
+    def test_det_external(self):
+        """
+        Test the AutoFocus with an external spectrometer using a sp-ccd with a dedicated calibration light.
+        """
+        self.focus_ext.moveAbs({"z": self._good_focus - 200e-6}).result()
+
+        data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-off-slit-spccd-simple.ome.tiff"))
+        new_img = img.ensure2DImage(data[0])
+        self.spccd.set_image(new_img)
+
+        f = Sparc2AutoFocus("tunnel-lens-align", self.optmngr, [self.specline_spccd_ext], True)
+
+        data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-on-slit-spccd-simple.ome.tiff"))
+        new_img = img.ensure2DImage(data[0])
+        self.spccd.set_image(new_img)
+
+        res = f.result(timeout=1000)
+        for (g, d), fpos in res.items():
+            self.assertEqual(d.role, self.spccd.role)
+            self.assertAlmostEqual(fpos, self._good_focus, 3)
+
+        self.assertEqual(len(res.keys()), len(self.spgr_ded.axes["grating"].choices))
 
     @timeout(100)
     def test_cancel(self):

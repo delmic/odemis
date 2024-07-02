@@ -1,0 +1,439 @@
+# Configuration for a simulated SPARC v2 system with a free-space-laser tunnel (FSLT)
+SPARC2-FSLT-SIM: {
+    class: Microscope,
+    role: sparc2,
+}
+
+# Light (lamp with known spectrum)
+"Calibration Light": {
+    class: light.Light,
+    role: "brightlight",
+    power_supplier: "Power Control Unit",
+    affects: ["Camera", "Integrated Spectrometer"],
+}
+
+# Light (lamp with known spectrum)
+"Tunnel Calibration Light": {
+    class: light.Light,
+    role: brightlight-ext,
+    power_supplier: "Tunnel Power Control Unit",
+    affects: ["External Camera", "External Spectrometer"],
+}
+
+"Power Control Unit": {
+    class: powerctrl.PowerControlUnit,
+    role: "power-control",
+    init: {
+        port: "/dev/fake", # for simulator
+        pin_map: {
+            "Calibration Light": 0,
+            "Camera": 4,
+            "Spectrograph": 6,
+            "Optical Actuators": 2,
+        },
+        delay: { # Time it takes before a component is accessible
+            "Calibration Light": 0, # To turn on/off the light, it's immediate
+            "Camera": 1,
+            "Spectrograph": 3,
+            "Optical Actuators": 1,
+        },
+        init: { # Which component to power on from the very beginning (to save time)
+            "Camera": True,
+            "Spectrograph": True,
+            "Optical Actuators": True,
+        },
+        termination: { # Which component to power off (or on) at the end
+            "Calibration Light": False, # make sure it's turned off
+            "Spectrograph": False,
+        },
+    }
+}
+
+"Tunnel Power Control Unit": {
+    class: powerctrl.PowerControlUnit,
+    role: "power-control2",
+    init: {
+        port: "/dev/fake",
+        pin_map: {
+            "Tunnel Actuators": 4,
+            "Tunnel Calibration Light": 6,
+        },
+        delay: { # Time it takes before a component is accessible
+            "Tunnel Actuators": 1,
+            "Tunnel Calibration Light": 1, # To turn on/off the light, it's immediate
+        },
+        init: { # Which component to power on from the very beginning (to save time)
+            "Tunnel Actuators": True,
+            "Tunnel Calibration Light": False, # leave off at init, for extra safety regarding the streak camera
+        },
+        termination: { # Which component to power off when closing Odemis (otherwise they stay in the current state)
+            "Tunnel Calibration Light": False,
+        },
+        # List of EEPROM IDs (of the plates in bay1 and bay2) which are required to start properly
+        ids: [],
+    }
+}
+
+# Can simulate a SEM connected to a DAQ board by using the comedi_test driver:
+# sudo modprobe comedi comedi_num_legacy_minors=4
+# sudo modprobe comedi_test
+# sudo comedi_config /dev/comedi0 comedi_test 1000000,1000000
+"SEM Scan Interface": {
+    class: simsem.SimSEM,
+    role: null,
+    init: {
+           drift_period: 5, # s  (disable to get a the whole resolution of the image)
+           image: "sparc-etd-gold-balls.h5",
+    },
+    # more detectors can be added, if necessary
+    children: {
+       scanner: "SEM E-beam",
+       detector0: "SEM Detector",
+    }
+}
+
+"SEM E-beam": {
+    # Internal child of SimSEM, so no class
+    role: e-beam,
+    init: {},
+    properties: {
+        dwellTime: 10.e-6, # s
+    },
+    affects: ["SEM Detector", "Integrated Spectrometer", "Camera"] # affects the CCD in case of cathodoluminescence
+}
+
+"SEM Detector": { # aka ETD
+    # Internal child of SimSEM, so no class
+    role: se-detector,
+    init: {},
+}
+
+# Depending exactly on the configuration, it might also be used for spectrometer
+"Camera": {
+    class: andorcam2.AndorCam2,
+    role: ccd,
+    power_supplier: "Power Control Unit",
+    init: {
+      device: "fake",
+      image: "sparc-ar.h5", # only for simulator
+      transp: [1, -2],
+    },
+}
+
+# Spectrometer = Andor Zyla + Shamrock SR193 (connected via USB)
+"Integrated Spectrometer": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer-integrated,
+    dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [-1, 2], # only applied to the spectrometer data (not raw CCD)
+    },
+}
+
+# On some configuration, there is a dedicated camera for the acquisition of the
+# spectra, otherwise 'Camera' is used.
+"External Camera": {
+    class: andorcam2.AndorCam2,
+    role: sp-ccd,
+    # power_supplier: null,
+    init: {
+        device: "fake",
+        transp: [-1, 2], # if mirrored on X axis
+        image: "sparc-spec-sim.h5", # only for simulator
+    },
+    properties: {
+        targetTemperature: -60, # °C
+    },
+}
+
+"External Spectrometer": {
+    class: spectrometer.CompositedSpectrometer,
+    role: spectrometer-external,
+    dependencies: {detector: "Camera", spectrograph: "Spectrograph"},
+    init: {
+        transp: [1, -2], # only applied to the spectrometer data (not raw CCD)
+    },
+}
+
+"Spectrograph": {
+    class: andorshrk.Shamrock,
+    role: spectrograph,
+    power_supplier: "Power Control Unit",
+    init: {
+        device: "fake",
+        slits: {1: "slit-in", # INPUT_SIDE
+        },
+        bands: { # The filters in the filter-wheel
+            1: [320.e-9, 400.e-9], # pos -> m,m
+            2: [500.e-9, 550.e-9],
+            3: [400.e-9, 450.e-9],
+            6: "pass-through"
+        },
+        fstepsize: 10.9e-6, # m, size of one focus step
+    },
+    affects: ["Camera", "Integrated Spectrometer"],
+}
+
+"Spectrograph focus": {
+    class: actuator.MultiplexActuator,
+    role: "focus",
+    dependencies: {"z": "Spectrograph"},
+    init: {
+        axes_map: {"z": "focus"},
+    },
+    affects: ["Camera", "Integrated Spectrometer", "External Camera", "External Spectrometer"],
+}
+
+# Provide the filter wheel of the spectrograph as a separate component
+"Spec Filter Wheel": {
+    class: actuator.MultiplexActuator,
+    role: filter,
+    dependencies: {"band": "Spectrograph"},
+    init: {
+        axes_map: {"band": "band"},
+    },
+    affects: ["Camera", "Integrated Spectrometer"],
+}
+
+"Optical Path Properties": {
+    class: static.OpticalLens,
+    role: lens,
+    # Standard mirror config
+    init: {
+       mag: 0.31, # ratio
+       na: 0.2, # ratio, numerical aperture
+       ri: 1.0, # ratio, refractive index
+       pole_pos: [458, 519], # (px, px), position of the pole (aka the hole in the mirror)
+       x_max: 13.25e-3,  # m, the distance between the parabola origin and the cutoff position
+       hole_diam: 0.6e-3,  # m, diameter the hole in the mirror
+       focus_dist: 0.5e-3,  # m, the vertical mirror cutoff, iow the min distance between the mirror and the sample
+       parabola_f: 2.5e-3,  # m, parabola_parameter=1/4f
+       rotation: -1.570796326795, # rad, 90° rotation between optical axis and SEM Y axis
+    },
+    affects: ["Camera", "Integrated Spectrometer"],
+}
+
+# Controller for the motors moving the various parts of the optical box with a free space laser module
+# DIP must be configured with address 2 (= 0100000)
+"Optical Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    power_supplier: "Power Control Unit",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        axes: ["spec-sel", null, "l1", "l2", "slit"],
+        # [m/µstep, , m/µstep, m/µstep, m/µstep] The values are special for the simulator
+        ustepsize: [25.1e-9, null, 25.1e-9, 25.1e-9, 5.e-7],
+        rng: [[-1.e-3, 100.e-3], null, [-1.e-3, 100.e-3], [-1.e-3, 100.e-3], [-1.e-3, 2.e-3]],
+        unit: ["m", null, "m", "m", "m"],
+        refproc: "Standard",
+        refswitch: {"spec-sel": 0, "l1": 4, "l2": 4},
+        inverted: ["l2"],
+        # +spec-sel should move towards the back
+    },
+}
+
+# The first lens of Plate 1, able to move along the whole range
+"Lens1 Mover": {
+    class: actuator.MultiplexActuator,
+    role: "lens-mover",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "l1"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": 0.0045} # m
+    },
+    affects: ["Lens2 Switch"],
+}
+
+# The second lens of Plate 1, either to working or parking position
+"Lens2 Switch": {
+    class: actuator.MultiplexActuator,
+    role: "lens-switch",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "l2"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Position away
+        FAV_POS_DEACTIVE: {"x": 0.0}, # m
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"x": -0.00509299496}, # m
+        POS_ACTIVE_RANGE: {"x": [-1.e-3, 1.e-3]},  # relative min/max from the active position when doing EK-scanning
+    },
+    affects: ["Camera", "Integrated Spectrometer"],
+}
+
+# Controller for moving the 'stagebox' stage
+# DIP must be configured with address 4 (= 0010000)
+"Mirror Actuators": {
+    class: tmcm.TMCLController,
+    role: "mirror",
+    init: {
+#        port: "/dev/ttyTMCM*",
+#        address: 4,
+        port: "/dev/fake6",
+        address: null,        
+        # For the TMCM-6110:
+        axes: ["l", "s"],
+#        ustepsize: [5.9e-9, 5.9e-9], # m/µstep
+        ustepsize: [1.e-6, 1.e-6], # m/µstep (big, for the simulator to move fast)
+        # TODO: limit the range to the pole-piece
+        rng: [[0, 250.e-3], [-2.0e-3, 2.0e-3]],  # m, min/max
+        refproc: "Standard",
+        refswitch: {"s": 0, "l": 0},
+    },
+    metadata: {
+        # Default position of the mirror engaged (will be improved during alignment)
+        # TODO: to be calibrated
+        FAV_POS_ACTIVE: {"l": 0.049, "s": 0.0020},  # m, m
+        #AXES_ORDER_REF: ["s", "l"],
+    },
+#    persistent: {
+#        metadata: [FAV_POS_ACTIVE],
+#    },
+}
+
+# Spectrograph on a separate table, kymera 328i
+"External Spectrograph": {
+    class: andorshrk.Shamrock,
+    role: spectrograph-dedicated,
+    init: {
+        device: "fake",
+        slits: {1: "slit-in", # INPUT_SIDE
+        },
+        bands: { # The filters in the filter-wheel
+            1: "pass-through",
+            2: [780.e-9, 820.e-9], # pos -> m,m
+            3: [530.e-9, 570.e-9],
+            4: [580.e-9, 620.e-9],
+            5: [630.e-9, 670.e-9],
+            6: [430.e-9, 470.e-9],
+        },
+        fstepsize: 30.e-6, # m, size of one focus step
+    },
+    affects: ["External Camera", "External Spectrometer"], 
+}
+
+"Ext Spectrograph focus": {
+    class: actuator.MultiplexActuator,
+    role: spec-ded-focus,
+    dependencies: {"z": "External Spectrograph"},
+    init: {
+        axes_map: {"z": "focus"},
+    },
+    affects: ["External Camera", "External Spectrometer"], 
+}
+
+# Provide the mirror (aka port selector) of the spectrograph as a separate component
+"Ext Spec CCD Flipper": {
+    class: actuator.FixedPositionsActuator,
+    role: spec-ded-det-selector,
+    dependencies: {"rx": "External Spectrograph"},
+    init: {
+        axis_name: "flip-out",
+        positions: {
+            0: ["Spec Camera 2", "Ext Spectrometer 2"],
+            1.5707963267948966: ["Spec Camera 3", "Ext Spectrometer 3"],
+        },
+    },
+    affects: ["Spec Camera 2", "Ext Spectrometer 2", "Spec Camera 3", "Ext Spectrometer 3"],
+}
+
+# Control the slit position to either fully-open or small (dependent on the spectrometer slit-in)
+"Slit": {
+    class: actuator.FixedPositionsActuator,
+    role: "slit-in-big",
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axis_name: "slit",
+        positions: {
+            0: "on", # fully opened
+            0.0012: "off", # opening based on the small slit
+        },
+    },
+    affects: ["Camera", "Integrated Spectrometer", "External Camera", "External Spectrometer"],
+}
+
+# Tilt Mirror in bay 1, selects between ATM (internal spectrograph) and FSLT (external spectrograph)
+"Spectrometer Selector": {
+    class: actuator.MultiplexActuator,
+    role: spec-selector,
+    dependencies: {"x": "Optical Actuators"},
+    init: {
+        axes_map: {"x": "spec-sel"},
+        ref_on_init: ["x"],
+    },
+    metadata: {
+        # Position of the mirror to select the external spectrometer
+        # TODO calibrate
+        FAV_POS_ACTIVE: {"x": 0.011008835}, # m
+        FAV_POS_ACTIVE_DEST: ["Tunnel Lens Aligner"],
+        FAV_POS_DEACTIVE: {"x": 0.035419}, # m
+        FAV_POS_DEACTIVE_DEST: ["Lens1 Mover"],
+    },
+    affects: ["Lens1 Mover", "Tunnel Lens Aligner"],
+}
+
+# ================================================================================================= #
+#  SPARC FSLT specific components
+# ================================================================================================= #
+
+# Controller for the motor moving the Z axis of the lens (and possibly other axes in the free space light tunnel)
+# DIP must be configured with address 3 (= 11000000)
+"Tunnel Actuators": {
+    class: tmcm.TMCLController,
+    role: null,
+    power_supplier: "Tunnel Power Control Unit",
+    init: {
+        port: "/dev/fake6",
+        address: null,
+        #param_file: "/usr/share/odemis/sparc2-atm-tmcm6110-tunnel.tmcm.tsv",
+        axes: ["z"],
+        ustepsize: [25.1e-9], # [m/µstep] The values are special for the simulator
+        rng: [[0, 60.e-3]],
+        unit: ["m",],
+        refproc: "Standard",
+        refswitch: {"z": 0},
+        inverted: [],
+        # +z should move towards the back
+    },
+}
+
+# New Focus 8742, configured to use network connection with DCHP
+# X axis as motor 1
+# Y axis as motor 2
+"Tunnel Stage": {
+    class: nfpm.PM8742,
+    role: null,
+    init: {
+        address: "fake", # put the IP address if static IP is used, or "autoip"
+        sn: "11511",
+        # X/Y are wrt light path (from the sample to the detector)
+        axes: ["x", "y"],
+        # inverted: ["y",],
+        stepsize: [33.e-9, 33.e-9] # m/step
+    },
+}
+
+# Composite component that contains all the axes for moving the alignment lens
+"Tunnel Lens Aligner": {
+    class: actuator.MultiplexActuator,
+    role: spec-ded-aligner,
+    dependencies: {"x": "Tunnel Stage", "y": "Tunnel Stage", "z": "Tunnel Actuators"},
+    init: {
+        axes_map: {"x": "x", "y": "y", "z": "z"},
+        ref_on_init: ["z"],  # x & y axes have no reference position
+    },
+    metadata: {
+        # Default position of the lens (can be improved by user)
+        FAV_POS_ACTIVE: {"z": 0.0509299496}, # m
+    },
+    affects: ["External Camera", "External Spectrometer", "Streak Readout CCD"],
+}
+

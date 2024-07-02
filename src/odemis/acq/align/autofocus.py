@@ -572,6 +572,8 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
     focuser = None
     if align_mode == "spec-focus":
         focuser = model.getComponent(role='focus')
+    elif align_mode == "tunnel-lens-align":
+        focuser = model.getComponent(role='spec-ded-focus')
     elif align_mode == "spec-fiber-focus":
         # The "right" focuser is the one which affects the same detectors as the fiber-aligner
         aligner = model.getComponent(role='fiber-aligner')
@@ -786,7 +788,14 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
             raise CancelledError()
 
         logging.debug("Turning on the light")
-        bl = model.getComponent(role="brightlight")
+        if align_mode == "tunnel-lens-align":
+            try:
+                bl = model.getComponent(role="brightlight-ext")
+            except KeyError:
+                logging.error("No light component found with role brightlight-ext")
+        else:
+            bl = model.getComponent(role="brightlight")
+
         _playStream(dets[0], streams)
         future._running_subf = light.turnOnLight(bl, dets[0])
         try:
@@ -834,6 +843,11 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
         ret = {}
         logging.debug("Running AutoFocusSpectrometer on %s, using %s, for the detectors %s, and using selector %s",
                       spgr, focuser, dets, selector)
+        # make sure the slit-in position is at the minimum when using an external spectrograph
+        if spgr.role == 'spectrograph-dedicated':
+            if spgr.position.value["slit-in"] != spgr.axes["slit-in"].range[0]:
+                spgr.moveAbsSync({"slit-in": spgr.axes["slit-in"].range[0]})
+
         try:
             future._running_subf = AutoFocusSpectrometer(spgr, focuser, dets, selector, streams)
             et = future._actions_time.pop(0)
