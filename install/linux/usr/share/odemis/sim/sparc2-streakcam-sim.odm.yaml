@@ -152,6 +152,18 @@ SPARC2: {
     },
 }
 
+"E-beam blanker pulse generator": {
+    role: ebeam-blanker,
+    class: keysight.TrueForm,
+    init: {
+        address: "fake",  # "fake" (to start the simulator) or an IP address
+        channel: 1,
+        limits: [[-4.0, 4.0], [-5.0, 5.0]],  # min/max (in V)
+        tracking: {2: "INV"},
+    },
+    affects: ["SEM E-beam", "Streak Readout CCD"],
+}
+
 # simple simulated streak camera
 "Streak Camera": {
     class: simstreakcam.StreakCamera,
@@ -454,16 +466,4 @@ SPARC2: {
         # Note: if you want to use absolute moves, add a "translation" too
     },
 }
-
-"UFBB": {
-  role: blanker,
-  class: keysight.TrueForm,
-  init: {
-      address: "192.168.5.11",  # "fake" (to start the simulator) or an IP address
-      channel: 1,
-      limits: [[-4.0, 4.0], [5.0, -5.0]],  # min/max (in V)
-      tracking: {2: "INV"},
-  }
-}
-
 

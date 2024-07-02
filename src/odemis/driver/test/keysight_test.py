@@ -43,7 +43,7 @@ CONFIG_AWG = {
     "address": "192.168.5.11",
     "channel": 1,
     "tracking": {2: "INV"},
-    "limits": [[-4.0, 4.0], [5.0, -5.0]],
+    "limits": [[-4.0, 4.0], [-5.0, 5.0]],
 }
 
 # arguments used for the creation of basic components
@@ -67,7 +67,6 @@ class TestKeysight(unittest.TestCase):
         """
         Test duty cycle
         """
-        old_val = self.dev.dutyCycle.value
         self.dev.dutyCycle.value = 0.68
         self.assertEqual(self.dev.dutyCycle.value, 0.68)
         self.dev.dutyCycle.value = 0.32
@@ -75,24 +74,28 @@ class TestKeysight(unittest.TestCase):
 
         with self.assertRaises(IndexError):
             self.dev.dutyCycle.value = 0.95
+        # The device clips the value, so the driver should update the VA accordingly
+        self.assertNotEqual(self.dev.dutyCycle.value, 0.32)
+
         with self.assertRaises(IndexError):
             self.dev.dutyCycle.value = 0.15
 
-        self.dev.dutyCycle.value = old_val
-
     def test_period(self):
         """
-        Test period setting which is 1/frequency
+        Test period setting (that is 1 / frequency)
         """
-        logging.debug("Test period(frequency) setting")
-
         self.assertNotEqual(self.dev.period.value, 0)
 
         old_val = self.dev.period.value
         self.dev.period.value = 1e-4
-        self.assertEqual(self.dev.period.value, 1e-4)
+        self.assertAlmostEqual(self.dev.period.value, 1e-4)
         self.dev.period.value = 25e-7
-        self.assertEqual(self.dev.period.value, 25e-7)
+        time.sleep(5)  # Wait sufficiently long for the settings to be updated
+        self.assertAlmostEqual(self.dev.period.value, 25e-7)
+
+        # Check non "round" frequency values
+        self.dev.period.value = 25.5e-9  # Freq: 3.92156862745098e7
+        self.assertAlmostEqual(self.dev.period.value, 25.5e-9)
 
         with self.assertRaises(IndexError):
             self.dev.period.value = 1e7
@@ -107,15 +110,21 @@ class TestKeysight(unittest.TestCase):
         """
         self.dev.period.value = 1e-4
         self.dev.delay.value = 1e-5
-        self.assertEqual(self.dev.delay.value, 1e-5)
+        self.assertAlmostEqual(self.dev.delay.value, 1e-5)
         self.dev.delay.value = 1e-6
-        self.assertEqual(self.dev.delay.value, 1e-6)
+        self.assertAlmostEqual(self.dev.delay.value, 1e-6)
+        self.dev.delay.value = -1e-6
+        self.assertAlmostEqual(self.dev.delay.value, -1e-6)
 
+        # Raise IndexError if it's out of range
         with self.assertRaises(IndexError):
             self.dev.delay.value = self.dev.delay.range[1] + 1
         with self.assertRaises(IndexError):
-            self.dev.delay.value = -1
+            self.dev.delay.value = self.dev.delay.range[0] - 1
 
+        # It should raise ValueError if it's within range... but not within the period
+        with self.assertRaises(ValueError):
+            self.dev.delay.value = -1
         with self.assertRaises(ValueError):
             self.dev.delay.value = self.dev.period.value + 1e-6
 
