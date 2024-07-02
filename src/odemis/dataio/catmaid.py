@@ -26,7 +26,7 @@ import math
 import numpy
 import re
 import requests
-from future.moves.urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs
 
 from PIL import Image
 from io import BytesIO
