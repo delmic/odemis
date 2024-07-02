@@ -167,6 +167,11 @@ class SparcAlignTab(Tab):
 
         tab_data.align_mode.subscribe(self._onAlignMode)
 
+        # Hide the fiber aligner panel if no hardware present (although the "fiber-align" mode may
+        # still be there, as it might be a manual fiber aligner)
+        showfib = ("fibaligner", "x") in tab_data.axes
+        panel.pnl_fibaligner.Show(showfib)
+
         self._actuator_controller = ActuatorController(tab_data, panel, "mirror_align_")
 
         # Bind keys
