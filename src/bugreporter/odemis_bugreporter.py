@@ -28,7 +28,7 @@ from concurrent.futures import Future
 import configparser
 import csv
 from datetime import datetime
-from future.moves.urllib.request import Request, urlopen
+from urllib.request import Request, urlopen
 from glob import glob
 import json
 import logging

@@ -26,8 +26,8 @@ import os
 import pkg_resources
 import subprocess
 import tempfile
-from future.moves.urllib.request import Request, urlopen
-from future.moves.urllib.error import HTTPError
+from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 import wx
 
 

@@ -19,19 +19,21 @@ You should have received a copy of the GNU General Public License along with Ode
 see http://www.gnu.org/licenses/.
 
 """
-
-from functools import partial
-from abc import ABCMeta, abstractmethod, abstractproperty
 import glob
-import imp
+import importlib.util
 import inspect
 import logging
+import os
+import threading
+from abc import ABCMeta, abstractmethod, abstractproperty
+from functools import partial
 from typing import Callable
 
-from odemis import util, gui
+import wx
 from wx.lib.agw.infobar import AutoWrapStaticText
 
 import odemis
+from odemis import util, gui
 from odemis.gui import FG_COLOUR_ERROR, FG_COLOUR_WARNING, FG_COLOUR_MAIN
 from odemis.gui.comp.buttons import ImageTextButton
 from odemis.gui.cont.settings import SettingsController
@@ -40,10 +42,7 @@ from odemis.gui.main_xrc import xrcfr_plugin
 from odemis.gui.model import MicroscopeView, MicroscopyGUIData, StreamView
 from odemis.gui.util import call_in_wx_main, get_home_folder
 from odemis.gui.util.widgets import ProgressiveFutureConnector
-from odemis.model import VigilantAttribute, getVAs
-import os
-import threading
-import wx
+from odemis.model import getVAs
 from odemis.util import inspect_getmembers
 
 
@@ -106,12 +105,16 @@ def load_plugin(filename, microscope, main_app):
         # eg: aab.py -> odemis.gui.plugin.aab
         dirn, bsn = os.path.split(filename)
         mn, ext = os.path.splitext(bsn)
-        if ext == ".pyc":
-            pm = imp.load_compiled(__name__ + "." + mn, filename)
-        elif ext == ".py":
-            pm = imp.load_source(__name__ + "." + mn, filename)
-        else:
+        module_name = __name__ + "." + mn
+        if ext not in (".py", ".pyc"):
             raise ValueError("Unsupported extension '%s'" % (ext,))
+
+        # Create a module specification
+        spec = importlib.util.spec_from_file_location(module_name, filename)
+        # Create a module object (empty)
+        pm = importlib.util.module_from_spec(spec)
+        # Actually read the file and load (= execute) the module
+        spec.loader.exec_module(pm)
     except Exception:
         logging.info("Skipping script %s, which failed to load", filename, exc_info=True)
         return ret
