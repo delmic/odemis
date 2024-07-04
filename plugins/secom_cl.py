@@ -538,7 +538,7 @@ class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
         """
         :param streams: ([Stream]) The streams to acquire.
         """
-        super(SECOMCLSEMMDStream, self).__init__(name, streams)
+        super().__init__(name, streams)
 
         self.filename = model.StringVA("a.tiff")
         self.firstOptImg = None  # save the first optical image for display in analysis tab
@@ -552,7 +552,7 @@ class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
         """
         self.ccd_roi = sem_roi_to_ccd(self._emitter, self._ccd, self.roi.value, self._sccd.roi_margin.value)
 
-        return super(SECOMCLSEMMDStream, self)._runAcquisition(future)
+        return super()._runAcquisition(future)
 
     def _preprocessData(self, n, data, i):
         """
@@ -564,7 +564,7 @@ class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
         :returns: (value) The value as needed by _assembleFinalData.
         """
         if n != self._ccd_idx:
-            return super(SECOMCLSEMMDStream, self)._preprocessData(n, data, i)
+            return super()._preprocessData(n, data, i)
 
         ccd_roi = self.ccd_roi
         data = data[ccd_roi[1]: ccd_roi[3] + 1, ccd_roi[0]: ccd_roi[2] + 1]  # crop
@@ -596,9 +596,9 @@ class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
         # Return something, but not the data to avoid data being cached.
         return model.DataArray(numpy.array([0]))
 
-    def _assembleLiveData(self, n, raw_data, px_idx, rep, pol_idx):
+    def _assembleLiveData(self, n, raw_data, px_idx, px_pos, rep, pol_idx=0):
         if n != self._ccd_idx:
-            return super(SECOMCLSEMMDStream, self)._assembleLiveData(n, raw_data, px_idx, rep, pol_idx)
+            return super()._assembleLiveData(n, raw_data, px_idx, px_pos, rep, pol_idx)
 
         # For other streams (CL) don't do a live update
         return
@@ -610,7 +610,7 @@ class SECOMCLSEMMDStream(acqstream.SEMCCDMDStream):
         :param raw_das: (list) List of data acquired for given detector n.
         """
         if n != self._ccd_idx:
-            super(SECOMCLSEMMDStream, self)._assembleFinalData(n, data)
+            super()._assembleFinalData(n, data)
 
         # For other streams (CL) don't do anything
         return
@@ -685,7 +685,7 @@ class CLAcqPlugin(Plugin):
     spots on the sample along a grid. Can also be used as a plugin.
     """
     name = "CL acquisition for SECOM"
-    __version__ = "2.0"
+    __version__ = "2.1"
     __author__ = u"Éric Piel, Lennard Voortman, Sabrina Rossberger"
     __license__ = "Public domain"
 
