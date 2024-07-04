@@ -352,6 +352,18 @@ class MetadataUpdater(model.Component):
         def updateOutWLRange(pos, fl=filter, comp_affected=comp_affected):
             wl_out = fl.axes["band"].choices[pos["band"]]
             comp_affected.updateMetadata({model.MD_OUT_WL: wl_out})
+            # apply lateral chromatic correction to align with the reference channel
+            apply_transform = fl.getMetadata().get(model.MD_TRANSFORM_PER_CHANNEL, None)
+            if apply_transform is not None:
+                if fl.position.value["band"] in apply_transform.keys():
+                    comp_affected.updateMetadata(
+                        {model.MD_PIXEL_SIZE_COR: apply_transform[fl.position.value["band"]][model.MD_PIXEL_SIZE_COR]})
+                    comp_affected.updateMetadata(
+                        {model.MD_POS_COR: apply_transform[fl.position.value["band"]][model.MD_POS_COR]})
+                    comp_affected.updateMetadata(
+                        {model.MD_ROTATION_COR: apply_transform[fl.position.value["band"]][model.MD_ROTATION_COR]})
+                    comp_affected.updateMetadata(
+                        {model.MD_SHEAR_COR: apply_transform[fl.position.value["band"]][model.MD_SHEAR_COR]})
 
         filter.position.subscribe(updateOutWLRange, init=True)
         self._onTerminate.append((filter.position.unsubscribe, (updateOutWLRange,)))
