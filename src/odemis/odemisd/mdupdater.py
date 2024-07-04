@@ -355,6 +355,21 @@ class MetadataUpdater(model.Component):
         def updateOutWLRange(pos, fl=filter, comp_affected=comp_affected):
             wl_out = fl.axes["band"].choices[pos["band"]]
             comp_affected.updateMetadata({model.MD_OUT_WL: wl_out})
+            # apply lateral chromatic correction to align with the reference channel
+            apply_transform = fl.getMetadata().get(model.MD_CHROMATIC_COR, None)
+            if apply_transform:
+                try:
+                    metadata_cor = apply_transform[fl.position.value["band"]]
+                    assert isinstance(metadata_cor, dict), "Expected a dictionary format"
+                    assert all(
+                        isinstance(key, str) for key in metadata_cor), "All keys should be strings"
+                    comp_affected.updateMetadata(metadata_cor)
+                except (AssertionError, KeyError) as exp:
+                    # Check if CHROMATIC_COR is a dictionary with filter band positions as keys and correction metadata
+                    # dictionary as values. For e.g. correction metadata dictionary for a given band position has
+                    # the following format:
+                    # {"Pixel size cor": [1, 1], "Centre position cor": [0, 0] , "Rotation cor": 0 , "Shear cor": 1}
+                    logging.error("Chromatic correction metadata was not updated due to %s", exp)
 
         filter.position.subscribe(updateOutWLRange, init=True)
         self._onTerminate.append((filter.position.unsubscribe, (updateOutWLRange,)))
