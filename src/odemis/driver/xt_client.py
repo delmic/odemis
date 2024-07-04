@@ -2235,8 +2235,18 @@ class Stage(model.Actuator):
                     pos["t"] = pos.pop("rx")
                 if "rz" in pos.keys():
                     pos["r"] = pos.pop("rz")
+
                 self.parent.move_stage(pos, rel=rel)
-                time.sleep(0.1)  # It takes a little while before the stage is being reported as moving
+                time.sleep(100e-3)  # It takes a little while before the stage is being reported as moving
+
+                orig_pos_raw = self.parent.get_stage_position()
+                # Drop axes from the original position, which are not important because they will not move
+                orig_pos_raw = {a: orig_pos_raw[a] for a, nv in pos.items()}
+                target_pos = {}  # target position in abs to reach
+                if not rel:
+                    target_pos = pos
+                else:
+                    target_pos = {a: op + orig_pos_raw[a] for a, op in pos.items()}
 
                 # Wait until the move is over.
                 # Don't check for future._must_stop because anyway the stage will
@@ -2248,7 +2258,7 @@ class Stage(model.Actuator):
                 while moving:
                     # Take the opportunity to update .position (every 100 ms)
                     now = time.time()
-                    if now - last_pos_update > 0.1:
+                    if now - last_pos_update > 100e-3:
                         self._updatePosition()
                         last_pos_update = now
 
@@ -2271,6 +2281,55 @@ class Stage(model.Actuator):
                         moving = self.parent.stage_is_moving()
                         if moving:
                             logging.warning("Stage reported stopped but moving again, will wait longer")
+                            continue
+
+                    # The stage is not moving anymore, but we still want to wait until the position has been updated
+                    check_pos = True
+                    # check for rotation and tilt is not included as it was not tested on the hardware
+                    # do not check update if angular movements are present
+                    if 'r' in pos or 't' in pos:
+                        logging.debug("Position includes rx or rz. Breaking out of the loop.")
+                        check_pos = False
+                    else:
+                        # only linear movements are requested, estimate time taken by stage
+                        # TODO check the linear speed, default to 2 (copied from move_to_pos in zeiss.py)
+                        pass
+                        # dur_lin = max(
+                        #     numpy.sqrt((pos - orig_pos_raw) ** 2)) / 2
+                        # # give enough time for the stage to update its position
+                        # timeout_update = dur_lin*10
+                    timeout_update = 10  # keep it to 10 seconds till the linear speed of stage is verified
+                    time_check = time.time()
+                    while check_pos:
+                        if time.time() > timeout_update + time_check:
+                            logging.warning(
+                                "Stage position after move + %s s is still not properly updated from original pos: "
+                                "%s. Giving up waiting", timeout_update, orig_pos_raw)
+
+                        moving = self.parent.stage_is_moving()
+                        if moving:
+                            logging.warning("Stage reported stopped but moving again, will wait longer")
+                            time.sleep(20e-3)
+                            continue
+
+                        pos_raw = self.parent.get_stage_position()
+                        # Every axis requested to move should have moved (compared to the position before starting)
+                        if all(pos_raw[a] != op for a, op in orig_pos_raw.items()):
+                            all_axes_updated = True
+
+                            # For x, y, and z, be extra picky and wait until they are "almost" at the target
+                            for k in ["x", "y", "z"]:
+                                if k in pos:
+                                    if abs(pos_raw[k] - target_pos[k]) >= 1e-6:
+                                        all_axes_updated = False
+                                        break
+
+                            if all_axes_updated:
+                                logging.debug("Position has updated fully: from %s -> %s", orig_pos_raw, pos_raw)
+                                check_pos = False
+                            else:
+                                time.sleep(20e-3)
+
                 else:
                     logging.debug("Stage move completed")
 
@@ -2279,6 +2338,7 @@ class Stage(model.Actuator):
                 # know the user that the move is not complete.
                 if future._must_stop.is_set():
                     raise CancelledError()
+
             except Exception:
                 if future._must_stop.is_set():
                     raise CancelledError()
