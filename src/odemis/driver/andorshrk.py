@@ -395,6 +395,8 @@ class Shamrock(model.Actuator):
         else:
             self._dll = ShamrockDLL()
 
+        self._removeNonImplementedFunctions()
+
         # Note: it used to need a "ccd" dependency, but not anymore
         self._camera = camera
         self._hw_access = HwAccessMgr(camera)
@@ -640,10 +642,20 @@ class Shamrock(model.Actuator):
             model.Actuator.__init__(self, name, role, axes=axes, **kwargs)
 
             # set HW and SW version
-            self._swVersion = "%s" % (odemis.__version__,)
+            try:
+                fw_ver = ", firmware " + self.GetFirmwareVersion()
+            except AttributeError:
+                fw_ver = ""
+            self._swVersion = "Odemis %s%s" % (odemis.__version__, fw_ver)
+
             sn = self.GetSerialNumber()
-            self._hwVersion = ("%s (s/n: %s, focal length: %d mm)" %
-                               ("Andor Shamrock", sn, round(fl * 1000)))
+            try:
+                model_id = " " + self.GetSystemModel()
+            except AttributeError:
+                model_id = ""
+
+            self._hwVersion = ("%s%s (s/n: %s, focal length: %d mm)" %
+                               ("Andor Shamrock", model_id, sn, round(fl * 1000)))
 
             # will take care of executing axis move asynchronously
             self._executor = CancellableThreadPoolExecutor(max_workers=1) # one task at a time
@@ -659,6 +671,19 @@ class Shamrock(model.Actuator):
             if not self._is_dll_shared:
                 self.Close()
             raise
+
+    def _removeNonImplementedFunctions(self):
+        """
+        Remove the methods corresponding to functions which are not implemented on the current version
+        of the SDK.
+        """
+        # Functions only since SDK 2.104.30132
+        for f in ("GetSystemModel", "GetFirmwareVersion", "ChangeTurret", "ReadTurretRFID"):
+            if not hasattr(self._dll, "ATSpectrograph" + f):
+                logging.debug("Removing %s, which is not available on the current SDK", f)
+                # It can be removed from the class because all the instances at a given time will use
+                # the same SDK version.
+                delattr(Shamrock, f)
 
     def _setProtection(self, value):
         """
@@ -793,14 +818,36 @@ class Shamrock(model.Actuator):
         return nodevices.value
 
     @callWithReconnect
-    def GetSerialNumber(self):
+    def GetSerialNumber(self) -> str:
         """
-        Returns the device serial number
+        :return: the device serial number
         """
         serial = create_string_buffer(64) # hopefully always fit! (normally 6 bytes)
         with self._hw_access:
             self._dll.ShamrockGetSerialNumber(self._device, serial)
         return serial.value.decode('latin1')
+
+    # Only since SDK 2.104.30132 (will be removed automatically if not available)
+    @callWithReconnect
+    def GetSystemModel(self) -> str:
+        """
+        :return: the device model name (eg "KY328i-D2")
+        """
+        model_name = create_string_buffer(64)  # hopefully always fit!
+        with self._hw_access:
+            self._dll.ATSpectrographGetSystemModel(self._device, model_name)
+        return model_name.value.decode('latin1')
+
+    # Only since SDK 2.104.30132 (will be removed automatically if not available)
+    @callWithReconnect
+    def GetFirmwareVersion(self) -> str:
+        """
+        :return: the device firmware version (eg, "V2.0.124")
+        """
+        fw_ver = create_string_buffer(64)  # hopefully always fit!
+        with self._hw_access:
+            self._dll.ATSpectrographGetFirmwareVersion(self._device, fw_ver)
+        return fw_ver.value.decode('latin1')
 
     # Probably not needed, as ShamrockGetCalibration returns everything already
     # computed
@@ -818,6 +865,31 @@ class Shamrock(model.Actuator):
                  byref(FocalLength), byref(AngularDeviation), byref(FocalTilt))
 
         return FocalLength.value, math.radians(AngularDeviation.value), math.radians(FocalTilt.value)
+
+    # Only since SDK 2.104.30132 (will be removed automatically if not available)
+    def ChangeTurret(self):
+        """
+        Requests the turret to move to a special exchange position so that the user can access it
+        and swap it with another turret.
+        Blocks until the turret has reached the requested position.
+        Only available on some devices, like the KY328i, since SDK 2.104.30132.
+        """
+        with self._hw_access:
+            self._dll.ATSpectrographChangeTurret(self._device)
+
+    # Only since SDK 2.104.30132 (will be removed automatically if not available)
+    def ReadTurretRFID(self):
+        """
+        Requests the spectrograph to read the RFID tag of the turret. If the turret is away on the
+        the special exchange position, it will be first moved to the normal position.
+        Blocks until the turret has reached the requested position.
+        Only available on some devices, like the KY328i, since SDK 2.104.30132.
+        Note: this is the low-level call. This function doesn't take care of updating the grating
+        information on the axes.
+        """
+        # TODO: does it also work on a Ky193?
+        with self._hw_access:
+            self._dll.ATSpectrographReadTurretRFID(self._device)
 
     @callWithReconnect
     def SetTurret(self, turret):
@@ -2316,6 +2388,12 @@ class FakeShamrockDLL(object):
     def ShamrockGetSerialNumber(self, device, serial):
         serial.value = b"SR193fake"
 
+    def ATSpectrographGetFirmwareVersion(self, device, version):
+        version.value = b"V1.23.4"
+
+    def ATSpectrographGetSystemModel(self, device, modl):
+        modl.value = b"FAKE-193"
+
     def ShamrockEepromGetOpticalParams(self, device, p_fl, p_ad, p_ft):
         fl = _deref(p_fl, c_float)
         ad = _deref(p_ad, c_float)
@@ -2578,6 +2656,12 @@ class FakeShamrockDLL(object):
             raise ShamrockError(20268, ShamrockDLL.err_code[20267])
 
         value.value = self._iris[i]
+
+    def ATSpectrographChangeTurret(self, device):
+        time.sleep(5)
+
+    def ATSpectrographReadTurretRFID(self, device):
+        time.sleep(5)
 
 
 class AndorSpec(model.Detector):
