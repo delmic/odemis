@@ -26,6 +26,7 @@ import time
 from concurrent.futures import CancelledError, TimeoutError
 from concurrent.futures._base import RUNNING, FINISHED, CANCELLED
 from enum import Enum
+from typing import List, Tuple, Optional, Dict
 
 import numpy
 import psutil
@@ -43,6 +44,7 @@ from odemis.acq.stream import Stream, EMStream, ARStream, \
     CLStream
 from odemis.model import DataArray
 from odemis.util import dataio as udataio, img, linalg
+from odemis.util import rect_intersect
 from odemis.util.img import assembleZCube
 from odemis.util.linalg import generate_triangulation_points
 from odemis.util.raster import point_in_polygon
@@ -61,6 +63,14 @@ SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
 # Maximum distance is used to separate two focus points in overview acquisition using autofocus
 # Increasing this distance may result in out of focus overview acquisition image
 MAX_DISTANCE_FOCUS_POINTS = 450e-06  # in m
+
+# cryo-TEM grid sizes
+SAMPLE_RADIUS_TEM_GRID = 1.25e-3  # m, standard TEM grid size including the borders
+# Bounding-box relative to the center of a sample, corresponding to usable area
+# for imaging/milling. Used in particular for the overview image.
+hwidth = SAMPLE_RADIUS_TEM_GRID / math.sqrt(2)
+SAMPLE_USABLE_BBOX_TEM_GRID = (-hwidth, -hwidth, hwidth, hwidth)  # m, minx, miny, maxx, maxy
+DEFAULT_FOV = (100e-6, 100e-6) # m
 
 class FocusingMethod(Enum):
     NONE = 0  # Never auto-focus
@@ -222,11 +232,7 @@ class TiledAcquisitionTask(object):
             logging.debug("Bounding box of stream data: %s", im_bbox)
             return im_bbox[2] - im_bbox[0], im_bbox[3] - im_bbox[1]
         elif isinstance(sd, Stream):
-            # Ask the stream, which estimates based on the emitter/detector settings
-            try:
-                return sd.guessFoV()
-            except (NotImplementedError, AttributeError):
-                raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (sd,))
+            return get_fov(sd)
         else:
             raise TypeError("Unsupported object")
 
@@ -966,8 +972,8 @@ def estimateOverviewTime(*args, **kwargs):
     return task.estimate_time()
 
 
-def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
-                    registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
+def acquireOverview(streams, stage, areas, focus, detector, overlap=0.2, settings_obs=None, log_path=None, zlevels=None,
+                    registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE, use_autofocus: bool = False):
     """
     Start autofocus and tiled acquisition tasks for each area in the list of area which is
     given by the input argument areas.
@@ -978,7 +984,7 @@ def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs
         Each area is defined by 4 floats :left, top, right, bottom positions
         of the acquisition area (in m)
     :param focus: (Actuator) the focus actuator
-    :param ccd: (Camera) the camera to use for the acquisition
+    :param detector: (Detector) the detector to use for the acquisition
     :param overlap: (0<float<1) the overlap between tiles (in percentage)
     :param settings_obs: (dict) the settings for the acquisition
     :param log_path: (str) path to the log file
@@ -987,6 +993,7 @@ def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs
     :param registrar: (str) the type of registration to use
     :param weaver: (str) the type of weaver to use
     :param focusing_method: (str) the focusing method to use
+    :param use_autofocus: (bool) whether to use autofocus or not
     :return: (ProgressiveFuture) an object that represents the task, allow to
         know how much time before it is over and to cancel it. It also permits
         to receive the result of the task, which is a list of model.DataArray:
@@ -994,9 +1001,9 @@ def acquireOverview(streams, stage, areas, focus, ccd, overlap=0.2, settings_obs
     """
     # Create a progressive future with running sub future
     future = model.ProgressiveFuture()
-    task = AcquireOverviewTask(streams, stage, areas, focus, ccd, future, overlap, settings_obs,
+    task = AcquireOverviewTask(streams, stage, areas, focus, detector, future, overlap, settings_obs,
                                log_path, zlevels,
-                               registrar, weaver, focusing_method)
+                               registrar, weaver, focusing_method, use_autofocus)
     future.task_canceller = task.cancel  # let the future cancel the task
 
     future.set_progress(end=task.estimate_time() + time.time())
@@ -1011,9 +1018,10 @@ class AcquireOverviewTask(object):
     Create a task to run autofocus and tiled acquisition for each area in the list of areas
     """
 
-    def __init__(self, streams, stage, areas, focus, ccd, future=None, overlap=0.2, settings_obs=None, log_path=None,
-                 zlevels=None,
-                 registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN, focusing_method=FocusingMethod.NONE):
+    def __init__(self, streams, stage, areas, focus, detector, future=None,
+                 overlap=0.2, settings_obs=None, log_path=None,
+                 zlevels=None, registrar=REGISTER_GLOBAL_SHIFT, weaver=WEAVER_MEAN,
+                 focusing_method=FocusingMethod.NONE, use_autofocus: bool = False):
         # site and feature means the same
         self._stage = stage
         self._future = future
@@ -1022,7 +1030,7 @@ class AcquireOverviewTask(object):
             self._future._task_lock = threading.Lock()
         self.streams = streams
         self.areas = areas  # list of areas
-        self._ccd = ccd  # TODO to delete after ccd.data components is used from streams in do_autofocus_roi
+        self._det = detector  # TODO to delete after ccd.data components is used from streams in do_autofocus_roi
         self._focus = focus
         active_rng = self._focus.getMetadata().get(model.MD_POS_ACTIVE_RANGE, None)
 
@@ -1036,6 +1044,7 @@ class AcquireOverviewTask(object):
 
         self.conf_level = 0.8
         self.focusing_method = focusing_method
+        self._use_autofocus: bool = use_autofocus
         self._focus_points = []  # list of focus points per each area in areas
         self._total_nb_focus_points = 0
         for area in areas:
@@ -1075,7 +1084,9 @@ class AcquireOverviewTask(object):
         if actual_time_per_roi:
             acquisition_time = actual_time_per_roi * remaining_rois
         else:
-            autofocus_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._ccd)
+            autofocus_time = 0
+            if self._use_autofocus:
+                autofocus_time = estimate_autofocus_in_roi_time(self._total_nb_focus_points, self._det)
             tiled_time = 0
             for area in self.areas:
                 tiled_time += estimateTiledAcquisitionTime(
@@ -1108,37 +1119,40 @@ class AcquireOverviewTask(object):
             start_time = time.time()
             # create a for loop for roi to create sub futures
             for idx, roi in enumerate(self.areas):
+
                 remaining_t = self.estimate_time(idx, actual_time_per_roi)
                 self._future.set_end_time(time.time() + remaining_t)
 
-                # cancel the sub future
-                with self._future._task_lock:
-                    if self._future._task_state == CANCELLED:
-                        raise CancelledError()
-                    # is_active set to True will keep the acquisition going on
-                    self.streams[0].is_active.value = True
-                    logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
-                    # run autofocus for the selected roi
-                    self._future.running_subf = autofocus_in_roi(roi,
-                                                                 self._stage,
-                                                                 self._ccd,
-                                                                 self._focus,
-                                                                 self.focus_rng,
-                                                                 self._focus_points[idx],
-                                                                 self.conf_level)
+                focus_points = None
+                if self._use_autofocus:
+                    # cancel the sub future
+                    with self._future._task_lock:
+                        if self._future._task_state == CANCELLED:
+                            raise CancelledError()
+                        # is_active set to True will keep the acquisition going on
+                        self.streams[0].is_active.value = True
+                        logging.debug(f"Autofocus is running for roi number {idx}, with bounding box: {roi} [m]")
+                        # run autofocus for the selected roi
+                        self._future.running_subf = autofocus_in_roi(roi,
+                                                                    self._stage,
+                                                                    self._det,
+                                                                    self._focus,
+                                                                    self.focus_rng,
+                                                                    self._focus_points[idx],
+                                                                    self.conf_level)
 
-                try:
-                    focus_points_per_area = len(self._focus_points[idx])
-                    max_wait_t = estimate_autofocus_in_roi_time(focus_points_per_area, self._ccd) * 3 + 1
-                    focus_points = self._future.running_subf.result(max_wait_t)
-                except TimeoutError:
-                    self.streams[0].is_active.value = False
-                    logging.debug(f"Autofocus timed out for roi number {idx}, with bounding box: {roi} [m]")
-                    raise
-                except Exception:
-                    self.streams[0].is_active.value = False
-                    logging.debug(f"Autofocus failed for roi number {idx}, with bounding box: {roi} [m]")
-                    raise
+                    try:
+                        focus_points_per_area = len(self._focus_points[idx])
+                        max_wait_t = estimate_autofocus_in_roi_time(focus_points_per_area, self._det) * 3 + 1
+                        focus_points = self._future.running_subf.result(max_wait_t)
+                    except TimeoutError:
+                        logging.debug(f"Autofocus timed out for roi number {idx}, with bounding box: {roi} [m]")
+                        raise
+                    except Exception:
+                        logging.debug(f"Autofocus failed for roi number {idx}, with bounding box: {roi} [m]")
+                        raise
+                    finally:
+                        self.streams[0].is_active.value = False
 
                 # cancel the sub future
                 with self._future._task_lock:
@@ -1147,7 +1161,10 @@ class AcquireOverviewTask(object):
 
                     # run tiled acquisition for the selected roi
                     logging.debug(f"Z-stack acquisition is running for roi number {idx} with {roi} values")
-                    self._future.running_subf = acquireTiledArea(self.streams, self._stage, roi,
+
+                    self._future.running_subf = acquireTiledArea(streams=self.streams,
+                                                                 stage=self._stage,
+                                                                 area=roi,
                                                                  focus_range=self.focus_rng,
                                                                  overlap=self._overlap,
                                                                  settings_obs=self._settings_obs,
@@ -1181,7 +1198,7 @@ class AcquireOverviewTask(object):
             logging.debug("Stopping because acquisition overview was cancelled")
             raise
         except Exception:
-            logging.exception(f"acquisition overview failed")
+            logging.exception("acquisition overview failed")
             self._future.running_subf.cancel()
             raise
         finally:
@@ -1190,3 +1207,196 @@ class AcquireOverviewTask(object):
                 self._future._task_state = FINISHED
 
         return da_rois
+
+def get_tiled_areas(
+    pos: Dict[str, float],
+    streams: List[Stream],
+    tiles_nx: int,
+    tiles_ny: int,
+    overlap: float,
+    tiling_rng: Dict[str, list],  # TODO: make optional, use axes range otherwise
+    selected_grids: List[str] = None,
+    sample_centers: Dict[str, Tuple[float]] = None,
+    whole_grid: bool = False,
+    rel_bbox: tuple = SAMPLE_USABLE_BBOX_TEM_GRID,
+) -> List[Tuple[float]]:
+    """
+    Compute the bounding boxes of all areas to acquire.
+    :param pos: the current position of the stage
+    :param streams: the streams to acquire
+    :param tiles_nx: the number of tiles in the x direction
+    :param tiles_ny: the number of tiles in the y direction
+    :param overlap: the overlap between tiles (in percentage)
+    :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
+    :param selected_grids: the grids to acquire
+    :param sample_centers: the centers of the sample grids
+    :param whole_grid: if True, the whole grid is acquired
+    :param rel_bbox: the relative bounding box of the sample grid (xmin, ymin, xmax, ymax)
+    return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
+    of all areas to acquire.
+    """
+    if not whole_grid:
+        area = compute_area_size(
+            pos=pos,
+            streams=streams,
+            tiles_nx=tiles_nx,
+            tiles_ny=tiles_ny,
+            tiling_rng=tiling_rng,
+            overlap=overlap,
+        )
+        if area is None:
+            return []
+        else:
+            return [area]
+
+    # TODO: for now this is only for the MIMAS, but eventually, on the METEOR,
+    # which often supports 2 grids, this should also be possible to use.
+    # TODO: ensure that sample centers are converted to same coordinate system as stage position
+
+    # Sort the (selected) centers along X, and for centers with the same X, along the Y.
+    # In theory, the order doesn't really matter (at best it would safe a few
+    # seconds of stage movement), but it's nice for the user that acquisitions
+    # are done always in the same order, as it reduces "astonishment".
+    sorted_centers = sorted(
+        pos for name, pos in sample_centers.items() if name in selected_grids
+    )
+    areas = [
+        (
+            center[0] + rel_bbox[0],
+            center[1] + rel_bbox[1],
+            center[0] + rel_bbox[2],
+            center[1] + rel_bbox[3],
+        )
+        for center in sorted_centers
+    ]
+
+    return areas
+
+def compute_area_size(
+    pos: Dict[str, float],
+    streams: List[Stream],
+    tiles_nx: int,
+    tiles_ny: int,
+    tiling_rng: Dict[str, list],
+    overlap: float,
+) -> Optional[Tuple[float, float]]:
+    """
+    Calculates the requested tiling area size, based on the number of tiles, stream fov and overlap.
+    :param pos: the current position of the stage
+    :param streams: the streams to acquire
+    :param tiles_nx: the number of tiles in the x direction
+    :param tiles_ny: the number of tiles in the y direction
+    :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
+    :param overlap: the overlap between tiles (in percentage)
+    :return: the size (in m) in X and Y. If no area at all, returns None.
+    """
+    # get smallest fov
+    fovs = [get_fov(s) for s in streams]
+    if not fovs:
+        # fall back to a small fov (default)
+        fov = DEFAULT_FOV
+    else:
+        # smallest fov
+        fov = tuple(map(min, zip(*fovs)))
+
+    # these formulas for w and h have to match the ones used in the 'stitching' module.
+    w = tiles_nx * fov[0] * (1 - overlap)
+    h = tiles_nx * fov[1] * (1 - overlap)
+
+    # Note the area can accept LTRB or LBRT.
+    area = clip_tiling_area_to_range(w, h, pos, tiling_rng)
+    if area is None:
+        # there is no intersection
+        logging.warning(
+            "Couldn't find intersection between stage pos %s and tiling range %s"
+            % (pos, tiling_rng)
+        )
+
+    return area
+
+def get_fov(s: Stream):
+    """Get the field of view of a stream"""
+    try:
+        return s.guessFoV()
+    except (NotImplementedError, AttributeError):
+        raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (s,))
+
+def clip_tiling_area_to_range(
+    w: float, h: float, pos: Dict[str, float], tiling_rng: Dict[str, List[float]]
+) -> Optional[Tuple[float]]:
+    """
+    Finds the intersection between the requested tiling area and the tiling range.
+    :param w: the width of the tiling area
+    :param h: the height of the tiling area
+    :param pos: the current position of the stage
+    :param tiling_rng: the maximum tiling range along x and y axes as
+            (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin). the maximum range is
+            specified by the task, and is usually the stage axes range or the imaging range.
+    :returns: (None or tuple of 4 floats): None if there is no intersection, or
+        the rectangle representing the intersection as (xmin, ymin, xmax, ymax).
+    """
+    area_req = (pos["x"] - w / 2, pos["y"] - h / 2, pos["x"] + w / 2, pos["y"] + h / 2)
+    # clip the tiling area, if needed (or find the intersection between the active range and the requested area)
+    return rect_intersect(
+        area_req,
+        (
+            tiling_rng["x"][0],
+            tiling_rng["y"][1],
+            tiling_rng["x"][1],
+            tiling_rng["y"][0],
+        ),
+    )
+
+def get_zstack_levels(zsteps: int, zstep_size: float, rel: bool = False, focuser=None):
+    """
+    Calculate the zstack levels from the current focus position and zsteps value
+    :param zsteps: (int) the number of zsteps
+    :param zstep_size: (float) the size of each zstep
+    :param rel: If this is False (default), then z stack levels are in absolute values. If rel is set to True then
+        the z stack levels are calculated relative to each other.
+    :param focuser: (Actuator) the focuser to use for the zstack levels
+    :returns:
+        (list(float) or None) zstack levels for zstack acquisition. None if only one zstep is requested.
+    """
+    # TODO: consolidate with odemis.util.comp.generate_zlevels
+    # TODO: fix corner cases for shifting the zlevels
+
+    if zsteps == 1:
+        return None
+
+    if not rel and focuser is None:
+        raise ValueError("A focuser is required to calculate absolute zstack levels.")
+
+    if rel:
+        zmin = -(zsteps / 2 * zstep_size)
+        zmax = +(zsteps / 2 * zstep_size)
+    else:
+        # Clip zsteps value to allowed range
+        focus_value = focuser.position.value["z"]
+        focus_range = focuser.axes["z"].range
+        zmin = focus_value - (zsteps / 2 * zstep_size)
+        zmax = focus_value + (zsteps / 2 * zstep_size)
+        if (zmax - zmin) > (focus_range[1] - focus_range[0]):
+            # Corner case: it'd be larger than the entire range => limit to the entire range
+            zmin = focus_range[0]
+            zmax = focus_range[1]
+        if zmax > focus_range[1]: # FIXME: this can shift the focus outside of the range
+            # Too high => shift down
+            shift = zmax - focus_range[1]
+            zmin -= shift
+            zmax -= shift
+
+        if zmin < focus_range[0]: # FIXME: this can shift the focus outside of the range
+            # Too low => shift up
+            shift = focus_range[0] - zmin
+            zmin += shift
+            zmax += shift
+
+    # TODO: if there is an even number of zsteps, the current focus position will not be part of the zlevels.
+    # As the current focus position can often be the "best" position, we could change the algorithm in such case to
+    # shift exactly symmetrical, but instead use the current position as one of the zlevels.
+
+    # Create focus zlevels from the given zsteps number
+    zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
+
+    return zlevels
