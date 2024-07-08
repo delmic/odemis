@@ -632,6 +632,8 @@ class AutomatedMillingManager(object):
         self.posture_manager = MicroscopePostureManager(model.getMicroscope())
         workflows = ["MILLING", "IMAGING"] # TODO: implement imaging workflow separately (fm acquisition)
 
+        FLM_ACQUISITION = False
+
         for task_num, task_name in enumerate(self.task_list, 1):
             print(f"Starting {task_name} for {len(self.project.features)} features...")
             task_num = f"{task_num:02d}"
@@ -689,6 +691,10 @@ class AutomatedMillingManager(object):
                 self._future.msg = f"Start Milling Task: {task_name} ({len(task.patterns)} Patterns) for {feature.name.value}"
                 self._future.set_progress()
 
+                from odemis.acq.milling.tasks import draw_milling_tasks
+                fig = draw_milling_tasks(ref_image, {task_name: task})
+                plt.show()
+
                 print(f"Starting Milling Task: {task}")
                 self._future.running_subf = mill_patterns(task)
                 self._future.running_subf.result()
@@ -704,31 +710,38 @@ class AutomatedMillingManager(object):
                 self._exporter.export(sem_filename, sem_image)
                 self._exporter.export(fib_filename, fib_image)       
 
+                if FLM_ACQUISITION:
+                    # move to flm position
+                    # TODO: use pm to move to flm position
+                    # TODO: move the fm acquisitions to the end of each task.
+                    print(f"Moving to FLM position for {feature.name.value}")
+                    # set objective position
+                    self._future.running_subf = self.focus.moveAbs({"z": feature.focus_position.value})
+                    self._future.running_subf.result()
 
-                # move to flm position
-                # TODO: use pm to move to flm position
-                # TODO: move the fm acquisitions to the end of each task.
-                print(f"Moving to FLM position for {feature.name.value}")
-                # set objective position
-                self._future.running_subf = self.focus.moveAbs({"z": feature.focus_position.value})
-                self._future.running_subf.result()
+                    # TODO: get fm acquisition settings from where?
 
-                # TODO: get fm acquisition settings from where?
+                    # acquire fm z-stack
+                    self._future.running_subf = acquire([self.fm_stream])
+                    data, ex = self._future.running_subf.result()
+                    fm_image = data
+                    # save flm image
+                    fm_filename = os.path.join(feature.path, f"{feature_name}-{task_num}-{task_name}-Finished-FLM.ome.tiff").replace(" ", "-")
+                    self._exporter.export(fm_filename, fm_image)
 
-                # acquire fm z-stack
-                self._future.running_subf = acquire([self.fm_stream])
-                data, ex = self._future.running_subf.result()
-                fm_image = data
-                # save flm image
-                fm_filename = os.path.join(feature.path, f"{feature_name}-{task_num}-{task_name}-Finished-FLM.ome.tiff").replace(" ", "-")
-                self._exporter.export(fm_filename, fm_image)
-
-                # plot images
-                fig, ax = plt.subplots(1, 3, figsize=(10, 5))
-                ax[0].imshow(sem_image, cmap="gray")
-                ax[1].imshow(fib_image, cmap="gray")
-                ax[2].imshow(fm_image[0], cmap="gray")
-                plt.show()
+                    # plot images
+                    fig, ax = plt.subplots(1, 3, figsize=(10, 5))
+                    ax[0].imshow(sem_image, cmap="gray")
+                    ax[1].imshow(fib_image, cmap="gray")
+                    ax[2].imshow(fm_image[0], cmap="gray")
+                    plt.show()
+                
+                else:
+                    # plot images
+                    fig, ax = plt.subplots(1, 2, figsize=(10, 5))
+                    ax[0].imshow(sem_image, cmap="gray")
+                    ax[1].imshow(fib_image, cmap="gray")
+                    plt.show()
 
                 # update status
                 feature.status.value = task_name
@@ -737,3 +750,35 @@ class AutomatedMillingManager(object):
 
                 # save project
                 self.project.save()
+
+
+def run_automated_milling(stage, sem_stream, fib_stream, fm_stream, task_list, project) -> futures.Future:
+    """
+    Automatically mill and image a list of features.
+
+    :return: ProgressiveFuture
+    """
+    # Create a progressive future with running sub future
+    future = model.ProgressiveFuture()
+    # create automated milling task
+    amm = AutomatedMillingManager(
+        future=future,
+        stage=stage,
+        sem_stream=sem_stream,
+        fib_stream=fib_stream,
+        fm_stream=fm_stream,
+        task_list=task_list,
+        project=project,
+    )
+    # add the ability of cancelling the future during execution
+    future.task_canceller = amm.cancel
+
+    # set the progress of the future
+    total_duration = 100000 # TODO: estimated duration
+    import time
+    future.set_end_time(time.time() + total_duration)
+
+    # assign the acquisition task to the future
+    executeAsyncTask(future, amm.run)
+
+    return future
