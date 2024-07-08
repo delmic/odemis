@@ -519,6 +519,10 @@ HW_SETTINGS_CONFIG = {
             # None, it should not be changed
             "control_type": odemis.gui.CONTROL_NONE,
         },
+        "scanState": {
+            # None, it should not be changed
+            "control_type": odemis.gui.CONTROL_NONE,
+        },
     },
     r"photo-detector.*":
         OrderedDict((

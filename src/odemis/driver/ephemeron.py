@@ -37,17 +37,50 @@ import numpy
 from scipy import ndimage
 
 import functions
-from constants import *
+# from constants import *
 from odemis import model, dataio
 from odemis.model import Detector, oneway
 from odemis.util import img
+
+# constants
+URI = "opc.tcp://localhost:4840/freeopcua/server/"
+NAMESPACE = "http://examples.freeopcua.github.io"
+DATA_VAR_NAME = "MightyEBICDataArray"
+
+STATE_ID_IDLE = "server-idle"
+STATE_ID_RUNNING = "server-running"
+STATE_ID_TRIGGER = "server-triggered"
+STATE_ID_CHECKING_DWELL = "server-checking-dwell"
+STATE_ID_STOPPED = "server-stopped"
+STATE_ID_ERROR = "server-error"
+
+STATE_NAME_IDLE = "Idle"
+STATE_NAME_RUNNING = "Running"
+STATE_NAME_TRIGGER = "Trigger"
+STATE_NAME_CHECKING_DWELL = "CheckingDwell"
+STATE_NAME_STOPPED = "Stopped"
+STATE_NAME_ERROR = "Error"
+
+TRANSITION_ID_IDLE = "to-idle"
+TRANSITION_ID_RUNNING = "to-running"
+TRANSITION_ID_TRIGGER = "to-trigger"
+TRANSITION_ID_CHECKING_DWELL = "to-checking-dwell"
+TRANSITION_ID_STOPPED = "to-stopped"
+TRANSITION_ID_ERROR = "to-error"
+
+TRANSITION_NAME_IDLE = "To Idle"
+TRANSITION_NAME_RUNNING = "To Running"
+TRANSITION_NAME_TRIGGER = "To Trigger"
+TRANSITION_NAME_CHECKING_DWELL = "To Checking Dwell"
+TRANSITION_NAME_STOPPED = "To Stopped"
+TRANSITION_NAME_ERROR = "To Error"
 
 
 class MightyEbic(Detector):
     def __init__(self, name: str, role: str, device: str, port: int,
                  channel: int, url: str, namespace: str, **kwargs):
         """
-        Initialize the EBIC controller
+        Initialise the EBIC controller
         :param name:
         :param role:
         :param device:
@@ -57,32 +90,30 @@ class MightyEbic(Detector):
         :param namespace:
         """
         super().__init__(name, role, **kwargs)
-        # for debug, eventually -> get resolution from the controller
+        # for debug, eventually -> get resolution from the controller/detector
         max_res = (1024, 1024)
         min_res = (1, 1)
-        max_res_hw = self._transposeSizeFromUser(max_res)
 
-        self._name = name
         self.device = device
         self.port = port
+        self.acq_data = None
+        self.idx = None
+        self.sub_handler = SubHandler()
+        self.delay = 5e-8  # need to make this a VA on the stream panel as well?
+        self.t_opc_connection = None
+        self.fake_img = None
+        self.StartScanOPCUA = None
+        self._name = name
         self._channel = channel
         self._namespace = namespace
         self._client = Client(url=url)
         self._opc_server = None
-        self.idx = None
-        self.sub_handler = SubHandler()
-        self._state = "Disconnected"
-        #self._translation = (0, 0)
         self._binning = (1, 1)
-        #self._resolution = max_res_hw
-        #self.init_done = False
-        self.t_opc_connection = None
         self._error_msg = None
         self._simserver = None
-        self.scan_time = None
-        self.dwell_time = None
-        self.fake_img = None
-        self.current_drift = 0
+        self._connected = False
+        self._scan_time = 0.0
+        self._dwell_time = 0.0
 
         # fake image setup
         if self.device == "fake":
@@ -96,7 +127,6 @@ class MightyEbic(Detector):
             new_img = numpy.array(new_img)
             self.fake_img = img.rescale_hq(new_img, max_res)
 
-
         # The shape is just one point, the depth
         idt = numpy.iinfo(self.fake_img.dtype)
         data_depth = idt.max - idt.min + 1
@@ -108,6 +138,7 @@ class MightyEbic(Detector):
         else:
             bpp = 16
         self.bpp = model.IntEnumerated(bpp, {8, 16})
+        self.scanState = model.StringVA("Disconnected")
 
         try:
             self._start_opcclient_thread()
@@ -115,29 +146,21 @@ class MightyEbic(Detector):
             raise ConnectionError(self._error_msg)
 
         # register the VA's
-        # higher spp will force a higher scan_time
+        # higher spp will force a higher dwell_time as well as increasing scan_time
         self.spp = model.IntEnumerated(1, set(range(1, 11)), setter=self.on_spp_change)
         self.numberOfChannels = model.IntEnumerated(2, set(range(1, 9)), setter=self.on_chan_num_change)
-        #self.numberOfChannels.subscribe(self.on_chan_num_change)
-        # higher spp will force a higher dwell_time
-        self.oversampling = model.IntEnumerated(0, {0, 2, 4, 8, 16, 32, 64}, setter=self.on_oversampling_change)
-        #self.oversampling.subscribe(self.on_oversampling_change)
+        self.oversampling = model.IntEnumerated(0, {0, 2, 4, 8, 16, 32, 64})
+        self.oversampling.subscribe(self.on_oversampling_change)
         self.binning = model.ResolutionVA((1, 1), ((1, 1), (16, 16)))
         # the resolution of the scanner of the EBIC controller
         self.resolution = model.ResolutionVA(max_res, (min_res, max_res), unit="px")
         self.repetition = model.TupleVA((1, 1), unit="px", setter=self.on_repetition_change)
 
         self.data = EBICDataFlow(self)
-        #self.softwareTrigger = model.Event()
-
         self._acquisition_thread = None
         self._acquisition_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
-
-        # Thread of the generator
-        self._generator = None
-
         self._hwVersion = "Ephemeron EBIC controlbox S/N: 123456-SIM"
         self._swVersion = "Firmware: simulated-device"
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
@@ -151,7 +174,7 @@ class MightyEbic(Detector):
             # if the device should be simulated, start a simulator server first
             self._simserver = threading.Thread(target=self._start_opc_simserver)
             self._simserver.start()
-            while not model.hasVA(self, "serverSim"):
+            while self.scanState.value != STATE_NAME_IDLE:
                 time.sleep(0.1)
 
         self.t_opc_connection = threading.Thread(target=self._start_opc_client)
@@ -160,6 +183,7 @@ class MightyEbic(Detector):
 
         if self.t_opc_connection.is_alive():
             logging.info(f"Connected to EBIC controller ({self.device})")
+            self._connected = True
         else:
             raise ConnectionError()
 
@@ -187,13 +211,14 @@ class MightyEbic(Detector):
         try:
             self._opc_server = MightyEbicSimulator()
             await self._opc_server.setup()
-            await self._opc_server.create_variable("MyArray", numpy.array([1, 2, 3], dtype=numpy.int32))
             current_state_node = await self._opc_server.state_machine_node.get_child(
                 f"{self._opc_server.idx}:current_state"
             )
 
             myobj = await self._opc_server.server.nodes.objects.add_object(self._opc_server.idx, "EBIC_Controller")
-            myvar = await myobj.add_variable(self._opc_server.idx, "pixel_num", 5)
+            myvar = await myobj.add_variable(self._opc_server.idx,
+                                             "MightyEBICDataArray",
+                                             (numpy.ones((3000, 3000), dtype=numpy.float64)).tolist())
             # Set the variable to be writable by clients
             await myvar.set_writable()
 
@@ -201,52 +226,57 @@ class MightyEbic(Detector):
 
             async with self._opc_server.server:
                 await asyncio.sleep(1)
-                new_state = await current_state_node.read_value()
-                logging.info(f"Current State is {new_state}")
-                # set the server RO VA
-                va = model.BooleanVA(True, readonly=True)
-                setattr(self, "serverSim", va)  # set the class VA variable name
                 while True:
-                    await asyncio.sleep(1)
+                    await asyncio.sleep(3)
                     new_state = await current_state_node.read_value()
-                    # await self._opc_server.change_state(new_state)
-                    # _logger.info(f"Current State is {new_state}")
-                    # await current_state_node.write_value(new_state)
+                    await self._opc_server.change_state(new_state)
+                    await current_state_node.write_value(new_state)
+                    self.scanState.value = new_state
         except ConnectionError as ex:
             self._error_msg = ex
         except Exception as ex:
             raise Exception(ex)
 
     def terminate(self):
+        super().terminate()
         # stop the simulator server if a fake device is used
         if self._simserver:
             self._simserver.terminated = True
             self._simserver.join()
 
-        super().terminate()
+        self._connected = False
+        self.t_opc_connection.terminated = True
+        self.t_opc_connection.join()
 
     async def setup_controller(self):
         # search for connected EBIC controllers using the opcua protocol
         # connecting to the controller/Client -> async with Client(url=self.url) as self.client
         self.idx = await self._client.get_namespace_index(self._namespace)
         await self.create_state_subscription()
+        obj = self._client.nodes.objects
+        self.StartScanOPCUA = await obj.get_child([f"{self.idx}:ScanObjectOPCUA", f"{self.idx}:StartScanOPCUA"])
 
     async def connect_to_controller(self):
         try:
             async with self._client:
                 logging.info("Client connected")
                 await self.setup_controller()
-                await self.get_controller_state()
-                logging.info(f"Server state is now: {self._state}")
-
-                # TODO: fix/patch for setting the controller state this does not work now
-                # await self.set_controller_state(STATE_NAME_RUNNING)
-                # await asyncio.sleep(5)
-                # await self.set_controller_state(STATE_NAME_STOPPED)
                 logging.info("Connection is active")
                 await asyncio.sleep(1)
-                await self._client.check_connection()
-                #self.init_done = True
+                while self._connected:
+                    current_state = self.scanState.value
+                    await asyncio.sleep(1)
+                    # only fire a change state when scanState value actually changed
+                    # it will generate a LOT of unnecessary lines in the logfile.
+                    if current_state != self.scanState.value:
+                        await self.change_state(self.scanState.value)
+                        if current_state == STATE_NAME_RUNNING and self.scanState.value == STATE_NAME_STOPPED:
+                            # check for data
+                            logging.debug(f"requesting data after state change from {current_state} to {self.scanState.value}")
+                            self.acq_data = await self.retrieve_acquired_data()
+                            # set state to idle again after retrieving the data
+                            self.scanState.value = STATE_NAME_IDLE
+
         except (ConnectionError, ua.UaError) as e:
             raise ConnectionError(str(e) + " -> Client disconnected")
 
@@ -266,19 +296,18 @@ class MightyEbic(Detector):
         await subscription.subscribe_events(state_machine_node, state_change_event)
 
     async def get_controller_state(self):
-        state_node = await self._client.nodes.root.get_child(
-            f"0:Objects/{self.idx}:state_machine/{self.idx}:current_state",
-        )
-        self._state = await state_node.read_value()
+        return self.scanState.value
 
-    async def set_controller_state(self, req_state):
+    async def change_state(self, new_state: str) -> None:
+        """
+        Change state of server state machine based on state name.
+        new_state (str): state name constant to change to
+        """
         current_state = await self._client.nodes.root.get_child(
             f"0:Objects/{self.idx}:state_machine/{self.idx}:current_state",
         )
-        await current_state.write_value(req_state)
+        await current_state.write_value(new_state)
         await self._client.nodes.objects.call_method(f"{self.idx}:change_state")
-        # TODO: only assign if state change = success
-        self._state = req_state
 
     def start_acquire(self, callback):
         with self._acquisition_lock:
@@ -295,8 +324,7 @@ class MightyEbic(Detector):
 
     def _wait_acquisition_stopped(self):
         """
-        Waits until the acquisition thread is fully finished _iff_ it was requested
-        to stop.
+        Waits until the acquisition thread is fully finished _if_ it was requested to stop.
         """
         # "if" is to not wait if it's already finished
         if self._acquisition_must_stop.is_set():
@@ -418,19 +446,7 @@ class MightyEbic(Detector):
             metadata[model.MD_EBEAM_VOLTAGE] = scanner.accelVoltage.value
             return model.DataArray(sim_img, metadata)
 
-    # def _update_drift(self):
-    #     """
-    #     Periodically updates drift according to drift_factor and drift_period.
-    #     """
-    #     drift = self.current_drift + random.random() * self.drift_factor
-    #     if abs(drift) >= self.drift_bound:
-    #         # Make it bounce back
-    #         drift = math.copysign(1, drift) * (2 * self.drift_bound - abs(drift))
-    #         self.drift_factor = -self.drift_factor
-    #
-    #     self.current_drift = drift
-
-    def get_dwell_time(self, OS=0, CH: int = 2, samples: int = 1, delay: float = 5e-8, trigger: bool = True) -> int:
+    def get_dwell_time(self, delay: float = 5e-8, trigger: bool = True) -> float:
         """Gets the dwell time of each pixel based on Channels, samples, delay and oversampling.
 
         Args:
@@ -445,10 +461,10 @@ class MightyEbic(Detector):
 
         """
         delayCycle = functions.delayCycles(delay)  # delay in cycles
+        dt = functions.dwellTime(self.oversampling.value, self.numberOfChannels.value, delayCycle, trigger) * 10e-6
+        return dt
 
-        return functions.dwellTime(OS, CH, delayCycle, trigger)
-
-    def get_scan_time(self, dwell_time: int, points_fast: int, points_slow: int) -> float:
+    def get_scan_time(self, dwell_time: float, points_fast: int, points_slow: int) -> float:
         """Gets the scan time of the system based on dwell time and number of points.
 
         Args:
@@ -460,32 +476,37 @@ class MightyEbic(Detector):
         """
         return functions.scanTime(dwell_time, points_fast, points_slow)
 
-    def set_scan_parameters(self, trigger=True) -> bool:
+    async def start_scan(self, simulate=False) -> None:
         """
-        Sets the scan parameters of the EBIC scan box.
-        :return:
+        Starts a scan with the EBIC scan controlbox.
+        Send settings to the server/client to initiate scan.
         """
-        delay = 1e-2  # 10ms default
+        self._dwell_time = self.get_dwell_time(self.delay)
+        self._scan_time = self.get_scan_time(self._dwell_time, self.repetition.value[0], self.repetition.value[1])
 
-        self.dwell_time = self.get_dwell_time(self.oversampling.value,
-                                              self.numberOfChannels.value,
-                                              self.spp.value,
-                                              delay,
-                                              trigger)
-        self.scan_time = self.get_scan_time(self.dwell_time, self.repetition.value[0], self.repetition.value[1])
-        # TODO not return boolean but float -> sum of dwell_time and scan_time?
-        return True
-
-    def start_scan(self):
-        # this function is to be used in the special SPARC acq and calls the start state of the API
-        pass
+        result = await self.StartScanOPCUA.call_method(
+            ua.NodeId("ScanObjectOPCUA", self.idx),  # FIXME this might not be the right format
+            ua.QualifiedName("StartScanOPCUA", self.idx),
+            self.repetition.value[0],
+            self.repetition.value[1],
+            self.oversampling.value,
+            self.numberOfChannels.value,
+            self.spp.value,
+            self.delay,
+            TRIGGER=True,
+            Simulate=simulate)
 
     def stop_scan(self):
         # this function is to be used in the special SPARC acq
         pass
 
     async def retrieve_acquired_data(self):
-        pass
+        """
+        Reads a variable from the server.
+        """
+        data = await self._client.nodes.root.get_child(["0:Objects", f"{self.idx}:{DATA_VAR_NAME}"])
+        value = await data.read_value()
+        return numpy.array(list(value), dtype=numpy.float64)
 
     async def read_variable(self, obj_name: str, var_name: str) -> Any:
         """
@@ -496,7 +517,6 @@ class MightyEbic(Detector):
         """
         var = await self._client.nodes.root.get_child(f"0:Objects/{self.idx}:{obj_name}/{self.idx}:{var_name}")
         value = await var.read_value()
-        # return numpy.array(list(value), dtype=numpy.int32)
         return value
 
     def on_repetition_change(self, value):
@@ -509,7 +529,7 @@ class MightyEbic(Detector):
         return value
 
     def on_oversampling_change(self, value):
-        return value
+        self.set_scan_parameters()
 
 
 class MightyEbicSimulator:
@@ -600,7 +620,7 @@ class MightyEbicSimulator:
 
         # TODO: state_machine source code contains an error and needs to be patched in our version
         # Issue in question: https://github.com/FreeOpcUa/opcua-asyncio/issues/1479
-        # await self.state_machine.change_state(idle_state, idle_transition)
+        await self.state_machine.change_state(idle_state, idle_transition)
 
         self.state_machine_node = await self.server.nodes.objects.add_object(
             self.idx,
@@ -699,12 +719,11 @@ class EBICDataFlow(model.DataFlow):
     def synchronizedOn(self, event):
         """
         Synchronize the acquisition on the given event. Every time the event is
-          triggered, the scanner will start a new acquisition/scan.
-          The DataFlow can be synchronized only with one Event at a time.
-          However each DataFlow can be synchronized, separately. The scan will
-          only start once each active DataFlow has received an event.
-        event (model.Event or None): event to synchronize with. Use None to
-          disable synchronization.
+        triggered, the scanner will start a new acquisition/scan.
+        The DataFlow can be synchronized only with one Event at a time.
+        However, each DataFlow can be synchronized separately. The scan will
+        only start once each active DataFlow has received an event.
+        event (model.Event or None): event to synchronize with. Use None to disable synchronization.
         """
         super().synchronizedOn(event)
         if self._sync_event == event:
@@ -717,8 +736,7 @@ class EBICDataFlow(model.DataFlow):
 
         self._sync_event = event
         if self._sync_event:
-            # if the df is synchronized, the subscribers probably don't want to
-            # skip some data
+            # if the df is synchronized, the subscribers probably don't want to skip some data
             self._evtq = queue.Queue()  # to be sure it's empty
             self._sync_event.subscribe(self)
 

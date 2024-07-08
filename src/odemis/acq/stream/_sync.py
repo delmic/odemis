@@ -37,6 +37,7 @@ from odemis.acq import drift
 from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
+from odemis.driver import ephemeron
 from odemis.util.driver import guessActuatorMoveDuration
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
     MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS, MD_THETA_LIST, MD_WL_LIST, MD_ROTATION, \
@@ -1156,8 +1157,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
         if hasattr(self, "useScanStage") and self.useScanStage.value:
             # TODO does not support polarimetry or image integration so far
             return self._runAcquisitionScanStage(future)
-        elif hasattr(self, "useEBIC"):
-            return self._runAcquisitionEBIC(future)
         else:
             return self._runAcquisitionEbeam(future)
 
@@ -1347,242 +1346,6 @@ class SEMCCDMDStream(MultipleDetectorStream):
 
                     self._img_intor = [None for _ in self._streams]
                     self._acq_data = [[] for _ in self._streams]  # delete acq_data to use less RAM
-
-            dur = time.time() - start_t
-            logging.info("Acquisition completed in %g s -> %g s/frame", dur, dur / n)
-
-            # acquisition done!
-            for s, sub in zip(self._streams, self._subscribers):
-                s._dataflow.unsubscribe(sub)
-            self._ccd_df.synchronizedOn(None)
-
-            with self._acq_lock:
-                if self._acq_state == CANCELLED:
-                    raise CancelledError()
-                self._acq_state = FINISHED
-            self._current_scan_area = None  # Indicate we are done for the live update
-
-            # Process all the (intermediary) ._live_data to the right shape/format for the final ._raw
-            for stream_idx, das in enumerate(self._live_data):
-                self._assembleFinalData(stream_idx, das)
-
-            self._stopLeeches()
-
-            if self._dc_estimator:
-                self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))
-
-        except Exception as exp:
-            if not isinstance(exp, CancelledError):
-                logging.exception("Software sync acquisition of multiple detectors failed")
-
-            # make sure it's all stopped
-            for s, sub in zip(self._streams, self._subscribers):
-                s._dataflow.unsubscribe(sub)
-            self._ccd_df.synchronizedOn(None)
-
-            self._raw = []
-            self._anchor_raw = []
-            if not isinstance(exp, CancelledError) and self._acq_state == CANCELLED:
-                logging.warning("Converting exception to cancellation")
-                raise CancelledError()
-            raise
-        else:
-            return self.raw
-        finally:
-            self._current_scan_area = None  # Indicate we are done for the live (also in case of error)
-            for s in self._streams:
-                s._unlinkHwVAs()
-            self._dc_estimator = None
-            self._current_future = None
-            self._acq_data = [[] for _ in self._streams]  # regain a bit of memory
-
-            self._acq_done.set()
-            # Only after this flag, as it's used by the im_thread too
-            self._live_data = [[] for _ in self._streams]
-            self._streams[0].raw = []
-            self._streams[0].image.value = None
-            self._img_intor = [None for _ in self._streams]
-
-    def _runAcquisitionEBIC(self, future):
-        """
-        Acquires images from the multiple detectors via software synchronisation.
-        Acquires images via moving the ebeam.
-        Warning: can be quite memory consuming if the grid is big
-        :param future: Current future running for the whole acquisition.
-        :returns (list of DataArray): All the data acquired.
-        :raises:
-          CancelledError() if cancelled
-          Exceptions if error
-        """
-        # TODO: handle better very large grid acquisition (than memory oops)
-        try:
-            self._acq_done.clear()
-            img_time, integration_count = self._adjustHardwareSettings()
-            dwell_time = self._emitter.dwellTime.value * integration_count  # total time of ebeam spent on one pos/pixel
-            sem_time = dwell_time * numpy.prod(self._emitter.resolution.value)
-            spot_pos = self._getSpotPositions()  # list of center positions for each point of the ROI
-            logging.debug("Generating %dx%d spots for %g (dt=%g) s",
-                          spot_pos.shape[1], spot_pos.shape[0], img_time, dwell_time)
-            rep = self.repetition.value  # (int, int): number of pixels in the ROI (X, Y)
-            tot_num = int(numpy.prod(rep)) * integration_count  # total number of images to acquire
-            sub_pxs = self._emitter.pixelSize.value  # sub-pixel size
-            tile_size = self._emitter.resolution.value  # how many SEM pixels per ebeam "position"
-
-            self._acq_data = [[] for _ in self._streams]  # just to be sure it's really empty
-            self._live_data = [[] for _ in self._streams]
-            # In case of long integration time, one ImageIntegrator per stream
-            self._img_intor = [None for _ in self._streams]
-            self._raw = []
-            self._anchor_raw = []
-            self._current_scan_area = (0, 0, 0, 0)
-            logging.debug("Starting repetition stream acquisition with components %s",
-                          ", ".join(s._detector.name for s in self._streams))
-
-            # The acquisition works the following way:
-            # * The CCD is set to synchronised acquisition, and for every e-beam
-            #   spot (or set of sub-pixels in fuzzing mode).
-            # * The e-beam synchronised detector(s) is configured for one e-beam
-            #   spot and stopped (after a couple of scans) as soon as the CCD
-            #   data comes in.
-            # Rationale: using the .newPosition Event on the e-beam is not
-            # reliable enough as the CCD driver may not receive the data in time.
-            # (it might be solvable for most hardware by improving the drivers
-            # to put the CCD into special "burst" mode). We could almost use
-            # .get() on the CCD, but it's slow, and it's not cancellable. If we
-            # use synchronisation also on the e-beam, we cannot stop the scan
-            # immediately after the CCD image is received. So we would either
-            # stop it a little before (and in fuzzing it might not have scanned
-            # everything during the exposure, and can only scan once) or wait
-            # one scan too long, which would correspond to almost 50% exposure
-            # time overhead per pixel.
-
-            # prepare detector
-            self._ccd_df.synchronizedOn(self._trigger)
-            # prepare the EBIC scanner
-            #self._ebic.
-
-            # subscribe to last entry in _subscribers (optical detector)
-            self._ccd_df.subscribe(self._subscribers[self._ccd_idx])
-
-            # Instead of subscribing/unsubscribing to the SEM for each pixel,
-            # we've tried to keep subscribed, but request to be unsynchronised/
-            # synchronised. However, synchronizing doesn't cancel the current
-            # scanning, so it could still be going on with the old translation
-            # while starting the next acquisition.
-
-            # if no polarimetry hardware present
-            pos_polarizations = [None]
-            time_move_pol_left = 0  # sec extra time needed to move HW
-
-            # check if polarization VA exists, overwrite list of polarization value
-            # if self._analyzer:
-            #     if self._acquireAllPol.value:
-            #         pos_polarizations = POL_POSITIONS
-            #         logging.debug("Will acquire the following polarization positions: %s", list(pos_polarizations))
-            #         # tot number of ebeam pos to acquire taking the number of images per ebeam pos into account
-            #         tot_num *= len(pos_polarizations)
-            #     else:
-            #         pos_polarizations = [self._polarization.value]
-            #         logging.debug("Will acquire the following polarization position: %s", pos_polarizations)
-            #     # extra time to move pol analyzer for each pos requested (value is very approximate)
-            #     time_move_pol_once = POL_MOVE_TIME  # s
-            #     logging.debug("Add %s extra sec to move polarization analyzer for all positions requested."
-            #                   % time_move_pol_left)
-            #     time_move_pol_left = time_move_pol_once * len(pos_polarizations)
-
-            # Initialize leeches: Shape should be slowest axis to fastest axis
-            # (pol pos, rep y, rep x, images to integrate).
-            # Polarization analyzer pos is slowest and image integration fastest.
-            # Estimate acq time for leeches is based on two fastest axis.
-            if integration_count > 1:
-                shape = (len(pos_polarizations), rep[1], rep[0], integration_count)
-            else:
-                shape = (len(pos_polarizations), rep[1], rep[0])
-
-            leech_nimg, leech_time_pimg = self._startLeeches(img_time, tot_num, shape)
-
-            logging.debug("Scanning resolution is %s and scale %s",
-                          self._emitter.resolution.value,
-                          self._emitter.scale.value)
-
-            last_ccd_update = 0
-            start_t = time.time()
-            n = 0  # number of images acquired so far
-            # for pol_idx, pol_pos in enumerate(pos_polarizations):
-            #     if pol_pos is not None:
-            #         logging.debug("Acquiring with the polarization position %s", pol_pos)
-            #         # move polarization analyzer to position specified
-            #         f = self._analyzer.moveAbs({"pol": pol_pos})
-            #         f.result()
-            #         time_move_pol_left -= time_move_pol_once
-
-            # iterate over pixel positions for scanning.
-            for px_idx in numpy.ndindex(*rep[::-1]):  # last dim (X) iterates first
-                trans = tuple(spot_pos[px_idx])  # spot position
-
-                self._current_scan_area = (px_idx[1] * tile_size[0],
-                                           px_idx[0] * tile_size[1],
-                                           (px_idx[1] + 1) * tile_size[0] - 1,
-                                           (px_idx[0] + 1) * tile_size[1] - 1)
-
-                # take care of drift
-                if self._dc_estimator:
-                    trans = (trans[0] - self._dc_estimator.tot_drift[0],
-                             trans[1] - self._dc_estimator.tot_drift[1])
-                cptrans = self._emitter.translation.clip(trans)
-                if cptrans != trans:
-                    if self._dc_estimator:
-                        logging.error("Drift of %s px caused acquisition region out "
-                                      "of bounds: needed to scan spot at %s.",
-                                      self._dc_estimator.tot_drift, trans)
-                    else:
-                        logging.error("Unexpected clipping in the scan spot position %s", trans)
-                self._emitter.translation.value = cptrans
-                logging.debug("E-beam spot after drift correction: %s",
-                              self._emitter.translation.value)
-
-                # time left for leeches
-                leech_time_left = (tot_num - n + 1) * leech_time_pimg
-                # extra time needed taking leeches into account and moving polarizer HW if present
-                extra_time = leech_time_left + time_move_pol_left
-
-                # Reset live image, to be sure that if there is an
-                # integrationTime, the new images are not mixed with the one
-                # from the previous pixel (= ebeam pos).
-                self._sccd.raw = []
-
-                # acquire images
-                for i in range(integration_count):
-                    self._acquireImage(n, px_idx, img_time, sem_time, sub_pxs,
-                                       tot_num, leech_nimg, extra_time, future)
-                    # Live update the setting stream with the new data
-                    # When there is integration, we always pass the data, as
-                    # the number of images received matters.
-                    if integration_count > 1 or time.time() > last_ccd_update + self._live_update_period:
-                        try:
-                            self._sccd._onNewData(self._ccd_df, self._acq_data[self._ccd_idx][-1])
-                        except Exception:
-                            logging.exception("Failed to update CCD live view")
-                        last_ccd_update = time.time()
-
-                    # integrate the acquired images one after another
-                    for stream_idx, das in enumerate(self._acq_data):
-                        if self._img_intor[stream_idx] is None:
-                            self._img_intor[stream_idx] = img.ImageIntegrator(integration_count)
-                        self._acq_data[stream_idx] = [self._img_intor[stream_idx].append(das[-1])]
-
-                    n += 1  # number of images acquired so far
-
-                for i, das in enumerate(self._acq_data):
-                    # TODO add EBIC acquired data here?
-                    self._assembleLiveData(i, das[-1], px_idx, rep)
-
-                # Activate _updateImage thread
-                self._shouldUpdateImage()
-                logging.debug("Done acquiring image number %s out of %s.", n, tot_num)
-
-                self._img_intor = [None for _ in self._streams]
-                self._acq_data = [[] for _ in self._streams]  # delete acq_data to use less RAM
 
             dur = time.time() - start_t
             logging.info("Acquisition completed in %g s -> %g s/frame", dur, dur / n)
@@ -2198,6 +1961,20 @@ class SEMMDStream(MultipleDetectorStream):
             logging.debug("Starting e-beam sync acquisition with components %s",
                           ", ".join(s._detector.name for s in self._streams))
 
+            # initialize the EBIC scan controller and verify it is in ready state
+            ebic_det = None
+            try:
+                ebic_det = model.getComponent(role='ebic-detector')
+            except LookupError:
+                logging.debug("No EBIC detector found skipping synchronized acquisition of EBIC.")
+
+            if ebic_det:
+                if ebic_det.scanState.value != ephemeron.STATE_NAME_IDLE:
+                    logging.warning(f"Scan state of the EBIC scan controller is not {ephemeron.STATE_NAME_IDLE}")
+                else:
+                    # Set the EBIC scan controller state to running
+                    ebic_det.scanState.value = ephemeron.STATE_NAME_RUNNING
+
             tot_num = numpy.prod(rep)
 
             # initialize leeches
@@ -2342,6 +2119,8 @@ class SEMMDStream(MultipleDetectorStream):
                                   "reason: %e" % e)
 
             self._stopLeeches()
+            # Set the EBIC scan controller state to stopped
+            ebic_det.scanState.value = ephemeron.STATE_NAME_STOPPED
 
             if self._dc_estimator:
                 self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))

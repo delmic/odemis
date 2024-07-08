@@ -1685,19 +1685,12 @@ class SparcStreamsController(StreamBarController):
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
-        sem_ebic_stream = acqstream.SEMMDStream("SEM EBIC",
-                                               [sem_stream, ebic_stream])
+        sem_ebic_stream = acqstream.SEMMDStream("SEM EBIC", [sem_stream, ebic_stream])
 
-        ret = self._addRepStream(ebic_stream, sem_ebic_stream, play=False)
-
-        # With EBIC, often the user wants to get the whole area, same as the survey.
-        # But it's not very easy to select all of it, so do it automatically.
-        # (after the controller creation, to automatically set the ROA too)
-        # TODO let the user select the ROI instead of using the full ROI automatically
-        # if isinstance(ebic_stream, acqstream.EBICSettingsStream) and ebic_stream.roi.value == acqstream.UNDEFINED_ROI:
-        if ebic_stream.roi.value == acqstream.UNDEFINED_ROI:
+        # Let the user select the ROI instead of using the full ROI automatically
+        if isinstance(ebic_stream, acqstream.EBICSettingsStream) and ebic_stream.roi.value == acqstream.UNDEFINED_ROI:
             ebic_stream.roi.value = (0, 0, 1, 1)
-        return ret
+        return self._addRepStream(ebic_stream, sem_ebic_stream, play=False)
 
     def addCLIntensity(self):
         """ Create a CLi stream and add to to all compatible viewports """
