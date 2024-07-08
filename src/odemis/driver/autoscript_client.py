@@ -116,7 +116,7 @@ class SEM(model.HwComponent):
             self.server._pyroTimeout = 30  # seconds
             self._swVersion = self.server.get_software_version()
             self._hwVersion = self.server.get_hardware_version()
-            if "adapter; autoscript" not in self._swVersion:
+            if "adapter: autoscript" not in self._swVersion:
                 raise HwError("The connected server is not an autoscript server. Please check the xt adapter configuration."
                               "The server software version is '%s'." % self._swVersion)
             logging.debug(
@@ -131,7 +131,7 @@ class SEM(model.HwComponent):
 
         # Transfer latest xtadapter package if available
         # The transferred package will be a zip file in the form of bytes
-        check_and_transfer_latest_package(self)  # TODO: enable this once the package is available
+        # check_and_transfer_latest_package(self)  # TODO: enable this once the package is available
 
         # Create the scanner type child(ren)
         # Check if at least one of the required scanner types is instantiated

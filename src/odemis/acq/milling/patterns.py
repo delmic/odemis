@@ -28,7 +28,7 @@ class MillingPatternParameters(ABC):
         """generate the milling pattern for the microscope"""
         pass
     
-class RectanglePatternParameters:
+class RectanglePatternParameters(MillingPatternParameters):
     """Represents rectangle pattern parameters"""
 
     def __init__(self, width: float, height: float, depth: float, rotation: float = 0.0, center = (0, 0), scan_direction: str = "TopToBottom", name: str = "Rectangle"):
@@ -68,7 +68,7 @@ class RectanglePatternParameters:
     def generate(self):
         return self
 
-class TrenchPatternParameters(ABC):
+class TrenchPatternParameters(MillingPatternParameters):
     """Represents trench pattern parameters"""
 
     def __init__(self, width: float, height: float, depth: float, spacing: float, center = (0, 0), name: str = "Trench"):
@@ -134,7 +134,7 @@ class TrenchPatternParameters(ABC):
         return patterns
 
 
-class MicroexpansionPatternParameters(ABC):
+class MicroexpansionPatternParameters(MillingPatternParameters):
     """Represents microexpansion pattern parameters"""
 
     def __init__(self, width: float, height: float, depth: float, spacing: float, center = (0, 0), name: str = "Trench"):
