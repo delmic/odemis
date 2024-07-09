@@ -2408,6 +2408,19 @@ class AndorCam2(model.DigitalCamera):
                     raise  # Serious error
             else:
                 logging.info("Already %d new images available (from %d, to %d)", last - first + 1, first, last)
+
+                # It seems that sometimes the WaitForAcquisition() would have noticed the new image,
+                # but as we didn't call it, it didn't clear the flag, and next time, it would report
+                # that an image is immediately available while it's not. So we call it now, in non-
+                # blocking mode, and without caring about the result.
+                try:
+                    # If we don't call this now, next time we call it, it will claim there is an image
+                    # available, although we have already read it.
+                    self.WaitForAcquisition(0.0)
+                except AndorV2Error as ex:
+                    # probably DRV_NO_NEW_DATA, meaning there is no new image detected, which is fine
+                    pass
+
                 return False  # new image!
 
             # No message => wait for an image for a short while
