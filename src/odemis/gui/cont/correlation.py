@@ -22,6 +22,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+import copy
 import logging
 import math
 import wx
@@ -32,7 +33,7 @@ import wx.html
 import odemis.acq.stream as acqstream
 import odemis.gui.model as guimod
 from odemis import model
-from odemis.acq.stream import StaticStream, StaticFluoStream, StaticSEMStream
+from odemis.acq.stream import RGBStream, StaticStream, StaticFluoStream, StaticSEMStream
 from odemis.gui.util import call_in_wx_main
 from odemis.gui.cont.tabs.localization_tab import LocalizationTab
 
@@ -51,6 +52,31 @@ def update_image_in_views(s: StaticStream, views: list) -> None:
             if st is s:
                 sp._shouldUpdateImage()
 
+def convert_rgb_to_sem(rgb_stream: RGBStream) -> StaticSEMStream:
+    """Convert an RGB stream to a SEM stream
+    :param rgb_stream: (RGBStream) the RGB stream to convert
+    :return: (StaticSEMStream) the converted SEM stream
+    """
+    d = rgb_stream.raw[0]
+    if isinstance(d, model.DataArrayShadow):
+        d = d.getData()
+
+    # get dim order, and select the first channel (arbitrary choice)
+    dims = d.metadata[model.MD_DIMS]
+    if dims == "YXC":
+        d = d[:, :, 0]
+    elif dims == "CYX":
+        d = d[0, :, :]
+
+    # convert to sem stream
+    sem_stream = StaticSEMStream(rgb_stream.name.value, raw=d)
+
+    # update md
+    sem_stream.raw[0].metadata = copy.deepcopy(d.metadata)
+    sem_stream.raw[0].metadata[model.MD_ACQ_TYPE] = model.MD_AT_EM
+    sem_stream.raw[0].metadata[model.MD_DIMS] = "YX"
+
+    return sem_stream
 
 class CorrelationController(object):
 
@@ -188,6 +214,12 @@ class CorrelationController(object):
             # skip existing streams, live streams
             if s in self._tab_data_model.streams.value or not isinstance(s, StaticStream):
                 continue
+
+            # if the user has loaded a rgb stream, assume it is meant to be a SEM stream
+            # (convert to 2D SEM stream, fix metadata, etc.)
+            if isinstance(s, RGBStream):
+                logging.debug(f"Converting RGB stream to SEM: {s.name.value}")
+                s = convert_rgb_to_sem(s)
 
             # reset the stream correlation data, and add to correlation streams
             self._reset_stream_correlation_data(s)
@@ -374,7 +406,7 @@ class CorrelationController(object):
         s = self._tab_data_model.selected_stream.value
 
         # the cur_pos is the realspace position of the image
-        p = s.raw[0].metadata[model.MD_POS]
+        p = s.raw[0].metadata.get(model.MD_POS, (0,0))
         x, y = p[:2]  # x, y positions only (ignore z)
 
         # the correlation pos is the change in position in the viewer
