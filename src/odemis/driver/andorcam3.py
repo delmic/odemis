@@ -915,7 +915,7 @@ class AndorCam3(model.DigitalCamera):
                 status_str = " (%s)" % (status,)
             else:
                 status_str = ""
-            logging.debug(u"Temp is %.2f°C%s", temp, status_str)
+            logging.debug(u"Temperature of %s is %.2f°C%s", self.name, temp, status_str)
         except ATError as exp:
             # This is a known error if the camera is turned off or disconnected.
             # We don't do anything, but at least we can hint the user something
