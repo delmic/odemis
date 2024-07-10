@@ -202,7 +202,7 @@ class Sparc2AlignTab(Tab):
         self._spot_stream = spot_stream
 
         self._ccd_stream = None
-        self._ccd_stream_ext = None  # next to a 'regular' ccd stream there can be an external ccd stream
+        self._ccd_stream_ext = None  # used for the tunnel lens alignment, with the spectrograph-dedicated
         self._as_stream = None
         # The ccd stream panel entry object is kept as attribute
         # to enable/disable ccd stream panel during focus mode
@@ -268,7 +268,8 @@ class Sparc2AlignTab(Tab):
         else:
             self.panel.btn_bkg_acquire.Show(False)
 
-        if main_data.ccds and any([len(main_data.ccds) > 1, main_data.sp_ccd]):
+        ccd_focuser_ext = None
+        if "tunnel-lens-align" in tab_data.align_mode.choices:
             # check if there is a dedicated spectrograph which affects an external CCD
             try:
                 spec = model.getComponent(role="spectrograph-dedicated")
@@ -278,9 +279,7 @@ class Sparc2AlignTab(Tab):
                 spec = None
             if spec:
                 # check if there is a CCD which is dependent on the dedicated spectrograph
-                ext_ccd = [ccd for ccd in main_data.ccds if ccd.name in spec.affects.value]
-                if not ext_ccd:
-                    ext_ccd.append(main_data.sp_ccd)  # try to assign the sp_ccd if there is any
+                ext_ccd = [ccd for ccd in main_data.ccds + main_data.sp_ccds if ccd.name in spec.affects.value]
                 if any(ext_ccd):
                     hwdetvas = set()
                     if model.hasVA(ext_ccd[0], "temperature"):
@@ -295,7 +294,7 @@ class Sparc2AlignTab(Tab):
                                         detvas=get_local_vas(ext_ccd[0], main_data.hw_settings_config),
                                         forcemd={model.MD_POS: (0, 0),  # Just in case the stage is there
                                                  model.MD_ROTATION: 0},  # Force the CCD as-is
-                                        acq_type=model.MD_AT_AR,  # For the merge slider icon
+                                        acq_type=model.MD_AT_SPECTRUM,  # For the merge slider icon
                                         )
                     self._setFullFoV(ccd_stream_ext, (2, 2))
                     self._ccd_stream_ext = ccd_stream_ext
@@ -304,11 +303,15 @@ class Sparc2AlignTab(Tab):
                                         add_to_view=self.panel.vp_align_lens_ext.view)
                     self._ccd_spe_ext.stream_panel.flatten()
 
-                    self._addMoIEntries(self._ccd_spe_ext.stream_panel)
-                    ccd_stream_ext.image.subscribe(self._onNewMoI)
-
                     # To activate the SEM spot when the external CCD plays
                     ccd_stream_ext.should_update.subscribe(self._on_ccd_stream_play)
+
+                    # if there is a detector which is affected by the external focuser
+                    # set the spec_ded_focus components as focuser
+                    if all([self._ccd_stream_ext,
+                            main_data.spec_ded_focus,
+                            self._ccd_stream_ext.detector.name in main_data.spec_ded_focus.affects.value]):
+                        ccd_focuser_ext = main_data.spec_ded_focus
 
         # For running autofocus (can only one at a time)
         self._autofocus_f = model.InstantaneousFuture()
@@ -320,13 +323,6 @@ class Sparc2AlignTab(Tab):
             ccd_focuser = main_data.focus
         else:
             ccd_focuser = None
-
-        ccd_focuser_ext = None
-        # check if there is a detector which is affected by the external focuser
-        if main_data.spec_ded_focus and ext_ccd:
-            for det in ext_ccd:
-                if det.name in main_data.spec_ded_focus.affects.value:
-                    ccd_focuser_ext = main_data.spec_ded_focus
 
         # check for internal and external spectrometers with focus
         if ccd_focuser:
@@ -479,7 +475,6 @@ class Sparc2AlignTab(Tab):
             if main_data.streak_ccd.name in main_data.spectrograph_ded.affects.value:
                 spect = main_data.spectrograph_ded
                 self.panel.cmb_focus_detectors_ext.Append(main_data.streak_ccd.name)
-
 
             add_axis("grating", spect)
             add_axis("wavelength", spect)
@@ -695,7 +690,7 @@ class Sparc2AlignTab(Tab):
 
         self.panel.btn_manual_focus.Bind(wx.EVT_BUTTON, self._onManualFocus)
         if main_data.spectrograph_ded:
-            self.panel.btn_manual_focus_ext.Bind(wx.EVT_BUTTON, self._onManualFocus_ext)
+            self.panel.btn_manual_focus_ext.Bind(wx.EVT_BUTTON, self._onManualFocus)
 
         if main_data.brightlight:
             # Make sure the calibration light is off
@@ -1062,7 +1057,9 @@ class Sparc2AlignTab(Tab):
             if main.spectrograph_ded and main.streak_ccd.name in main.spectrograph_ded.affects.value:
                 self.panel.pnl_focus_ext.Show(True)
                 self.panel.pnl_focus.Show(False)
-                self.panel.cmb_focus_detectors_ext.SetSelection(1)
+                # find the index of the streak_cdd name in the detectors combobox and change selection accordingly
+                cmb_index = self.panel.cmb_focus_detectors_ext.FindString(main.streak_ccd.name)
+                self.panel.cmb_focus_detectors_ext.SetSelection(cmb_index)
             else:
                 self.panel.pnl_focus.Show(True)
                 self.panel.pnl_focus_ext.Show(False)
@@ -1127,7 +1124,8 @@ class Sparc2AlignTab(Tab):
             self.panel.pnl_light_aligner.Show(False)
             self.panel.pnl_lens_tunnel.Show(True)
             self._show_spec_ded_aligner_components(True)  # adjust this panel to enable full control of all axes
-            self.panel.cmb_focus_detectors_ext.SetSelection(0)  # set the detector to the first in the list
+            # set the selection back to the main ccd to avoid the streak ccd to be selected
+            self.panel.cmb_focus_detectors_ext.SetSelection(0)
 
             self.panel.pnl_moi_settings.Show(False)
         else:
@@ -1182,7 +1180,9 @@ class Sparc2AlignTab(Tab):
 
     def _show_spec_ded_aligner_components(self, show=False):
         """
-        Enable or disable FSLT lens GUI components (x, y and z buttons, position slider and labels)
+        Enable or disable FSLT lens GUI components (x, y and z buttons, position slider and labels).
+        Specifically in streak cam mode we would like to show a restricted set of controls that are
+        actually useful for the alignment procedure.
         :param enable (show): Show or hide the specific component
         :return:
         """
@@ -1394,7 +1394,7 @@ class Sparc2AlignTab(Tab):
         """
         focusedview = self.tab_data_model.focussedView.value
         # depending on the focusedview type, assign the right focus streams and detector panel combobox
-        if focusedview.name.value == "Lens alignment tunnel":
+        if focusedview is self.panel.vp_align_lens_ext.view:
             focus_streams = self._focus_streams_ext
             focus_det_panel = self.panel.cmb_focus_detectors_ext
         else:
@@ -1485,15 +1485,22 @@ class Sparc2AlignTab(Tab):
         Called when manual focus btn receives an event.
         """
         main = self.tab_data_model.main
-        bl = main.brightlight
         align_mode = self.tab_data_model.align_mode.value
-        gauge = self.panel.gauge_autofocus
-        self._mf_future.cancel()  # In case it's still changing, immediately stop (the gauge)
+        if align_mode == "tunnel-lens-align":
+            bl = main.brightlight_ext
+            gauge = self.panel.gauge_autofocus_ext
+        else:
+            bl = main.brightlight
+            gauge = self.panel.gauge_autofocus
+        # In case it's running, immediately stop (the gauge)
+        self._mf_future.cancel() if self._mf_future.running() else None
 
         if event.GetEventObject().GetValue():  # manual focus btn toggled
             # Set the optical path according to the align mode
             if align_mode == "streak-align":
                 opath = "streak-focus"
+            elif align_mode == "tunnel-lens-align":
+                opath = "spec-focus-ext"
             elif align_mode in ("lens-align", "lens2-align", "light-in-align"):
                 opath = "spec-focus"
             else:
@@ -1505,12 +1512,24 @@ class Sparc2AlignTab(Tab):
             if align_mode == "streak-align":
                 # force wavelength 0
                 # TODO: Make sure it's the correct position on the workflow, maybe do it for all modes?
-                main.spectrograph.moveAbsSync({"wavelength": 0})
-
-                self.panel.slider_focus.Enable(True)
-                self.panel.cmb_focus_gratings.Enable(True)
-                # Do no enable detector selection, as only the streak-ccd is available
-                # TODO: update the combobox to indicate the current detector is the streak-ccd
+                if all([main.streak_ccd,
+                        main.spectrograph_ded,
+                        main.streak_ccd.name in main.spectrograph_ded.affects.value]):
+                    main.spectrograph_ded.moveAbsSync({"wavelength": 0})
+                    self.panel.slider_focus_ext.Enable(True)
+                    self.panel.cmb_focus_gratings_ext.Enable(True)
+                else:
+                    main.spectrograph.moveAbsSync({"wavelength": 0})
+                    self.panel.slider_focus.Enable(True)
+                    self.panel.cmb_focus_gratings.Enable(True)
+                    # Do no enable detector selection, as only the streak-ccd is available
+                    # TODO: update the combobox to indicate the current detector is the streak-ccd
+            elif align_mode == "tunnel-lens-align":
+                main.spectrograph_ded.moveAbsSync({"wavelength": 0,
+                                                   "slit-in": main.spectrograph_ded.axes["slit-in"].range[0]})
+                self._enableFocusComponents(manual=True, ccd_stream=False)
+                # Do no enable detector selection, as there can be streak-ccd connected as well
+                self.panel.cmb_focus_detectors_ext.Enable(False)
             else:
                 if align_mode in ("lens-align", "lens2-align", "light-in-align"):
                     self._enableFocusComponents(manual=True, ccd_stream=False)
@@ -1534,65 +1553,6 @@ class Sparc2AlignTab(Tab):
             self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
 
     @call_in_wx_main
-    def _onManualFocus_ext(self, event):
-        """
-        Called when manual focus btn receives an event.
-        """
-        main = self.tab_data_model.main
-        bl_ext = main.brightlight_ext
-        align_mode = self.tab_data_model.align_mode.value
-        gauge = self.panel.gauge_autofocus_ext
-        self._mf_future.cancel()  # In case it's still changing, immediately stop (the gauge)
-
-        if event.GetEventObject().GetValue():  # manual focus btn toggled
-            # Set the optical path according to the align mode
-            if align_mode == "streak-align":
-                opath = "streak-focus"
-            elif align_mode == "tunnel-lens-align":
-                opath = "spec-focus-ext"
-            else:
-                self._stream_controller.pauseStreams()
-                logging.warning("Manual focus requested not compatible with requested alignment mode %s. Do nothing.",
-                                align_mode)
-                return
-
-            if align_mode == "streak-align":
-                # force wavelength 0
-                # TODO: Make sure it's the correct position on the workflow, maybe do it for all modes?
-                main.spectrograph_ded.moveAbsSync({"wavelength": 0})
-
-                self.panel.slider_focus_ext.Enable(True)
-                self.panel.cmb_focus_gratings_ext.Enable(True)
-                # Do no enable detector selection, as only the streak-ccd is available
-            elif align_mode == "tunnel-lens-align":
-                main.spectrograph_ded.moveAbsSync({"wavelength": 0,
-                                                   "slit-in": main.spectrograph_ded.axes["slit-in"].range[0]})
-                self._enableFocusComponents(manual=True, ccd_stream=False)
-                # Do no enable detector selection, as there can be streak-ccd connected as well
-                self.panel.cmb_focus_detectors.Enable(False)
-            else:
-                if align_mode in ("lens-align", "lens2-align", "light-in-align"):
-                    self._enableFocusComponents(manual=True, ccd_stream=False)
-                self._stream_controller.pauseStreams()
-                self.panel.btn_bkg_acquire.Enable(False)
-
-            self._mf_future = Sparc2ManualFocus(main.opm, bl_ext, opath, toggled=True)
-            self._mf_future.add_done_callback(self._onManualFocusReady_ext)
-            # Update GUI
-            self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
-        else:  # manual focus button is untoggled
-            # First pause the streams, so that image of the slit (almost closed) is the final image
-            self._stream_controller.pauseStreams()
-            # Go back to previous mode (=> open the slit & turn off the lamp)
-            # Get the optical path from align mode
-            opath = self._mode_to_opm[align_mode]
-
-            self._mf_future = Sparc2ManualFocus(main.opm, bl_ext, opath, toggled=False)
-            self._mf_future.add_done_callback(self._onManualFocusFinished)
-            # Update GUI
-            self._pfc_manual_focus = ProgressiveFutureConnector(self._mf_future, gauge)
-
-    @call_in_wx_main
     def _onManualFocusReady(self, future):
         """
         Called when starting manual focus is done
@@ -1606,16 +1566,6 @@ class Sparc2AlignTab(Tab):
             istream = self.panel.cmb_focus_detectors.GetSelection()
             self._focus_streams[istream].should_update.value = True
 
-    @call_in_wx_main
-    def _onManualFocusReady_ext(self, future):
-        """
-        Called when starting manual focus is done
-        Make sure there's a shown focus stream, then enable/disable manual focus components
-        """
-        if future.cancelled():
-            return
-
-        align_mode = self.tab_data_model.align_mode.value
         if align_mode != "streak-align" and self._focus_streams_ext:
             istream = self.panel.cmb_focus_detectors_ext.GetSelection()
             self._focus_streams_ext[istream].should_update.value = True
@@ -1640,7 +1590,7 @@ class Sparc2AlignTab(Tab):
                 btn = self.panel.btn_autofocus
                 gauge = self.panel.gauge_autofocus
             elif align_mode == "tunnel-lens-align":
-                focus_mode = "tunnel-lens-align"
+                focus_mode = "spec-focus-ext"
                 ss = self._focus_streams_ext
                 btn = self.panel.btn_autofocus_ext
                 gauge = self.panel.gauge_autofocus_ext
