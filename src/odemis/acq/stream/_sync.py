@@ -45,7 +45,7 @@ from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
     MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS, MD_THETA_LIST, MD_WL_LIST, MD_ROTATION, \
-    MD_ROTATION_COR
+    MD_ROTATION_COR, MD_LIGHT_POWER
 from odemis.model import hasVA
 from odemis.util import units, executeAsyncTask, almost_equal, img, angleres
 from odemis.util.driver import guessActuatorMoveDuration
@@ -2599,7 +2599,10 @@ class SEMSpectrumMDStream(SEMCCDMDStream):
                        MD_PIXEL_SIZE: pxs,
                        MD_DIMS: "CTZYX",
                        MD_DESCRIPTION: self._streams[n].name.value})
-
+            # if there is a power setting present on the spectrum stream add the current
+            # power of the light emitter.
+            if self._streams[n].power:
+                md.update({MD_LIGHT_POWER: self._streams[n].power.value})
             # Shape of spectrum data = C11YX
             da = numpy.zeros(shape=(spec_shape[1], 1, 1, rep[1], rep[0]), dtype=raw_data.dtype)
             self._live_data[n].append(model.DataArray(da, md))
