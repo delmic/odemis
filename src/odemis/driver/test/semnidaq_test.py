@@ -52,7 +52,11 @@ CONFIG_CLD = {
     "role": "cld",
     "channel": 1,
     # "channel": "ao1",  # Loopback from the AO1, for testing
-    "limits": [3, -3]  # Data inverted
+    "limits": [3, -3],  # Data inverted
+    # Cannot be used as standard board only has 8 channels, and they are all used
+    # "active_ttl": {
+    #     5: [True, False, "protection"],  # high when active, low when protection is True
+    # },
 }
 
 CONFIG_BSD = {
@@ -60,13 +64,17 @@ CONFIG_BSD = {
     "role": "bsd",
     "channel": 2,
     # "channel": "ao1",  # Loopback from the AO1, for testing
-    "limits": [-4, 4]  # Data inverted
+    "limits": [-4, 4]
 }
 
 CONFIG_CNT = {
     "name": "counter",
     "role": "counter",
     "source": 8,  # PFI8
+    "active_ttl": {
+        5: [False, True, "protection"],  # low when active, high when protection is True
+    },
+    "activation_delay": 500e-9,  # s
 }
 
 CONFIG_SCANNER = {
@@ -646,7 +654,6 @@ class TestAnalogSEM(unittest.TestCase):
             self.assertEqual(da.shape, exp_shape)
             self.assertIn(model.MD_DWELL_TIME, da.metadata)
             self.assertAlmostEqual(da.metadata[model.MD_PIXEL_SIZE], exp_pxs)
-
 
     def test_acquisition_counter(self):
         self.scanner.dwellTime.value = 10e-06  # s
