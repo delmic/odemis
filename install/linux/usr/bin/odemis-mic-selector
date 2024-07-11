@@ -12,27 +12,26 @@
 # Example:
 # odemis-mic-selector.py --log-level 2 --config /usr/share/test-sun.yaml 238abe69010000c8 1bcf:2880 --config /usr/share/test-key.yaml 413c:2003 --fallback /usr/share/test-none.yaml
 
+import argparse
+import glob
+import logging
+import os
+import subprocess
+import sys
+from logging.handlers import RotatingFileHandler
+from typing import List
 
 import Pyro4
-import argparse
-import collections
-import logging
-from logging.handlers import RotatingFileHandler
+
 from odemis import model
 from odemis.driver import powerctrl
 from odemis.util import driver
-import subprocess
-import sys
-import os
 
 LSUSB_BIN = "/usr/bin/lsusb"
 
 TMCMCONFIG_BIN = "/usr/bin/tmcmconfig"
 
-CLASS_PCU = powerctrl.PowerControlUnit
-KWARGS_PCU = {"name": "pcu", "role": "pcu", "port": "/dev/ttyPMT*"}
-# KWARGS_PCU_TEST = {"name": "pcu", "role": "pcu", "port": "/dev/fake"}
-# KWARGS_PCU = KWARGS_PCU_TEST
+PCU_PORT_PATTERN = "/dev/ttyPMT*"
 
 class ConfigMatcher(object):
     """
@@ -64,43 +63,72 @@ def count_usb_device(usbid):
     return out.count(usbid)
 
 
+def find_backend_pcus() -> List[model.HwComponent]:
+    """
+    return (list of HwComponent): all the power control units found (can be empty)
+    :raises: IOError if no backend is found
+    """
+    try:
+        comps = model.getComponents()
+    except (Pyro4.errors.CommunicationError, IOError, LookupError):
+        raise IOError("Failed to access the backend")
+
+    pcus = []
+    for comp in comps:
+        if comp.role and comp.role.startswith("power-control"):
+            pcus.append(comp)
+    return pcus
+
+
+def connect_all_pcus() -> List[model.HwComponent]:
+    pcus = []
+    ports = glob.glob(PCU_PORT_PATTERN)
+    # For testing: uncomment this line:
+    # ports.append("/dev/fake")
+    for port in ports:
+        try:
+            pcu = powerctrl.PowerControlUnit(name=f"power control unit on {port}", role=None, port=port, check_power=False)
+            pcus.append(pcu)
+        except Exception as ex:
+            # Not all device on the port are PCU, so we can ignore the error
+            logging.warning("Failed to connect to PCU on %s: %s", port, ex)
+            continue
+
+    return pcus
+
+
 def get_eeprom_ids():
     """
     return (set of int): ID of each EEPROM detected
     """
     terminate = False
     try:
-        pcu = model.getComponent(role="power-control")
+        pcus = find_backend_pcus()
         logging.debug("Using the backend to access the power controller")
-    except (Pyro4.errors.CommunicationError, IOError, LookupError):
-        logging.debug("Failed to access the backend, will try directly")
-        pcu = CLASS_PCU(**KWARGS_PCU)
+    except IOError:
+        # No backend available, try to connect to the PCUs directly
+        pcus = connect_all_pcus()
         terminate = True
 
-    try:
-        ids = pcu.memoryIDs.value
-    except IOError as ex:
-        logging.warning("Failed to get IDs: %s", ex)
-        ids = []
-
-    # HACK: it seems the PCU sometimes fails to detect the IDs on the first
-    # call to SID => try a few more times.
-    # With the old powerhubs (oslo), there should always at least be one ID,
-    # but even on the new powerhubs (lund), if we are called it's because the
-    # user expects an ID.
-    if not ids:
-        logging.warning("Failed to find any IDs, trying again")
-        try:
-            ids = pcu.memoryIDs.value
-        except IOError as ex:
-            logging.warning("Failed to get IDs: %s", ex)
-            ids = []
-        if not ids:
-            logging.warning("Failed to find any IDs, trying one last time")
-            ids = pcu.memoryIDs.value
+    ids = []
+    for pcu in pcus:
+        new_ids = []
+        # HACK: it seems the PCU sometimes fails to detect the IDs on the first
+        # call to SID => try a few more times.
+        for i in range(3):
+            try:
+                new_ids = pcu.memoryIDs.value
+            except IOError as ex:
+                logging.warning("Failed to get IDs: %s", ex)
+            if new_ids:
+                break
+        else:
+            logging.warning("Failed to find any IDs on %s", pcu.name)
+        ids.extend(new_ids)
 
     if terminate:
-        pcu.terminate()
+        for pcu in pcus:
+            pcu.terminate()
     logging.debug("Found EEPROM IDs %s", ids)
     iids = set(int(i, 16) for i in ids)
     return iids
