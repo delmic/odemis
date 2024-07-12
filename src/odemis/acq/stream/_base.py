@@ -1302,7 +1302,8 @@ class Stream(object):
         tform = AffineTransform(matrix, translation)
         pixel_pos_c = tform.inverse().apply(p_pos)
         # a "-" is used for the y coordinate because Y axis has the opposite direction in physical coordinates
-        pixel_pos = int(pixel_pos_c[0] + size[0] / 2), - int(pixel_pos_c[1] - size[1] / 2)
+        pixel_pos = (int(math.floor(pixel_pos_c[0] + size[0] / 2)),
+                     int(math.floor(- (pixel_pos_c[1] - size[1] / 2))))
         if 0 <= pixel_pos[0] < size[0] and 0 <= pixel_pos[1] < size[1]:
             return pixel_pos
         else:
