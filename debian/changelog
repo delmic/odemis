@@ -1,3 +1,15 @@
+odemis (3.5.2-1) bionic; urgency=medium
+
+  * New version: 3.5.2
+  * Main bug fixes:
+    - Stitching function again takes the SEM scan rotation into account for
+      imported SEM TIFF images. (METEOR/ENZEL)
+    - Correlation tab now assumes that imported RGB TIFFs are SEM data (METEOR)
+    - SPARCv1 alignment tab would provide fiber aligner buttons even if the
+      axes couldn't be controled by software. (SPARC)
+
+ -- Éric Piel (Delmic) <piel@delmic.com>  Fri, 12 Jul 2024 13:23:40 +0200
+
 odemis (3.5.1-1) bionic; urgency=medium
 
   * New version: 3.5.1
