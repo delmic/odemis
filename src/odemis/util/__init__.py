@@ -24,23 +24,24 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 # Various helper functions that have a generic usefulness
 # Warning: do not put anything that has dependencies on non default python modules
 
-import queue
-from collections.abc import Mapping
-from concurrent.futures import CancelledError
-from decorator import decorator
-from functools import wraps
 import inspect
 import itertools
 import logging
 import math
-import numpy
+import queue
 import signal
 import sys
 import threading
 import time
-import weakref
 import types
+import weakref
+from collections.abc import Mapping
+from concurrent.futures import CancelledError
+from functools import wraps
 from typing import Iterable, Tuple, TypeVar
+
+import numpy
+from decorator import decorator
 
 from . import weak
 
@@ -605,57 +606,62 @@ def limit_invocation(delay_s):
     return li_dec
 
 
-def inspect_getmembers(object, predicate=None):
-    """
-    Fix for the corresponding function in inspect. If we modify __getattr__ of a function, inspect.getmembers()
-    doesn't work as intended (a TypeError is raised). The change consists of one line (highlighted below).
-    https://stackoverflow.com/questions/54478679/workaround-for-getattr-special-method-breaking-inspect-getmembers-in-pytho
-    """
-    # Line below adds inspect. reference to isclass()
-    if inspect.isclass(object):
-        # Line below adds inspect. reference to getmro()
-        mro = (object,) + inspect.getmro(object)
-    else:
-        mro = ()
-    results = []
-    processed = set()
-    names = dir(object)
-    # :dd any DynamicClassAttributes to the list of names if object is a class;
-    # this may result in duplicate entries if, for example, a virtual
-    # attribute with the same name as a DynamicClassAttribute exists
-    try:
-        for base in object.__bases__:
-            for k, v in base.__dict__.items():
-                if isinstance(v, types.DynamicClassAttribute):
-                    names.append(k)
-    #################################################################
-    ### Modification to inspect.getmembers: also catch TypeError here
-    #################################################################
-    except (AttributeError, TypeError):
-        pass
-    for key in names:
-        # First try to get the value via getattr.  Some descriptors don't
-        # like calling their __get__ (see bug #1785), so fall back to
-        # looking in the __dict__.
+# inspect.getmembers() in Python 3.10 and prior has an issue when __getattr__ is modified.
+if sys.version_info >= (3, 11):
+    def inspect_getmembers(object, predicate=None):
+        return inspect.getmembers(object, predicate)
+else:
+    def inspect_getmembers(object, predicate=None):
+        """
+        Fix for the corresponding function in inspect. If we modify __getattr__ of a function, inspect.getmembers()
+        doesn't work as intended (a TypeError is raised). The change consists of one line (highlighted below).
+        https://stackoverflow.com/questions/54478679/workaround-for-getattr-special-method-breaking-inspect-getmembers-in-pytho
+        """
+        # Line below adds inspect. reference to isclass()
+        if inspect.isclass(object):
+            # Line below adds inspect. reference to getmro()
+            mro = (object,) + inspect.getmro(object)
+        else:
+            mro = ()
+        results = []
+        processed = set()
+        names = dir(object)
+        # :dd any DynamicClassAttributes to the list of names if object is a class;
+        # this may result in duplicate entries if, for example, a virtual
+        # attribute with the same name as a DynamicClassAttribute exists
         try:
-            value = getattr(object, key)
-            # handle the duplicate key
-            if key in processed:
-                raise AttributeError
-        except AttributeError:
-            for base in mro:
-                if key in base.__dict__:
-                    value = base.__dict__[key]
-                    break
-            else:
-                # could be a (currently) missing slot member, or a buggy
-                # __dir__; discard and move on
-                continue
-        if not predicate or predicate(value):
-            results.append((key, value))
-        processed.add(key)
-    results.sort(key=lambda pair: pair[0])
-    return results
+            for base in object.__bases__:
+                for k, v in base.__dict__.items():
+                    if isinstance(v, types.DynamicClassAttribute):
+                        names.append(k)
+        #################################################################
+        ### Modification to inspect.getmembers: also catch TypeError here
+        #################################################################
+        except (AttributeError, TypeError):
+            pass
+        for key in names:
+            # First try to get the value via getattr.  Some descriptors don't
+            # like calling their __get__ (see bug #1785), so fall back to
+            # looking in the __dict__.
+            try:
+                value = getattr(object, key)
+                # handle the duplicate key
+                if key in processed:
+                    raise AttributeError
+            except AttributeError:
+                for base in mro:
+                    if key in base.__dict__:
+                        value = base.__dict__[key]
+                        break
+                else:
+                    # could be a (currently) missing slot member, or a buggy
+                    # __dir__; discard and move on
+                    continue
+            if not predicate or predicate(value):
+                results.append((key, value))
+            processed.add(key)
+        results.sort(key=lambda pair: pair[0])
+        return results
 
 class TimeoutError(Exception):
     pass
