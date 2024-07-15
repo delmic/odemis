@@ -66,7 +66,7 @@ class RectanglePatternParameters(MillingPatternParameters):
         return f"{self.to_json()}"
 
     def generate(self):
-        return self
+        return [self]
 
 class TrenchPatternParameters(MillingPatternParameters):
     """Represents trench pattern parameters"""
