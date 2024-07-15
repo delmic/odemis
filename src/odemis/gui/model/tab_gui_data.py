@@ -217,7 +217,7 @@ class CryoGUIData(MicroscopyGUIData):
     Represents an interface for handling cryo microscopes.
     """
     def __init__(self, main):
-        if main.role not in ("enzel", "meteor", "mimas"):
+        if not main.is_viewer and main.role not in ("enzel", "meteor", "mimas"):
             raise ValueError(
                 "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
         super().__init__(main)

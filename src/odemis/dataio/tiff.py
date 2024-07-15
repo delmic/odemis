@@ -2778,10 +2778,9 @@ def _convert_thermo_fisher_to_odemis_metadata(metadata: str) -> dict:
     try:
         # beam metadata
         beam_type = tfs_md["Beam"]["beam"]
-        # tmp: disable scan rotation metadata, as it is inconsistent with how odemis displays images
-        md[model.MD_ROTATION] = 0  # float(tfs_md[beam_type]["scanrotation"])
         md[model.MD_EBEAM_VOLTAGE] = float(tfs_md[beam_type]["hv"])
         md[model.MD_EBEAM_CURRENT] = float(tfs_md[beam_type]["beamcurrent"])
+        md[model.MD_BEAM_SCAN_ROTATION] = float(tfs_md[beam_type]["scanrotation"])
 
         # acquistion type
         acq_map =  {
@@ -2928,9 +2927,9 @@ def _convert_zeiss_to_odemis_metadata(metadata: str) -> dict:
             }
 
             scan_rotation = float(zmd[rot_map[beam_type]].split(" ")[0])
-        md[model.MD_ROTATION] = numpy.deg2rad(scan_rotation)
+        md[model.MD_BEAM_SCAN_ROTATION] = numpy.deg2rad(scan_rotation)
     except Exception as e:
-        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_ROTATION} - {type(e)}: {e}")
+        logging.warning(f"Failed to parse ZEISS metadata: {model.MD_BEAM_SCAN_ROTATION} - {type(e)}: {e}")
         # log the exception type
 
     # beam metadata (dependent keys)
@@ -3145,9 +3144,9 @@ def _convert_tescan_to_odemis_metadata(metadata: bytes) -> dict:
             logging.warning(f"Failed to parse TESCAN metadata: {model.MD_ACQ_TYPE} - {e}")
 
         try:
-            md[model.MD_ROTATION] = numpy.deg2rad(float(tmd[beam_type]["scanrotation"]))
+            md[model.MD_BEAM_SCAN_ROTATION] = numpy.deg2rad(float(tmd[beam_type]["scanrotation"]))
         except KeyError as e:
-            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_ROTATION} - {e}")
+            logging.warning(f"Failed to parse TESCAN metadata: {model.MD_BEAM_SCAN_ROTATION} - {e}")
 
         try:
             md[model.MD_EBEAM_VOLTAGE] = float(tmd[beam_type]["hv"])
@@ -3212,7 +3211,7 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
 
     try:
         md[model.MD_SW_VERSION] = omd["system"]["info"]["fibsem_version"]
-    except:
+    except KeyError as e:
         logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_SW_VERSION} - {type(e)}: {e}")
 
     try:
@@ -3250,9 +3249,9 @@ def _convert_openfibsem_to_odemis_metadata(metadata: str) -> dict:
         beam_settings = omd["microscope_state"][beam_type_settings]
 
         try:
-            md[model.MD_ROTATION] = math.radians(float(beam_settings["scan_rotation"]))
+            md[model.MD_BEAM_SCAN_ROTATION] = math.radians(float(beam_settings["scan_rotation"]))
         except KeyError as e:
-            logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_ROTATION} - {e}")
+            logging.warning(f"Failed to parse OpenFIBSEM metadata: {model.MD_BEAM_SCAN_ROTATION} - {e}")
 
         try:
             md[model.MD_EBEAM_VOLTAGE] = float(beam_settings["voltage"])

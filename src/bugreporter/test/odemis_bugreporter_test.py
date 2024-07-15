@@ -21,7 +21,7 @@ see http://www.gnu.org/licenses/.
 
 """
 from bugreporter.odemis_bugreporter import OdemisBugreporter, BugreporterFrame
-from future.moves.urllib.error import HTTPError
+from urllib.error import HTTPError
 import logging
 import odemis
 import os

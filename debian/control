@@ -66,6 +66,9 @@ Depends: ${shlibs:Depends},
 # Needed for xtadapter update notification feature
          notification-daemon,
          python3-ftdi1,
+# Needed for the Diligent MCC DAQ board driver
+         python3-hid,
+         python3-libusb1,
 Suggests: imagej
 Description: Open Delmic Microscope Software
  Odemis is the acquisition software for the Delmic microscopes. In particular,

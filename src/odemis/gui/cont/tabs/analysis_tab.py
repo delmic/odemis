@@ -821,6 +821,9 @@ class AnalysisTab(Tab):
 
     @classmethod
     def get_display_priority(cls, main_data):
+        # high priority for viewer
+        if main_data.is_viewer:
+            return 1
         # Don't display tab for FastEM
         if main_data.role in ("mbsem",):
             return None

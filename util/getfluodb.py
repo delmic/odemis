@@ -25,7 +25,7 @@ import shutil
 import logging
 import sys
 import json
-from future.moves.urllib.request import urlopen
+from urllib.request import urlopen
 
 logging.getLogger().setLevel(logging.DEBUG)
 
