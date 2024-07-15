@@ -269,6 +269,15 @@ class StaticSEMStream(Static2DStream):
             kwargs["acq_type"] = model.MD_AT_EM
         Static2DStream.__init__(self, name, raw, *args, **kwargs)
 
+class StaticFIBStream(Static2DStream):
+    """
+    Same as a StaticStream, but considered a FIB stream
+    """
+
+    def __init__(self, name, raw, *args, **kwargs):
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_FIB
+        Static2DStream.__init__(self, name, raw, *args, **kwargs)
 
 class StaticCLStream(Static2DStream):
     """
