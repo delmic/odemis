@@ -18,6 +18,8 @@ You should have received a copy of the GNU General Public License along with Ode
 from builtins import str
 import queue
 import logging
+import random
+
 from odemis import model, util, dataio
 from odemis.model import oneway
 import time
@@ -276,9 +278,14 @@ class ReadoutCamera(model.DigitalCamera):
         self._img_counter = (self._img_counter + 1) % len(self._img_list)
         image = self._img_list[self._img_counter].copy()
 
+        if self.parent._streakunit.shutter.value:  # Shutter active -> no image (just noise)
+            image[:] = 100  # Background level
+            mx = 1000
+        else:
+            mx = image.max()
+
         # Add some noise
-        mx = image.max()
-        image += numpy.random.randint(0, max(mx // 100, 10), image.shape, dtype=image.dtype)
+        image += numpy.random.randint(0, 10, image.shape, dtype=image.dtype)
         # Clip, but faster than clip() on big array.
         # There can still be some overflow, but let's just consider this "strong noise"
         image[image > mx] = mx
@@ -307,8 +314,6 @@ class ReadoutCamera(model.DigitalCamera):
             time.sleep(self.exposureTime.value)
 
         # update MD for the current image
-        self.parent._delaybox._updateTriggerRate()
-
         metadata = gen_img.metadata.copy()  # MD of image
         metadata.update(self._metadata)  # MD of camera
         self._mergeMetadata(metadata)
@@ -370,6 +375,9 @@ class StreakUnit(model.HwComponent):
                    0.001, 0.002, 0.005, 0.01}
         self.timeRange = model.FloatEnumerated(timeRange, choices, setter=self._setTimeRange, unit="s")
 
+        # Not all streak units have a shutter, but let's simulate one
+        self.shutter = model.BooleanVA(True)
+
         self._metadata[model.MD_STREAK_TIMERANGE] = self.timeRange.value
         self._metadata[model.MD_STREAK_MCPGAIN] = self.MCPGain.value
         self._metadata[model.MD_STREAK_MODE] = self.streakMode.value
@@ -430,19 +438,31 @@ class DelayGenerator(model.HwComponent):
     Represents a delay generator.
     """
 
-    def __init__(self, name, role, parent, daemon=None, **kwargs):
-        super(DelayGenerator, self).__init__(name, role, parent=parent, daemon=daemon, **kwargs)  # init HwComponent
+    def __init__(self, name, role, parent, daemon=None, streak_unit=None, **kwargs):
+        super().__init__(name, role, parent=parent, daemon=daemon, **kwargs)  # init HwComponent
 
-        self.parent = parent
-
+        self._streak_unit = streak_unit
         self._metadata[model.MD_HW_VERSION] = "Simulated delay generator DG645"
 
         range_trigDelay = [0.0, 1]  # sec
         # set default value according to timeRange setting (look up in MD)
-        self.triggerDelay = model.FloatContinuous(0.0, range_trigDelay, setter=self._setTriggerDelay, unit="s")
+        self.triggerDelay = model.FloatContinuous(0.0, range_trigDelay, unit="s")
 
-        self._metadata[model.MD_TRIGGER_DELAY] = self.triggerDelay.value
-        self._metadata[model.MD_TRIGGER_RATE] = 1000000
+        # The pulse frequency. Can be at 0 if the pulse is not active.
+        self.triggerRate = model.FloatVA(1e6, unit="Hz", readonly=True)
+
+        self._trigger_rate_sim = util.RepeatingTimer(1, self._updateTriggerRate, "Simulated trigger rate changes")
+        self._trigger_rate_sim.start()
+
+        if streak_unit:
+            streak_unit.timeRange.subscribe(self._on_time_range)
+
+    def terminate(self):
+        self._trigger_rate_sim.cancel()
+        if self._streak_unit:
+            self._streak_unit.timeRange.unsubscribe(self._on_time_range)
+            self._streak_unit = None
+        super().terminate()
 
     # override HwComponent.updateMetadata
     def updateMetadata(self, md):
@@ -458,24 +478,22 @@ class DelayGenerator(model.HwComponent):
 
         super(DelayGenerator, self).updateMetadata(md)
 
-    def _setTriggerDelay(self, value):
-        """
-        Updates the trigger delay VA.
-        :parameter value: (float) value to be set
-        :return: (float) current trigger delay value
-        """
-        logging.debug("Reporting trigger delay %s for delay generator.", value)
-        self._metadata[model.MD_TRIGGER_DELAY] = value
-
-        return value
+    def _on_time_range(self, time_range: float):
+        # set corresponding trigger delay
+        tr2d = self._metadata.get(model.MD_TIME_RANGE_TO_DELAY)
+        if tr2d:
+            key = util.find_closest(time_range, tr2d.keys())
+            if util.almost_equal(key, time_range):
+                self.triggerDelay.value = tr2d[key]
+            else:
+                logging.warning("Time range %s is not a key in MD for time range to "
+                                "trigger delay calibration" % time_range)
 
     def _updateTriggerRate(self):
-        """Get the trigger rate (repetition) rate from the delay generator and updates the VA.
-        The Trigger rate corresponds to the ebeam blanking frequency. As the delay
-        generator is operated "external", the trigger rate is a read-only value.
-        Called whenever an image arrives."""
-        value = numpy.random.randint(100000, 1000000)  # return a random trigger rate
-        self._metadata[model.MD_TRIGGER_RATE] = value
+
+        new_val = self.triggerRate.value + random.randint(-10, 10)
+        new_val = min(max(0.1e6, new_val), 2e6)
+        self.triggerRate._set_value(new_val, force_write=True)
 
 
 class StreakCamera(model.HwComponent):
@@ -500,18 +518,21 @@ class StreakCamera(model.HwComponent):
                                          spectrograph=dependencies.get("spectrograph"),
                                          daemon=daemon, **kwargs)
         self.children.value.add(self._readoutcam)  # add readoutcam to children-VA
+
         try:
             kwargs = children["streakunit"]
         except Exception:
             raise ValueError("Required child streakunit not provided")
         self._streakunit = StreakUnit(parent=self, daemon=daemon, **kwargs)
         self.children.value.add(self._streakunit)  # add streakunit to children-VA
-        try:
+
+        if "delaybox" in children.keys():
             kwargs = children["delaybox"]
-        except Exception:
-            raise ValueError("Required child delaybox not provided")
-        self._delaybox = DelayGenerator(parent=self, daemon=daemon, **kwargs)
-        self.children.value.add(self._delaybox)  # add delaybox to children-VA
+            self._delaybox = DelayGenerator(parent=self, daemon=daemon, streak_unit=self._streakunit, **kwargs)
+            self.children.value.add(self._delaybox)  # add delaybox to children-VA
+        else:
+            self._delaybox = None
+            logging.info("No delaybox provided.")
 
     def terminate(self):
         """
@@ -520,6 +541,7 @@ class StreakCamera(model.HwComponent):
         # terminate children
         for child in self.children.value:
             child.terminate()
+        super().terminate()
 
 
 class SimpleStreakCameraDataFlow(model.DataFlow):
