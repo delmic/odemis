@@ -664,9 +664,9 @@ class AutomatedMillingManager(object):
 
                 # roll data by a random amount
                 import random
-                x, y = random.randint(0, 100), random.randint(0, 100)
-                new_image = numpy.roll(new_image, [x, y], axis=[0, 1])
-                print(f"Shifted image by {x}, {y} pixels")
+                # x, y = random.randint(0, 100), random.randint(0, 100)
+                # new_image = numpy.roll(new_image, [x, y], axis=[0, 1])
+                # print(f"Shifted image by {x}, {y} pixels")
 
                 align_filename = os.path.join(feature.path, f"{feature_name}-{task_num}-{task_name}-Alignment-FIB.ome.tiff").replace(" ", "-") # TODO: make unique
                 self._exporter.export(align_filename, new_image)       

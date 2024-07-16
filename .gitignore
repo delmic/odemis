@@ -80,3 +80,6 @@ magic.odm.yaml
 # vscode settings
 .vscode/*
 *.code-workspace
+scripts/venv/*
+scripts/automated-milling-projects/*
+!scripts/automated-milling-projects/milling_tasks.yaml

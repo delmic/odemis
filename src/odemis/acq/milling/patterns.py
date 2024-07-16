@@ -109,6 +109,9 @@ class TrenchPatternParameters(MillingPatternParameters):
         height = self.height.value
         depth = self.depth.value
         spacing = self.spacing.value
+
+        # pattern center
+        center_y = height / 2 + spacing / 2
         
         patterns = [
             RectanglePatternParameters(
@@ -117,7 +120,7 @@ class TrenchPatternParameters(MillingPatternParameters):
                 height=height,
                 depth=depth,
                 rotation=0,
-                center = (0, spacing), # x, y
+                center = (0, center_y), # x, y
                 scan_direction="TopToBottom",
             ),
             RectanglePatternParameters(
@@ -126,7 +129,7 @@ class TrenchPatternParameters(MillingPatternParameters):
                 height=height,
                 depth=depth,
                 rotation=0,
-                center = (0, -spacing), # x, y
+                center = (0, -center_y), # x, y
                 scan_direction="BottomToTop",
             ),
         ]
