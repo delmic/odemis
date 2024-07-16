@@ -657,6 +657,12 @@ class AutomatedMillingManager(object):
                 # reset beam shift
                 self.ion_beam.shift.value = (0, 0)
 
+                # match image settings for alignment
+                ref_image = feature.reference_image # load from directory?
+                pixel_size = ref_image.metadata[model.MD_PIXEL_SIZE]
+                fov = pixel_size[0] * ref_image.shape[1]
+                self.ion_beam.horizontalFoV.value = fov
+
                 # beam shift alignment
                 self._future.running_subf = acquire([self.fib_stream])
                 data, _ = self._future.running_subf.result()
@@ -671,7 +677,6 @@ class AutomatedMillingManager(object):
                 align_filename = os.path.join(feature.path, f"{feature_name}-{task_num}-{task_name}-Alignment-FIB.ome.tiff").replace(" ", "-") # TODO: make unique
                 self._exporter.export(align_filename, new_image)       
 
-                ref_image = feature.reference_image # load from directory?
                 def align_reference_image(ref_image, new_image, scanner):
                     shift_px = MeasureShift(ref_image, new_image, 10)
                     # shift_px = (1, 1)
@@ -692,7 +697,7 @@ class AutomatedMillingManager(object):
                 self._future.set_progress()
 
                 from odemis.acq.milling.tasks import draw_milling_tasks
-                fig = draw_milling_tasks(ref_image, {task_name: task})
+                fig = draw_milling_tasks(new_image, {task_name: task})
                 plt.show()
 
                 print(f"Starting Milling Task: {task}")
