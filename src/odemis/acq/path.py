@@ -36,6 +36,7 @@ from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
 from odemis.util import TimeoutError
 
 GRATING_NOT_MIRROR = "CONST:NOTMIRROR"  # A special string so that no grating position can be like this
+MAX_POSITION = "CONST:MAXPOSITION"  # To indicate that the maximum in the axis range should be used
 
 ACQ_QUALITY_FAST = 0
 ACQ_QUALITY_BEST = 1
@@ -251,6 +252,15 @@ SPARC2_MODES = {
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                  # 'spec-selector' will depend on the affects
                 }),
+            'spec-focus-ext': ("sp-ccd",
+                {'chamber-light': {'power': 'off'},
+                 # 'spec-selector' will depend on the affects
+                 # for the spec-ded aligner only z axis positions are stored, currently for one WL
+                 'spec-ded-aligner': {'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # for the spectrograph dedicated slit fully open and filter always on pass-through
+                 'spectrograph-dedicated': {'slit-in': 10e-6, 'wavelength': 0},
+                 # 'spec-ded-det-selector' will depend on the affects
+                 }),
             'fiber-align': ("fiber-aligner",
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
@@ -288,7 +298,20 @@ SPARC2_MODES = {
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    #'z': "MD:" + model.MD_FAV_POS_ACTIVE
                                    },
-                 }),
+                }),
+            'tunnel-lens-align': ("sp-ccd",
+                {'chamber-light': {'power': 'off'},
+                 # 'spec-selector' will depend on the affects
+                 # for the spec-ded aligner only z axis positions are stored, currently for one WL
+                 'spec-ded-aligner': {'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                 # for the spectrograph dedicated slit fully open and filter always on pass-through
+                 'spectrograph-dedicated': {'grating': 'mirror',
+                                            'wavelength': 0,
+                                            'slit-in': MAX_POSITION,
+                                            'iris-direct': MAX_POSITION,
+                                            },
+                 # 'spec-ded-det-selector' will depend on the affects
+                }),
          }
 
 # Currently not used as-is, mostly here to make guessMode() happy.
@@ -334,7 +357,7 @@ MIMAS_MODES = {
 
 ALIGN_MODES = {'mirror-align', 'lens2-align', 'ek-align', 'chamber-view',
                'fiber-align', 'streak-align', 'spec-focus', 'spec-fiber-focus',
-               'streak-focus', "light-in-align"}
+               'streak-focus', 'light-in-align', 'tunnel-lens-align', 'spec-focus-ext'}
 
 
 class OneTaskExecutor(ThreadPoolExecutor):
@@ -726,8 +749,13 @@ class OpticalPathManager:
                         logging.debug("Using grating position as-is: '%s'", pos)
                         pass  # use pos as-is
                 elif axis == "slit-in":
+                    if pos == MAX_POSITION:
+                        pos = comp.axes[axis].range[1]
                     if mode in ALIGN_MODES and (comp_role, axis) not in self._stored:
                         self._stored[comp_role, axis] = comp.position.value[axis]
+                elif axis == "iris-direct":
+                    if pos == MAX_POSITION:
+                        pos = comp.axes[axis].range[1]
                 elif hasattr(comp.axes[axis], "choices") and isinstance(comp.axes[axis].choices, dict):
                     choices = comp.axes[axis].choices
                     for key, value in choices.items():
