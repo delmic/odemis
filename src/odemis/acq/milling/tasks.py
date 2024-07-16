@@ -235,7 +235,7 @@ import matplotlib.pyplot as plt
 
 from odemis.acq.milling.patterns import TrenchPatternParameters, RectanglePatternParameters, MicroexpansionPatternParameters
 
-def _draw_trench_pattern(image: model.DataArray, params: TrenchPatternParameters, colour: str = "yellow", name: str = "Task") -> list[mpatches.Rectangle]:
+def _draw_trench_pattern(image: model.DataArray, params: TrenchPatternParameters, colour: str = "yellow", name: str = "Task") -> List[mpatches.Rectangle]:
     # get parameters
     width = params.width.value
     height = params.height.value
@@ -262,7 +262,7 @@ def _draw_trench_pattern(image: model.DataArray, params: TrenchPatternParameters
     return [rect1, rect2]
 
 
-def _draw_rectangle_pattern(image: model.DataArray, params: RectanglePatternParameters, colour: str = "yellow", name: str = "Task") -> list[mpatches.Rectangle]:
+def _draw_rectangle_pattern(image: model.DataArray, params: RectanglePatternParameters, colour: str = "yellow", name: str = "Task") -> List[mpatches.Rectangle]:
     # get parameters
     width = params.width.value
     height = params.height.value
@@ -286,7 +286,7 @@ def _draw_rectangle_pattern(image: model.DataArray, params: RectanglePatternPara
     return [rect]
 
 
-def _draw_microexpansion_pattern(image: model.DataArray, params: MicroexpansionPatternParameters, colour: str = "yellow", name: str = "Task") -> list[mpatches.Rectangle]:
+def _draw_microexpansion_pattern(image: model.DataArray, params: MicroexpansionPatternParameters, colour: str = "yellow", name: str = "Task") -> List[mpatches.Rectangle]:
 
     # get parameters
     width = params.width.value
