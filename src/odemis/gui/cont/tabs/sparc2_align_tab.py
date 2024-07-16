@@ -308,7 +308,7 @@ class Sparc2AlignTab(Tab):
 
                     # if there is a detector which is affected by the external focuser
                     # set the spec_ded_focus components as focuser
-                    if (self._ccd_stream_ext 
+                    if (self._ccd_stream_ext
                         and main_data.spec_ded_focus
                         and self._ccd_stream_ext.detector.name in main_data.spec_ded_focus.affects.value
                        ):
