@@ -661,7 +661,7 @@ def Sparc2ManualFocus(opm, bl, align_mode, toggled=True):
     procedure in a Future or even cancel it.
     :param opm: OpticalPathManager object
     :param bl: bright light object
-    :param align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus, tunnel-lens-align
+    :param align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
     :param mf_toggled (bool): Toggle the manual focus button on/off
     :return (ProgressiveFuture -> for the _DoSparc2ManualFocus function)
     """
@@ -684,7 +684,7 @@ def _DoSparc2ManualFocus(opm, bl, align_mode, toggled=True):
     :param future: the future object that is used to represent the task
     :param opm: OpticalPathManager object
     :param bl: brightlight object
-    :param align_mode: OPM mode, spec-focus or spec-fiber-focus, streak-focus, tunnel-lens-align
+    :param align_mode: OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
     :param mf_toggled (bool): Toggle the manual focus button on/off
     """
     # First close slit, then switch on calibration light

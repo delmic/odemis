@@ -308,9 +308,10 @@ class Sparc2AlignTab(Tab):
 
                     # if there is a detector which is affected by the external focuser
                     # set the spec_ded_focus components as focuser
-                    if all([self._ccd_stream_ext,
-                            main_data.spec_ded_focus,
-                            self._ccd_stream_ext.detector.name in main_data.spec_ded_focus.affects.value]):
+                    if (self._ccd_stream_ext 
+                        and main_data.spec_ded_focus
+                        and self._ccd_stream_ext.detector.name in main_data.spec_ded_focus.affects.value
+                       ):
                         ccd_focuser_ext = main_data.spec_ded_focus
 
         # For running autofocus (can only one at a time)
@@ -1512,9 +1513,10 @@ class Sparc2AlignTab(Tab):
             if align_mode == "streak-align":
                 # force wavelength 0
                 # TODO: Make sure it's the correct position on the workflow, maybe do it for all modes?
-                if all([main.streak_ccd,
-                        main.spectrograph_ded,
-                        main.streak_ccd.name in main.spectrograph_ded.affects.value]):
+                if (main.streak_ccd
+                    and main.spectrograph_ded
+                    and main.streak_ccd.name in main.spectrograph_ded.affects.value
+                   ):
                     main.spectrograph_ded.moveAbsSync({"wavelength": 0})
                     self.panel.slider_focus_ext.Enable(True)
                     self.panel.cmb_focus_gratings_ext.Enable(True)

@@ -36,7 +36,7 @@ from odemis.model import BAND_PASS_THROUGH, MD_POL_NONE
 from odemis.util import TimeoutError
 
 GRATING_NOT_MIRROR = "CONST:NOTMIRROR"  # A special string so that no grating position can be like this
-MAX_POSITION = "CONST:MAXPOSITION"
+MAX_POSITION = "CONST:MAXPOSITION"  # To indicate that the maximum in the axis range should be used
 
 ACQ_QUALITY_FAST = 0
 ACQ_QUALITY_BEST = 1
