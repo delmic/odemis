@@ -880,6 +880,10 @@ class Continuous(object):
             start = (start,)
             end = (end,)
 
+        if len(start) != len(end):
+            raise TypeError("Range min %s and max %s should have the same length." %
+                            (start, end))
+
         if any(mn > mx for mn, mx in zip(start, end)):
             raise TypeError("Range min %s should be smaller than max %s." %
                             (start, end))
