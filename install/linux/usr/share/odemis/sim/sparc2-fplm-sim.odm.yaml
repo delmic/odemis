@@ -9,7 +9,7 @@
     class: light.Light,
     role: "brightlight",
     power_supplier: "Power Control Unit",
-    affects: ["Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
+    affects: ["Camera", "Spectral Camera", "Spectrometer Vis-NIR", "Spectrometer IR"],
 }
 
 "Power Control Unit": {
@@ -75,14 +75,18 @@
         hfw_nomag: 0.25, # m
         # output ports -> True (high when scanning) or False (high when parked)
         # + property name + True (high when set to True) or False (high when set to False)
-        scanning_ttl: {4: True, 2: [True, "external"], 3: [False, "blanker", True]},
+        scanning_ttl: {
+            4: True,
+            2: [True, "external"],
+            3: [False, "blanker", True]
+        },
     },
     properties: {
         scale: [8, 8], # (ratio) : start with a pretty fast scan
         dwellTime: 10.e-6, # s
         magnification: 100, # (ratio)
     },
-    affects: ["SEM Detector", "Spectrometer IR", "Camera"] # affects the CCD in case of cathodoluminescence
+    affects: ["SEM Detector", "Spectrometer Vis-NIR", "Spectrometer IR", "Camera", "Spectral Camera", "EBIC"]
 }
 
 "SEM Detector": { # aka ETD
@@ -91,6 +95,16 @@
     init: {
         channel: 0, # 0-> sawtooth waves, 1-> square waves
         limits: [-3, 3] # V
+    },
+}
+
+# A detector which is independent from the DAQ board. Though in reality, it's
+# synchronized on the newPixel TTL signal of the DAQ board scanner.
+"EBIC": {
+    class: simsem.IndependentDetector,
+    role: ebic-detector,
+    init: {
+#        image: "",
     },
 }
 

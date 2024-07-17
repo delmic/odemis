@@ -24,6 +24,8 @@ from builtins import str
 import queue
 import logging
 import math
+from typing import Callable, Optional
+
 import numpy
 from odemis import model, util, dataio
 from odemis.model import isasync, oneway
@@ -106,6 +108,8 @@ class SimSEM(model.HwComponent):
         """
         for d in self._detectors:
             d.terminate()
+
+        super().terminate()
 
 
 class Scanner(model.Emitter):
@@ -338,7 +342,7 @@ class Detector(model.Detector):
         """
         # It will set up ._shape and .parent
         model.Detector.__init__(self, name, role, parent=parent, **kwargs)
-        self.data = SEMDataFlow(self, parent)
+        self.data = SEMDataFlow(self)
         self._acquisition_thread = None
         self._acquisition_lock = threading.Lock()
         self._acquisition_init_lock = threading.Lock()
@@ -378,6 +382,7 @@ class Detector(model.Detector):
         self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
 
     def terminate(self):
+        super().terminate()
         self._update_drift_timer.cancel()
         self.stop_acquire()
 
@@ -543,16 +548,161 @@ class Detector(model.Detector):
             self._acquisition_must_stop.clear()
 
 
+class IndependentDetector(model.Detector):
+    """
+    Simulates a Detector that is instantiated alone, without a scanner. It has a .resolution and
+    .dwellTime to know the scan resolution and duration.
+    """
+    def __init__(self, name: str, role: str, image: str = "simsem-fake-output.h5",
+                 continuous: bool = True, **kwargs):
+        """
+        :param name: Standard parameter for the Component.
+        :param role: Standard parameter for the Component.
+        :param image: path to a file to use as fake image (relative to the directory of this class)
+        :param one_shot: if True, the detector will keep acquiring images until the .data DataFlow
+        is unsubscribed from, which is the standard behaviour. Otherwise, it will stop after one image,
+        which is more common behaviour for independent detectors.
+        """
+        # image: if it's a relative path, make it relative from the directory of this file
+        if not os.path.isabs(image):
+            image = os.path.join(os.path.dirname(__file__), image)
+        converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
+        self.fake_img = img.ensure2DImage(converter.read_data(image)[0])
+
+        self._continuous = bool(continuous)
+
+        # It will set up ._shape
+        model.Detector.__init__(self, name, role, **kwargs)
+        self.data = SEMDataFlow(self)
+        self._acquisition_thread: Optional[threading.Thread] = None
+        self._acquisition_lock = threading.Lock()
+        self._acquisition_must_stop = threading.Event()
+
+        # The shape is just one point, the depth
+        idt = numpy.iinfo(self.fake_img.dtype)
+        data_depth = idt.max - idt.min + 1
+        self._shape = (data_depth,)  # same as "standard" detector, so just the data depth
+
+        # Accepts any resolution, as it's just a "slave" of the real scanner
+        self.resolution = model.ResolutionVA((1, 1), [(1, 1), self.fake_img.shape[::-1]])
+        # The dwell time is supposed to be set to a value (slightly) lower than the scanner's dwell time
+        self.dwellTime = model.FloatContinuous(1e-6, (0.1e-6, 1000), unit="s",
+                                               setter=self._set_dwell_time)
+
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = model.Event()
+
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
+
+    def terminate(self) -> None:
+        super().terminate()
+        self.stop_acquire()
+
+    def _set_dwell_time(self, value: float) -> float:
+        # Round down to 100 ns
+        dt = math.floor(value / 100e-9) * 100e-9
+        # Make sure it's still within the range
+        dt = max(self.dwellTime.range[0], dt)
+        return dt
+
+    def start_acquire(self, callback: Callable[[model.DataArray], None]) -> None:
+        with self._acquisition_lock:
+            self._wait_acquisition_stopped()
+            target = self._acquire_thread
+            self._acquisition_thread = threading.Thread(
+                    target=target,
+                    name="IndependentDetector acquire flow thread",
+                    args=(callback,))
+            self._acquisition_thread.start()
+
+    def stop_acquire(self) -> None:
+        with self._acquisition_lock:
+            self._acquisition_must_stop.set()
+
+    def _wait_acquisition_stopped(self) -> None:
+        """
+        Waits until the acquisition thread is fully finished if (and only if) it was requested to stop.
+        """
+        # "if" is to not wait if it's already finished
+        if self._acquisition_must_stop.is_set():
+            logging.debug("Waiting for thread to stop.")
+            self._acquisition_thread.join(10)  # 10s timeout for safety
+            if self._acquisition_thread.is_alive():  # Should never happen
+                logging.error("Failed to stop the acquisition thread after 10s")
+                # No idea how we could recover... so we just keep going as if everything is fine
+            # ensure it's not set, even if the thread died prematurely
+            self._acquisition_must_stop.clear()
+
+    def _simulate_image(self) -> model.DataArray:
+        """
+        Generates the fake output based on the resolution.
+        As no translation/scale info is available, because it's specified on a separate scanner,
+        it always uses the image center, with the smallest pixel size.
+        """
+        metadata = self._metadata.copy()
+
+        logging.debug("Simulating an image")
+        res = self.resolution.value
+        max_res = self.resolution.range[1]
+
+        # Take the center of the image, with the specified resolution
+        center = (max_res[0] / 2, max_res[1] / 2)
+        ltrb = [int(center[0] - (res[0] / 2)),
+                int(center[1] - (res[1] / 2)),
+                int(center[0] + ((res[0] / 2) - 1)),
+                int(center[1] + ((res[1] / 2) - 1))
+                ]
+
+        sim_img = self.fake_img[ltrb[1]:ltrb[3] + 1, ltrb[0]:ltrb[2] + 1].copy()
+
+        # Add some noise
+        mx = self.fake_img.max()
+        rng = mx - self.fake_img.min()
+        sim_img += numpy.random.randint(0, max(rng // 10, 10), sim_img.shape, dtype=sim_img.dtype)
+        # Clip, but faster than clip() on big array.
+        # There can still be some overflow, but let's just consider this "strong noise"
+        sim_img[sim_img > mx] = mx
+
+        metadata[model.MD_ACQ_DATE] = time.time()
+        metadata[model.MD_DWELL_TIME] = self.dwellTime.value
+        return model.DataArray(sim_img, metadata)
+
+    def _acquire_thread(self, callback: Callable[[model.DataArray], None]) -> None:
+        """
+        Thread that simulates the acquisition. It imitates the delay according
+        to the dwell time and resolution and provides the new generated output to
+        the Dataflow.
+        """
+        try:
+            while not self._acquisition_must_stop.is_set():
+                dwelltime = self.dwellTime.value
+                resolution = self.resolution.value
+                duration = numpy.prod(resolution) * dwelltime
+                self.data._waitSync()
+                img = self._simulate_image()
+                if self._acquisition_must_stop.wait(duration):
+                    break
+                callback(img)
+
+                if not self._continuous and not self.data._sync_event:
+                    logging.debug("Stopping acquisition as DataFlow is not synchronized and 1 data acquired")
+                    return
+        except Exception:
+            logging.exception("Unexpected failure during image acquisition")
+        finally:
+            logging.debug("Acquisition thread closed")
+            self._acquisition_must_stop.clear()
+
+
 class SEMDataFlow(model.DataFlow):
     """
     This is an extension of model.DataFlow. It receives notifications from the
     detector component once the fake output is generated. This is the dataflow to
     which the SEM acquisition streams subscribe.
     """
-    def __init__(self, detector, sem):
+    def __init__(self, detector):
         """
         detector (semcomedi.Detector): the detector that the dataflow corresponds to
-        sem (semcomedi.SEMComedi): the SEM
         """
         model.DataFlow.__init__(self)
         self.component = weakref.ref(detector)
