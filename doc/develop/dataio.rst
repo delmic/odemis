@@ -186,9 +186,52 @@ tag of the first TIFF page. The exact `XML schema can be found here
 
 HDF5
 ====
-The HDF5 format is defined by the `HDF group <https://support.hdfgroup.org/HDF5/doc/index.html>`_.
+The HDF5 format is defined by the `HDF group <https://www.hdfgroup.org/>`_.
+Odemis follows the `HDF5 3.0 specification <https://docs.hdfgroup.org/hdf5/v1_14/_f_m_t3.html>`_.
 
-The data organisation and the metadata storage follow the `convention defined by SVI 
+Essentially, the data organisation and the metadata storage follow the `convention defined by SVI
 <https://svi.nl/HDF5>`_.
 
-.. TODO: describe in more details. Especially, extensions (eg for polarymetry, AR)
+Every DataArray of Odemis (which correspond to a "Stream" in the GUI) is stored in a separate HDF5
+"Group" (ie, folder) named "Acquisition*N*" where *N* is a number. Within that group, the (sub-)group
+"ImageData" contains the data and its most essential metadata. The "PhysicalData" sub-group contains the
+metadata, describing the conditions of acquisition. The "ImageData" group always contains the HDF5 "Data Object"
+named "Image", which contains the raw data. This data object has multiple dimensions (typically 5), although
+some might be of length 1, in which case that means the dataset doesn't make use of that dimension.
+Each dimension has a "label" (according to the HDF5 vocabulary). The label indicates what is stored along this
+dimension. Most usually the labels are "C", "T", "Z", "Y", and "X" (in this order). "C" is for light wavelength
+(eg, spectrum data, in meters), "T" is for time (eg, data change over time, in seconds). There can also be a "A"
+dimension, which indicates the angle (eg, for angle-resolved data with zenithal angle of the light, in radians).
+The "X", "Y", and "Z" dimensions are for the spatial data, stored in meters.
+
+Further more, HDF5 has a the notion of "scale". Each scale is connected to a dimension.
+Typically, scales are named "DimensionScale...". The scale to store metadata about the "position" of
+pixels along the associated dimension. It can be stored in two (slightly) different ways:
+
+  * If the scale has a single value, it represents the "size" of a pixel, and all pixels are of equal size.
+    In practice, this is used of X,Y, and Z. For instance a DimensionScaleX of 1.0e-6 means that the
+    pixel size is 1 µm in X. In this case absolute position of the pixel also depends on the "offset",
+    described just later.
+  * Otherwise, there is one value per pixel (so the scale might be non-linear). So the scale is the
+    same length as the associated dimension. In practice, this is used for T, C, and A. For instance,
+    a DimensionScaleT of [1.0e-9, 1.1e-9, 1.2e-9] means that the data of a the first index in the T
+    dimension is at 1 ns, the data at the second index at 1.1 ns, and the data at the third index at 1.2 ns.
+
+There are also a series of "...Offset" data objects, which are used to store the absolute position of
+the data (in a referential linked to the microscope hardware used to the acquire the data). The XOffset,
+YOffset, and ZOffset are used to store the position of the *center* pixel of the image (in meters).
+That means that the position of center of the pixel at index i (starting from 0) along the X dimension is
+"XOffset + i × DimensionScaleX - (X.length - 1) × DimensionScaleX / 2". The Y dimension is considered to
+go "upwards", and the first pixel at the at the top of the image. So the position of the center of the
+pixel at index j along the Y dimension is "YOffset - j × DimensionScaleY + (Y.length - 1) × DimensionScaleY / 2".
+The TOffset data object contains the data of acquisition is in "Unix time" (ie, seconds since the 1st of January 1970).
+
+SPARC 2D angular-resolved data are saved in a special format.
+For each e-beam position XY, there is a separate "Acquisition" stored containing the raw 2D CCD data
+corresponding to this position. The XY position on the e-beam map is stored as XOffset and YOffset.
+The dimensions of the data are labelled CTZYX, (where only the last 2 dimensions have a length > 2).
+However, the last two dimensions correspond indirectly to the 2 angles of the light.
+It's raw CCD data, which needs a conversion to actually obtain the angles (see ``odemis.util.angleres.AngleResolved2Polar()``).
+The PhysicalData group contains the metadata about the parabolic mirror shape required for the conversion.
+
+.. TODO: describe polarimetry format

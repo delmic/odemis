@@ -626,6 +626,12 @@ class ActuatorGUIData(MicroscopyGUIData):
                   "light_aligner": (50e-6, [5e-6, 500e-6], "light_aligner", None),
                   "spec_switch": (50e-6, [5e-6, 500e-6], "spec_switch", None),
                   }
+        if main.spec_ded_aligner:
+            ss_def.update({
+                "spec_ded_aligner_xy": (5e-6, [100e-9, 1e-4], "spec_ded_aligner", {"x", "y"}),
+                "spec_ded_aligner_z": (25e-6, [5e-6, 500e-6], "spec_ded_aligner", {"z"}),
+            })
+
         # Use mirror_xy preferably, and fallback to mirror
         if main.mirror_xy:
             # Typically for the SPARCv2
@@ -754,7 +760,8 @@ class Sparc2AlignGUIData(ActuatorGUIData):
         # Mode values are different from the modes of the OpticalPathManager
         amodes = [
                   "lens-align", "mirror-align", "lens2-align", "center-align",
-                  "ek-align", "streak-align", "fiber-align", "light-in-align"
+                  "ek-align", "streak-align", "fiber-align", "light-in-align",
+                  "tunnel-lens-align",
                  ]
 
         # VA for autofocus procedure mode
@@ -823,6 +830,9 @@ class Sparc2AlignGUIData(ActuatorGUIData):
                 md = main.spec_switch.getMetadata()
                 if not {model.MD_FAV_POS_ACTIVE, model.MD_FAV_POS_DEACTIVE}.issubset(md.keys()):
                     raise ValueError("spec-switch should have FAV_POS_ACTIVE and FAV_POS_DEACTIVE")
+
+        if main.spec_ded_aligner is None:
+            amodes.remove("tunnel-lens-align")
 
         self.align_mode = StringEnumerated(amodes[0], choices=set(amodes))
 

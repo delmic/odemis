@@ -559,7 +559,7 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
         Run AutoFocusSpectrometer
         Acquire one last image
         Turn off the light
-    align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus
+    align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
     opm: OpticalPathManager
     streams: list of streams. The first stream is used for displaying the last
        image with the slit closed.
@@ -572,6 +572,8 @@ def Sparc2AutoFocus(align_mode, opm, streams=None, start_autofocus=True):
     focuser = None
     if align_mode == "spec-focus":
         focuser = model.getComponent(role='focus')
+    elif align_mode == "spec-focus-ext":
+        focuser = model.getComponent(role='spec-ded-focus')
     elif align_mode == "spec-fiber-focus":
         # The "right" focuser is the one which affects the same detectors as the fiber-aligner
         aligner = model.getComponent(role='fiber-aligner')
@@ -659,7 +661,7 @@ def Sparc2ManualFocus(opm, bl, align_mode, toggled=True):
     procedure in a Future or even cancel it.
     :param opm: OpticalPathManager object
     :param bl: bright light object
-    :param align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus
+    :param align_mode (str): OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
     :param mf_toggled (bool): Toggle the manual focus button on/off
     :return (ProgressiveFuture -> for the _DoSparc2ManualFocus function)
     """
@@ -682,7 +684,7 @@ def _DoSparc2ManualFocus(opm, bl, align_mode, toggled=True):
     :param future: the future object that is used to represent the task
     :param opm: OpticalPathManager object
     :param bl: brightlight object
-    :param align_mode: OPM mode, spec-focus or spec-fiber-focus, streak-focus
+    :param align_mode: OPM mode, spec-focus or spec-fiber-focus, streak-focus, spec-focus-ext
     :param mf_toggled (bool): Toggle the manual focus button on/off
     """
     # First close slit, then switch on calibration light
@@ -786,7 +788,17 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
             raise CancelledError()
 
         logging.debug("Turning on the light")
-        bl = model.getComponent(role="brightlight")
+        if align_mode == "spec-focus-ext":
+            try:
+                bl = model.getComponent(role="brightlight-ext")
+            except KeyError:
+                raise KeyError("No light component found with role brightlight-ext")
+        else:
+            try:
+                bl = model.getComponent(role="brightlight")
+            except KeyError:
+                raise KeyError("No light component found with role brightlight")
+
         _playStream(dets[0], streams)
         future._running_subf = light.turnOnLight(bl, dets[0])
         try:
@@ -834,6 +846,7 @@ def _DoSparc2AutoFocus(future, streams, align_mode, opm, dets, spgr, selector, f
         ret = {}
         logging.debug("Running AutoFocusSpectrometer on %s, using %s, for the detectors %s, and using selector %s",
                       spgr, focuser, dets, selector)
+
         try:
             future._running_subf = AutoFocusSpectrometer(spgr, focuser, dets, selector, streams)
             et = future._actions_time.pop(0)

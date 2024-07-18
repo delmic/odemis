@@ -114,6 +114,35 @@ def set_szero(device, slit, offset):
     device._updatePosition()
 
 
+def exchange_turret(device: andorshrk.Shamrock) -> None:
+    """
+    Brings the turret (on a Kymera 328i) to the special exchange position.
+    Blocks until the turret is in position.
+    """
+    try:
+        device.ChangeTurret()
+    except AttributeError:
+        raise ValueError("This version of the Andor Shamrock library does not support changing the turret. "
+                         "Make sure you have at least version 2.104.30132")
+    logging.info("Turret is ready to be exchanged")
+
+
+def detect_turret(device: andorshrk.Shamrock) -> None:
+    """
+    Brings back the turret (on a Kymera 328i) to the standard position, and detects the turret number
+    (using the RFID tag).
+    Blocks until the turret is in position and the RFID is read.
+    """
+    try:
+        device.ReadTurretRFID()
+    except AttributeError:
+        raise ValueError("This version of the Andor Shamrock library does not support detecting the turret. "
+                         "Make sure you have at least version 2.104.30132")
+
+    turret = device.GetTurret()
+    logging.info("Detected turret is %s", turret)
+
+
 def main(args):
     """
     Handles the command line arguments
@@ -140,7 +169,10 @@ def main(args):
     parser.add_argument('--szero', dest="szero", nargs=2, type=int,
                         metavar=("<slit>", "<offset>"),
                         help="Changes the zero position (-200 → 0) for the given slit. (1 step ≈ 5µm)")
-    # TODO: allow to change the current turret?
+    parser.add_argument('--exchange-turret', dest="exchange_turret", action="store_true",
+                        help="Brings the turret to the exchange position")
+    parser.add_argument('--detect-turret', dest="detect_turret", action="store_true",
+                        help="Brings back the turret and detect the turret number")
 
     parser.add_argument('--serial', dest="serial", default=0,
                         help="Serial number of the device (by default, it will pick the one connected). Odemis must not be running.")
@@ -164,6 +196,9 @@ def main(args):
         else:
             dev = andorshrk.Shamrock("test", "test", options.serial)
 
+        if options.exchange_turret and options.detect_turret:
+            raise ValueError("Cannot exchange and detect the turret at the same time.")
+
         if options.read:
             read_all(dev)
         if options.turret:
@@ -174,6 +209,12 @@ def main(args):
             set_doffset(dev, *options.doffset)
         if options.szero:
             set_szero(dev, *options.szero)
+        if options.exchange_turret:
+            exchange_turret(dev)
+        if options.detect_turret:
+            detect_turret(dev)
+            if options.role:
+                logging.warning("Odemis back-end must be restarted to update the grating information.")
 
         if not options.role:
             dev.terminate()

@@ -76,6 +76,10 @@ class CompositedScanner(model.Emitter):
                 va = getattr(self._external_scanner, vaname)
                 setattr(self, vaname, va)
 
+        # Copy Events from the external scanner
+        for evtname, evt in model.getEvents(self._external_scanner).items():
+            setattr(self, evtname, evt)
+
         # Copy VAs for controlling the ebeam from internal
         # horizontalFoV or magnification need a bit more cleverness
         if model.hasVA(self._internal_scanner, "horizontalFoV"):
