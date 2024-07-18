@@ -24,32 +24,35 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 """
 
 import collections
-from concurrent.futures import CancelledError
-from functools import partial
 import logging
 import math
-import pkg_resources
+import os
 import time
+from concurrent.futures import CancelledError
+from functools import partial
+
+import pkg_resources
 import wx
+from odemis.acq.stream_settings import StreamSettingsConfig
 
-from odemis.gui.util.wx_adapter import fix_static_text_clipping
-
-from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui
-from odemis.gui.cont.stream_bar import StreamBarController
+import odemis.gui.conf.file
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
+from odemis import model
 from odemis.acq.align.autofocus import GetSpectrometerFocusingDetectors
 from odemis.acq.align.autofocus import Sparc2AutoFocus, Sparc2ManualFocus
 from odemis.gui.conf.data import get_local_vas, get_hw_config
 from odemis.gui.conf.util import create_axis_entry
 from odemis.gui.cont import settings
+from odemis.gui.cont.actuators import ActuatorController
+from odemis.gui.cont.stream_bar import StreamBarController
 from odemis.gui.cont.tabs._constants import MIRROR_ONPOS_RADIUS, MIRROR_POS_PARKED
 from odemis.gui.cont.tabs.tab import Tab
-from odemis.gui.cont.actuators import ActuatorController
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
 from odemis.gui.util.widgets import ProgressiveFutureConnector, AxisConnector
+from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.util import units, spot, limit_invocation, almost_equal, driver
 
 
@@ -1352,6 +1355,12 @@ class Sparc2AlignTab(Tab):
             ccd = self._ccd_stream.detector
             dets = sorted(dets, key=lambda d: d.name == ccd.name, reverse=True)
 
+        # Allow the user to override the default settings by saving them in ~/.config/odemis/focus_settings.json
+        # The format should be a list of dict: key VA name -> VA value, and a special key "name" -> detector name.
+        focus_settings_path = os.path.join(odemis.gui.conf.file.CONF_PATH, "focus_settings.json")
+        # Note: loading the config never raise exceptions, in the worse case, it will log a warning.
+        focus_settings = StreamSettingsConfig(focus_settings_path, max_entries=1024)  # more than enough entries
+
         # One "line" stream per detector
         # Add a stream to see the focus, and the slit for lens alignment.
         # As it is a BrightfieldStream, it will turn on the emitter when
@@ -1377,6 +1386,17 @@ class Sparc2AlignTab(Tab):
                     speclines.detReadoutRate.value = speclines.detReadoutRate.range[1]
                 except AttributeError:
                     speclines.detReadoutRate.value = max(speclines.detReadoutRate.choices)
+
+            # Load special settings, if present
+            if d.name in focus_settings.entries:
+                try:
+                    focus_settings.apply_settings(speclines, d.name)
+                    logging.debug("Applied special focus settings for '%s'", d.name)
+                except Exception as ex:
+                    logging.warning("Failed to apply special focus settings for '%s': %s", d.name, ex)
+            else:
+                logging.debug("Focus stream for '%s' has no special settings in %s", d.name, focus_settings_path)
+
             focus_streams.append(speclines)
 
         return focus_streams
