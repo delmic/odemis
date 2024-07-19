@@ -105,16 +105,12 @@ class Sparc2AlignTab(Tab):
 
         if main_data.streak_ccd:
             self._streak_settings_controller = settings.StreakCamAlignSettingsController(panel, tab_data)
-            self.streak_ccd = main_data.streak_ccd
-            self.streak_delay = main_data.streak_delay
-            self.streak_unit = main_data.streak_unit
-            self.streak_lens = main_data.streak_lens
 
             # !!Note: In order to make sure the default value shown in the GUI corresponds
             # to the correct trigger delay from the MD, we call the setter of the .timeRange VA,
             # which sets the correct value for the .triggerDelay VA from MD-lookup
             # Cannot be done in the driver, as MD from yaml is updated after initialization of HW!!
-            self.streak_unit.timeRange.value = self.streak_unit.timeRange.value
+            main_data.streak_unit.timeRange.value = main_data.streak_unit.timeRange.value
 
         # Create stream & view
         self._stream_controller = StreamBarController(
