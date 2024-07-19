@@ -2062,6 +2062,15 @@
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_settings_ebeam_blanker">
+                        <label>EBEAM BLANKER</label>
+                        <hidden>1</hidden>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_streams">
                           <size>300,-1</size>
