@@ -29,6 +29,7 @@ import wx
 from odemis import model
 import odemis.acq.stream as acqstream
 import odemis.gui.cont.acquisition as acqcont
+from odemis.gui.cont.settings import EBeamBlankerSettingsController
 from odemis.gui.cont.stream_bar import SparcStreamsController
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
@@ -240,6 +241,9 @@ class SparcAcquisitionTab(Tab):
 
         tab_data.tool.subscribe(self.on_tool_change)
 
+        # Will show the (pulsed) ebeam blanker settings, if available, otherwise will do nothing
+        self._ebeam_blanker_ctrl = EBeamBlankerSettingsController(panel, tab_data)
+
         # Create Stream Bar Controller
         self._stream_controller = SparcStreamsController(
             tab_data,
@@ -412,6 +416,7 @@ class SparcAcquisitionTab(Tab):
     def on_acquisition(self, is_acquiring):
         # TODO: Make sure nothing can be modified during acquisition
 
+        self._ebeam_blanker_ctrl.enable(not is_acquiring)
         self.tb.enable(not is_acquiring)
         self.panel.vp_sparc_tl.Enable(not is_acquiring)
         # TODO: Leave the canvas accessible, but only forbid moving the stage and

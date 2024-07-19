@@ -1084,6 +1084,7 @@ class xrcpnl_tab_sparc2_align(wx.Panel):
         self.vp_align_fiber = xrc.XRCCTRL(self, "vp_align_fiber")
         self.vp_align_lens_ext = xrc.XRCCTRL(self, "vp_align_lens_ext")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
+        self.fp_settings_ebeam_blanker = xrc.XRCCTRL(self, "fp_settings_ebeam_blanker")
         self.pnl_streams = xrc.XRCCTRL(self, "pnl_streams")
         self.pnl_moi_settings = xrc.XRCCTRL(self, "pnl_moi_settings")
         self.btn_bkg_acquire = xrc.XRCCTRL(self, "btn_bkg_acquire")
@@ -1139,6 +1140,7 @@ class xrcpnl_tab_sparc_acqui(wx.Panel):
         self.vp_sparc_as = xrc.XRCCTRL(self, "vp_sparc_as")
         self.scr_win_right = xrc.XRCCTRL(self, "scr_win_right")
         self.fpb_settings = xrc.XRCCTRL(self, "fpb_settings")
+        self.fp_settings_ebeam_blanker = xrc.XRCCTRL(self, "fp_settings_ebeam_blanker")
         self.pnl_sparc_streams = xrc.XRCCTRL(self, "pnl_sparc_streams")
         self.txt_filename = xrc.XRCCTRL(self, "txt_filename")
         self.btn_sparc_change_file = xrc.XRCCTRL(self, "btn_sparc_change_file")
@@ -13619,6 +13621,15 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                 <object class="wxBoxSizer">
                   <object class="sizeritem">
                     <object class="FoldPanelBar">
+                      <object class="FoldPanelItem" name="fp_settings_ebeam_blanker">
+                        <label>EBEAM BLANKER</label>
+                        <hidden>1</hidden>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_streams">
                           <size>300,-1</size>
@@ -14739,6 +14750,15 @@ D\x02\x12\x0c/\x81\x10.\xc4\xcc\xb0\x8f\xa1\x9e\xa1\x81a/\x90\x05\x06\x8d\
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
                     <object class="FoldPanelBar" name="fpb_settings">
+                      <object class="FoldPanelItem" name="fp_settings_ebeam_blanker">
+                        <label>EBEAM BLANKER</label>
+                        <hidden>1</hidden>
+                        <fg>#1A1A1A</fg>
+                        <bg>#555555</bg>
+                        <XRCED>
+                          <assign_var>1</assign_var>
+                        </XRCED>
+                      </object>
                       <object class="FoldPanelItem">
                         <object class="StreamBar" name="pnl_sparc_streams">
                           <size>300,-1</size>
