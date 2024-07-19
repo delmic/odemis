@@ -390,6 +390,9 @@ HW_SETTINGS_CONFIG = {
                            u"Be careful when setting the gain while operating the camera in focus-mode.",
                 "key_step": 1,
             }),
+            ("shutter", {
+                "tooltip": "Checked means the shutter is closed, and protects the camera from the light.",
+            }),
         )),
     r"spectrometer.*":
         OrderedDict((
