@@ -908,18 +908,22 @@ class StreakCamAlignSettingsController(SettingsBarController):
         entry_triggerDelay.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
         self.ctrl_triggerDelay = entry_triggerDelay.value_ctrl
 
-        entry_magnification = create_setting_entry(self.panel_streak, "Magnification",
-                                                   self.streak_lens.magnification,
-                                                   self.streak_lens,
-                                                   conf={"control_type": odemis.gui.CONTROL_COMBO,
-                                                         "label": "Magnification",
-                                                         "tooltip": "Change the magnification of the input"
-                                                                    "optics for the streak camera system. \n"
-                                                                    "Values < 1: De-magnifying \n"
-                                                                    "Values > 1: Magnifying"})
+        if (self.streak_lens
+            and hasattr(self.streak_lens.magnification, "choices")
+            and len(self.streak_lens.magnification.choices) > 1
+           ):
+            entry_magnification = create_setting_entry(self.panel_streak, "Magnification",
+                                                       self.streak_lens.magnification,
+                                                       self.streak_lens,
+                                                       conf={"control_type": odemis.gui.CONTROL_COMBO,
+                                                             "label": "Magnification",
+                                                             "tooltip": "Change the magnification of the input"
+                                                                        "optics for the streak camera system. \n"
+                                                                        "Values < 1: De-magnifying \n"
+                                                                        "Values > 1: Magnifying"})
 
-        entry_magnification.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
-        self.combo_magnification = entry_magnification.value_ctrl
+            entry_magnification.value_ctrl.SetBackgroundColour(odemis.gui.BG_COLOUR_PANEL)
+            self.combo_magnification = entry_magnification.value_ctrl
 
         # remove border
         self.panel_streak.GetSizer().GetItem(0).SetBorder(0)
