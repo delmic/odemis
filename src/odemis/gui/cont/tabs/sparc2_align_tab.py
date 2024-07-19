@@ -482,7 +482,8 @@ class Sparc2AlignTab(Tab):
 
             add_axis("grating", spect)
             add_axis("wavelength", spect)
-            add_axis("x", main_data.slit_in_big)
+            if main_data.streak_ccd.name in main_data.slit_in_big.affects.value:
+                add_axis("x", main_data.slit_in_big)
             add_axis("slit-in", spect)
 
             # To activate the SEM spot when the camera plays
