@@ -149,12 +149,18 @@ SPARC2_MODES = {
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
                  'slit-in-big': {'x': 'off'},  # closed
                  'filter': {'band': BAND_PASS_THROUGH},
-                 'spectrograph': {'slit-in': 10e-6},  # slit to the minimum
+                 'spectrograph': {'slit-in': 10e-6, 'wavelength': 0},  # slit to the minimum
                  'chamber-light': {'power': 'off'},
                  'pol-analyzer': {'pol': MD_POL_NONE},
                  'light-aligner': {'x': "MD:" + model.MD_FAV_POS_ACTIVE,
                                    'z': "MD:" + model.MD_FAV_POS_ACTIVE},
                 }),
+            'streak-focus-ext': ("streak-ccd",  # same as spec-focus-ext, but with the streak-ccd
+                 {'spec-ded-aligner': {'z': "MD:" + model.MD_FAV_POS_ACTIVE},
+                  # slit to the minimum, wavelength to the zeroth order
+                  'spectrograph-dedicated': {'slit-in': 10e-6, 'wavelength': 0},
+                  'chamber-light': {'power': 'off'},
+                  }),
             'temporal-spectrum': ("streak-ccd",  # acquisition tab
                 {'lens-switch': {'x': ("MD:" + model.MD_FAV_POS_DEACTIVE, 'off')},
                  'lens-mover': {'x': "MD:" + model.MD_FAV_POS_ACTIVE},
@@ -257,7 +263,7 @@ SPARC2_MODES = {
                  # 'spec-selector' will depend on the affects
                  # for the spec-ded aligner only z axis positions are stored, currently for one WL
                  'spec-ded-aligner': {'z': "MD:" + model.MD_FAV_POS_ACTIVE},
-                 # for the spectrograph dedicated slit fully open and filter always on pass-through
+                 # slit to the minimum, wavelength to the zeroth order
                  'spectrograph-dedicated': {'slit-in': 10e-6, 'wavelength': 0},
                  # 'spec-ded-det-selector' will depend on the affects
                  }),
