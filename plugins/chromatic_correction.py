@@ -4,8 +4,10 @@ Created on June 13, 2024
 
 @author: Karishma Kumar
 
-Gives ability to provide charomatic correction in x and y based on the given streams in the
-localisation tab.
+Gives ability to provide chromatic correction in x and y based on the given streams in the
+localisation tab for Meteor. It corrects for chromatic aberration caused due to lenses and the optical path by
+aligning different coloured channels with a reference coloured channel. For e.g. a bead emitting fluoroscence in all
+channels would be displayed at the same location in all channels after chromatic correction.
 
 Copyright © 2024 Karishma Kumar, Delmic
 
@@ -21,85 +23,76 @@ Public License for more details.
 You should have received a copy of the GNU General Public License along with Odemis. If not,
 see http://www.gnu.org/licenses/.
 """
-
 import copy
+import logging
+import os
 
-import cv2
 import numpy
 import wx
 import yaml
 from scipy.spatial.distance import cdist
 
+import odemis.gui.conf.file
 from odemis import model, dataio
 from odemis.acq.acqmng import acquireZStack
 from odemis.acq.stream import FluoStream
 from odemis.gui.plugin import Plugin
 from odemis.util.comp import generate_zlevels
+from odemis.util.spot import MaximaFind
 from odemis.util.transform import AffineTransform
 
-BEAD_DIAMETER = 10 * numpy.sqrt(2)  # the length of the square that fits in the bead circle
-
-
-def process_image(image):
-    # Check the number of channels in the image
-    if len(image.shape) == 2:  # Grayscale image
-        gray = image
-    elif len(image.shape) == 3 and image.shape[2] == 3:  # BGR image
-        gray = cv2.cvtColor(image, cv2.COLOR_BGR2GRAY)
-    else:
-        raise ValueError("Unexpected image format!")
-
-    # Apply threshold
-    _, binary = cv2.threshold(gray, 200, 255, cv2.THRESH_BINARY)
-    # Ensure the binary image is of type CV_8UC1
-    binary = binary.astype(numpy.uint8)
-    # Find contours
-    contours, _ = cv2.findContours(binary, cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
-    centers = []
-    # size of the square based on diameter
-    length = BEAD_DIAMETER / numpy.sqrt(2)
-    for contour in contours:
-        # Calculate the bounding box for each contour
-        x, y, w, h = cv2.boundingRect(contour)
-        # Filter out small contours
-        if w >= length and h >= length:
-            # Calculate moments for each contour
-            M = cv2.moments(contour)
-            if M['m00'] != 0:
-                cX = int(M['m10'] / M['m00'])
-                cY = int(M['m01'] / M['m00'])
-                centers.append((cX, cY))
-    return binary, centers
+# Value is based on one experiment dataset, needs more testing
+# Diameter might need to be adapted if the sample or the objective is changed
+# Objective of 50x|0.5 na is used
+# Actual bead size used was 200nm
+ACTUAL_BEAD_DIAMETER = 200 * 1e-9  # m
+# Based on diffraction, bead size in the image appears bigger which is used in calculation for finding and matching
+# bead centers. The actual bead diameter is multiplied by a scaling factor
+# The scaling is based on the provided dataset
+SCALE = 5.5
+# Maximum number of beads to find in the given image
+BEAD_QUANTITY = 15
 
 
 def find_corresponding_points(centers1, centers2, max_distance):
     """
     Find corresponding points in two sets of points that are within a specified maximum distance.
-
-    :param centers1: (np.ndarray) Nx2 array of points (x, y) in the first image.
-    :param centers2: (np.ndarray) Mx2 array of points (x, y) in the second image.
-    :param max_distance: (float) Maximum allowable distance for point pairs.
+    :param centers1: (numpy.ndarray) Nx2 array of points (x, y) in the first image.
+    :param centers2: (numpy.ndarray) Mx2 array of points (x, y) in the second image.
+    :param max_distance: (float in pixels) Maximum allowable distance for point pairs.
     :returns:
-        pairs: (list of tuples) Corresponding point pairs (index1, index2).
+        pairs: (numpy.ndarray) Corresponding point pairs (index1, index2).
     """
     # Calculate pairwise distances
     distances = cdist(centers1, centers2)
 
     # Find pairs within the max_distance
-    pairs = numpy.argwhere(distances <= max_distance)
+    all_pairs = numpy.argwhere(distances <= max_distance)
+    sorted_pairs = sorted(all_pairs, key=lambda x: distances[x[0], x[1]])
 
-    return pairs
+    matched_1 = set()
+    matched_2 = set()
+    pairs = []
+
+    for i, j in sorted_pairs:
+        if i not in matched_1 and j not in matched_2:
+            pairs.append([i, j])
+            matched_1.add(i)
+            matched_2.add(j)
+
+    return numpy.array(pairs)
 
 
 class ChromaticCorrectionPlugin(Plugin):
     name = "Chromatic Correction"
-    __version__ = "0.1"
-    __author__ = u"Karishma Kumar"
+    __version__ = "1.0"
+    __author__ = "Karishma Kumar"
     __license__ = "GPLv2"
 
     def __init__(self, microscope, main_app):
-        super(ChromaticCorrectionPlugin, self).__init__(microscope, main_app)
-        self.addMenu("Data correction/Lateral chromatic correction", self.start)
+        if "cryosecom-localization" in main_app.main_data.tab.choices.values():
+            super().__init__(microscope, main_app)
+            self.addMenu("Data correction/Lateral chromatic correction", self.start)
 
     def show_static_stream(self, filename: str, data: model.DataArray):
         """
@@ -114,60 +107,37 @@ class ChromaticCorrectionPlugin(Plugin):
         self.main_app.main_data.tab.value = analysis_tab
         analysis_tab.load_data(filename, extend=True)
 
-    def start(self):
-        localization_tab = self.main_app.main_data.getTabByName("cryosecom-localization")
-        tab_data = localization_tab.tab_data_model
-        other_mip_streams = []
-        reference_mip_stream = []
-        levels = generate_zlevels(tab_data.main.focus,
-                                  (-10e-06, 10e-06),
-                                  5e-06)
-        non_static = [s for s in tab_data.streams.value
-                      if isinstance(s, FluoStream)]
-        zlevels = {s: levels for s in non_static}
-        settings_observer = tab_data.main.settings_obs
-        acqui_task = acquireZStack(non_static, zlevels, settings_obs=settings_observer)
-        das, e = acqui_task.result()
+    def compute_transformation(self, ref_channel, channels, max_distance):
+        """
+        Compute affine transformation between a reference channel and another coloured channel.
+        :param ref_channel: (model.DataArray) The reference channels to which other channels are aligned
+        :param channels: (list of model.DataArray) The channels are transformed to align with reference channel
+        :param max_distance: (float in meters) The maximum distance accepted to match two same locations in between
+         reference channel and channels
+        """
+        trans_per_channel = {model.MD_CHROMATIC_COR: {}}  # stores transformation values per channel
+        dist_pxl = int(max_distance / ref_channel.metadata[model.MD_PIXEL_SIZE][0])  # convert m to pixel units
+        centers_ref = MaximaFind(ref_channel, BEAD_QUANTITY, dist_pxl)
 
-        if len(das) <= 1:
-            box = wx.MessageDialog(self.main_app.main_frame,
-                                   "Add minimum two streams. One of the streams must be green channel.",
-                                   "Failed to do chromatic correction", wx.OK | wx.ICON_STOP)
-            box.ShowModal()
-            box.Destroy()
-            return
-
-        # Calculate Maximum Intensity projection for all the present channels in the stream panel
-        for i, da in enumerate(das):
-            mip_image = model.DataArray(numpy.amax(da, axis=0), copy.copy(da.metadata))
-            dataio.tiff.export(f"{da.metadata[model.MD_DESCRIPTION]}_{i}", mip_image)
-            # All the channels will be corrected according to a reference colored channel
-            # green channel is selected as reference channel, Why? -> Ask Deniz
-            if da.metadata[model.MD_USER_TINT] == (0, 255, 0):
-                reference_mip_stream = mip_image
-            else:
-                other_mip_streams.append(mip_image)
-
-        # Save and display the reference channel in the analysis tab
-        self.show_static_stream(f"modified_{reference_mip_stream.metadata[model.MD_DESCRIPTION]}_ref",
-                                reference_mip_stream)
-
-        # Compute transformation between reference channel and other channels
-        trans_per_channel = {}  # stores transformation values per channel
-        _, centers_ref = process_image(reference_mip_stream)
-        centers_ref = numpy.array(centers_ref)
-        for i, im in enumerate(other_mip_streams):
+        for i, im in enumerate(channels):
             # Find corresponding points
-            _, centers_new = process_image(im)
-            centers_new = numpy.array(centers_new)
-            max_distance = BEAD_DIAMETER
-            corresponding_pairs = find_corresponding_points(centers_ref, centers_new, max_distance)
+            centers_new = MaximaFind(im, BEAD_QUANTITY, dist_pxl)
+            corresponding_pairs = find_corresponding_points(centers_ref, centers_new, dist_pxl)
 
             # Extract the matching points
             points1 = centers_ref[corresponding_pairs[:, 0]]
             points2 = centers_new[corresponding_pairs[:, 1]]
 
-            if len(corresponding_pairs) >= 4:
+            if len(corresponding_pairs) < 4:
+                txt = ('The chromatic correction did not happen for channel with %s. Skipping this channel.\n\n'
+                       'Alternatively, navigate to location with more beads or change the bead diameter in the script'
+                       % im.metadata[model.MD_DESCRIPTION])
+                box = wx.MessageDialog(self.main_app.main_frame,
+                                       txt, "Partial failure of chromatic correction", wx.OK)
+                box.ShowModal()
+                box.Destroy()
+
+            else:
                 # Estimate the transformation matrix
                 affine = AffineTransform.from_pointset(points1, points2)
                 mat = numpy.eye(3)
@@ -202,27 +172,81 @@ class ChromaticCorrectionPlugin(Plugin):
                 input_wl = im.metadata[model.MD_IN_WL]
                 output_wl = im.metadata[model.MD_OUT_WL]
 
-                trans_per_channel[f"channel_{i}"] = {
-                    "tint": list(im.metadata[model.MD_USER_TINT]),
-                    "scale_cor": [float(scale[0]), float(scale[1])],
-                    "translation_cor": [float(translation[0]), float(translation[1])],
-                    "rotation_cor": float(rotation),
-                    "shear_cor": float(shear),
-                    "excitation": [float(input_wl[0]), float(input_wl[1])],
-                    "emission": [float(output_wl[0]), float(output_wl[1])],
-                    "exposure time": float(im.metadata[model.MD_EXP_TIME]),
-                    "light power": float(im.metadata[model.MD_LIGHT_POWER])
-                }
+                try:
+                    fl_band = im.metadata[model.MD_EXTRA_SETTINGS]['Filter Wheel']['position'][0]['band']
+                    # The below metadata dictionary will be added to the microscope file using input command
+                    # under the filter wheel component, only if the metadata has Pixel size cor, Centre position cor,
+                    # Rotation cor, and Shear cor for a minimum one filter wheel band position
+                    trans_per_channel[model.MD_CHROMATIC_COR][fl_band] = {
+                        "Pixel size cor": [float(scale[0]), float(scale[1])],
+                        "Centre position cor": [float(translation[0]), float(translation[1])],
+                        "Rotation cor": float(rotation),
+                        "Shear cor": float(shear),
+                        # Extra information saved for tracking/debugging purpose
+                        "tint": list(im.metadata[model.MD_USER_TINT]),
+                        "excitation": [float(input_wl[0]), float(input_wl[1])],
+                        "emission": [float(output_wl[0]), float(output_wl[1])],
+                        "exposure time": float(im.metadata[model.MD_EXP_TIME]),
+                        "light power": float(im.metadata[model.MD_LIGHT_POWER])
+                    }
 
-                # update metadata
-                im.metadata.update({model.MD_PIXEL_SIZE_COR: scale})
-                im.metadata.update({model.MD_POS_COR: translation})
-                im.metadata.update({model.MD_ROTATION_COR: rotation})
-                im.metadata.update({model.MD_SHEAR_COR: shear})
+                    # update metadata
+                    im.metadata.update({model.MD_PIXEL_SIZE_COR: scale})
+                    im.metadata.update({model.MD_POS_COR: translation})
+                    im.metadata.update({model.MD_ROTATION_COR: rotation})
+                    im.metadata.update({model.MD_SHEAR_COR: shear})
 
-                # save the image and display
-                self.show_static_stream(f"modified_{im.metadata[model.MD_DESCRIPTION]}_{i}", im)
+                    # save the image and display
+                    self.show_static_stream(f"modified_{im.metadata[model.MD_DESCRIPTION]}_{i}.ome.tiff", im)
+                except (ValueError, KeyError) as ex:
+                    logging.error("Failed to compute chromatic aberration correction yaml file due to: %s", ex)
 
-        # TODO : decide the file location of transformation values
-        with open('transformation_per_channel.yaml', 'w') as yaml_file:
-            yaml.dump(trans_per_channel, yaml_file, default_flow_style=False)
+        return trans_per_channel
+
+    def start(self):
+        localization_tab = self.main_app.main_data.getTabByName("cryosecom-localization")
+        tab_data = localization_tab.tab_data_model
+        other_mip_streams = []
+        reference_mip_stream = []
+
+        if len(tab_data.streams.value) <= 1:
+            box = wx.MessageDialog(self.main_app.main_frame,
+                                   "Add minimum two streams. One of the streams must be green channel.",
+                                   "Failed to do chromatic correction", wx.OK | wx.ICON_STOP)
+            box.ShowModal()
+            box.Destroy()
+            return
+
+        levels = generate_zlevels(tab_data.main.focus,
+                                  (-10e-06, 10e-06),
+                                  5e-06)
+        non_static = [s for s in tab_data.streams.value
+                      if isinstance(s, FluoStream)]
+        zlevels = {s: levels for s in non_static}
+        settings_observer = tab_data.main.settings_obs
+        acqui_task = acquireZStack(non_static, zlevels, settings_obs=settings_observer)
+        das, e = acqui_task.result()
+
+        # Calculate Maximum Intensity projection for all the present channels in the stream panel
+        for i, da in enumerate(das):
+            mip_image = model.DataArray(numpy.amax(da, axis=0), copy.copy(da.metadata))
+            dataio.tiff.export(f"{da.metadata[model.MD_DESCRIPTION]}_{i}.ome.tiff", mip_image)
+            # All the channels will be corrected according to a reference colored channel
+            # green channel is selected as reference channel, as it lies in the middle of the spectrum
+            if da.metadata[model.MD_USER_TINT] == (0, 255, 0):
+                reference_mip_stream = mip_image
+            else:
+                other_mip_streams.append(mip_image)
+
+        # Save and display the reference channel in the analysis tab
+        self.show_static_stream(f"modified_{reference_mip_stream.metadata[model.MD_DESCRIPTION]}_ref.ome.tiff",
+                                reference_mip_stream)
+
+        # Compute transformation between reference channel and other channels
+        max_distance = ACTUAL_BEAD_DIAMETER * SCALE  # size of bead in the image
+        trans_per_channel = self.compute_transformation(reference_mip_stream, other_mip_streams, max_distance)
+
+        if trans_per_channel:
+            file_location = os.path.join(odemis.gui.conf.file.CONF_PATH, "lens-chromatic-correction.odm.yaml")
+            with open(file_location, 'w') as yaml_file:
+                yaml.dump(trans_per_channel, yaml_file, default_flow_style=False, sort_keys=False)

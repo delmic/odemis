@@ -271,3 +271,5 @@ MD_FIELD_FREE_POS_SHIFT = "Field free position shift"  # tuple [m]
 # Fastem: Parameters used for stitching and reconstruction of 3D volumes
 MD_SLICE_IDX = "Index of slice in volume stack"  # int
 MD_FIELD_SIZE = "Average field of view of a megafield"  # tuple (px, px)
+
+MD_CHROMATIC_COR = "Chromatic cor"
