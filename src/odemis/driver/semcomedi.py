@@ -2902,8 +2902,13 @@ class Scanner(model.Emitter):
             nrchans = 0
         else:
             nrchans = max(1, len(self.parent._acquisitions))
-        dt, self._osr, self._dpr = self.parent.find_best_oversampling_rate(value, nrchans)
+
+        return self._updateDwellTime(value, nrchans)
+
+    def _updateDwellTime(self, dt, nrchans):
+        dt, self._osr, self._dpr = self.parent.find_best_oversampling_rate(dt, nrchans)
         self._nrchans = nrchans
+        logging.debug("Updating nr channels to %d, for dwell time %f", nrchans, dt)
         return dt
 
     def _setScale(self, value):
@@ -3165,7 +3170,11 @@ class Scanner(model.Emitter):
         """
         if nrchans != self._nrchans:
             # force updating the dwell time for this new number of read channels
-            self.dwellTime.value = self.dwellTime.value
+            prev_dt = self.dwellTime.value
+            dt = self._updateDwellTime(prev_dt, nrchans)
+            if dt != prev_dt:
+                self.dwellTime._value = dt
+                self.dwellTime.notify(dt)
             if nrchans != self._nrchans:
                 raise ValueError(f"Cannot run {nrchans} channels currently")
 
