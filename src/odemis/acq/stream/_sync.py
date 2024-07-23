@@ -619,8 +619,8 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         n (0<=int): the detector/stream index
         data (DataArray): the data as received from the detector, from
           _onData(), and with MD_POS updated to the current position of the e-beam.
-        i (int, int): iteration number in X, Y
-        return (value): value as needed by _onCompletedData
+        i (int, int): pixel index of the first (top-left) pixel (Y, X)
+        return (value): value as needed by _onCompletedData/_assembleLiveData
         """
         # Update metadata based on user settings
         s = self._streams[n]
@@ -1487,6 +1487,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
                     logging.debug("Got SEM data from %s", s)
                     s._dataflow.unsubscribe(sub)
 
+                    sem_data = self._preprocessData(i, sem_data, (0, 0))
                     self._assembleLiveData2D(i, sem_data, (0, 0), pos_lt, rep, 0)
 
                 # TODO: if there is some missing data, we could guess which pixel is missing, based on the timestamp.
@@ -1829,7 +1830,7 @@ class SEMCCDMDStream(MultipleDetectorStream):
         """
         Acquires the image from the detector.
         :param n (int): Number of points (pixel/ebeam positions) acquired so far.
-        :param px_idx (int, int): Current scanning position of ebeam.
+        :param px_idx (int, int): Current scanning position of ebeam (Y, X)
         :param img_time (0<float): Expected time spend for one image.
         :param sem_time (0<float): Expected time spend for all sub-pixel.
                (=img_time if not fuzzing, and < img_time if fuzzing)
@@ -1921,9 +1922,9 @@ class SEMCCDMDStream(MultipleDetectorStream):
             if self._acq_state == CANCELLED:
                 raise CancelledError()
 
-            ccd_data = self._acq_data[self._ccd_idx][-1]
-            self._acq_data[-1][-1] = self._preprocessData(self._ccd_idx, ccd_data, px_idx)
-            logging.debug("Processed CCD data %d = %s", n, px_idx)
+            for i, das in enumerate(self._acq_data):
+                das[-1] = self._preprocessData(i, das[-1], px_idx)
+            logging.debug("Pre-processed data %d = %s", n, px_idx)
 
             self._updateProgress(future, time.time() - start, n + 1, tot_num, extra_time)
 
@@ -2153,8 +2154,8 @@ class SEMCCDMDStream(MultipleDetectorStream):
                         cor_pos = raw_pos[0] + strans[0], raw_pos[1] + strans[1]
                         logging.debug("Updating pixel pos from %s to %s", raw_pos, cor_pos)
 
-                    ccd_data = self._acq_data[-1][-1]
-                    self._acq_data[-1][-1] = self._preprocessData(len(self._streams), ccd_data, px_idx)
+                    for i, das in enumerate(self._acq_data):
+                        das[-1] = self._preprocessData(i, das[-1], px_idx)
                     logging.debug("Processed CCD data %d = %s", n, px_idx)
 
                     n += 1
@@ -2438,7 +2439,9 @@ class SEMMDStream(MultipleDetectorStream):
                     if i >= 1 and len(das[-1]) == 0:
                         # It's OK to not receive data on the first detector (SEM).
                         # It happens for instance with the Monochromator.
-                        raise IOError("No data received for stream %s" % (self._streams[i].name.value))
+                        raise IOError("No data received for stream %s" % (self._streams[i].name.value,))
+
+                    das[-1] = self._preprocessData(i, das[-1], px_idx)
                     self._assembleLiveData2D(i, das[-1], px_idx, px_pos, rep, 0)
 
                 self._shouldUpdateImage()
@@ -2506,7 +2509,7 @@ class SEMMDStream(MultipleDetectorStream):
 
         except Exception as exp:
             if not isinstance(exp, CancelledError):
-                logging.exception("Software sync acquisition of multiple detectors failed")
+                logging.exception("Scanner sync acquisition of multiple detectors failed")
 
             # make sure it's all stopped
             for s, sub in zip(self._streams, self._subscribers):
