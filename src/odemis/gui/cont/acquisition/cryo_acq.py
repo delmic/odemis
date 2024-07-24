@@ -50,6 +50,8 @@ from odemis.util.comp import generate_zlevels
 from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
 
+from odemis.acq.feature import acquire_at_features
+
 
 # constants for the acquisition future state of the cryo-secom
 ST_FINISHED = "FINISHED"
@@ -93,6 +95,7 @@ class CryoAcquiController(object):
         # bind events (buttons, checking, ...) with callbacks
         # for "ACQUIRE" button
         self._panel.btn_cryosecom_acquire.Bind(wx.EVT_BUTTON, self._on_acquire)
+        self._panel.btn_acquire_features.Bind(wx.EVT_BUTTON, self._acquire_at_features)
         # for "change..." button
         self._panel.btn_cryosecom_change_file.Bind(
             wx.EVT_BUTTON, self._on_btn_change
@@ -237,6 +240,96 @@ class CryoAcquiController(object):
         # thumb_nail = acqmng.computeThumbnail(st, future) # ImageJ does not work with the thumbnail in the tiff files
         scheduled_future = executor.submit(self._export_data, data, None)
         scheduled_future.add_done_callback(self._on_export_data_done)
+
+    def _acquire_at_features(self, _: wx.Event):
+        """Acquire at the features using the current imaging settings."""
+        # store the focuser position
+        self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
+
+        # hide/show/disable some widgets
+        self._panel.gauge_cryosecom_acq.Show()
+        self._panel.btn_cryosecom_acqui_cancel.Show()
+        self._panel.txt_cryosecom_left_time.Show()
+        self._panel.txt_cryosecom_est_time.Hide()
+        self._panel.btn_cryosecom_change_file.Disable()
+        self._panel.btn_acquire_overview.Disable()
+        self._panel.z_stack_chkbox.Disable()
+        self._panel.streams_chk_list.Disable()
+        self._panel.param_Zmin.Enable(False)
+        self._panel.param_Zmax.Enable(False)
+        self._panel.param_Zstep.Enable(False)
+        # disable the streams settings
+        self._tab.streambar_controller.pauseStreams()
+        self._tab.streambar_controller.pause()
+        self._tab_data.main.is_acquiring.value = True
+
+        zlevels: dict = {}
+        if self._zStackActive:
+            self._on_zstack()  # update the zlevels with the current focus position
+            zlevels = self._zlevels
+
+        filename = self._filename.value
+        stage = self._tab_data.main.stage
+        focus = self._tab_data.main.focus
+        features = self._tab_data.main.features.value
+
+        logging.warning(f"Acquiring at features: {features}")
+
+        self._acq_future = acquire_at_features(
+            features=features,
+            stage=stage,
+            focus=focus,
+            streams=self._acquiStreams.value,
+            zlevels=zlevels,
+            filename=filename,
+            settings_obs=self._tab_data.main.settings_obs,
+        )
+        logging.warning("Acquisition started")
+
+        # link the acquisition gauge to the acquisition future
+        self._gauge_future_conn = ProgressiveFutureConnector(
+            future=self._acq_future,
+            bar=self._panel.gauge_cryosecom_acq,
+            label=self._panel.txt_cryosecom_left_time,
+            full=False,
+        )
+
+        self._acq_future.add_done_callback(self._on_feature_acquisition_done)
+        self._panel.Layout()
+
+    # TODO: handle cascading errors
+    def _on_feature_acquisition_done(self, future):
+        local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
+        local_tab.tab_data_model.select_current_position_feature()
+        self._acq_future = None
+        self._gauge_future_conn = None
+        self._tab_data.main.is_acquiring.value = False
+        self._tab_data.main.focus.moveAbs({"z": self._good_focus_pos})
+
+        # try to get the acquisition data
+        try:
+            data, exp = future.result()
+            self._panel.txt_cryosecom_est_time.Show()
+            self._panel.txt_cryosecom_est_time.SetLabel("Finishing acquisition...")
+            logging.info("The acquisition is done")
+        except CancelledError:
+            logging.info("The acquisition was canceled")
+            self._reset_acquisition_gui(state=ST_CANCELED)
+            return
+        except Exception:
+            logging.exception("The acquisition failed")
+            self._reset_acquisition_gui(
+                text="Acquisition failed (see log panel).", state=ST_FAILED
+            )
+            return
+        if exp:
+            logging.error("Acquisition partially failed %s: ", exp)
+
+        try:  # QUERY: the gui crashes without this...?
+            self._reset_acquisition_gui(state=ST_FINISHED)
+            self._update_acquisition_time()
+        except Exception as e:
+            logging.warning(f"Error resetting acquisition GUI: {e}")
 
     def _reset_acquisition_gui(self, text=None, state=None):
         """
