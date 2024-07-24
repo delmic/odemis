@@ -111,7 +111,9 @@ class xrcfr_overview_acq(wx.Dialog):
         self.fp_settings_secom_optical = xrc.XRCCTRL(self, "fp_settings_secom_optical")
         self.pnl_opt_streams = xrc.XRCCTRL(self, "pnl_opt_streams")
         self.pnl_secom_streams = xrc.XRCCTRL(self, "pnl_secom_streams")
+        self.zstack_steps_label = xrc.XRCCTRL(self, "zstack_steps_label")
         self.zstack_steps = xrc.XRCCTRL(self, "zstack_steps")
+        self.zstep_size_label = xrc.XRCCTRL(self, "zstep_size_label")
         self.zstep_size_ctrl = xrc.XRCCTRL(self, "zstep_size_ctrl")
         self.whole_grid_chkbox = xrc.XRCCTRL(self, "whole_grid_chkbox")
         self.tiles_number_x_lbl = xrc.XRCCTRL(self, "tiles_number_x_lbl")
@@ -1700,7 +1702,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                       <hgap>50</hgap>
                       <growablecols>1</growablecols>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="zstack_steps_label">
                           <label>ZStack steps</label>
                           <fg>#DDDDDD</fg>
                           <XRCED>
@@ -1731,7 +1733,7 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                         <border>10</border>
                       </object>
                       <object class="sizeritem">
-                        <object class="wxStaticText">
+                        <object class="wxStaticText" name="zstep_size_label">
                           <label>Zstep size</label>
                           <fg>#DDDDDD</fg>
                           <XRCED>
