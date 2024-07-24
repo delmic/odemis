@@ -27,9 +27,8 @@ import math
 import os.path
 from builtins import str
 from concurrent.futures._base import CancelledError
-from typing import Dict, List, Optional, Tuple
+from typing import List, Tuple
 
-import numpy
 import odemis.gui.model as guimodel
 import wx
 from odemis import dataio, gui, model
@@ -37,7 +36,7 @@ from odemis.acq import acqmng, path, stitching, stream
 from odemis.acq.stitching import (REGISTER_IDENTITY, WEAVER_MEAN,
                                   FocusingMethod, acquireOverview)
 from odemis.acq.stream import (NON_SPATIAL_STREAMS, EMStream, LiveStream,
-                               OpticalStream, ScannedFluoStream)
+                               OpticalStream, ScannedFluoStream, SEMStream, FIBStream)
 from odemis.gui.preset import (apply_preset, get_global_settings_entries,
                                get_local_settings_entries, preset_as_is,
                                presets)
@@ -54,8 +53,9 @@ from odemis.gui.util import (call_in_wx_main, formats_to_wildcards,
 from odemis.gui.util.conversion import sample_positions_to_layout
 from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
-from odemis.util import rect_intersect, units
+from odemis.util import units
 from odemis.util.filename import create_filename, guess_pattern, update_counter
+from odemis.acq.stitching import get_tiled_areas, get_zstack_levels
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -654,6 +654,14 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         save_dir = self.conf.last_path
         if isinstance(orig_tab_data, guimodel.CryoGUIData):
             save_dir = self.conf.pj_last_path
+
+        # feature flag to enable/disable FIBSEM mode (disabled until fibsem code is merged)
+        self.fibsem_mode = False # isinstance(orig_tab_data, guimodel.CryoFIBSEMGUIData)
+
+        # hide optical settings / stream panel when in fibsem mode
+        self.fp_settings_secom_optical.Show(not self.fibsem_mode)
+        self.pnl_opt_streams.Show(not self.fibsem_mode)
+
         self.filename = create_filename(save_dir, "{datelng}-{timelng}-overview",
                                               ".ome.tiff")
         assert self.filename.endswith(".ome.tiff")
@@ -689,20 +697,20 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self._autofocus_roi_vac = VigilantAttributeConnector(
             self.autofocus_roi_ckbox, self.autofocus_chkbox, events=wx.EVT_CHECKBOX)
 
-        # Slightly change the interface if multiple grids available (sample centers).
-        # For now this only works on the MIMAS. So in total we have this whole display:
-        # * zstack steps
-        # * step size
+        # Change the interface depending on the component being used for imaging, and
+        # whether we have sample centers or not
+        # * zstack steps (if not fibsem acquisition)
+        # * step size (if not fibsem acquisition)
         # [] whole grid acquisition (if sample centers)
         # * tile nb x
         # * tile nb y
         # * selected grid area (if sample centers)
         # * grid selection panel (if sample centers) -> uses a placeholder panel
         # * Total area
-        # [] autofocus (if not sample centers)
+        # * autofocus
 
         if self._main_data_model.sample_centers:
-            self.autofocus_chkbox.Hide()
+            self.autofocus_chkbox.Show()
             self.autofocus_roi_ckbox.value = True
 
             self.whole_grid_chkbox.Value = True
@@ -737,6 +745,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             self.selected_grid_lbl.Hide()
             self.selected_grid_pnl_holder.Hide()
             self._grids = None
+            self._selected_grids = set()
 
         orig_view = orig_tab_data.focussedView.value
         self._view = self._tab_data_model.focussedView.value
@@ -780,18 +789,36 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # imprecision, all the tiles will overlap or at worse be next to each other (i.e. , no space between tiles)
         self.overlap = 0.10
         try:
+            if self.fibsem_mode:
+                self.stage = self._main_data_model.stage_bare
+                self.focuser = self._main_data_model.ebeam_focus
+                self.detector = self._main_data_model.sed
+                self.settings_obs = self._main_data_model.settings_obs
+                imaging_range = model.MD_SEM_IMAGING_RANGE
+
+                # In FIBSEM mode, we don't have autofocus because of how the overview code currently works
+                self.autofocus_chkbox.Hide()
+                self.autofocus_roi_ckbox.value = False
+
+            else:
+                self.stage = self._main_data_model.stage
+                self.focuser = self._main_data_model.focus
+                self.detector = self._main_data_model.ccd
+                self.settings_obs = self._main_data_model.settings_obs
+                imaging_range = model.MD_POS_ACTIVE_RANGE
+
             # Use the stage range, which can be overridden by the MD_POS_ACTIVE_RANGE.
             # Note: this last one might be temporary, until we have a RoA tool provided in the GUI.
             self._tiling_rng = {
-                "x": self._main_data_model.stage.axes["x"].range,
-                "y": self._main_data_model.stage.axes["y"].range
+                "x": self.stage.axes["x"].range,
+                "y": self.stage.axes["y"].range
             }
 
-            stage_md = self._main_data_model.stage.getMetadata()
-            if model.MD_POS_ACTIVE_RANGE in stage_md:
-                self._tiling_rng.update(stage_md[model.MD_POS_ACTIVE_RANGE])
+            stage_md = self.stage.getMetadata()
+            if imaging_range in stage_md:
+                self._tiling_rng.update(stage_md[imaging_range])
         except (KeyError, IndexError):
-            raise ValueError("Failed to find stage.MD_POS_ACTIVE_RANGE with x and y range")
+            raise ValueError(f"Failed to find stage {imaging_range} with x and y range")
 
         # Note: It should never be possible to reach here with no streams
         streams = self.get_acq_streams()
@@ -848,7 +875,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             if not isinstance(s, LiveStream):
                 continue
 
-            self.streambar_controller.addStream(s, add_to_view=self._view)
+            sc = self.streambar_controller.addStream(s, add_to_view=self._view)
+            sc.stream_panel.show_remove_btn(True)
 
     def remove_all_streams(self):
         """
@@ -877,62 +905,21 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
         of all areas to acquire.
         """
-        whole_grid = self.whole_grid_chkbox.Value
-        if not whole_grid:
-            area = self._compute_area_size()
-            if area is None:
-                return []
-            else:
-                return [area]
 
-        # TODO: for now this is only for the MIMAS, but eventually, on the METEOR,
-        # which often supports 2 grids, this should also be possible to use.
-
-        # .sample_centers contains the center position of each area
-        # .sample_rel_bbox contains the relative bounding box on an area
-        rel_bbox = self._main_data_model.sample_rel_bbox
-
-        # Sort the (selected) centers along X, and for centers with the same X, along the Y.
-        # In theory, the order doesn't really matter (at best it would safe a few
-        # seconds of stage movement), but it's nice for the user that acquisitions
-        # are done always in the same order, as it reduces "astonishment".
-        sorted_centers = sorted(pos
-                                for name, pos in self._main_data_model.sample_centers.items()
-                                if name in self._selected_grids)
-        areas = [(center[0] + rel_bbox[0], center[1] + rel_bbox[1], center[0] + rel_bbox[2], center[1] + rel_bbox[3])
-                 for center in sorted_centers]
+        areas = get_tiled_areas(
+            pos=self.stage.position.value,
+            streams=self.get_acq_streams(),
+            tiles_nx=self.tiles_nx.value,
+            tiles_ny=self.tiles_ny.value,
+            overlap=self.overlap,
+            tiling_rng=self._tiling_rng,
+            selected_grids=self._selected_grids,
+            sample_centers=self._main_data_model.sample_centers,
+            rel_bbox=self._main_data_model.sample_rel_bbox,
+            whole_grid=self.whole_grid_chkbox.Value,
+        )
 
         return areas
-
-    def _compute_area_size(self) -> Optional[Tuple[float,float]]:
-        """
-        Calculates the requested tiling area size, based on the tiles number
-        :return: the size (in m) in X and Y. If no area at all, returns None.
-        """
-        # get smallest fov
-        fovs = [self.get_fov(s) for s in self.get_acq_streams()]
-        if not fovs:
-            # fall back to a small fov (default)
-            self.fov = DEFAULT_FOV
-        else:
-            # smallest fov
-            self.fov = (min(f[0] for f in fovs),
-                        min(f[1] for f in fovs))
-
-        nx = self.tiles_nx.value
-        ny = self.tiles_ny.value
-        # these formulas for w and h have to match the ones used in the 'stitching' module.
-        w = nx * self.fov[0] * (1 - self.overlap)
-        h = ny * self.fov[1] * (1 - self.overlap)
-
-        pos = self._tab_data_model.main.stage.position.value
-        # Note the area can accept LTRB or LBRT.
-        area = self.clip_tiling_area_to_range(w, h, pos, self._tiling_rng)
-        if area is None:
-            # there is no intersection
-            logging.warning("Couldn't find intersection between stage pos %s and tiling range %s" % (pos, self._tiling_rng))
-
-        return area
 
     def on_grid_button(self, evt: wx.Event = None):
         """
@@ -984,9 +971,10 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         # Some settings can affect the FoV. Also, adding/removing the stream with
         # the smallest FoV would also affect the area.
         areas = self._get_areas()
+        streams = self.get_acq_streams()
 
         # Disable acquisition button if no area
-        self.btn_secom_acquire.Enable(bool(areas))
+        self.btn_secom_acquire.Enable(bool(areas and streams))
 
         if not areas:
             self.area_size_txt.SetLabel("Invalid stage position")
@@ -1003,6 +991,18 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         When the list of streams to acquire has changed
         """
         self.update_setting_display()
+
+        # if all the streams are SEMStream or FIBStream, disable z-stack acquistion
+        z_stack_disabled = all([isinstance(s, (SEMStream, FIBStream))
+                                for s in self.get_acq_streams()])
+        if z_stack_disabled:
+            self.zstep_size_ctrl.Hide()
+            self.zstep_size_label.Hide()
+            self.zstack_steps.Hide()
+            self.zstack_steps_label.Hide()
+
+            # set steps to 1 to override the existing z-stack acquisition
+            self.zsteps.value = 1
 
     def on_tiles_number(self, _=None):
         """
@@ -1031,60 +1031,30 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
 
         streams = self.get_acq_streams()
         if not streams:
-            acq_time = 0
-        else:
-            zlevels = self._get_zstack_levels()
-            focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
+            # This can happen if the user removes all the streams.
+            logging.debug("No streams available cannot estimate acquisition time")
+            self.lbl_acqestimate.SetLabel("Add a stream area to acquire.")
+            return
 
-            if self.autofocus_roi_ckbox.value:
-                acq_time = stitching.estimateOverviewTime(streams,
-                                                          self._main_data_model.stage,
-                                                          areas,
-                                                          self._main_data_model.focus,
-                                                          self._main_data_model.ccd,
-                                                          overlap=self.overlap,
-                                                          settings_obs=self._main_data_model.settings_obs,
-                                                          weaver=WEAVER_MEAN,
-                                                          registrar=REGISTER_IDENTITY,
-                                                          zlevels=zlevels,
-                                                          focusing_method=focus_mtd)
+        zlevels = self._get_zstack_levels()
+        focus_mtd = FocusingMethod.MAX_INTENSITY_PROJECTION if zlevels else FocusingMethod.NONE
 
-            else:
-                # If there are several areas, the autofocus should be automatically selected
-                # => no autofocus only works with a single area
-                acq_time = stitching.estimateTiledAcquisitionTime(streams,
-                                                                  self._main_data_model.stage,
-                                                                  areas[0], self.overlap,
-                                                                  zlevels=zlevels,
-                                                                  focusing_method=focus_mtd)
+        acq_time = stitching.estimateOverviewTime(streams=streams,
+                                                    stage=self.stage,
+                                                    areas=areas,
+                                                    focus=self.focuser,
+                                                    detector=self.detector,
+                                                    overlap=self.overlap,
+                                                    settings_obs=self.settings_obs,
+                                                    weaver=WEAVER_MEAN,
+                                                    registrar=REGISTER_IDENTITY,
+                                                    zlevels=zlevels,
+                                                    focusing_method=focus_mtd,
+                                                    use_autofocus=self.autofocus_roi_ckbox.value)
 
         txt = "The estimated acquisition time is {}."
         txt = txt.format(units.readable_time(math.ceil(acq_time)))
         self.lbl_acqestimate.SetLabel(txt)
-
-    def get_fov(self, s):
-        try:
-            return s.guessFoV()
-        except (NotImplementedError, AttributeError):
-            raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (s,))
-
-    @staticmethod
-    def clip_tiling_area_to_range(w, h, pos, tiling_rng):
-        """
-        Finds the intersection between the requested tiling area and the tiling range.
-        w (float): width of the tiling area
-        h (float): height of the tiling area
-        pos (dict -> float): current position of the stage
-        tiling_rng (dict -> list): the tiling range along x and y axes as
-          (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
-        return (None or tuple of 4 floats): None if there is no intersection, or
-          the rectangle representing the intersection as (xmin, ymin, xmax, ymax).
-        """
-        area_req = (pos["x"] - w / 2, pos["y"] - h / 2,
-                    pos["x"] + w / 2, pos["y"] + h / 2)
-        # clip the tiling area, if needed (or find the intersection between the active range and the requested area)
-        return rect_intersect(area_req,
-            (tiling_rng["x"][0], tiling_rng["y"][1], tiling_rng["x"][1], tiling_rng["y"][0]))
 
     def on_key(self, evt):
         """ Dialog key press handler. """
@@ -1158,43 +1128,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         :returns:
             (list(float) or None) zstack levels for zstack acquisition. None if only one zstep is requested.
         """
-        zsteps = self.zsteps.value
-        if zsteps == 1:
-            return None
-
-        if rel:
-            zmin = - (zsteps / 2 * self.zstep_size.value)
-            zmax = + (zsteps / 2 * self.zstep_size.value)
-        else:
-            # Clip zsteps value to allowed range
-            focus_value = self._main_data_model.focus.position.value['z']
-            focus_range = self._main_data_model.focus.axes['z'].range
-            zmin = focus_value - (zsteps / 2 * self.zstep_size.value)
-            zmax = focus_value + (zsteps / 2 * self.zstep_size.value)
-            if (zmax - zmin) > (focus_range[1] - focus_range[0]):
-                # Corner case: it'd be larger than the entire range => limit to the entire range
-                zmin = focus_range[0]
-                zmax = focus_range[1]
-            if zmax > focus_range[1]:
-                # Too high => shift down
-                shift = zmax - focus_range[1]
-                zmin -= shift
-                zmax -= shift
-
-            if zmin < focus_range[0]:
-                # Too low => shift up
-                shift = focus_range[0] - zmin
-                zmin += shift
-                zmax += shift
-
-        # TODO: if there is an even number of zsteps, the current focus position will not be part of the zlevels.
-        # As the current focus position can often be the "best" position, we could change the algorithm in such case to
-        # shift exactly symmetrical, but instead use the current position as one of the zlevels.
-
-        # Create focus zlevels from the given zsteps number
-        zlevels = numpy.linspace(zmin, zmax, zsteps).tolist()
-
-        return zlevels
+        return get_zstack_levels(zsteps=self.zsteps.value, zstep_size=self.zstep_size.value, rel=rel, focuser=self.focuser)
 
     def _fit_view_to_area(self, area: Tuple[float,float]):
         center = ((area[0] + area[2]) / 2,
@@ -1237,34 +1171,26 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             logging.info("Acquisition tiles logged at %s", self.filename_tiles)
             os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
-        if self.autofocus_roi_ckbox.value:
-            # acquireOverview() needs relative zlevels, as they will be used relative to the focus points found
-            zlevels = self._get_zstack_levels(rel=True)
-            self.acq_future = acquireOverview(acq_streams,
-                                              self._main_data_model.stage,
-                                              areas,
-                                              self._main_data_model.focus,
-                                              self._main_data_model.ccd,
-                                              overlap=self.overlap,
-                                              settings_obs=self._main_data_model.settings_obs,
-                                              log_path=self.filename_tiles,
-                                              weaver=WEAVER_MEAN,
-                                              registrar=REGISTER_IDENTITY,
-                                              zlevels=zlevels,
-                                              focusing_method=focus_mtd)
+        use_autofocus = self.autofocus_roi_ckbox.value
 
-        else:
-            # If there are several areas, the autofocus should be automatically selected
-            # => no autofocus only works with a single area
-            zlevels = self._get_zstack_levels(rel=False)
-            self.acq_future = stitching.acquireTiledArea(acq_streams, self._main_data_model.stage, area=areas[0],
-                                                         overlap=self.overlap,
-                                                         settings_obs=self._main_data_model.settings_obs,
-                                                         log_path=self.filename_tiles,
-                                                         weaver=WEAVER_MEAN,
-                                                         registrar=REGISTER_IDENTITY,
-                                                         zlevels=zlevels,
-                                                         focusing_method=focus_mtd)
+        # autofocus needs relative zlevels, as they will be used relative to the focus points found
+        zlevels = self._get_zstack_levels(rel=use_autofocus)
+
+        self.acq_future = acquireOverview(
+            streams=acq_streams,
+            stage=self.stage,
+            areas=areas,
+            focus=self.focuser,
+            detector=self.detector,
+            overlap=self.overlap,
+            settings_obs=self.settings_obs,
+            log_path=self.filename_tiles,
+            weaver=WEAVER_MEAN,
+            registrar=REGISTER_IDENTITY,
+            zlevels=zlevels,
+            focusing_method=focus_mtd,
+            use_autofocus=use_autofocus,
+        )
 
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
                                                                 self.gauge_acq,
