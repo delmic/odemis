@@ -313,10 +313,6 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
             if future._autofocus_state == CANCELLED:
                 raise CancelledError()
 
-            if left == right:
-                logging.info("Seems to have reached minimum step size (at %g m)", 2 * step_factor * min_step)
-                break
-
             # if best focus was found at the center
             if i_max == 1:
                 step_factor /= 2
@@ -335,6 +331,13 @@ def _DoBinaryFocus(future, detector, emt, focus, dfbkg, good_focus, rng_focus):
                 # Clip best_pos in case the hardware reports a position outside of the range.
                 best_pos = max(rng[0], min(best_pos, rng[1]))
                 focus.moveAbsSync({"z": best_pos})
+
+            if left == right:
+                # Do this after moving to the best position, because clipping left and right can cause
+                # left and right to be equal, even when both are unequal to the best position.
+                logging.info("Seems to have reached minimum step size (at %g m)", 2 * step_factor * min_step)
+                break
+
             step_cntr += 1
 
         worst_fm = min(focus_levels.values())
