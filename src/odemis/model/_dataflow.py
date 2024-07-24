@@ -242,26 +242,33 @@ class DataFlow(DataFlowBase):
         """
         updates the high water mark option of OMQ pipe according to max_discard
         """
-        if (self._max_discard == self._max_discard_last_update
-            or self.pipe is None
-           ):
-            return
+        # As of 0MQ v4.3.4, changing the HWM while connected still doesn't work correctly. It can
+        # crash the server, or just drop messages unexpectedly. So, we just leave to a large
+        # number and let the client drop the messages.
+        # Uncomment below once 0MQ is fixed (on all supported platforms), so that when max_discard
+        # is > 0, the server will drop messages early.
+        return
 
-        # When discarding, allow a bit of delay, but nothing more: if more than
-        # 2 DataArray (= 2*3 msg) already queued, the _newest_ one will be dropped.
-        # The best would be to drop the _oldest_ messages.
-        # Note: before ZMQ 4.2, it was necessary to unbind/bind the pipe to update the HWM, however,
-        # this automatically drops all subscribers. And sometimes, even if there are no subscribers,
-        # it crashes ZMQ. From ZMQ 4.2, it's possible to change the HWM without rebinding.
-        hwm = 6 if self._max_discard else 3000
-        self.pipe.sndhwm = hwm
-        self._max_discard_last_update = self._max_discard
-        logging.debug("Updating 0MQ HWM to %d on %s (max_discard = %s)",
-                       hwm, self._global_name, self._max_discard)
-
-        # TODO: in ZMQ v4, ZMQ_CONFLATE allows to have a queue of 1 message
-        # containing only the newest message. That sounds closer to what we
-        # need (though, currently multi-part messages are not supported).
+        # if (self._max_discard == self._max_discard_last_update
+        #     or self.pipe is None
+        #    ):
+        #     return
+        #
+        # # When discarding, allow a bit of delay, but nothing more: if more than
+        # # 2 DataArray (= 2*2 msg) already queued, the _newest_ one will be dropped.
+        # # The best would be to drop the _oldest_ messages.
+        # # Note: before ZMQ 4.2, it was necessary to unbind/bind the pipe to update the HWM, however,
+        # # this automatically drops all subscribers. And sometimes, even if there are no subscribers,
+        # # it crashes ZMQ. From ZMQ 4.2, it's possible to change the HWM without rebinding.
+        # hwm = 4 if self._max_discard else 2000
+        # self.pipe.sndhwm = hwm
+        # self._max_discard_last_update = self._max_discard
+        # logging.debug("Updating 0MQ HWM to %d on %s (max_discard = %s)",
+        #                hwm, self._global_name, self._max_discard)
+        #
+        # # TODO: in ZMQ v4, ZMQ_CONFLATE allows to have a queue of 1 message
+        # # containing only the newest message. That sounds closer to what we
+        # # need (though, currently multi-part messages are not supported).
 
     def synchronizedOn(self, event):
         """
@@ -304,8 +311,9 @@ class DataFlow(DataFlowBase):
         # thread anymore. To be safe, it might need a pub-sub forwarder proxy inproc
         self._ctx = zmq.Context(1)
         self.pipe = self._ctx.socket(zmq.PUB)
-        self.pipe.linger = 1 # don't keep messages more than 1s after close
-        self._update_pipe_hwm()  # will not unbind/bind, as global_name is not set yet
+        self.pipe.linger = 1  # s, don't keep messages more than 1s after close
+        self.pipe.sndhwm = 200  # For now, it's just hard-coded (see _update_pipe_hwm)
+        # self._update_pipe_hwm()
 
         uri = daemon.uriFor(self)
         # uri.sockname is the file name of the pyro daemon (with full path)
@@ -418,9 +426,8 @@ class DataFlow(DataFlowBase):
             # is gone (if there is a way to associate it)
 
             # TODO thread-safe for self.pipe ?
-            dformat = {"dtype": str(data.dtype), "shape": data.shape}
+            dformat = {"dtype": str(data.dtype), "shape": data.shape, "metadata": data.metadata}
             self.pipe.send_pyobj(dformat, zmq.SNDMORE)
-            self.pipe.send_pyobj(data.metadata, zmq.SNDMORE)
             try:
                 if not data.flags["C_CONTIGUOUS"]:
                     # if not in C order, it will be received incorrectly
@@ -616,7 +623,6 @@ class SubscribeProxyThread(threading.Thread):
                 if self._data in socks:
                     # TODO: be more resilient if wrong data is received (can block forever)
                     array_format = self._data.recv_pyobj()
-                    array_md = self._data.recv_pyobj()
                     array_buf = self._data.recv(copy=False)
                     # logging.debug("Received new DataArray over ZMQ for %s", self.uri)
                     # more fresh data already?
@@ -638,7 +644,7 @@ class SubscribeProxyThread(threading.Thread):
                     else:  # frombuffer doesn't support zero length array
                         array = numpy.empty((0,), dtype=array_format["dtype"])
                     array.shape = array_format["shape"]
-                    darray = DataArray(array, metadata=array_md)
+                    darray = DataArray(array, metadata=array_format["metadata"])
                     self.weak_df.notify(darray)
 
         except ReferenceError:  # The DataFlow(Proxy) is gone
