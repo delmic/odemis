@@ -186,12 +186,14 @@ class CryoFeatureOverlay(StagePointSelectOverlay, DragMixin):
                     converted_pos = linked_yz._get_pos_vector(
                         linked_new_pos
                     )  # this is to bare coordinates
+                    converted_pos["x"] = new_pos["x"]  # update x position
                     logging.warning(f"converted linked pos: {converted_pos}")
 
                     # update stage bare position
-                    new_stage_bare_pos = stage_bare.position.value  # get rx, rz
-                    new_stage_bare_pos["x"] = new_pos["x"]  # update x position
-                    new_stage_bare_pos.update(converted_pos)  # update y, z position
+                    new_stage_bare_pos = (
+                        stage_bare.position.value
+                    )  # get rx, rz from current stage bare position (orientation)
+                    new_stage_bare_pos.update(converted_pos)  # update x, y, z position
                     logging.warning(f"new projected stage-bare:  {new_stage_bare_pos}")
 
                     self.tab_data.add_new_feature(
