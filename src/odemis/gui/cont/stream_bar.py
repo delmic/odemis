@@ -32,6 +32,7 @@ import time
 import wx
 
 import odemis.acq.stream as acqstream
+import odemis.gui.conf.file
 import odemis.gui.model as guimodel
 from odemis import model
 from odemis.acq.stream_settings import StreamSettingsConfig
@@ -1201,8 +1202,7 @@ class SecomStreamsController(StreamBarController):
     """
 
     def __init__(self, *args, **kwargs):
-        dir = os.path.join(get_home_folder(), u".config/odemis")
-        file_path = os.path.abspath(os.path.join(dir, f"stream_settings.json"))
+        file_path = os.path.abspath(os.path.join(odemis.gui.conf.file.CONF_PATH, "stream_settings.json"))
         max_entries = 10  # Maximum number most recent settings to display
         # Initialize a file to save acquired streams
         self.stream_settings = StreamSettingsConfig(file_path, max_entries)

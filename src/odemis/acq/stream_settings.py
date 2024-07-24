@@ -20,7 +20,7 @@ import os
 from typing import List, Dict, Any
 
 from odemis import model, util
-from odemis.acq.stream import FluoStream
+from odemis.acq.stream import Stream
 from odemis.util.img import md_format_to_tint, tint_to_md_format
 
 # Power value depends on selected excitation
@@ -156,28 +156,35 @@ class StreamSettingsConfig:
         # read and update the stream settings in the JSON file
         self.update_data(local_entries)
 
-    def apply_settings(self, stream: FluoStream, name: str):
+    def apply_settings(self, stream: Stream, name: str):
         """
         Apply the values from the saved data of the given name to the stream
         controller settings.
-        :param stream: FluoStream that needs to be set with the values from the JSON file
+        :param stream: Stream that needs to be set with the values from the JSON file
         :param name: Name of the saved setting in the JSON file
         """
         index = self._get_config_index(self.config_data, name)
-        if index is not None:
-            settings_order = get_settings_order(stream)
-            prev_setting = self.config_data[index]
-            # Follow the order for setting the values as listed in setting_keys
-            for key in settings_order:
-                current_value = prev_setting[key]  # Get the previous value if it exists
-                # tint requires special handling
-                if key == "tint":
-                    current_value = md_format_to_tint(prev_setting["tint"])
-                # Special handling for attributes that need to be converted to tuples
-                elif isinstance(current_value, list) and all(isinstance(x, (int, float)) for x in current_value):
-                    current_value = tuple(current_value)
-                try:
-                    # Set the attribute value
-                    getattr(stream, key).value = current_value
-                except Exception as e:
-                    logging.warning(f"Error in applying the stream settings for {key}: {e}")
+        if index is None:
+            logging.debug("Not applying the stream settings as '%s' is unknown.", name)
+            return
+
+        settings_order = get_settings_order(stream)
+        prev_setting = self.config_data[index]
+        # Follow the order for setting the values as listed in setting_keys
+        for key in util.sorted_according_to(prev_setting.keys(), settings_order):
+            if key == "name":
+                continue  # Entry name is not to be applied
+
+            current_value = prev_setting[key]  # Get the previous value if it exists
+            # tint requires special handling
+            if key == "tint":
+                current_value = md_format_to_tint(prev_setting["tint"])
+            # Special handling for attributes that need to be converted to tuples
+            elif isinstance(current_value, list) and all(isinstance(x, (int, float)) for x in current_value):
+                current_value = tuple(current_value)
+
+            # Set the VA value
+            try:
+                getattr(stream, key).value = current_value
+            except Exception as e:
+                logging.warning(f"Error in applying the stream settings for {key}: {e}")

@@ -39,17 +39,15 @@ class TestAcquiredStreamSettings(unittest.TestCase):
                   'power': 0.0000000012, 'emission': [0.00001, 1.234e-07],
                   'detExposureTime': 0.00123456789, 'auto_bc_outliers': 0.12345},
                  {'name': 'Filtered Colour 2', 'excitation': [0, 1, 2],
-                  'power': 0.0000000034, 'emission': [0.00001, 1.234e-07],
-                  'detExposureTime': 0.00123456789, 'auto_bc_outliers': 0.12345},
-                 {'name': 'Filtered Colour 3', 'excitation': [0, 1, 2],
                   'power': 0.0000000045, 'emission': [0.00001, 1.234e-07],
                   'detExposureTime': 0.00123456789, 'auto_bc_outliers': 0.12345},
-                 {'name': 'Filtered Colour 4', 'excitation': [0, 1, 2],
+                 {'name': 'Filtered Colour 3', 'excitation': [0, 1, 2],
                   'power': 0.0000000056, 'emission': [0.00001, 1.234e-07],
                   'detExposureTime': 0.00123456789, 'auto_bc_outliers': 0.12345},
-                 {'name': 'Filtered Colour 5', 'excitation': [0, 1, 2],
+                 {'name': 'Filtered Colour 4', 'excitation': [0, 1, 2],
                   'power': 0.0000000067, 'emission': [0.00001, 1.234e-07],
                   'detExposureTime': 0.00123456789, 'auto_bc_outliers': 0.12345},
+                 {'name': 'Few settings', 'detExposureTime': 0.89},  # Only exposure time should be applied
                  {'name': 'Filtered Colour 6', 'excitation': [0, 1, 2],
                   'power': 0.0000000078, 'emission': [0.00001, 1.234e-07],
                   'detExposureTime': 0.00123456789, 'auto_bc_outliers': 0.12345},
@@ -72,9 +70,6 @@ class TestAcquiredStreamSettings(unittest.TestCase):
 
     @classmethod
     def setUpClass(cls):
-        file_path = os.path.abspath(os.path.join("", "settings.json"))
-        cls.acq_settings = StreamSettingsConfig(file_path, 10)
-
         testing.start_backend(METEOR_CONFIG)
         cls.stage = model.getComponent(role="stage")
         cls.ccd = model.getComponent(role="ccd")
@@ -82,10 +77,20 @@ class TestAcquiredStreamSettings(unittest.TestCase):
         cls.focus = model.getComponent(role="focus")
         cls.filter = model.getComponent(role="filter")
 
-    def test_entries(self):
-        """The name of entries in the json file is unique"""
+    def setUp(self):
+        file_path = os.path.abspath(os.path.join("", "settings.json"))
+        # Always start from scratch
+        try:
+            os.remove(file_path)
+        except OSError:
+            pass
+
+        self.acq_settings = StreamSettingsConfig(file_path, 10)
         # Use the test_data as config_data
         self.acq_settings.update_data(self.test_data)
+
+    def test_entries(self):
+        """The name of entries in the json file is unique"""
         # Only one stream should have Filtered Colour 1 as the name
         index = next((i for i, k in enumerate(self.acq_settings.config_data) if k["name"] == "Filtered Colour 1"),
                      None)
@@ -153,6 +158,24 @@ class TestAcquiredStreamSettings(unittest.TestCase):
         settings_order = get_settings_order(fms)
         for key in settings_order:
             self.assertEqual(getattr(fms, key).value, data[key])
+
+    def test_set_streams_settings_missing_keys(self):
+        s = FluoStream("fluo", self.ccd, self.ccd.data,
+                       self.light, self.filter, focuser=self.focus, detvas={"exposureTime"})
+
+        s.excitation.value = (3.9e-07, 3.97e-07, 4.0000000000000003e-07, 4.0300000000000005e-07,
+                              4.1000000000000004e-07)
+        s.power.value = 0.24
+        s.emission.value = (5.795e-07, 6.105e-07)
+        s.tint.value = (12, 13, 14)
+        s.detExposureTime.value = 0.12
+        s.auto_bc_outliers.value = 0.45
+
+        self.acq_settings.apply_settings(s, "Few settings")
+        self.assertEqual(s.detExposureTime.value, 0.89)  # As defined in the "Few settings" entry
+        # The rest shouldn't have changed
+        self.assertEqual(s.power.value, 0.24)
+        self.assertEqual(s.tint.value, (12, 13, 14))
 
     def test_get_settings_order(self):
         """Test the list of required setting parameters used for loading/saving an old stream"""
