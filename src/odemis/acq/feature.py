@@ -9,7 +9,13 @@ from concurrent import futures
 from concurrent.futures._base import CANCELLED, FINISHED, RUNNING, CancelledError
 
 from odemis import model
-from odemis.acq.acqmng import acquire, acquireZStack, SettingsObserver, estimateZStackAcquisitionTime, estimateTime
+from odemis.acq.acqmng import (
+    acquire,
+    acquireZStack,
+    SettingsObserver,
+    estimateZStackAcquisitionTime,
+    estimateTime,
+)
 from odemis.acq.move import MicroscopePostureManager, FM_IMAGING, POSITION_NAMES
 from odemis.acq.stream import Stream
 from odemis.dataio import find_fittest_converter
@@ -18,7 +24,12 @@ from odemis.util.filename import create_filename
 from odemis.util.dataio import splitext, data_to_static_streams, open_acquisition
 
 # The current state of the feature
-FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = "Active", "Rough Milled", "Polished", "Discarded"
+FEATURE_ACTIVE, FEATURE_ROUGH_MILLED, FEATURE_POLISHED, FEATURE_DEACTIVE = (
+    "Active",
+    "Rough Milled",
+    "Polished",
+    "Discarded",
+)
 
 
 class CryoFeature(object):
@@ -26,7 +37,7 @@ class CryoFeature(object):
     Model class for a cryo interesting feature
     """
 
-    def __init__(self, name, x, y, z, streams=None):
+    def __init__(self, name, x, y, z, streams=None, stage_bare_pos: dict = {}):
         """
         :param name: (string) the feature name
         :param x: (float) the X axis of the feature position
@@ -37,7 +48,11 @@ class CryoFeature(object):
         self.name = model.StringVA(name)
         # The 3D position of an interesting point in the site (Typically, the milling should happen around that
         # volume, never touching it.)
-        self.pos = model.TupleContinuous((x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), unit="m")
+        self.pos = model.TupleContinuous(
+            (x, y, z), range=((-1, -1, -1), (1, 1, 1)), cls=(int, float), unit="m"
+        )  # TODO: deprecate
+        self.position = model.VigilantAttribute(stage_bare_pos, unit="m")
+        self.focus = model.VigilantAttribute({"z": z}, unit="m")
 
         self.status = model.StringVA(FEATURE_ACTIVE)
         # TODO: Handle acquired files
@@ -52,10 +67,15 @@ def get_features_dict(features):
     """
     flist = []
     for feature in features:
-        feature_item = {'name': feature.name.value, 'pos': feature.pos.value,
-                        'status': feature.status.value}
+        feature_item = {
+            "name": feature.name.value,
+            "pos": feature.pos.value,
+            "status": feature.status.value,
+            "position": feature.position.value,
+            "focus": feature.focus.value,
+        }
         flist.append(feature_item)
-    return {'feature_list': flist}
+    return {"feature_list": flist}
 
 
 class FeaturesDecoder(json.JSONDecoder):
@@ -68,13 +88,19 @@ class FeaturesDecoder(json.JSONDecoder):
 
     def object_hook(self, obj):
         # Either the object is the feature list or the feature objects inside it
-        if 'name' in obj:
-            pos = obj['pos']
-            feature = CryoFeature(obj['name'], pos[0], pos[1], pos[2])
-            feature.status.value = obj['status']
+        if "name" in obj:
+            pos = obj["pos"]
+            position = obj["position"]
+            focus = obj["focus"]  # TODO: implement focus position
+            feature = CryoFeature(
+                obj["name"], pos[0], pos[1], pos[2], stage_bare_pos=position
+            )
+            feature.status.value = obj["status"]
             return feature
-        if 'feature_list' in obj:
-            return obj['feature_list']
+        if "feature_list" in obj:
+            return obj["feature_list"]
+
+        return obj
 
 
 def save_features(project_dir, features):
@@ -84,7 +110,7 @@ def save_features(project_dir, features):
     :param features: (list of Features) all the features to serialize
     """
     filename = os.path.join(project_dir, "features.json")
-    with open(filename, 'w') as jsonfile:
+    with open(filename, "w") as jsonfile:
         json.dump(get_features_dict(features), jsonfile)
 
 
@@ -97,8 +123,9 @@ def read_features(project_dir):
     filename = os.path.join(project_dir, "features.json")
     if not os.path.exists(filename):
         raise ValueError(f"Features file doesn't exists in this location. {filename}")
-    with open(filename, 'r') as jsonfile:
+    with open(filename, "r") as jsonfile:
         return json.load(jsonfile, cls=FeaturesDecoder)
+
 
 def load_project_data(path: str) -> dict:
     """load meteor project data from a directory:
@@ -130,6 +157,7 @@ def load_project_data(path: str) -> dict:
             f.streams.value.extend(data_to_static_streams(open_acquisition(fname)))
 
     return {"overviews": overview_data, "features": features}
+
 
 class MoveError(Exception):
     pass

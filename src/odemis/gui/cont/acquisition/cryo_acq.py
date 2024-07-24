@@ -38,19 +38,23 @@ import wx
 
 from odemis import model, dataio
 from odemis.acq import acqmng, stream
+from odemis.acq.feature import acquire_at_features
 from odemis.acq.stream import FluoStream, StaticStream, BrightfieldStream
 from odemis.gui import conf
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
-from odemis.gui.cont.acquisition.overview_stream_acq import OverviewStreamAcquiController
+from odemis.gui.cont.acquisition.overview_stream_acq import (
+    OverviewStreamAcquiController,
+)
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
-from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector
+from odemis.gui.util.widgets import (
+    ProgressiveFutureConnector,
+    VigilantAttributeConnector,
+)
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
 from odemis.util import units
 from odemis.util.comp import generate_zlevels
 from odemis.util.dataio import splitext
 from odemis.util.filename import guess_pattern, create_filename, update_counter
-
-from odemis.acq.feature import acquire_at_features
 
 
 # constants for the acquisition future state of the cryo-secom
