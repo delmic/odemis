@@ -632,7 +632,7 @@ class AcquisitionTask(object):
         # The first field is acquired twice, so the timeout must be at least twice the total field time.
         # Use 5 times the total field time to have a wide margin.
         timeout = 5 * total_field_time + 2
-
+        bs_fail = False
         # Acquire all single field images, which are automatically offloaded to the external storage.
         for field_idx in self._roa.field_indices:
             # Reset the event that waits for the image being received (puts flag to false).
@@ -645,13 +645,19 @@ class AcquisitionTask(object):
             # TODO remove the below temporary fix when a proper solution is found
             # The temporary fix has been applied so that the ROAs acquisition can still continue upon failure
             # of correcting the beam shift
-            try:
-                self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
-            except Exception:
-                logging.exception("Correcting the beam shift failed, check if the image quality is still good.")
-                # In case of failure save the ccd image
-                ccd_image = self._ccd.data.get(asap=False)
-                fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)
+            # field indices are saved (col, row), run the beamshift correction for every 4th column.
+            # TODO value 4 needs to be updated based on experimental testing
+            if field_idx[0] % 4 == 0 or bs_fail:
+                logging.debug(f"Will run beamshift correction for field index {field_idx}")
+                try:
+                    self.correct_beam_shift()  # correct the shift of the beams caused by the parasitic magnetic field.
+                    bs_fail = False
+                except Exception:
+                    logging.exception("Correcting the beam shift failed, check if the image quality is still good.")
+                    # In case of failure save the ccd image
+                    ccd_image = self._ccd.data.get(asap=False)
+                    fastem_util.save_image(self.path, f"{self.field_idx}_after.tiff", ccd_image)
+                    bs_fail = True
 
             dataflow.next(field_idx)  # acquire the next field image.
 
