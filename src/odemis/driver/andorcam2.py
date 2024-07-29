@@ -828,21 +828,18 @@ class AndorCam2(model.DigitalCamera):
             # 0 => shutter always auto
             # > 0 => shutter auto if exp time + readout > period, otherwise opened
             # big value => shutter always opened
-            if self.hasShutter(shutter_times is not None):
+            if caps.CameraType == AndorCapabilities.CAMERATYPE_IXONULTRA:
+                # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
+                logging.debug("iXon Ultra camera, leaving shutter always open")
+                self.SetShutter(1, AndorV2DLL.SHUTTER_OPEN, 0, 0)
+                self._shutter_period = None
+            elif self.hasShutter(shutter_times is not None):
                 if shutter_times is None:
                     shutter_times = (0, 0)
                 elif not all(0 <= s < 10 for s in shutter_times):
                     raise ValueError("shutter_times must be between 0 and 10s")
                 self._shutter_optime, self._shutter_cltime = shutter_times
-
                 self._shutter_period = 0.1
-                ct = caps.CameraType
-                if ct == AndorCapabilities.CAMERATYPE_IXONULTRA:
-                    # Special case for iXon Ultra -> leave it open (with 0, 0) (cf p.77 hardware guide)
-                    # TODO: instead, force it open here, whether shutter_times is given or not,
-                    # and don't provide a shutterMinimumPeriod
-                    self._shutter_period = maxexp.value
-
                 self.shutterMinimumPeriod = model.FloatContinuous(self._shutter_period,
                                                   (0, maxexp.value), unit="s",
                                                   setter=self._setShutterPeriod)
@@ -2629,13 +2626,20 @@ class AndorCam2(model.DigitalCamera):
                         raise
 
             # Force the shutter to be closed (in case it was forced open during acquisition)
+            sleep_time = 0
             if shutter_forced:
-                self.SetShutter(1, AndorV2DLL.SHUTTER_CLOSE, 0, 0)
+                try:
+                    self.SetShutter(1, AndorV2DLL.SHUTTER_CLOSE, 0, 0)
+                except Exception as ex:
+                    logging.warning("Failed to close the shutter: %s", ex)
                 # Wait enough time to be sure it's closed, before opening it again on next acquisition
-                time.sleep(self._shutter_cltime)
+                sleep_time = self._shutter_cltime
 
             if has_hw_lock:
                 self.hw_lock.release()
+
+            if sleep_time:
+                time.sleep(sleep_time)
 
     def _gc_while_waiting(self, max_time=None):
         """
