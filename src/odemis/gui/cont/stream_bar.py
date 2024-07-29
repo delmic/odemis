@@ -1662,13 +1662,15 @@ class SparcStreamsController(StreamBarController):
         main_data = self._main_data_model
 
         if model.hasVA(main_data.ebic, "resolution"):
-            ebic_stream = acqstream.DigitalEBICStream(
+            ebic_stream = acqstream.IndependentEBICStream(
                 "EBIC",
                 main_data.ebic,
                 main_data.ebic.data,
                 main_data.ebeam,
+                main_data.sed.data,
                 focuser=self._main_data_model.ebeam_focus,
                 emtvas={"dwellTime"},
+                # TODO: hide dwellTime and resolution from EBIC
                 detvas=get_local_vas(main_data.ebic, self._main_data_model.hw_settings_config),
             )
         else:

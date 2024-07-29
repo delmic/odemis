@@ -104,7 +104,7 @@ SPARC2-FPLM: {
     class: simsem.IndependentDetector,
     role: ebic-detector,
     init: {
-#        image: "",
+        image: "simsem-fake-output.h5",  # Default image
     },
 }
 

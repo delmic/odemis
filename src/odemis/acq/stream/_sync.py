@@ -37,7 +37,7 @@ from odemis.acq import drift
 from odemis.acq import leech
 from odemis.acq.leech import AnchorDriftCorrector
 from odemis.acq.stream._live import LiveStream
-from odemis.driver import ephemeron
+#from odemis.driver import ephemeron
 from odemis.util.driver import guessActuatorMoveDuration
 from odemis.model import MD_POS, MD_DESCRIPTION, MD_PIXEL_SIZE, MD_ACQ_DATE, MD_AD_LIST, \
     MD_DWELL_TIME, MD_EXP_TIME, MD_DIMS, MD_THETA_LIST, MD_WL_LIST, MD_ROTATION, \
@@ -871,7 +871,18 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
         if pol_idx > len(self._live_data[n]) - 1:
             # New polarization => new DataArray
             md = raw_data.metadata.copy()
-            center, pxs = self._get_center_pxs(rep, (1, 1), raw_data)
+            if MD_POS in md:
+                center, pxs = self._get_center_pxs(rep, (1, 1), raw_data)
+            else:
+                # This can happen if the detector is a "independent" detector, in which case it
+                # doesn't have the SEM metadata. So have to use the SEM data, which ought to be at
+                # the same position.
+                assert n >= 1
+                sem_raw_data = self._acq_data[0][-1]
+                assert tile_shape == sem_raw_data.shape
+                center, pxs = self._get_center_pxs(rep, (1, 1), sem_raw_data)
+                logging.debug("Computing independent detector Pixel size = %s", pxs)
+
             md.update({MD_POS: center,
                        MD_PIXEL_SIZE: pxs,
                        MD_DESCRIPTION: self._streams[n].name.value})
@@ -1933,8 +1944,22 @@ class SEMMDStream(MultipleDetectorStream):
         # TODO: check that no fuzzing is requested (as it's not supported and
         # not useful).
 
+        # If a detector is "independent", then connect its dwell time
+        # Note: resolution is updated later, just before the acquisition block
+        # TODO: should it be done automatically by the "SettingsStream" in .prepare() or .linkHwVA()?
+        dt = self._dwellTime.value
+        for s in self._streams:
+            det = s._detector
+            if model.hasVA(det, "resolution"):
+                det.dwellTime.value = dt
+                # It's fine to a have dwell time slightly shorter (it will wait a tiny bit after acquiring
+                # each pixel), but not longer.
+                if det.dwellTime.value > dt:
+                    logging.warning("Failed to set the dwell time of %s to %s s: %s s accepted",
+                                    det.name, dt, det.dwellTime.value)
+
         self._emitter.scale.value = cscale
-        return self._dwellTime.value
+        return dt
 
     def _runAcquisition(self, future):
         """
@@ -1961,19 +1986,20 @@ class SEMMDStream(MultipleDetectorStream):
             logging.debug("Starting e-beam sync acquisition with components %s",
                           ", ".join(s._detector.name for s in self._streams))
 
-            # initialize the EBIC scan controller and verify it is in ready state
-            ebic_det = None
-            try:
-                ebic_det = model.getComponent(role='ebic-detector')
-            except LookupError:
-                logging.debug("No EBIC detector found skipping synchronized acquisition of EBIC.")
-
-            if ebic_det:
-                if ebic_det.scanState.value != ephemeron.STATE_NAME_IDLE:
-                    logging.warning(f"Scan state of the EBIC scan controller is not {ephemeron.STATE_NAME_IDLE}")
-                else:
-                    # Set the EBIC scan controller state to running
-                    ebic_det.scanState.value = ephemeron.STATE_NAME_RUNNING
+            # FIXME: should just detect that the detector has a .resolution and .dwellTime, and so do something "special"
+            # # initialize the EBIC scan controller and verify it is in ready state
+            # ebic_det = None
+            # try:
+            #     ebic_det = model.getComponent(role='ebic-detector')
+            # except LookupError:
+            #     logging.debug("No EBIC detector found skipping synchronized acquisition of EBIC.")
+            #
+            # if ebic_det:
+            #     if ebic_det.scanState.value != ephemeron.STATE_NAME_IDLE:
+            #         logging.warning(f"Scan state of the EBIC scan controller is not {ephemeron.STATE_NAME_IDLE}")
+            #     else:
+            #         # Set the EBIC scan controller state to running
+            #         ebic_det.scanState.value = ephemeron.STATE_NAME_RUNNING
 
             tot_num = numpy.prod(rep)
 
@@ -2011,6 +2037,17 @@ class SEMMDStream(MultipleDetectorStream):
                     #   Just go with the flow, and return this acquisition instead?
                     raise ValueError("Failed to configure emitter resolution to %s, got %s" %
                                      ((n_x, n_y), em_res))
+
+                # Update the resolution of the "independent" detectors
+                for s in self._streams:
+                    det = s._detector
+                    if model.hasVA(det, "resolution"):
+                        det.resolution.value = (n_x, n_y)
+                        if det.resolution.value != (n_x, n_y):
+                            logging.warning("Failed to set the resolution of %s to %s s: %s s accepted",
+                                            det.name, (n_x, n_y), det.resolution.value)
+                        else:
+                            logging.debug("Set resolution of independent detector %s to %s", det.name, (n_x, n_y))
 
                 # Move the beam to the center of the sub-frame
                 trans = tuple(pos_flat[spots_sum:(spots_sum + npixels2scan)].mean(axis=0))
@@ -2119,8 +2156,8 @@ class SEMMDStream(MultipleDetectorStream):
                                   "reason: %e" % e)
 
             self._stopLeeches()
-            # Set the EBIC scan controller state to stopped
-            ebic_det.scanState.value = ephemeron.STATE_NAME_STOPPED
+            # # Set the EBIC scan controller state to stopped
+            # ebic_det.scanState.value = ephemeron.STATE_NAME_STOPPED
 
             if self._dc_estimator:
                 self._anchor_raw.append(self._assembleAnchorData(self._dc_estimator.raw))

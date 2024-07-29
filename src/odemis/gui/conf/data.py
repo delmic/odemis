@@ -506,21 +506,13 @@ HW_SETTINGS_CONFIG = {
             "control_type": odemis.gui.CONTROL_RADIO,
             "tooltip": "Number of samples per pixel",
         },
+        # For the "independent" detector type (otherwise, these VA's don't exists, so that has no effect)
         "resolution": {
-            # Read-only it shouldn't be changed by the user, but it should be visible
-            "control_type": odemis.gui.CONTROL_READONLY,
-            "accuracy": None,  # never simplify the numbers
-        },
-        "binning": {
-            # None, it should not be changed
+            # It should not be changed directtly, but via the emitter
             "control_type": odemis.gui.CONTROL_NONE,
         },
-        "repetition": {
-            # None, it should not be changed
-            "control_type": odemis.gui.CONTROL_NONE,
-        },
-        "scanState": {
-            # None, it should not be changed
+        "dwellTime": {
+            # It should not be changed directly, but via the emitter
             "control_type": odemis.gui.CONTROL_NONE,
         },
     },
@@ -1047,17 +1039,6 @@ STREAM_SETTINGS_CONFIG = {
                 "control_type": odemis.gui.CONTROL_SLIDER,
             }),
         )),
-    # stream.DigitalEBICStream:
-    #     OrderedDict((
-    #         ("chan_num", {
-    #             "control_type": odemis.gui.CONTROL_COMBO,
-    #         }),
-    #         ("spp", {
-    #             "label": "samples per pixel",
-    #             "control_type": odemis.gui.CONTROL_SLIDER,
-    #             "tooltip": "Number of samples per pixel in the image",
-    #         }),
-    #     )),
 }
 
 

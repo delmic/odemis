@@ -117,6 +117,7 @@ MD_AT_SPECTRUM = "Spectrum"
 MD_AT_AR = "Angle-resolved"
 MD_AT_EM = "Electron microscope"
 MD_AT_FIB = "Focused ion beam"
+MD_AT_EBIC = "Electron beam induced current"
 MD_AT_FLUO = "Fluorescence"
 MD_AT_ANCHOR = "Anchor region"
 MD_AT_CL = "Cathodoluminescence"
@@ -127,7 +128,6 @@ MD_AT_TEMPSPECTRUM = "Temporal Spectrum"
 MD_AT_EK = "AR Spectrum"
 MD_AT_TEMPORAL = "Temporal"
 MD_AT_SLIT = "Slit view"  # View of the spectrograph slit for SPARCv2 alignment
-MD_AT_EBIC = "Electron beam induced current"
 
 BAND_PASS_THROUGH = "pass-through"  # Special "filter" name when there is no filter: all light passes
 
