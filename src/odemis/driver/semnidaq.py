@@ -84,7 +84,8 @@ from nidaqmx.constants import (AcquisitionType, DigitalWidthUnits,
                                LineGrouping, TerminalConfiguration,
                                VoltageUnits, RegenerationMode, Edge, CountDirection,
                                TriggerType)
-from nidaqmx.stream_readers import CounterReader
+from nidaqmx.stream_readers import CounterReader, AnalogUnscaledReader
+from nidaqmx.stream_writers import AnalogUnscaledWriter
 from numpy.polynomial import polynomial
 
 from odemis import model, util
@@ -599,6 +600,7 @@ class Acquirer:
         self._scanner.configure_do_task(self._do_task_end)
 
         self._ao_task = None
+        self._ao_writer = None
         self._ao_data_next_sample = 0
         self._ao_data = None
         # It is not very clear what is the relationship between the hw buffer and the "samples transferred"
@@ -855,7 +857,7 @@ class Acquirer:
 
         return analog_mds, counting_mds
 
-    def _write_int16_interleaved(self, data: numpy.ndarray) -> int:
+    def _write_ao_int16(self, data: numpy.ndarray) -> int:
         """
         Write data to the AO task in a "safe" way by making sure it's contiguous in memory
         :param data: 2D numpy aray of the samples to write of shape (2, N), dtype int16
@@ -866,7 +868,7 @@ class Acquirer:
         #  however the python wrapper doesn't allow to do that. Trying to do it "manually" sort of work...
         #  but in this case the write events callback is never called. => Need to investigate what's
         #  wrong. The tests showed that it goes from 1ms to 0.1ms per write (for 50000 samples)
-        return self._ao_task.out_stream.write(numpy.ascontiguousarray(data))
+        return self._ao_writer.write_int16(numpy.ascontiguousarray(data))
         # Example how to write in interleaved mode
         # return writer._interpreter.write_binary_i16(
         #        writer._handle, data.shape[1], False, timeout, FillMode.GROUP_BY_SCAN_NUMBER.value, data)
@@ -885,7 +887,7 @@ class Acquirer:
             return 0  # Already wrote all, nothing left to do
 
         write_end = min(self._ao_data_next_sample + n, ao_data_len)
-        written_n = self._write_int16_interleaved(self._ao_data[:, self._ao_data_next_sample:write_end])
+        written_n = self._write_ao_int16(self._ao_data[:, self._ao_data_next_sample:write_end])
         self._ao_data_next_sample = (self._ao_data_next_sample + written_n)
 
         return written_n
@@ -902,7 +904,7 @@ class Acquirer:
         ao_data_len = self._ao_data.shape[1]
         write_end = min(self._ao_data_next_sample + n, ao_data_len)
         expected_n = write_end - self._ao_data_next_sample
-        written_n = self._write_int16_interleaved(self._ao_data[:, self._ao_data_next_sample:write_end])
+        written_n = self._write_ao_int16(self._ao_data[:, self._ao_data_next_sample:write_end])
         self._ao_data_next_sample = (self._ao_data_next_sample + written_n) % ao_data_len
         # If everything was written => we are done
         # If the board doesn't accept as many as we asked => no need to try more
@@ -913,7 +915,7 @@ class Acquirer:
         n -= written_n
         if self._ao_data_next_sample != 0:
             logging.error("start should be 0, but got %s", self._ao_data_next_sample)
-        written2_n = self._write_int16_interleaved(self._ao_data[:, :n])
+        written2_n = self._write_ao_int16(self._ao_data[:, :n])
         self._ao_data_next_sample = (self._ao_data_next_sample + written2_n) % ao_data_len
         return written_n + written2_n
 
@@ -1208,6 +1210,8 @@ class Acquirer:
         with nidaqmx.Task("AO") as ao_task, nidaqmx.Task("DO") as do_task, nidaqmx.Task("AI") as ai_task:
             self._scanner.configure_ao_task(ao_task)
             self._ao_task = ao_task
+            self._ao_writer = AnalogUnscaledWriter(self._ao_task.out_stream)
+            self._ao_writer.auto_start = False
 
             if acq_settings.do_samples_n:
                 self._scanner.configure_do_task(do_task)
@@ -1335,6 +1339,8 @@ class Acquirer:
         ai_buffer_full = numpy.empty((n_analog_det, ai_buffer_n), dtype=self._ai_dtype)
         acc_dtype = get_best_dtype_for_acc(ai_buffer_full.dtype, acq_settings.ai_osr)
 
+        ai_reader = AnalogUnscaledReader(ai_task.in_stream)
+
         # create a counter reader to read from the counter InStream
         ci_readers = []
         for ci_task in ci_tasks:
@@ -1374,7 +1380,7 @@ class Acquirer:
             while acquired_n < acq_settings.ai_samples_n:
                 new_samples_n, prev_samples_n, prev_samples_sum = self._read_ai_buffer(
                     acq_settings,
-                    ai_task, ai_data, ai_buffer_full, acquired_n,
+                    ai_reader, ai_data, ai_buffer_full, acquired_n,
                     acc_dtype, prev_samples_n, prev_samples_sum)
 
                 acquired_n += new_samples_n
@@ -1415,7 +1421,7 @@ class Acquirer:
 
     # TODO: make a whole class for this?
     def _read_ai_buffer(self, acq_settings: AcquisitionSettings,
-                        ai_task: nidaqmx.Task, ai_data: numpy.ndarray,
+                        ai_reader: AnalogUnscaledReader, ai_data: numpy.ndarray,
                         ai_buffer_full: numpy.ndarray,
                         acquired_n: int, acc_dtype: numpy.dtype,
                         prev_samples_n: List[int], prev_samples_sum: List[int],
@@ -1425,7 +1431,7 @@ class Acquirer:
         of the final frame data.
 
         :param acq_settings: AcquisitionSettings object containing the settings for the current acquisition.
-        :param ai_task: nidaqmx.Task object representing the AI task.
+        :param ai_reader: object to read the data from the AI task.
         :param ai_data: image array to store the data, shape (channels, height, width)
         :param ai_buffer_full: temporary array to store the raw AI data from the device, shape (channels, N)
         :param acquired_n: number of samples already acquired.
@@ -1467,7 +1473,7 @@ class Acquirer:
         # C,N (channel, sample numbers), *except* if C == 1, in which case
         # it must only be of shape N. However, readinto works fine with 1,N.
         try:
-            new_samples_n = ai_task.in_stream.readinto(ai_buffer)
+            new_samples_n = ai_reader.read_int16(ai_buffer, samples_to_acquire)
         except nidaqmx.DaqReadError as ex:
             raise IOError("Failed to read AI acquisition data") from ex
         if new_samples_n != samples_to_acquire:
@@ -2824,7 +2830,7 @@ class Scanner(model.Emitter):
         """
         Generate an array of the values to send to scan a 2D area, using linear
         interpolation between the limits. It's basically a saw-tooth curve on
-        the fast dimension and a linear increase on the H dimension.
+        the fast dimension and a linear increase on the slow dimension.
         :param res: size of the scanning area (X=fast, Y=slow axis)
         :param limits: the min/max limits of fast, slow axes. Must NOT be numpy.uint
         :param margin (0<=int): number of additional pixels to add at the beginning of
