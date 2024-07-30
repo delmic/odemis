@@ -69,6 +69,7 @@ class CryoZLocalizationController(object):
             self._panel.lbl_z_localization.Hide()
             self._panel.lbl_stigmator_angle.Hide()
             self._panel.cmb_stigmator_angle.Hide()
+            self._panel.menu_localization_streams.Hide()
             self._panel.Layout()
             return
 
