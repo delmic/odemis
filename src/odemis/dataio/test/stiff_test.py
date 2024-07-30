@@ -641,6 +641,7 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_PIXEL_SIZE_COR: (1.2, 1.2),
                      model.MD_ROTATION_COR: 6.27,  # rad
                      model.MD_SHEAR_COR: 0.005,
+                     model.MD_ROTATION: 0.2,
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -654,7 +655,11 @@ class TestTiffIO(unittest.TestCase):
                      model.MD_IN_WL: (500e-9, 522e-9),  # m
                      model.MD_OUT_WL: (650e-9, 660e-9, 675e-9, 678e-9, 680e-9), # m
                      model.MD_USER_TINT: (255, 0, 65), # purple
-                     model.MD_LIGHT_POWER: 100e-3  # W
+                     model.MD_LIGHT_POWER: 100e-3,  # W
+                    # Note: for multi-files the group check result in different number
+                    # of groups before / after the metadata is merged if the images
+                    # have matching MD_ROTATION but different MD_ROTATION_COR.
+                     model.MD_ROTATION: 0.01,  # rad
                     },
                     {model.MD_SW_VERSION: "1.0-test",
                      model.MD_HW_NAME: "fake hw",
@@ -730,6 +735,8 @@ class TestTiffIO(unittest.TestCase):
                 self.assertAlmostEqual(im.metadata[model.MD_ACQ_DATE], md[model.MD_ACQ_DATE], delta=1)
                 self.assertEqual(im.metadata[model.MD_BPP], md[model.MD_BPP])
                 self.assertEqual(im.metadata[model.MD_BINNING], md[model.MD_BINNING])
+                if model.MD_ROTATION in md:
+                    self.assertAlmostEqual(im.metadata[model.MD_ROTATION], md[model.MD_ROTATION], delta=1e-4)
                 if model.MD_USER_TINT in md:
                     self.assertEqual(im.metadata[model.MD_USER_TINT], md[model.MD_USER_TINT])
 

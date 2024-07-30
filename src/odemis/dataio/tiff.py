@@ -1205,29 +1205,52 @@ def _findImageGroups(das):
     groups = dict()
     current_ifd = 0
     prev_da = None
+    plen_c = None
 
+    # required keys for merging
+    required_keys = [model.MD_IN_WL, model.MD_OUT_WL]
+    # metadata -> default value if missing
+    matching_keys = {
+        model.MD_HW_NAME: None,
+        model.MD_HW_VERSION: None,
+        model.MD_PIXEL_SIZE: None,
+        model.MD_POS: None,
+        model.MD_ROTATION: 0,
+        model.MD_SHEAR: 0,
+    }
     for da in das:
         # check if it can be part of the current group (compare just to the previous DA)
         dims = da.metadata.get(model.MD_DIMS, "CTZYX"[-da.ndim::])
-        if (prev_da is None
-            or da.shape[0] != 1  # If C != 1 => not possible to merge (C is always first dimension) or it is a
-                # greyscale YX image
-            or (model.MD_IN_WL not in da.metadata or model.MD_OUT_WL not in da.metadata)
-            or prev_da.shape != da.shape
-            or prev_da.metadata.get(model.MD_HW_NAME, None) != da.metadata.get(model.MD_HW_NAME, None)
-            or prev_da.metadata.get(model.MD_HW_VERSION, None) != da.metadata.get(model.MD_HW_VERSION, None)
-            or prev_da.metadata.get(model.MD_PIXEL_SIZE) != da.metadata.get(model.MD_PIXEL_SIZE)
-            or prev_da.metadata.get(model.MD_POS) != da.metadata.get(model.MD_POS)
-            or prev_da.metadata.get(model.MD_ROTATION, 0) != da.metadata.get(model.MD_ROTATION, 0)
-            or prev_da.metadata.get(model.MD_SHEAR, 0) != da.metadata.get(model.MD_SHEAR, 0)
-           ):
-            # new group
+
+        len_c = 1
+        if "C" in dims:
+            len_c = da.shape[dims.index("C")]
+
+        # conditions for merging:
+        # there is a previous data array
+        # there is one channel for both arrays
+        # the dimensions/shapes are the same
+        # it looks like an FM image (ie, WL_IN and WL_OUT are present in the metadata)
+        # all the required keys are present in the metadata
+        # all the matching keys have the same value in the metadata
+        # otherwise, create a new group
+        if (prev_da is not None
+            and (plen_c == 1 and len_c == 1)
+            and prev_da.shape == da.shape
+            and all(k in da.metadata for k in required_keys)
+            and all(prev_da.metadata.get(k, v) == da.metadata.get(k, v) for k, v in matching_keys.items())
+        ):
+            # merge with the existing group
+            pass
+        else:
+            # create a new group
             group_ifd = current_ifd
         groups.setdefault(group_ifd, []).append(da)
 
         # increase ifd by the number of planes
         current_ifd += _countNeededIFDs(da)
-        prev_da = da
+        prev_da, plen_c = da, len_c
+    logging.debug(f"found {len(groups)} image groups for {len(das)} data arrays. groups: {groups.keys()}")
 
     return groups
 
@@ -1863,6 +1886,7 @@ def _saveAsMultiTiffLT(filename, ldata, thumbnail, compressed=True, multiple_fil
 #        TIFFWriteDirectory(created_TIFF);
 
     groups = _findImageGroups(ldata)
+
     sorted_groups = sorted(groups.items(), key=operator.itemgetter(0))
     # Extract ImageJ compatible Image description based on the first group dimension
     imagej_description = extract_imagej_metadata(sorted_groups[0][1])
@@ -2053,26 +2077,25 @@ def export(filename, data, thumbnail=None, compressed=True, multiple_files=False
     multiple_files (boolean): whether the data is distributed across multiple
       files or not.
     '''
-    if isinstance(data, list):
-        if multiple_files:
-            if thumbnail is not None:
-                logging.warning("Thumbnail is not supported for multiple files "
-                                "export and thus it is discarded.")
-            nfiles = len(_findImageGroups(data))
-            # Create the whole list of uuid's to pass it to each file
-            uuid_list = []
-            for i in range(nfiles):
-                uuid_list.append(uuid.uuid4().urn)
-            for i in range(nfiles):
-                # TODO: Take care of thumbnails
-                _saveAsMultiTiffLT(filename, data, None, compressed,
-                                   multiple_files, i, uuid_list, pyramid)
-        else:
-            _saveAsMultiTiffLT(filename, data, thumbnail, compressed, pyramid=pyramid)
-    else:
-        # TODO should probably not enforce it: respect duck typing
-        assert(isinstance(data, model.DataArray))
-        _saveAsMultiTiffLT(filename, [data], thumbnail, compressed, pyramid=pyramid)
+    if not isinstance(data, list):
+        data = [data]
+
+    if multiple_files:
+        if thumbnail is not None:
+            logging.warning("Thumbnail is not supported for multiple files "
+                            "export and thus it is discarded.")
+        nfiles = len(_findImageGroups(data))
+        # Create the whole list of uuid's to pass it to each file
+        uuid_list = []
+        for i in range(nfiles):
+            uuid_list.append(uuid.uuid4().urn)
+        for i in range(nfiles):
+            # TODO: Take care of thumbnails
+            _saveAsMultiTiffLT(filename, data, None, compressed,
+                                multiple_files, i, uuid_list, pyramid)
+        return
+
+    _saveAsMultiTiffLT(filename, data, thumbnail, compressed, pyramid=pyramid)
 
 
 def read_data(filename):
