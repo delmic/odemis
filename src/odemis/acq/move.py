@@ -705,15 +705,22 @@ class ConvertStage:
         vpos = self._convertPosFromdep(vpos_dep)
         return {"x": vpos[0], "y": vpos[1]}
 
+    def map_get_convert_pos(self, dep_val):
+        """Map a pair of axes onto x-y axes and apply rotation to get convert stage position"""
+        map_dep_pos = {"x": dep_val[self._axes_dep["x"]], "y": dep_val[self._axes_dep["y"]]}
+        convert_val = self._get_convert_pos_vector(map_dep_pos)
+        return convert_val
+
     def get_dep_vector_fav_pos(self, dep_val, fav_pos_active=None):
         """
-        Get the convert stage values based on dependent stage values by fixing the convert stage axes to a defined
+        Get the dependent stage values by fixing the convert stage axes to a defined
         plane given by fav_pos_active.
-        :param dep_val: (dict str -> float) stage coordinates of the dependedent axes
+        :param dep_val: (dict str -> float) stage coordinates of the dependent axes
         :param fav_pos_active: (dict str -> float) Modify convert stage values of dependent axes based on favorite
          active position, specified by z axis of convert stage
-        :return: (dict str -> float) resultant convert stage axes based on fav_pos_active
+        :return: (dict str -> float) resultant dependent stage axes based on fav_pos_active
         """
+        new_val = dep_val.copy()
         if self.fav_pos_active is None:
             self.fav_pos_active = fav_pos_active
             logging.debug(f"Set {model.MD_FAV_POS_ACTIVE} to {self.fav_pos_active}")
@@ -721,17 +728,43 @@ class ConvertStage:
         # select the axes which undergo transformation
         # the transformation is rotation on y and z axes
         # map y and z axes onto x and y for conversion
-        map_dep_pos = {"x": dep_val[self._axes_dep["x"]], "y": dep_val[self._axes_dep["y"]]}
-        convert_pos = self._get_convert_pos_vector(map_dep_pos)
+        convert_pos = self.map_get_convert_pos(dep_val)
         self.fav_pos_active = self.meteor_stage.getMetadata().get(model.MD_FAV_POS_ACTIVE)
         convert_pos["y"] = self.fav_pos_active["z"]
         map_dep_pos = self._get_dep_pos_vector(convert_pos)
 
         # remap the x and y values to the original dependent stage axes
-        dep_val[self._axes_dep["x"]] = map_dep_pos["x"]
-        dep_val[self._axes_dep["y"]] = map_dep_pos["y"]
+        new_val[self._axes_dep["x"]] = map_dep_pos["x"]
+        new_val[self._axes_dep["y"]] = map_dep_pos["y"]
 
-        return dep_val
+        return new_val
+
+    def get_dep_vector_fav_position_correction(self, pos_before_fav_pos, pos_after_fav_pos):
+        """
+        Get dependent stage values by correcting the convert stage values to original fm imaging plane which was before
+        fixing the fm imaging plane to fav_pos_active. The computation depends on points corresponding to two different
+        imaging planes. The before and after points need not be of the same feature.
+        :param pos_before_fav_pos: (dict str -> float) stage coordinates of the dependent axes before fixing fm imaging
+         plane
+        :param pos_after_fav_pos: (dict str -> float) stage coordinates of the dependent axes after fixing fm imaging
+         plane
+        :return: (dict str -> float) resultant dependent stage axes compensating the effects of fixing fm imaging plane
+         to fav_pos_active
+        """
+        result_pos = pos_after_fav_pos.copy()
+        old_con_pos = self.map_get_convert_pos(pos_before_fav_pos)
+        new_con_pos = self.map_get_convert_pos(pos_after_fav_pos)
+        # calculate the distance between the two parallel imaging planes (change in z of meteor stage)
+        change = {k: new_con_pos[k]-old_con_pos[k] for k, av in new_con_pos.items()}
+        new_con_pos["y"] -= change["y"]
+
+        map_dep_pos = self._get_dep_pos_vector(new_con_pos)
+
+        # remap the x and y values to the original dependent stage axes
+        result_pos[self._axes_dep["x"]] = map_dep_pos["x"]
+        result_pos[self._axes_dep["y"]] = map_dep_pos["y"]
+
+        return result_pos
 
     def _updateAxesRange(self):
         """
@@ -767,11 +800,10 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         # Instantiate a class to convert stage axes such that the imaging plane in the new axes
         # moves perpendicular to the objective axis by keeping a fixed distance
         self.convert_stage = ConvertStage(self.stage, ["y", "z"], self.rotation)
-        # Enable the correction in SEM mode when switched from FM mode
-        self.sem_cor = False
-        self.sem_stage_pos_pre = None  # previous stage position in SEM before switching to FM
-        self.fav_pos_active = None
-        self.update_fav_pos_active()
+        # Helpful parameters to work with fixed imaging plane in FM
+        self.stage_pos_before_fav_fm = None  # previous stage position in SEM before switching to FM
+        self.fav_pos_active = None  # desired imaging plane axes values
+        self.update_fav_pos_active()  # estimate and update the desired imaging plane axes values
 
     def update_fav_pos_active(self):
         """
@@ -828,7 +860,6 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
             transformed_pos["y"] = pos["y"] + pos_cor[1]
 
         transformed_pos.update(fm_pos_active)
-
         # In FM mode, observe the features on sample on a fixed imaging plane
         transformed_pos_fav = self.convert_stage.get_dep_vector_fav_pos(transformed_pos, self.fav_pos_active)
 
@@ -840,6 +871,42 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
             logging.warning(f"Transformed position {transformed_pos} is outside FM imaging range")
 
         return transformed_pos
+
+    def calculate_pos_before_fixing_imaging_plane(self, pos):
+        """
+        Transforms the current stage position from the SEM imaging area to the
+        meteor/FM imaging area without fixing the imaging plane.
+        :param pos: (dict str->float) the initial stage position.
+        :return: (dict str->float) the transformed position.
+        """
+        stage_md = self.stage.getMetadata()
+        transformed_pos = pos.copy()
+        pos_cor = stage_md[model.MD_POS_COR]
+        fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
+
+        # check if the stage positions have rz axes
+        if not ("rz" in pos and "rz" in fm_pos_active):
+            raise ValueError(f"The stage position does not have rz axis pos={pos}, fm_pos_active={fm_pos_active}")
+
+        # whether we need to rotate around the z axis (180deg)
+        has_rz = not isNearPosition(pos, fm_pos_active, {"rz"},
+                                    atol_rotation=ATOL_ROTATION_TRANSFORM)
+
+        # NOTE:
+        # if we are rotating around the z axis (180deg), we need to flip the x and y axes
+        # if we are not rotating around the z axis, we we only need to translate the x and y axes
+        # For the rotation case: pos_cor calibration data is multipled by 2x due to historical reasons
+        # it is the radius of rotation -> we need the diameter, therefore 2x
+        # TODO: remove the 2x multiplication when the calibration data is updated
+        if has_rz:
+            transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
+            transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
+        else:
+            transformed_pos["x"] = pos["x"] + pos_cor[0]
+            transformed_pos["y"] = pos["y"] + pos_cor[1]
+
+        transformed_pos.update(fm_pos_active)
+        return  transformed_pos
 
     # Note: this transformation also consists of translation and rotation.
     # The translation is along x and y axes. They are calculated based on
@@ -855,7 +922,6 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         :return: (dict str->float) the transformed stage position.
         """
         stage_md = self.stage.getMetadata()
-        transformed_pos = pos.copy()
         pos_cor = stage_md[model.MD_POS_COR]
         sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 
@@ -867,6 +933,10 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         has_rz = not isNearPosition(pos, sem_pos_active, {"rz"},
                                     atol_rotation=ATOL_ROTATION_TRANSFORM)
 
+        # compensate the impact of fixing the fm imaging plane on the current stage position
+        # based on the value of original imaging plane value saved before fixing the fm imaging plane
+        new_pos = self.convert_stage.get_dep_vector_fav_position_correction(self.stage_pos_before_fav_fm, pos)
+        transformed_pos = new_pos.copy()
         # NOTE:
         # if we are rotating around the z axis (180deg), we need to flip the x and y axes
         # if we are not rotating around the z axis, we we only need to translate the x and y axes
@@ -874,25 +944,13 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         # it is the radius of rotation -> we need the diameter, therefore 2x
         # TODO: remove the 2x multiplication when the calibration data is updated
         if has_rz:
-            transformed_pos["x"] = 2 * pos_cor[0] - pos["x"]
-            transformed_pos["y"] = 2 * pos_cor[1] - pos["y"]
+            transformed_pos["x"] = 2 * pos_cor[0] - new_pos["x"]
+            transformed_pos["y"] = 2 * pos_cor[1] - new_pos["y"]
         else:
-            transformed_pos["x"] = pos["x"] - pos_cor[0]
-            transformed_pos["y"] = pos["y"] - pos_cor[1]
+            transformed_pos["x"] = new_pos["x"] - pos_cor[0]
+            transformed_pos["y"] = new_pos["y"] - pos_cor[1]
 
         transformed_pos.update(sem_pos_active)
-
-        # Due to the pre-tilt in the shuttle, the z axis is corrected
-        # for a change in y axis
-        # As from measurement in SEM, when y increases then raw z decreases
-        if self.sem_cor:
-            # TODO the sem corr does not work, Z correction is not needed as SEM has higher
-            # depth of field by y correction is required, which is not clear "how to" yet
-            if self.sem_stage_pos_pre is not None:
-                transformed_pos["z"] = (transformed_pos["z"] -
-                                        (transformed_pos["y"] - self.sem_stage_pos_pre["y"]) * math.tan(self.rotation))
-            else:
-                logging.warning(f"SEM position is not corrected when coming back from FM pos {pos}")
 
         # check if the transformed position is within the SEM imaging range
         if not isInRange(transformed_pos, stage_md[model.MD_SEM_IMAGING_RANGE], {'x', 'y'}):
@@ -956,8 +1014,8 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
                 # save rotation and tilt in SEM before switching to FM imaging
                 # to restore rotation and tilt while switching back from FM -> SEM
                 if current_label == SEM_IMAGING and target == FM_IMAGING:
-                    self.sem_stage_pos_pre = self.stage.position.value
                     current_value = self.stage.position.value
+                    self.stage_pos_before_fav_fm = self.calculate_pos_before_fixing_imaging_plane(current_value)
                     self.stage.updateMetadata({model.MD_FAV_SEM_POS_ACTIVE: {'rx': current_value['rx'],
                                                                              'rz': current_value['rz']}})
                 # Park the focuser for safety

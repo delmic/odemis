@@ -291,11 +291,7 @@ class MultiplexActuator(model.Actuator):
             return model.InstantaneousFuture()
         self._checkMoveAbs(pos)
         pos = self._applyInversion(pos)
-        # Check if z value is changed when moving only in x and y
-        # Function changed for testing purpose
-        old_z_pos = self.position.value["z"]
-        logging.debug("Moving the stage from old position x: %s y:%s, z:%s", self.position.value["x"],
-                      self.position.value["y"], self.position.value["z"])
+
         if self._executor:
             f = self._executor.submit(self._doMoveAbs, pos, **kwargs)
         else:
@@ -303,25 +299,7 @@ class MultiplexActuator(model.Actuator):
             dep, move = cmv.popitem()
             assert not cmv
             f = dep.moveAbs(move, **kwargs)
-        new_z_pos = self.position.value["z"]
-        logging.debug("Moved the stage to new position x: %s y:%s, z:%s", self.position.value["x"],
-                      self.position.value["y"], self.position.value["z"])
-        delta_z = new_z_pos - old_z_pos
-        if pos.get("z", 0) == 0:
-            logging.debug(f"The z was not requested to move, change in z from {old_z_pos} to {new_z_pos} by {delta_z}")
 
-        # For testing purpose
-        # if delta_z >= 5e-6:
-        #     pos = {"z": old_z_pos} # Move to old z position
-        #     if self._executor:
-        #         f = self._executor.submit(self._doMoveAbs, pos, **kwargs)
-        #     else:
-        #         cmv = self._moveTodepMove(pos, rel=False)
-        #         dep, move = cmv.popitem()
-        #         assert not cmv
-        #         f = dep.moveAbs(move, **kwargs)
-        #     logging.debug(f"Moved the stage to new corrected position x: {self.position.value["x"]}, "
-        #                   f"y:{self.position.value["y"]}, z:{self.position.value["z"]}")
         return f
 
     def _doMoveAbs(self, pos, **kwargs):
