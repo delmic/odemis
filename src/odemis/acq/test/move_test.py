@@ -626,6 +626,40 @@ class TestMeteorTFS2Move(TestMeteorTFS1Move):
     MIC_CONFIG = METEOR_TFS2_CONFIG
     ROTATION_AXES = {'rx', 'rz'}
 
+    def test_moving_from_sem_to_fm_to_sem(self):
+        """From sem position move to fm, navigate in fm and move back to sem position"""
+        # move to loading position
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move the stage to the sem imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        grid_2_sem_pos = self.posture_manager.getTargetPosition(GRID_2)
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move to the fm imaging area
+        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # check the values of tilt and rotation
+        fm_angles = self.stage.getMetadata()[model.MD_FAV_FM_POS_ACTIVE]
+        for axis in self.ROTATION_AXES:
+            self.assertAlmostEqual(self.stage.position.value[axis], fm_angles[axis], places=4)
+        # Go to grid 2 in FM
+        f = self.posture_manager.cryoSwitchSamplePosition(GRID_2)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # go back to sem position
+        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        current_position = self.stage.position.value
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        for axis in current_position.keys():
+            self.assertAlmostEqual(current_position[axis], grid_2_sem_pos[axis], places=4)
+
     def test_moving_in_grid1_fm_imaging_area_after_loading(self):
         """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
         super().test_moving_in_grid1_fm_imaging_area_after_loading()
