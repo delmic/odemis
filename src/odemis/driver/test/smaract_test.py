@@ -23,6 +23,8 @@ import logging
 import math
 import tempfile
 
+import numpy
+
 from odemis.driver import smaract
 from odemis.util import testing
 import os
@@ -583,7 +585,7 @@ class TestMCS2(unittest.TestCase):
         # Test relative moves
         self.dev.moveAbs({'x': 0, 'y': 0, 'z': 0}).result()
         old_pos = self.dev.position.value
-        shift = {'x': 1e-3, 'y':-1e-3}
+        shift = {'x': 1e-3, 'y': -1e-3}
         self.dev.moveRel(shift).result()
         new_pos = self.dev.position.value
 
@@ -718,6 +720,193 @@ class TestMCS2(unittest.TestCase):
 
         testfile.close()
         os.remove(file_name)
+
+
+# Configuration to mostly test the Optical focus Component
+CONFIG_1DOF = {"name": "1DOF",
+        "role": "stage",
+        "ref_on_init": True,
+        "locator": "network:sn:MCS2-00006678",
+        "speed": 0.003,
+        "accel": 0.003,
+        "axes": {
+            'z': {
+                'range': [-20e-3, 20e-3],
+                'unit': 'm',
+                'channel': 0,
+            },
+        },
+}
+
+if TEST_NOHW:
+    CONFIG_1DOF['locator'] = 'fake'
+
+SAFE_Z = -600.0e-6  # deactive position for the actuator
+SMALL_STEP = -1.0e-6  # small step to move from the deactive position
+BIG_STEP = -10.0e-3  # big step to move from the deactive position
+
+
+class TestMCS2_1DOF(unittest.TestCase):
+    """
+    Tests cases for the SmarAct MCS2 controller in 1DOF
+    """
+    @classmethod
+    def setUpClass(cls):
+        cls.dev = smaract.MCS2(**CONFIG_1DOF)
+        # make sure the actuator is moved to the reference position
+        while not cls.dev.referenced.value:
+            time.sleep(0.1)
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.dev.terminate()
+
+    def test_simple(self):
+        self.assertEqual(set(self.dev.axes.keys()), {"z"})
+
+    def test_out_of_range(self):
+        """
+        Test sending a position that is out of range.
+        """
+        pos = {'z': -21e-3}
+        with self.assertRaises(ValueError):
+            self.dev.moveAbs(pos).result()
+
+    def test_move_abs(self):
+        pos1 = {'z': SAFE_Z}
+        pos2 = {'z': SAFE_Z + SMALL_STEP}  # move by -10 um from pos1
+        pos3 = {'z': SAFE_Z + 2 * SMALL_STEP}  # move by -20 um from pos1
+        pos4 = {'z': SAFE_Z - SMALL_STEP}  # move by 10 um from pos1
+        pos5 = {'z': SAFE_Z + 2 * SMALL_STEP}  # move by 20 um from pos1
+
+        self.dev.moveAbs(pos1).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos1, **COMP_ARGS)
+        self.dev.moveAbs(pos2).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos2, **COMP_ARGS)
+        self.dev.moveAbs(pos3).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos3, **COMP_ARGS)
+        self.dev.moveAbs(pos4).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos4, **COMP_ARGS)
+        self.dev.moveAbs(pos5).result()
+        testing.assert_pos_almost_equal(self.dev.position.value, pos5, **COMP_ARGS)
+        logging.debug(self.dev.position.value)
+
+    def test_move_in_z_range(self):
+        # Check if optical focus can move repeatedly in small steps in different ranges
+        start_position = self.dev.position.value
+        logging.debug(f"the current z range value is {start_position}")
+        z_range = numpy.arange(-10.e-6, 10.e-6, 50.e-9) + self.dev.position.value["z"]
+        for zval in z_range:
+            self.dev.moveAbs({"z":zval}).result()
+            self.assertAlmostEqual(self.dev.position.value["z"], zval, places=6)
+
+        # move back to initial position
+        self.dev.moveAbs(start_position).result()
+        self.assertAlmostEqual(self.dev.position.value["z"], start_position["z"], places=6)
+        z_range = numpy.arange(-7.e-6, 7.e-6, 50.e-9) + self.dev.position.value["z"]
+        for zval in z_range:
+            self.dev.moveAbs({"z":zval}).result()
+            self.assertAlmostEqual(self.dev.position.value["z"], zval, places=6)
+
+        # move back to initial position
+        self.dev.moveAbs(start_position).result()
+        self.assertAlmostEqual(self.dev.position.value["z"], start_position["z"], places=6)
+        z_range = numpy.arange(-6.e-6, 6.e-6, 50.e-9) + self.dev.position.value["z"]
+        for zval in z_range:
+            self.dev.moveAbs({"z":zval}).result()
+            self.assertAlmostEqual(self.dev.position.value["z"], zval, places=6)
+
+    def test_move_cancel(self):
+        # Test cancellation by cancelling the future
+        self.dev.moveAbs({'z': SAFE_Z}).result()
+        new_pos = {'z': SAFE_Z + BIG_STEP}
+        f = self.dev.moveAbs(new_pos)
+        f.cancel()
+
+        difference = new_pos['z'] - self.dev.position.value['z']
+        self.assertNotAlmostEqual(difference, 0, places=5)
+
+        # Test cancellation by stopping
+        self.dev.moveAbs({'z': SAFE_Z}).result()
+        new_pos = {'z': SAFE_Z + BIG_STEP}
+        self.dev.moveAbs(new_pos)
+        time.sleep(0.05)
+        self.dev.stop()
+
+        difference = new_pos['z'] - self.dev.position.value['z']
+        self.assertNotAlmostEqual(difference, 0, places=4)
+
+    def test_move_rel(self):
+        # Test relative moves
+        self.dev.moveAbs({'z': SAFE_Z}).result()
+        old_pos = self.dev.position.value
+        shift = {'z': BIG_STEP}
+        self.dev.moveRel(shift).result()
+        new_pos = self.dev.position.value
+
+        testing.assert_pos_almost_equal(smaract.add_coord(old_pos, shift), new_pos, **COMP_ARGS)
+
+        # Test several relative moves and ensure they are queued up.
+        old_pos = self.dev.position.value
+        shift = {'z': -0.000001}
+        self.dev.moveRel(shift)
+        self.dev.moveRel(shift)
+        self.dev.moveRel(shift).result()
+
+        new_pos = smaract.add_coord(smaract.add_coord(smaract.add_coord(old_pos, shift), shift), shift)
+        testing.assert_pos_almost_equal(self.dev.position.value, new_pos, **COMP_ARGS)
+
+    def test_reference_cancel(self):
+        """Test canceling referencing"""
+        axes = set(self.dev.axes.keys())
+        # First, reference it
+        f = self.dev.reference(axes)
+        f.result()
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        f = self.dev.reference(axes)
+        time.sleep(0.1)
+        f.cancel()
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertFalse(i)
+
+    def test_reference(self):
+        axes = set(self.dev.axes.keys())
+        f = self.dev.reference(axes)
+        f.result()
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        # Try again, after a move
+        shift = {'z': BIG_STEP}
+        self.dev.moveRel(shift).result()
+        pos_move = dict(self.dev.position.value)
+
+        f = self.dev.reference(axes)
+        f.result()
+        pos_refd = dict(self.dev.position.value)
+
+        for a, i in self.dev.referenced.value.items():
+            self.assertTrue(i)
+
+        # Check that at least the position changed
+        self.assertNotEqual(pos_move["z"], pos_refd["z"])
+
+    def test_auto_update_function(self):
+        """Check if position VA is updated when it is changed"""
+        self.dev.moveAbs({"z": SAFE_Z}).result()
+        pos_before_move = self.dev.position.value
+        rel_move = {"z": 5e-6}
+        expected_pos = pos_before_move.copy()
+        expected_pos["z"] += rel_move["z"]
+        self.dev.moveRel(rel_move).result()
+        # the position updater function is called every 1 sec, wait a bit more.
+        time.sleep(2)
+        pos_after_move = self.dev.position.value
+        testing.assert_pos_almost_equal(expected_pos, pos_after_move, **COMP_ARGS)
 
 
 CONFIG_Picoscale = {"name": "Stage Metrology",
