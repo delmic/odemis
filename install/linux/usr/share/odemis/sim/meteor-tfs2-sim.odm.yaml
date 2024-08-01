@@ -31,7 +31,7 @@ METEOR-Sim: {
 "Stage": {
     role: stage-bare,
     init: {
-        raw: true, # 0 or 1
+        raw_coordinates: true, # 0 or 1
     },
     metadata: {
         # Loading position:
