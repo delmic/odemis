@@ -144,13 +144,6 @@ class MultipleDetectorStream(Stream, metaclass=ABCMeta):
                 self._sstage = s._sstage
                 break
 
-        # Check for an EBIC detector with its own scan box
-        for s in streams:
-            if hasattr(s, "_ebic") and s._ebic.role == "ebic-detector":
-                self.useEBIC = True  # bool for the presence of the EBIC
-                self._ebic = s._ebic  # the actual EBIC component
-                break
-
         # Get polarization analyzer if found in optical substream
         self._analyzer = None
         for s in streams:
