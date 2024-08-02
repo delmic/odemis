@@ -1658,38 +1658,42 @@ class SparcStreamsController(StreamBarController):
 
         return self._addRepStream(ar_stream, sem_ar_stream)
 
-
     def addEBIC(self, **kwargs):
-
         main_data = self._main_data_model
 
-        ebic_stream = acqstream.EBICSettingsStream(
-            "EBIC",
-            main_data.ebic,
-            main_data.ebic.data,
-            main_data.ebeam,
-            sstage=main_data.scan_stage,
-            focuser=self._main_data_model.ebeam_focus,
-            emtvas={"dwellTime"},
-            detvas=get_local_vas(main_data.ebic, self._main_data_model.hw_settings_config),
-        )
+        if model.hasVA(main_data.ebic, "resolution"):
+            ebic_stream = acqstream.IndependentEBICStream(
+                "EBIC",
+                main_data.ebic,
+                main_data.ebic.data,
+                main_data.ebeam,
+                main_data.sed.data,
+                focuser=self._main_data_model.ebeam_focus,
+                emtvas={"dwellTime"},
+                detvas=get_local_vas(main_data.ebic, self._main_data_model.hw_settings_config),
+            )
+        else:
+            ebic_stream = acqstream.EBICSettingsStream(
+                "EBIC",
+                main_data.ebic,
+                main_data.ebic.data,
+                main_data.ebeam,
+                sstage=main_data.scan_stage,
+                focuser=self._main_data_model.ebeam_focus,
+                emtvas={"dwellTime"},
+                detvas=get_local_vas(main_data.ebic, self._main_data_model.hw_settings_config),
+            )
 
         # Create the equivalent MDStream
         sem_stream = self._tab_data_model.semStream
-        sem_ebic_stream = acqstream.SEMMDStream("SEM EBIC",
-                                               [sem_stream, ebic_stream])
-
-        ret = self._addRepStream(ebic_stream, sem_ebic_stream,
-                                  play=False
-                                  )
+        sem_ebic_stream = acqstream.SEMMDStream("SEM EBIC", [sem_stream, ebic_stream])
 
         # With EBIC, often the user wants to get the whole area, same as the survey.
         # But it's not very easy to select all of it, so do it automatically.
         # (after the controller creation, to automatically set the ROA too)
         if ebic_stream.roi.value == acqstream.UNDEFINED_ROI:
             ebic_stream.roi.value = (0, 0, 1, 1)
-        return ret
-
+        return self._addRepStream(ebic_stream, sem_ebic_stream, play=False)
 
     def addCLIntensity(self):
         """ Create a CLi stream and add to to all compatible viewports """
