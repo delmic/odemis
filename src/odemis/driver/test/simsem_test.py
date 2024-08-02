@@ -518,5 +518,51 @@ class TestSEMDrift(TestSEM):
         testing.assert_array_not_equal(im_no_shift, im_big_shift)
 
 
+class TestIndependentDetector(unittest.TestCase):
+
+    @classmethod
+    def setUpClass(cls):
+        cls.det = simsem.IndependentDetector("EBIC", "ebic-detector", image="simsem-fake-output.h5")
+
+    @classmethod
+    def tearDownClass(cls):
+        cls.det.terminate()
+
+    def compute_expected_duration(self):
+        dwell = self.det.dwellTime.value
+        size = self.det.resolution.value
+        dur = size[0] * size[1] * dwell
+        logging.debug("expecting a %s s acquisition", dur)
+
+        return dur
+
+    def test_dwell_time(self):
+        # Dwell time should accept anything, but round down to the closest multiple of 100ns.
+        self.det.dwellTime.value = 1e-6
+        self.assertEqual(self.det.dwellTime.value, 1e-6)
+
+        self.det.dwellTime.value = 1.16e-6
+        self.assertAlmostEqual(self.det.dwellTime.value, 1.1e-6, delta=0.1e-9)
+
+    def test_acquisition(self):
+        for res, dt in [((200, 100), 10e-6),
+                        ((1, 1), 0.1),
+                        (self.det.resolution.range[1], 0.1e-6),
+                        ]:
+            self.det.resolution.value = res
+            self.det.dwellTime.value = dt
+            expected_duration = self.compute_expected_duration()
+
+            start = time.time()
+            im = self.det.data.get()
+            duration = time.time() - start
+
+            self.assertEqual(im.shape[::-1], res)
+            self.assertGreaterEqual(duration, expected_duration,
+                                    "Error execution took %f s, less than acquisition time %d." % (duration, expected_duration))
+            self.assertEqual(im.metadata[model.MD_DWELL_TIME], self.det.dwellTime.value)
+            self.assertIn(model.MD_ACQ_DATE, im.metadata)
+
+
 if __name__ == "__main__":
     unittest.main()
