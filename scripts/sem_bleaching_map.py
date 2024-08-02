@@ -776,7 +776,7 @@ class Acquirer(object):
                     de.acquire()
 
                 de = drift.AnchoredEstimator(self.ebeam, self.sed, anchor, self.dtsem)
-                px_iter = de.estimateCorrectionPeriod(self.dperiod, 1.0, self.gridpitch)
+                px_iter = de.estimateCorrectionPeriod(self.dperiod, 1.0, self.gridpitch[::-1])
                 de.acquire()  # original anchor region
                 self.save_data(de.raw[-1], "%s%02d-driftAnchor-%05d%s" % (fn_base, 0, 0, fn_ext))
                 self.driftlog = [(0, 0)]
