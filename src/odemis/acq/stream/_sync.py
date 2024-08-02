@@ -2322,8 +2322,22 @@ class SEMMDStream(MultipleDetectorStream):
         # TODO: check that no fuzzing is requested (as it's not supported and
         # not useful).
 
+        # If a detector is "independent", then connect its dwell time
+        # Note: resolution is updated later, just before the acquisition block
+        # TODO: should it be done automatically by the "SettingsStream" in .prepare() or .linkHwVA()?
+        dt = self._dwellTime.value
+        for s in self._streams:
+            det = s._detector
+            if model.hasVA(det, "resolution"):
+                det.dwellTime.value = dt
+                # It's fine to a have dwell time slightly shorter (it will wait a tiny bit after acquiring
+                # each pixel), but not longer.
+                if det.dwellTime.value > dt:
+                    logging.warning("Failed to set the dwell time of %s to %s s: %s s accepted",
+                                    det.name, dt, det.dwellTime.value)
+
         self._emitter.scale.value = cscale
-        return self._dwellTime.value
+        return dt
 
     def _get_next_rectangle(self, rep: Tuple[int, int], acq_num: int, px_time: float,
                             leech_np: List[Optional[int]]) -> Tuple[int, int]:
@@ -2419,6 +2433,19 @@ class SEMMDStream(MultipleDetectorStream):
                     #   Just go with the flow, and return this acquisition instead?
                     raise ValueError("Failed to configure emitter resolution to %s, got %s" %
                                      ((n_x, n_y), em_res))
+
+                # Update the resolution of the "independent" detectors
+                for s in self._streams:
+                    det = s._detector
+                    if model.hasVA(det, "resolution"):
+                        det.resolution.value = (n_x, n_y)
+                        # It's unlikely but the detector could have specific constraints on the resolution
+                        # and refuse the requested one => better fail early.
+                        if det.resolution.value != (n_x, n_y):
+                            raise ValueError(f"Failed to set the resolution of {det.name} to {n_x} x {n_y} px: "
+                                             f"{det.resolution.value} px accepted")
+                        else:
+                            logging.debug("Set resolution of independent detector %s to %s", det.name, (n_x, n_y))
 
                 # Move the beam to the center of the sub-frame
                 trans = tuple(pos_flat[spots_sum:(spots_sum + npixels2scan)].mean(axis=0))

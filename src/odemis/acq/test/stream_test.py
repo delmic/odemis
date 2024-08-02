@@ -58,6 +58,7 @@ SPARC2_CONFIG = CONFIG_PATH + "sim/sparc2-sim-scanner.odm.yaml"
 SPARC2POL_CONFIG = CONFIG_PATH + "sim/sparc2-polarizer-sim.odm.yaml"
 SPARC2STREAK_CONFIG = CONFIG_PATH + "sim/sparc2-streakcam-sim.odm.yaml"
 SPARC2_4SPEC_CONFIG = CONFIG_PATH + "sim/sparc2-4spec-sim.odm.yaml"
+SPARC2_INDE_EBIC_CONFIG = CONFIG_PATH + "sim/sparc2-independent-ebic-sim.odm.yaml"
 TIME_CORRELATOR_CONFIG = CONFIG_PATH + "sim/sparc2-time-correlator-sim.odm.yaml"
 SPARC2_HWSYNC_CONFIG = CONFIG_PATH + "sim/sparc2-nidaq-sim.odm.yaml"
 
@@ -3912,6 +3913,152 @@ class SPARC2PolAnalyzerTestCase(unittest.TestCase):
         # check last image in .raw has a time axis greater than 1  (last image is drift correction image)
         ar_drift = sas.raw[-1]  # drift correction image
         self.assertGreaterEqual(ar_drift.shape[-4], 2)
+
+
+class SPARC2TestCaseIndependentDetector(unittest.TestCase):
+    """
+    This test case is specifically targeting the IndependentEBICStream
+    """
+    backend_was_running = False
+
+    @classmethod
+    def setUpClass(cls):
+        testing.start_backend(SPARC2_INDE_EBIC_CONFIG)
+
+        # Find components
+        cls.microscope = model.getMicroscope()
+        cls.ebeam = model.getComponent(role="e-beam")
+        cls.sed = model.getComponent(role="se-detector")
+        cls.ebic = model.getComponent(role="ebic-detector")
+
+    def test_ebic_live_stream(self):
+        """
+        Test live IndependentEBICStream, and especially, that it can provide continuous
+        images, although the hardware doesn't support continuous acquisition.
+        """
+        ebics = stream.IndependentEBICStream("test ebic", self.ebic, self.ebic.data,
+                                             self.ebeam, self.sed.data,
+                                             detvas={"dwellTime"})
+
+        self._images = []
+        ebics.image.subscribe(self._on_image)
+
+        # Changing the RoI + repetition updates (increases) the pixel size, which leads to a smaller
+        # resolution of the full FoV (used during live stream)
+        ebics.roi.value = (0.15, 0.6, 0.8, 0.8)
+        ebics.repetition.value = (15, 26)
+
+        # set GUI VAs
+        ebics.detDwellTime.value = 1e-3  # s
+
+        # update stream (live)
+        ebics.should_update.value = True
+        # activate/play stream, optical path should be corrected immediately (no need to wait)
+        ebics.is_active.value = True
+
+        # Wait long enough that *several* images are acquired
+        time.sleep(4)
+        ebics.is_active.value = False
+
+        nb_images = len(self._images)
+        self.assertGreater(nb_images, 1, "Not several EBIC images received after 4s")
+        self.assertIsInstance(self._images[0], model.DataArray)
+        # check if metadata is correctly stored
+        md = self._images[0].metadata
+        self.assertIn(model.MD_POS, md)
+        self.assertIn(model.MD_PIXEL_SIZE, md)
+
+        # check raw image is a DataArray with right shape and MD
+        self.assertIsInstance(ebics.raw[0], model.DataArray)
+        self.assertIn(model.MD_POS, ebics.raw[0].metadata)
+        self.assertIn(model.MD_PIXEL_SIZE, ebics.raw[0].metadata)
+
+        # Check we really don't receive any images anymore
+        time.sleep(2)
+        self.assertEqual(nb_images, len(self._images), "EBIC images received after stopping live stream")
+
+        ebics.image.unsubscribe(self._on_image)
+
+    def _on_image(self, im):
+        self._images.append(im)
+
+    def test_ebic_acq(self):
+        # Create the stream
+        sems = stream.SEMStream("test sem", self.sed, self.sed.data, self.ebeam,
+                                emtvas={"dwellTime", "scale", "magnification", "pixelSize"})
+        ebics = stream.IndependentEBICStream("test ebic", self.ebic, self.ebic.data,
+                                             self.ebeam, self.sed.data,
+                                             detvas={"dwellTime"})
+        sms = stream.SEMMDStream("test sem-md", [sems, ebics])
+
+        # Now, proper acquisition
+        ebics.roi.value = (0, 0.2, 0.3, 0.6)
+
+        # dwell time of sems shouldn't matter
+        ebics.detDwellTime.value = 1e-6  # s
+
+        ebics.repetition.value = (500, 700)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(ebics)
+
+        # Start acquisition
+        timeout = 1 + 1.5 * sms.estimateAcquisitionTime()
+        start = time.time()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sms.raw))
+
+        # Both SEM and EBIC should have the same shape
+        self.assertEqual(len(sms.raw), 2)
+        self.assertEqual(sms.raw[0].shape, exp_res[::-1])
+        self.assertEqual(sms.raw[1].shape, exp_res[::-1])
+        sem_md = sms.raw[0].metadata
+        ebic_md = sms.raw[1].metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], ebic_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], ebic_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(ebic_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(ebic_md[model.MD_PIXEL_SIZE], exp_pxs)
+
+        # Now same thing but with more pixels and drift correction
+        ebics.roi.value = (0.3, 0.1, 1.0, 0.8)
+        ebics.tint.value = (255, 0, 0)  # Red colour
+        dc = leech.AnchorDriftCorrector(self.ebeam, self.sed)
+        dc.period.value = 1
+        dc.roi.value = (0.525, 0.525, 0.6, 0.6)
+        dc.dwellTime.value = 2e-06
+        sems.leeches.append(dc)
+
+        ebics.repetition.value = (1200, 1100)
+        exp_pos, exp_pxs, exp_res = roi_to_phys(ebics)
+
+        # Start acquisition
+        timeout = 1 + 2.5 * sms.estimateAcquisitionTime()
+        start = time.time()
+        dc.series_start()
+        f = sms.acquire()
+
+        # wait until it's over
+        data = f.result(timeout)
+        dc.series_complete(data)
+        dur = time.time() - start
+        logging.debug("Acquisition took %g s", dur)
+        self.assertTrue(f.done())
+        self.assertEqual(len(data), len(sms.raw))
+        # Both SEM and CL should have the same shape (and last one is anchor region)
+        self.assertEqual(len(sms.raw), 3)
+        self.assertEqual(sms.raw[0].shape, exp_res[::-1])
+        self.assertEqual(sms.raw[1].shape, exp_res[::-1])
+        sem_md = sms.raw[0].metadata
+        ebic_md = sms.raw[1].metadata
+        numpy.testing.assert_allclose(sem_md[model.MD_POS], ebic_md[model.MD_POS])
+        numpy.testing.assert_allclose(sem_md[model.MD_PIXEL_SIZE], ebic_md[model.MD_PIXEL_SIZE])
+        numpy.testing.assert_allclose(ebic_md[model.MD_POS], exp_pos)
+        numpy.testing.assert_allclose(ebic_md[model.MD_PIXEL_SIZE], exp_pxs)
+        self.assertEqual(ebic_md[model.MD_USER_TINT], (255, 0, 0))  # from .tint
 
 
 class TimeCorrelatorTestCase(unittest.TestCase):

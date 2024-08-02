@@ -14,7 +14,7 @@ Odemis is distributed in the hope that it will be useful, but WITHOUT ANY WARRAN
 
 You should have received a copy of the GNU General Public License along with Odemis. If not, see http://www.gnu.org/licenses/.
 '''
-
+import threading
 # Contains special streams which are not proper, but can be used as a way to
 # store or retrieve information.
 
@@ -26,6 +26,8 @@ import math
 import time
 
 import numbers
+from typing import Tuple, Any, Dict
+
 import numpy
 
 from odemis import model
@@ -1448,8 +1450,161 @@ class EBICSettingsStream(FastScanningDetector):
         emtvas: don't put resolution or scale
         """
         if "acq_type" not in kwargs:
-            kwargs["acq_type"] = model.MD_AT_EM
+            kwargs["acq_type"] = model.MD_AT_EBIC
         super().__init__(name, detector, dataflow, emitter, **kwargs)
+
+
+SCANNER_POS_MD = {model.MD_POS, model.MD_POS_COR, model.MD_PIXEL_SIZE, model.MD_PIXEL_SIZE_COR,
+                  model.MD_SHEAR, model.MD_SHEAR_COR, model.MD_ROTATION, model.MD_ROTATION_COR}
+
+
+class IndependentEBICStream(FastScanningDetector):
+    """
+    A special EBIC stream, typically with a EBIC (current) as a detector and its own scanner.
+    It's physically very similar to the SEM stream, but as we want to select just a region
+    it's in practice similar to the CLSettingStream.
+
+    In live view, the ROI is not applied, but the pixelSize is.
+
+    This stream makes it possible to acquire an image simultaneously with the
+    SED in live view, but as a requirement they would need to align dwell time/resolution.
+    """
+    def __init__(self, name, detector, dataflow, emitter, emt_dataflow, **kwargs):
+        """
+        See "Stream" for the basic parameters.
+        :param emt_dataflow: a DataFlow that can be used to start/stop the emitter
+        :param emtvas: (inside kwargs) As for Stream, but don't put "resolution" or "scale".
+        """
+        if "acq_type" not in kwargs:
+            kwargs["acq_type"] = model.MD_AT_EBIC
+        super().__init__(name, detector, dataflow, emitter, **kwargs)
+
+        self._emitter_dataflow = emt_dataflow
+        self._latest_emitter_md = {}  # the metadata of the emitter, to be copied onto the detector data
+
+        # The "independent" detector is independent if it has dwellTime and resolution
+        assert model.hasVA(detector, "dwellTime")
+        # When playing the stream, the .repetition VA is converted to .resolution on the emitter, so
+        # normally they are equivalent. To be really certain the detector is synchronized with the emitter,
+        # we use the "lower level" VA, which is the .resolution.
+        assert model.hasVA(detector, "resolution")
+
+    def _onNewEmitterData(self, dataflow: model.DataFlow, data: model.DataArray) -> None:
+        """
+        Called when the emitter sends new data. Typically almost at the same time as the dectector,
+        but it can be just before or just after.
+        The actual data is unused, we use only some of the metadata.
+        """
+        logging.debug("Received data from the emitter of shape %s", data.shape)
+        # Copy the metadata which indicates the position of the scan pixels
+        useful_md = {k: v for k, v in data.metadata.items() if k in SCANNER_POS_MD}
+        self._latest_emitter_md = useful_md
+        self._updateMD(useful_md)
+
+    def _updateMD(self, md: Dict[str, Any]) -> None:
+        """
+        Updates the metadata of the latest data (and future one) with the metadata of the emitter
+        """
+        if not self.raw:
+            return
+        # We don't need a lock, although _onNewData() also updates .raw and the metadata.
+        # That's because we either update a data which already has the latest metadata, in which
+        # case this doesn't change the metadata, or we update the old data, which will be immediately replaced
+        # by the new one, in which case it's not a big deal.
+        # TODO: be extra careful, by checking the .shape (should be the same) and the MD_ACQ_DATE
+        # (should be < 0.1s apart).
+        data = self.raw[0]
+        data.metadata.update(md)
+
+        self._shouldUpdateHistogram()
+        self._shouldUpdateImage()
+
+    def _onNewData(self, dataflow: model.DataFlow, data: model.DataArray) -> None:
+        # Typically, the data from the detector has no position metadata, so we add the latest one
+        # known, which is the "least bad one".
+        # One reason it could have already the position metadata is that this is coming from the
+        # SEMMDStream, which calls this function to show a live update.
+        if model.MD_POS not in data.metadata:
+            data.metadata.update(self._latest_emitter_md)
+        super()._onNewData(dataflow, data)
+
+        # The detector is "one-shot": after an acquisition, it doesn't automatically start a new one.
+        # However, the scanner keeps going. So we need to stop both, and restart them, to force a
+        # continuous acquisition.
+        # We cannot re-subscribe to the dataflow directly from here, as it's called from the dataflow,
+        # which would cause a deadlock. So we do this in a separate thread.
+        t = threading.Thread(target=self._restart_acquisition)
+        t.start()
+
+    def _restart_acquisition(self):
+        """
+        Stops and immediately restarts the acquisition.
+        This is to force the detectors to start a new acquisition, synchronized with the scanner.
+        """
+        try:
+            if self.is_active.value:
+                logging.debug("Will stop and restart the acquisition")
+                self._emitter_dataflow.unsubscribe(self._onNewEmitterData)
+                self._dataflow.unsubscribe(self._onNewData)
+
+                self._dataflow.subscribe(self._onNewData)
+                self._emitter_dataflow.subscribe(self._onNewEmitterData)
+        except Exception:
+            logging.exception("Failed to restart the acquisition")
+
+    def _onActive(self, active: bool) -> None:
+        """
+        Overrides the standard _onActive to start/stop the emitter as well.
+        """
+        if active:
+            # Set the emitter to the right settings
+            self._onDwellTime(self._emitter.dwellTime.value)
+            self._onResolution(self._emitter.resolution.value)
+
+        super()._onActive(active)
+        # If active -> calls _startAcquisition()
+        if not active:
+            self._emitter_dataflow.unsubscribe(self._onNewEmitterData)
+
+    def _startAcquisition(self, future=None):
+        """
+        Overrides the standard _startAcquisition to start the emitter as well.
+        """
+        # First start the independent detector "as usual"... and it'll be waiting for the emitter
+        super()._startAcquisition(future)
+
+        # logging
+        # Then start the emitter
+        self._emitter_dataflow.subscribe(self._onNewEmitterData)
+
+    def _onDwellTime(self, value: float):
+        """
+        Overrides the standard _onDwellTime to set the dwell time on the emitter as well.
+        """
+        if self.is_active.value:
+            self._detector.dwellTime.value = value
+
+            # It's fine to a have dwell time slightly shorter (it will wait a tiny bit after acquiring
+            # each pixel), but not longer.
+            if self._detector.dwellTime.value > value:
+                logging.warning("Failed to set the dwell time of %s to %s s: %s s accepted",
+                                self._detector.name, value, self._detector.dwellTime.value)
+
+        super()._onDwellTime(value)
+
+    def _onResolution(self, value: Tuple[int, int]):
+        """
+        Overrides the standard _onResolution to set the dwell time on the emitter as well.
+        """
+        if self.is_active.value:
+            self._detector.resolution.value = value
+
+            if self._detector.resolution.value != value:
+                logging.warning("Failed to set the resolution of %s to %s: %s accepted",
+                                self._detector.name, value, self._detector.resolution.value)
+
+        super()._onResolution(value)
+
 
 # Maximum allowed overlay difference in electron coordinates.
 # Above this, the find overlay procedure will consider an error occurred and
