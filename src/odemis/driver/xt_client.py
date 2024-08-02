@@ -358,8 +358,8 @@ class SEM(model.HwComponent):
                     update.show()
                 else:
                     logging.warning("{} is a bad file in {} not transferring latest package.".format(ret, package.path))
-        except Exception:
-            logging.warning("Failure during transfer latest xtadapter package (non critical)", exc_info=True)
+        except Exception as err:
+            logging.exception(err)
 
     def move_stage(self, position: Dict[str, float], rel: bool = False) -> None:
         """
@@ -375,6 +375,15 @@ class SEM(model.HwComponent):
         with self._proxy_access:
             self.server._pyroClaimOwnership()
             self.server.move_stage(position, rel)
+
+    def set_raw_coordinate_system(self, raw: bool = True):
+        """
+        Read raw z coordinate or linked z coordinate when requesting stage coordinates
+        :param raw: (bool) If True, request raw z stage coordinates, otherwise request linked Z coordiantes
+        """
+        with self._proxy_access:
+            self.server._pyroClaimOwnership()
+            self.server.set_raw_coordinate_system(raw)
 
     def stage_is_moving(self) -> bool:
         """
@@ -2147,10 +2156,18 @@ class Stage(model.Actuator):
     moving the TFS stage and updating the position.
     """
 
-    def __init__(self, name: str, role: str, parent: model.HwComponent, rng: dict = None, **kwargs) -> None:
+    def __init__(self, name: str, role: str, parent: model.HwComponent, rng: dict = None, raw: bool = False,
+                 **kwargs) -> None:
+        self.raw = raw
+        logging.debug(f"raw {raw}")
+        self.parent = parent
+        # define axes which needs offset correction such that TFS stage coordinates
+        # are equal to stage coordinates displayed through Odemis
+        self.offset = {"x": 0, "y": 0}
+
         if rng is None:
             rng = {}
-        stage_info = parent.stage_info()
+        stage_info = self.parent.stage_info()
         if "x" not in rng:
             rng["x"] = stage_info["range"]["x"]
         if "y" not in rng:
@@ -2170,7 +2187,7 @@ class Stage(model.Actuator):
             "rz": model.Axis(unit=stage_info["unit"]["r"], range=rng["rz"]),
         }
 
-        model.Actuator.__init__(self, name, role, parent=parent, axes=axes_def,
+        model.Actuator.__init__(self, name, role, parent=self.parent, axes=axes_def,
                                 **kwargs)
         # will take care of executing axis move asynchronously
         self._executor = CancellableThreadPoolExecutor(max_workers=1)  # one task at a time
@@ -2178,10 +2195,34 @@ class Stage(model.Actuator):
         self.position = model.VigilantAttribute({}, unit=stage_info["unit"],
                                                 readonly=True)
         self._updatePosition()
+        # update the offset if raw stage coordinates are read
+        self.parent.set_raw_coordinate_system(self.raw)
+        self._get_offset_raw_coordinate_system()
 
         # Refresh regularly the position
         self._pos_poll = util.RepeatingTimer(5, self._refreshPosition, "Stage position polling")
         self._pos_poll.start()
+
+    def _get_offset_raw_coordinate_system(self) -> None:
+        """Calculate the offset in linear stage axes x and y when the stage coordinates are read in raw coordinates such
+         that it is equal to x and y when stage coordinates are read in linked coordinates."""
+        # TODO needs to be check on hardware
+        # 1. by checking if raw coordinates displayed by TFS system is the same as Odemis
+        # 2. by checking if same feature is visible in FM after switching from SEM
+        if self.raw:
+            pos = self._getPosition()
+            logging.debug(f"offset raw pos {pos}")
+            self.parent.set_raw_coordinate_system(False)
+            pos_after = self._getPosition()
+            logging.debug(f"offset unraw pos {pos_after}")
+            for axis in self.offset.keys():
+                logging.debug(f"calculating offset {axis}")
+                self.offset[axis] = pos_after[axis] - pos[axis]
+            # the offset should only be in linear axes, it is not expected in rotational axes
+            # assert all(pos[axis] == pos_after[axis] for axis in ["rx", "rz"])
+            logging.debug(f"The offset values in x and y are {self.offset} when stage is in the raw coordinate system")
+            # Set back the original coordinate system
+            self.parent.set_raw_coordinate_system(self.raw)
 
     def _updatePosition(self) -> None:
         """
@@ -2189,6 +2230,11 @@ class Stage(model.Actuator):
         """
         old_pos = self.position.value
         pos = self._getPosition()
+        if self.raw:
+            # correct for the offset such that the stage coordinates displayed in
+            # TFS software is the same as Odemis
+            pos["x"] = pos["x"] + self.offset["x"]
+            pos["y"] = pos["y"] + self.offset["y"]
         self.position._set_value(self._applyInversion(pos), force_write=True)
         if old_pos != self.position.value:
             logging.debug("Updated position to %s", self.position.value)
@@ -2235,6 +2281,11 @@ class Stage(model.Actuator):
                     pos["t"] = pos.pop("rx")
                 if "rz" in pos.keys():
                     pos["r"] = pos.pop("rz")
+                if self.raw and (rel == False):
+                    if "x" in pos.keys():
+                        pos["x"] = pos["x"] - self.offset["x"]
+                    if "y" in pos.keys():
+                        pos["y"] = pos["y"] - self.offset["y"]
                 self.parent.move_stage(pos, rel=rel)
                 time.sleep(0.1)  # It takes a little while before the stage is being reported as moving
 
