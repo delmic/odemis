@@ -119,6 +119,9 @@ class MetadataUpdater(model.Component):
                 elif a.role == "streak-lens":
                     # update the magnification of the streak lens
                     observed = self.observeStreakLens(a, d)
+                elif a.role == "streak-delay":
+                    # update the trigger related settings
+                    observed = self.observeStreakDelay(a, d)
                 elif a.role == "e-beam":
                     observed = self.observeEbeam(a, d)
                 else:
@@ -407,6 +410,33 @@ class MetadataUpdater(model.Component):
 
         streak_lens.magnification.subscribe(updateMagnification, init=True)
         self._onTerminate.append((streak_lens.magnification.unsubscribe, (updateMagnification,)))
+
+        return True
+
+    def observeStreakDelay(self, streak_delay, comp_affected):
+        """Update the trigger related settings of the streak delay affecting the
+        streak readout camera."""
+
+        if not comp_affected.role.endswith("ccd"):
+            return False
+
+        # Typically, the streak-delay always has a triggerDelay
+        if model.hasVA(streak_delay, "triggerDelay"):
+            def updateTriggerDelay(delay, comp_affected=comp_affected):
+                md = {model.MD_TRIGGER_DELAY: delay}
+                comp_affected.updateMetadata(md)
+
+            streak_delay.triggerDelay.subscribe(updateTriggerDelay, init=True)
+            self._onTerminate.append((streak_delay.triggerDelay.unsubscribe, (updateTriggerDelay,)))
+
+        # It may also have a triggerRate, which is used to detect/control the trigger frequency
+        if model.hasVA(streak_delay, "triggerRate"):
+            def updateTriggerRate(rate, comp_affected=comp_affected):
+                md = {model.MD_TRIGGER_RATE: rate}
+                comp_affected.updateMetadata(md)
+
+            streak_delay.triggerRate.subscribe(updateTriggerRate, init=True)
+            self._onTerminate.append((streak_delay.triggerRate.unsubscribe, (updateTriggerRate,)))
 
         return True
 

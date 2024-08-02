@@ -349,9 +349,6 @@ class TestSimStreakCam(unittest.TestCase):
             self.assertNotIn(model.MD_TIME_LIST, image.metadata)
             self.assertFalse(image.metadata[model.MD_STREAK_MODE])
 
-            # check that triggerRate MD is updated each time an image is returned
-            # we use a random int generator to test it actually changes
-            self.assertNotEqual(triggerRate, image.metadata[model.MD_TRIGGER_RATE])
             logging.debug("Got image.")
 
             self.images_left -= 1
@@ -390,9 +387,6 @@ class TestSimStreakCam(unittest.TestCase):
             self.assertIn(model.MD_TIME_LIST, image.metadata)
             self.assertTrue(image.metadata[model.MD_STREAK_MODE])
 
-            # check that triggerRate MD is updated each time an image is returned
-            # we use a random int generator to test it actually changes
-            self.assertNotEqual(triggerRate, image.metadata[model.MD_TRIGGER_RATE])
             logging.debug("Got image.")
 
             self.images_left -= 1
