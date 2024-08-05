@@ -33,6 +33,7 @@ import wx
 from odemis.gui import conf
 from odemis.gui.util.wx_adapter import fix_static_text_clipping
 from odemis.gui.win.acquisition import ShowChamberFileDialog, LoadProjectFileDialog
+from odemis.gui.comp.positions import EditMeteorPositionsDialog
 from odemis.model import InstantaneousFuture
 from odemis.util.filename import guess_pattern, create_projectname
 
@@ -40,8 +41,8 @@ from odemis import model
 import odemis.gui.cont.views as viewcont
 import odemis.gui.model as guimod
 from odemis.acq.feature import load_project_data
-from odemis.acq.move import GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
-    FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS
+from odemis.acq.move import (GRID_1, GRID_2, LOADING, COATING, MILLING, UNKNOWN, ALIGNMENT, LOADING_PATH, \
+    FM_IMAGING, SEM_IMAGING, POSITION_NAMES, THREE_BEAMS, FIB_IMAGING, MeteorTFS1PostureManager)
 from odemis.acq.stream import StaticStream
 from odemis.gui.comp.buttons import BTN_TOGGLE_OFF, BTN_TOGGLE_PROGRESS, BTN_TOGGLE_COMPLETE
 from odemis.gui.cont.tabs.tab import Tab
@@ -165,8 +166,18 @@ class CryoChamberTab(Tab):
 
             # the meteor buttons
             self.position_btns = {SEM_IMAGING: self.panel.btn_switch_sem_imaging, FM_IMAGING: self.panel.btn_switch_fm_imaging,
-                                  GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
+                                GRID_2: self.panel.btn_switch_grid2, GRID_1: self.panel.btn_switch_grid1}
             self._grid_btns = (self.panel.btn_switch_grid1, self.panel.btn_switch_grid2)
+
+            # additional positions for tfs1
+            if isinstance(self.posture_manager, MeteorTFS1PostureManager):
+                self.position_btns.update({
+                        FIB_IMAGING: self.panel.btn_switch_fib_imaging, MILLING: self.panel.btn_switch_milling,
+                    }
+                )
+                self.btn_edit_meteor_positions = self.panel.btn_edit_meteor_positions
+                self.btn_edit_meteor_positions.Bind(wx.EVT_BUTTON, self._edit_meteor_positions)
+                self.btn_edit_meteor_positions.Show()
 
             # show load project button
             self.btn_load_project.Show()
@@ -683,6 +694,21 @@ class CryoChamberTab(Tab):
         self._show_warning_msg(None)
         self.panel.btn_cancel.Enable()
 
+    def _edit_meteor_positions(self, evt):
+        """Open a dialog for editing meteor stage positions and metadata"""
+
+        stage_md = self._stage.getMetadata()
+        dialog = EditMeteorPositionsDialog(self.main_frame, stage_md)
+        # dialog.SetSize(size=(400, 400))
+        dialog.Center()
+
+        _ = dialog.ShowModal()
+        if dialog._update_pressed:
+            self._stage.updateMetadata(dialog.stage_md)
+            logging.debug(f"Updated stage metadata: {self._stage.getMetadata()}")
+
+        dialog.Destroy()
+
     def _on_switch_btn(self, evt):
         """
         Event handling for the position panel buttons
@@ -783,8 +809,9 @@ class CryoChamberTab(Tab):
 
         elif self._role == 'meteor':
             if (
-                self._target_position in [FM_IMAGING, SEM_IMAGING]
-                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING]
+                # TODO: there is better logic for this
+                self._target_position in [FM_IMAGING, SEM_IMAGING, FIB_IMAGING, MILLING]
+                and current_posture in [LOADING, SEM_IMAGING, FM_IMAGING, FIB_IMAGING, MILLING]
                 and not self._display_meteor_pos_warning_msg(end_pos)
             ):
                 return None
