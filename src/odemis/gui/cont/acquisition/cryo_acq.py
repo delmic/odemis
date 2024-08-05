@@ -36,20 +36,24 @@ from concurrent.futures._base import CancelledError
 
 import wx
 
-from odemis import model, dataio
+from odemis import dataio, model
 from odemis.acq import acqmng, stream
-from odemis.acq.stream import FluoStream, StaticStream, BrightfieldStream
+from odemis.acq.feature import acquire_at_features, add_feature_info_filename
+from odemis.acq.stream import BrightfieldStream, FluoStream, StaticStream
 from odemis.gui import conf
 from odemis.gui.cont.acquisition._constants import VAS_NO_ACQUISITION_EFFECT
-from odemis.gui.cont.acquisition.overview_stream_acq import OverviewStreamAcquiController
+from odemis.gui.cont.acquisition.overview_stream_acq import (
+    OverviewStreamAcquiController,
+)
 from odemis.gui.util import call_in_wx_main, wxlimit_invocation
-from odemis.gui.util.widgets import ProgressiveFutureConnector, VigilantAttributeConnector
+from odemis.gui.util.widgets import (
+    ProgressiveFutureConnector,
+    VigilantAttributeConnector,
+)
 from odemis.gui.win.acquisition import ShowAcquisitionFileDialog
 from odemis.util import units
 from odemis.util.comp import generate_zlevels
-from odemis.util.dataio import splitext
-from odemis.util.filename import guess_pattern, create_filename, update_counter
-
+from odemis.util.filename import create_filename, guess_pattern, update_counter
 
 # constants for the acquisition future state of the cryo-secom
 ST_FINISHED = "FINISHED"
@@ -93,6 +97,7 @@ class CryoAcquiController(object):
         # bind events (buttons, checking, ...) with callbacks
         # for "ACQUIRE" button
         self._panel.btn_cryosecom_acquire.Bind(wx.EVT_BUTTON, self._on_acquire)
+        self._panel.btn_acquire_features.Bind(wx.EVT_BUTTON, self._acquire_at_features)
         # for "change..." button
         self._panel.btn_cryosecom_change_file.Bind(
             wx.EVT_BUTTON, self._on_btn_change
@@ -143,6 +148,7 @@ class CryoAcquiController(object):
         )
 
         self._tab_data.main.is_acquiring.subscribe(self._on_acquisition, init=True)
+        self._tab_data.main.features.subscribe(self._on_features_change, init=True)
 
     @call_in_wx_main
     def _on_acquisition(self, is_acquiring: bool):
@@ -166,6 +172,7 @@ class CryoAcquiController(object):
         self._panel.txt_cryosecom_est_time.Hide()
         self._panel.btn_cryosecom_change_file.Disable()
         self._panel.btn_acquire_overview.Disable()
+        self._panel.btn_acquire_features.Disable()
         self._panel.z_stack_chkbox.Disable()
         self._panel.streams_chk_list.Disable()
         self._panel.param_Zmin.Enable(False)
@@ -238,6 +245,106 @@ class CryoAcquiController(object):
         scheduled_future = executor.submit(self._export_data, data, None)
         scheduled_future.add_done_callback(self._on_export_data_done)
 
+    def _acquire_at_features(self, _: wx.Event):
+        """Acquire at the features using the current imaging settings."""
+        # store the focuser position
+        self._good_focus_pos = self._tab_data.main.focus.position.value["z"]
+
+        # hide/show/disable some widgets
+        self._panel.gauge_cryosecom_acq.Show()
+        self._panel.btn_cryosecom_acqui_cancel.Show()
+        self._panel.txt_cryosecom_left_time.Show()
+        self._panel.txt_cryosecom_est_time.Hide()
+        self._panel.btn_cryosecom_change_file.Disable()
+        self._panel.btn_acquire_overview.Disable()
+        self._panel.btn_acquire_features.Disable()
+        self._panel.z_stack_chkbox.Disable()
+        self._panel.streams_chk_list.Disable()
+        self._panel.param_Zmin.Enable(False)
+        self._panel.param_Zmax.Enable(False)
+        self._panel.param_Zstep.Enable(False)
+        # disable the streams settings
+        self._tab.streambar_controller.pauseStreams()
+        self._tab.streambar_controller.pause()
+        self._tab_data.main.is_acquiring.value = True
+
+        zlevels: dict = {}
+        if self._zStackActive:
+            self._on_zstack()  # update the zlevels with the current focus position
+            zlevels = self._zlevels
+
+        filename = self._filename.value
+        stage = self._tab_data.main.stage
+        focus = self._tab_data.main.focus
+        features = self._tab_data.main.features.value
+
+        logging.warning(f"Acquiring at features: {features}")
+
+        self._acq_future = acquire_at_features(
+            features=features,
+            stage=stage,
+            focus=focus,
+            streams=self._acquiStreams.value,
+            zlevels=zlevels,
+            filename=filename,
+            settings_obs=self._tab_data.main.settings_obs,
+        )
+        logging.warning("Acquisition started")
+
+        # link the acquisition gauge to the acquisition future
+        self._gauge_future_conn = ProgressiveFutureConnector(
+            future=self._acq_future,
+            bar=self._panel.gauge_cryosecom_acq,
+            label=self._panel.txt_cryosecom_left_time,
+            full=False,
+        )
+
+        self._acq_future.add_done_callback(self._on_feature_acquisition_done)
+        self._panel.Layout()
+
+    # TODO: handle cascading errors
+    @call_in_wx_main
+    def _on_feature_acquisition_done(self, future):
+        # local_tab = self._tab_data.main.getTabByName("cryosecom-localization")
+        # local_tab.tab_data_model.select_current_position_feature()
+        self._acq_future = None
+        self._gauge_future_conn = None
+        self._tab_data.main.is_acquiring.value = False
+        self._tab_data.main.focus.moveAbs({"z": self._good_focus_pos})
+
+        # try to get the acquisition data
+        try:
+            data, exp = future.result()
+            self._panel.txt_cryosecom_est_time.Show()
+            self._panel.txt_cryosecom_est_time.SetLabel("Finishing acquisition...")
+            logging.info("The acquisition is done")
+        except CancelledError:
+            logging.info("The acquisition was canceled")
+            self._reset_acquisition_gui(state=ST_CANCELED)
+            return
+        except Exception:
+            logging.exception("The acquisition failed")
+            self._reset_acquisition_gui(
+                text="Acquisition failed (see log panel).", state=ST_FAILED
+            )
+            return
+        if exp:
+            logging.error("Acquisition partially failed %s: ", exp)
+
+        try:  # QUERY: the gui crashes without this...?
+            self._reset_acquisition_gui(state=ST_FINISHED)
+            self._update_acquisition_time()
+            self._refresh_current_feature_data()
+        except Exception as e:
+            logging.warning(f"Error resetting acquisition GUI: {e}")
+
+    def _refresh_current_feature_data(self):
+        # refresh the current feature to load stream data
+        f = self._tab_data.main.currentFeature.value
+        if f is not None:
+            self._tab_data.main.currentFeature.value = None
+            self._tab_data.main.currentFeature.value = f
+
     def _reset_acquisition_gui(self, text=None, state=None):
         """
         Resets some GUI widgets for the next acquisition
@@ -251,6 +358,7 @@ class CryoAcquiController(object):
         self._panel.btn_cryosecom_acquire.Enable()
         self._panel.btn_cryosecom_change_file.Enable()
         self._panel.btn_acquire_overview.Enable()
+        self._panel.btn_acquire_features.Enable()
         self._panel.z_stack_chkbox.Enable()
         self._panel.streams_chk_list.Enable()
         self._panel.txt_cryosecom_left_time.Hide()
@@ -292,21 +400,6 @@ class CryoAcquiController(object):
         data = future.result()
         self._display_acquired_data(data)
 
-    def _add_feature_info_filename(self, filename: str) -> str:
-        """
-        Add feature name, feature status and the counter at the end of the filename.
-        :param filename: filename given by user
-        """
-        path_base, ext = splitext(filename)
-        feature = self._tab_data.main.currentFeature.value
-        feature_name = feature.name.value
-        feature_status = feature.status.value
-
-        path, basename = os.path.split(path_base)
-        ptn = f"{basename}-{feature_name}-{feature_status}-{{cnt}}"
-
-        return create_filename(path, ptn, ext, count="001")
-
     def _export_data(self, data, thumb_nail):
         """
         Called to export the acquired data.
@@ -315,7 +408,8 @@ class CryoAcquiController(object):
         """
         filename = self._filename.value
         if data:
-            filename = self._add_feature_info_filename(filename)
+            filename = add_feature_info_filename(feature=self._tab_data.main.currentFeature.value,
+                                                 filename=filename)
             exporter = dataio.get_converter(self._config.last_format)
             exporter.export(filename, data, thumb_nail)
             logging.info(u"Acquisition saved as file '%s'.", filename)
@@ -581,3 +675,13 @@ class CryoAcquiController(object):
         Called when a VA which might affect the acquisition is modified
         """
         self._update_acquisition_time()
+
+    def _on_features_change(self, features):
+        """ Called when the features are changed.
+        To enable/disable the acquire features button.
+        """
+
+        if features:
+            self._panel.btn_acquire_features.Enable()
+        else:
+            self._panel.btn_acquire_features.Disable()
