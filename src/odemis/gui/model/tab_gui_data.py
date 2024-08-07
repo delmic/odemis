@@ -222,7 +222,7 @@ class CryoGUIData(MicroscopyGUIData):
                 "Expected a microscope role of 'enzel', 'meteor', or 'mimas' but found it to be %s." % main.role)
         super().__init__(main)
 
-    def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None):
+    def add_new_feature(self, pos_x, pos_y, pos_z=None, f_name=None, stage_bare_pos: dict = {}):
         """
         Create a new feature and add it to the features list
         """
@@ -231,7 +231,7 @@ class CryoGUIData(MicroscopyGUIData):
             f_name = make_unique_name("Feature-1", existing_names)
         if pos_z is None:
             pos_z = self.main.focus.position.value['z']
-        feature = CryoFeature(f_name, pos_x, pos_y, pos_z)
+        feature = CryoFeature(f_name, pos_x, pos_y, pos_z, stage_bare_pos=stage_bare_pos)
         self.main.features.value.append(feature)
         self.main.currentFeature.value = feature
         return feature
