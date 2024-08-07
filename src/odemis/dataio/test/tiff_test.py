@@ -2318,6 +2318,109 @@ class TestTiffIO(unittest.TestCase):
             res = (1,) * (5 - len(shape)) + shape
             self.assertEqual(im.shape, res)
 
+    def testFindImageGroupsAcquiredMultiChannelZStack(self):
+        """
+        Same test as above, except we test the images in the format they are actually acquired in:
+        Format: List[ZYX] -> Not List[CTZYX]
+        """
+        metadata = [{model.MD_SW_VERSION: "1.0-test",
+                model.MD_HW_NAME: "fake hw",
+                model.MD_DESCRIPTION: "blue dye",
+                model.MD_ACQ_DATE: time.time() + 1,
+                model.MD_BPP: 12,
+                model.MD_BINNING: (1, 1),  # px, px
+                model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                model.MD_POS: (13.7e-3, -30e-3),  # m
+                model.MD_EXP_TIME: 1.2,  # s
+                model.MD_IN_WL: (500e-9, 522e-9),  # m
+                model.MD_OUT_WL: (400e-9, 450e-9),  # m
+            },
+            {model.MD_SW_VERSION: "1.0-test",
+                model.MD_HW_NAME: "fake hw",
+                model.MD_DESCRIPTION: "green dye",
+                model.MD_ACQ_DATE: time.time() + 2,
+                model.MD_BPP: 12,
+                model.MD_BINNING: (1, 1),  # px, px
+                model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                model.MD_POS: (13.7e-3, -30e-3),  # m
+                model.MD_EXP_TIME: 1,  # s
+                model.MD_IN_WL: (590e-9, 620e-9),  # m
+                model.MD_OUT_WL: (520e-9, 550e-9),  # m
+            },
+            {model.MD_SW_VERSION: "1.0-test",
+                model.MD_HW_NAME: "fake hw",
+                model.MD_DESCRIPTION: "red dye",
+                model.MD_ACQ_DATE: time.time() + 2,
+                model.MD_BPP: 12,
+                model.MD_BINNING: (1, 1),  # px, px
+                model.MD_PIXEL_SIZE: (1e-6, 1e-6),  # m/px
+                model.MD_POS: (13.7e-3, -30e-3),  # m
+                model.MD_EXP_TIME: 1,  # s
+                model.MD_IN_WL: (600e-9, 630e-9),  # m
+                model.MD_OUT_WL: (620e-9, 650e-9),  # m
+            },
+            ]
+        # create 3 greyscale images with Z stacks of same size
+        # define total number in Z and C
+        nb_z = 3
+        nb_c = len(metadata)
+        nb_t = 1
+        size = (300, 400, nb_z)  # X, Y, Z
+        dtype = numpy.dtype("uint16")
+        ldata = []
+        for i, md in enumerate(metadata):
+            a = model.DataArray(numpy.zeros(size[::-1], dtype), md.copy())
+            a[:, 0, 0] = i
+            a[:, i*20:i*20+10, i*20:i*20+10] = 1000  # "watermark" it
+            ldata.append(a)
+
+        # check images match acqusition format
+        self.assertEqual(len(ldata), nb_c)              # Check that the number of images is correct (nb_c)
+        self.assertEqual(ldata[0].shape, size[::-1])    # Check that the shape of the images is correct (size[::-1])
+        self.assertEqual(ldata[0].ndim, 3)              # Check that the images are 3D
+
+        # export
+        tiff.export(FILENAME, ldata)
+
+        # The multi-channel z stack must belong to same group
+        image_groups = tiff._findImageGroups(ldata)
+        self.assertEqual(len(image_groups), 1)
+
+        # In xml information for ImageJ, C=3 channel changes fastest, then Z=2 For e.g.
+        ometxt = tiff._convertToOMEMD(ldata)
+        root = ET.fromstring(ometxt)
+        # Check the content of first 6 ifds
+        ifd_max = 9
+        combinations_zc = []
+        for i in range(nb_z):
+            for j in range(nb_c):
+                for k in range(nb_t):
+                    combinations_zc.append((i, j, k))
+
+        tiff_data_elements = root.findall('.//{http://www.openmicroscopy.org/Schemas/OME/2012-06}TiffData')
+        for ind, element in enumerate(tiff_data_elements):
+            tiffdata = element.attrib
+            if int(tiffdata["IFD"]) < ifd_max:
+                self.assertTrue((int(tiffdata["FirstZ"]), int(tiffdata["FirstC"]), int(tiffdata["FirstT"])) in combinations_zc)
+                self.assertEqual(int(tiffdata["IFD"]), ind)
+                self.assertEqual(int(tiffdata["PlaneCount"]), 1)
+            else:
+                break
+
+        # check it's here
+        st = os.stat(FILENAME)  # this test also that the file is created
+        self.assertGreater(st.st_size, 0)
+
+        # check data
+        rdata = tiff.read_data(FILENAME)
+        self.assertEqual(len(rdata), len(ldata))
+
+        for i, im in enumerate(rdata):
+            shape = ldata[i].shape
+            # Pad the shape with 1s to always get 5 dimensions
+            res = (1,) * (5 - len(shape)) + shape
+            self.assertEqual(im.shape, res)
+
     def testAcquisitionDataTIFFLargerFile(self):
 
         def getSubData(dast, zoom, rect):

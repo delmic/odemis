@@ -215,17 +215,16 @@ class AnchoredEstimator(object):
         :param period: (float) Maximum time between acquisition of the anchor region in seconds.
         :param t: (float) Time spend for acquiring one data at the fastest dimension.
         :param repetitions: (tuple of 2 ints) Number of iterations for the two fastest axes in the
-                                              entire drift-corrected acquisition. First value is the
-                                              fastest dimension scanned. Usually it is the
-                                              number of px (ebeam) positions. Sometimes fastest dimension
-                                              can be e.g. number of images to integrate.
+        entire drift-corrected acquisition. The first value is the slowest dimension scanned.
+        Usually this is the Y number of px (ebeam) positions. It might also be the number of images
+        to integrate.
         :returns (iterator yielding 0<int): Iterator which yields number of acquisitions until
                                             next correction.
         """
         # TODO: implement more clever calculation
         acq_dc_period = []
         acq = int(period // t)  # number of acquisitions per period
-        acq_per_fastest_dim = repetitions[0]
+        acq_per_fastest_dim = repetitions[1]
         if acq >= acq_per_fastest_dim:
             # Correct every (acq // acq_per_fastest_dim) acquisitions
             acq_dc_period.append((acq // acq_per_fastest_dim) * acq_per_fastest_dim)

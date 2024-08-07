@@ -107,7 +107,7 @@ class Acquirer(object):
             px_time = (self.spect.exposureTime.value + # exposure time
                        numpy.prod(self.spect.resolution.value) / self.spect.readoutRate.value + # readout time
                        0.1) # overhead (eg, pinhole movement)
-            px_iter = de.estimateCorrectionPeriod(dperiod, px_time, shape)
+            px_iter = de.estimateCorrectionPeriod(dperiod, px_time, shape[::-1])
             next_dc = next(px_iter)
 
         # Set the E-beam in spot mode (order matters)
