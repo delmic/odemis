@@ -64,12 +64,6 @@ SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
 # Increasing this distance may result in out of focus overview acquisition image
 MAX_DISTANCE_FOCUS_POINTS = 450e-06  # in m
 
-# cryo-TEM grid sizes
-SAMPLE_RADIUS_TEM_GRID = 1.25e-3  # m, standard TEM grid size including the borders
-# Bounding-box relative to the center of a sample, corresponding to usable area
-# for imaging/milling. Used in particular for the overview image.
-hwidth = SAMPLE_RADIUS_TEM_GRID / math.sqrt(2)
-SAMPLE_USABLE_BBOX_TEM_GRID = (-hwidth, -hwidth, hwidth, hwidth)  # m, minx, miny, maxx, maxy
 DEFAULT_FOV = (100e-6, 100e-6) # m
 
 class FocusingMethod(Enum):
@@ -1208,47 +1202,54 @@ class AcquireOverviewTask(object):
 
         return da_rois
 
-def get_tiled_areas(
+def get_stream_based_bbox(
     pos: Dict[str, float],
     streams: List[Stream],
     tiles_nx: int,
     tiles_ny: int,
     overlap: float,
     tiling_rng: Dict[str, list],  # TODO: make optional, use axes range otherwise
-    selected_grids: List[str] = None,
-    sample_centers: Dict[str, Tuple[float]] = None,
-    whole_grid: bool = False,
-    rel_bbox: tuple = SAMPLE_USABLE_BBOX_TEM_GRID,
-) -> List[Tuple[float]]:
+) -> Optional[Tuple[float]]:
     """
-    Compute the bounding boxes of all areas to acquire.
+    Compute a bounding box based on streams, based on the number of x tiles, stream fov and overlap.
     :param pos: the current position of the stage
     :param streams: the streams to acquire
     :param tiles_nx: the number of tiles in the x direction
     :param tiles_ny: the number of tiles in the y direction
     :param overlap: the overlap between tiles (in percentage)
     :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
-    :param selected_grids: the grids to acquire
-    :param sample_centers: the centers of the sample grids
-    :param whole_grid: if True, the whole grid is acquired
-    :param rel_bbox: the relative bounding box of the sample grid (xmin, ymin, xmax, ymax)
-    return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
-    of all areas to acquire.
+    :return: the bounding box (xmin, ymin, xmax, ymax in physical coordinates). If no area at all, returns None.
     """
-    if not whole_grid:
-        area = compute_area_size(
-            pos=pos,
-            streams=streams,
-            tiles_nx=tiles_nx,
-            tiles_ny=tiles_ny,
-            tiling_rng=tiling_rng,
-            overlap=overlap,
-        )
-        if area is None:
-            return []
-        else:
-            return [area]
+    # Get al stream fov's, if any
+    fovs = [get_fov(s) for s in streams]
+    if not fovs:
+        # fall back to a small fov (default)
+        fov = DEFAULT_FOV
+    else:
+        # smallest fov
+        fov = tuple(map(min, zip(*fovs)))
 
+    return get_fov_based_bbox(
+        pos=pos,
+        fov=fov,
+        tiles_nx=tiles_nx,
+        tiles_ny=tiles_ny,
+        tiling_rng=tiling_rng,
+        overlap=overlap,
+    )
+
+
+def get_tiled_bboxes(
+    rel_bbox: Tuple[float],
+    sample_centers: List[Tuple[float]],
+) -> List[Tuple[float]]:
+    """
+    Compute bounding boxes for a given relative bounding box to different sample centers
+    :param rel_bbox: the relative bounding box of the sample grid (xmin, ymin, xmax, ymax)
+    :param sample_centers: the centers of the sample grids
+    return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
+    corresponding to the sample centers.
+    """
     # TODO: for now this is only for the MIMAS, but eventually, on the METEOR,
     # which often supports 2 grids, this should also be possible to use.
     # TODO: ensure that sample centers are converted to same coordinate system as stage position
@@ -1257,10 +1258,8 @@ def get_tiled_areas(
     # In theory, the order doesn't really matter (at best it would safe a few
     # seconds of stage movement), but it's nice for the user that acquisitions
     # are done always in the same order, as it reduces "astonishment".
-    sorted_centers = sorted(
-        pos for name, pos in sample_centers.items() if name in selected_grids
-    )
-    areas = [
+    sorted_centers = sorted(sample_centers)
+    bboxes = [
         (
             center[0] + rel_bbox[0],
             center[1] + rel_bbox[1],
@@ -1270,49 +1269,40 @@ def get_tiled_areas(
         for center in sorted_centers
     ]
 
-    return areas
+    return bboxes
 
-def compute_area_size(
+def get_fov_based_bbox(
     pos: Dict[str, float],
-    streams: List[Stream],
+    fov: Tuple[float, float],
     tiles_nx: int,
     tiles_ny: int,
     tiling_rng: Dict[str, list],
     overlap: float,
 ) -> Optional[Tuple[float, float]]:
     """
-    Calculates the requested tiling area size, based on the number of tiles, stream fov and overlap.
+    Calculates the requested bounding box, based on the number of tiles, fov and overlap.
     :param pos: the current position of the stage
-    :param streams: the streams to acquire
+    :param fov: the fov to acquire, default is DEFAULT_FOV
     :param tiles_nx: the number of tiles in the x direction
     :param tiles_ny: the number of tiles in the y direction
     :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
     :param overlap: the overlap between tiles (in percentage)
-    :return: the size (in m) in X and Y. If no area at all, returns None.
+    :return: the bounding box (xmin, ymin, xmax, ymax in physical coordinates). If no area at all, returns None.
     """
-    # get smallest fov
-    fovs = [get_fov(s) for s in streams]
-    if not fovs:
-        # fall back to a small fov (default)
-        fov = DEFAULT_FOV
-    else:
-        # smallest fov
-        fov = tuple(map(min, zip(*fovs)))
-
     # these formulas for w and h have to match the ones used in the 'stitching' module.
     w = tiles_nx * fov[0] * (1 - overlap)
-    h = tiles_nx * fov[1] * (1 - overlap)
+    h = tiles_ny * fov[1] * (1 - overlap)
 
     # Note the area can accept LTRB or LBRT.
-    area = clip_tiling_area_to_range(w, h, pos, tiling_rng)
-    if area is None:
+    bbox = clip_tiling_bbox_to_range(w, h, pos, tiling_rng)
+    if bbox is None:
         # there is no intersection
         logging.warning(
             "Couldn't find intersection between stage pos %s and tiling range %s"
             % (pos, tiling_rng)
         )
 
-    return area
+    return bbox
 
 def get_fov(s: Stream):
     """Get the field of view of a stream"""
@@ -1321,13 +1311,13 @@ def get_fov(s: Stream):
     except (NotImplementedError, AttributeError):
         raise TypeError("Unsupported Stream %s, it doesn't have a .guessFoV()" % (s,))
 
-def clip_tiling_area_to_range(
+def clip_tiling_bbox_to_range(
     w: float, h: float, pos: Dict[str, float], tiling_rng: Dict[str, List[float]]
 ) -> Optional[Tuple[float]]:
     """
-    Finds the intersection between the requested tiling area and the tiling range.
-    :param w: the width of the tiling area
-    :param h: the height of the tiling area
+    Finds the intersection between the requested tiling bounding box and the tiling range.
+    :param w: the width of the tiling bounding box
+    :param h: the height of the tiling bounding box
     :param pos: the current position of the stage
     :param tiling_rng: the maximum tiling range along x and y axes as
             (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin). the maximum range is
@@ -1335,10 +1325,10 @@ def clip_tiling_area_to_range(
     :returns: (None or tuple of 4 floats): None if there is no intersection, or
         the rectangle representing the intersection as (xmin, ymin, xmax, ymax).
     """
-    area_req = (pos["x"] - w / 2, pos["y"] - h / 2, pos["x"] + w / 2, pos["y"] + h / 2)
+    bbox_req = (pos["x"] - w / 2, pos["y"] - h / 2, pos["x"] + w / 2, pos["y"] + h / 2)
     # clip the tiling area, if needed (or find the intersection between the active range and the requested area)
     return rect_intersect(
-        area_req,
+        bbox_req,
         (
             tiling_rng["x"][0],
             tiling_rng["y"][1],
