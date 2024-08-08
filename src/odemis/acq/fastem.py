@@ -27,15 +27,11 @@ import os
 import threading
 import time
 from concurrent.futures import CancelledError
+from typing import List, Tuple
 
 import numpy
 
 try:
-    from fastem_calibrations import (
-        autofocus_multiprobe,
-        image_translation_pre_align,
-        configure_hw
-    )
     from fastem_calibrations import util as fastem_util
 
     fastem_calibrations = True
@@ -43,15 +39,20 @@ except ImportError as err:
     logging.info("fastem_calibrations package not found with error: {}".format(err))
     fastem_calibrations = False
 
+import odemis.acq.stream as acqstream
 from odemis import model, util
 from odemis.acq import fastem_conf, stitching
 from odemis.acq.align.fastem import align, estimate_calibration_time
 from odemis.acq.stitching import REGISTER_IDENTITY, FocusingMethod
 from odemis.acq.stream import SEMStream
-from odemis.util import img, TimeoutError, transform
+from odemis.gui.comp.overlay.base import Vec
+from odemis.gui.comp.overlay.ellipse import EllipseOverlay
+from odemis.gui.comp.overlay.polygon import PolygonOverlay
+from odemis.gui.comp.overlay.rectangle import RectangleOverlay
+from odemis.util import TimeoutError, img, transform
 from odemis.util.driver import guessActuatorMoveDuration
 from odemis.util.registration import estimate_grid_orientation_from_img
-from odemis.util.transform import to_physical_space, SimilarityTransform
+from odemis.util.transform import SimilarityTransform, to_physical_space
 
 # The executor is a single object, independent of how many times the module (fastem.py) is loaded.
 _executor = model.CancellableThreadPoolExecutor(max_workers=1)
@@ -85,9 +86,9 @@ SETTINGS_SELECTION = {
                      'referenced',
                      'speed']
 }
-CALIBRATION_1 = "calib_1"
-CALIBRATION_2 = "calib_2"
-CALIBRATION_3 = "calib_3"
+CALIBRATION_1 = "Calibration 1"
+CALIBRATION_2 = "Calibration 2"
+CALIBRATION_3 = "Calibration 3"
 
 
 class FastEMROA(object):
@@ -98,49 +99,97 @@ class FastEMROA(object):
     and detector.
     """
 
-    def __init__(self, name, roc_2, roc_3, asm, multibeam, descanner, detector, overlap=0.06):
+    def __init__(self, shape, main_data, overlap=0.06, name="", slice_index=0):
         """
-        :param name: (str) Name of the region of acquisition (ROA). It is the name of the megafield (id) as stored on
-                     the external storage.
-        :param roc_2: (FastEMROC) Corresponding region of calibration (ROC). Used for dark offset and digital
-                      gain calibration.
-        :param roc_3: (FastEMROC) Corresponding region of calibration (ROC). Used for the final scanner rotation,
-                      final scanning amplitude and cell translation (cell stitching) calibration (field corrections).
-        :param asm: (technolution.AcquisitionServer) The acquisition server module component.
-        :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
-        :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server
-        module.
-        :param detector: (technolution.MPPC) The detector object to be used for collecting the image data.
+        :param shape: (EditableShape) The shape representing the region of acquisition in the canvas.
+        :param main_data: (MainGUIData) The data corresponding to the entire GUI.
         :param overlap: (float), optional
             The amount of overlap required between single fields. An overlap of 0.2 means that two neighboring fields
             overlap by 20%. By default, the overlap is 0.06, this means there is 6% overlap between the fields.
+        :param name: (str) Name of the region of acquisition (ROA). It is the stack_id of the megafield as stored on
+                     the external storage.
+        :param slice_index: (int) The slice index of the region of acquisition. It is the z_position of the megafield
+                     as stored on the external storage.
         """
+        self.shape = shape
         self.name = model.StringVA(name)
-        self.points = model.ListVA()
-        self.roc_2 = model.VigilantAttribute(roc_2)
-        self.roc_3 = model.VigilantAttribute(roc_3)
-        self._asm = asm
-        self._multibeam = multibeam
-        self._descanner = descanner
-        self._detector = detector
+        self.slice_index = model.IntVA(slice_index)
+        self._main_data = main_data
+        self.roc_2 = model.VigilantAttribute(None)
+        self.roc_3 = model.VigilantAttribute(None)
+        self._asm = self._main_data.asm
+        self._multibeam = self._main_data.multibeam
+        self._descanner = self._main_data.descanner
+        self._detector = self._main_data.mppc
+        self._scan_stage = self._main_data.scan_stage
 
         # List of tuples(int, int) containing the position indices of each field to be acquired.
         # Automatically updated when the coordinates change.
         self.field_indices = []
+        # List of tuples(Vec, Vec) containing the start and end position of rectangle representing a field to be acquired.
+        # Calculated based on field_indices
+        # Automatically updated when the coordinates change.
+        self.field_rects: List[Tuple[Vec, Vec]] = []
         self.overlap = overlap
-        self.points.subscribe(self.on_points, init=True)
+        self.shape.points.subscribe(self.on_points, init=True)
 
-        # TODO need to check if megafield already exists, otherwise overwritten, subscribe whenever name is changed,
-        #  it should be checked
+    def to_dict(self):
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        return {
+            "name": self.name.value,
+            "slice_index": self.slice_index.value,
+            "overlap": self.overlap,
+            "shape": self.shape.to_dict() if hasattr(self.shape, 'to_dict') else {},
+        }
+
+    @staticmethod
+    def from_dict(roa: dict, tab_data):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param roa: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param tab_data: The data corresponding to a GUI tab helpful while reconstructing the class.
+        :returns: (FastEMROA) reconstructed FastEMROA class.
+        """
+        name = roa["name"]
+        slice_index  = int(roa["slice_index"])
+        overlap = float(roa["overlap"])
+        shape_data = roa["shape"]
+        shape_type = shape_data["type"]
+        if shape_type == RectangleOverlay.__name__:
+            shape = RectangleOverlay.from_dict(shape_data, tab_data)
+        elif shape_type == EllipseOverlay.__name__:
+            shape = EllipseOverlay.from_dict(shape_data, tab_data)
+        elif shape_type == PolygonOverlay.__name__:
+            shape = PolygonOverlay.from_dict(shape_data, tab_data)
+        else:
+            raise ValueError("Unknown shape type.")
+        roa = FastEMROA(shape, tab_data.main, overlap=overlap, name=name, slice_index=slice_index)
+        return roa
 
     def on_points(self, points):
         """Recalculate the field indices when the points of the region of acquisition (ROA) have changed
         (e.g. resize, moving).
         :param points: list of nested points (x, y) representing the shape in physical coordinates.
         """
-        # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
-        points = [(y, x) for x, y in points]
-        self.field_indices = self._calculate_field_indices(points)
+        if points:
+            posx, posy = self.shape.get_position()
+            current_sample = self._main_data.current_sample.value
+            scintillator = current_sample.find_closest_scintillator((posx, posy))
+            if scintillator:
+                self.roc_2.value = scintillator.calibrations[CALIBRATION_2].region
+                self.roc_3.value = scintillator.calibrations[CALIBRATION_3].region
+            else:
+                self.roc_2.value = None
+                self.roc_2.value = None
+            # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
+            flipped_points = [(y, x) for x, y in points]
+            self.field_indices = self._calculate_field_indices(flipped_points)
+            self.field_rects = self._calculate_field_rectangles(points)
 
     def estimate_acquisition_time(self):
         """
@@ -157,6 +206,26 @@ class FastEMROA(object):
         if points:
             indices = self.get_poly_field_indices(points)
         return indices
+
+    def _calculate_field_rectangles(self, points):
+        rects = []
+        if points:
+            px_size = self._multibeam.pixelSize.value
+            field_res = self._multibeam.resolution.value
+            xmin_roa, _, _, ymax_roa = util.get_polygon_bbox(points)
+            first_tile_start_pos = (xmin_roa, ymax_roa - field_res[1] * px_size[1])
+            first_tile_end_pos = (xmin_roa + field_res[1] * px_size[1], ymax_roa)
+            for field_idx in self.field_indices:
+                rel_move_x = field_idx[0] * px_size[0] * field_res[0] * (1 - self.overlap)
+                rel_move_y = field_idx[1] * px_size[1] * field_res[1] * (1 - self.overlap)
+                start_pos_x = first_tile_start_pos[0] + rel_move_x
+                start_pos_y = first_tile_start_pos[1] - rel_move_y
+                end_pos_x = first_tile_end_pos[0] + rel_move_x
+                end_pos_y = first_tile_end_pos[1] - rel_move_y
+                p_start_pos = Vec(start_pos_x, start_pos_y)
+                p_end_pos = Vec(end_pos_x, end_pos_y)
+                rects.append((p_start_pos, p_end_pos))
+        return rects
 
     def get_poly_field_indices(self, polygon):
         """
@@ -299,22 +368,16 @@ class FastEMCalibration(object):
     A class containing FastEM calibration related attributes.
     """
 
-    def __init__(self, name: str, parent_panel) -> None:
+    def __init__(self, name: str) -> None:
         """
         :param name: (str) Name of the calibration.
-        :param parent_panel: The parent panel containing the calibration's button, gauge, label and panel object.
         """
         self.name = model.StringVA(name)
-        self.regions = model.VigilantAttribute({})  # dict, int --> FastEMROC
+        self.region = None
         self.is_done = model.BooleanVA(False)  # states if the calibration was done successfully or not
-        self.is_calibrating = model.BooleanVA(False)  # states if the calibration is running or not
-        self.calibrations = model.ListVA([])  # list of calibrations that need to be run sequencially
-        self.button = getattr(parent_panel, self.name.value + "_btn")
-        self.gauge = getattr(parent_panel, self.name.value + "_gauge")
-        self.label = getattr(parent_panel, self.name.value + "_label")
-        self.panel = getattr(parent_panel, self.name.value + "_pnl")
-        self.controller = None  # the calibration controller
-        self.regions_controller = None  # the region of calibration controller if it has regions
+        self.sequence = model.ListVA([])  # list of calibrations that need to be run sequencially
+        self.button = None
+        self.shape = None
 
 
 class FastEMROC(object):
@@ -326,10 +389,9 @@ class FastEMROC(object):
     scintillator is acquired and assigned with all ROAs on the respective scintillator.
     """
 
-    def __init__(self, name, coordinates, colour="#FFA300"):
+    def __init__(self, name, coordinates=acqstream.UNDEFINED_ROI, colour="#FFA300"):
         """
-        :param name: (str) Name of the region of calibration (ROC). It is the name of the megafield (id) as stored on
-                     the external storage.
+        :param name: (str) Name of the region of calibration (ROC).
         :param coordinates: (float, float, float, float) left, top, right, bottom, Bounding box coordinates of the
                             ROC in [m]. The coordinates are in the sample carrier coordinate system, which
                             corresponds to the component with role='stage'.
@@ -362,7 +424,7 @@ def estimate_acquisition_time(roa, pre_calibrations=None):
     return tot_time
 
 
-def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
+def acquire(roa, path, username, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
             se_detector, ebeam_focus, pre_calibrations=None, save_full_cells=False, settings_obs=None,
             spot_grid_thresh=0.5):
     """
@@ -374,6 +436,7 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stag
                 path as specified in the component.
                 The ASM will create the directory on the external storage, including the parent directories,
                 if they do not exist.
+    :param username: (str) The current user's name.
     :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
     :param multibeam: (technolution.EBeamScanner) The multibeam scanner component of the acquisition server module.
     :param descanner: (technolution.MirrorDescanner) The mirror descanner component of the acquisition server module.
@@ -410,7 +473,7 @@ def acquire(roa, path, scanner, multibeam, descanner, detector, stage, scan_stag
     # TODO: pass path through attribute on ROA instead of argument?
     # Create a task that acquires the megafield image.
     task = AcquisitionTask(scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
-                           se_detector, ebeam_focus, roa, path, pre_calibrations, save_full_cells, settings_obs,
+                           se_detector, ebeam_focus, roa, path, username, pre_calibrations, save_full_cells, settings_obs,
                            spot_grid_thresh, f)
 
     f.task_canceller = task.cancel  # lets the future know how to cancel the task.
@@ -429,7 +492,7 @@ class AcquisitionTask(object):
     """
 
     def __init__(self, scanner, multibeam, descanner, detector, stage, scan_stage, ccd, beamshift, lens,
-                 se_detector, ebeam_focus, roa, path,
+                 se_detector, ebeam_focus, roa, path, username,
                  pre_calibrations, save_full_cells, settings_obs, spot_grid_thresh, future):
         """
         :param scanner: (xt_client.Scanner) Scanner component connecting to the XT adapter.
@@ -452,6 +515,7 @@ class AcquisitionTask(object):
                     path as specified in the component.
                     The ASM will create the directory on the external storage, including the parent directories,
                     if they do not exist.
+        :param username: (str) The current user's name.
         :param pre_calibrations: (list[Calibrations]) List of calibrations that should be run before the ROA
                                  acquisition.
         :param save_full_cells: (bool) If True save the full cell images instead of cropping them
@@ -481,6 +545,7 @@ class AcquisitionTask(object):
         self._roc2 = roa.roc_2.value  # object for region of calibration 2
         self._roc3 = roa.roc_3.value  # object for region of calibration 3
         self._path = path  # sub-directories on external storage
+        self._username = username
         self._future = future
         self._pre_calibrations = pre_calibrations
         self._save_full_cells = save_full_cells
@@ -531,15 +596,17 @@ class AcquisitionTask(object):
                           int((1 - self._roa.overlap) * self._multibeam.resolution.value[1]))
         self._detector.updateMetadata({model.MD_FIELD_SIZE: eff_field_size})
 
+        self._detector.updateMetadata({model.MD_SLICE_IDX: self._roa.slice_index.value})
+        self._detector.updateMetadata({model.MD_USER: self._username})
+
         # Get the estimated time for the roa.
         total_roa_time = estimate_acquisition_time(self._roa, self._pre_calibrations)
 
         # No need to set the start time of the future: it's automatically done when setting its state to running.
-        self._future.set_progress(end=time.time() + total_roa_time)  # provide end time to future
         logging.info(
             "Starting acquisition of ROA %s, with expected duration of %f s, %s by %s fields and overlap %s.",
-            self._roa.name.value, total_roa_time, self._roa.field_indices[-1][0] + 1,
-            self._roa.field_indices[-1][1] + 1, self._roa.overlap,
+            self._roa.shape.name.value, total_roa_time, self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1,
+            self._roa.overlap,
         )
 
         # Update the position of the first tile.
@@ -550,8 +617,7 @@ class AcquisitionTask(object):
 
         # set the sub-directories (<user>/<project-name>/<roa-name>)
         # FIXME use username from GUI when that is implemented
-        username = self._detector.getMetadata().get(model.MD_USER, "fastem-user")
-        self._detector.filename.value = os.path.join(username, self._path, self._roa.name.value)
+        self._detector.filename.value = os.path.join(self._username, self._path, self._roa.name.value)
 
         # Move the stage to the first tile, to ensure the correct position is
         # stored in the megafield metadata yaml file.
@@ -683,10 +749,6 @@ class AcquisitionTask(object):
             if self._cancelled:
                 raise CancelledError()
 
-            # Update the time left for the acquisition.
-            expected_time = len(self._fields_remaining) * total_field_time
-            self._future.set_progress(start=time.time(), end=time.time() + expected_time)
-
         logging.debug("Successfully acquired all fields of ROA.")
 
     def pre_calibrate(self, pre_calibrations):
@@ -740,7 +802,7 @@ class AcquisitionTask(object):
                     if i == 2:
                         raise ValueError(f"Pre-calibrations failed 3 times, with error {err}")
                     else:
-                        logging.warning(f"Pre-calibration failed for ROA {self._roa.name.value} with error {err}, "
+                        logging.warning(f"Pre-calibration failed for ROA {self._roa.shape.name.value} with error {err}, "
                                         f"will try again.")
         finally:
             self._roa.overlap = overlap_init  # set back the overlap to the initial value
@@ -784,7 +846,7 @@ class AcquisitionTask(object):
 
         # Get the coordinate of the top left corner of the ROA, this corresponds to the (xmin, ymax) coordinate in the
         # role='stage' coordinate system.
-        points = self._roa.points.value.copy()
+        points = self._roa.shape.points.value.copy()
         xmin_roa, _, _, ymax_roa = util.get_polygon_bbox(points)
 
         # Transform from stage to scan-stage coordinate system
