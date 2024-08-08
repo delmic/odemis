@@ -21,6 +21,8 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+import os
+import subprocess
 import time
 from concurrent.futures import CancelledError
 from enum import Enum
@@ -32,6 +34,7 @@ try:
     from fastem_calibrations.autofocus_sem import AutofocusSEM
     from fastem_calibrations.autostigmation import Autostigmation
     from fastem_calibrations.cell_translation import CellTranslation
+    from fastem_calibrations.configure_hw import configure_asm, get_config_asm
     from fastem_calibrations.dark_offset_correction import DarkOffsetCorrection
     from fastem_calibrations.descan_gain import DescanGain
     from fastem_calibrations.digital_gain_correction import DigitalGainCorrection
@@ -43,10 +46,6 @@ try:
     from fastem_calibrations.scan_amplitude_pre_align import ScanAmplitudePreAlign
     from fastem_calibrations.scan_rotation import ScanRotation
     from fastem_calibrations.scan_rotation_pre_align import ScanRotationPreAlign
-    from fastem_calibrations.configure_hw import (
-        get_config_asm,
-        configure_asm
-    )
     fastem_calibrations = True
 except ImportError as err:
     logging.info("fastem_calibrations package not found with error: {}".format(err))
@@ -288,6 +287,12 @@ class CalibrationTask(object):
             raise
         except Exception as ex:
             logging.error("Calibration failed: %s", ex, exc_info=True)
+            if hasattr(ex, "image_path"):
+                if ex.image_path and os.path.isdir(ex.image_path):
+                    try:
+                        subprocess.Popen(['xdg-open', ex.image_path])
+                    except Exception:
+                        logging.exception("Could not open %s.", ex.image_path)
             raise
         finally:
             # Remove references to the calibrations once all calibrations are finished/cancelled.
