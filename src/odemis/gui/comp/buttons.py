@@ -36,8 +36,12 @@ import numpy
 import wx
 import wx.lib.buttons as wxbuttons
 
-from odemis.gui import (FG_COLOUR_HIGHLIGHT, FG_COLOUR_RADIO_ACTIVE,
-                        FG_COLOUR_RADIO_INACTIVE, img)
+from odemis.gui import (
+    FG_COLOUR_HIGHLIGHT,
+    FG_COLOUR_RADIO_ACTIVE,
+    FG_COLOUR_RADIO_INACTIVE,
+    img,
+)
 from odemis.gui.util.img import wxImageScaleKeepRatio
 
 
@@ -689,6 +693,17 @@ class GraphicRadioButton(ImageTextToggleButton):
             self.CaptureMouse()
         self.SetFocus()
         self.Refresh()
+
+
+class GraphicToggleButton(ImageTextToggleButton):
+    """ Simple graphical button that can be used to construct toggle button sets
+    """
+
+    def __init__(self, *args, **kwargs):
+        self.value = kwargs.pop('value', None)
+        if 'label' not in kwargs and self.value:
+            kwargs['label'] = u"%g" % self.value
+        super(GraphicToggleButton, self).__init__(*args, **kwargs)
 
 
 # The 3 states of the ProgressRadioButton
