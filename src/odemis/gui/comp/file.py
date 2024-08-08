@@ -26,14 +26,16 @@ Content:
 """
 import fnmatch
 import logging
-from odemis.gui import img
-import odemis.gui
-from odemis.util.dataio import splitext
 import os
+
 import wx
 import wx.lib.newevent
 
-from .buttons import ImageTextButton, ImageButton
+import odemis.gui
+from odemis.gui import img
+from odemis.util.dataio import splitext
+
+from .buttons import ImageButton, ImageTextButton
 
 FileSelectEvent, EVT_FILE_SELECT = wx.lib.newevent.NewEvent()
 
@@ -55,6 +57,7 @@ class FileBrowser(wx.Panel):
                  name='fileBrowser',
                  file_path=None,
                  default_dir=None,
+                 **kwargs,
         ):
         """
         clear_btn (bool): whether to show a button to remove the file selection
@@ -66,6 +69,7 @@ class FileBrowser(wx.Panel):
         style |= wx.TAB_TRAVERSAL
 
         self.file_path = file_path
+        self.btn_label = kwargs.pop("btn_label", "change...")
         self.default_dir = os.path.abspath(default_dir or os.path.dirname(file_path) or
                                            os.path.curdir)
         if not os.path.dirname(self.file_path):
@@ -113,7 +117,7 @@ class FileBrowser(wx.Panel):
             self._btn_clear.Bind(wx.EVT_BUTTON, self._on_clear)
             box.Add(self._btn_clear, 0, wx.LEFT, 10)
 
-        self.btn_ctrl = ImageTextButton(self, label="change...", height=16, style=wx.ALIGN_CENTER)
+        self.btn_ctrl = ImageTextButton(self, label=self.btn_label, height=16, style=wx.ALIGN_CENTER)
         self.btn_ctrl.Bind(wx.EVT_BUTTON, self._on_browse)
 
         box.Add(self.btn_ctrl, 0, wx.LEFT, 5)
