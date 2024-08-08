@@ -132,24 +132,33 @@ Graphical data is drawn using the following sequence of method calls:
 
 """
 
-from abc import abstractmethod
-import cairo
-from decorator import decorator
 import logging
-from odemis import util, gui
-from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent
-from odemis.gui import img
-from odemis.gui.comp.overlay.base import WorldOverlay, ViewOverlay
-from odemis.gui.evt import EVT_KNOB_ROTATE, EVT_KNOB_PRESS
-from odemis.gui.util import call_in_wx_main, capture_mouse_on_drag, \
-    release_mouse_on_drag
-from odemis.gui.util.conversion import wxcol_to_frgb
-from odemis.gui.util.img import add_alpha_byte, apply_rotation, apply_shear, apply_flip, get_sub_img
-from odemis.util import intersect
 import os
+from abc import abstractmethod
+
+import cairo
 import wx
+from decorator import decorator
 from wx.lib import wxcairo
 
+from odemis import gui, util
+from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN, BufferSizeEvent, img
+from odemis.gui.comp.overlay.base import ViewOverlay, WorldOverlay
+from odemis.gui.evt import EVT_KNOB_PRESS, EVT_KNOB_ROTATE
+from odemis.gui.util import (
+    call_in_wx_main,
+    capture_mouse_on_drag,
+    release_mouse_on_drag,
+)
+from odemis.gui.util.conversion import wxcol_to_frgb
+from odemis.gui.util.img import (
+    add_alpha_byte,
+    apply_flip,
+    apply_rotation,
+    apply_shear,
+    get_sub_img,
+)
+from odemis.util import intersect
 
 # Special abilities that a canvas might possess
 CAN_DRAG = 1    # Content can be dragged
@@ -1467,7 +1476,6 @@ class DraggableCanvas(BitmapCanvas):
 
     def on_left_down(self, evt):
         """ Start a dragging procedure """
-
         # Ignore the click if we're already dragging
         if CAN_DRAG in self.abilities and not self.dragging:
             self.set_dynamic_cursor(self._drag_cursor)
