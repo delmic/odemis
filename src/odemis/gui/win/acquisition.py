@@ -55,7 +55,9 @@ from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
 from odemis.util import units
 from odemis.util.filename import create_filename, guess_pattern, update_counter
-from odemis.acq.stitching import get_tiled_areas, get_zstack_levels
+from odemis.acq.stitching import (get_bbox_based_tiled_areas,
+                                  get_stream_based_area_size, 
+                                  get_zstack_levels)
 
 
 class AcquisitionDialog(xrcfr_acq):
@@ -905,19 +907,29 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
         of all areas to acquire.
         """
+        if not self.whole_grid_chkbox.Value:
+            areas = get_stream_based_area_size(
+                        pos=self.stage.position.value,
+                        streams=self.get_acq_streams(),
+                        tiles_nx=self.tiles_nx.value,
+                        overlap=self.overlap,
+                        tiling_rng=self._tiling_rng,
+            )
+        else:
+            if not hasattr(self._main_data_model, "sample_rel_bbox"):
+                raise NotImplementedError(
+                    "The current data model does not have a relative bounding box defined",
+                    "If a heuristic bounding box is desired, it can be implemented in ",
+                    "a specific MainGUIData model."
+                )
+    
+            sample_centers = [pos for name, pos in self._main_data_model.sample_centers.items() 
+                if name in self._selected_grids]
 
-        areas = get_tiled_areas(
-            pos=self.stage.position.value,
-            streams=self.get_acq_streams(),
-            tiles_nx=self.tiles_nx.value,
-            tiles_ny=self.tiles_ny.value,
-            overlap=self.overlap,
-            tiling_rng=self._tiling_rng,
-            selected_grids=self._selected_grids,
-            sample_centers=self._main_data_model.sample_centers,
-            rel_bbox=self._main_data_model.sample_rel_bbox,
-            whole_grid=self.whole_grid_chkbox.Value,
-        )
+            areas = get_bbox_based_tiled_areas(
+                sample_centers=sample_centers,
+                rel_bbox=self._main_data_model.rel_bbox,
+            )
 
         return areas
 

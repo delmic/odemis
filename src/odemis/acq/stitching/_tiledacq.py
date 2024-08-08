@@ -64,12 +64,6 @@ SAFE_REL_RANGE_DEFAULT = (-50e-6, 50e-6)  # m
 # Increasing this distance may result in out of focus overview acquisition image
 MAX_DISTANCE_FOCUS_POINTS = 450e-06  # in m
 
-# cryo-TEM grid sizes
-SAMPLE_RADIUS_TEM_GRID = 1.25e-3  # m, standard TEM grid size including the borders
-# Bounding-box relative to the center of a sample, corresponding to usable area
-# for imaging/milling. Used in particular for the overview image.
-hwidth = SAMPLE_RADIUS_TEM_GRID / math.sqrt(2)
-SAMPLE_USABLE_BBOX_TEM_GRID = (-hwidth, -hwidth, hwidth, hwidth)  # m, minx, miny, maxx, maxy
 DEFAULT_FOV = (100e-6, 100e-6) # m
 
 class FocusingMethod(Enum):
@@ -1207,48 +1201,55 @@ class AcquireOverviewTask(object):
                 self._future._task_state = FINISHED
 
         return da_rois
-
-def get_tiled_areas(
+    
+def get_stream_based_area_size(
     pos: Dict[str, float],
     streams: List[Stream],
     tiles_nx: int,
-    tiles_ny: int,
     overlap: float,
     tiling_rng: Dict[str, list],  # TODO: make optional, use axes range otherwise
-    selected_grids: List[str] = None,
-    sample_centers: Dict[str, Tuple[float]] = None,
-    whole_grid: bool = False,
-    rel_bbox: tuple = SAMPLE_USABLE_BBOX_TEM_GRID,
-) -> List[Tuple[float]]:
+):
     """
-    Compute the bounding boxes of all areas to acquire.
+    Calculates the requested tiling area size, based on the number of x tiles, stream fov and overlap.
     :param pos: the current position of the stage
     :param streams: the streams to acquire
     :param tiles_nx: the number of tiles in the x direction
-    :param tiles_ny: the number of tiles in the y direction
     :param overlap: the overlap between tiles (in percentage)
     :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
-    :param selected_grids: the grids to acquire
-    :param sample_centers: the centers of the sample grids
-    :param whole_grid: if True, the whole grid is acquired
+    :return: the size (in m) in X and Y. If no area at all, returns None.
+    """
+    # Get al stream fov's, if any
+    fovs = [get_fov(s) for s in streams]
+    if not fovs:
+        # fall back to a small fov (default)
+        fov = DEFAULT_FOV
+    else:
+        # smallest fov
+        fov = tuple(map(min, zip(*fovs)))
+
+    area_size = compute_area_size_for_fov(
+        pos=pos,
+        fov=fov,
+        tiles_nx=tiles_nx,
+        tiling_rng=tiling_rng,
+        overlap=overlap,
+    )
+    if area_size is None:
+        return []
+    else:
+        return [area_size]
+
+def get_bbox_based_tiled_areas(
+    rel_bbox: tuple,
+    sample_centers: Dict[str, Tuple[float]] = None,
+):
+    """
+    Compute areas for a given relative bounding box to different sample centers
     :param rel_bbox: the relative bounding box of the sample grid (xmin, ymin, xmax, ymax)
+    :param sample_centers: the centers of the sample grids
     return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates)
     of all areas to acquire.
     """
-    if not whole_grid:
-        area = compute_area_size(
-            pos=pos,
-            streams=streams,
-            tiles_nx=tiles_nx,
-            tiles_ny=tiles_ny,
-            tiling_rng=tiling_rng,
-            overlap=overlap,
-        )
-        if area is None:
-            return []
-        else:
-            return [area]
-
     # TODO: for now this is only for the MIMAS, but eventually, on the METEOR,
     # which often supports 2 grids, this should also be possible to use.
     # TODO: ensure that sample centers are converted to same coordinate system as stage position
@@ -1258,7 +1259,7 @@ def get_tiled_areas(
     # seconds of stage movement), but it's nice for the user that acquisitions
     # are done always in the same order, as it reduces "astonishment".
     sorted_centers = sorted(
-        pos for name, pos in sample_centers.items() if name in selected_grids
+        pos for pos in sample_centers.values()
     )
     areas = [
         (
@@ -1272,33 +1273,22 @@ def get_tiled_areas(
 
     return areas
 
-def compute_area_size(
+def compute_area_size_for_fov(
     pos: Dict[str, float],
-    streams: List[Stream],
+    fov: Tuple[float, float],
     tiles_nx: int,
-    tiles_ny: int,
     tiling_rng: Dict[str, list],
     overlap: float,
 ) -> Optional[Tuple[float, float]]:
     """
-    Calculates the requested tiling area size, based on the number of tiles, stream fov and overlap.
+    Calculates the requested tiling area size, based on the number of tiles, fov and overlap.
     :param pos: the current position of the stage
-    :param streams: the streams to acquire
+    :param fov: the fov to acquire, default is DEFAULT_FOV
     :param tiles_nx: the number of tiles in the x direction
-    :param tiles_ny: the number of tiles in the y direction
     :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
     :param overlap: the overlap between tiles (in percentage)
     :return: the size (in m) in X and Y. If no area at all, returns None.
     """
-    # get smallest fov
-    fovs = [get_fov(s) for s in streams]
-    if not fovs:
-        # fall back to a small fov (default)
-        fov = DEFAULT_FOV
-    else:
-        # smallest fov
-        fov = tuple(map(min, zip(*fovs)))
-
     # these formulas for w and h have to match the ones used in the 'stitching' module.
     w = tiles_nx * fov[0] * (1 - overlap)
     h = tiles_nx * fov[1] * (1 - overlap)
