@@ -1210,7 +1210,7 @@ def get_stream_based_area_size(
     tiling_rng: Dict[str, list],  # TODO: make optional, use axes range otherwise
 ):
     """
-    Calculates the requested tiling area size, based on the number of x tiles, stream fov and overlap.
+    Compute a bounding box based on streams, based on the number of x tiles, stream fov and overlap.
     :param pos: the current position of the stage
     :param streams: the streams to acquire
     :param tiles_nx: the number of tiles in the x direction
