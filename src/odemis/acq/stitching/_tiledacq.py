@@ -1209,7 +1209,7 @@ def get_stream_based_bbox(
     tiles_ny: int,
     overlap: float,
     tiling_rng: Dict[str, list],  # TODO: make optional, use axes range otherwise
-) -> Tuple[float]:
+) -> Optional[Tuple[float]]:
     """
     Compute a bounding box based on streams, based on the number of x tiles, stream fov and overlap.
     :param pos: the current position of the stage
