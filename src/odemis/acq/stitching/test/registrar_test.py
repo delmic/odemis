@@ -68,7 +68,8 @@ class TestIdentityRegistrar(unittest.TestCase):
         # and tile sizes
         shifts = [(0, 0), (10, 10), (0, 10), (8, 5), (-6, 5)]
         t_sizes = [(500, 500), (300, 400), (500, 200)]
-        dtypes = [numpy.int8, numpy.int16]
+        # Use uint over int since negative values for images are not commonly used.
+        dtypes = [numpy.uint8, numpy.uint16]
 
         for shift in shifts:
             for size in t_sizes:
@@ -308,7 +309,8 @@ class TestShiftRegistrar(unittest.TestCase):
         # sizes
         shifts = [(0, 0), (10, 10), (0, 10), (8, 5), (6, -5)]
         img_sizes = [(500, 500), (300, 400), (500, 200)]
-        dtypes = [numpy.int8, numpy.int16]
+        # Use uint over int since negative values for images are not commonly used.
+        dtypes = [numpy.uint8, numpy.uint16]
         px_size = (1e-6, 1e-6)
 
         for shift in shifts:
@@ -322,12 +324,14 @@ class TestShiftRegistrar(unittest.TestCase):
                         if is_vertical:
                             # Draw a vertical line
                             x = random.randint(0, img_size[0])
-                            color = random.randint(1, 256)
+                            # Give the line a random non-zero color in the uint8 range (also in bounds of uint16).
+                            color = random.randint(1, 255)
                             img[x:x + 2, :] = color
                         else:
                             # Draw a horizontal line
                             y = random.randint(0, img_size[1])
-                            color = random.randint(1, 256)
+                            # Give the line a random non-zero color in the uint8 range (also in bounds of uint16).
+                            color = random.randint(1, 255)
                             img[:, y: y + 2] = color
 
                     # Crop two tiles from the full image
@@ -618,7 +622,8 @@ class TestGlobalShiftRegistrar(unittest.TestCase):
         # sizes
         shifts = [(0, 0), (10, 10), (0, 10), (8, 5), (6, -5)]
         img_sizes = [(500, 500), (300, 400), (500, 200)]
-        dtypes = [numpy.int8, numpy.int16]
+        # Use uint over int since negative values for images are not commonly used.
+        dtypes = [numpy.uint8, numpy.uint16]
         px_size = (1e-6, 1e-6)
 
         for shift in shifts:
@@ -632,12 +637,14 @@ class TestGlobalShiftRegistrar(unittest.TestCase):
                         if is_vertical:
                             # Draw a vertical line
                             x = random.randint(0, img_size[0])
-                            color = random.randint(1, 256)
+                            # Give the line a random non-zero color in the uint8 range (also in bounds of uint16).
+                            color = random.randint(1, 255)
                             img[x:x + 2, :] = color
                         else:
                             # Draw a horizontal line
                             y = random.randint(0, img_size[1])
-                            color = random.randint(1, 256)
+                            # Give the line a random non-zero color in the uint8 range (also in bounds of uint16).
+                            color = random.randint(1, 255)
                             img[:, y: y + 2] = color
 
                     # Crop two tiles from the full image
