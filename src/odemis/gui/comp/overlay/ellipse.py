@@ -28,6 +28,7 @@ import odemis.gui as gui
 from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
 from odemis.gui.comp.overlay.base import SEL_MODE_NONE, SEL_MODE_ROTATION, Vec
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
+from odemis.util.conversion import frgba_to_hex, hex_to_frgba
 
 # The circumference of an ellipse is divided by this factor to calculate number of
 # arcs to be drawn. This increases the angle of an arc and reduces the number of
@@ -44,7 +45,35 @@ class EllipseState:
         self.p_point2 = ellipse_overlay.p_point2
         self.p_point3 = ellipse_overlay.p_point3
         self.p_point4 = ellipse_overlay.p_point4
-        self._points = ellipse_overlay._points.copy()
+
+    def to_dict(self):
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        return {
+            "p_point1": self.p_point1,
+            "p_point2": self.p_point2,
+            "p_point3": self.p_point3,
+            "p_point4": self.p_point4,
+        }
+
+    @staticmethod
+    def from_dict(state: dict, ellipse_overlay):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param state: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param ellipse_overlay: The overlay representing an ellipse.
+        :returns: (EllipseState) reconstructed EllipseState class.
+        """
+        ellipse_state = EllipseState(ellipse_overlay)
+        ellipse_state.p_point1 = Vec(state["p_point1"])
+        ellipse_state.p_point2 = Vec(state["p_point2"])
+        ellipse_state.p_point3 = Vec(state["p_point3"])
+        ellipse_state.p_point4 = Vec(state["p_point4"])
+        return ellipse_state
 
 
 class EllipseOverlay(RectangleOverlay):
@@ -68,6 +97,53 @@ class EllipseOverlay(RectangleOverlay):
         """
         super().__init__(cnvs, colour)
 
+    def to_dict(self):
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        state = self.get_state()
+        state_dict = state.to_dict() if state is not None else {}
+        return {
+            "name": self.name.value,
+            "colour": frgba_to_hex(self.colour),
+            "selected": self.selected.value,
+            "cnvs_view_name": self.cnvs.view.name.value,
+            "type": self.__class__.__name__,
+            "state": state_dict,
+        }
+
+    @staticmethod
+    def from_dict(ellipse: dict, tab_data):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param ellipse: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param tab_data: The data corresponding to a GUI tab helpful while reconstructing the class.
+        :returns: (EllipseOverlay) reconstructed EllipseOverlay class.
+        """
+        name = ellipse["name"]
+        selected = ellipse["selected"]
+        cnvs_view_name = ellipse["cnvs_view_name"]
+        colour = ellipse["colour"]
+        shape_cnvs = None
+        for viewport in tab_data.viewports.value:
+            if viewport.canvas.view.name.value == cnvs_view_name:
+                shape_cnvs = viewport.canvas
+                break
+        if shape_cnvs is None:
+            raise ValueError("Could not find shape canvas.")
+        ellipse_overlay = EllipseOverlay(shape_cnvs)
+        ellipse_overlay.name.value = name
+        ellipse_overlay.selected.value = selected
+        ellipse_overlay.is_created.value = True
+        ellipse_overlay.colour = hex_to_frgba(colour)
+        state_data = ellipse["state"]
+        state = EllipseState.from_dict(state_data, ellipse_overlay)
+        ellipse_overlay.restore_state(state)
+        return ellipse_overlay
+
     def copy(self):
         """
         :returns: (EllipseOverlay) a new instance of EllipseOverlay with necessary copied attributes.
@@ -76,6 +152,7 @@ class EllipseOverlay(RectangleOverlay):
         shape = EllipseOverlay(self.cnvs)
         shape.colour = self.colour
         shape.restore_state(self.get_state())
+        shape.is_created.value = True
         return shape
 
     def move_to(self, pos):
@@ -90,6 +167,13 @@ class EllipseOverlay(RectangleOverlay):
         self._phys_to_view()
         self.points.value = self._points
 
+    def set_rotation(self, target_rotation: float):
+        """Set the rotation of the shape to a specific angle."""
+        self._set_rotation(target_rotation)
+        self._view_to_phys()
+        self.cnvs.update_drawing()
+        self.points.value = self._points
+
     def get_state(self) -> Optional[EllipseState]:
         """Get the current state of the shape."""
         # Only return the state if the ellipse creation is finished
@@ -98,15 +182,16 @@ class EllipseOverlay(RectangleOverlay):
             return EllipseState(self)
         return None
 
-    def restore_state(self, state: EllipseState):
+    def restore_state(self, state: Optional[EllipseState]):
         """Restore the shape to a given state."""
-        self.p_point1 = state.p_point1
-        self.p_point2 = state.p_point2
-        self.p_point3 = state.p_point3
-        self.p_point4 = state.p_point4
-        self._points = state._points
-        self._phys_to_view()
-        self.points.value = self._points
+        if state is not None:
+            self.p_point1 = state.p_point1
+            self.p_point2 = state.p_point2
+            self.p_point3 = state.p_point3
+            self.p_point4 = state.p_point4
+            self._phys_to_view()
+            self.cnvs.update_drawing()
+            self.points.value = self._points
 
     def check_point_proximity(self, v_point):
         """
@@ -138,6 +223,7 @@ class EllipseOverlay(RectangleOverlay):
             self._view_to_phys()
             rectangle_points = self.get_physical_sel()
             if rectangle_points:
+                self.is_created.value = True
                 self.selected.value = self.check_point_proximity(evt.Position)
                 if self.selected.value:
                     self.set_physical_sel(rectangle_points)
@@ -216,6 +302,20 @@ class EllipseOverlay(RectangleOverlay):
             if self.selected.value:
                 self.draw_side_labels(ctx, b_point1, b_point2, b_point3, b_point4)
 
-            # Draw the rotation label
+            # Draw the rotation label or name label at the center
             if self.selection_mode == SEL_MODE_ROTATION:
                 self.draw_rotation_label(ctx)
+            else:
+                self.draw_name_label(ctx)
+
+            # Draw the grid rectangles
+            if self.fill_grid.value and self.grid_rects:
+                for p_start_pos, p_end_pos in self.grid_rects:
+                    b_start_pos = Vec(self.cnvs.phys_to_buffer(p_start_pos, offset))
+                    b_end_pos = Vec(self.cnvs.phys_to_buffer(p_end_pos, offset))
+                    rect = (b_start_pos.x,
+                        b_start_pos.y,
+                        b_end_pos.x - b_start_pos.x,
+                        b_end_pos.y - b_start_pos.y)
+                    ctx.rectangle(*rect)
+                ctx.stroke()
