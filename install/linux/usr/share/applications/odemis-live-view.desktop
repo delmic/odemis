@@ -5,3 +5,4 @@ Exec=odemis-live-view
 Terminal=false
 Type=Application
 Icon=media-playback-start
+Categories=System;
