@@ -21,34 +21,41 @@ Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
 
-import cairo
-from decorator import decorator
 import logging
-import numpy
-from odemis import util, model
-from odemis.acq import stream
-from odemis.acq.stream import DataProjection
-from odemis.gui import BLEND_SCREEN, BLEND_DEFAULT
-from odemis.gui.comp.canvas import CAN_ZOOM, CAN_DRAG, CAN_FOCUS, CAN_MOVE_STAGE, BitmapCanvas
-from odemis.gui.util import wxlimit_invocation, ignore_dead, img, \
-    call_in_wx_main
-from odemis.gui.util.img import format_rgba_darray, apply_flip
-from odemis.util import units, limit_invocation
-from odemis.util.img import getBoundingBox
-import scipy.ndimage
 import time
 import weakref
+
+import cairo
+import numpy
+import scipy.ndimage
 import wx
-from wx.lib.imageutils import stepColour
 import wx.lib.newevent
+import wx.lib.wxcairo as wxcairo
+from decorator import decorator
+from wx.lib.imageutils import stepColour
 
 import odemis.gui as gui
 import odemis.gui.comp.canvas as canvas
+import odemis.gui.model as guimodel
+from odemis.gui.model.main_gui_data import (
+    Scintillator,
+)
+from odemis import model, util
+from odemis.acq import stream
+from odemis.acq.stream import DataProjection
+from odemis.gui import BLEND_DEFAULT, BLEND_SCREEN
+from odemis.gui.comp.canvas import (
+    CAN_DRAG,
+    CAN_FOCUS,
+    CAN_MOVE_STAGE,
+    CAN_ZOOM,
+    BitmapCanvas,
+)
 from odemis.gui.comp.overlay.centered_line import CenteredLineOverlay
 from odemis.gui.comp.overlay.cryo_feature import CryoFeatureOverlay
 from odemis.gui.comp.overlay.dichotomy import DichotomyOverlay
 from odemis.gui.comp.overlay.ellipse import EllipseOverlay
-from odemis.gui.comp.overlay.fastem import FastEMROCOverlay, FastEMBackgroundOverlay
+from odemis.gui.comp.overlay.fastem import FastEMROCOverlay, FastEMScintillatorOverlay
 from odemis.gui.comp.overlay.focus import FocusOverlay
 from odemis.gui.comp.overlay.gadget import GadgetOverlay
 from odemis.gui.comp.overlay.history import HistoryOverlay
@@ -66,8 +73,10 @@ from odemis.gui.comp.overlay.shapes import ShapesOverlay
 from odemis.gui.comp.overlay.spectrum_line_select import SpectrumLineSelectOverlay
 from odemis.gui.comp.overlay.spot_mode import SpotModeViewOverlay, SpotModeWorldOverlay
 from odemis.gui.comp.overlay.text_view import TextViewOverlay
-import odemis.gui.model as guimodel
-import wx.lib.wxcairo as wxcairo
+from odemis.gui.util import call_in_wx_main, ignore_dead, img, wxlimit_invocation
+from odemis.gui.util.img import apply_flip, format_rgba_darray
+from odemis.util import limit_invocation, units
+from odemis.util.img import getBoundingBox
 
 
 @decorator
@@ -1807,14 +1816,16 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         # List of overlays which handles creation, editing and removal of a shape class which
         # is a subclass of EditableShape class
         self.shapes_overlay = []
+        self.bg_overlay = None
+        self.is_ctrl_down = False
+        self.is_shape_tool = False
 
-    def add_background_overlay(self, rectangles):
+    def add_background_overlay(self, scintillator: Scintillator):
         """
-        rectangles (list of (float, float, float, float)): background rectangles in physical ltrb coordinates
+        :param scintillator: The scintiallor for which the background overlay need to be drawn.
         """
-        bg_overlay = FastEMBackgroundOverlay(self, rectangles)
-        self.add_world_overlay(bg_overlay)
-        return bg_overlay
+        self.bg_overlay = FastEMScintillatorOverlay(cnvs=self, scintillator=scintillator)
+        self.add_world_overlay(self.bg_overlay)
 
     def remove_shape(self, shape):
         """
@@ -1850,19 +1861,8 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         is running in the main GUI thread.
         """
         logging.debug("Zooming out to show all scintillators.")
-        if self._tab_data_model:
-            sizes = self._tab_data_model.main.scintillator_sizes
-            keys = list(self._tab_data_model.main.scintillator_positions.keys())
-            values = list(self._tab_data_model.main.scintillator_positions.values())
-            l_value = min(values, key=lambda item: item[0])
-            t_value = max(values, key=lambda item: item[1])
-            r_value = max(values, key=lambda item: item[0])
-            b_value = min(values, key=lambda item: item[1])
-            l = l_value[0] - sizes[keys[values.index(l_value)]][0]
-            t = t_value[1] + sizes[keys[values.index(t_value)]][1]
-            r = r_value[0] + sizes[keys[values.index(r_value)]][0]
-            b = b_value[1] - sizes[keys[values.index(b_value)]][1]
-            self.fit_to_bbox((l, t, r, b))
+        if self.bg_overlay:
+            self.fit_to_bbox((self.bg_overlay.get_scintillator_bbox()))
         else:
             raise ValueError("Tab data model not initialized yet.")
 
@@ -1871,21 +1871,114 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         # involves two clicks
         evt.Skip()
 
+    def on_left_down(self, evt):
+        """
+        Start a dragging procedure.
+
+        If a tool is selected it is still possible to drag the canvas by additionally pressing Ctrl.
+        Both canvas dragging and tool creation make use of left click and motion, therefore
+        additional Ctrl key check is used to aid both functionalities.
+        """
+        # Use self.is_ctrl_down for on_left_up and on_motion because there can be a corner case where
+        # Ctrl key is not pressed anymore and on_left_up or on_motion event is called.
+        self.is_ctrl_down = evt.ControlDown()
+        if (self.is_shape_tool and self.is_ctrl_down) or not self.is_shape_tool:
+            canvas.DraggableCanvas.on_left_down(self, evt)
+        else:
+            canvas.BitmapCanvas.on_left_down(self, evt)
+
+    def on_left_up(self, evt):
+        """
+        End the dragging procedure.
+
+        If a tool is selected it is still possible to drag the canvas by additionally pressing Ctrl.
+        Both canvas dragging and tool creation make use of left click and motion, therefore
+        additional Ctrl key check is used to aid both functionalities.
+        """
+        if (self.is_shape_tool and self.is_ctrl_down) or not self.is_shape_tool:
+            canvas.DraggableCanvas.on_left_up(self, evt)
+        else:
+            canvas.BitmapCanvas.on_left_up(self, evt)
+
+    def on_motion(self, evt):
+        """
+        Process mouse motion.
+
+        Set the drag shift and refresh the image if dragging is enabled.
+
+        If a tool is selected it is still possible to drag the canvas by additionally pressing Ctrl.
+        Both canvas dragging and tool creation make use of left click and motion, therefore
+        additional Ctrl key check is used to aid both functionalities.
+        """
+        if self.is_shape_tool and self.is_ctrl_down or not self.is_shape_tool:
+            canvas.DraggableCanvas.on_motion(self, evt)
+        else:
+            canvas.BitmapCanvas.on_motion(self, evt)
+
     def setView(self, view, tab_data):
         super().setView(view, tab_data)
         view.show_crosshair.value = False
 
         if guimodel.TOOL_RECTANGLE in tab_data.tool.choices:
-            rectangles_overlay = ShapesOverlay(self, RectangleOverlay, guimodel.TOOL_RECTANGLE, tab_data.tool)
+            rectangles_overlay = ShapesOverlay(
+                cnvs=self,
+                shape_cls=RectangleOverlay,
+                tool=guimodel.TOOL_RECTANGLE,
+                shapes_va=tab_data.shapes,
+                shape_to_copy_va=tab_data.shape_to_copy,
+            )
             self.add_world_overlay(rectangles_overlay)
             self.shapes_overlay.append(rectangles_overlay)
 
         if guimodel.TOOL_ELLIPSE in tab_data.tool.choices:
-            ellipses_overlay = ShapesOverlay(self, EllipseOverlay, guimodel.TOOL_ELLIPSE, tab_data.tool)
+            ellipses_overlay = ShapesOverlay(
+                cnvs=self,
+                shape_cls=EllipseOverlay,
+                tool=guimodel.TOOL_ELLIPSE,
+                shapes_va=tab_data.shapes,
+                shape_to_copy_va=tab_data.shape_to_copy,
+            )
             self.add_world_overlay(ellipses_overlay)
             self.shapes_overlay.append(ellipses_overlay)
 
         if guimodel.TOOL_POLYGON in tab_data.tool.choices:
-            polygon_overlay = ShapesOverlay(self, PolygonOverlay, guimodel.TOOL_POLYGON, tab_data.tool)
+            polygon_overlay = ShapesOverlay(
+                cnvs=self,
+                shape_cls=PolygonOverlay,
+                tool=guimodel.TOOL_POLYGON,
+                shapes_va=tab_data.shapes,
+                shape_to_copy_va=tab_data.shape_to_copy,
+            )
             self.add_world_overlay(polygon_overlay)
             self.shapes_overlay.append(polygon_overlay)
+
+        self._tab_data_model.tool.subscribe(self._on_shape_tool, init=True)
+        self._tab_data_model.focussedView.subscribe(self._on_focussed_view)
+
+    def _on_destroy(self, evt):
+        if self._tab_data_model:
+            self._tab_data_model.tool.unsubscribe(self._on_shape_tool)
+            self._tab_data_model.focussedView.unsubscribe(self._on_focussed_view)
+        super()._on_destroy(evt)
+
+    def _on_shape_tool(self, tool_id):
+        self.is_shape_tool = tool_id in (
+            guimodel.TOOL_RECTANGLE,
+            guimodel.TOOL_ELLIPSE,
+            guimodel.TOOL_POLYGON,
+        )
+        is_view_focussed = self.view == self._tab_data_model.focussedView.value
+        for shape_overlay in self.shapes_overlay:
+            shape_overlay.active.value = (
+                shape_overlay.tool == tool_id
+                and is_view_focussed
+                and len(self._tab_data_model.current_project.value) > 0
+            )
+
+    def _on_focussed_view(self, focussed_view):
+        for shape_overlay in self.shapes_overlay:
+            shape_overlay.active.value = (
+                shape_overlay.tool == self._tab_data_model.tool.value
+                and self.view == focussed_view
+                and len(self._tab_data_model.current_project.value) > 0
+            )
