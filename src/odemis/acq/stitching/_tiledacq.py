@@ -1216,7 +1216,7 @@ def get_stream_based_area_size(
     :param tiles_nx: the number of tiles in the x direction
     :param overlap: the overlap between tiles (in percentage)
     :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
-    :return: the size (in m) in X and Y. If no area at all, returns None.
+    :return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates). If no area at all, returns None.
     """
     # Get al stream fov's, if any
     fovs = [get_fov(s) for s in streams]
@@ -1227,17 +1227,17 @@ def get_stream_based_area_size(
         # smallest fov
         fov = tuple(map(min, zip(*fovs)))
 
-    area_size = compute_area_size_for_fov(
+    area = compute_area_for_fov(
         pos=pos,
         fov=fov,
         tiles_nx=tiles_nx,
         tiling_rng=tiling_rng,
         overlap=overlap,
     )
-    if area_size is None:
+    if area is None:
         return []
     else:
-        return [area_size]
+        return [area]
 
 def get_bbox_based_tiled_areas(
     rel_bbox: tuple,
@@ -1273,7 +1273,7 @@ def get_bbox_based_tiled_areas(
 
     return areas
 
-def compute_area_size_for_fov(
+def compute_area_for_fov(
     pos: Dict[str, float],
     fov: Tuple[float, float],
     tiles_nx: int,
@@ -1281,13 +1281,13 @@ def compute_area_size_for_fov(
     overlap: float,
 ) -> Optional[Tuple[float, float]]:
     """
-    Calculates the requested tiling area size, based on the number of tiles, fov and overlap.
+    Calculates the requested tiling area, based on the number of tiles, fov and overlap.
     :param pos: the current position of the stage
     :param fov: the fov to acquire, default is DEFAULT_FOV
     :param tiles_nx: the number of tiles in the x direction
     :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
     :param overlap: the overlap between tiles (in percentage)
-    :return: the size (in m) in X and Y. If no area at all, returns None.
+    :return: the area's bounding box (xmin, ymin, xmax, ymax in physical coordinates). If no area at all, returns None.
     """
     # these formulas for w and h have to match the ones used in the 'stitching' module.
     w = tiles_nx * fov[0] * (1 - overlap)

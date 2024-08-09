@@ -18,6 +18,7 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 """
 import logging
+import math
 import os
 import time
 import unittest
@@ -31,7 +32,8 @@ from odemis.acq import stream
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
     WEAVER_MEAN, acquireTiledArea, FocusingMethod
-from odemis.acq.stitching._tiledacq import TiledAcquisitionTask, get_fov, get_tiled_areas, get_zstack_levels, compute_area_size, clip_tiling_area_to_range, SAMPLE_USABLE_BBOX_TEM_GRID
+from odemis.acq.stitching._tiledacq import (TiledAcquisitionTask, get_fov, get_zstack_levels, clip_tiling_area_to_range,
+                                            get_stream_based_area_size, get_bbox_based_tiled_areas, compute_area_for_fov)
 from odemis.util import testing, img
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
 
@@ -589,12 +591,13 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         rng = {"x": (-0.1, 0.1), "y": (-0.1, 0.1)}
         nx, ny = 5, 5
         overlap = 0.1
-        areas = get_tiled_areas(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap,
-                                 whole_grid=False)
+        areas = get_stream_based_area_size(
+            pos=pos,
+            streams=streams,
+            tiles_nx=nx,
+            tiling_rng=rng,
+            overlap=overlap,
+        )
 
         w = nx * fov[0] * (1 - overlap)
         h = ny * fov[1] * (1 - overlap)
@@ -602,39 +605,39 @@ class TiledAcqUtilTestCase(unittest.TestCase):
 
         # test when outside range
         pos = {"x": 0.2, "y": 0.2}
-        area = get_tiled_areas(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap,
-                                 whole_grid=False)
+        area = get_stream_based_area_size(
+            pos=pos,
+            streams=streams,
+            tiles_nx=nx,
+            tiling_rng=rng,
+            overlap=overlap,
+        )
         self.assertEqual(area, [])
 
         # test whole grid
         selected_grids = ["GRID 1", "GRID 2"]
         sample_centers_raw = self.stage_bare.getMetadata()[model.MD_SAMPLE_CENTERS]
         sample_centers = {n: (v["x"], v["y"]) for n, v in sample_centers_raw.items()}
+
+        SAMPLE_RADIUS_TEM_GRID = 1.25e-3
+        hwidth = SAMPLE_RADIUS_TEM_GRID / math.sqrt(2)
+        SAMPLE_USABLE_BBOX_TEM_GRID = (-hwidth, -hwidth, hwidth, hwidth)
         rel_bbox = SAMPLE_USABLE_BBOX_TEM_GRID
-        areas = get_tiled_areas(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap,
-                                 whole_grid=True,
-                                 sample_centers=sample_centers,
-                                 rel_bbox=rel_bbox,
-                                 selected_grids=selected_grids,
+
+        areas = get_bbox_based_tiled_areas(
+            sample_centers=sample_centers,
+            rel_bbox=rel_bbox,
         )
 
         computed_areas = []
-        for name, center in sample_centers.items():
+        for _, center in sample_centers.items():
 
             computed_areas.append(
                 (center[0] + rel_bbox[0],
                  center[1] + rel_bbox[1],
                  center[0] + rel_bbox[2],
                  center[1] + rel_bbox[3])
-        )
+            )
         self.assertEqual(len(areas), len(selected_grids))
         numpy.testing.assert_array_almost_equal(areas, computed_areas)
 
@@ -647,11 +650,13 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         rng = {"x": (-0.1, 0.1), "y": (-0.1, 0.1)}
         nx, ny = 5, 5
         overlap = 0.1
-        area = compute_area_size(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap)
+        area = compute_area_for_fov(
+            pos=pos,
+            fov=fov,
+            tiles_nx=nx,
+            tiling_rng=rng,
+            overlap=overlap
+        )
 
         w = nx * fov[0] * (1 - overlap)
         h = ny * fov[1] * (1 - overlap)
@@ -659,11 +664,13 @@ class TiledAcqUtilTestCase(unittest.TestCase):
 
         # test when outside range
         pos = {"x": 0.2, "y": 0.2}
-        area = compute_area_size(pos=pos,
-                                 streams=streams,
-                                 tiles_nx=nx, tiles_ny=ny,
-                                 tiling_rng=rng,
-                                 overlap=overlap)
+        area = compute_area_for_fov(
+            pos=pos,
+            fov=fov,
+            tiles_nx=nx,
+            tiling_rng=rng,
+            overlap=overlap
+        )
         self.assertEqual(area, None)
 
 
