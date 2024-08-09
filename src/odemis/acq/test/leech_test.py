@@ -25,7 +25,7 @@ import numpy
 from odemis import model
 from odemis.acq import stream
 from odemis.acq.drift import AnchoredEstimator
-from odemis.acq.leech import AnchorDriftCorrector, ProbeCurrentAcquirer
+from odemis.acq.leech import AnchorDriftCorrector, ProbeCurrentAcquirer, get_next_rectangle
 from odemis.driver import simsem
 
 logging.getLogger().setLevel(logging.DEBUG)
@@ -148,6 +148,29 @@ class ADCTestCase(unittest.TestCase):
 
         dc.complete([None])
         dc.series_complete([None])
+
+    def test_next_rectangle(self):
+        """
+        Tests the get_next_rectangle() function
+        """
+        # Use Y & X non-multiple of each other, to more easily detect errors
+        for rep in [(100, 13), (13, 100), (1, 1), (1, 13), (13, 1)]:
+            tot_pixels = rep[0] * rep[1]
+            nb_px = 0
+            # On rep = 100x13: should be able to acquire blocks of 7 lines, except for the last block
+            block_size = 13 * 7
+            for i in range(tot_pixels):  # Upper bound of iteration, typically should be smaller
+                next_block = min(block_size, tot_pixels - nb_px)  # clamp to the remaining pixels
+                n_y, n_x = get_next_rectangle(rep, nb_px, next_block)
+                assert n_y >= 1
+                assert n_x >= 1
+                assert n_y * n_x <= block_size
+                nb_px += n_y * n_x
+                assert nb_px <= tot_pixels
+                if nb_px == tot_pixels:
+                    break
+            else:
+                self.fail("Too many iterations")
 
 
 # @skip("simple")
