@@ -30,13 +30,21 @@ from odemis.gui.util import call_in_wx_main
 
 
 class CurrentPosCrossHairOverlay(WorldOverlay):
-    """ Render a static cross hair to the current position of the stage"""
+    """Render a static cross hair to the current position of the stage"""
 
-    def __init__(self, cnvs, colour=gui.CROSSHAIR_COLOR, size=gui.CROSSHAIR_SIZE, thickness=gui.CROSSHAIR_THICKNESS):
+    def __init__(
+        self,
+        cnvs,
+        colour=gui.CROSSHAIR_COLOR,
+        size=gui.CROSSHAIR_SIZE,
+        thickness=gui.CROSSHAIR_THICKNESS,
+    ):
         WorldOverlay.__init__(self, cnvs)
 
         if not hasattr(cnvs.view, "stage_pos"):
-            raise ValueError("CurrentPosCrossHairOverlay requires stage_pos VA on the view to function properly.")
+            raise ValueError(
+                "CurrentPosCrossHairOverlay requires stage_pos VA on the view to function properly."
+            )
         cnvs.view.stage_pos.subscribe(self._current_pos_updated, init=True)
 
         self.colour = conversion.hex_to_frgba(colour)
@@ -50,8 +58,9 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
         """
         Called when current stage position updated
         """
-        # Directly refresh the canvas (so the overlay draw is called with proper context)
-        self.cnvs.update_drawing()
+        if self.active.value:
+            # Directly refresh the canvas (so the overlay draw is called with proper context)
+            self.cnvs.update_drawing()
 
     def _get_current_stage_buffer_pos(self):
         """
@@ -62,13 +71,21 @@ class CurrentPosCrossHairOverlay(WorldOverlay):
         half_size_offset = self.cnvs.get_half_buffer_size()
         # return physical position converted to buffer 'world' coordinates
         return self.cnvs.phys_to_buffer_pos(
-            (pos['x'], pos['y']),
+            (pos["x"], pos["y"]),
             self.cnvs.p_buffer_center,
             self.cnvs.scale,
             offset=half_size_offset,
         )
 
     def draw(self, ctx, shift=(0, 0), scale=1.0):
-        """ Draw a cross hair to the Cairo context """
-        center = self._get_current_stage_buffer_pos()
-        self.crosshair.draw_crosshair(ctx, center, size=self.size, colour=self.colour, thickness=self.thickness)
+        """Draw a cross hair to the Cairo context"""
+        # Draw the crosshair if overlay is active
+        if self.active.value:
+            center = self._get_current_stage_buffer_pos()
+            self.crosshair.draw_crosshair(
+                ctx,
+                center,
+                size=self.size,
+                colour=self.colour,
+                thickness=self.thickness,
+            )
