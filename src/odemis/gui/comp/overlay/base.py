@@ -30,23 +30,22 @@ They will *only* receive mouse events if they are active!
 
 """
 
-from abc import ABCMeta, abstractmethod
 import logging
 import math
 import statistics
-from typing import Tuple, Optional, Dict, List
+from abc import ABCMeta, abstractmethod
+from typing import Dict, List, Optional, Tuple
 
 import cairo
-
 import wx
 
-from odemis import model
 import odemis.gui as gui
 import odemis.util as util
 import odemis.util.conversion as conversion
-from odemis.util.raster import point_in_polygon
+from odemis import model
 from odemis.gui import EVT_BUFFER_SIZE
-from odemis.model import TupleVA, BooleanVA
+from odemis.model import BooleanVA, TupleVA
+from odemis.util.raster import point_in_polygon
 
 
 class EdgeBoundingBox:
@@ -1307,6 +1306,24 @@ class RectangleEditingMixin(DragMixin):
         self.v_point4 = self.v_point4.rotate(diff_angle, self.v_center)
         self.rotation = current_rotation
 
+    def _set_rotation(self, target_rotation: float):
+        """
+        Set the rotation of the rectangle to a specific angle.
+
+        :param target_rotation: The target rotation angle in radians.
+        """
+        target_rotation = target_rotation % (2 * math.pi)
+        self._calc_center()
+        dx = self.v_center.x - self.v_point1.x
+        dy = self.v_center.y - self.v_point1.y
+        current_rotation = math.atan2(dy, dx) % (2 * math.pi)
+        diff_angle = (target_rotation - current_rotation) % (2 * math.pi)
+        self.v_point1 = self.v_point1.rotate(diff_angle, self.v_center)
+        self.v_point2 = self.v_point2.rotate(diff_angle, self.v_center)
+        self.v_point3 = self.v_point3.rotate(diff_angle, self.v_center)
+        self.v_point4 = self.v_point4.rotate(diff_angle, self.v_center)
+        self.rotation = target_rotation
+
     def start_drag(self):
         self.edit_v_start_pos = self.drag_v_start_pos
         self.selection_mode = SEL_MODE_DRAG
@@ -1351,11 +1368,18 @@ class RectangleEditingMixin(DragMixin):
             center_y = (self.v_point1.y + self.v_point3.y) / 2
             self.v_center = Vec(center_x, center_y)
 
+    def _calc_rotation(self):
+        if self.v_point1 and self.v_center:
+            dx = self.v_center.x - self.v_point1.x
+            dy = self.v_center.y - self.v_point1.y
+            self.rotation = math.atan2(dy, dx) % (2 * math.pi)
+
     def _calc_edges(self):
         """ Calculate the inner and outer edges of the selection according to the hover margin """
 
         if self.v_point1 and self.v_point2 and self.v_point3 and self.v_point4:
             self._calc_center()
+            self._calc_rotation()
             angle = math.atan2(self.v_point1.y - self.v_center.y, self.v_point1.x - self.v_center.x)
             self.v_rotation = Vec(
                 self.v_point1.x + 2 * self.hover_margin * math.cos(angle),
@@ -1664,6 +1688,22 @@ class LineEditingMixin(ClickMixin, DragMixin):
         self.rotate_v_points(diff_angle)
         self.rotation = current_rotation
 
+    def _set_rotation(self, target_rotation: float):
+        """
+        Set the rotation of the polygon to a specific angle.
+
+        :param target_rotation: The target rotation angle in radians.
+        """
+        target_rotation = target_rotation % (2 * math.pi)
+        self._calc_center()
+        v_point_0 = self.v_points[0]
+        dx = self.v_center.x - v_point_0.x
+        dy = self.v_center.y - v_point_0.y
+        current_rotation = math.atan2(dy, dx) % (2 * math.pi)
+        diff_angle = (target_rotation - current_rotation) % (2 * math.pi)
+        self.rotate_v_points(diff_angle)
+        self.rotation = target_rotation
+
     def start_drag(self):
         self.edit_v_start_pos = self.drag_v_start_pos
         self.selection_mode = SEL_MODE_DRAG
@@ -1701,12 +1741,20 @@ class LineEditingMixin(ClickMixin, DragMixin):
         centroid_y = statistics.mean(p.y for p in self.v_points)
         self.v_center = Vec(centroid_x, centroid_y)
 
+    def _calc_rotation(self):
+        if self.v_points and self.v_center:
+            v_point_0 = self.v_points[0]
+            dx = self.v_center.x - v_point_0.x
+            dy = self.v_center.y - v_point_0.y
+            self.rotation = math.atan2(dy, dx) % (2 * math.pi)
+
     def _calc_edges(self):
         """Calculate the l, r, t, b coordinates of each edge according to the hover margin."""
         if self.right_click_finished:
 
             if self.edit_mode == EDIT_MODE_POINT:
                 self._calc_center()
+                self._calc_rotation()
                 # Rotation point near the first point
                 v_point_0 = self.v_points[0]
                 angle = math.atan2(v_point_0.y - self.v_center.y, v_point_0.x - self.v_center.x)
