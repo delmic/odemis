@@ -1201,7 +1201,7 @@ class AcquireOverviewTask(object):
                 self._future._task_state = FINISHED
 
         return da_rois
-    
+
 def get_stream_based_area_size(
     pos: Dict[str, float],
     streams: List[Stream],

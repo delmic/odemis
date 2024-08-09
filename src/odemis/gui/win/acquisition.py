@@ -56,7 +56,7 @@ from odemis.gui.util.widgets import (ProgressiveFutureConnector,
 from odemis.util import units
 from odemis.util.filename import create_filename, guess_pattern, update_counter
 from odemis.acq.stitching import (get_bbox_based_tiled_areas,
-                                  get_stream_based_area_size, 
+                                  get_stream_based_area_size,
                                   get_zstack_levels)
 
 
@@ -922,8 +922,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
                     "If a heuristic bounding box is desired, it can be implemented in ",
                     "a specific MainGUIData model."
                 )
-    
-            sample_centers = [pos for name, pos in self._main_data_model.sample_centers.items() 
+
+            sample_centers = [pos for name, pos in self._main_data_model.sample_centers.items()
                 if name in self._selected_grids]
 
             areas = get_bbox_based_tiled_areas(
