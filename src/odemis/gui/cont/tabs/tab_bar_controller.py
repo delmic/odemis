@@ -192,8 +192,8 @@ class TabBarController(TabController):
             if b not in buttons:
                 b.Hide()
 
-        # hide tab buttons for viewer
-        if main_data.is_viewer:
+        # Hide tab buttons if the microscope is a viewer or there is only 1 tab or no tabs
+        if main_data.is_viewer or len(tabs) <= 1:
             main_frame.pnl_tabbuttons.Hide()
 
         return tabs, default_tab
