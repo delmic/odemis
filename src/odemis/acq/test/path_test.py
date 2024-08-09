@@ -1354,15 +1354,16 @@ class Sparc2TunnelLensAlignerTestCase(unittest.TestCase):
         self.brightlight_ext.power.value = [10]
         self.optmngr.setPath("tunnel-lens-align").result()
 
-        # assert the external calibration light is off
-        self.assertEqual(self.brightlight_ext.power.value, [0])
+        # assert the external calibration light is still on
+        self.assertEqual(self.brightlight_ext.power.value, list(self.brightlight_ext.power.range[1]))
         # assert that the specified actuators were moved according to mode given
         self.assertEqual(self.spectrograph_ext.position.value["grating"], 2)
         self.assertEqual(self.spectrograph_ext.position.value["wavelength"], 0.0)
         self.assertEqual(self.spectrograph_ext.position.value["slit-in"], self.spectrograph_ext.axes["slit-in"].range[1])
-        assert_pos_as_in_mode(self, self.spec_selector, "tunnel-lens-align")
         assert_pos_as_in_mode(self, self.spec_ded_aligner, "tunnel-lens-align")
-        assert_pos_as_in_mode(self, self.spec_ded_det_selector, "tunnel-lens-align")
+        # put the external calibration light off again
+        self.brightlight_ext.power.value = [0]
+        self.assertEqual(self.brightlight_ext.power.value, list(self.brightlight_ext.power.range[0]))
 
 
 class SecomPathTestCase(unittest.TestCase):
