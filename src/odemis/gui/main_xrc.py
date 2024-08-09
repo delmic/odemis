@@ -761,6 +761,7 @@ class xrcpnl_tab_localization(wx.Panel):
         self.txt_cryosecom_left_time = xrc.XRCCTRL(self, "txt_cryosecom_left_time")
         self.btn_cryosecom_acqui_cancel = xrc.XRCCTRL(self, "btn_cryosecom_acqui_cancel")
         self.btn_acquire_overview = xrc.XRCCTRL(self, "btn_acquire_overview")
+        self.btn_acquire_features = xrc.XRCCTRL(self, "btn_acquire_features")
         self.pnl_cryosecom_acquired = xrc.XRCCTRL(self, "pnl_cryosecom_acquired")
         self.btn_mill_active_features = xrc.XRCCTRL(self, "btn_mill_active_features")
         self.txt_milling_est_time = xrc.XRCCTRL(self, "txt_milling_est_time")
@@ -9230,6 +9231,24 @@ D\xc48\xc6qd\x1b\xed\x886\x1a\xa5\x00\x00D0\xc6\x181?\x03\x96\xf6I\x16\
                                 <height>48</height>
                                 <face_colour>def</face_colour>
                                 <label>ACQUIRE OVERVIEW</label>
+                                <font>
+                                  <size>14</size>
+                                  <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                                </font>
+                                <style>wxALIGN_CENTRE</style>
+                                <XRCED>
+                                  <assign_var>1</assign_var>
+                                </XRCED>
+                              </object>
+                              <option>0</option>
+                              <flag>wxTOP|wxBOTTOM|wxLEFT</flag>
+                              <border>10</border>
+                            </object>
+                            <object class="sizeritem">
+                              <object class="ImageTextButton" name="btn_acquire_features">
+                                <height>48</height>
+                                <face_colour>def</face_colour>
+                                <label>Acquire at all Features</label>
                                 <font>
                                   <size>14</size>
                                   <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
