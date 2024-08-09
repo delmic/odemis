@@ -33,7 +33,7 @@ from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.stitching import WEAVER_COLLAGE_REVERSE, REGISTER_IDENTITY, \
     WEAVER_MEAN, acquireTiledArea, FocusingMethod
 from odemis.acq.stitching._tiledacq import (TiledAcquisitionTask, get_fov, get_zstack_levels, clip_tiling_area_to_range,
-                                            get_stream_based_area_size, get_bbox_based_tiled_areas, compute_area_for_fov)
+                                            get_stream_based_bbox, get_tiled_bboxes, get_fov_based_bbox)
 from odemis.util import testing, img
 from odemis.util.comp import compute_camera_fov, compute_scanner_fov
 
@@ -583,7 +583,7 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         focus_active_pos = self.focus.getMetadata()[model.MD_FAV_POS_ACTIVE]
         self.focus.moveAbsSync(focus_active_pos)
 
-    def test_get_tiled_areas(self):
+    def test_get_stream_based_bbox(self):
         # test when inside range, not whole grid
         pos = {"x": 0, "y": 0}
         streams = [self.fm_streams[0]]
@@ -591,29 +591,32 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         rng = {"x": (-0.1, 0.1), "y": (-0.1, 0.1)}
         nx, ny = 5, 5
         overlap = 0.1
-        areas = get_stream_based_area_size(
+        bbox = get_stream_based_bbox(
             pos=pos,
             streams=streams,
             tiles_nx=nx,
+            tiles_ny=ny,
             tiling_rng=rng,
             overlap=overlap,
         )
 
         w = nx * fov[0] * (1 - overlap)
         h = ny * fov[1] * (1 - overlap)
-        numpy.testing.assert_array_almost_equal(areas[0], [-w/2, -h/2, w/2, h/2])
+        numpy.testing.assert_array_almost_equal(bbox, [-w/2, -h/2, w/2, h/2])
 
         # test when outside range
         pos = {"x": 0.2, "y": 0.2}
-        area = get_stream_based_area_size(
+        bbox = get_stream_based_bbox(
             pos=pos,
             streams=streams,
             tiles_nx=nx,
+            tiles_ny=ny,
             tiling_rng=rng,
             overlap=overlap,
         )
-        self.assertEqual(area, [])
+        self.assertEqual(bbox, None)
 
+    def test_get_tiled_bboxes(self):
         # test whole grid
         selected_grids = ["GRID 1", "GRID 2"]
         sample_centers_raw = self.stage_bare.getMetadata()[model.MD_SAMPLE_CENTERS]
@@ -624,7 +627,7 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         SAMPLE_USABLE_BBOX_TEM_GRID = (-hwidth, -hwidth, hwidth, hwidth)
         rel_bbox = SAMPLE_USABLE_BBOX_TEM_GRID
 
-        areas = get_bbox_based_tiled_areas(
+        areas = get_tiled_bboxes(
             sample_centers=sample_centers,
             rel_bbox=rel_bbox,
         )
@@ -641,7 +644,7 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         self.assertEqual(len(areas), len(selected_grids))
         numpy.testing.assert_array_almost_equal(areas, computed_areas)
 
-    def test_compute_area_size(self):
+    def test_get_fov_based_bbox(self):
 
         # test when inside range
         pos = {"x": 0, "y": 0}
@@ -650,28 +653,30 @@ class TiledAcqUtilTestCase(unittest.TestCase):
         rng = {"x": (-0.1, 0.1), "y": (-0.1, 0.1)}
         nx, ny = 5, 5
         overlap = 0.1
-        area = compute_area_for_fov(
+        bbox = get_fov_based_bbox(
             pos=pos,
             fov=fov,
             tiles_nx=nx,
+            tiles_ny=ny,
             tiling_rng=rng,
             overlap=overlap
         )
 
         w = nx * fov[0] * (1 - overlap)
         h = ny * fov[1] * (1 - overlap)
-        numpy.testing.assert_array_almost_equal(area, [-w/2, -h/2, w/2, h/2])
+        numpy.testing.assert_array_almost_equal(bbox, [-w/2, -h/2, w/2, h/2])
 
         # test when outside range
         pos = {"x": 0.2, "y": 0.2}
-        area = compute_area_for_fov(
+        bbox = get_fov_based_bbox(
             pos=pos,
             fov=fov,
             tiles_nx=nx,
+            tiles_ny=ny,
             tiling_rng=rng,
             overlap=overlap
         )
-        self.assertEqual(area, None)
+        self.assertEqual(bbox, None)
 
 
     def test_clip_tiling_area_to_range(self):

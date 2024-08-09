@@ -1202,21 +1202,23 @@ class AcquireOverviewTask(object):
 
         return da_rois
 
-def get_stream_based_area_size(
+def get_stream_based_bbox(
     pos: Dict[str, float],
     streams: List[Stream],
     tiles_nx: int,
+    tiles_ny: int,
     overlap: float,
     tiling_rng: Dict[str, list],  # TODO: make optional, use axes range otherwise
-):
+) -> Tuple[float]:
     """
     Compute a bounding box based on streams, based on the number of x tiles, stream fov and overlap.
     :param pos: the current position of the stage
     :param streams: the streams to acquire
     :param tiles_nx: the number of tiles in the x direction
+    :param tiles_ny: the number of tiles in the y direction
     :param overlap: the overlap between tiles (in percentage)
     :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
-    :return: the bounding boxes (xmin, ymin, xmax, ymax in physical coordinates). If no area at all, returns None.
+    :return: the bounding box (xmin, ymin, xmax, ymax in physical coordinates). If no area at all, returns None.
     """
     # Get al stream fov's, if any
     fovs = [get_fov(s) for s in streams]
@@ -1227,22 +1229,20 @@ def get_stream_based_area_size(
         # smallest fov
         fov = tuple(map(min, zip(*fovs)))
 
-    area = compute_area_for_fov(
+    return get_fov_based_bbox(
         pos=pos,
         fov=fov,
         tiles_nx=tiles_nx,
+        tiles_ny=tiles_ny,
         tiling_rng=tiling_rng,
         overlap=overlap,
     )
-    if area is None:
-        return []
-    else:
-        return [area]
 
-def get_bbox_based_tiled_areas(
+
+def get_tiled_bboxes(
     rel_bbox: tuple,
     sample_centers: Dict[str, Tuple[float]] = None,
-):
+) -> List[Tuple[float]]:
     """
     Compute areas for a given relative bounding box to different sample centers
     :param rel_bbox: the relative bounding box of the sample grid (xmin, ymin, xmax, ymax)
@@ -1273,25 +1273,27 @@ def get_bbox_based_tiled_areas(
 
     return areas
 
-def compute_area_for_fov(
+def get_fov_based_bbox(
     pos: Dict[str, float],
     fov: Tuple[float, float],
     tiles_nx: int,
+    tiles_ny: int,
     tiling_rng: Dict[str, list],
     overlap: float,
 ) -> Optional[Tuple[float, float]]:
     """
-    Calculates the requested tiling area, based on the number of tiles, fov and overlap.
+    Calculates the requested bounding box, based on the number of tiles, fov and overlap.
     :param pos: the current position of the stage
     :param fov: the fov to acquire, default is DEFAULT_FOV
     :param tiles_nx: the number of tiles in the x direction
+    :param tiles_ny: the number of tiles in the y direction
     :param tiling_rng: the tiling range along x and y axes as (xmin, ymin, xmax, ymax), or (xmin, ymax, xmax, ymin)
     :param overlap: the overlap between tiles (in percentage)
-    :return: the area's bounding box (xmin, ymin, xmax, ymax in physical coordinates). If no area at all, returns None.
+    :return: the bounding box (xmin, ymin, xmax, ymax in physical coordinates). If no area at all, returns None.
     """
     # these formulas for w and h have to match the ones used in the 'stitching' module.
     w = tiles_nx * fov[0] * (1 - overlap)
-    h = tiles_nx * fov[1] * (1 - overlap)
+    h = tiles_ny * fov[1] * (1 - overlap)
 
     # Note the area can accept LTRB or LBRT.
     area = clip_tiling_area_to_range(w, h, pos, tiling_rng)

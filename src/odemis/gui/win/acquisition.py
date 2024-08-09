@@ -55,8 +55,8 @@ from odemis.gui.util.widgets import (ProgressiveFutureConnector,
                                      VigilantAttributeConnector)
 from odemis.util import units
 from odemis.util.filename import create_filename, guess_pattern, update_counter
-from odemis.acq.stitching import (get_bbox_based_tiled_areas,
-                                  get_stream_based_area_size,
+from odemis.acq.stitching import (get_tiled_bboxes,
+                                  get_stream_based_bbox,
                                   get_zstack_levels)
 
 
@@ -908,13 +908,16 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         of all areas to acquire.
         """
         if not self.whole_grid_chkbox.Value:
-            areas = get_stream_based_area_size(
+            area = get_stream_based_bbox(
                         pos=self.stage.position.value,
                         streams=self.get_acq_streams(),
                         tiles_nx=self.tiles_nx.value,
+                        tiles_ny=self.tiles_ny.value,
                         overlap=self.overlap,
                         tiling_rng=self._tiling_rng,
             )
+            # Cast to list, to have a consistent format with the alternative path
+            areas = [area] if area is not None else []
         else:
             if not hasattr(self._main_data_model, "sample_rel_bbox"):
                 raise NotImplementedError(
@@ -926,7 +929,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             sample_centers = [pos for name, pos in self._main_data_model.sample_centers.items()
                 if name in self._selected_grids]
 
-            areas = get_bbox_based_tiled_areas(
+            areas = get_tiled_bboxes(
                 sample_centers=sample_centers,
                 rel_bbox=self._main_data_model.rel_bbox,
             )
