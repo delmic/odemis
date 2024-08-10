@@ -20,19 +20,26 @@ This file is part of Odemis.
 
 """
 import math
-from typing import Optional, List, Tuple
+from typing import List, Optional, Tuple
 
 import cairo
 import wx
 
 import odemis.gui as gui
-from odemis.gui.comp.overlay.base import (SEL_MODE_ROTATION, SEL_MODE_NONE,
-                                          DragMixin, SelectionMixin,
-                                          Vec, RectangleEditingMixin,
-                                          Label, WorldOverlay)
-from odemis.gui.comp.overlay._constants import LINE_WIDTH_THIN, LINE_WIDTH_THICK
-from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
+from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
+from odemis.gui.comp.overlay.base import (
+    SEL_MODE_NONE,
+    SEL_MODE_ROTATION,
+    DragMixin,
+    Label,
+    RectangleEditingMixin,
+    SelectionMixin,
+    Vec,
+    WorldOverlay,
+)
+from odemis.gui.comp.overlay.shapes import EditableShape
+from odemis.util.conversion import frgba_to_hex, hex_to_frgba
 
 
 class RectangleState:
@@ -42,6 +49,34 @@ class RectangleState:
         self.p_point3 = rectangle_overlay.p_point3
         self.p_point4 = rectangle_overlay.p_point4
 
+    def to_dict(self):
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        return {
+            "p_point1": self.p_point1,
+            "p_point2": self.p_point2,
+            "p_point3": self.p_point3,
+            "p_point4": self.p_point4,
+        }
+
+    @staticmethod
+    def from_dict(state: dict, rectangle_overlay):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param state: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param ellipse_overlay: The overlay representing a rectangle.
+        :returns: (RectangleState) reconstructed RectangleState class.
+        """
+        rectangle_state = RectangleState(rectangle_overlay)
+        rectangle_state.p_point1 = Vec(state["p_point1"])
+        rectangle_state.p_point2 = Vec(state["p_point2"])
+        rectangle_state.p_point3 = Vec(state["p_point3"])
+        rectangle_state.p_point4 = Vec(state["p_point4"])
+        return rectangle_state
 
 class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
     """
@@ -104,6 +139,64 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             deg=None,
             background=None
         )
+        self._name_label = Label(
+            text=self.name.value,
+            pos=(0, 0),
+            font_size=12,
+            flip=True,
+            align=wx.ALIGN_CENTRE_HORIZONTAL,
+            colour=(1.0, 1.0, 1.0),  # default to white
+            opacity=1.0,
+            deg=None,
+            background=None
+        )
+
+    def to_dict(self):
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        state = self.get_state()
+        state_dict = state.to_dict() if state is not None else {}
+        return {
+            "name": self.name.value,
+            "colour": frgba_to_hex(self.colour),
+            "selected": self.selected.value,
+            "cnvs_view_name": self.cnvs.view.name.value,
+            "type": self.__class__.__name__,
+            "state": state_dict,
+        }
+
+    @staticmethod
+    def from_dict(rectangle: dict, tab_data):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param rectangle: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param tab_data: The data corresponding to a GUI tab helpful while reconstructing the class.
+        :returns: (EllipseOverlay) reconstructed EllipseOverlay class.
+        """
+        name = rectangle["name"]
+        selected = rectangle["selected"]
+        cnvs_view_name = rectangle["cnvs_view_name"]
+        colour = rectangle["colour"]
+        shape_cnvs = None
+        for viewport in tab_data.viewports.value:
+            if viewport.canvas.view.name.value == cnvs_view_name:
+                shape_cnvs = viewport.canvas
+                break
+        if shape_cnvs is None:
+            raise ValueError("Could not find shape canvas")
+        rectangle_overlay = RectangleOverlay(shape_cnvs)
+        rectangle_overlay.name.value = name
+        rectangle_overlay.selected.value = selected
+        rectangle_overlay.is_created.value = True
+        rectangle_overlay.colour = hex_to_frgba(colour)
+        state_data = rectangle["state"]
+        state = RectangleState.from_dict(state_data, rectangle_overlay)
+        rectangle_overlay.restore_state(state)
+        return rectangle_overlay
 
     def copy(self):
         """
@@ -113,6 +206,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         shape = RectangleOverlay(self.cnvs)
         shape.colour = self.colour
         shape.restore_state(self.get_state())
+        shape.is_created.value = True
         return shape
 
     def move_to(self, pos):
@@ -124,6 +218,13 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         self.p_point3 += shift
         self.p_point4 += shift
         self._phys_to_view()
+        self._points = self.get_physical_sel()
+        self.points.value = self._points
+
+    def set_rotation(self, target_rotation: float):
+        """Set the rotation of the shape to a specific angle."""
+        self._set_rotation(rot)
+        self._view_to_phys()
         self._points = self.get_physical_sel()
         self.points.value = self._points
 
@@ -266,6 +367,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             self._view_to_phys()
             self._points = self.get_physical_sel()
             if self._points:
+                self.is_created.value = True
                 self.selected.value = self.check_point_proximity(evt.Position)
                 if self.selected.value:
                     self.set_physical_sel(self._points)
@@ -388,6 +490,12 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         ctx.fill()
         ctx.stroke()
 
+    def draw_name_label(self, ctx):
+        self._name_label.text = self.name.value
+        self._name_label.pos = self.cnvs.view_to_buffer(self.v_center)
+        self._name_label.background = (0, 0, 0)  # black
+        self._name_label.draw(ctx)
+
     def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4, dash=True):
         """ Draw the selection as a rectangle """
         line_width = LINE_WIDTH_THICK if self.selected.value else LINE_WIDTH_THIN
@@ -422,6 +530,20 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
             if self.selected.value:
                 self.draw_side_labels(ctx, b_point1, b_point2, b_point3, b_point4)
 
-            # Draw the rotation label
+            # Draw the rotation label or name label at the center
             if self.selection_mode == SEL_MODE_ROTATION:
                 self.draw_rotation_label(ctx)
+            else:
+                self.draw_name_label(ctx)
+
+            # Draw the grid rectangles
+            if self.fill_grid.value and self.grid_rects:
+                for p_start_pos, p_end_pos in self.grid_rects:
+                    b_start_pos = Vec(self.cnvs.phys_to_buffer(p_start_pos, offset))
+                    b_end_pos = Vec(self.cnvs.phys_to_buffer(p_end_pos, offset))
+                    rect = (b_start_pos.x,
+                        b_start_pos.y,
+                        b_end_pos.x - b_start_pos.x,
+                        b_end_pos.y - b_start_pos.y)
+                    ctx.rectangle(*rect)
+                    ctx.stroke()
