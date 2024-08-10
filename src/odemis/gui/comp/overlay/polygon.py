@@ -27,11 +27,17 @@ import cairo
 import wx
 
 import odemis.gui as gui
-from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
-from odemis.gui.comp.overlay.base import (SEL_MODE_ROTATION, LineEditingMixin,
-                                          Vec, Label, WorldOverlay)
-from odemis.gui.comp.overlay.shapes import EditableShape
 import odemis.util.units as units
+from odemis.gui.comp.overlay._constants import LINE_WIDTH_THICK, LINE_WIDTH_THIN
+from odemis.gui.comp.overlay.base import (
+    SEL_MODE_ROTATION,
+    Label,
+    LineEditingMixin,
+    Vec,
+    WorldOverlay,
+)
+from odemis.gui.comp.overlay.shapes import EditableShape
+from odemis.util.conversion import frgba_to_hex, hex_to_frgba
 
 
 class PolygonState:
@@ -39,6 +45,31 @@ class PolygonState:
         self._finished = polygon_overlay._finished
         self._points = polygon_overlay._points.copy()
 
+    def to_dict(self):
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        return {
+            "p_points": self._points,
+        }
+
+    @staticmethod
+    def from_dict(state: dict, polygon_overlay):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param state: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param polygon_overlay: The overlay representing a polygon.
+        :returns: (PolygonState) reconstructed PolygonState class.
+        """
+        polygon_state = PolygonState(polygon_overlay)
+        polygon_state._finished = True
+        points  = state["p_points"]
+        points = [Vec(point) for point in points]
+        polygon_state._points = points
+        return polygon_state
 
 class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
     """Overlay representing one polygon."""
@@ -80,7 +111,65 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
             deg=None,
             background=None
         )
+        self._name_label = Label(
+            text=self.name.value,
+            pos=(0, 0),
+            font_size=12,
+            flip=True,
+            align=wx.ALIGN_CENTRE_HORIZONTAL,
+            colour=(1.0, 1.0, 1.0),  # default to white
+            opacity=1.0,
+            deg=None,
+            background=None
+        )
         self.v_point.subscribe(self._on_v_point)
+
+    def to_dict(self):
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        state = self.get_state()
+        state_dict = state.to_dict() if state is not None else {}
+        return {
+            "name": self.name.value,
+            "colour": frgba_to_hex(self.colour),
+            "selected": self.selected.value,
+            "cnvs_view_name": self.cnvs.view.name.value,
+            "type": self.__class__.__name__,
+            "state": state_dict,
+        }
+
+    @staticmethod
+    def from_dict(polygon: dict, tab_data):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param polygon: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param tab_data: The data corresponding to a GUI tab helpful while reconstructing the class.
+        :returns: (PolygonOverlay) reconstructed PolygonOverlay class.
+        """
+        name = polygon["name"]
+        selected = polygon["selected"]
+        cnvs_view_name = polygon["cnvs_view_name"]
+        colour = polygon["colour"]
+        shape_cnvs = None
+        for viewport in tab_data.viewports.value:
+            if viewport.canvas.view.name.value == cnvs_view_name:
+                shape_cnvs = viewport.canvas
+                break
+        if shape_cnvs is None:
+            raise ValueError("Could not find shape canvas")
+        polygon_overlay = PolygonOverlay(shape_cnvs)
+        polygon_overlay.name.value = name
+        polygon_overlay.selected.value = selected
+        polygon_overlay.is_created.value = True
+        polygon_overlay.colour = hex_to_frgba(colour)
+        state_data = polygon["state"]
+        state = PolygonState.from_dict(state_data, polygon_overlay)
+        polygon_overlay.restore_state(state)
+        return polygon_overlay
 
     def copy(self):
         """
@@ -90,6 +179,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         shape = PolygonOverlay(self.cnvs)
         shape.colour = self.colour
         shape.restore_state(self.get_state())
+        shape.is_created.value = True
         return shape
 
     def move_to(self, pos):
@@ -97,6 +187,13 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         current_pos  = self.get_position()
         shift = (pos[0] - current_pos[0], pos[1] - current_pos[1])
         self._points = [p + shift for p in self._points]
+        self._phys_to_view()
+        self.points.value = self._points
+
+    def set_rotation(self, target_rotation: float):
+        """Set the rotation of the shape to a specific angle."""
+        self._set_rotation(target_rotation)
+        self._view_to_phys()
         self._phys_to_view()
         self.points.value = self._points
 
@@ -178,10 +275,12 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
     def on_right_up(self, evt):
         LineEditingMixin._on_right_up(self, evt)
         self._view_to_phys()
+        self.is_created.value = True
         if len(self._points) <= 2:
             logging.warning("Cannot create a polygon for less than 3 points.")
             self.reset_click_mixin()
             self._points.clear()
+            self.is_created.value = False
         # Set initial value
         self.points.value = self._points
         self.cnvs.update_drawing()
@@ -222,6 +321,12 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         self._rotation_label.pos = self.cnvs.view_to_buffer(self.v_center)
         self._rotation_label.background = (0, 0, 0)  # black
         self._rotation_label.draw(ctx)
+
+    def draw_name_label(self, ctx):
+        self._name_label.text = self.name.value
+        self._name_label.pos = self.cnvs.view_to_buffer(self.v_center)
+        self._name_label.background = (0, 0, 0)  # black
+        self._name_label.draw(ctx)
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4, dash=True):
         """Draw the selection as a polygon"""
@@ -302,11 +407,27 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
                 self._label.draw(ctx)
                 # calculate the center explicitly for ShapesOverlay _get_shape function, if polygon creation is not finished
                 self._calc_center()
+                # also calculate the rotation explicitly, if polygon creation is not finished
+                self._calc_rotation()
             else:
                 ctx.close_path()
                 ctx.stroke()
                 self._calc_edges()
                 self.draw_edges(ctx)
-                # Draw the rotation label
+                # Draw the rotation label or name label at the center
                 if self.selection_mode == SEL_MODE_ROTATION:
                     self.draw_rotation_label(ctx)
+                else:
+                    self.draw_name_label(ctx)
+
+                # Draw the grid rectangles
+                if self.fill_grid.value and self.grid_rects:
+                    for p_start_pos, p_end_pos in self.grid_rects:
+                        b_start_pos = Vec(self.cnvs.phys_to_buffer(p_start_pos, offset))
+                        b_end_pos = Vec(self.cnvs.phys_to_buffer(p_end_pos, offset))
+                        rect = (b_start_pos.x,
+                            b_start_pos.y,
+                            b_end_pos.x - b_start_pos.x,
+                            b_end_pos.y - b_start_pos.y)
+                        ctx.rectangle(*rect)
+                    ctx.stroke()
