@@ -19,18 +19,18 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
+import logging
 from abc import ABCMeta, abstractmethod
 from collections import deque, namedtuple
 from enum import Enum
-import logging
-from typing import Tuple, List, Union, Deque, Optional
+from typing import Deque, List, Optional, Tuple, Union
 
 import numpy
 import wx
 from scipy.spatial import cKDTree
 
 from odemis import model, util
-from odemis.gui.comp.overlay.base import WorldOverlay, Vec
+from odemis.gui.comp.overlay.base import Vec, WorldOverlay
 
 # The number of undo actions stored in the stack
 UNDO_STACK_DEPTH = 25
@@ -48,8 +48,11 @@ class EditableShape(metaclass=ABCMeta):
 
     def __init__(self, cnvs):
         """:param cnvs: canvas passed by the shape's overlay and used to draw the shapes."""
+        self.name = model.StringVA()
         # States if the shape is selected
         self.selected = model.BooleanVA(True)
+        # States if the shape creation is done
+        self.is_created = model.BooleanVA(False)
         # list of nested points (x, y) representing the shape and whose value will be used
         # during ROA acquisition
         # The points VA is set to _points if the shape is selected
@@ -59,6 +62,10 @@ class EditableShape(metaclass=ABCMeta):
         # Useful for internal points manipulation
         self._points: List[Vec] = []
         self.cnvs = cnvs
+        # Flag which states whether to fill the shape and draw a grid of rectangles
+        self.fill_grid = model.BooleanVA(False)
+        # A grid of rectangles with the start and end position of rectangle in physical coordinates
+        self.grid_rects: List[Tuple[Vec, Vec]] = []
 
     def get_bounding_box(self) -> Tuple[float, float, float, float]:
         """Get the shape's bounding box."""
@@ -127,6 +134,32 @@ class EditableShape(metaclass=ABCMeta):
     def on_motion(self, evt):
         evt.Skip()
 
+    @abstractmethod
+    def to_dict(self):
+        """
+        Convert the necessary class attributes and its values to a dict.
+        This method can be used to gather data for creating a json file.
+        """
+        pass
+
+    @staticmethod
+    @abstractmethod
+    def from_dict(shape: dict, tab_data):
+        """
+        Use the dict keys and values to reconstruct the class from a json file.
+
+        :param shape: The dict containing the class attributes and its values as key value pairs.
+                    to_dict() method must have been used previously to create this dict.
+        :param tab_data: The data corresponding to a GUI tab helpful while reconstructing the class.
+        :returns: (EditableShape) reconstructed EditableShape class.
+        """
+        pass
+
+    @abstractmethod
+    def set_rotation(self, target_rotation: float):
+        """Set the rotation of the shape to a specific angle."""
+        pass
+
 
 class ShapesOverlay(WorldOverlay):
     """
@@ -134,25 +167,40 @@ class ShapesOverlay(WorldOverlay):
     The shape's events and drawing are handled by its WorldOverlay. It can handle multiple shapes.
     """
 
-    def __init__(self, cnvs, shape_cls, tool=None, tool_va=None):
+    def __init__(
+        self,
+        cnvs,
+        shape_cls,
+        tool=None,
+        tool_va=None,
+        shapes_va=None,
+        shape_to_copy_va=None,
+    ):
         """
         :param cnvs: canvas for the overlay.
         :param shape_cls: (EditableShape) The shape class whose creation, editing and removal
             will be handled by this class.
-        :param tool_va: (None or VA of value TOOL_*) New shapes can be created. If None, then
-            no shape can be added by the user.
+        :param tool: (int) The tool id of the shape cls.
+        :param tool_va: (None or VA of value TOOL_*) ShapesOverlay will be activated using this VA.
+            If None, the user should externally implement a method to activate the ShapesOverlay.
+        :param shapes_va: Possibility to pass a shared VA whose value is the list of all shapes.
+        :param shape_to_copy_va: Possibility to pass a shared VA whose value is the shape to copy object.
         """
         if not issubclass(shape_cls, EditableShape):
             raise ValueError("Not a subclass of EditableShape!")
         WorldOverlay.__init__(self, cnvs)
         self.shape_cls = shape_cls
-        # VA which changes value upon new shape's creation
-        self.new_shape = model.VigilantAttribute(None, readonly=True)
         # True if latest action created a shape (for undo and redo)
         self._is_new_shape = False
         self._selected_shape = None
-        self._shape_to_copy = None
-        self._shapes: List[EditableShape] = []
+        if shape_to_copy_va is None:
+            self._shape_to_copy = model.VigilantAttribute(None, readonly=True)
+        else:
+            self._shape_to_copy = shape_to_copy_va
+        if shapes_va is None:
+            self._shapes = model.ListVA()
+        else:
+            self._shapes = shapes_va
         # History of shape's states
         # Stack is a Tuple[EditableShape, Dict[IntEnum, Any], bool] of the shape, its state and
         # a flag stating if it was newly created
@@ -160,30 +208,35 @@ class ShapesOverlay(WorldOverlay):
         self._redo_stack: Deque[ShapeState] = deque(maxlen=UNDO_STACK_DEPTH)
         self._undo_action = False
         self._redo_action = False
-        if tool and tool_va:
+        self.is_ctrl_down = False
+        if tool:
             self.tool = tool
-            tool_va.subscribe(self._on_tool, init=True)
+            if tool_va:
+                tool_va.subscribe(self._on_tool, init=True)
 
     def clear(self):
         """Remove all shapes and update canvas."""
-        self._shapes.clear()
+        self._shapes.value.clear()
 
     def remove_shape(self, shape):
         """Remove the shape and update canvas."""
-        if shape in self._shapes:
-            self._shapes.remove(shape)
+        if shape.cnvs == self.cnvs and shape in self._shapes.value:
+            self._shapes.value.remove(shape)
             self.cnvs.request_drawing_update()
 
     def add_shape(self, shape):
         """Add the shape and update canvas."""
-        if shape not in self._shapes:
-            self._shapes.append(shape)
-            self.new_shape._set_value(shape, force_write=True)
+        if shape.cnvs == self.cnvs and shape not in self._shapes.value:
+            self._shapes.value.append(shape)
             self.cnvs.request_drawing_update()
 
     def on_enter(self, evt):
         if self.active.value:
-            self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
+            self.cnvs.SetFocus()
+            if self._shape_to_copy.value:
+                self.cnvs.set_default_cursor(wx.CURSOR_BULLSEYE)
+            else:
+                self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
         else:
             WorldOverlay.on_enter(self, evt)
 
@@ -195,7 +248,7 @@ class ShapesOverlay(WorldOverlay):
 
     def _deselect_shapes(self):
         """Deselect shapes except the selected shape."""
-        for shape in self._shapes:
+        for shape in self._shapes.value:
             if shape.selected.value and shape != self._selected_shape:
                 shape.selected.value = False
 
@@ -207,8 +260,9 @@ class ShapesOverlay(WorldOverlay):
         """
         Find the shape corresponding to the given view position based on proximity.
 
-        It tries to find the shape whose center is closest to the view position and then checks if
-        the view position is in the proximity of that shape to confirm it.
+        It tries to find the shape whose canvas is same as ShapesOverlay's canvas, whose center
+        is closest to the view position and finally checks if the view position is in the proximity
+        of that shape to confirm it.
 
         Note:
         This method considers only 4 shapes with centers closest to the view position. In general
@@ -220,17 +274,24 @@ class ShapesOverlay(WorldOverlay):
         :param v_pos: The position in view coordinates.
         :return: The desired shape, or None if no shape is found.
         """
-        if self._shapes:
-            v_centers = numpy.array([shape.v_center for shape in self._shapes])
+        cnvs_shapes = []
+        v_centers = []
+
+        for shape in self._shapes.value:
+            if shape.cnvs == self.cnvs:
+                cnvs_shapes.append(shape)
+                v_centers.append(shape.v_center)
+
+        if v_centers:
             v_centers_kdtree = cKDTree(v_centers)
-             # Query the 4 nearest centers to the given view position
+            # Query the 4 nearest centers to the given view position
             distances, indices = v_centers_kdtree.query(numpy.array(v_pos), k=4)
             for distance, index in zip(distances, indices):
                 # Distances are sorted by nearest first
                 # If a distance is infinite, no need to check further as remaining distances will be infinite
                 if numpy.isinf(distance):
                     return None
-                shape = self._shapes[index]
+                shape = cnvs_shapes[index]
                 if shape.check_point_proximity(v_pos):
                     return shape
         return None
@@ -238,16 +299,15 @@ class ShapesOverlay(WorldOverlay):
     def _create_new_shape(self):
         """Create a new shape."""
         shape = self.shape_cls(self.cnvs)
-        self._shapes.append(shape)
-        self.new_shape._set_value(shape, force_write=True)
+        self._shapes.value.append(shape)
         return shape
 
     def _copy_shape(self, v_pos: Tuple[float, float]):
         """Copy a selected shape to a view position as the center."""
         # Copy the shape
-        shape = self._shape_to_copy.copy()
-        self._shapes.append(shape)
-        self.new_shape._set_value(shape, force_write=True)
+        shape = self._shape_to_copy.value.copy()
+        shape.cnvs = self.cnvs
+        self._shapes.value.append(shape)
         # Move the copied shape to a view position
         p_pos = self.cnvs.view_to_phys(v_pos, self.cnvs.get_half_buffer_size())
         shape.move_to(p_pos)
@@ -257,21 +317,30 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_left_down(evt)
 
-        self._is_new_shape = False
-        # Copy the selected shape by pressing Ctrl + C
-        if self._shape_to_copy:
-            # Update the selected shape as the newly copied shape
-            # whose state can then be appended to undo stack
-            self._selected_shape = self._copy_shape(evt.Position)
-            self._is_new_shape = True
-        # New or previously created shape
-        else:
-            self._selected_shape = self._get_shape(evt.Position)
-            if self._selected_shape is None:
-                self._selected_shape = self._create_new_shape()
+        # If the ShapesOverlay is active it is still possible to drag the canvas by additionally pressing Ctrl.
+        # Both canvas dragging and shape creation make use of left click and motion, therefore additional Ctrl
+        # key check is used to aid both functionalities.
+        self.is_ctrl_down = evt.ControlDown()
+        if not self.is_ctrl_down:
+            self._is_new_shape = False
+            # If shape creation has not finished
+            if self._selected_shape and not self._selected_shape.is_created.value:
+                self._selected_shape.on_left_down(evt)
+                self._deselect_shapes()
+            # Copy the selected shape by pressing Ctrl + C
+            elif self._shape_to_copy.value:
+                # Update the selected shape as the newly copied shape
+                # whose state can then be appended to undo stack
+                self._selected_shape = self._copy_shape(evt.Position)
                 self._is_new_shape = True
-            self._selected_shape.on_left_down(evt)
-            self._deselect_shapes()
+            # New or previously created shape
+            else:
+                self._selected_shape = self._get_shape(evt.Position)
+                if self._selected_shape is None:
+                    self._selected_shape = self._create_new_shape()
+                    self._is_new_shape = True
+                self._selected_shape.on_left_down(evt)
+                self._deselect_shapes()
         WorldOverlay.on_left_down(self, evt)
 
     def on_char(self, evt):
@@ -303,13 +372,13 @@ class ShapesOverlay(WorldOverlay):
                 # Unselect the selected shape
                 self._selected_shape.selected.value = False
                 # Stop copying the shape
-                self._shape_to_copy = None
+                self._shape_to_copy._set_value(None, force_write=True)
                 self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
                 self.cnvs.request_drawing_update()
             elif evt.GetKeyCode() == wx.WXK_CONTROL_C:
                 # Deselect the selected shape which will be copied
                 self._selected_shape.selected.value = False
-                self._shape_to_copy = self._selected_shape
+                self._shape_to_copy._set_value(self._selected_shape, force_write=True)
                 self.cnvs.set_default_cursor(wx.CURSOR_BULLSEYE)
                 self.cnvs.request_drawing_update()
         else:
@@ -319,7 +388,7 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_left_up(evt)
 
-        if self._selected_shape and hasattr(self._selected_shape, "on_left_up"):
+        if self._selected_shape and not self.is_ctrl_down:
             self._selected_shape.on_left_up(evt)
             state = self._selected_shape.get_state()
             if state:
@@ -335,7 +404,7 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_right_down(evt)
 
-        if self._selected_shape and hasattr(self._selected_shape, "on_right_down"):
+        if self._selected_shape:
             self._selected_shape.on_right_down(evt)
         else:
             WorldOverlay.on_right_down(self, evt)
@@ -344,7 +413,7 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_right_up(evt)
 
-        if self._selected_shape and hasattr(self._selected_shape, "on_right_up"):
+        if self._selected_shape:
             self._selected_shape.on_right_up(evt)
         else:
             WorldOverlay.on_right_up(self, evt)
@@ -353,8 +422,10 @@ class ShapesOverlay(WorldOverlay):
         if not self.active.value:
             return super().on_motion(evt)
 
-        if self._selected_shape and hasattr(self._selected_shape, "on_motion"):
+        if self._selected_shape and not self.is_ctrl_down:
             self._selected_shape.on_motion(evt)
+            if self._shape_to_copy.value:
+                self.cnvs.set_default_cursor(wx.CURSOR_BULLSEYE)
         else:
             WorldOverlay.on_motion(self, evt)
 
@@ -418,10 +489,11 @@ class ShapesOverlay(WorldOverlay):
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, dash=False):
         """Draw all the shapes."""
-        for shape in self._shapes:
-            shape.draw(
-                ctx,
-                shift,
-                scale,
-                dash=dash,
-            )
+        for shape in self._shapes.value:
+            if shape.cnvs == self.cnvs:
+                shape.draw(
+                    ctx,
+                    shift,
+                    scale,
+                    dash=dash,
+                )
