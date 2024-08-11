@@ -22,29 +22,35 @@ This file is part of Odemis.
 
 import copy
 import logging
+
+import numpy
+import wx
+
+import odemis.acq.stream as acqstream
+import odemis.gui.cont.acquisition as acqcont
+import odemis.util.dataio as udataio
 from odemis.acq import stream
-from odemis.dataio import tiff
 from odemis.gui import model
-from odemis.gui.comp import popup
 from odemis.gui.comp.grid import ViewportGrid
 from odemis.gui.conf import get_acqui_conf
 from odemis.gui.evt import EVT_KNOB_PRESS
 from odemis.gui.model import CHAMBER_PUMPING
 from odemis.gui.util import call_in_wx_main, img
 from odemis.gui.util.img import insert_tile_to_image, merge_screen
-from odemis.model import (MD_POS, MD_PIXEL_SIZE, DataArray, DataArrayShadow, MD_DIMS,
-                          MD_AT_OVV_FULL, MD_AT_OVV_TILES, MD_AT_HISTORY,
-                          MD_POS_ACTIVE_RANGE, MD_DESCRIPTION)
-from odemis.util import limit_invocation, comp
-from odemis.util.filename import create_filename
+from odemis.model import (
+    MD_AT_HISTORY,
+    MD_AT_OVV_FULL,
+    MD_AT_OVV_TILES,
+    MD_DESCRIPTION,
+    MD_DIMS,
+    MD_PIXEL_SIZE,
+    MD_POS,
+    MD_POS_ACTIVE_RANGE,
+    DataArray,
+    DataArrayShadow,
+)
+from odemis.util import comp, limit_invocation
 from odemis.util.img import getBoundingBox
-import numpy
-import wx
-
-
-import odemis.acq.stream as acqstream
-import odemis.gui.cont.acquisition as acqcont
-import odemis.util.dataio as udataio
 
 
 class ViewPortController(object):
@@ -75,32 +81,19 @@ class ViewPortController(object):
 
         assert not self._data_model.views.value  # should still be empty
 
-        self._viewports = list(viewports.keys())
-        self._create_views_fixed(viewports)
-
-        # First view is focused
-        tab_data.focussedView.value = tab_data.visible_views.value[0]
-
-        # subscribe to layout and view changes
-        tab_data.visible_views.subscribe(self._on_visible_views)
-        self._grid_panel = self._viewports[0].Parent
-        if isinstance(self._grid_panel, ViewportGrid):
-            tab_data.viewLayout.subscribe(self._on_view_layout, init=True)
-            tab_data.focussedView.subscribe(self._on_focussed_view, init=True)
-        elif len(self._viewports) != 1:
-            self._grid_panel = None
-            logging.info("Multiple viewports, but no ViewportGrid to manage them")
+        self.create_views(viewports)
 
     @property
     def viewports(self):
         return self._viewports
 
-    def _create_views_fixed(self, viewports):
+    def create_views(self, viewports):
         """ Create the different views displayed, according to viewtypes
         viewports (OrderedDict (MicroscopeViewport -> kwargs)): cf init
 
         To be executed only once, at initialisation.
         """
+        self._viewports = list(viewports.keys())
         views = []
         visible_views = []
 
@@ -117,6 +110,18 @@ class ViewPortController(object):
 
         self._data_model.views.value = views
         self._data_model.visible_views.value = visible_views
+
+        if self._data_model.visible_views.value:
+            # First view is focused
+            self._data_model.focussedView.value = self._data_model.visible_views.value[0]
+        # subscribe to layout and view changes
+        self._data_model.visible_views.subscribe(self._on_visible_views)
+        self._grid_panel = None
+        if self._viewports:
+            self._grid_panel = self._viewports[0].Parent
+            if isinstance(self._grid_panel, ViewportGrid):
+                self._data_model.viewLayout.subscribe(self._on_view_layout, init=True)
+                self._data_model.focussedView.subscribe(self._on_focussed_view, init=True)
 
     def get_viewport_by_view(self, view):
         """ Return the ViewPort associated with the given view """
@@ -173,7 +178,7 @@ class ViewPortController(object):
         self._set_visible_views(visible_views)
 
         # Ensure the focused view is always one that is visible
-        if self._data_model.focussedView.value not in visible_views:
+        if visible_views and self._data_model.focussedView.value not in visible_views:
             self._data_model.focussedView.value = visible_views[0]
 
     def _on_focussed_view(self, view):
@@ -181,6 +186,11 @@ class ViewPortController(object):
         Called when the focussed view changes.
         :param view: (MicroscopeView) The newly focussed view
         """
+        if view is None:
+            for vp in self._viewports:
+                vp.SetFocus(False)
+                vp.Refresh()
+            return
         logging.debug("Changing focus to view %s", view.name.value)
 
         viewport = self.views_to_viewports([view])[0]
@@ -203,7 +213,6 @@ class ViewPortController(object):
 
     def _on_knob_press(self, _):
         """ Advance the focus to the next grid Viewport, if any """
-
         if self._grid_panel is None:
             return
 
@@ -238,6 +247,11 @@ class ViewPortController(object):
         elif layout == model.VIEW_LAYOUT_VERTICAL:
             logging.debug("Displaying two viewport stacked vertically")
             visible_viewports = self.views_to_viewports(self._data_model.visible_views.value[:2])
+            self._grid_panel.set_visible_viewports(visible_viewports)
+
+        elif layout == model.VIEW_LAYOUT_DYNAMIC:
+            logging.debug("Displaying viewport stacked dynamically")
+            visible_viewports = self.views_to_viewports(self._data_model.visible_views.value)
             self._grid_panel.set_visible_viewports(visible_viewports)
 
         elif layout == model.VIEW_LAYOUT_FULLSCREEN:
