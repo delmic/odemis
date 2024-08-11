@@ -20,16 +20,15 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-import queue
 import logging
 import math
-import time
+import queue
 import threading
+import time
 
 from odemis import model
-from odemis.acq.stream import Stream, StreamTree, RGBSpatialProjection, DataProjection
-from odemis.model import (FloatContinuous, VigilantAttribute, MD_POS,
-                          InstantaneousFuture)
+from odemis.acq.stream import DataProjection, RGBSpatialProjection, Stream, StreamTree
+from odemis.model import MD_POS, FloatContinuous, InstantaneousFuture, VigilantAttribute
 
 MAX_SAFE_MOVE_DISTANCE = 10e-3  # 1 cm
 
@@ -67,7 +66,17 @@ class StreamView(View):
     other objects can update it.
     """
 
-    def __init__(self, name, stage=None, stream_classes=None, fov_hw=None, projection_class=RGBSpatialProjection, zPos=None):
+    def __init__(
+        self,
+        name,
+        stage=None,
+        stream_classes=None,
+        fov_hw=None,
+        projection_class=RGBSpatialProjection,
+        zPos=None,
+        view_pos_init=None,
+        fov_range=((0.0, 0.0), (1e9, 1e9)),
+    ):
         """
         :param name (string): user-friendly name of the view
         :param stage (Actuator): actuator with two axes: x and y
@@ -79,6 +88,11 @@ class StreamView(View):
             Determines the projection used to display streams which have no .image
         :param zPos (None or Float VA): Global position in Z coordinate for the view.
           Used when a stream supports Z stack display, which is controlled by the focuser.
+        :param view_pos_init: (tuple) The view position on init, If None and if stage
+            component is present, use the stage position. Otherwise set to (0, 0).
+        :param fov_range: (2 tuples of len n)
+            The first tuple contains the minimum values corresponding to each element in `value`,
+            the second tuple contains the maximum values corresponding to each element in `value`.
         """
 
         super(StreamView, self).__init__(name)
@@ -106,8 +120,8 @@ class StreamView(View):
         # drawn, including the margins, via fov_buffer). This is used to update
         # the (static) streams with a projection which can be resized via .rect
         # and .mpp.
-        self.fov = model.TupleContinuous((0.0, 0.0), cls=(int, float), range=((0.0, 0.0), (1e9, 1e9)))
-        self.fov_buffer = model.TupleContinuous((0.0, 0.0), cls=(int, float), range=((0.0, 0.0), (1e9, 1e9)))
+        self.fov = model.TupleContinuous((0.0, 0.0), cls=(int, float), range=fov_range)
+        self.fov_buffer = model.TupleContinuous((0.0, 0.0), cls=(int, float), range=fov_range)
         self.fov_buffer.subscribe(self._onFovBuffer)
 
         # Will be created on the first time it's needed
@@ -119,22 +133,21 @@ class StreamView(View):
         if stage:
             self.stage_pos = stage.position
 
-            # the current center of the view, which might be different from
-            # the stage
-            pos = self.stage_pos.value
-            view_pos_init = (pos["x"], pos["y"])
+            if view_pos_init is None:
+                # the current center of the view, which might be different from
+                # the stage
+                pos = self.stage_pos.value
+                view_pos_init = (pos["x"], pos["y"])
         else:
             view_pos_init = (0, 0)
 
         self.view_pos = model.ListVA(view_pos_init, unit="m")
-        self.view_pos.subscribe(self._onViewPos)
 
         self._fstage_move = InstantaneousFuture() # latest future representing a move request
 
         # current density (meter per pixel, ~ scale/zoom level)
         # 1µm/px => ~large view of the sample (view width ~= 1000 px)
         self.mpp = FloatContinuous(1e-6, range=(10e-12, 10e-3), unit="m/px")
-        self.mpp.subscribe(self._onMpp)
         # self.mpp.debug = True
 
         # How much one image is displayed on the other one. Value used by
@@ -158,6 +171,9 @@ class StreamView(View):
 
         if zPos is not None:
             self.zPos = zPos
+
+        self.mpp.subscribe(self._onMpp, init=True)
+        self.view_pos.subscribe(self._onViewPos, init=True)
 
     def _onFovBuffer(self, fov):
         self._updateStreamsViewParams()
