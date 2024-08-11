@@ -23,11 +23,15 @@ import wx
 from decorator import decorator
 
 import odemis.gui as gui
+from odemis.gui import img
+from odemis.gui.comp.buttons import ImageButton, ImageTextButton
 from odemis.gui.comp.combo import ComboBox
 from odemis.gui.comp.file import FileBrowser
 from odemis.gui.comp.radio import GraphicalRadioButtonControl
-from odemis.gui.comp.slider import UnitIntegerSlider, UnitFloatSlider, Slider
-from odemis.gui.comp.text import UnitIntegerCtrl, UnitFloatCtrl
+from odemis.gui.comp.slider import Slider, UnitFloatSlider, UnitIntegerSlider
+from odemis.gui.comp.spinner import UnitFloatSpinner, UnitIntegerSpinner
+from odemis.gui.comp.text import UnitFloatCtrl, UnitIntegerCtrl
+from odemis.gui.comp.toggle import GraphicalToggleButtonControl
 
 
 @decorator
@@ -36,7 +40,11 @@ def control_bookkeeper(f, self, *args, **kwargs):
     self.clear_default_message()
     result = f(self, *args, **kwargs)
     # Redo FoldPanelBar layout
-    self.Parent.Parent.Layout()
+    if hasattr(self, "Parent"):
+        parent = self.Parent
+        if hasattr(parent, "Parent"):
+            parent.Parent.Layout()
+    self.Layout()
     self.num_rows += 1
     return result
 
@@ -68,8 +76,28 @@ class SettingsPanel(wx.Panel):
         # Make the 2nd column expand
         self.gb_sizer.AddGrowableCol(1)
 
-        self.SetSizer(self._main_sizer)
         self._main_sizer.Add(self.gb_sizer, proportion=1, flag=wx.ALL | wx.EXPAND, border=5)
+
+    def Layout(self):
+        """Layout the ControlsPanel."""
+
+        if not self._main_sizer:
+            return False  # we need to complete the creation first!
+
+        oursz = self.GetSize()
+
+        # move & resize the button and the static line
+        self._main_sizer.SetDimension(
+            0, 0, oursz.GetWidth(), self._main_sizer.GetMinSize().GetHeight()
+        )
+        self._main_sizer.Layout()
+
+        return True
+
+    def OnSize(self, event):
+        """Handles the wx.EVT_SIZE event for ControlsPanel"""
+        self.Layout()
+        event.Skip()
 
     def set_default_message(self, msg):
         """ Set the default message in the settings panel """
@@ -161,20 +189,24 @@ class SettingsPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_text_field(self, label_text, value=None, readonly=False):
+    def add_text_field(self, label_text, value=None, readonly=False, multiline=False):
         """ Add a label and text control to the settings panel
 
         :param label_text: (str) Label text to display
         :param value: (None or str) Value to display
         :param readonly: (boolean) Whether the value can be changed by the user
+        :param multiline: (boolean) Whether text control style should be multiline
 
-        :return: (Ctrl, Ctrl) Label and text control
+        :return: Label and text control
 
         """
 
         lbl_ctrl = self._add_side_label(label_text)
         value_ctrl = wx.TextCtrl(self, value=str(value or ""),
-                                 style=wx.TE_PROCESS_ENTER | wx.BORDER_NONE | (wx.TE_READONLY if readonly else 0))
+                                 style=wx.TE_PROCESS_ENTER
+                                 | wx.BORDER_NONE
+                                 | (wx.TE_READONLY if readonly else 0)
+                                 | (wx.TE_MULTILINE if multiline else 0))
         value_ctrl.MinSize = (-1, value_ctrl.BestSize[1])
 
         if readonly:
@@ -332,7 +364,57 @@ class SettingsPanel(wx.Panel):
         return lbl_ctrl, value_ctrl
 
     @control_bookkeeper
-    def add_file_button(self, label_text, value=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard=None):
+    def add_combobox_with_buttons_control(self, label_text, value=None, conf=None):
+        """ Add a combo box to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display *NOT USED ATM*
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        :return: Label and combobox control, the combobox control has add_btn and delete_btn attributes
+            of the buttons which can be later used to create logic for adding and deleteting items in
+            combobox.
+        """
+        if conf is None:
+            conf = {}
+
+        lbl_ctrl = self._add_side_label(label_text)
+        cbstyle = wx.NO_BORDER | wx.TE_PROCESS_ENTER | conf.pop("style", 0)
+        value_ctrl = ComboBox(self, wx.ID_ANY, pos=(0, 0), size=(-1, 16),
+                              style=cbstyle, **conf)
+        add_kwargs = {
+            "icon": img.getBitmap("icon/ico_plus.png"),
+            "height" : 16,
+            "style": wx.ALIGN_CENTER,
+        }
+        delete_kwargs = {
+            "icon": img.getBitmap("icon/ico_trash.png"),
+            "height" : 16,
+            "style": wx.ALIGN_CENTER,
+        }
+        add_button_ctrl = ImageButton(self, **add_kwargs)
+        delete_button_ctrl = ImageButton(self, **delete_kwargs)
+        setattr(value_ctrl, "add_btn", add_button_ctrl)
+        setattr(value_ctrl, "delete_btn", delete_button_ctrl)
+
+        button_sizer = wx.BoxSizer(wx.HORIZONTAL)
+        button_sizer.Add(add_button_ctrl, 0, wx.ALL)
+        button_sizer.Add(delete_button_ctrl, 0, wx.ALL)
+
+        control_sizer = wx.BoxSizer(wx.VERTICAL)
+        control_sizer.Add(value_ctrl, 0, wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5)
+        control_sizer.Add(button_sizer, 0, wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL, 5)
+
+        self.gb_sizer.Add(control_sizer, (self.num_rows, 1),
+                          flag=wx.ALL | wx.EXPAND)
+
+        if value:
+            value_ctrl.SetValue(str(value))
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_file_button(self, label_text, value=None, clearlabel=None, dialog_style=wx.FD_OPEN, wildcard=None, **kwargs):
 
         # Create label
         lbl_ctrl = self._add_side_label(label_text)
@@ -344,7 +426,10 @@ class SettingsPanel(wx.Panel):
                                  clear_btn=clearlabel is not None,
                                  file_path=value,
                                  wildcard=wildcard,
-                                 default_dir=None)
+                                 default_dir=None,
+                                 **kwargs)
+                                # FIXME it causes a segfault if btn_label arg is used instead of **kwargs
+                                #  btn_label=btn_label or "Open")
         value_ctrl.SetForegroundColour(gui.FG_COLOUR_EDIT)
         value_ctrl.SetBackgroundColour(gui.BG_COLOUR_MAIN)
 
@@ -354,5 +439,117 @@ class SettingsPanel(wx.Panel):
                           border=5)
 
         return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_toggle_control(self, label_text, values=None, conf=None):
+        """Add a series of toggle buttons to the settings panel
+
+        :param label_text: (str) Label text to display
+        :param values: (None or float) Values to display as the state is toggled
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        if conf is None:
+            conf = {}
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = GraphicalToggleButtonControl(
+            self, -1, style=wx.NO_BORDER, **conf
+        )
+        self.gb_sizer.Add(
+            value_ctrl,
+            (self.num_rows, 1),
+            span=(1, 2),
+            flag=wx.ALL | wx.EXPAND | wx.ALIGN_CENTER_VERTICAL,
+            border=5,
+        )
+
+        if values is not None:
+            value_ctrl.SetValue(values)
+
+        return lbl_ctrl, value_ctrl
+
+    def _add_spinner(self, klass, label_text, value, conf, *args):
+        """Add a spinner of type 'klass' to the user settings panel"""
+        if conf is None:
+            conf = {}
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = klass(
+            self,
+            id=wx.ID_ANY,
+            pos=(0, 0),
+            size=(5, 16),
+            value=value,
+            *args,
+            **conf,
+        )
+        self.gb_sizer.Add(
+            value_ctrl,
+            (self.num_rows, 1),
+            span=(1, 2),
+            flag=wx.EXPAND | wx.ALL,
+            border=5,
+        )
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_float_spinner(self, label_text, value="", conf=None):
+        """Add a float value spinner to the user settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        return self._add_spinner(UnitFloatSpinner, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_integer_spinner(self, label_text, value="", conf=None):
+        """Add a integer value spinner to the user settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or float) Value to display
+        :param conf: (None or dict) Dictionary containing parameters for the control
+
+        """
+        return self._add_spinner(UnitIntegerSpinner, label_text, value, conf)
+
+    @control_bookkeeper
+    def add_dir_picker(self, label_text, value=None):
+        """Add a label and directory control to the user settings panel
+
+        :param label_text: (str) Label text to display
+        :param value: (None or str) Value to display
+
+        :return: (Ctrl, Ctrl) Label and text control
+
+        """
+
+        lbl_ctrl = self._add_side_label(label_text)
+        value_ctrl = wx.DirPickerCtrl(
+            self, path=str(value or ""), pos=(0, 0), size=(-1, 16)
+        )
+        value_ctrl.SetForegroundColour(gui.FG_COLOUR_DIS)
+        value_ctrl.SetBackgroundColour(value_ctrl.Parent.BackgroundColour)
+        self.gb_sizer.Add(
+            value_ctrl, (self.num_rows, 1), flag=wx.EXPAND | wx.ALIGN_CENTER_VERTICAL
+        )
+
+        return lbl_ctrl, value_ctrl
+
+    @control_bookkeeper
+    def add_run_btn(self, label_text):
+        """
+        Add a generic run button and the corresponding side label to the gridbag sizer.
+        :param label_text: (str) label text to display
+        :returns: (wx.StaticText, ImageTextButton) side label and run button
+        """
+        lbl_ctrl = self._add_side_label(label_text)
+        run_btn = ImageTextButton(self, label="Run", height=16, style=wx.ALIGN_CENTER)
+        self.gb_sizer.Add(run_btn, (self.num_rows, 2), span=(1, 1),
+                         flag=wx.ALIGN_CENTRE_VERTICAL | wx.EXPAND | wx.TOP | wx.BOTTOM, border=5)
+        return lbl_ctrl, run_btn
 
 # END Control methods
