@@ -480,7 +480,7 @@ class StreamBarController(object):
         """
         return self._add_stream(stream, **kwargs)
 
-    def _add_stream(self, stream, add_to_view=False, visible=True, play=None):
+    def _add_stream(self, stream, stream_cont_cls=StreamController, add_to_view=False, visible=True, play=None):
         """ Add the given stream to the tab data model and appropriate views
 
         Args:
@@ -546,7 +546,8 @@ class StreamBarController(object):
                 show_panel = isinstance(stream, fview.stream_classes)
 
             stream_cont = self._add_stream_cont(stream,
-                                                show_panel,
+                                                cls=stream_cont_cls,
+                                                show_panel=show_panel,
                                                 locked=self.locked_mode,
                                                 static=self.static_mode,
                                                 view=linked_view,
@@ -555,7 +556,7 @@ class StreamBarController(object):
         else:
             return stream
 
-    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False,
+    def _add_stream_cont(self, stream, cls: StreamController, show_panel=True, locked=False, static=False,
                          view=None):
         """ Create and add a stream controller for the given stream
 
@@ -563,7 +564,7 @@ class StreamBarController(object):
 
         """
 
-        stream_cont = StreamController(self._stream_bar, stream, self._tab_data_model,
+        stream_cont = cls(self._stream_bar, stream, self._tab_data_model,
                                        show_panel, view, sb_ctrl=self)
 
         if locked:
@@ -1169,7 +1170,7 @@ class EnzelAlignmentStreamsBarController:
         stream.is_active.value = False
 
 
-class FastEMStreamsController(StreamBarController):
+class FastEMStreamsBarController(StreamBarController):
     """
     StreamBarController with additional functionality for overview streams (add/remove overview streams from
     view if main data .overview_streams VA changes).
@@ -1182,18 +1183,21 @@ class FastEMStreamsController(StreamBarController):
     def _on_overview_streams(self, _):
         ovv_streams = self._tab_data_model.main.overview_streams.value.values()
         tab_streams = self._tab_data_model.streams.value
-        canvas = self._view_controller.viewports[0].canvas
-        # Remove old streams from view
-        for s in tab_streams:
-            if isinstance(s, FastEMOverviewStream) and s not in ovv_streams:
-                tab_streams.remove(s)
-                canvas.view.removeStream(s)
+        focussed_view = self._tab_data_model.focussedView.value
+        if focussed_view is not None:
+            active_viewport = self._view_controller.get_viewport_by_view(self._tab_data_model.focussedView.value)
+            canvas = active_viewport.canvas
+            # Remove old streams from view
+            for s in tab_streams:
+                if isinstance(s, FastEMOverviewStream) and s not in ovv_streams:
+                    tab_streams.remove(s)
+                    canvas.view.removeStream(s)
 
-        # Add stream to view if it's not already there
-        for s in ovv_streams:
-            if isinstance(s, FastEMOverviewStream) and s not in tab_streams:
-                tab_streams.append(s)
-                canvas.view.addStream(s)
+            # Add stream to view if it's not already there
+            for s in ovv_streams:
+                if isinstance(s, FastEMOverviewStream) and s not in tab_streams:
+                    tab_streams.append(s)
+                    canvas.view.addStream(s)
 
 
 class SecomStreamsController(StreamBarController):
