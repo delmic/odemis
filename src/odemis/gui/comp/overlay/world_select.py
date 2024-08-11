@@ -26,9 +26,14 @@ import wx
 
 import odemis.gui as gui
 import odemis.util.units as units
-from odemis.gui.comp.overlay.base import (EDIT_MODE_BOX, SEL_MODE_CREATE,
-                                          SEL_MODE_EDIT, SelectionMixin,
-                                          Vec, WorldOverlay)
+from odemis.gui.comp.overlay.base import (
+    EDIT_MODE_BOX,
+    SEL_MODE_CREATE,
+    SEL_MODE_EDIT,
+    SelectionMixin,
+    Vec,
+    WorldOverlay,
+)
 
 
 class WorldSelectOverlay(WorldOverlay, SelectionMixin):
@@ -49,7 +54,6 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     @p_start_pos.setter
     def p_start_pos(self, p_pos):
         self._p_start_pos = p_pos
-        self._phys_to_view()
 
     @property
     def p_end_pos(self):
@@ -58,7 +62,6 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
     @p_end_pos.setter
     def p_end_pos(self, p_pos):
         self._p_end_pos = p_pos
-        self._phys_to_view()
 
     # Selection clearing
 
@@ -113,6 +116,7 @@ class WorldSelectOverlay(WorldOverlay, SelectionMixin):
         else:
             self.p_start_pos = rect[:2]
             self.p_end_pos = rect[2:4]
+            self._phys_to_view()
 
     def draw(self, ctx, shift=(0, 0), scale=1.0, line_width=4, dash=True):
         """ Draw the selection as a rectangle """
