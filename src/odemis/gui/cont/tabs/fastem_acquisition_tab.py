@@ -20,22 +20,14 @@ You should have received a copy of the GNU General Public License along with
 Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-
-import wx
-
-from odemis.acq.fastem import CALIBRATION_1, CALIBRATION_2, CALIBRATION_3
-from odemis.gui.cont.stream_bar import FastEMStreamsController
-from odemis.gui.conf.data import get_hw_config
-from odemis.gui.cont import settings, project
-from odemis.gui.cont.acquisition import (FastEMAcquiController, FastEMCalibrationController,
-                                         FastEMScintillatorCalibrationController)
-from odemis.gui.cont.tabs.tab import Tab
-from odemis.gui.util import call_in_wx_main
 import odemis.gui.model as guimod
+from odemis.gui.comp.fastem_project_list_panel import FastEMProjectList
+from odemis.gui.cont.acquisition import FastEMAcquiController
+from odemis.gui.cont.tabs.tab import Tab
 
 
 class FastEMAcquisitionTab(Tab):
-    def __init__(self, name, button, panel, main_frame, main_data, vp, view_controller, sem_stream):
+    def __init__(self, name, button, panel, main_frame, main_data, main_tab_data):
         """
         FASTEM acquisition tab for calibrating the system and acquiring regions of
         acquisition (ROAs), which are organized in projects.
@@ -72,61 +64,26 @@ class FastEMAcquisitionTab(Tab):
         # need to wait for the tab to be shown on the first time.
         self._initialized_after_show = False
 
-        self.vp = vp
-        self._stream_controller = FastEMStreamsController(
-            view_controller._data_model,
-            panel.pnl_acquisition_streams,
-            ignore_view=True,  # Show all stream panels, independent of any selected viewport
-            view_ctrl=view_controller,
-        )
-        self.acq_sem_stream_cont = self._stream_controller.addStream(sem_stream, add_to_view=True)
-        self.acq_sem_stream_cont.stream_panel.show_remove_btn(False)
-        tab_data.streams.value.append(sem_stream)  # it should also be saved
-        tab_data.semStream = sem_stream
+        self.main_tab_data = main_tab_data
 
-        for name, calibration in self.tab_data_model.calibrations.items():
-            if name == CALIBRATION_1:
-                calibration.controller = FastEMCalibrationController(
-                                            self.tab_data_model,
-                                            calibration
-                                            )
-            elif name in (CALIBRATION_2, CALIBRATION_3):
-                calibration.regions_controller = project \
-                    .FastEMCalibrationRegionsController(self.tab_data_model, vp, calibration)
-                calibration.controller = FastEMScintillatorCalibrationController(self.tab_data_model,
-                                                                                 calibration)
-
-        # Controller for acquisition settings panel
-        self._acq_settings_controller = settings.SettingsController(
-            panel.pnl_acq_settings,
-            ""  # default message, which is shown if no setting is available
-        )
-        dt_conf = get_hw_config(tab_data.main.multibeam, tab_data.main.hw_settings_config).get("dwellTime")
-        self._acq_settings_controller.add_setting_entry(
-            "dwellTime", tab_data.main.multibeam.dwellTime, tab_data.main.multibeam, dt_conf)
-
-        # Controller for the list of projects
-        self._project_list_controller = project.FastEMProjectListController(
-            tab_data,
+        self.project_list = FastEMProjectList(
             panel.pnl_projects,
-            viewport=vp,
+            main_tab_data=main_tab_data,
+            size=panel.pnl_projects.Size,
         )
 
         # Acquisition controller
         self._acquisition_controller = FastEMAcquiController(
             tab_data,
             panel,
+            main_tab_data,
+            self.project_list.tree_ctrl,
         )
-        main_data.is_acquiring.subscribe(self.on_acquisition)
 
     def Show(self, show=True):
         super().Show(show)
 
         if show and not self._initialized_after_show:
-            # At init the canvas has sometimes a weird size (eg, 1000x1 px), which
-            # prevents the fitting to work properly. We need to wait until the
-            # canvas has been resized to the final size. That's quite late...
-            wx.CallAfter(self.vp.canvas.zoom_out)
             self._initialized_after_show = True
 
     @classmethod
@@ -136,15 +93,3 @@ class FastEMAcquisitionTab(Tab):
             return 1
         else:
             return None
-
-    @call_in_wx_main
-    def on_acquisition(self, is_acquiring):
-        # Don't allow changes to acquisition/calibration ROIs during acquisition
-        if is_acquiring:
-            self._stream_controller.enable(False)
-            self._stream_controller.pause()
-            self._stream_controller.pauseStreams()
-        else:
-            self._stream_controller.resume()
-            # don't automatically resume streams
-            self._stream_controller.enable(True)
