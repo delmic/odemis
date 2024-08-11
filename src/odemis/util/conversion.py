@@ -201,6 +201,28 @@ def int32_to_rgba(int32_color: int) -> Tuple[int]:
 
     return r, g, b, a
 
+def frgba_to_hex(frgba):
+    """ Convert a float RGBA value into a Hexadecimal colour representation.
+    If the alpha value is 1.0, it will output a 6-character hex (e.g., #RRGGBB).
+    Otherwise, it will output an 8-character hex (e.g., #RRGGBBAA).
+
+    :param frgba: (float, float, float, float) RGBA values in the range [0..1]
+    :return: Hexadecimal colour representation as a string
+    """
+    if len(frgba) != 4:
+        raise ValueError("Illegal FRGBA colour %s" % str(frgba))
+
+    r = int(round(frgba[0] * 255))
+    g = int(round(frgba[1] * 255))
+    b = int(round(frgba[2] * 255))
+    a = int(round(frgba[3] * 255))
+
+    if a == 255:  # Fully opaque, do not include alpha in hex string
+        return '#{:02x}{:02x}{:02x}'.format(r, g, b)
+    else:  # Include alpha in hex string
+        return '#{:02x}{:02x}{:02x}{:02x}'.format(r, g, b, a)
+
+
 # String -> VA conversion helper
 def convert_to_object(s):
     """
