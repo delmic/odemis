@@ -1,0 +1,210 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<resource class="wxFrame" version="2.5.3.0"
+  xmlns="http://www.wxwidgets.org/wxxrc">
+  <!-- Root panel -->
+  <object class="wxPanel" name="pnl_fastem_project_manager">
+    <object class="wxBoxSizer">
+      <orient>wxHORIZONTAL</orient>
+      <!-- Left panel: pnl_active_project -->
+      <object class="sizeritem">
+        <object class="wxPanel" name="pnl_active_project">
+          <size>230,200</size>
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <object class="sizeritem">
+              <object class="CaptionBar">
+                <label>PROJECTS</label>
+                <fg>#1A1A1A</fg>
+              </object>
+              <option>0</option>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel" name="active_project_panel">
+                <bg>#333333</bg>
+                <fg>#999999</fg>
+                <size>230,160</size>
+                <flag>wxTOP|wxEXPAND</flag>
+              </object>
+            </object>
+          </object>
+          <bg>#4D4D4D</bg>
+        </object>
+        <option>0</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <!-- Middle panel: btn_panel -->
+      <object class="sizeritem">
+        <object class="wxPanel" name="btn_panel">
+          <object class="wxBoxSizer">
+            <orient>wxVERTICAL</orient>
+            <!-- Add spacer to move buttons down -->
+            <object class="spacer">
+                <size>-1,40</size>
+            </object>
+            <object class="sizeritem">
+              <object class="wxPanel">
+                <object class="wxBoxSizer">
+                  <orient>wxVERTICAL</orient>
+                  <object class="sizeritem">
+                    <object class="ImageButton" name="btn_move_up">
+                      <icon>../../img/icon/arr_up.png</icon>
+                      <height>16</height>
+                      <style>wxALIGN_CENTRE</style>
+                    </object>
+                    <flag>wxEXPAND|wxBOTTOM</flag>
+                    <border>8</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageButton" name="btn_move_down">
+                      <icon>../../img/icon/arr_down.png</icon>
+                      <height>16</height>
+                      <style>wxALIGN_CENTRE</style>
+                    </object>
+                    <flag>wxEXPAND|wxBOTTOM</flag>
+                    <border>8</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageButton" name="btn_delete">
+                      <icon>../../img/icon/ico_trash.png</icon>
+                      <height>16</height>
+                      <style>wxALIGN_CENTRE</style>
+                    </object>
+                    <flag>wxEXPAND|wxBOTTOM</flag>
+                    <border>8</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageButton" name="btn_export">
+                      <icon>../../img/icon/ico_download.png</icon>
+                      <height>16</height>
+                      <style>wxALIGN_CENTRE</style>
+                    </object>
+                    <flag>wxEXPAND|wxBOTTOM</flag>
+                    <border>8</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="ImageButton" name="btn_import">
+                      <icon>../../img/icon/ico_upload.png</icon>
+                      <height>16</height>
+                      <style>wxALIGN_CENTRE</style>
+                    </object>
+                    <flag>wxEXPAND|wxBOTTOM</flag>
+                    <border>8</border>
+                  </object>
+                </object>
+                <bg>#000000</bg>
+              </object>
+            </object>
+          </object>
+          <flag>wxEXPAND</flag>
+          <bg>#BFBFBF</bg>
+        </object>
+        <option>0</option>
+        <flag>wxEXPAND</flag>
+      </object>
+      <!-- Right panel: vertical sizer containing pnl_project_tabbuttons and pnl_project_tabs -->
+      <object class="sizeritem">
+        <object class="wxBoxSizer">
+          <orient>wxVERTICAL</orient>
+          <!-- Top panel: pnl_project_tabbuttons with horizontal sizer for tab buttons -->
+          <object class="sizeritem">
+            <object class="wxPanel" name="pnl_project_tabbuttons">
+              <object class="wxBoxSizer">
+                <orient>wxHORIZONTAL</orient>
+                <object class="sizeritem">
+                  <object class="TabButton" name="btn_tab_settings">
+                    <label>SETTINGS</label>
+                    <size>160,30</size>
+                    <face_colour>def</face_colour>
+                    <fg>#E5E5E5</fg>
+                    <font>
+                      <size>11</size>
+                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                    </font>
+                    <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+                  <border>10</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="TabButton" name="btn_tab_ribbons">
+                    <label>RIBBONS</label>
+                    <size>160,30</size>
+                    <face_colour>def</face_colour>
+                    <fg>#E5E5E5</fg>
+                    <font>
+                      <size>11</size>
+                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                    </font>
+                    <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+                  <border>10</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="TabButton" name="btn_tab_sections">
+                    <label>SECTIONS</label>
+                    <size>160,30</size>
+                    <face_colour>def</face_colour>
+                    <fg>#E5E5E5</fg>
+                    <font>
+                      <size>11</size>
+                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                    </font>
+                    <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+                  <border>10</border>
+                </object>
+                <object class="sizeritem">
+                  <object class="TabButton" name="btn_tab_roas">
+                    <label>ROAS</label>
+                    <size>160,30</size>
+                    <face_colour>def</face_colour>
+                    <fg>#E5E5E5</fg>
+                    <font>
+                      <size>11</size>
+                      <sysfont>wxSYS_DEFAULT_GUI_FONT</sysfont>
+                    </font>
+                    <style>wxALIGN_CENTRE</style>
+                    <XRCED>
+                      <assign_var>1</assign_var>
+                    </XRCED>
+                  </object>
+                  <flag>wxLEFT|wxALIGN_BOTTOM</flag>
+                  <border>10</border>
+                </object>
+              </object>
+              <bg>#BFBFBF</bg>
+              <flag>wxEXPAND</flag>
+              <size>878,40</size>
+            </object>
+            <option>0</option>
+            <flag>wxEXPAND</flag>
+          </object>
+          <!-- Middle panel: pnl_project_tabs -->
+          <object class="sizeritem">
+            <object class="wxPanel" name="pnl_project_tabs">
+              <bg>#333333</bg>
+              <flag>wxEXPAND</flag>
+            </object>
+            <option>1</option>
+            <flag>wxEXPAND</flag>
+          </object>
+        </object>
+        <option>1</option>
+        <flag>wxEXPAND</flag>
+      </object>
+    </object>
+    <bg>#333333</bg>
+  </object>
+</resource>
