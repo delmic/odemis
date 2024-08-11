@@ -9,248 +9,44 @@
         <object class="wxPanel">
           <object class="wxBoxSizer">
             <object class="sizeritem">
-              <object class="wxScrolledWindow" name="scr_win_right">
+              <object class="wxPanel" name="pnl_projects_header">
                 <object class="wxBoxSizer">
                   <orient>wxVERTICAL</orient>
                   <object class="sizeritem">
-                    <object class="FoldPanelBar" name="fpb_settings">
-                      <object class="FoldPanelItem">
-                        <object class="StreamBar" name="pnl_acquisition_streams">
-                          <size>300,-1</size>
-                          <add_button>0</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>SEM</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem" name="pnl_acq_settings">
-                        <object class="wxPanel">
-                          <size>300,-1</size>
-                          <add_button>1</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                            <XRCED>
-                              <assign_var>1</assign_var>
-                            </XRCED>
-                        </object>
-                        <label>ACQUISITION SETTINGS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="wxPanel" name="calib_1_pnl">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <object class="wxBoxSizer">
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="calib_1_btn">
-                                <height>24</height>
-                                <face_colour>def</face_colour>
-                                <label>Calibrate</label>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxALL</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxGauge" name="calib_1_gauge">
-                                <size>160,10</size>
-                                <range>100</range>
-                                <value>0</value>
-                                <hidden>1</hidden>
-                                <style>wxGA_SMOOTH</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxFIXED_MINSIZE</flag>
-                              <border>18</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText" name="calib_1_label">
-                                <style>wxALIGN_RIGHT</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>1</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                              <border>14</border>
-                            </object>
-                            <orient>wxHORIZONTAL</orient>
-                          </object>
-                        </object>
-                        <label>CALIBRATION 1</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="wxPanel">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <object class="wxBoxSizer">
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="calib_2_btn">
-                                <height>24</height>
-                                <face_colour>def</face_colour>
-                                <label>Calibrate</label>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxALL</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxGauge" name="calib_2_gauge">
-                                <size>160,10</size>
-                                <range>100</range>
-                                <value>0</value>
-                                <hidden>1</hidden>
-                                <style>wxGA_SMOOTH</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxFIXED_MINSIZE</flag>
-                              <border>18</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText" name="calib_2_label">
-                                <style>wxALIGN_RIGHT</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>1</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                              <border>14</border>
-                            </object>
-                            <orient>wxHORIZONTAL</orient>
-                          </object>
-                        </object>
-                        <object class="FastEMCalibrationPanelHeader" name="calib_2_pnl">
-                          <size>300,-1</size>
-                          <add_button>1</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>CALIBRATION 2</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="wxPanel">
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <object class="wxBoxSizer">
-                            <object class="sizeritem">
-                              <object class="ImageTextButton" name="calib_3_btn">
-                                <height>24</height>
-                                <face_colour>def</face_colour>
-                                <label>Calibrate</label>
-                                <style>wxALIGN_CENTRE</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxALL</flag>
-                              <border>10</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxGauge" name="calib_3_gauge">
-                                <size>160,10</size>
-                                <range>100</range>
-                                <value>0</value>
-                                <hidden>1</hidden>
-                                <style>wxGA_SMOOTH</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>0</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT|wxFIXED_MINSIZE</flag>
-                              <border>18</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText" name="calib_3_label">
-                                <style>wxALIGN_RIGHT</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                              <option>1</option>
-                              <flag>wxTOP|wxBOTTOM|wxRIGHT</flag>
-                              <border>14</border>
-                            </object>
-                            <orient>wxHORIZONTAL</orient>
-                          </object>
-                        </object>
-                        <object class="FastEMCalibrationPanelHeader" name="calib_3_pnl">
-                          <size>300,-1</size>
-                          <add_button>1</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>CALIBRATION 3</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <object class="FoldPanelItem">
-                        <object class="FastEMProjectList" name="pnl_projects">
-                          <size>300,-1</size>
-                          <add_button>1</add_button>
-                          <fg>#7F7F7F</fg>
-                          <bg>#333333</bg>
-                          <XRCED>
-                            <assign_var>1</assign_var>
-                          </XRCED>
-                        </object>
-                        <label>PROJECTS</label>
-                        <fg>#1A1A1A</fg>
-                        <bg>#555555</bg>
-                      </object>
-                      <spacing>0</spacing>
-                      <leftspacing>0</leftspacing>
-                      <rightspacing>0</rightspacing>
-                      <bg>#333333</bg>
-                      <XRCED>
-                        <assign_var>1</assign_var>
-                      </XRCED>
+                    <object class="CaptionBar">
+                      <label>PROJECTS</label>
+                      <fg>#1A1A1A</fg>
                     </object>
+                    <option>0</option>
+                    <flag>wxEXPAND</flag>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxPanel" name="pnl_projects">
+                      <bg>#333333</bg>
+                      <fg>#7F7F7F</fg>
+                      <size>400,700</size>
+                      <flag>wxTOP|wxEXPAND</flag>
+                    </object>
+                  </object>
+                </object>
+                <bg>#4D4D4D</bg>
+              </object>
+              <flag>wxEXPAND</flag>
+            </object>
+            <object class="sizeritem">
+              <object class="wxFlexGridSizer">
+                <cols>1</cols>
+                <vgap>0</vgap>
+                <hgap>0</hgap>
+                <object class="sizeritem">
+                  <object class="wxPanel">
+                    <option>1</option>
                     <flag>wxEXPAND</flag>
                   </object>
                 </object>
-                <size>400,-1</size>
-                <bg>#333333</bg>
-                <style>wxVSCROLL</style>
-                <XRCED>
-                  <assign_var>1</assign_var>
-                </XRCED>
               </object>
               <option>1</option>
               <flag>wxEXPAND</flag>
-              <minsize>400,400</minsize>
             </object>
             <orient>wxVERTICAL</orient>
             <object class="sizeritem">
@@ -270,39 +66,26 @@
                       <object class="wxBoxSizer">
                         <orient>wxVERTICAL</orient>
                         <object class="sizeritem">
+                          <object class="wxCheckBox" name="chk_ebeam_off">
+                            <label>Turn off e-beam after acquisition</label>
+                          </object>
+                          <flag>wxALL|wxEXPAND</flag>
+                          <border>10</border>
+                        </object>
+                        <object class="sizeritem">
                           <object class="wxFlexGridSizer">
                             <object class="sizeritem">
                               <object class="wxStaticText">
-                                <label>Total number of ROAs:</label>
+                                <label>Total number:</label>
                                 <fg>#E5E5E5</fg>
                               </object>
                               <flag>wxTOP</flag>
                               <border>2</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="wxTextCtrl" name="txt_num_rois">
+                              <object class="wxTextCtrl" name="txt_num_roas">
                                 <size>200,20</size>
-                                <value>...</value>
-                                <fg>#BFBFBF</fg>
-                                <bg>#333333</bg>
-                                <style>wxBORDER_NONE|wxTE_READONLY</style>
-                                <XRCED>
-                                  <assign_var>1</assign_var>
-                                </XRCED>
-                              </object>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxStaticText">
-                                <label>Destination</label>
-                                <fg>#E5E5E5</fg>
-                              </object>
-                              <flag>wxTOP</flag>
-                              <border>2</border>
-                            </object>
-                            <object class="sizeritem">
-                              <object class="wxTextCtrl" name="txt_destination">
-                                <size>200,20</size>
-                                <value>...</value>
+                                <value>0</value>
                                 <fg>#BFBFBF</fg>
                                 <bg>#333333</bg>
                                 <style>wxBORDER_NONE|wxTE_READONLY</style>
@@ -312,7 +95,7 @@
                               </object>
                             </object>
                             <cols>2</cols>
-                            <rows>3</rows>
+                            <rows>2</rows>
                             <vgap>5</vgap>
                             <hgap>10</hgap>
                             <growablecols>1</growablecols>
@@ -347,8 +130,8 @@
                                 <border>5</border>
                               </object>
                               <object class="sizeritem">
-                                <object class="wxStaticText" name="lbl_sparc_acq_estimate">
-                                  <label>No region of interest selected.</label>
+                                <object class="wxStaticText" name="lbl_acq_estimate">
+                                  <label>No region of acquisition selected.</label>
                                   <fg>#DDDDDD</fg>
                                   <font>
                                     <size>10</size>
@@ -371,7 +154,7 @@
                         <object class="sizeritem">
                           <object class="wxBoxSizer">
                             <object class="sizeritem">
-                              <object class="wxGauge" name="gauge_sparc_acq">
+                              <object class="wxGauge" name="gauge_acq">
                                 <size>-1,10</size>
                                 <range>100</range>
                                 <value>0</value>
@@ -385,7 +168,7 @@
                               <border>16</border>
                             </object>
                             <object class="sizeritem">
-                              <object class="ImageTextButton" name="btn_sparc_cancel">
+                              <object class="ImageTextButton" name="btn_cancel">
                                 <height>24</height>
                                 <face_colour>def</face_colour>
                                 <label>Cancel</label>
@@ -410,7 +193,8 @@
                     <flag>wxEXPAND</flag>
                   </object>
                   <object class="sizeritem">
-                    <object class="ImageTextButton" name="btn_sparc_acquire">
+                    <object class="ImageTextButton" name="btn_acquire">
+                      <bg>#333333</bg>
                       <icon>../../img/icon/ico_acqui.png</icon>
                       <height>48</height>
                       <face_colour>blue</face_colour>
@@ -429,7 +213,6 @@
                     <border>10</border>
                   </object>
                 </object>
-                <bg>#4D4D4D</bg>
               </object>
               <flag>wxEXPAND</flag>
             </object>
