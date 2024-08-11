@@ -20,24 +20,38 @@ This file is part of Odemis.
     Odemis. If not, see http://www.gnu.org/licenses/.
 
 """
-from collections.abc import Mapping
-from itertools import chain
 import logging
 import math
 import threading
-from typing import Dict, Tuple, List, Optional
+from abc import ABCMeta, abstractmethod
+from collections.abc import Mapping
+from typing import Dict, Optional, Tuple
 
 from odemis import model
-from odemis.acq import path, acqmng
+from odemis.acq import acqmng, path
+from odemis.acq.align.fastem import Calibrations
+from odemis.acq.fastem import (
+    CALIBRATION_1,
+    CALIBRATION_2,
+    CALIBRATION_3,
+    FastEMCalibration,
+    FastEMROC,
+)
 from odemis.acq.move import MicroscopePostureManager
-from odemis.gui import conf
+from odemis.gui import FG_COLOUR_WARNING, conf
 from odemis.gui.conf.data import get_hw_settings_config
-from odemis.gui.model._constants import (CHAMBER_UNKNOWN, CHAMBER_VENTED, CHAMBER_PUMPING,
-                                         CHAMBER_VACUUM, CHAMBER_VENTING, STATE_OFF,
-                                         STATE_ON, STATE_DISABLED)
-from odemis.model import FloatContinuous, StringVA, hasVA
 from odemis.gui.log import observe_comp_state
-from odemis.gui.util.conversion import sample_positions_to_layout
+from odemis.gui.model._constants import (
+    CHAMBER_PUMPING,
+    CHAMBER_UNKNOWN,
+    CHAMBER_VACUUM,
+    CHAMBER_VENTED,
+    CHAMBER_VENTING,
+    STATE_DISABLED,
+    STATE_OFF,
+    STATE_ON,
+)
+from odemis.model import FloatContinuous, StringVA, hasVA
 
 
 class MainGUIData(object):
@@ -529,15 +543,89 @@ class CryoMainGUIData(MainGUIData):
         self.sample_rel_bbox = self.SAMPLE_USABLE_BBOX_TEM_GRID
 
 
+class ScintillatorShape(metaclass=ABCMeta):
+    """Base class representing a geometric shape."""
+    def __init__(self, position: Tuple[float, float]):
+        self.position = position
+
+    @abstractmethod
+    def get_size(self):
+        pass
+
+    @abstractmethod
+    def get_bbox(self):
+        pass
+
+
+class RectangleScintillator(ScintillatorShape):
+    """Class representing a rectangle."""
+    def __init__(self, position: Tuple[float, float], width: float, height: float):
+        super().__init__(position)
+        self.width = width
+        self.height = height
+
+    def get_size(self):
+        return self.width, self.height
+
+    def get_bbox(self):
+        return (
+            self.position[0] - self.width / 2,
+            self.position[1] - self.height / 2,
+            self.position[0] + self.width / 2,
+            self.position[1] + self.height / 2,
+        )  # (minx, miny, maxx, maxy) [m]
+
+
+class CircleScintillator(ScintillatorShape):
+    """Class representing a circle."""
+    def __init__(self, position: Tuple[float, float], radius: float):
+        super().__init__(position)
+        self.radius = radius
+
+    def get_size(self):
+        return 2 * self.radius, 2 * self.radius
+
+    def get_bbox(self):
+        return (
+            self.position[0] - self.radius,
+            self.position[1] - self.radius,
+            self.position[0] + self.radius,
+            self.position[1] + self.radius,
+        )  # (minx, miny, maxx, maxy) [m]
+
+
+class Scintillator:
+    """Class representing a scintillator with its position and size."""
+    def __init__(self, number: int, shape: ScintillatorShape):
+        self.number = number
+        self.shape = shape
+        self.calibrations: Dict[str, FastEMCalibration] = {}
+
+
 class Sample:
     """Class representing a sample carrier / holder for FastEM."""
-    def __init__(self):
-        self.name: str = ""
-        self.type: str = ""
-        # Key is scintillator number, value is the position
-        self.positions: Dict[int, Tuple[float, float]] = {}
-        # Key is scintillator number, value is the size
-        self.sizes: Dict[int, Tuple[float, float]] = {}
+    def __init__(self, type: str):
+        self.type = type
+        self.scintillators: Dict[int, Scintillator] = {}
+
+    def find_closest_scintillator(self, position: Tuple[float, float]) -> Optional[Scintillator]:
+        """
+        Find the closest scintillator for the provided region of acquisition (ROA) position.
+        :param position: (float, float) the position of the ROA.
+        :return: int the number of the closest scintillator, or None if no scintillator is found.
+        """
+        roi_x, roi_y = position
+        mindist = 1  # distances always lower 1
+        closest_scintillator = None
+
+        for scintillator in self.scintillators.values():
+            sc_x, sc_y = scintillator.shape.position
+            dist = max(abs(roi_x - sc_x), abs(roi_y - sc_y))
+            if dist < mindist:
+                mindist = dist
+                closest_scintillator = scintillator
+
+        return closest_scintillator
 
 
 class FastEMMainGUIData(MainGUIData):
@@ -552,106 +640,95 @@ class FastEMMainGUIData(MainGUIData):
         # screen positions to stage positions for the acquisition)
         if self.stage is None:
             raise KeyError("No stage found in the microscope.")
+
+        # Calibration sequence
+        if microscope.name.lower().endswith("sim"):
+            calib_1_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN]
+            calib_2_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,]
+                                    # Calibrations.DARK_OFFSET]
+            calib_3_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN]
+        else:
+            calib_1_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_ROTATION_PREALIGN,
+                                    Calibrations.SCAN_ROTATION_PREALIGN,
+                                    Calibrations.DESCAN_GAIN_STATIC,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                                    Calibrations.IMAGE_ROTATION_FINAL,
+                                    Calibrations.IMAGE_TRANSLATION_FINAL]
+            calib_2_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                                    Calibrations.DARK_OFFSET,
+                                    Calibrations.DIGITAL_GAIN]
+            calib_3_calibrations = [Calibrations.OPTICAL_AUTOFOCUS,
+                                    Calibrations.IMAGE_TRANSLATION_PREALIGN,
+                                    Calibrations.SCAN_ROTATION_FINAL,
+                                    Calibrations.CELL_TRANSLATION]
+
         md = self.stage.getMetadata()
         if model.MD_POS_ACTIVE_RANGE not in md:
             raise KeyError("Stage has no MD_POS_ACTIVE_RANGE metadata.")
         # POS_ACTIVE_RANGE contains the bounding-box of the positions with a sample
         carrier_range = md[model.MD_POS_ACTIVE_RANGE]
         minx, miny = carrier_range["x"][0], carrier_range["y"][0]  # bottom-left of carrier 1 in m
-        # SAMPLE_CENTERS contains the center position of the scintillators from bottom-left
-        # position with a sample
+        # Field-size
+        sz = (self.multibeam.resolution.value[0] * self.multibeam.pixelSize.value[0],
+              self.multibeam.resolution.value[1] * self.multibeam.pixelSize.value[1])
+        # The SAMPLE_CENTERS contains information about the supported sample carriers
+        # A sample carrier has a number of scintillators. A scintillator is associated with a number.
+        # Further a scintillator is described by its shape and center. Given the shape type, the
+        # shape's dimensions are described by its size (rectangle) or radius (circle).
+        # Currently two shape types are supported namely rectangle and circle.
+        # center (X, Y) [m] of each scintillator is measured from the bottom-left position of the sample carrier
         if model.MD_SAMPLE_CENTERS not in md:
             raise KeyError("Stage has no MD_SAMPLE_CENTERS metadata.")
         centers = md[model.MD_SAMPLE_CENTERS]
-        # SAMPLE_SIZES contains the sizes of the scintillators
-        if model.MD_SAMPLE_SIZES not in md:
-            raise KeyError("Stage has no MD_SAMPLE_SIZES metadata.")
-        sample_sizes = md[model.MD_SAMPLE_SIZES]
-        # Handle error cases for sample centers and sizes
-        if centers.keys() != sample_sizes.keys():
-            raise KeyError("MD_SAMPLE_CENTERS and MD_SAMPLE_SIZES metadata should have "
-                "the same keys.")
-        if not all(isinstance(i, float) for i in chain.from_iterable(centers.values())):
-            raise TypeError("The sample centers must be of the type float.")
-        if not all(isinstance(i, float) for i in chain.from_iterable(sample_sizes.values())):
-            raise TypeError("The sample sizes must be of the type float.")
-        layout = sample_positions_to_layout(centers)
-        if None in chain.from_iterable(layout):
-            raise TypeError(
-                "Layout could not be determined from stage's MD_SAMPLE_CENTERS metadata,"
-                "check if the sample centers values are correct.")
-        self.current_sample = ""
-        self.samples: Dict[str, Sample] = {}
-        for row_idx, row in enumerate(layout):
-            for column_idx, name in enumerate(row):
-                try:
-                    parts = name.split(";")
-                    sample_info = parts[1].strip()
-                    scintillator_number = int(sample_info.split()[-1])
-                except Exception:
-                    raise ValueError(
-                        "Name of the sample must be of the format, e.g. 'SAMPLE_TYPE; SAMPLE 1'")
-                layout[row_idx][column_idx] = scintillator_number
-        for name, size in sample_sizes.items():
-            try:
-                parts = name.split(";")
-                sample_type = parts[0].strip()
-                sample_info = parts[1].strip()
-                scintillator_number = int(sample_info.split()[-1])
-            except Exception:
-                raise ValueError(
-                    "Name of the sample must be of the format, e.g. 'SAMPLE_TYPE; SAMPLE 1'")
-            if sample_type not in self.samples:
-                self.samples[sample_type] = Sample()
-                self.samples[sample_type].name = name
-                self.samples[sample_type].type = sample_type
-            self.samples[sample_type].sizes[scintillator_number] = size
-        self.current_sample = list(self.samples.keys())[0]
-        # SAMPLE_BACKGROUND contains the minx, miny, maxx, maxy positions of rectangles for
-        # background from bottom-left position with a sample
-        if model.MD_SAMPLE_BACKGROUND not in md:
-            raise KeyError("Stage has no MD_SAMPLE_BACKGROUND metadata.")
-        background = md[model.MD_SAMPLE_BACKGROUND]
 
-        # Initialize attributes related to the sample carrier
-        #  * .scintillator_sizes (dict: int --> (float, float)): size of scintillators in m
-        #  * .scintillator_positions (dict: int --> (float, float)): positions in stage coordinates
-        #  * .scintillator_layout (list of list of int): 2D layout of scintillator grid
-        #  * .background (list of ltrb tuples): coordinates for background overlay,
-        #    rectangles can be displayed in world overlay as grey bars, e.g. for simulating a sample carrier
-        for name, center in centers.items():
-            try:
-                parts = name.split(";")
-                sample_type = parts[0].strip()
-                sample_info = parts[1].strip()
-                scintillator_number = int(sample_info.split()[-1])
-            except Exception:
-                raise ValueError(
-                    "Name of the sample must be of the format, e.g. 'SAMPLE_TYPE; SAMPLE 1'")
-            if sample_type not in self.samples:
-                self.samples[sample_type] = Sample()
-                self.samples[sample_type].name = name
-                self.samples[sample_type].type = sample_type
-            self.samples[sample_type].positions[scintillator_number] = (minx + center[0], miny + center[1])
-        self.scintillator_sizes = self.samples[self.current_sample].sizes
-        self.scintillator_positions = self.samples[self.current_sample].positions
-        self.scintillator_layout = layout
-        self.background = []
-        for rect in background:
-            if len(rect) != 4:
-                raise ValueError(
-                    "The positions of rectangles for background must contain 4 elements,"
-                    "i.e. minx, miny, maxx, maxy [m].")
-            if not all(isinstance(i, float) for i in rect):
-                raise TypeError(
-                    "The positions of rectangles for background must be of the type float.")
-            self.background.append((minx + rect[0], miny + rect[1], minx + rect[2], miny + rect[3]))
+        self.samples = model.VigilantAttribute({})  # Dict[str, Sample]
+
+        for sample_type, sample_info in centers.items():
+            if sample_type not in self.samples.value:
+                sample = Sample(type=sample_type)
+                self.samples.value[sample_type] = sample
+            for scintillator_number, scintillator_info in sample_info.items():
+                center = scintillator_info["center"]
+                shape = scintillator_info["shape"]
+                position = (minx + center[0], miny + center[1])
+
+                # Determine shape and dimensions
+                if shape == "rectangle" and "size" in scintillator_info:
+                    size = scintillator_info["size"]
+                    shape = RectangleScintillator(position=position, width=size[0], height=size[1])
+                elif shape == "circle" and "radius" in scintillator_info:
+                    radius = scintillator_info["radius"]
+                    shape = CircleScintillator(position=position, radius=radius)
+                else:
+                    raise ValueError("Unknown scintillator shape dimensions")
+
+                scintillator = Scintillator(number=int(scintillator_number), shape=shape)
+                for calibration_name in [CALIBRATION_1, CALIBRATION_2, CALIBRATION_3]:
+                    calibration = FastEMCalibration(name=calibration_name)
+                    if calibration_name == CALIBRATION_1:
+                        calibration.sequence.value = calib_1_calibrations
+                    elif calibration_name in [CALIBRATION_2, CALIBRATION_3]:
+                        if calibration_name == CALIBRATION_2:
+                            colour = FG_COLOUR_WARNING
+                            calibration.sequence.value = calib_2_calibrations
+                        elif calibration_name == CALIBRATION_3:
+                            colour = "#00ff00"  # green
+                            calibration.sequence.value = calib_3_calibrations
+                        xmin = position[0] - 0.5 * sz[0]
+                        ymin = position[1] + 0.5 * sz[1]
+                        xmax = position[0] + 0.5 * sz[0]
+                        ymax = position[1] - 0.5 * sz[1]
+                        calibration.region = FastEMROC(str(scintillator_number), coordinates=(xmin, ymin, xmax, ymax), colour=colour)
+                    scintillator.calibrations[calibration_name] = calibration
+                self.samples.value[sample_type].scintillators[scintillator_number] = scintillator
 
         # Overview streams
         self.overview_streams = model.VigilantAttribute({})  # dict: int --> stream or None
-
-        # Scintillators containing sample (manual selection in chamber tab)
-        self.active_scintillators = model.ListVA([])
 
         # Indicate state of ebeam button
         hw_states = {STATE_OFF, STATE_ON, STATE_DISABLED}
@@ -661,6 +738,15 @@ class FastEMMainGUIData(MainGUIData):
         self.is_aligned = model.BooleanVA(False)
         self.emState.subscribe(self._reset_is_aligned)
         self.chamberState.subscribe(self._reset_is_aligned)
+
+        # The current user of the system
+        self.current_user = model.StringVA()
+        # The current sample in use
+        self.current_sample = model.VigilantAttribute(None)
+        # User preferred dwell time for overview image acquisition
+        self.user_dwell_time_overview = model.FloatVA()
+        # User preferred dwell time for project acquisition
+        self.user_dwell_time_acquisition = model.FloatVA()
 
     def _reset_is_aligned(self, _):
         self.is_aligned.value = False
