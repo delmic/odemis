@@ -56,7 +56,7 @@ class MillingPatternPanel(wx.Panel):
             if param in unsupported_parameters:
                 continue
 
-            conf = {"unit": "um", "accuracy": 2}
+            conf = {"unit": "m", "accuracy": 2}
             # if label == "rotation":
                 # conf = {"unit": "deg"}
 

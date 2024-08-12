@@ -1,7 +1,7 @@
 'Rough Milling':
   name: 'Rough Milling'
   milling:
-    current: 2e-10
+    current: 0.74e-9
     voltage: 30000.0
     field_of_view: 8e-05
     mode: 'Serial'
@@ -10,7 +10,7 @@
     - name: 'Rough Trench'
       width: 1.2e-05
       height: 6e-06
-      depth: 2e-06
+      depth: 1.5e-06
       spacing: 5e-06
       center_x: 0
       center_y: 0
@@ -18,7 +18,7 @@
     - name: 'Microexpansion Joints'
       width: 1e-06
       height: 1e-05
-      depth: 2e-06
+      depth: 1.0e-06
       spacing: 2e-05
       center_x: 0
       center_y: 0
@@ -26,7 +26,7 @@
 'Fine Milling':
   name: 'Fine Milling'
   milling:
-    current: 90e-12
+    current: 0.2e-9
     voltage: 30000.0
     field_of_view: 8e-05
     mode: 'Serial'
@@ -52,7 +52,7 @@
     - name: 'Trench'
       width: 9e-06
       height: 1e-06
-      depth: 0.4e-06
+      depth: 0.8e-06
       spacing: 8e-07
       center_x: 0
       center_y: 0
