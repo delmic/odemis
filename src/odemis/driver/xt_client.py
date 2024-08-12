@@ -43,6 +43,7 @@ from odemis import util
 from odemis.model import (CancellableFuture, CancellableThreadPoolExecutor,
                           DataArray, HwError, ProgressiveFuture,
                           StringEnumerated, isasync)
+from odemis.util.driver import isNearPosition
 
 Pyro5.api.config.SERIALIZER = 'msgpack'
 msgpack_numpy.patch()
@@ -2297,43 +2298,39 @@ class Stage(model.Actuator):
                 # it is a different imaging mode
                 # TODO: extend the behavior to other imaging modes
                 if 'r' in pos or 't' in pos:
-                    logging.debug("Position includes rx or rz. Breaking out of the loop.")
+                    logging.debug("Position requested to move includes rx or rz. Reported position accuracy is not"
+                                  "checked.")
                     not_updated = False
 
+                # Find target position in absolute
+                if not rel:
+                    target_pos = pos
+                else:
+                    target_pos = {ax: val + pos[ax] for ax, val in orig_pos_raw.items()}
+
                 while not_updated:
+                    time.sleep(wait_duration)
                     if time.time() > timeout:
                         logging.warning("Stage position after move + %s s is still same as original pos: %s. "
                                         "Giving up waiting", 10, orig_pos_raw)
                         break
 
-                    # If all the axes which were requested to move have new position, it's really finished
-                    pos_raw = self.parent.get_stage_position()
                     # Every axis requested to move should have moved (compared to the position before starting)
-                    if all(pos_raw[a] != op for a, op in orig_pos_raw.items()):
-                        all_axes_updated = True
-
+                    current_pos_raw = self.parent.get_stage_position()
+                    if not isNearPosition(orig_pos_raw, current_pos_raw, axes=set(orig_pos_raw.keys())):
                         # For x, y, and z, be extra picky and wait until they are "almost" at the target
                         # Due to y-z linkage, there is an equivalent change in z axis when y axis is changed
                         # Therefore, it is not important to check z
-                        for k in ["x", "y"]:
-                            if k in pos:
-                                if not rel:
-                                    if abs(pos_raw[k] - pos[k]) >= 1e-6:
-                                        all_axes_updated = False
-                                        break
-                                else:
-                                    if abs(pos_raw[k] - (pos[k] + orig_pos_raw[k])) >= 1e-6:
-                                        all_axes_updated = False
-                                        break
+                        all_axes_updated = isNearPosition(current_pos=current_pos_raw, target_position=target_pos,
+                                                          axes={"x", "y"}, atol_linear=1e-6)
 
                         if all_axes_updated:
-                            logging.debug("Position has updated fully: from %s -> %s", orig_pos_raw, pos_raw)
+                            logging.debug("Position has updated fully: from %s -> %s", orig_pos_raw,
+                                          current_pos_raw)
                             break
                         else:
                             time.sleep(wait_duration)
-                    else:
-                        logging.debug("Position has not updated fully: from %s -> %s", orig_pos_raw, pos_raw)
-                        time.sleep(wait_duration)
+
             except Exception:
                 if future._must_stop.is_set():
                     raise CancelledError()
