@@ -491,7 +491,10 @@ class AcquisitionTask(object):
         # save the initial multibeam resolution, because the resolution will get updated if save_full_cells is True
         self._old_res = self._multibeam.resolution.value
 
-        self.path = fastem_util.create_image_dir("beam-shift-correction")
+        path = fastem_util.create_image_dir("beam-shift-correction")
+        # The path should be [image-dir]/beam-shift-correction/[timestamp]/[roa-name]
+        self.path = os.path.join(path, self._roa.name.value)
+        os.makedirs(self.path, exist_ok=True)
 
         # Dictionary containing the single field images with index as key: e.g. {(0,1): DataArray}.
         self.megafield = {}
@@ -535,8 +538,8 @@ class AcquisitionTask(object):
         self._future.set_progress(end=time.time() + total_roa_time)  # provide end time to future
         logging.info(
             "Starting acquisition of ROA %s, with expected duration of %f s, %s by %s fields and overlap %s.",
-            self._roa.name, total_roa_time, self._roa.field_indices[-1][0] + 1, self._roa.field_indices[-1][1] + 1,
-            self._roa.overlap,
+            self._roa.name.value, total_roa_time, self._roa.field_indices[-1][0] + 1,
+            self._roa.field_indices[-1][1] + 1, self._roa.overlap,
         )
 
         # Update the position of the first tile.
@@ -920,7 +923,7 @@ class AcquisitionTask(object):
         Example: If the beam shift correction should run every 3 sections for the indices [(1, 0), (2, 0), (8, 0)],
         it should run for indices (1, 0) and (8, 0).
 
-        :param n_beam_shifts: (int) Every how many sections the beam shift correction should run.
+        :param n_beam_shifts: (int) Number of sections after which the beam shift correction should run.
         """
         # Sort indices by row first and then by column to enable row-wise processing
         field_indices = sorted(self._roa.field_indices, key=lambda x: (x[1], x[0]))
