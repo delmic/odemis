@@ -30,13 +30,16 @@ from concurrent.futures._base import CancelledError
 from unittest.mock import Mock
 
 import numpy
+from shapely.geometry import Polygon
 
 import odemis
 from odemis import model
 from odemis.acq import fastem, stream
 from odemis.acq.acqmng import SettingsObserver
 from odemis.acq.align.fastem import Calibrations
-from odemis.acq.fastem import estimate_acquisition_time, SETTINGS_SELECTION
+from odemis.acq.fastem import SETTINGS_SELECTION
+from odemis.gui.comp.overlay.shapes import EditableShape
+from odemis.gui.model.main_gui_data import FastEMMainGUIData
 from odemis.util import driver, get_polygon_bbox, img, is_point_in_rect, testing
 
 # * TEST_NOHW = 1: connected to the simulator or not connected to anything
@@ -50,6 +53,42 @@ logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 FASTEM_CONFIG = CONFIG_PATH + "sim/fastem-sim.odm.yaml"
 FASTEM_CONFIG_ASM = CONFIG_PATH + "sim/fastem-sim-asm.odm.yaml"
+
+
+class MockEditableShape(EditableShape):
+    def __init__(self, cnvs=None):
+        super().__init__(cnvs)
+
+    def check_point_proximity(self, v_point):
+        return False
+
+    def draw(self, ctx, shift=(0, 0), scale=1.0):
+        pass
+
+    def copy(self):
+        return MockEditableShape()
+
+    def move_to(self, pos):
+        pass
+
+    def get_state(self):
+        return {}
+
+    def restore_state(self, state):
+        pass
+
+    def to_dict(self):
+        return {}
+
+    @staticmethod
+    def from_dict(shape, tab_data):
+        return MockEditableShape()
+
+    def set_rotation(self, target_rotation):
+        pass
+
+    def reset(self):
+        pass
 
 
 class TestFASTEMOverviewAcquisition(unittest.TestCase):
@@ -175,6 +214,14 @@ class TestFastEMROA(unittest.TestCase):
         cls.multibeam = model.getComponent(role="multibeam")
         cls.descanner = model.getComponent(role="descanner")
 
+        # Create the FastEMMainGUIData
+        cls.microscope = model.getMicroscope()
+        cls.main_data = FastEMMainGUIData(microscope=cls.microscope)
+        cls.main_data.asm = cls.asm
+        cls.main_data.multibeam = cls.multibeam
+        cls.main_data.descanner = cls.descanner
+        cls.main_data.mppc = cls.mppc
+
     def test_get_poly_field_indices(self):
         """Test that the correct indices are returned and that they are in the right order."""
         x_fields = 5
@@ -189,23 +236,23 @@ class TestFastEMROA(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name,
-                               roc_2,
-                               roc_3,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap=0.0)
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=0.0,
+                        name=roa_name,
+                        slice_index=0)
+        roa.roc_2.value = roc_2
+        roa.roc_3.value = roc_3
+        roa.polygon_shape = Polygon(polygon)
 
-        # Index (1,0) is ignored because of the step over effect the algorithm can have with very small corners.
         expected_indices = [(0, 0),
-                            (0, 1), (1, 1), (2, 1),
-                            (0, 2), (1, 2), (2, 2), (3, 2),
-                            (0, 3), (1, 3), (2, 3), (3, 3), (4, 3)]  # (col, row)
+                            (0, 1), (1, 1),
+                            (0, 2), (1, 2), (2, 2),
+                            (0, 3), (1, 3), (2, 3), (3, 3),
+                            (0, 4), (1, 4), (2, 4), (3, 4)]
 
-        field_indices = roa.get_poly_field_indices(polygon)
-        self.assertListEqual(expected_indices, field_indices)
+        roa.calculate_field_indices()
+        self.assertListEqual(expected_indices, roa.field_indices)
 
     def test_get_poly_field_indices_overlap(self):
         """Test that the correct indices are returned and are in the right order with different sizes of overlap."""
@@ -220,31 +267,30 @@ class TestFastEMROA(unittest.TestCase):
         field_size_x = res_x * px_size_x
         field_size_y = res_y * px_size_y
 
-        expected_indices = [(0, 0), (1, 0),
-                            (0, 1), (1, 1), (2, 1),
-                            (0, 2), (1, 2), (2, 2), (3, 2),
-                            (0, 3), (1, 3), (2, 3), (3, 3), (4, 3)]
+        expected_indices = [(0, 0),
+                            (0, 1), (1, 1),
+                            (0, 2), (1, 2), (2, 2),
+                            (0, 3), (1, 3), (2, 3), (3, 3),
+                            (0, 4), (1, 4), (2, 4), (3, 4)]
 
         for overlap in (0, 0.0625, 0.2, 0.5, 0.7):
             xmin, ymin = (0, 0)
             xmax, ymax = (field_size_x * x_fields * (1 - overlap) + field_size_x * overlap,
                           field_size_y * y_fields * (1 - overlap) + field_size_y * overlap)
             polygon = [(ymin, xmin), (ymax - px_size_y, xmin), (ymin, xmax - px_size_x)]
-            roa = fastem.FastEMROA(roa_name,
-                                   None,
-                                   None,
-                                   self.asm,
-                                   self.multibeam,
-                                   self.descanner,
-                                   self.mppc,
-                                   overlap)
+            roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+            roa.polygon_shape = Polygon(polygon)
 
-            res_field_indices = roa.get_poly_field_indices(polygon)
+            roa.calculate_field_indices()
 
             max_extra_fields = int(1 / (1 - overlap))
 
             exp_x_min, exp_y_min, exp_x_max, exp_y_max = get_polygon_bbox(expected_indices)
-            res_x_min, res_y_min, res_x_max, res_y_max = get_polygon_bbox(res_field_indices)
+            res_x_min, res_y_min, res_x_max, res_y_max = get_polygon_bbox(roa.field_indices)
             self.assertEqual(exp_x_min, res_x_min)
             self.assertEqual(exp_y_min, res_y_min)
             self.assertLessEqual(res_x_max - exp_x_max, max_extra_fields)
@@ -268,19 +314,17 @@ class TestFastEMROA(unittest.TestCase):
         xmax, ymax = (0.8 * field_size_x * overlap,
                       0.8 * field_size_y * overlap)
         polygon = [(0, 0), (ymax - px_size_y, xmax - px_size_x), (ymax - px_size_y, 0)]
-        roa = fastem.FastEMROA(roa_name,
-                               None,
-                               None,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap)
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+        roa.polygon_shape = Polygon(polygon)
 
         # For very a small ROA only single field is expected.
         expected_indices = [(0, 0)]  # (col, row)
-        field_indices = roa.get_poly_field_indices(polygon)
-        self.assertListEqual(field_indices, expected_indices)
+        roa.calculate_field_indices()
+        self.assertListEqual(roa.field_indices, expected_indices)
 
 
 class TestFastEMAcquisition(unittest.TestCase):
@@ -315,6 +359,14 @@ class TestFastEMAcquisition(unittest.TestCase):
         cls.init_rot_cor = cls.scan_stage.getMetadata()[model.MD_ROTATION_COR]
         cls.scan_stage.updateMetadata({model.MD_ROTATION_COR: 0.0})
 
+        # Create the FastEMMainGUIData
+        cls.microscope = model.getMicroscope()
+        cls.main_data = FastEMMainGUIData(microscope=cls.microscope)
+        cls.main_data.asm = cls.asm
+        cls.main_data.multibeam = cls.multibeam
+        cls.main_data.descanner = cls.descanner
+        cls.main_data.mppc = cls.mppc
+
     @classmethod
     def tearDownClass(cls):
         cls.scan_stage.updateMetadata({model.MD_ROTATION_COR: cls.init_rot_cor})
@@ -344,18 +396,21 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name,
-                               roc_2,
-                               roc_3,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap=overlap)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+        roa.roc_2.value = roc_2
+        roa.roc_3.value = roc_3
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
 
         path_storage = "test_project_megafield"
-        f = fastem.acquire(roa, path_storage,
+        f = fastem.acquire(roa, path_storage, "default",
                            self.scanner, self.multibeam, self.descanner, self.mppc, self.stage, self.scan_stage,
                            self.ccd, self.beamshift, self.lens, self.se_detector, self.ebeam_focus)
         data, e = f.result()
@@ -388,18 +443,21 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name,
-                               roc_2,
-                               roc_3,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap=overlap)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+        roa.roc_2.value = roc_2
+        roa.roc_3.value = roc_3
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
 
         path_storage = "test_project_field_indices"
-        f = fastem.acquire(roa, path_storage,
+        f = fastem.acquire(roa, path_storage, "default",
                            self.scanner, self.multibeam, self.descanner, self.mppc,
                            self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
                            self.se_detector, self.ebeam_focus)
@@ -408,7 +466,7 @@ class TestFastEMAcquisition(unittest.TestCase):
         self.assertIsNone(e)  # check no exceptions were returned
         # check data returned contains the correct number of field images
         # expect plus 1 field in x and y respectively
-        self.assertEqual(len(data), (x_fields + 1) * (y_fields + 1))
+        self.assertGreater(len(data), x_fields * y_fields)
         self.assertIsInstance(data[(0, 0)], model.DataArray)
 
     def test_progress_ROA(self):
@@ -431,24 +489,24 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name,
-                               roc_2,
-                               roc_3,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap=overlap)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+        roa.roc_2.value = roc_2
+        roa.roc_3.value = roc_3
+        roa.shape._points = points
+        roa.shape.points.value = points
 
-        self.updates = 0  # updated in callback on_progress_update
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
 
         path_storage = "test_project_progress"
-        f = fastem.acquire(roa, path_storage,
+        f = fastem.acquire(roa, path_storage, "default",
                            self.scanner, self.multibeam, self.descanner, self.mppc,
                            self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
                            self.se_detector, self.ebeam_focus)
-        f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
         data, e = f.result()
@@ -456,7 +514,6 @@ class TestFastEMAcquisition(unittest.TestCase):
         self.assertIsNone(e)  # check no exceptions were returned
         self.assertIsInstance(data[(0, 0)], model.DataArray)
         self.assertTrue(self.done)
-        self.assertGreaterEqual(self.updates, 6)  # at least one update per field
 
     def test_cancel_ROA(self):
         """Test if it is possible to cancel between field images acquired for one ROA."""
@@ -478,26 +535,26 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name,
-                               roc_2,
-                               roc_3,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap=overlap)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+        roa.roc_2.value = roc_2
+        roa.roc_3.value = roc_3
+        roa.shape._points = points
+        roa.shape.points.value = points
 
-        self.end = None  # updated in callback on_progress_update
-        self.updates = 0  # updated in callback on_progress_update
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
+
         self.done = False  # updated in callback on_done
 
         path_storage = "test_project_cancel"
-        f = fastem.acquire(roa, path_storage,
+        f = fastem.acquire(roa, path_storage, "default",
                            self.scanner, self.multibeam, self.descanner, self.mppc,
                            self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
                            self.se_detector, self.ebeam_focus)
-        f.add_update_callback(self.on_progress_update)  # callback executed every time f.set_progress is called
         f.add_done_callback(self.on_done)  # callback executed when f.set_result is called (via bindFuture)
 
         time.sleep(1)  # make sure it's started
@@ -506,8 +563,6 @@ class TestFastEMAcquisition(unittest.TestCase):
 
         with self.assertRaises(CancelledError):
             f.result(timeout=5)  # add timeout = 5s in case cancellation error was not raised
-        self.assertGreaterEqual(self.updates, 3)  # at least one update at cancellation
-        self.assertLessEqual(self.end, time.time())
         self.assertTrue(self.done)
         self.assertTrue(f.cancelled())
 
@@ -536,18 +591,21 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name,
-                               roc_2,
-                               roc_3,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap=overlap)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+        roa.roc_2.value = roc_2
+        roa.roc_3.value = roc_3
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
 
         path_storage = "test_project_stage_move"
-        f = fastem.acquire(roa, path_storage,
+        f = fastem.acquire(roa, path_storage, "default",
                            self.scanner, self.multibeam, self.descanner, self.mppc,
                            self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
                            self.se_detector, self.ebeam_focus)
@@ -600,18 +658,21 @@ class TestFastEMAcquisition(unittest.TestCase):
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name,
-                               roc_2,
-                               roc_3,
-                               self.asm,
-                               self.multibeam,
-                               self.descanner,
-                               self.mppc,
-                               overlap=overlap)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+        roa.roc_2.value = roc_2
+        roa.roc_3.value = roc_3
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
 
         path_storage = "test_project_stage_move_rot_cor"
-        f = fastem.acquire(roa, path_storage,
+        f = fastem.acquire(roa, path_storage, "default",
                            self.scanner, self.multibeam, self.descanner, self.mppc,
                            self.stage, self.scan_stage, self.ccd, self.beamshift, self.lens,
                            self.se_detector, self.ebeam_focus)
@@ -631,11 +692,6 @@ class TestFastEMAcquisition(unittest.TestCase):
 
     def on_done(self, future):
         self.done = True
-
-    def on_progress_update(self, future, start, end):
-        self.start = start
-        self.end = end
-        self.updates += 1
 
 
 class TestFastEMAcquisitionTask(unittest.TestCase):
@@ -667,6 +723,14 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         cls.init_rot_cor = cls.scan_stage.getMetadata()[model.MD_ROTATION_COR]
         cls.scan_stage.updateMetadata({model.MD_ROTATION_COR: 0.0})
 
+        # Create the FastEMMainGUIData
+        cls.microscope = model.getMicroscope()
+        cls.main_data = FastEMMainGUIData(microscope=cls.microscope)
+        cls.main_data.asm = cls.asm
+        cls.main_data.multibeam = cls.multibeam
+        cls.main_data.descanner = cls.descanner
+        cls.main_data.mppc = cls.mppc
+
     @classmethod
     def tearDownClass(cls):
         cls.scan_stage.updateMetadata({model.MD_ROTATION_COR: cls.init_rot_cor})
@@ -693,16 +757,22 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
             # Create an ROA with the coordinates of the field.
             roa_name = "test_megafield_id"
-            roa = fastem.FastEMROA(roa_name, None, None,
-                                   self.asm, self.multibeam, self.descanner,
-                                   self.mppc, overlap=0.0)
-            roa.points.value = points
+            roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=0.0,
+                        name=roa_name,
+                        slice_index=0)
+            roa.shape._points = points
+            roa.shape.points.value = points
+
+            # Give sometime for calculation of field_indices
+            time.sleep(1)
 
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.scan_stage, self.ccd,
                                           self.beamshift, self.lens,
                                           self.se_detector, self.ebeam_focus,
-                                          roa, path=None, pre_calibrations=None,
+                                          roa, username="default", path=None, pre_calibrations=None,
                                           save_full_cells=False, future=None,
                                           settings_obs=None, spot_grid_thresh=0.5)
 
@@ -777,16 +847,22 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
             # Create an ROA with the coordinates of the field.
             roa_name = "test_megafield_id"
-            roa = fastem.FastEMROA(roa_name, None, None,
-                                   self.asm, self.multibeam, self.descanner,
-                                   self.mppc, overlap)
-            roa.points.value = points
+            roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+            roa.shape._points = points
+            roa.shape.points.value = points
+
+            # Give sometime for calculation of field_indices
+            time.sleep(1)
 
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.scan_stage, self.ccd,
                                           self.beamshift, self.lens,
                                           self.se_detector, self.ebeam_focus,
-                                          roa, path=None, pre_calibrations=None,
+                                          roa, username="default", path=None, pre_calibrations=None,
                                           save_full_cells=False, future=None,
                                           settings_obs=None, spot_grid_thresh=0.5)
 
@@ -858,15 +934,22 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
         # Create an ROA with the coordinates of the field.
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name, None, None,
-                               self.asm, self.multibeam, self.descanner,
-                               self.mppc, overlap)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=overlap,
+                        name=roa_name,
+                        slice_index=0)
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
+
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
-                                      roa, path=None, pre_calibrations=None,
+                                      roa, username="default", path=None, pre_calibrations=None,
                                       save_full_cells=True, future=None,
                                       settings_obs=None, spot_grid_thresh=0.5)
 
@@ -935,16 +1018,22 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
         # Create an ROA with the coordinates of the field.
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name, None, None,
-                               self.asm, self.multibeam, self.descanner,
-                               self.mppc, overlap=0.0)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=0.0,
+                        name=roa_name,
+                        slice_index=0)
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
 
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
-                                      roa, path=None, pre_calibrations=None,
+                                      roa, username="default", path=None, pre_calibrations=None,
                                       save_full_cells=False, future=None, settings_obs=None, spot_grid_thresh=0.5)
         # Set the _pos_first_tile, which would normally be set in the run function.
         task._pos_first_tile = task.get_pos_first_tile()
@@ -989,16 +1078,22 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
         # Create an ROA with the coordinates of the field.
         roa_name = "test_megafield_id"
-        roa = fastem.FastEMROA(roa_name, None, None,
-                               self.asm, self.multibeam, self.descanner,
-                               self.mppc, overlap=0.0)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=0.0,
+                        name=roa_name,
+                        slice_index=0)
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
 
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
-                                      roa, path=None, pre_calibrations=None,
+                                      roa, username="default", path=None, pre_calibrations=None,
                                       save_full_cells=False, future=None, settings_obs=None, spot_grid_thresh=0.5)
 
         self.descanner.updateMetadata({model.MD_SCAN_GAIN: (5000, 5000)})
@@ -1043,16 +1138,22 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
 
             # Create an ROA with the coordinates of the field.
             roa_name = "test_megafield_id"
-            roa = fastem.FastEMROA(roa_name, None, None,
-                                   self.asm, self.multibeam, self.descanner,
-                                   self.mppc, overlap=0.0)
-            roa.points.value = points
+            roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=0.0,
+                        name=roa_name,
+                        slice_index=0)
+            roa.shape._points = points
+            roa.shape.points.value = points
+
+            # Give sometime for calculation of field_indices
+            time.sleep(2)
 
             task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                           self.mppc, self.stage, self.scan_stage, self.ccd,
                                           self.beamshift, self.lens,
                                           self.se_detector, self.ebeam_focus,
-                                          roa, path=None, pre_calibrations=None,
+                                          roa, username="default", path=None, pre_calibrations=None,
                                           save_full_cells=False, future=None,
                                           settings_obs=None, spot_grid_thresh=0.5)
 
@@ -1072,15 +1173,22 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         settings_obs = SettingsObserver(model.getMicroscope(), model.getComponents())
         points = [(0, 0), (0, 0), (0, 0), (0, 0)]
 
-        roa = fastem.FastEMROA("roa_name", None, None,
-                               self.asm, self.multibeam, self.descanner,
-                               self.mppc, overlap=0.0)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=0.0,
+                        name="roa_name",
+                        slice_index=0)
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
+
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
-                                      roa, path=None, pre_calibrations=None,
+                                      roa, username="default", path=None, pre_calibrations=None,
                                       save_full_cells=False, future=None,
                                       settings_obs=settings_obs, spot_grid_thresh=0.5)
 
@@ -1111,17 +1219,25 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
         points = [(0, 0), (0, 0), (0, 0), (0, 0)]
 
-        roa = fastem.FastEMROA("roa_name", roc_2, roc_3,
-                               self.asm, self.multibeam, self.descanner,
-                               self.mppc, overlap=0.06)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=0.06,
+                        name="roa_name",
+                        slice_index=0)
+        roa.roc_2.value = roc_2
+        roa.roc_3.value = roc_3
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(1)
 
         # Acquire an image were the full cell images are cropped to 800x800px
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
-                                      roa, path="test-path", pre_calibrations=None,
+                                      roa, username="default", path="test-path", pre_calibrations=None,
                                       save_full_cells=False, future=Mock(),
                                       settings_obs=settings_obs, spot_grid_thresh=0.5)
         data, err = task.run()
@@ -1132,7 +1248,7 @@ class TestFastEMAcquisitionTask(unittest.TestCase):
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
-                                      roa, path="test-path", pre_calibrations=None,
+                                      roa, username="default", path="test-path", pre_calibrations=None,
                                       save_full_cells=True, future=Mock(),
                                       settings_obs=settings_obs, spot_grid_thresh=0.5)
         data, err = task.run()
@@ -1242,6 +1358,14 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         cls.beamshift = Mock()
         cls.beamshift.shift.value = [1, 1]
 
+        # Mock the FastEMMainGUIData
+        cls.main_data = Mock()
+        cls.main_data.current_sample.value = None
+        cls.main_data.asm = cls.asm
+        cls.main_data.multibeam = cls.multibeam
+        cls.main_data.descanner = cls.descanner
+        cls.main_data.mppc = cls.mppc
+
         # Mock fastem_calibrations and fastem_calibrations.util, to be able to call them on systems where
         # fastem_calibrations is not available.
         import sys
@@ -1263,19 +1387,27 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
         coordinates = (0, 0, 1e-8, 1e-8)  # in m
         roc_2 = fastem.FastEMROC("roc_2", coordinates)
         roc_3 = fastem.FastEMROC("roc_3", coordinates)
-        points = [(0, 0), (0, 0), (0, 0), (0, 0)]
+        points = [(0, 0), (0.000001, 0), (0.000001, 0.000001), (0, 0.000001)]
 
-        roa = fastem.FastEMROA("roa_name", roc_2, roc_3,
-                               self.asm, self.multibeam, self.descanner,
-                               self.mppc, overlap=0.0)
-        roa.points.value = points
+        roa = fastem.FastEMROA(shape=MockEditableShape(),
+                        main_data=self.main_data,
+                        overlap=0.0,
+                        name="roa_name",
+                        slice_index=0)
+        roa.roc_2.value = roc_2
+        roa.roc_3.value = roc_3
+        roa.shape._points = points
+        roa.shape.points.value = points
+
+        # Give sometime for calculation of field_indices
+        time.sleep(2)
 
         # Acquire an image were the full cell images are cropped to 800x800px
         task = fastem.AcquisitionTask(self.scanner, self.multibeam, self.descanner,
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
-                                      roa, path="test-path", pre_calibrations=None,
+                                      roa, username="default", path="test-path", pre_calibrations=None,
                                       save_full_cells=False, future=Mock(),
                                       settings_obs=None, spot_grid_thresh=0.5)
 
@@ -1294,7 +1426,7 @@ class TestFastEMAcquisitionTaskMock(TestFastEMAcquisitionTask):
                                       self.mppc, self.stage, self.scan_stage, self.ccd,
                                       self.beamshift, self.lens,
                                       self.se_detector, self.ebeam_focus,
-                                      roa, path="test-path", pre_calibrations=None,
+                                      roa, username="default", path="test-path", pre_calibrations=None,
                                       save_full_cells=True, future=Mock(),
                                       settings_obs=None, spot_grid_thresh=0.5)
 

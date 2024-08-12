@@ -121,7 +121,6 @@ class FastEMROA(object):
         self._multibeam = self._main_data.multibeam
         self._descanner = self._main_data.descanner
         self._detector = self._main_data.mppc
-        self._scan_stage = self._main_data.scan_stage
 
         # List of tuples(int, int) containing the position indices of each field to be acquired.
         # Automatically updated when the coordinates change.
@@ -179,13 +178,14 @@ class FastEMROA(object):
         if points:
             posx, posy = self.shape.get_position()
             current_sample = self._main_data.current_sample.value
-            scintillator = current_sample.find_closest_scintillator((posx, posy))
-            if scintillator:
-                self.roc_2.value = scintillator.calibrations[CALIBRATION_2].region
-                self.roc_3.value = scintillator.calibrations[CALIBRATION_3].region
-            else:
-                self.roc_2.value = None
-                self.roc_2.value = None
+            if current_sample:
+                scintillator = current_sample.find_closest_scintillator((posx, posy))
+                if scintillator:
+                    self.roc_2.value = scintillator.calibrations[CALIBRATION_2].region
+                    self.roc_3.value = scintillator.calibrations[CALIBRATION_3].region
+                else:
+                    self.roc_2.value = None
+                    self.roc_2.value = None
             # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
             flipped_points = [(y, x) for x, y in points]
             self.field_indices = self._calculate_field_indices(flipped_points)

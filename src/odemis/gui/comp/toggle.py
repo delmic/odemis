@@ -33,7 +33,7 @@ from odemis.gui.comp.buttons import GraphicToggleButton
 class GraphicalToggleButtonControl(wx.Panel):
     """
     A custom graphical toogle button control.
-    
+
     The toggle button are created and positioned based on 2 attributes
     namely create_grid and grid_layout.
     """
