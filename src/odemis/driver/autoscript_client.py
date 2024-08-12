@@ -1562,19 +1562,22 @@ class Detector(model.Detector):
 
     def start_acquisition(self):
         """Start acquiring images"""
-
-        if self.parent.get_imaging_state(self._scanner.channel) == "Running":
-            logging.info(f"Imaging state is already running for channel {self._scanner.channel}")
-            return
-
+        try: # TODO: remove
+            if self.parent.get_imaging_state(self._scanner.channel) == "Running":
+                logging.info(f"Imaging state is already running for channel {self._scanner.channel}")
+                return
+        except:
+            pass
         self.parent.start_acquisition(self._scanner.channel)
 
     def stop_acquisition(self, wait_for_frame: bool = True):
         """Stop acquiring images"""
-
-        if self.parent.get_imaging_state(self._scanner.channel) == "Idle":
-            logging.info(f"Imaging state is already stopped for channel {self._scanner.channel}")
-            return
+        try: # TODO: remove
+            if self.parent.get_imaging_state(self._scanner.channel) == "Idle":
+                logging.info(f"Imaging state is already stopped for channel {self._scanner.channel}")
+                return
+        except:
+            pass
 
         self.parent.stop_acquisition(self._scanner.channel, wait_for_frame=wait_for_frame)
 
