@@ -124,6 +124,8 @@ class xrcfr_overview_acq(wx.Dialog):
         self.selected_grid_pnl_holder = xrc.XRCCTRL(self, "selected_grid_pnl_holder")
         self.area_size_txt = xrc.XRCCTRL(self, "area_size_txt")
         self.autofocus_chkbox = xrc.XRCCTRL(self, "autofocus_chkbox")
+        self.autofocus_dist_lbl = xrc.XRCCTRL(self, "autofocus_dist_lbl")
+        self.autofocus_dist = xrc.XRCCTRL(self, "autofocus_dist")
         self.gauge_acq = xrc.XRCCTRL(self, "gauge_acq")
         self.lbl_acqestimate = xrc.XRCCTRL(self, "lbl_acqestimate")
         self.btn_cancel = xrc.XRCCTRL(self, "btn_cancel")
@@ -1940,6 +1942,49 @@ b\xeb\x85\x9f\xb6B\x1d\x0cK\x17\xac\xf0\x12\xfe\xa0\xe5\xee\xe03\xb1\xfa\
                     </object>
                     <flag>wxLEFT</flag>
                     <border>10</border>
+                  </object>
+                  <object class="sizeritem">
+                    <object class="wxBoxSizer">
+                      <orient>wxHORIZONTAL</orient>
+                      <object class="sizeritem">
+                        <object class="wxStaticText" name="autofocus_dist_lbl">
+                          <label>Maximum AutoFocus Distance (um)</label>
+                          <fg>#DDDDDD</fg>
+                          <font>
+                            <size>9</size>
+                          </font>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <!-- <cellpos>1,0</cellpos> -->
+                        <flag>wxLEFT</flag>
+                        <border>13</border>
+                      </object>
+                      <object class="sizeritem">
+                        <object class="UnitFloatCtrl" name="autofocus_dist">
+                          <size>-1,15</size>
+                          <value>450</value>
+                          <key_step>10</key_step>
+                          <min>10</min>
+                          <max>1000</max>
+                          <!-- <unit>m</unit> -->
+                          <!-- <scale>linear</scale> -->
+                          <accuracy>4</accuracy>
+                          <font>
+                            <size>9</size>
+                            <encoding>UTF-8</encoding>
+                          </font>
+                          <style>wxBORDER_NONE</style>
+                          <XRCED>
+                            <assign_var>1</assign_var>
+                          </XRCED>
+                        </object>
+                        <!-- <cellpos>1,1</cellpos> -->
+                        <flag>wxLEFT|wxRIGHT|wxEXPAND</flag>
+                        <border>10</border>
+                      </object>
+                    </object>
                   </object>
                 </object>
                 <size>400,-1</size>
