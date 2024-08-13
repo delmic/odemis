@@ -45,6 +45,10 @@ class OMECompatibilityPlugin(Plugin):
                 pass_menu_item=True,
             )
 
+            # Set the default value (menu item is not instantiated yet?)
+            # menu_item = self.findMenuItem("Help/Development/Enable OME Compatibility")
+            # menu_item.Check(self.OME_COMPAT)
+
     def enable_ome_compatibility(self, item: wx.MenuItem):
         """Enable OME compatibility mode for METEOR"""
         tiff.GLOBAL_OME_COMPAT_MODE = bool(item.IsChecked())

@@ -110,7 +110,7 @@ T.tifftags[TIFFTAG_TESCAN_MD] = ((T.ctypes.c_uint32, T.ctypes.c_char), lambda d:
 T.suppress_warnings()
 
 # enable ome (2016-06) compatible mode
-GLOBAL_OME_COMPAT_MODE: bool = False # TODO: use a plugin to make this a gui flag
+GLOBAL_OME_COMPAT_MODE: bool = True
 
 def _convertToTiffTag(metadata):
     """
