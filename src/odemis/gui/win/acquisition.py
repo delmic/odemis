@@ -783,6 +783,9 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
         self.btn_secom_acquire.Bind(wx.EVT_BUTTON, self.on_acquire)
         self.Bind(wx.EVT_CLOSE, self.on_close)
 
+        from odemis.acq.stitching._tiledacq import MAX_DISTANCE_FOCUS_POINTS
+        self.autofocus_dist.SetValue(MAX_DISTANCE_FOCUS_POINTS * 1e6)  # in µm
+
         # Set parameters for tiled acq
         # High overlap percentage is not required as the stitching is based only on stage position,
         # independent of the image content. It just needs to be big enough to make sure that even with some stage
@@ -1172,7 +1175,8 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             os.makedirs(os.path.dirname(self.filename_tiles), exist_ok=True)
 
         use_autofocus = self.autofocus_roi_ckbox.value
-
+        autofocus_dist = self.autofocus_dist.GetValue() * 1e-6  # in m # TODO: convert to µm in the GUI
+        logging.warning(f"Using autofocus: {use_autofocus}, distance: {autofocus_dist}")
         # autofocus needs relative zlevels, as they will be used relative to the focus points found
         zlevels = self._get_zstack_levels(rel=use_autofocus)
 
@@ -1190,6 +1194,7 @@ class OverviewAcquisitionDialog(xrcfr_overview_acq):
             zlevels=zlevels,
             focusing_method=focus_mtd,
             use_autofocus=use_autofocus,
+            autofocus_dist=autofocus_dist,
         )
 
         self._acq_future_connector = ProgressiveFutureConnector(self.acq_future,
