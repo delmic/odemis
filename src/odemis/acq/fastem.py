@@ -30,6 +30,8 @@ from concurrent.futures import CancelledError
 from typing import List, Tuple
 
 import numpy
+from scipy.ndimage import binary_fill_holes
+from shapely.geometry import Polygon, box
 
 try:
     from fastem_calibrations import util as fastem_util
@@ -49,7 +51,7 @@ from odemis.gui.comp.overlay.base import Vec
 from odemis.gui.comp.overlay.ellipse import EllipseOverlay
 from odemis.gui.comp.overlay.polygon import PolygonOverlay
 from odemis.gui.comp.overlay.rectangle import RectangleOverlay
-from odemis.util import TimeoutError, img, transform
+from odemis.util import TimeoutError, transform
 from odemis.util.driver import guessActuatorMoveDuration
 from odemis.util.registration import estimate_grid_orientation_from_img
 from odemis.util.transform import SimilarityTransform, to_physical_space
@@ -89,6 +91,7 @@ SETTINGS_SELECTION = {
 CALIBRATION_1 = "Calibration 1"
 CALIBRATION_2 = "Calibration 2"
 CALIBRATION_3 = "Calibration 3"
+ACQ_SIZE_THRESHOLD = 0.002  # 2 mm
 
 
 class FastEMROA(object):
@@ -122,6 +125,8 @@ class FastEMROA(object):
         self._descanner = self._main_data.descanner
         self._detector = self._main_data.mppc
 
+        # Shape represented using shapely.geometry.Polygon
+        self.polygon_shape = None
         # List of tuples(int, int) containing the position indices of each field to be acquired.
         # Automatically updated when the coordinates change.
         self.field_indices = []
@@ -171,8 +176,8 @@ class FastEMROA(object):
         return roa
 
     def on_points(self, points):
-        """Recalculate the field indices when the points of the region of acquisition (ROA) have changed
-        (e.g. resize, moving).
+        """Recalculate the field indices and rectangles when the points of the region of acquisition (ROA) have changed
+        (e.g. resize, moving). Also assign the region of calibration (ROC) 2 and 3.
         :param points: list of nested points (x, y) representing the shape in physical coordinates.
         """
         if points:
@@ -186,10 +191,16 @@ class FastEMROA(object):
                 else:
                     self.roc_2.value = None
                     self.roc_2.value = None
-            # FastEMROA.get_poly_field_indices expects list of nested tuples (y, x)
-            flipped_points = [(y, x) for x, y in points]
-            self.field_indices = self._calculate_field_indices(flipped_points)
-            self.field_rects = self._calculate_field_rectangles(points)
+            # Update the polygon shape
+            self.polygon_shape = Polygon(points)
+            xmin, ymin, xmax, ymax = self.polygon_shape.bounds
+            # If the ROA bounding box is larger in size, use threading so that the drawing operations are not affected
+            if abs(xmax - xmin) >= ACQ_SIZE_THRESHOLD or abs(ymax - ymin) >= ACQ_SIZE_THRESHOLD:
+                thread = threading.Thread(target=self.calculate_field_indices)
+                thread.daemon = True
+                thread.start()
+            else:
+                self.calculate_field_indices()
 
     def estimate_acquisition_time(self):
         """
@@ -201,166 +212,125 @@ class FastEMROA(object):
 
         return tot_time
 
-    def _calculate_field_indices(self, points):
-        indices = []
-        if points:
-            indices = self.get_poly_field_indices(points)
-        return indices
+    def calculate_field_indices(self):
+        """
+        Calculate and assign the field indices required to cover a polygon,
+        considering overlap between cells.
+        """
+        if self.polygon_shape is None:
+            return
+        # Bounding box of the polygon and its exterior points
+        xmin, ymin, xmax, ymax = self.polygon_shape.bounds
+        points = self.polygon_shape.exterior.coords
 
-    def _calculate_field_rectangles(self, points):
+        # Define grid cell size based on multibeam resolution and pixel size
+        px_size = self._multibeam.pixelSize.value
+        field_res = self._multibeam.resolution.value
+        field_size = (field_res[0] * px_size[0], field_res[1] * px_size[1])
+
+        # Calculate grid dimensions considering overlap
+        r_grid_width = field_size[1] * (1 - self.overlap)
+        c_grid_width = field_size[0] * (1 - self.overlap)
+        grid_width = int(numpy.ceil((xmax - xmin) / c_grid_width))
+        grid_height = int(numpy.ceil((ymax - ymin) / r_grid_width))
+        megafield_grid = numpy.zeros((grid_height, grid_width), dtype=bool)  # row, col
+
+        def get_possible_intersected_fields(row1, col1, row2, col2):
+            """Bresenham's line algorithm to determine the possible intersected fields."""
+            fields = set()
+            dx = abs(row2 - row1)
+            dy = abs(col2 - col1)
+            sx = 1 if row1 < row2 else -1
+            sy = 1 if col1 < col2 else -1
+            err = dx - dy
+
+            while True:
+                fields.add((row1, col1))
+                # Add adjacent neighbors to ensure complete coverage
+                fields.add((row1 + sx, col1))
+                fields.add((row1 - sx, col1))
+                fields.add((row1, col1 + sy))
+                fields.add((row1, col1 - sy))
+                if row1 == row2 and col1 == col2:
+                    break
+                e2 = err * 2
+                if e2 > -dy:
+                    err -= dy
+                    row1 += sx
+                if e2 < dx:
+                    err += dx
+                    col1 += sy
+
+            return fields
+
+        def to_grid(x, y):
+            """Convert real-world coordinates to grid coordinates."""
+            row = int(numpy.floor((ymax - y) / r_grid_width))
+            col = int(numpy.floor((x - xmin) / c_grid_width))
+            return row, col
+
+        intersected_fields = set()
+        # Iterate over polygon boundary points and determine intersected fields
+        for i in range(len(points)):
+            p1 = points[i]
+            p2 = points[i - 1]
+            row1, col1 = to_grid(p1[0], p1[1])
+            row2, col2 = to_grid(p2[0], p2[1])
+            fields = get_possible_intersected_fields(row1, col1, row2, col2)
+            intersected_fields.update(fields)
+
+        for row, col in intersected_fields:
+            if 0 <= row < grid_height and 0 <= col < grid_width:
+                # Define the bounds of the current field
+                field = box(
+                    xmin + col * c_grid_width,
+                    ymax - (row + 1) * r_grid_width,
+                    xmin + (col + 1) * c_grid_width,
+                    ymax - row * r_grid_width
+                )
+                # Check if the field intersects with the polygon shape
+                if self.polygon_shape.intersects(field):
+                    megafield_grid[row, col] = True
+
+        # Fill holes in the grid to get a contiguous fields
+        indices_array = binary_fill_holes(megafield_grid)
+        rows, cols = numpy.nonzero(indices_array)
+        indices_list = list(zip(cols.tolist(), rows.tolist()))
+
+        # Assign the calculated field indices
+        self.field_indices = indices_list
+
+    def calculate_grid_rects(self):
+        """
+        Calculate the bounding rectangles for the grid cells that cover the polygon shape.
+        """
+        if self.polygon_shape is None:
+            return
+        # Extract bounding box coordinates from the polygon shape
         rects = []
-        if points:
-            px_size = self._multibeam.pixelSize.value
-            field_res = self._multibeam.resolution.value
-            xmin_roa, _, _, ymax_roa = util.get_polygon_bbox(points)
-            first_tile_start_pos = (xmin_roa, ymax_roa - field_res[1] * px_size[1])
-            first_tile_end_pos = (xmin_roa + field_res[1] * px_size[1], ymax_roa)
-            for field_idx in self.field_indices:
-                rel_move_x = field_idx[0] * px_size[0] * field_res[0] * (1 - self.overlap)
-                rel_move_y = field_idx[1] * px_size[1] * field_res[1] * (1 - self.overlap)
-                start_pos_x = first_tile_start_pos[0] + rel_move_x
-                start_pos_y = first_tile_start_pos[1] - rel_move_y
-                end_pos_x = first_tile_end_pos[0] + rel_move_x
-                end_pos_y = first_tile_end_pos[1] - rel_move_y
-                p_start_pos = Vec(start_pos_x, start_pos_y)
-                p_end_pos = Vec(end_pos_x, end_pos_y)
-                rects.append((p_start_pos, p_end_pos))
-        return rects
+        xmin, _, _, ymax = self.polygon_shape.bounds
 
-    def get_poly_field_indices(self, polygon):
-        """
-        Determine the required fields within a bounding megafield to describe a polygonal ROA and return the
-        index values of these fields.
+        # Define grid cell size based on multibeam resolution and pixel size
+        px_size = self._multibeam.pixelSize.value
+        field_res = self._multibeam.resolution.value
+        field_size = (field_res[0] * px_size[0], field_res[1] * px_size[1])
 
-        :param polygon: (list of nested tuples (y, x)) The real world coordinates in meters of the polygon points in
-        consecutive order.
-        :return: (list of nested tuples (col, row)) The column and row indices of the field images
-        in the order they should be acquired.
-        """
-        # Shift the coordinate system to start at the minimum values of the bounding box
-        # so the indices start from this point.
-        ymin, xmin, _, _ = util.get_polygon_bbox(polygon)
-        for i, point in enumerate(polygon):
-            polygon[i] = (point[0] - ymin, point[1] - xmin)
+        # Calculate grid dimensions considering overlap
+        r_grid_width = field_size[1] * (1 - self.overlap)
+        c_grid_width = field_size[0] * (1 - self.overlap)
 
-        # Get the indices of the fields intersected by the polygon lines.
-        indices = self._get_intersected_field_indices(polygon)
+        # Iterate through each field index to compute the bounding rectangles
+        for col, row in self.field_indices:
+            start_pos_x = xmin + col * c_grid_width
+            start_pos_y = ymax - (row + 1) * r_grid_width
+            end_pos_x = start_pos_x + field_size[0]
+            end_pos_y = start_pos_y + field_size[1]
+            p_start_pos = Vec(start_pos_x, start_pos_y)
+            p_end_pos = Vec(end_pos_x, end_pos_y)
+            rects.append((p_start_pos, p_end_pos))
 
-        # If only one index was found return that one so filling will not be applied.
-        if len(indices) == 1:
-            return [(indices[0][1], indices[0][0])]  # (col, row)
-
-        # Create a boolean numpy array to represent the megafield with True values for fields that need to be acquired.
-        # and fill it so the inside of the polygon is also acquired.
-        index_array = self._create_and_fill_megafield_rep(indices)
-
-        # The index values are acquired with the assumption that the y-axis is positive downwards.
-        # To convert to the real world definition the y-axis is flipped.
-        index_array = numpy.flip(index_array, 0)
-
-        # The indices that represent the polygon are where the index_array has True values.
-        rows, cols = numpy.where(index_array)
-
-        # Indices are zipped in a list so that (col, row) because the data flow expects the column first and the row
-        # second.
-        index_list = list(zip(cols.tolist(), rows.tolist()))
-
-        return index_list
-
-    def _get_intersected_field_indices(self, polygon):
-        """
-        Determine which fields are intersected by the lines of the polygon and return the corresponding indices.
-
-        :param polygon: (list of nested tuples (y, x)) The real world coordinates of the polygon points in
-        consecutive order.
-        :return: (list of nested tuples (row,column)) Index values of the intersected fields.
-        """
-        indices = []
-        px_size = self._multibeam.pixelSize.value  # Size per pixel in m
-        field_res = self._multibeam.resolution.value  # Number of pixels per field
-
-        field_size = (field_res[0] * px_size[0], field_res[1] * px_size[1])  # [px] * [m/px] = [m]
-        r_grid_width = field_size[1] - field_size[1] * self.overlap
-        c_grid_width = field_size[0] - field_size[0] * self.overlap
-        for i in range(len(polygon)):
-            p1, p2 = numpy.array((polygon[i], polygon[i - 1]))
-
-            if numpy.all(p1 == p2):
-                # If the points that form the line are equal only return the indices of the field they are in,
-                # indices for a line with length zero cannot be determined.
-                r_simple = r_grid_width * (p1[0] / r_grid_width)
-                c_simple = c_grid_width * (p1[1] / c_grid_width)
-                intersected_index = (round(r_simple / r_grid_width), round(c_simple / c_grid_width))
-                if intersected_index not in indices:
-                    indices.append(intersected_index)
-                continue
-
-            # Initialize the first two points.
-            row1, row2 = p1[0], p2[0]
-            col1, col2 = p1[1], p2[1]
-
-            # Determine the difference between both directions.
-            row_diff = row2 - row1
-            col_diff = col2 - col1
-
-            # Get the largest difference so the correct slope can be determined.
-            largest_diff = max(abs(row_diff), abs(col_diff))
-            smallest_width = min(r_grid_width, c_grid_width)
-
-            # The method incrementally checks points along a line and checks in what field each point lies,
-            # this can result in "stepping over" a corner of a field. Check four times as many points to minimize
-            # the "step-over" effect.
-            rstep = smallest_width * (1 / 4) * row_diff / largest_diff
-            cstep = smallest_width * (1 / 4) * col_diff / largest_diff
-
-            if largest_diff == abs(row_diff):
-                nsteps = math.ceil(largest_diff / abs(rstep))
-            else:
-                nsteps = math.ceil(largest_diff / abs(cstep))
-
-            row = row1
-            col = col1
-            for n in range(nsteps):
-                r_simple = r_grid_width * math.floor(row / r_grid_width)
-                c_simple = c_grid_width * math.floor(col / c_grid_width)
-                # Round is used instead of int in case there is a previous floating point or rounding error.
-                intersected_index = (round(r_simple / r_grid_width), round(c_simple / c_grid_width))
-                if intersected_index not in indices:
-                    indices.append(intersected_index)
-                row += rstep
-                col += cstep
-
-        return indices
-
-    @staticmethod
-    def _create_and_fill_megafield_rep(indices):
-        """
-        Create a numpy array that represents the given indexes as True values and fills any enclosed False values.
-
-        :param indices: (list of nested tuples (row,column)) Index values of the shape that needs to be filled.
-        :return: (ndarray) Filled numpy array that represent the fields that need to be acquired.
-        """
-        # Get the bounding megafield shape by taking the maximum indices from the indices list and create a boolean
-        # numpy array to represent the megafield with True values for fields that need to be acquired
-        _, _, rmax, cmax = util.get_polygon_bbox(indices)
-        megafield_grid_shape = (rmax + 1, cmax + 1)
-        megafield_grid_rep = numpy.zeros(megafield_grid_shape, dtype=bool)
-        megafield_grid_rep[[r[0] for r in indices], [c[1] for c in indices]] = True
-
-        # Pad the array with zeros so the flood fill will always surround the entire shape
-        padding_size = 1
-        megafield_grid_rep = numpy.pad(megafield_grid_rep, padding_size, "constant", constant_values=False)
-        # Flood filling from the outside will create the inverse of the desired result
-        # The correct indices are then the inverse of the inverted fill together with the already given line
-        inv_fill = img.apply_flood_fill(megafield_grid_rep, (0, 0))
-        indice_array = ~inv_fill | megafield_grid_rep
-
-        # Remove the padding to regain the correct shape
-        indice_array = indice_array[padding_size:-padding_size, padding_size:-padding_size]
-
-        # TODO: check if it has actually been filled
-
-        return indice_array
+        # Assign the calculated field rectangles
+        self.field_rects = rects
 
 
 class FastEMCalibration(object):
