@@ -249,7 +249,7 @@ class TestSparc2AutoFocus(unittest.TestCase):
         new_img = img.ensure2DImage(data[0])
         self.spccd.set_image(new_img)
 
-        f = Sparc2AutoFocus("tunnel-lens-align", self.optmngr, [self.specline_spccd_ext], True)
+        f = Sparc2AutoFocus("spec-focus-ext", self.optmngr, [self.specline_spccd_ext], True)
 
         data = tiff.read_data(os.path.join(TEST_IMAGE_PATH, "brightlight-on-slit-spccd-simple.ome.tiff"))
         new_img = img.ensure2DImage(data[0])
