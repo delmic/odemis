@@ -57,8 +57,8 @@ CONTROL_CONFIG = {
         "style": wx.CB_READONLY,
     },
     VOLTAGE: {
-        "labels": ["2.5 kV", " 5 kV", "10 kV", "15 kV"],
-        "choices": [2500, 5000, 10000, 15000],
+        "labels": ["2.5 kV", "4 kV", " 5 kV", "10 kV"],
+        "choices": [2500, 4000, 5000, 10000],
         "style": wx.CB_READONLY,
     },
     OVERVOLTAGE: {
