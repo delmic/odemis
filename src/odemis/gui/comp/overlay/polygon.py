@@ -171,6 +171,11 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         polygon_overlay.restore_state(state)
         return polygon_overlay
 
+    def reset(self):
+        """Reset the shape creation."""
+        self.reset_click_mixin()
+        self._points.clear()
+
     def copy(self):
         """
         :returns: (PolygonOverlay) a new instance of PolygonOverlay with necessary copied attributes.
@@ -278,8 +283,7 @@ class PolygonOverlay(EditableShape, LineEditingMixin, WorldOverlay):
         self.is_created.value = True
         if len(self._points) <= 2:
             logging.warning("Cannot create a polygon for less than 3 points.")
-            self.reset_click_mixin()
-            self._points.clear()
+            self.reset()
             self.is_created.value = False
         # Set initial value
         self.points.value = self._points
