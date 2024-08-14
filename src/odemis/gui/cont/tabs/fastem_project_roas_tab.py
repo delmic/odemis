@@ -236,6 +236,7 @@ class ROARow(Row):
             ROARow.set_grid_fill(False, col, grid)
             self.data[ROAColumnNames.FIELDS.value] = value_to_set
             if value_to_set == "1":
+                self.roa.calculate_grid_rects()
                 self.roa.shape.grid_rects = self.roa.field_rects
                 self.roa.shape.fill_grid.value = True
                 self.roa.shape.cnvs.request_drawing_update()
