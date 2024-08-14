@@ -160,6 +160,11 @@ class EditableShape(metaclass=ABCMeta):
         """Set the rotation of the shape to a specific angle."""
         pass
 
+    @abstractmethod
+    def reset(self):
+        """Reset the shape creation."""
+        pass
+
 
 class ShapesOverlay(WorldOverlay):
     """
@@ -369,18 +374,22 @@ class ShapesOverlay(WorldOverlay):
                     self._redo_stack.clear()  # Clear redo stack when a shape's state is saved
                     self.remove_shape(shape_state.shape)
             elif evt.GetKeyCode() == wx.WXK_ESCAPE:
-                # Unselect the selected shape
-                self._selected_shape.selected.value = False
+                if not self._selected_shape.is_created.value:
+                    self._selected_shape.reset()
+                else:
+                    # Unselect the selected shape
+                    self._selected_shape.selected.value = False
                 # Stop copying the shape
                 self._shape_to_copy._set_value(None, force_write=True)
                 self.cnvs.set_default_cursor(wx.CURSOR_CROSS)
                 self.cnvs.request_drawing_update()
             elif evt.GetKeyCode() == wx.WXK_CONTROL_C:
-                # Deselect the selected shape which will be copied
-                self._selected_shape.selected.value = False
-                self._shape_to_copy._set_value(self._selected_shape, force_write=True)
-                self.cnvs.set_default_cursor(wx.CURSOR_BULLSEYE)
-                self.cnvs.request_drawing_update()
+                if self._selected_shape.is_created.value:
+                    # Deselect the selected shape which will be copied
+                    self._selected_shape.selected.value = False
+                    self._shape_to_copy._set_value(self._selected_shape, force_write=True)
+                    self.cnvs.set_default_cursor(wx.CURSOR_BULLSEYE)
+                    self.cnvs.request_drawing_update()
         else:
             WorldOverlay.on_char(self, evt)
 

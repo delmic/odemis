@@ -144,6 +144,10 @@ class EllipseOverlay(RectangleOverlay):
         ellipse_overlay.restore_state(state)
         return ellipse_overlay
 
+    def reset(self):
+        """Reset the shape creation."""
+        pass
+
     def copy(self):
         """
         :returns: (EllipseOverlay) a new instance of EllipseOverlay with necessary copied attributes.

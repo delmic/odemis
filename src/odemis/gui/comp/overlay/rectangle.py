@@ -198,6 +198,10 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
         rectangle_overlay.restore_state(state)
         return rectangle_overlay
 
+    def reset(self):
+        """Reset the shape creation."""
+        pass
+
     def copy(self):
         """
         :returns: (RectangleOverlay) a new instance of RectangleOverlay with necessary copied attributes.
@@ -223,7 +227,7 @@ class RectangleOverlay(EditableShape, RectangleEditingMixin, WorldOverlay):
 
     def set_rotation(self, target_rotation: float):
         """Set the rotation of the shape to a specific angle."""
-        self._set_rotation(rot)
+        self._set_rotation(target_rotation)
         self._view_to_phys()
         self._points = self.get_physical_sel()
         self.points.value = self._points
