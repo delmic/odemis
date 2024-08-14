@@ -1031,20 +1031,19 @@ class PMDSimulator(object):
         self._output_buf += msg
 
         try:
-            if cmd == "M":
+            if cmd == "M":  # Set and read waveform and parking state
                 if not args:
                     self._output_buf += ":%d" % self.waveform[axis]
                 elif len(args) == 1:
                     self.waveform[axis] = int(args[0])
                 else:
                     raise ValueError()
-            elif cmd == "?":
+            elif cmd == "?":  # Read controller type and firmware revision.
                 if not args:
                     self._output_buf += ":PMD401 V1"
                 else:
                     raise ValueError()
-            elif cmd == "T":
-                # Absolute move
+            elif cmd == "T":  # Closed loop absolute move to new target position.
                 self.closed_loop[axis] = True
                 if not args:
                     self._output_buf += ":%d" % self.target_pos[axis]
@@ -1064,8 +1063,7 @@ class PMDSimulator(object):
             elif cmd == "S":  # stop axis
                 self.is_moving = False
                 self.closed_loop[axis] = False
-            elif cmd == "C":
-                # Relative move
+            elif cmd == "C":  # Closed loop relative move to new position.
                 self.closed_loop[axis] = True
                 if not args:
                     self._output_buf += ":%d" % self.target_pos[axis]
@@ -1080,42 +1078,44 @@ class PMDSimulator(object):
                     self.move(steps, self.target_pos)
                 else:
                     raise ValueError()
-            elif cmd == "E":
+            elif cmd == "E":  # Read or set encoder position.
                 if not args:
                     self._output_buf += ":%d" % self.current_pos[axis]
                 elif len(args) == 1:
                     self.target_pos[axis] += int(args[0])
                 else:
                     raise ValueError()
-            elif cmd == "J":
+            elif cmd == "J":  # Run motor (Jog), ie open loop stepping.
                 if not args:
                     if self.is_moving:
                         self._output_buf += ":222"
                     else:
                         self._output_buf += ":0"
                 elif len(args) == 1:
-                    pass  # simulate move
+                    pass  # TODO simulate move
                 elif len(args) == 2:
-                    pass  # simulate move
+                    pass  # TODO simulate move
                 elif len(args) == 3:
                     # simulate move
                     self.speed = int(args[1])
                 else:
                     raise ValueError()
             elif cmd == "I":
+                # Run motor (Index Jog). Same as J command, but will only run if index mode
+                # is activated and index has not been detected.
                 self.find_index()
-            elif cmd == "N":
+            elif cmd == "N":  # Index mode. When enabled, use open loop jogging (I) to search for quadrature index.
                 if self.indexing:
                     self._output_buf += "1,132.,indexed"
                 else:
                     self._output_buf += "1,132"
-            elif cmd == "Y":
+            elif cmd == "Y":  # Settings command
                 if len(args) == 1:
                     if int(args[0]) == 42:  # serial number
                         self._output_buf += ":12345678"
                     elif int(args[0]) == 11:  # spc parameter
                         self._output_buf += ":70000"
-            elif cmd == "U":
+            elif cmd == "U":  # Read controller status.
                 if self.is_moving:
                     # "0020" means targetMode (closed loop mode) active
                     self.status = "0020" if self.closed_loop[axis] else "0000"
@@ -1138,8 +1138,9 @@ class PMDSimulator(object):
 
     def move(self, steps, target_pos):
         # simple move, same duration for every length, don't care about speed
-        f = self.executor.submit(self._do_move, steps, target_pos)
-        f.result(timeout=900)
+        self.executor.submit(self._do_move, steps, target_pos)
+        # f = self.executor.submit(self._do_move, steps, target_pos)
+        # f.result(timeout=900)
 
     def find_index(self):
         t = Thread(target=self._do_indexing)
