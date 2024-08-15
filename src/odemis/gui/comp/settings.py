@@ -77,6 +77,7 @@ class SettingsPanel(wx.Panel):
         self.gb_sizer.AddGrowableCol(1)
 
         self._main_sizer.Add(self.gb_sizer, proportion=1, flag=wx.ALL | wx.EXPAND, border=5)
+        self.SetSizer(self._main_sizer)
 
     def Layout(self):
         """Layout the ControlsPanel."""
