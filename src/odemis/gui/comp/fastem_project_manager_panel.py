@@ -304,15 +304,15 @@ class ProjectManagerImportExport:
                     project_colour.pop()
                 )
 
-        # Set and notify the parent again
+        # Set and notify the parent again to be reflected in FastEMProjectTreeCtrl
         for roa_row in roa_rows:
             if roa_row.parent_name.value != DEFAULT_PARENT:
                 roa_row.parent_name._set_value(
                     roa_row.parent_name.value, must_notify=True
                 )
 
-        # Set and notify the parent again
-        for section_row in roa_rows:
+        # Set and notify the parent again to be reflected in FastEMProjectTreeCtrl
+        for section_row in sections_row:
             if section_row.parent_name.value != DEFAULT_PARENT:
                 section_row.parent_name._set_value(
                     section_row.parent_name.value, must_notify=True
