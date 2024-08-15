@@ -40,7 +40,7 @@ from odemis.acq.stream import StaticStream, FastEMOverviewStream
 from odemis.gui.conf.data import get_local_vas
 from odemis.gui.cont.stream import StreamController
 from odemis.gui.model import TOOL_NONE, TOOL_SPOT
-from odemis.gui.util import call_in_wx_main, get_home_folder
+from odemis.gui.util import call_in_wx_main
 
 # There are two kinds of controllers:
 # * Stream controller: links 1 stream <-> stream panel (cont/stream/StreamPanel)
@@ -480,7 +480,7 @@ class StreamBarController(object):
         """
         return self._add_stream(stream, **kwargs)
 
-    def _add_stream(self, stream, stream_cont_cls=StreamController, add_to_view=False, visible=True, play=None):
+    def _add_stream(self, stream, add_to_view=False, visible=True, play=None, stream_cont_cls=StreamController):
         """ Add the given stream to the tab data model and appropriate views
 
         Args:
@@ -493,6 +493,7 @@ class StreamBarController(object):
                 create any entry.
             play (None or boolean): If True, immediately start it, if False, let it stopped, and if
                 None, only play if already a stream is playing.
+            stream_cont_cls: The stream controller class.
 
         Returns:
             (StreamController or Stream): the stream controller or stream (if visible is False) that
@@ -546,18 +547,18 @@ class StreamBarController(object):
                 show_panel = isinstance(stream, fview.stream_classes)
 
             stream_cont = self._add_stream_cont(stream,
-                                                cls=stream_cont_cls,
                                                 show_panel=show_panel,
                                                 locked=self.locked_mode,
                                                 static=self.static_mode,
                                                 view=linked_view,
+                                                cls=stream_cont_cls,
                                                 )
             return stream_cont
         else:
             return stream
 
-    def _add_stream_cont(self, stream, cls: StreamController, show_panel=True, locked=False, static=False,
-                         view=None):
+    def _add_stream_cont(self, stream, show_panel=True, locked=False, static=False,
+                         view=None, cls=StreamController):
         """ Create and add a stream controller for the given stream
 
         :return: (StreamController)

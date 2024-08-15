@@ -698,7 +698,7 @@ class MicroscopeViewport(ViewPort):
         if self.view:
             if fov:
                 # Clip the fov
-                self.view.fov.value = self.view.fov.clip(fov)
+                fov = self.view.fov.value = self.view.fov.clip(fov)
             buf_fov = self.get_buffer_fov_from_mpp()
             if buf_fov:
                 # Clip the fov buffer
@@ -707,7 +707,7 @@ class MicroscopeViewport(ViewPort):
                 # Set the mpp according to the clipped fov
                 self.set_mpp_from_fov(self.view.fov.value)
 
-        return self.view.fov.value
+        return fov
 
     def show_sample_overlay(self, samples: Dict[str, Tuple[float, float]], radius: float):
         """
