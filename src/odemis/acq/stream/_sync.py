@@ -2489,7 +2489,8 @@ class SEMMDStream(MultipleDetectorStream):
                             raise ValueError(f"Failed to set the resolution of {det.name} to {n_x} x {n_y} px: "
                                              f"{det.resolution.value} px accepted")
                         else:
-                            logging.debug("Set resolution of independent detector %s to %s", det.name, (n_x, n_y))
+                            logging.debug("Set resolution of independent detector %s to %s",
+                                          det.name, (n_x, n_y))
 
                 # Move the beam to the center of the sub-frame
                 trans = tuple(pos_flat[spots_sum:(spots_sum + npixels2scan)].mean(axis=0))
