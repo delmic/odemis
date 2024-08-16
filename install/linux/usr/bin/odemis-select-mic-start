@@ -32,7 +32,12 @@ status=$?
 if [ $status == 0 ] || [ $status == 3 ] ; then
     # extract the running microscope file
     mic_name="$(odemis list --machine | head -1 | cut -d $'\t' -f 1)"
-    reply=$(zenity --info --title="Odemis backend already running" --text "Restart with new backend or start GUI only\n\nactive: $mic_name" --ok-label="Cancel" --extra-button="Restart" --extra-button="GUI only" --width=300 --height=100)
+    reply=$(zenity --info --title="Odemis backend already running" \
+        --text "Restart with new backend or start GUI only\n\nactive: $mic_name" \
+        --ok-label="Cancel" \
+        --extra-button="Restart" \
+        --extra-button="GUI only" \
+        --width=300 --height=100)
     if [ "$reply" == "Restart" ]; then
         echo "Trying to stop the backend"
         sudo odemis-stop
@@ -55,7 +60,10 @@ for fn in "${args[@]}"; do
     # add a new header to the logfile
     printf "$(date) Parsing file: $fn\n" >> $parse_logfile
     # extract the microscope name by using this small Python script
-    mic_name="$(python3 -c "import sys; import yaml; from odemis.odemisd import modelgen; f = open('$fn'); d = yaml.load(f, modelgen.SafeLoader); print(next(n for n, d in d.items() if d.get('class') == 'Microscope'))" 2>>$parse_logfile)"
+    mic_name="$(python3 -c "import sys; import yaml; from odemis.odemisd import modelgen; \
+        f = open('$fn'); \
+        d = yaml.load(f, modelgen.SafeLoader); \
+        print(next(n for n, d in d.items() if d.get('class') == 'Microscope'))" 2>>$parse_logfile)"
     mic_list+=("$fn")
     if test "$mic_name" == ""; then
         # save the file name in the error list
@@ -68,7 +76,11 @@ for fn in "${args[@]}"; do
 done
 
 # prompt the user with a list of microscope configurations to choose from
-selection="$(zenity --list --title "Odemis configuration starter" --list --text "Please select a configuration to start:" --column "" --column "" "${mic_list[@]}" --hide-header --width=300 --height=400 --hide-column 1 --print-column=1 2>/dev/null)"
+selection="$(zenity --list --title="Odemis configuration starter" \
+    --list --text "Please select a configuration to start:" \
+    --column "" --column "" "${mic_list[@]}" --hide-header \
+    --width=300 --height=400 \
+    --hide-column 1 --print-column=1 2>/dev/null)"
 
 # if one of the microscope names is selected which also contains an error, show the log file and stop the script
 for efn in "${error_filenames[@]}"; do
