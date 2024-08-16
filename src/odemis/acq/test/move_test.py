@@ -41,7 +41,6 @@ from odemis.util.driver import ATOL_LINEAR_POS, isNearPosition
 logging.getLogger().setLevel(logging.DEBUG)
 logging.basicConfig(format="%(asctime)s  %(levelname)-7s %(module)s:%(lineno)d %(message)s")
 
-
 CONFIG_PATH = os.path.dirname(odemis.__file__) + "/../../install/linux/usr/share/odemis/"
 ENZEL_CONFIG = CONFIG_PATH + "sim/enzel-sim.odm.yaml"
 METEOR_TFS1_CONFIG = CONFIG_PATH + "sim/meteor-sim.odm.yaml"
@@ -73,12 +72,12 @@ class TestEnzelMove(unittest.TestCase):
         cls.stage_alignment = cls.stage.getMetadata()[model.MD_FAV_POS_ALIGN]
         cls.stage_sem_imaging = cls.stage.getMetadata()[model.MD_FAV_POS_SEM_IMAGING]
         cls.stage_3beams = cls.posture_manager.get3beamsSafePos(cls.stage.getMetadata()[model.MD_FAV_POS_ACTIVE],
-                                                              SAFETY_MARGIN_5DOF)
+                                                                SAFETY_MARGIN_5DOF)
         cls.align_deactive = cls.aligner.getMetadata()[model.MD_FAV_POS_DEACTIVE]
         cls.align_alignment = cls.aligner.getMetadata()[model.MD_FAV_POS_ALIGN]
         cls.align_active = cls.aligner.getMetadata()[model.MD_FAV_POS_ACTIVE]
         cls.align_3beams = cls.posture_manager.get3beamsSafePos(cls.aligner.getMetadata()[model.MD_FAV_POS_ACTIVE],
-                                                              SAFETY_MARGIN_3DOF)
+                                                                SAFETY_MARGIN_3DOF)
 
         # Make sure the lens is referenced too (small move will only complete after the referencing)
         cls.aligner.moveRelSync({"x": 1e-6})
@@ -103,7 +102,7 @@ class TestEnzelMove(unittest.TestCase):
         # Get the stage to loading position
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
-                                     atol=ATOL_LINEAR_POS)
+                                        atol=ATOL_LINEAR_POS)
         # Align should be parked
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 
@@ -112,16 +111,17 @@ class TestEnzelMove(unittest.TestCase):
         f.result()
         filter_dict = lambda keys, d: {key: d[key] for key in keys}
         testing.assert_pos_almost_equal(filter_dict({'x', 'y', 'z'}, stage.position.value),
-                                     filter_dict({'x', 'y', 'z'}, self.stage_coating), atol=ATOL_LINEAR_POS)
+                                        filter_dict({'x', 'y', 'z'}, self.stage_coating), atol=ATOL_LINEAR_POS)
         testing.assert_pos_almost_equal(filter_dict({'rx', 'rz'}, stage.position.value),
-                                     filter_dict({'rx', 'rz'}, self.stage_coating), atol=ATOL_LINEAR_POS)
+                                        filter_dict({'rx', 'rz'}, self.stage_coating), atol=ATOL_LINEAR_POS)
         # align should be in deactive position
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
 
         # Get the stage to alignment position
         f = self.posture_manager.cryoSwitchSamplePosition(ALIGNMENT)
         f.result()
-        testing.assert_pos_almost_equal(stage.position.value, self.stage_alignment, atol=ATOL_LINEAR_POS, match_all=False)
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_alignment, atol=ATOL_LINEAR_POS,
+                                        match_all=False)
 
         # Get the stage to 3beams position
         f = self.posture_manager.cryoSwitchSamplePosition(THREE_BEAMS)
@@ -132,7 +132,8 @@ class TestEnzelMove(unittest.TestCase):
         # Get the stage to alignment position
         f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
         f.result()
-        testing.assert_pos_almost_equal(stage.position.value, self.stage_sem_imaging, atol=ATOL_LINEAR_POS, match_all=False)
+        testing.assert_pos_almost_equal(stage.position.value, self.stage_sem_imaging, atol=ATOL_LINEAR_POS,
+                                        match_all=False)
 
         # Switch back to loading position
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
@@ -147,19 +148,19 @@ class TestEnzelMove(unittest.TestCase):
         f = self.posture_manager._cryoSwitchAlignPosition(LOADING)
         f.result()
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive,
-                                     atol=ATOL_LINEAR_POS)
+                                        atol=ATOL_LINEAR_POS)
 
         # Get the stage to imaging position
         f = self.posture_manager._cryoSwitchAlignPosition(THREE_BEAMS)
         f.result()
         testing.assert_pos_almost_equal(align.position.value, self.align_3beams,
-                                     atol=ATOL_LINEAR_POS)
+                                        atol=ATOL_LINEAR_POS)
 
         # Get the stage to imaging position
         f = self.posture_manager._cryoSwitchAlignPosition(ALIGNMENT)
         f.result()
         testing.assert_pos_almost_equal(align.position.value, self.align_alignment,
-                                     atol=ATOL_LINEAR_POS)
+                                        atol=ATOL_LINEAR_POS)
 
     def test_cancel_loading(self):
         """
@@ -172,7 +173,7 @@ class TestEnzelMove(unittest.TestCase):
         cancelled = f.cancel()
         self.assertTrue(cancelled)
         testing.assert_pos_not_almost_equal(stage.position.value, self.stage_deactive,
-                                         atol=ATOL_LINEAR_POS)
+                                            atol=ATOL_LINEAR_POS)
 
         stage = self.stage
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
@@ -181,7 +182,7 @@ class TestEnzelMove(unittest.TestCase):
         cancelled = f.cancel()
         self.assertTrue(cancelled)
         testing.assert_pos_not_almost_equal(stage.position.value, self.stage_coating,
-                                         atol=ATOL_LINEAR_POS)
+                                            atol=ATOL_LINEAR_POS)
 
     def test_get_current_aligner_position(self):
         """
@@ -301,12 +302,14 @@ class TestEnzelMove(unittest.TestCase):
         self.posture_manager.cryoSwitchSamplePosition(THREE_BEAMS).result()
         # 2. Move the stage linear axes to their max range + move rx from 0
         self.posture_manager._cryoSwitchAlignPosition(LOADING).result()
-        self.stage.moveAbs({'x': self.stage.axes['x'].range[1], 'y': self.stage.axes['y'].range[1], 'z': self.stage.axes['z'].range[1], 'rx': 0.15}).result()
+        self.stage.moveAbs(
+            {'x': self.stage.axes['x'].range[1], 'y': self.stage.axes['y'].range[1], 'z': self.stage.axes['z'].range[1],
+             'rx': 0.15}).result()
         # 3. Move to loading where the ordered submoves would start from rx/rx, resulting in an invalid move
         # exception if it's not handled
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         testing.assert_pos_almost_equal(self.stage.position.value, self.stage_deactive,
-                                     atol=ATOL_LINEAR_POS)
+                                        atol=ATOL_LINEAR_POS)
 
 
 class TestMeteorTFS1Move(unittest.TestCase):
@@ -558,7 +561,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
             self.assertAlmostEqual(self.stage.position.value[axis], sem_angles[axis], places=4)
 
     def test_unknown_label_at_initialization(self):
-        arbitrary_position = {"x": 0.0, "y": 0.0, "z":-3.0e-3}
+        arbitrary_position = {"x": 0.0, "y": 0.0, "z": -3.0e-3}
         self.stage.moveAbs(arbitrary_position).result()
         current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(UNKNOWN, current_imaging_mode)
@@ -595,6 +598,7 @@ class TestMeteorTFS1Move(unittest.TestCase):
             self.posture_manager._transformFromSEMToMeteor(grid2_pos)
         except Exception as e:
             self.fail(f"_transformFromSEMToMeteor raised error when it shouldn't: {e}")
+
 
 class TestMeteorZeiss1Move(TestMeteorTFS1Move):
     """
@@ -745,8 +749,9 @@ class TestMeteorTFS2Move(TestMeteorTFS1Move):
                       self.linked_stage.position.value["y"], self.linked_stage.position.value["z"])
         # 0.6 mm radius is TFS millable area of one grid
         for n in range(1, 7):
-            logging.debug("Moving y in Stage position in GRID 1 y: %s", self.linked_stage.position.value["y"] + 0.6e-03/n)
-            self.linked_stage.moveAbs({"y": self.linked_stage.position.value["y"] + 0.6e-03/n}).result()
+            logging.debug("Moving y in Stage position in GRID 1 y: %s",
+                          self.linked_stage.position.value["y"] + 0.6e-03 / n)
+            self.linked_stage.moveAbs({"y": self.linked_stage.position.value["y"] + 0.6e-03 / n}).result()
             logging.debug("Stage position in GRID 1 x: %s y:%s, z:%s", self.linked_stage.position.value["x"],
                           self.linked_stage.position.value["y"], self.linked_stage.position.value["z"])
 
@@ -836,7 +841,7 @@ class TestMimasMove(unittest.TestCase):
         # Get the stage to loading position
         self.posture_manager.cryoSwitchSamplePosition(LOADING).result()
         testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive,
-                                     atol=ATOL_LINEAR_POS)
+                                        atol=ATOL_LINEAR_POS)
         # Align should be parked
         testing.assert_pos_almost_equal(align.position.value, self.align_deactive, atol=ATOL_LINEAR_POS)
         # GIS should be parked
@@ -862,7 +867,6 @@ class TestMimasMove(unittest.TestCase):
         pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, FM_IMAGING)
 
-
         # Move a little bit around => still in FM_IMAGING
         stage.moveRelSync({"x": 100e-6, "y": -100e-6, "z": 1e-6})
         current_pos = self.stage.position.value
@@ -879,26 +883,28 @@ class TestMimasMove(unittest.TestCase):
         pos_label = self.posture_manager.getCurrentPostureLabel()
         self.assertEqual(pos_label, MILLING)
 
-
         # Test the progress update
         # Note: it hasn't started yet, but it can be already more than 0%, as by moving
         # around the stage in imaging mode, it might have gotten closer to the DEACTIVE
         # position
-        progress_before = self.posture_manager.getMovementProgress(stage.position.value, self.stage_active, self.stage_deactive)
+        progress_before = self.posture_manager.getMovementProgress(stage.position.value, self.stage_active,
+                                                                   self.stage_deactive)
         self.assertLess(progress_before, 0.2)
 
         # Switch back to loading position
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
 
         # Progress should be just a little bit more than before
-        progress_start = self.posture_manager.getMovementProgress(stage.position.value, self.stage_active, self.stage_deactive)
+        progress_start = self.posture_manager.getMovementProgress(stage.position.value, self.stage_active,
+                                                                  self.stage_deactive)
         self.assertTrue(0 <= progress_before <= progress_start < 0.5)
 
         f.result()
         testing.assert_pos_almost_equal(stage.position.value, self.stage_deactive, atol=ATOL_LINEAR_POS)
 
         # Progress should now be arrived => 100%
-        progress_end = self.posture_manager.getMovementProgress(stage.position.value, self.stage_active, self.stage_deactive)
+        progress_end = self.posture_manager.getMovementProgress(stage.position.value, self.stage_active,
+                                                                self.stage_deactive)
         self.assertAlmostEqual(progress_end, 1)
 
     def test_cancel_loading(self):
@@ -924,7 +930,7 @@ class TestMimasMove(unittest.TestCase):
         # self.assertNotEqual(pos_label, LOADING)
         self.assertNotEqual(pos_label, FM_IMAGING)
         # Should report UNKNOWN if cancelled early, and IMAGING if cancelled later
-        #self.assertEqual(pos_label, (UNKNOWN, IMAGING))
+        # self.assertEqual(pos_label, (UNKNOWN, IMAGING))
 
         # It should be allowed to go back to LOADING
         f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
@@ -967,6 +973,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
     """
     This class is to test _getDistance() function in the move module
     """
+
     @classmethod
     def setUpClass(cls):
         # Backend can be any of these : Meteor/Enzel/Mimas
@@ -1107,6 +1114,7 @@ class TestGetDifferenceFunction(unittest.TestCase):
 
         assert progress_0 < progress_1 < progress_2 < progress_3 < progress_end
 
+
 class TestMoveUtil(unittest.TestCase):
     """
     This class is to test movement utilities in the move module
@@ -1117,10 +1125,9 @@ class TestMoveUtil(unittest.TestCase):
         Test isNearPosition function behaves as expected
         """
 
-
         # negative tests (not near)
         start = {'x': 0.023, 'y': 0.032, 'z': 0.01, "rx": 0, "rz": 0}
-        end = {'x': 0.024, 'y': 0.033, 'z': 0.015, "rx": 0.12213888553625313  , "rz":  5.06145}
+        end = {'x': 0.024, 'y': 0.033, 'z': 0.015, "rx": 0.12213888553625313, "rz": 5.06145}
 
         self.assertFalse(isNearPosition(start, end, {'x'}))
         self.assertFalse(isNearPosition(start, end, {'y'}))
@@ -1130,7 +1137,7 @@ class TestMoveUtil(unittest.TestCase):
 
         # positive tests (is near)
         start = {'x': 0.023, 'y': 0.32, 'z': 0.01, "rx": 0, "rz": 0}
-        end = {'x': 0.023+0.09e-6, 'y': 0.32+0.09e-6, 'z': 0.01, "rx": 0+0.5e-3, "rz": 0+0.5e-3}
+        end = {'x': 0.023 + 0.09e-6, 'y': 0.32 + 0.09e-6, 'z': 0.01, "rx": 0 + 0.5e-3, "rz": 0 + 0.5e-3}
 
         self.assertTrue(isNearPosition(start, end, {'x'}))
         self.assertTrue(isNearPosition(start, end, {'y'}))
@@ -1140,7 +1147,7 @@ class TestMoveUtil(unittest.TestCase):
 
         # test user defined tolerance
         start = {'x': 20e-6, 'y': 0.032, 'z': 0.01, "rx": 0, "rz": 5.043996}
-        end = {'x': 22e-6, 'y': 0.06, 'z': 0.015, "rx": 0.12213888553625313  , "rz": 5.06145}
+        end = {'x': 22e-6, 'y': 0.06, 'z': 0.015, "rx": 0.12213888553625313, "rz": 5.06145}
 
         # true
         self.assertTrue(isNearPosition(start, end, {'x', 'rz'},

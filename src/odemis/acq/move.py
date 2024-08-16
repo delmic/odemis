@@ -64,8 +64,8 @@ SAFETY_MARGIN_3DOF = 200e-6  # m
 
 # Tolerance for the difference between the current position and the target position
 # these should only be used for TFS1MeteorPostureManager _transformFromSEMToMeteor / _transformFromMeteorToSEM
-ATOL_ROTATION_TRANSFORM = 0.04   # rad ~2.5 deg
-ATOL_LINEAR_TRANSFORM = 5e-6    # 5 um
+ATOL_ROTATION_TRANSFORM = 0.04  # rad ~2.5 deg
+ATOL_LINEAR_TRANSFORM = 5e-6  # 5 um
 
 
 class MicroscopePostureManager:
@@ -421,9 +421,9 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
             # add rx, rz from sem fav position, as grid positions do not have rx, rz
             # rz is now required to calculate transform in _transformFromSEMToMeteor
             # TODO: add this outside the if statement, after confirming behaviour is the same @patrick
-            sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE] # only rx, rz
-            grid1_pos.update(sem_pos_active)   # x, y, z, rx, rz
-            grid2_pos.update(sem_pos_active)   # x, y, z, rx, rz
+            sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]  # only rx, rz
+            grid1_pos.update(sem_pos_active)  # x, y, z, rx, rz
+            grid2_pos.update(sem_pos_active)  # x, y, z, rx, rz
 
             distance_to_grid1 = self._getDistance(current_pos, self._transformFromSEMToMeteor(grid1_pos))
             distance_to_grid2 = self._getDistance(current_pos, self._transformFromSEMToMeteor(grid2_pos))
@@ -452,7 +452,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         fm_pos_active = stage_md[model.MD_FAV_FM_POS_ACTIVE]
 
         # check if the stage positions have rz axes
-        if not ("rz" in pos and"rz" in fm_pos_active):
+        if not ("rz" in pos and "rz" in fm_pos_active):
             raise ValueError(f"The stage position does not have rz axis pos={pos}, fm_pos_active={fm_pos_active}")
 
         # whether we need to rotate around the z axis (180deg)
@@ -500,7 +500,7 @@ class MeteorTFS1PostureManager(MeteorPostureManager):
         sem_pos_active = stage_md[model.MD_FAV_SEM_POS_ACTIVE]
 
         # check if the stage positions have rz axes
-        if not ("rz" in pos and"rz" in sem_pos_active):
+        if not ("rz" in pos and "rz" in sem_pos_active):
             raise ValueError(f"The stage position does not have rz axis. pos={pos}, sem_pos_active={sem_pos_active}")
 
         # whether we need to rotate around the z axis (180deg)
@@ -635,7 +635,7 @@ class ConvertStage:
             shear = (0, 0)
 
         self.axes = {"x": copy.deepcopy(self._dependency.axes[axes[0]]),
-                    "y": copy.deepcopy(self._dependency.axes[axes[1]])}
+                     "y": copy.deepcopy(self._dependency.axes[axes[1]])}
 
         self.fav_pos_active = meteor_stage_md.get(model.MD_FAV_POS_ACTIVE, None)
 
@@ -755,7 +755,7 @@ class ConvertStage:
         old_con_pos = self.map_get_convert_pos(pos_before_fav_pos)
         new_con_pos = self.map_get_convert_pos(pos_after_fav_pos)
         # calculate the distance between the two parallel imaging planes (change in z of meteor stage)
-        change = {k: new_con_pos[k]-old_con_pos[k] for k, av in new_con_pos.items()}
+        change = {k: new_con_pos[k] - old_con_pos[k] for k, av in new_con_pos.items()}
         new_con_pos["y"] -= change["y"]
 
         map_dep_pos = self._get_dep_pos_vector(new_con_pos)
@@ -814,9 +814,9 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
         stage_md = self.stage.getMetadata()
         sem_grid2_pos = stage_md[model.MD_SAMPLE_CENTERS][POSITION_NAMES[GRID_2]]
         sem_grid2_pos.update(stage_md[model.MD_FAV_SEM_POS_ACTIVE])
-        end_pos = self._transformFromSEMToMeteor(sem_grid2_pos)
+        end_pos = self.calculate_pos_before_fixing_imaging_plane(sem_grid2_pos)
         self.fav_pos_active = {"z": (end_pos["y"] * math.sin(self.rotation) +
-                                end_pos["z"] * math.cos(self.rotation))}
+                                     end_pos["z"] * math.cos(self.rotation))}
 
     # Note: this transformation consists of translation of along x and y
     # axes, and 7 degrees rotation around rx, and 180 degree rotation around rz.
@@ -906,7 +906,7 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
             transformed_pos["y"] = pos["y"] + pos_cor[1]
 
         transformed_pos.update(fm_pos_active)
-        return  transformed_pos
+        return transformed_pos
 
     # Note: this transformation also consists of translation and rotation.
     # The translation is along x and y axes. They are calculated based on
@@ -935,8 +935,9 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
 
         # compensate the impact of fixing the fm imaging plane on the current stage position
         # based on the value of original imaging plane value saved before fixing the fm imaging plane
-        new_pos = self.convert_stage.get_dep_vector_fav_position_correction(self.stage_pos_before_fav_fm, pos)
-        transformed_pos = new_pos.copy()
+        if self.stage_pos_before_fav_fm:
+            new_pos = self.convert_stage.get_dep_vector_fav_position_correction(self.stage_pos_before_fav_fm, pos)
+            transformed_pos = new_pos.copy()
         # NOTE:
         # if we are rotating around the z axis (180deg), we need to flip the x and y axes
         # if we are not rotating around the z axis, we we only need to translate the x and y axes
@@ -1007,7 +1008,6 @@ class MeteorTFS2PostureManager(MeteorTFS1PostureManager):
             if target in (GRID_1, GRID_2):
                 # The current mode doesn't change. Only X/Y/Z should move (typically
                 # only X/Y). In the same mode, GRID 1/2, the rx/rz values should not change
-                # TODO: probably a better way would be to forbid grid switching if not in SEM/FM imaging posture
                 sub_moves.append((self.stage, filter_dict({'x', 'y', 'z'}, target_pos)))
                 sub_moves.append((self.stage, filter_dict({'rx', 'rz'}, target_pos)))
             elif target in (LOADING, SEM_IMAGING, FM_IMAGING):
@@ -1501,17 +1501,17 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         x_0 = calibrated_values["x_0"]
         y_0 = calibrated_values["y_0"]
         z_ct = calibrated_values["z_ct"]
-        b_0 = (pos["z"] - z_ct)*math.cos(rx_sem)
+        b_0 = (pos["z"] - z_ct) * math.cos(rx_sem)
 
         # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
         sem_reference_pos_x = x_0
         sem_reference_pos_y = y_0 - b_0 * math.tan(rx_sem)
-        sem_reference_pos_z = b_0 * (1/math.cos(rx_sem) - 1)
+        sem_reference_pos_z = b_0 * (1 / math.cos(rx_sem) - 1)
 
         # Calculate the equivalent coordinates of the calibrated position, at the FM position
         fm_reference_pos_x = x_0 + calibrated_values["dx"]
         fm_reference_pos_y = y_0 + calibrated_values["dy"] - b_0 * math.tan(rx_fm)
-        fm_reference_pos_z = b_0 * (1/math.cos(rx_fm) - 1)
+        fm_reference_pos_z = b_0 * (1 / math.cos(rx_fm) - 1)
 
         # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
         # at the FM position.
@@ -1557,12 +1557,12 @@ class MeteorTescan1PostureManager(MeteorPostureManager):
         # Calculate the equivalent coordinates of the (0-degree tilt) calibrated position, at the SEM position stage tilt
         sem_ref_pos_x = x_0
         sem_ref_pos_y = y_0 - b_0 * math.tan(rx_sem)
-        sem_ref_pos_z = b_0 * (1/math.cos(rx_sem) - 1)
+        sem_ref_pos_z = b_0 * (1 / math.cos(rx_sem) - 1)
 
         # Calculate the equivalent coordinates of the calibrated position, at the FM position
         fm_ref_pos_x = x_0 + calibrated_values["dx"]
         fm_ref_pos_y = y_0 + calibrated_values["dy"] - b_0 * math.tan(rx_fm)
-        fm_ref_pos_z = b_0 * (1/math.cos(rx_fm) - 1)
+        fm_ref_pos_z = b_0 * (1 / math.cos(rx_fm) - 1)
 
         # Use the above reference positions to calculate the equivalent coordinates of the point of interest,
         # at the FM position.
@@ -1951,10 +1951,10 @@ class EnzelPostureManager(MicroscopePostureManager):
                 and stage_posture in (LOADING, COATING, SEM_IMAGING, LOADING_PATH)):
             return stage_posture
         elif (align_posture == THREE_BEAMS  # Engaged
-                and stage_posture in (IMAGING, ALIGNMENT, THREE_BEAMS)):
+              and stage_posture in (IMAGING, ALIGNMENT, THREE_BEAMS)):
             return stage_posture
         elif (align_posture == LOADING_PATH
-                and stage_posture == LOADING_PATH):
+              and stage_posture == LOADING_PATH):
             return stage_posture
 
         # None of the above -> unknown position
@@ -2287,7 +2287,7 @@ class EnzelPostureManager(MicroscopePostureManager):
         # exactly at POS_ACTIVE.
         # TODO: should have a POS_ACTIVE_RANGE to define the whole region
         if (isNearPosition(current_pos, align_active, self.align.axes) or
-            isNearPosition(current_pos, align_alignment, self.align.axes) or
+                isNearPosition(current_pos, align_alignment, self.align.axes) or
                 isNearPosition(current_pos, three_beams, self.align.axes)):
             return THREE_BEAMS
 
