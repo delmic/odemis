@@ -30,7 +30,6 @@ overview image and multibeam acquisition.
 import logging
 import math
 import os
-import re
 import subprocess
 import threading
 import time
@@ -227,7 +226,11 @@ class FastEMOverviewAcquiController(object):
 
     def _on_focussed_view(self, view):
         if view:
+            current_sample = self._main_data_model.current_sample.value
             scintillator_num = int(view.name.value)
+            self._load_overview_img_ctrl.wildcard = (
+                f"fastem_{current_sample.type}_{scintillator_num}.ome.tiff"
+            )
             self._contrast_ctrl.SetValue(
                 self.overview_acq_data[scintillator_num][CONTRAST]
             )
@@ -264,23 +267,17 @@ class FastEMOverviewAcquiController(object):
         self.update_acquisition_time()
 
     def on_overview_img_load(self, _):
-        fn = self._load_overview_img_ctrl.GetValue()
-        current_sample = self._main_data_model.current_sample.value
-        current_user = self._main_data_model.current_user.value
-        if current_sample and current_user:
-            sample_type = current_sample.type
-            regex_template = f"fastem_{sample_type}_(\d+)\.ome\.tiff"
-            regex_pattern = re.compile(regex_template)
-            match = re.search(regex_pattern, self._load_overview_img_ctrl.basename)
-            if match:
-                num = int(match.group(1))
-                da = open_acquisition(fn)
-                s = data_to_static_streams(da)[0]
-                s = FastEMOverviewStream(s.name.value, s.raw[0])
-                # Dict VA needs to be explicitly copied, otherwise it doesn't detect the change
-                ovv_ss = self._main_data_model.overview_streams.value.copy()
-                ovv_ss[num] = s
-                self._main_data_model.overview_streams.value = ovv_ss
+        view = self._main_tab_data.focussedView.value
+        if view:
+            num = int(view.name.value)
+            fn = self._load_overview_img_ctrl.GetValue()
+            da = open_acquisition(fn)
+            s = data_to_static_streams(da)[0]
+            s = FastEMOverviewStream(s.name.value, s.raw[0])
+            # Dict VA needs to be explicitly copied, otherwise it doesn't detect the change
+            ovv_ss = self._main_data_model.overview_streams.value.copy()
+            ovv_ss[num] = s
+            self._main_data_model.overview_streams.value = ovv_ss
 
     def _on_va_change(self, _):
         self.check_acquire_button()
