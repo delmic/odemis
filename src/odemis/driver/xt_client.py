@@ -2236,14 +2236,14 @@ class Stage(model.Actuator):
                     pos["t"] = pos.pop("rx")
                 if "rz" in pos.keys():
                     pos["r"] = pos.pop("rz")
- 
-                orig_pos_raw = self.parent.get_stage_position()
+
+                orig_pos = self.parent.get_stage_position()
 
                 self.parent.move_stage(pos, rel=rel)
                 time.sleep(0.1)  # It takes a little while before the stage is being reported as moving
 
-                # Drop axes from the original position, which are not important becuase they will not move
-                orig_pos_raw = {a: orig_pos_raw[a] for a, nv in pos.items() if nv != orig_pos_raw[a]}
+                # Drop axes from the original position, which are not important because they have not moved
+                orig_pos = {a: orig_pos[a] for a, nv in pos.items() if nv != orig_pos[a]}
 
                 # Wait until the move is over.
                 # Don't check for future._must_stop because anyway the stage will
@@ -2289,8 +2289,9 @@ class Stage(model.Actuator):
 
                 # The stage is not moving anymore, but we still want to wait until the position has been updated
                 # TODO: base the timeout on the stage movement time estimation (est. *10)
-                timeout = time.time() + 10  # s
-                not_updated = True
+                timeout = 10  #s
+                expected_end_time = time.time() + timeout  # s
+                check_pos = True
                 wait_duration = 20e-03  # s
 
                 # Check for presence of rx/t or rz/r keys in pos
@@ -2298,38 +2299,38 @@ class Stage(model.Actuator):
                 # it is a different imaging mode
                 # TODO: extend the behavior to other imaging modes
                 if 'r' in pos or 't' in pos:
-                    logging.debug("Position requested to move includes rx or rz. Reported position accuracy is not"
-                                  "checked.")
-                    not_updated = False
+                    logging.debug("Position requested to move to includes t (rx/tilt) or r (rz/rotation). "
+                                  "Reported position accuracy is not checked.")
+                    check_pos = False
 
-                # Find target position in absolute
+                # Get the target position in absolute coordinates
                 if not rel:
                     target_pos = pos
                 else:
-                    target_pos = {ax: val + pos[ax] for ax, val in orig_pos_raw.items()}
+                    target_pos = {ax: val + pos[ax] for ax, val in orig_pos.items()}
 
-                while not_updated:
+                while check_pos:
                     time.sleep(wait_duration)
-                    if time.time() > timeout:
+                    if time.time() > expected_end_time:
                         logging.warning("Stage position after move + %s s is still same as original pos: %s. "
-                                        "Giving up waiting", 10, orig_pos_raw)
+                                        "Giving up waiting", timeout, orig_pos)
                         break
 
+                    current_pos = self.parent.get_stage_position()
                     # Every axis requested to move should have moved (compared to the position before starting)
-                    current_pos_raw = self.parent.get_stage_position()
-                    if not isNearPosition(orig_pos_raw, current_pos_raw, axes=set(orig_pos_raw.keys())):
+                    # if there is some change w.r.t starting position, proceed to check the target position
+                    if all(current_pos[a] != op for a, op in orig_pos.items()):
                         # For x, y, and z, be extra picky and wait until they are "almost" at the target
                         # Due to y-z linkage, there is an equivalent change in z axis when y axis is changed
                         # Therefore, it is not important to check z
-                        all_axes_updated = isNearPosition(current_pos=current_pos_raw, target_position=target_pos,
+                        # check for x and y axes as they move repeatedly in overview acquisitions
+                        axes_updated = isNearPosition(current_pos=current_pos, target_position=target_pos,
                                                           axes={"x", "y"}, atol_linear=1e-6)
 
-                        if all_axes_updated:
-                            logging.debug("Position has updated fully: from %s -> %s", orig_pos_raw,
-                                          current_pos_raw)
+                        if axes_updated:
+                            logging.debug("Position has updated fully: from %s -> %s", orig_pos,
+                                          current_pos)
                             break
-                        else:
-                            time.sleep(wait_duration)
 
             except Exception:
                 if future._must_stop.is_set():
