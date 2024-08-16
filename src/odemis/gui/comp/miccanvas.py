@@ -1852,15 +1852,16 @@ class FastEMMainCanvas(DblMicroscopeCanvas):
         roc_overlay.active.value = True
         return roc_overlay
 
-    def zoom_out(self):
+    @call_in_wx_main
+    def fit_view_to_content(self, recenter=None):
         """
-        Zoom out to show all scintillators.
-        raises ValueError, IndexError: in case it's called too early during GUI startup
+        Override base class fit_view_to_content method.
 
-        Note: Should be called from main GUI thread. Make sure caller of this method
-        is running in the main GUI thread.
+        It calls fit_to_bbox to zoom in to the scintillator bounding box and recenter.
+
+        :raises: ValueError in case it's called too early during GUI startup.
         """
-        logging.debug("Zooming out to show all scintillators.")
+        logging.debug("Zooming out of scintillator.")
         if self.bg_overlay:
             self.fit_to_bbox((self.bg_overlay.get_scintillator_bbox()))
         else:
