@@ -290,7 +290,7 @@ class FastEMMainTab(Tab):
         self.panel.pnl_vp_grid.visible_viewports = []
         self.view_controller.create_views(viewports=vpv)
         for viewport in self.view_controller.viewports:
-            wx.CallAfter(viewport.canvas.zoom_out)
+            viewport.canvas.fit_view_to_content()
 
     def query_terminate(self):
         """
