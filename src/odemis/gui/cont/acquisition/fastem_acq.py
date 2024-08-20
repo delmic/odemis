@@ -525,12 +525,9 @@ class FastEMAcquiController(object):
         self.gauge_acq.Value = 0
 
         # During acquisition the galvo's only move a very small amount. To reduce the wearing of the ball bearing,
-        # the galvo's are moved to their extrema at the start of every acquisition.
-        logging.debug("Move the galvo's to their extrema.")
-        for scan_offset in [[-1, -1], [1, 1]]:  # [a.u.]
-            self._main_data_model.descanner.scanAmplitude.value = (0, 0)
-            self._main_data_model.descanner.scanOffset.value = scan_offset
-            self._main_data_model.mppc.data.get(dataContent="empty")
+        # the galvo's are moved to their full range at the start of every acquisition.
+        logging.debug("Move the galvo's to their full range.")
+        self._main_data_model.descanner.moveFullRange()
 
         # The user should focus manually before an acquisition, thus the current
         # position is saved as "good focus"
