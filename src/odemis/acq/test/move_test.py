@@ -624,6 +624,62 @@ class TestMeteorTescan1Move(TestMeteorTFS1Move):
     MIC_CONFIG = METEOR_TESCAN1_CONFIG
     ROTATION_AXES = {'rx', 'rz'}
 
+    def test_tilt_offset_correction(self):
+        # TODO change the difference value to relax or tighten it
+        # will depend on how good calibration is done
+
+        logging.debug("Check without tilt offset correction")
+        self.posture_manager.tescan_modified = False
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move to sem
+        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        sem_stage_position = self.stage.position.value
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move to fm
+        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # move back to sem
+        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        sem_new_stage_position = self.stage.position.value
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        self.assertTrue(abs(sem_stage_position["y"] - sem_new_stage_position["y"]) > 50.0e-06)
+        logging.debug("The sem stage position without tilt correction before and after: %s, %s",
+        sem_stage_position, sem_new_stage_position)
+
+        logging.debug("Check with tilt offset correction")
+        self.posture_manager.tescan_modified = True
+        f = self.posture_manager.cryoSwitchSamplePosition(LOADING)
+        f.result()
+        # move to sem
+        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        sem_stage_position = self.stage.position.value
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        # move to fm
+        f = self.posture_manager.cryoSwitchSamplePosition(FM_IMAGING)
+        f.result()
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(FM_IMAGING, current_imaging_mode)
+        # move back to sem
+        f = self.posture_manager.cryoSwitchSamplePosition(SEM_IMAGING)
+        f.result()
+        sem_new_stage_position = self.stage.position.value
+        current_imaging_mode = self.posture_manager.getCurrentPostureLabel()
+        self.assertEqual(SEM_IMAGING, current_imaging_mode)
+        self.assertTrue(abs(sem_stage_position["y"] - sem_new_stage_position["y"]) < 10.0e-06)
+        logging.debug("The sem stage position with tilt correction before and after: %s, %s",
+        sem_stage_position, sem_new_stage_position)
+        for axis in ["x", "z", "rx", "rz"]:
+            self.assertAlmostEqual(sem_new_stage_position[axis], sem_stage_position[axis], places=5)
+
     def test_moving_in_grid1_fm_imaging_area_after_loading(self):
         """Check if the stage moves in the right direction when moving in the fm imaging grid 1 area."""
         super().test_moving_in_grid1_fm_imaging_area_after_loading()
