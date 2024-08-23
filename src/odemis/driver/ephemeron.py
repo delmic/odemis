@@ -17,36 +17,31 @@ of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE. See the GNU General Publ
 You should have received a copy of the GNU General Public License along with Odemis.
 If not, see http://www.gnu.org/licenses/.
 '''
+from __future__ import annotations
+
 # this driver is developed for communication with an EBIC controller API
 # the EBIC scan controller from Ephemeron will acquire a digital EBIC signal
 # to be used simultaneously with other signals such as SE/CL
 
 import logging
-import os
-import queue
 import threading
 import time
+import queue
 import weakref
-from typing import Any, Optional
 
 import asyncio
+from typing import Callable, Optional
+
+import numpy
 from asyncua import Client, Server, Node, ua
 from asyncua.common.methods import uamethod
-from asyncua.common.statemachine import State, StateMachine, Transition
-import numpy
-from scipy import ndimage
+from asyncua.common.statemachine import State, StateMachine
+from numpy import ndarray
 
-import functions
-# from constants import *
-from odemis import model, dataio
-from odemis.model import Detector, oneway
-from odemis.util import img
+from odemis import model
+from odemis.model import Detector, HwError, oneway
 
 # constants
-URI = "opc.tcp://localhost:4840/freeopcua/server/"
-NAMESPACE = "http://examples.freeopcua.github.io"
-DATA_VAR_NAME = "MightyEBICDataArray"
-
 STATE_ID_IDLE = "server-idle"
 STATE_ID_RUNNING = "server-running"
 STATE_ID_TRIGGER = "server-triggered"
@@ -75,117 +70,109 @@ TRANSITION_NAME_CHECKING_DWELL = "To Checking Dwell"
 TRANSITION_NAME_STOPPED = "To Stopped"
 TRANSITION_NAME_ERROR = "To Error"
 
+MAX_SAMPLES_PER_PIXEL = 10
+MAX_NUMBER_OF_CHANNELS = 8
+DATA_VAR_NAME = "MightyEBICDataArray"
+EBIC_CONTROLLER_NODE = "MightyEBICController"
+EBIC_STATE_NODE = "MightyEBICState"
+EBIC_DATA_NODE = "MightyEBICData"
+
 
 class MightyEbic(Detector):
-    def __init__(self, name: str, role: str, device: str, port: int,
-                 channel: int, url: str, namespace: str, **kwargs):
+    def __init__(self, name: str, role: str, channel: int, url: str, namespace: str, **kwargs):
         """
         Initialise the EBIC controller
-        :param name:
-        :param role:
-        :param device:
-        :param port:
-        :param channel:
-        :param url:
-        :param namespace:
+        :param name (str): The name of the device configured through the configuration file
+        :param role (str): The role of the device configured through the configuration file
+        :param channel (int): The channel the device should use for hw triggering.
+        :param url (str): The url address to use with the OPC UA protocol
+        :param namespace (str): The object name identifier to use for the OPC UA protocol
         """
         super().__init__(name, role, **kwargs)
         # for debug, eventually -> get resolution from the controller/detector
-        max_res = (1024, 1024)
+        max_res = (4096, 4096)
         min_res = (1, 1)
 
-        self.device = device
-        self.port = port
-        self.acq_data = None
-        self.idx = None
+        self.acq_data: Optional[ndarray] = None
+        self.idx: Optional[int] = None
         self.sub_handler = SubHandler()
-        self.delay = 5e-8  # need to make this a VA on the stream panel as well?
-        self.t_opc_connection = None
-        self.fake_img = None
-        self.StartScanOPCUA = None
+        self.t_opc_connection: Optional[threading.Thread] = None
+        self.ebic_scan_controller: Optional[Node] = None
         self._name = name
         self._channel = channel
         self._namespace = namespace
-        self._client = Client(url=url)
-        self._opc_server = None
-        self._binning = (1, 1)
-        self._error_msg = None
-        self._simserver = None
+        self._url = url
+        self._opc_client = Client(url=url)
+        # server is only used for simulation of the opcServer if it is non-existent
+        self._opc_server: Optional[MightyEbicSimulator] = None
+        self._error_msg: Optional[str] = None
+        self._t_simserver: Optional[threading.Thread] = None
         self._connected = False
         self._scan_time = 0.0
-        self._dwell_time = 0.0
-
-        # fake image setup
-        if self.device == "fake":
-            image = "simsem-fake-output.h5"
-            # ensure relative path is from this file
-            if not os.path.isabs(image):
-                image = os.path.join(os.path.dirname(__file__), image)
-            converter = dataio.find_fittest_converter(image, mode=os.O_RDONLY)
-            # just for simulation of the data stream
-            new_img = img.ensure2DImage(converter.read_data(image)[0])  # is now (2048, 2048) -> restrict to res
-            new_img = numpy.array(new_img)
-            self.fake_img = img.rescale_hq(new_img, max_res)
-
-        # The shape is just one point, the depth
-        idt = numpy.iinfo(self.fake_img.dtype)
-        data_depth = idt.max - idt.min + 1
-        self._shape = (data_depth,)  # only one point
-
-        # 8 or 16 bits image
-        if data_depth == 255:
-            bpp = 8
-        else:
-            bpp = 16
-        self.bpp = model.IntEnumerated(bpp, {8, 16})
-        self.scanState = model.StringVA("Disconnected")
+        self._scan_state = "Disconnected"
+        self._trigger_mode = False
+        self._opc_client_running = False
 
         try:
-            self._start_opcclient_thread()
-        except ConnectionError:
-            raise ConnectionError(self._error_msg)
+            self._start_opcclient_thread(60)
+        except HwError:
+            raise HwError(f"Cannot connect to device -> {self._error_msg}")
 
-        # register the VA's
+        # The number of samples that are measured at each pixel and averaged.
         # higher spp will force a higher dwell_time as well as increasing scan_time
-        self.spp = model.IntEnumerated(1, set(range(1, 11)), setter=self.on_spp_change)
-        self.numberOfChannels = model.IntEnumerated(2, set(range(1, 9)), setter=self.on_chan_num_change)
+        self.samplesPerPixel = model.IntEnumerated(1,
+                                                   set(range(1, MAX_SAMPLES_PER_PIXEL + 1)),
+                                                   setter=self.on_spp_change)
+        self.numberOfChannels = model.IntEnumerated(2,
+                                                    set(range(1, MAX_NUMBER_OF_CHANNELS + 1)),
+                                                    setter=self.on_chan_num_change)
+        # TODO: add comment explaining diff between oversampling and samples per pixel
         self.oversampling = model.IntEnumerated(0, {0, 2, 4, 8, 16, 32, 64})
         self.oversampling.subscribe(self.on_oversampling_change)
-        self.binning = model.ResolutionVA((1, 1), ((1, 1), (16, 16)))
         # the resolution of the scanner of the EBIC controller
         self.resolution = model.ResolutionVA(max_res, (min_res, max_res), unit="px")
-        self.repetition = model.TupleVA((1, 1), unit="px", setter=self.on_repetition_change)
+        self.repetition = model.TupleVA((max_res[1], max_res[1]), unit="px")
+        self.dwellTime = model.FloatContinuous(1e-6, (0.1e-6, 1000), unit="s")
 
+        #self.sub_handler = ScanSubHandler()  # SubHandler()
         self.data = EBICDataFlow(self)
-        self._acquisition_thread = None
+        self._acquisition_thread: Optional[threading.Thread] = None
         self._acquisition_lock = threading.Lock()
-        self._acquisition_init_lock = threading.Lock()
+        # self._acquisition_init_lock = threading.Lock()
         self._acquisition_must_stop = threading.Event()
-        self._hwVersion = "Ephemeron EBIC controlbox S/N: 123456-SIM"
-        self._swVersion = "Firmware: simulated-device"
+
+        # Special event to request software unblocking on the scan
+        self.softwareTrigger = model.Event()
+
+        self._metadata[model.MD_DET_TYPE] = model.MD_DT_NORMAL
         self._metadata[model.MD_HW_VERSION] = self._hwVersion
         self._metadata[model.MD_SW_VERSION] = self._swVersion
 
-    def _start_opcclient_thread(self):
+    def _start_opcclient_thread(self, timeout: int=60):
         """
         Start the receiver thread, which keeps listening to the response of the command port.
         """
-        if self.device == "fake":
+        if "localhost" in self._url:
             # if the device should be simulated, start a simulator server first
-            self._simserver = threading.Thread(target=self._start_opc_simserver)
-            self._simserver.start()
-            while self.scanState.value != STATE_NAME_IDLE:
+            self._t_simserver = threading.Thread(target=self._start_opc_simserver)
+            self._t_simserver.start()
+            while self._scan_state != STATE_NAME_IDLE:
                 time.sleep(0.1)
 
         self.t_opc_connection = threading.Thread(target=self._start_opc_client)
         self.t_opc_connection.start()
-        time.sleep(1)  # wait just a moment to check if it's alive
 
-        if self.t_opc_connection.is_alive():
-            logging.info(f"Connected to EBIC controller ({self.device})")
-            self._connected = True
-        else:
-            raise ConnectionError()
+        # # wait just a moment to check if it's alive
+        # counter = 0
+        # while not self._opc_client_running and counter < timeout:
+        #     time.sleep(1)
+        #     counter += 1
+        #     logging.debug("Trying to connect to the EBIC controller")
+        # if counter > timeout:
+        #     raise ConnectionError()
+
+        logging.info(f"Connected to EBIC controller (url:{self._url} namespace:{self._namespace})")
+        self._connected = True
 
     def _start_opc_client(self):
         try:
@@ -205,296 +192,242 @@ class MightyEbic(Detector):
 
     async def connect_to_simserver(self):
         """
-        Setup and operation example of OPC server. Simulates transmitting data via a variable and changing the
-        state of the state machine with an attached event generator.
+        Setup and operation example of OPC server. Simulates transmitting data via a variable
+        and changing the state of the state machine with an attached event generator.
         """
         try:
-            self._opc_server = MightyEbicSimulator()
+            self._opc_server = MightyEbicSimulator(self._url, self._namespace, self)
             await self._opc_server.setup()
             current_state_node = await self._opc_server.state_machine_node.get_child(
-                f"{self._opc_server.idx}:current_state"
+                f"0:CurrentState"
             )
-
-            myobj = await self._opc_server.server.nodes.objects.add_object(self._opc_server.idx, "EBIC_Controller")
-            myvar = await myobj.add_variable(self._opc_server.idx,
-                                             "MightyEBICDataArray",
-                                             (numpy.ones((3000, 3000), dtype=numpy.float64)).tolist())
-            # Set the variable to be writable by clients
-            await myvar.set_writable()
 
             logging.info("Starting server!")
 
             async with self._opc_server.server:
                 await asyncio.sleep(1)
+                current_state = await current_state_node.read_value()
+                logging.info(f"Current state before starting is {current_state.Text}")
                 while True:
-                    await asyncio.sleep(3)
+                    await asyncio.sleep(1)
                     new_state = await current_state_node.read_value()
-                    await self._opc_server.change_state(new_state)
-                    await current_state_node.write_value(new_state)
-                    self.scanState.value = new_state
+                    await self._opc_server.server.nodes.objects.call_method(
+                        f"{self._opc_server.idx}:change_state",
+                        new_state.Text)
+                    self._scan_state = new_state.Text
         except ConnectionError as ex:
             self._error_msg = ex
         except Exception as ex:
             raise Exception(ex)
 
-    def terminate(self):
-        super().terminate()
-        # stop the simulator server if a fake device is used
-        if self._simserver:
-            self._simserver.terminated = True
-            self._simserver.join()
+    async def get_node_id_by_browse_name(self, browse_name: str) -> ua.NodeId | None:
+        # Assuming root node is the starting point for browsing
+        objects_node = await self._opc_client.nodes.root.get_child("0:Objects")
 
-        self._connected = False
-        self.t_opc_connection.terminated = True
-        self.t_opc_connection.join()
-
-    async def setup_controller(self):
-        # search for connected EBIC controllers using the opcua protocol
-        # connecting to the controller/Client -> async with Client(url=self.url) as self.client
-        self.idx = await self._client.get_namespace_index(self._namespace)
-        await self.create_state_subscription()
-        obj = self._client.nodes.objects
-        self.StartScanOPCUA = await obj.get_child([f"{self.idx}:ScanObjectOPCUA", f"{self.idx}:StartScanOPCUA"])
+        # Browse recursively starting from the objects node
+        nodes_to_browse = [objects_node]
+        while nodes_to_browse:
+            current_node = nodes_to_browse.pop()
+            children = await current_node.get_children()
+            for child in children:
+                # Get the BrowseName attribute of the child node
+                child_browse_name = await child.read_browse_name()
+                if child_browse_name.Name == browse_name:
+                    nodes_to_browse.append(child)
+                    return child.nodeid
+        return None
 
     async def connect_to_controller(self):
         try:
-            async with self._client:
+            async with self._opc_client:
                 logging.info("Client connected")
-                await self.setup_controller()
-                logging.info("Connection is active")
-                await asyncio.sleep(1)
+                await self.create_state_subscription()
+                self._opc_client_running = True
                 while self._connected:
-                    current_state = self.scanState.value
+                    current_state = self._scan_state
                     await asyncio.sleep(1)
-                    # only fire a change state when scanState value actually changed
+                    # only fire a change state when _scan_state value actually changed
                     # it will generate a LOT of unnecessary lines in the logfile.
-                    if current_state != self.scanState.value:
-                        await self.change_state(self.scanState.value)
-                        if current_state == STATE_NAME_RUNNING and self.scanState.value == STATE_NAME_STOPPED:
+                    if current_state != self._scan_state:
+                        # only acquire data from the scan controller after a transition from running -> stopped
+                        if current_state == STATE_NAME_RUNNING and self._scan_state == STATE_NAME_STOPPED:
                             # check for data
-                            logging.debug(f"requesting data after state change from {current_state} to {self.scanState.value}")
-                            self.acq_data = await self.retrieve_acquired_data()
+                            logging.debug(f"requesting data after state change from {current_state} to {self._scan_state}")
+                            await self.retrieve_acquired_data()
                             # set state to idle again after retrieving the data
-                            self.scanState.value = STATE_NAME_IDLE
+                            self._scan_state = STATE_NAME_IDLE
 
         except (ConnectionError, ua.UaError) as e:
             raise ConnectionError(str(e) + " -> Client disconnected")
 
-    async def create_state_subscription(self) -> None:
+    async def create_state_subscription(self) -> int:
         """Creates a subscription for the change state event in the state machine."""
-        state_machine_node = await self._client.nodes.root.get_child(
-            f"0:Objects/{self.idx}:state_machine",
-        )
-        state_change_event = await self._client.nodes.root.get_child(
-            ["0:Types", "0:EventTypes", "0:BaseEventType", "2:StateChangeEvent"],
+        current_state_node = await self._opc_server.state_machine_node.get_child(
+            "0:CurrentState",
         )
 
-        subscription = await self._client.create_subscription(
+        subscription = await self._opc_client.create_subscription(
             period=500,
             handler=self.sub_handler,
         )
-        await subscription.subscribe_events(state_machine_node, state_change_event)
+        sub = await subscription.subscribe_data_change(current_state_node)
+
+        return sub
 
     async def get_controller_state(self):
-        return self.scanState.value
+        return self._scan_state
 
     async def change_state(self, new_state: str) -> None:
         """
         Change state of server state machine based on state name.
         new_state (str): state name constant to change to
         """
-        current_state = await self._client.nodes.root.get_child(
-            f"0:Objects/{self.idx}:state_machine/{self.idx}:current_state",
-        )
-        await current_state.write_value(new_state)
-        await self._client.nodes.objects.call_method(f"{self.idx}:change_state")
+        await self._opc_client.nodes.objects.call_method(f"{self.idx}:change_state", new_state)
 
     def start_acquire(self, callback):
         with self._acquisition_lock:
             self._wait_acquisition_stopped()
             self._acquisition_thread = threading.Thread(target=self._acquire_thread,
-                                                        name="Simulated acquire flow thread",
+                                                        name="IndependentDetector acquire flow thread",
                                                         args=(callback,))
             self._acquisition_thread.start()
 
     def stop_acquire(self):
         with self._acquisition_lock:
-            with self._acquisition_init_lock:
-                self._acquisition_must_stop.set()
+            self._acquisition_must_stop.set()
 
-    def _wait_acquisition_stopped(self):
+    def _wait_acquisition_stopped(self) -> None:
         """
-        Waits until the acquisition thread is fully finished _if_ it was requested to stop.
+        Waits until the acquisition thread is fully finished if (and only if) it was requested to stop.
         """
-        # "if" is to not wait if it's already finished
         if self._acquisition_must_stop.is_set():
             logging.debug("Waiting for thread to stop.")
             self._acquisition_thread.join(10)  # 10s timeout for safety
-            if self._acquisition_thread.is_alive():
-                logging.exception("Failed to stop the acquisition thread")
-                # Now let's hope everything is back to normal...
+            if self._acquisition_thread.is_alive():  # Should never happen
+                logging.error("Failed to stop the acquisition thread after 10s")
+                # No idea how we could recover... so we just keep going as if everything is fine
             # ensure it's not set, even if the thread died prematurely
             self._acquisition_must_stop.clear()
 
-    def _acquire_thread(self, callback):
+    def _acquire_thread(self, callback: Callable[[model.DataArray], None]) -> None:
         """
-        Thread that simulates the SEM acquisition. It calculates and updates the
-        center (e-beam) position based on the translation, imitates the delay according
-        to the dwell time and resolution and provides the new generated output to
-        the Dataflow.
+        Thread that simulates the acquisition. It imitates the delay according to the dwell time
+        and resolution and provides the new generated output to the Dataflow.
         """
         try:
             while not self._acquisition_must_stop.is_set():
-                dwelltime = self.dwell_time.value
+                dwelltime = self.dwellTime.value
                 resolution = self.resolution.value
                 duration = numpy.prod(resolution) * dwelltime
+                self.data._waitSync()
+                # start scan OPCUA
+                if self._t_simserver:
+                    img = self._simulate_image()
                 if self._acquisition_must_stop.wait(duration):
                     break
-                # TODO: it's not a very proper simulation for multiple detectors,
-                # as in Odemis the convention for SEM is that the ebeam waits
-                # for _all_ the detectors to be ready before scanning.
-                self.data._waitSync()
-                callback(self._simulate_image())
+                callback(img)
+
+                if not self._continuous and not self.data._sync_event:
+                    logging.debug("Stopping acquisition as DataFlow is not synchronized and 1 data acquired")
+                    return
         except Exception:
             logging.exception("Unexpected failure during image acquisition")
         finally:
             logging.debug("Acquisition thread closed")
             self._acquisition_must_stop.clear()
 
-    def _simulate_image(self):
+    def get_dwell_time(self, delay: float = 5e-8, trigger: bool = False) -> float:
         """
-        Generates the fake output based on the translation, resolution and
-        current drift.
+        :param delay (float, optional): Number of clock cycles, this is a variable delay that
+            allows for the signal to reach a steady state before it is measured, default -> 0.05μs
+        :param trigger (bool): Define if trigger mode is active with respect to DAC update
+        :return (float): Dwell time in μs
         """
-        metadata = self._metadata.copy()
-        scanner = self.parent._scanner
-        metadata.update(scanner._metadata)
-        metadata.update(self._metadata)
+        # calculation of delay cycles (delay step is set at 10e-9 default)
+        delay = numpy.uint32(delay/10e-9)
 
-        with self._acquisition_init_lock:
-            logging.debug("Simulating an image")
-            pxs = scanner.pixelSize.value  # m/px
+        # ADC Time constants
+        WAIT = 4000  # default conversion rate
+        OS_scalar = 4500  # Oversampling scalar per OS multiple 0,2,4,8,16,32,64
+        CH_scalar = 1365  # Scalar for each channel we need to clock out
+        samples_scalar = 20  #
 
-            pxs_pos = scanner.translation.value
-            scale = scanner.scale.value
-            res = scanner.resolution.value
-            shi = scanner.shift.value
+        # DAC time constants
+        DAC_var = 10  # variable delay multiplier in ns
 
-            phy_pos = metadata.get(model.MD_POS, (0, 0))
-            trans = scanner.pixelToPhy(pxs_pos)
-            updated_phy_pos = (phy_pos[0] + trans[0], phy_pos[1] + trans[1])
+        # ADC sampling Overhead
+        sample_Overhead = 110  #
 
-            shape = self.fake_img.shape
-            # Simulate shift and drift
-            center = (shape[1] / 2 - shi[0] / pxs[0] - self.current_drift,
-                      shape[0] / 2 - shi[1] / pxs[1] + self.current_drift)
+        # DAC write Overhead
+        LOADDAC_OV = 5345  # overhead
+        DACUP_OV = 200
 
-            # First and last index (eg, 0 -> 255)
-            ltrb = [center[0] + pxs_pos[0] - (res[0] / 2) * scale[0],
-                    center[1] + pxs_pos[1] - (res[1] / 2) * scale[1],
-                    center[0] + pxs_pos[0] + ((res[0] / 2) - 1) * scale[0],
-                    center[1] + pxs_pos[1] + ((res[1] / 2) - 1) * scale[1]
-                    ]
-            # If the shift caused the image to go out of bounds, limit it
-            if ltrb[0] < 0:
-                ltrb[0] = 0
-            elif ltrb[2] > shape[1] - 1:
-                ltrb[0] -= ltrb[2] - (shape[1] - 1)
-            if ltrb[1] < 0:
-                ltrb[1] = 0
-            elif ltrb[3] > shape[0] - 1:
-                ltrb[1] -= ltrb[3] - (shape[0] - 1)
-            assert(ltrb[0] >= 0 and ltrb[1] >= 0)
+        # Calculate how long it takes to do an ADC read with
+        # if OS is greater than 2 we need to use different scalar
+        if self.oversampling.value >= 2:
+            WAIT = OS_scalar * self.oversampling.value
+        # for each conversion amount of time it takes clock out each channel
+        CH_T = CH_scalar * self.numberOfChannels.value
 
-            # compute each row and column that will be included
-            coord = ([int(round(ltrb[0] + i * scale[0])) for i in range(res[0])],
-                     [int(round(ltrb[1] + i * scale[1])) for i in range(res[1])])
-            sim_img = self.fake_img[numpy.ix_(coord[1], coord[0])] # copy
+        # total ADC READ based on CH and OS
+        ADCREAD = 120 + CH_T + WAIT
 
-            # reduce image depth if requested
-            bpp = self.bpp.value
-            if bpp < 16:
-                mind, maxd = sim_img.min(), sim_img.max()
-                maxf = 2 ** bpp - 1
-                b = maxf / max(1, (maxd - mind))
-                # Multiply by a float and drop to the original dtype
-                numpy.multiply(sim_img - mind, b, out=sim_img, casting="unsafe")
-                if bpp <= 8:
-                    sim_img = sim_img.astype(numpy.uint8)
+        # total number of conversions at a pixel
+        LOOP3 = sample_Overhead + samples_scalar * self.samplesPerPixel.value + ADCREAD * self.samplesPerPixel.value
 
-            metadata[model.MD_BPP] = bpp
+        # time for each DAC update
+        # DacUpdate not needed in Trigger mode
+        if trigger:
+            DACUPDATE = 0
+        else:
+            DACUPDATE = LOADDAC_OV + DAC_var * delay + DACUP_OV
 
-            if self.parent._focus:
-                # apply the defocus
-                pos = self.parent._focus.position.value['z']
-                dist = abs(pos - self.parent._focus._good_focus) * 1e4
-                sim_img = ndimage.gaussian_filter(sim_img, sigma=dist)
+        Dwell_us = (LOOP3 + DACUPDATE) / 1000.0  # convert to us
 
-            if not scanner.power.value:
-                sim_img[:] = 0
-            elif scanner.blanker.value:  # None (auto) and False (unblank) are handled the same here
-                # Leave a tiny bit of signal
-                numpy.multiply(sim_img, 0.001, out=sim_img, casting="unsafe")
+        return Dwell_us
 
-            # update fake output metadata
-            metadata[model.MD_POS] = updated_phy_pos
-            metadata[model.MD_PIXEL_SIZE] = (pxs[0] * scale[0], pxs[1] * scale[1])
-            metadata[model.MD_ACQ_DATE] = time.time()
-            metadata[model.MD_ROTATION] = scanner.rotation.value
-            metadata[model.MD_DWELL_TIME] = scanner.dwellTime.value
-            metadata[model.MD_EBEAM_CURRENT] = scanner.probeCurrent.value
-            metadata[model.MD_EBEAM_VOLTAGE] = scanner.accelVoltage.value
-            return model.DataArray(sim_img, metadata)
-
-    def get_dwell_time(self, delay: float = 5e-8, trigger: bool = True) -> float:
-        """Gets the dwell time of each pixel based on Channels, samples, delay and oversampling.
-
-        Args:
-            OS (int): oversampling rate
-            CH (int): number of channels
-            samples (int): number of samples per channel
-            delay (float): delay between samples
-            TRIGGER (bool): trigger state
-
-        Returns:
-            int: dwell time in us
-
+    def get_scan_time(self) -> float:
         """
-        delayCycle = functions.delayCycles(delay)  # delay in cycles
-        dt = functions.dwellTime(self.oversampling.value, self.numberOfChannels.value, delayCycle, trigger) * 10e-6
-        return dt
-
-    def get_scan_time(self, dwell_time: float, points_fast: int, points_slow: int) -> float:
-        """Gets the scan time of the system based on dwell time and number of points.
-
-        Args:
-            dwell_time (int): dwell time in us
-            points_fast (int): number of points in the fast axis default is x axis
-            points_slow (int): number of points in the slow axis default is y axis
-        Returns:
-            float: scan time in seconds
+        Takes the dwell time and scan size to calculate scan time in seconds
+        :return (float): Scan time in seconds
         """
-        return functions.scanTime(dwell_time, points_fast, points_slow)
+        LOOP2_OV = 40
+        LOOP1_OV = 40
+        SETUP = 1025  # Overhead to set up scan
 
-    async def start_scan(self, simulate=False) -> None:
+        LOOP2 = (self.dwellTime.value * 1000 + LOOP2_OV) * self.repetition.value[0] + 5  # in nanoseconds
+        LOOP1 = (LOOP2 + LOOP1_OV) * self.repetition.value[1]
+
+        ScanTime_ns = SETUP + LOOP1  # scantime in nanoseconds
+        ScanTime_s = ScanTime_ns / 1.0e9
+
+        return ScanTime_s
+
+    @uamethod
+    async def start_scan(self):
         """
         Starts a scan with the EBIC scan controlbox.
-        Send settings to the server/client to initiate scan.
+        Send fixed settings to the server/client to initiate scan.
+        -> 0:Root,0:Objects,2:ebic_scan_box
         """
-        self._dwell_time = self.get_dwell_time(self.delay)
-        self._scan_time = self.get_scan_time(self._dwell_time, self.repetition.value[0], self.repetition.value[1])
+        # FIXME How do we use the dwell time here
+        # self._dwell_time = self.get_dwell_time()
+        self._scan_time = self.get_scan_time()
 
-        result = await self.StartScanOPCUA.call_method(
-            ua.NodeId("ScanObjectOPCUA", self.idx),  # FIXME this might not be the right format
-            ua.QualifiedName("StartScanOPCUA", self.idx),
-            self.repetition.value[0],
-            self.repetition.value[1],
+        logging.info("Starting EBIC scan")
+        result = await self.ebic_scan_controller.call_method(
+            f"{self.idx}:StartScanOPCUA",
             self.oversampling.value,
             self.numberOfChannels.value,
-            self.spp.value,
-            self.delay,
-            TRIGGER=True,
-            Simulate=simulate)
+            self.samplesPerPixel.value, # drop the VA, compute it base on DT + OS rate
+            self.dwellTime.value, # = delay and could be set to default of 1 (clock cycle)
+            self.repetition.value[0],
+            self.repetition.value[1],
+            self._trigger_mode,
+            self._t_simserver is not None,
+        )
+        logging.info(f"EBIC scan finished with method call result {result}")
+        await self.change_state(STATE_NAME_STOPPED)
 
     def stop_scan(self):
         # this function is to be used in the special SPARC acq
@@ -504,23 +437,12 @@ class MightyEbic(Detector):
         """
         Reads a variable from the server.
         """
-        data = await self._client.nodes.root.get_child(["0:Objects", f"{self.idx}:{DATA_VAR_NAME}"])
+        data = await self._opc_client.nodes.root.get_child(["0:Objects", f"{self.idx}:{DATA_VAR_NAME}"])
         value = await data.read_value()
-        return numpy.array(list(value), dtype=numpy.float64)
-
-    async def read_variable(self, obj_name: str, var_name: str) -> Any:
-        """
-        Reads a variable from the OPC server.
-        :param obj_name:
-        :param var_name:
-        :return:
-        """
-        var = await self._client.nodes.root.get_child(f"0:Objects/{self.idx}:{obj_name}/{self.idx}:{var_name}")
-        value = await var.read_value()
-        return value
-
-    def on_repetition_change(self, value):
-        return value
+        try:
+            self.acq_data = numpy.array(list(value), dtype=numpy.float64)
+        except ValueError:
+            logging.error("Unable to convert the retrieved data to a numpy array.")
 
     def on_spp_change(self, value):
         return value
@@ -529,32 +451,102 @@ class MightyEbic(Detector):
         return value
 
     def on_oversampling_change(self, value):
-        self.set_scan_parameters()
+        return value
+
+    def terminate(self):
+        super().terminate()
+        # stop the simulator server
+        if self._t_simserver:
+            self._t_simserver.terminated = True
+            self._t_simserver.join()
+
+        self._connected = False
+        self.t_opc_connection.terminated = True
+        self.t_opc_connection.join()
 
 
 class MightyEbicSimulator:
     """
-    OPC Server class: This class is responsible for setting up the server and the state machine.
-    it can interface directly with hardware using the functions module.
+    OPC Server class: This class is responsible for setting up the server and the state machine
     """
-    def __init__(self):
+    def __init__(self, url: str, namespace: str, parent_det: MightyEbic):
         """Initialize the OPC Server class."""
         self.server = Server()
         self.idx = None
         self.state_machine = None
         self.state_machine_node = None
+        self.ebic_controller_node = None
+        self.ebic_data_node = None
+        #self.current_state_var = None
+        self.state_change_event_gen = None
         self.states = {}
         self.transitions = {}
+        self._url = url
+        self._namespace = namespace
+        self._parent_det = parent_det
+
+        self.inargOS = ua.Argument()
+        self.inargCH = ua.Argument()
+        self.inargSamp = ua.Argument()
+        self.inargDel = ua.Argument()
+        self.inargPF = ua.Argument()
+        self.inargPS = ua.Argument()
+        self.inargTR = ua.Argument()
+        self.inargSIM = ua.Argument()
+        self.outarg = ua.Argument()
 
     async def setup(self) -> None:
         """Call server async setup functions."""
         await self.server.init()
-        self.server.set_endpoint("opc.tcp://localhost:4840/freeopcua/server/")
+        self.server.set_endpoint(self._url)
 
         # set up our own namespace, not really necessary but should as spec
-        self.idx = await self.server.register_namespace("http://examples.freeopcua.github.io")
+        self.idx = await self.server.register_namespace(self._namespace)
         await self.setup_state_machine()
+        await self.setup_controller()
+        await self.setup_data_node()
         await self.setup_events()
+        await self.setup_scan_variables()
+        self.setup_scan_args()
+
+    async def setup_controller(self) -> None:
+        """
+        Search and assign the connected EBIC controller to the opcua client.
+        This is called asynchronous in connect_to_controller.
+        """
+        self.ebic_controller_node = await self.server.nodes.objects.add_object(
+            self.idx,
+            EBIC_CONTROLLER_NODE,
+        )
+        # Add the method to the EBIC controller node
+        await self.ebic_controller_node.add_method(
+            ua.NodeId("StartScanOPCUA", self.idx),
+            ua.QualifiedName("StartScanOPCUA", self.idx),
+            self._parent_det.start_scan,
+            [
+                self.inargOS,
+                self.inargCH,
+                self.inargSamp,
+                self.inargDel,
+                self.inargPF,
+                self.inargPS,
+                self.inargTR,
+                self.inargSIM,
+            ],
+            [ self.outarg ],
+        )
+
+    async def setup_data_node(self):
+        self.ebic_data_node = await self.server.nodes.objects.add_object(
+            self.idx,
+            EBIC_DATA_NODE)
+
+        data_var = await self.ebic_data_node.add_variable(
+            self.idx,
+            DATA_VAR_NAME,
+            (numpy.ones((3000, 3000), dtype=numpy.float64)).tolist())
+        # Set the variable to be writable by clients
+        await data_var.set_writable()
 
     async def setup_state_machine(self) -> None:
         """Set up the state machine for the server."""
@@ -562,83 +554,145 @@ class MightyEbicSimulator:
             self.server,
             self.server.nodes.objects,
             self.idx,
-            "OPCServerStateMachine",
+            EBIC_STATE_NODE,
         )
 
+        # install the state machine
         await self.state_machine.install(optionals=True)
+
+        # create states
         idle_state = State(STATE_ID_IDLE, STATE_NAME_IDLE, 1, node=None)
         self.states[STATE_NAME_IDLE] = idle_state
         await self.state_machine.add_state(idle_state, state_type=ua.NodeId(2309, 0))
+
         running_state = State(STATE_ID_RUNNING, STATE_NAME_RUNNING, 2)
         self.states[STATE_NAME_RUNNING] = running_state
         await self.state_machine.add_state(running_state, state_type=ua.NodeId(2307, 0))
+
         trigger_state = State(STATE_ID_TRIGGER, STATE_NAME_TRIGGER, 3)
         self.states[STATE_NAME_TRIGGER] = trigger_state
         await self.state_machine.add_state(trigger_state)
+
         stop_state = State(STATE_ID_STOPPED, STATE_NAME_STOPPED, 4)
         self.states[STATE_NAME_STOPPED] = stop_state
         await self.state_machine.add_state(stop_state)
+
         error_state = State(STATE_ID_ERROR, STATE_NAME_ERROR, 5)
         self.states[STATE_NAME_ERROR] = error_state
         await self.state_machine.add_state(error_state)
 
-        idle_transition = Transition(
-            TRANSITION_ID_RUNNING,
-            TRANSITION_NAME_RUNNING,
-            1,
-        )
-        self.transitions[STATE_NAME_IDLE] = idle_transition
-        await self.state_machine.add_transition(idle_transition)
-        running_transition = Transition(
-            TRANSITION_ID_TRIGGER,
-            TRANSITION_NAME_TRIGGER,
-            2,
-        )
-        self.transitions[STATE_NAME_RUNNING] = running_transition
-        await self.state_machine.add_transition(running_transition)
-        trigger_transition = Transition(
-            TRANSITION_ID_CHECKING_DWELL,
-            TRANSITION_NAME_CHECKING_DWELL,
-            3,
-        )
-        self.transitions[STATE_NAME_TRIGGER] = trigger_transition
-        await self.state_machine.add_transition(trigger_transition)
-        stop_transition = Transition(
-            TRANSITION_ID_STOPPED,
-            TRANSITION_NAME_STOPPED,
-            4,
-        )
-        self.transitions[STATE_NAME_STOPPED] = stop_transition
-        await self.state_machine.add_transition(stop_transition)
-        error_transition = Transition(
-            TRANSITION_ID_ERROR,
-            TRANSITION_NAME_ERROR,
-            5,
-        )
-        self.transitions[STATE_NAME_ERROR] = error_transition
-        await self.state_machine.add_transition(error_transition)
+        await self.state_machine.change_state(idle_state)
 
-        # TODO: state_machine source code contains an error and needs to be patched in our version
-        # Issue in question: https://github.com/FreeOpcUa/opcua-asyncio/issues/1479
-        await self.state_machine.change_state(idle_state, idle_transition)
+        inarg_new_state = ua.Argument()
+        inarg_new_state.Name = "new_state"
+        inarg_new_state.DataType = ua.NodeId(ua.ObjectIds.String)
+        inarg_new_state.ValueRank = -1
+        inarg_new_state.ArrayDimensions = []
+        inarg_new_state.Description = ua.LocalizedText("New State")
 
-        self.state_machine_node = await self.server.nodes.objects.add_object(
-            self.idx,
-            "state_machine",
-        )
-        current_state_var = await self.state_machine_node.add_variable(
-            self.idx,
-            "current_state",
-            "Idle",
-        )
-        await current_state_var.set_writable()
         await self.server.nodes.objects.add_method(
             ua.NodeId("change_state", self.idx),
             ua.QualifiedName("change_state", self.idx),
             self.change_state,
-            [ua.VariantType.String],
-            [ua.VariantType.String],
+            [inarg_new_state],
+            [],
         )
+
+    async def setup_scan_variables(self) -> None:
+        """Set up the scan variables for the server."""
+        OS = await self.ebic_controller_node.add_variable(self.idx, "oversampling", 0)
+        await OS.set_writable()
+
+        CH = await self.ebic_controller_node.add_variable(self.idx, "channels", 2)
+        await CH.set_writable()
+
+        samples = await self.ebic_controller_node.add_variable(self.idx, "samples", 1)
+        await samples.set_writable()
+
+        delay = await self.ebic_controller_node.add_variable(self.idx, "delay", 5e-8)
+        await delay.set_writable()
+
+        points_fast = await self.ebic_controller_node.add_variable(
+            self.idx, "points_fast", 1000
+        )
+        await points_fast.set_writable()
+
+        points_slow = await self.ebic_controller_node.add_variable(
+            self.idx, "points_slow", 1000
+        )
+        await points_slow.set_writable()
+
+        trigger = await self.ebic_controller_node.add_variable(self.idx, "trigger", False)
+        await trigger.set_writable()
+
+        simulate = await self.ebic_controller_node.add_variable(self.idx, "simulate", False)
+        await simulate.set_writable()
+
+        dwellTime = await self.ebic_controller_node.add_variable(self.idx, "dwellTime", 0)
+        await dwellTime.set_writable()
+
+        scanTime = await self.ebic_controller_node.add_variable(self.idx, "scanTime", 0)
+        await scanTime.set_writable()
+
+    def setup_scan_args(self):
+        """Define the arguments for the method."""
+        self.inargOS.Name = "oversampling"
+        self.inargOS.DataType = ua.NodeId(ua.ObjectIds.Int64)
+        self.inargOS.ValueRank = -1
+        self.inargOS.ArrayDimensions = []
+        self.inargOS.Description = ua.LocalizedText("Oversampling")
+
+        self.inargCH.Name = "channels"
+        self.inargCH.DataType = ua.NodeId(ua.ObjectIds.Int64)
+        self.inargCH.ValueRank = -1
+        self.inargCH.ArrayDimensions = []
+        self.inargCH.Description = ua.LocalizedText("Channels")
+
+        self.inargSamp.Name = "samples"
+        self.inargSamp.DataType = ua.NodeId(ua.ObjectIds.Int64)
+        self.inargSamp.ValueRank = -1
+        self.inargSamp.ArrayDimensions = []
+        self.inargSamp.Description = ua.LocalizedText("Samples")
+
+        self.inargDel.Name = "delay"
+        self.inargDel.DataType = ua.NodeId(ua.ObjectIds.Float)
+        self.inargDel.ValueRank = -1
+        self.inargDel.ArrayDimensions = []
+        self.inargDel.Description = ua.LocalizedText("Delay")
+
+        self.inargPF.Name = "points_fast"
+        self.inargPF.DataType = ua.NodeId(ua.ObjectIds.Int64)
+        self.inargPF.ValueRank = -1
+        self.inargPF.ArrayDimensions = []
+        self.inargPF.Description = ua.LocalizedText("Points Fast")
+
+        self.inargPS.Name = "points_slow"
+        self.inargPS.DataType = ua.NodeId(ua.ObjectIds.Int64)
+        self.inargPS.ValueRank = -1
+        self.inargPS.ArrayDimensions = []
+        self.inargPS.Description = ua.LocalizedText("Points Slow")
+
+        self.inargTR.Name = "Trigger"
+        self.inargTR.DataType = ua.NodeId(
+            ua.ObjectIds.Boolean
+        )  # was ua.NodeId(ua.ObjectIds.Boolean
+        self.inargTR.ValueRank = -1
+        self.inargTR.ArrayDimensions = []
+        self.inargTR.Description = ua.LocalizedText("Trigger")  # was ua.LocalizedText("TRIGGER")
+
+        self.inargSIM.Name = "Simulate"
+        self.inargSIM.DataType = ua.NodeId(
+            ua.ObjectIds.Boolean
+        )  # was ua.NodeId(ua.ObjectIds.Boolean)
+        self.inargSIM.ValueRank = -1
+        self.inargSIM.ArrayDimensions = []
+        self.inargSIM.Description = ua.LocalizedText("Simulate")
+
+        self.outarg.Name = "Result"
+        self.outarg.DataType = ua.NodeId(ua.ObjectIds.Int64)
+        self.outarg.ValueRank = -1
+        self.outarg.ArrayDimensions = []
+        self.outarg.Description = ua.LocalizedText("Result of the method call")
 
     async def setup_events(self) -> None:
         """Set up the events for the server."""
@@ -649,21 +703,26 @@ class MightyEbicSimulator:
             [("state", ua.VariantType.String)],
         )
 
+        #state_machine_node = await self.server.nodes.objects.get_child(
+
+        self.state_machine_node = await self.server.nodes.objects.get_child(
+            f"{self.idx}:{EBIC_STATE_NODE}",
+        )
+
         self.state_change_event_gen = await self.server.get_event_generator(
             event_type,
             self.state_machine_node,
         )
 
     @uamethod
-    async def change_state(self, new_state: str) -> None:
+    async def change_state(self, parent, new_state) -> None:
         """Change the state of the server.
 
         TODO: connect state with real hardware client.
         """
         if new_state in self.states:
-            await self.state_machine.change_state(
-                self.states[new_state], self.transitions[new_state]
-            )
+            await self.state_machine.change_state(self.states[new_state])
+            # await self.current_state_var.write_value(new_state)
         else:
             logging.error(f"Invalid state: {new_state}")
 
@@ -718,25 +777,23 @@ class EBICDataFlow(model.DataFlow):
 
     def synchronizedOn(self, event):
         """
-        Synchronize the acquisition on the given event. Every time the event is
-        triggered, the scanner will start a new acquisition/scan.
-        The DataFlow can be synchronized only with one Event at a time.
-        However, each DataFlow can be synchronized separately. The scan will
-        only start once each active DataFlow has received an event.
+        Synchronize the acquisition on the given event. Every time the event is triggered, the scanner will
+        start a new acquisition/scan. The DataFlow can be synchronized only with one Event at a time.
+        However, each DataFlow can be synchronized, separately. The scan will only start once each active
+        DataFlow has received an event.
         event (model.Event or None): event to synchronize with. Use None to disable synchronization.
         """
         super().synchronizedOn(event)
         if self._sync_event == event:
             return
-
         if self._sync_event:
             self._sync_event.unsubscribe(self)
             if not event:
                 self._evtq.put(None)  # in case it was waiting for this event
-
         self._sync_event = event
         if self._sync_event:
-            # if the df is synchronized, the subscribers probably don't want to skip some data
+            # if the df is synchronized, the subscribers probably don't want to
+            # skip some data
             self._evtq = queue.Queue()  # to be sure it's empty
             self._sync_event.subscribe(self)
 
@@ -748,7 +805,6 @@ class EBICDataFlow(model.DataFlow):
         if not self._evtq.empty():
             logging.warning("Received synchronization event but already %d queued",
                             self._evtq.qsize())
-
         self._evtq.put(time.time())
 
     def _waitSync(self):
@@ -763,26 +819,23 @@ class EBICDataFlow(model.DataFlow):
 
 class SubHandler:
     """Subscription Handler. To receive events from server for a subscription."""
-    def datachange_notification(self, node: Node, val, data):
-        """Called for every datachange notification from server.
-        Args:
-            node (Node): Node object being monitored
-            val (_type_): value of the node being updated
-            data (_type_): data of the node being changed
-        """
-        logging.info("data_change_notification %r %s", node, val)
+    def __init__(self):
+        self.state = "disconnected"
 
-    def event_notification(self, event: ua.EventNotificationList) -> None:
-        """Called for every event notification from server.
-        Args:
-            event (ua.EventNotificationList): event notification object
-        """
-        logging.info("event_notification %r", event)
+    def datachange_notification(self, node: Node, state: str) -> None:
+        """Callback for asyncua Subscription.
 
-    def state_change_notification(self, state: ua.NotificationMessage, transition: ua.NotificationMessage) -> None:
-        """Called for every state change notification from server state machine.
         Args:
-            state (ua.NotificationMessage): state notification object
-            transition (ua.NotificationMessage): transition notification object
+            node (Node): node of the state machine
+            state (str): state the machine is being changed to
         """
-        logging.info("state_change_notification %r %r", state, transition)
+        logging.info(f"Changing state to {state.Text} at node {node}")
+
+        if state.Text == "Running":
+            self.state = state
+        elif state.Text == "Idle":
+            self.state = state
+        elif state.Text == "Stopped":
+            self.state = state
+            if node.read_display_name() == EBIC_STATE_NODE:
+                pass
