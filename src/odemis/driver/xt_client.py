@@ -31,11 +31,11 @@ from concurrent import futures
 from concurrent.futures import CancelledError
 from typing import Any, Dict, Optional, Set, Tuple, Union
 
+import Pyro5.api
 import msgpack_numpy
 import notify2
 import numpy
 import pkg_resources
-import Pyro5.api
 from Pyro5.errors import CommunicationError
 
 from odemis import model
@@ -377,7 +377,7 @@ class SEM(model.HwComponent):
             self.server._pyroClaimOwnership()
             self.server.move_stage(position, rel)
 
-    def set_raw_coordinate_system(self, raw_coordinates:bool = True):
+    def set_raw_coordinate_system(self, raw_coordinates: bool = True):
         """
         Read raw z coordinate or linked z coordinate when requesting stage coordinates
         :param raw_coordinates: (bool) If True, request raw z stage coordinates, otherwise request linked Z coordiantes
@@ -386,10 +386,11 @@ class SEM(model.HwComponent):
             with self._proxy_access:
                 self.server._pyroClaimOwnership()
                 self.server.set_raw_coordinate_system(raw_coordinates)
-        except AttributeError:
+        except OSError:
             if raw_coordinates:
                 raise NotImplementedError("Ensure the version of Delmic XT Adapter is >= 1.12.0")
-            # If non-raw coordinates are requested, proceed with the current coordinate system
+            # Do not raise an error if non-raw coordinates are requested, because non-raw is the default in old
+            # versions of the xtadapter
 
     def get_raw_stage_position(self):
         """Read the stage position in raw coordinate system"""
