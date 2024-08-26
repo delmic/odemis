@@ -2287,17 +2287,22 @@ class Stage(model.Actuator):
                 if future._must_stop.is_set():
                     raise CancelledError()
 
+                # TODO: extend the behavior if rotation, tilt axes also need to be checked.
+                # So far checking the above is not required, as we have observed reporting stage position only in x/y
+                # being compromised. The issue with case western system was that the stage metadata was not
+                # updated in timely manner during the overview acquisition in FM mode (during which rotation, tilt are
+                # not changed), resulting in misplaced tiles in the image display. Even when the stage has physically
+                # moved to the target position but took time in updating its actual position through metadata
+                # The issue is resolved by checking if only x and y stage metadata reports the target position properly
+
                 # The stage is not moving anymore, but we still want to wait until the position has been updated
                 # TODO: base the timeout on the stage movement time estimation (est. *10)
-                timeout = 10  #s
+                timeout = 10  # s
                 expected_end_time = time.time() + timeout  # s
                 check_pos = True
                 wait_duration = 20e-03  # s
 
-                # Check for presence of rx/t or rz/r keys in pos
-                # In FM mode, the stage will maintain its rotation and tilt, if it is requested to change
-                # it is a different imaging mode
-                # TODO: extend the behavior to other imaging modes
+                # If rotation and tilt are there in target position, skip checking the metadata
                 if 'r' in pos or 't' in pos:
                     logging.debug("Position requested to move to includes t (rx/tilt) or r (rz/rotation). "
                                   "Reported position accuracy is not checked.")
@@ -2310,12 +2315,6 @@ class Stage(model.Actuator):
                     target_pos = {ax: val + pos[ax] for ax, val in orig_pos.items()}
 
                 while check_pos:
-                    time.sleep(wait_duration)
-                    if time.time() > expected_end_time:
-                        logging.warning("Stage position after move + %s s is still same as original pos: %s. "
-                                        "Giving up waiting", timeout, orig_pos)
-                        break
-
                     current_pos = self.parent.get_stage_position()
                     # Every axis requested to move should have moved (compared to the position before starting)
                     # if there is some change w.r.t starting position, proceed to check the target position
@@ -2331,6 +2330,13 @@ class Stage(model.Actuator):
                             logging.debug("Position has updated fully: from %s -> %s", orig_pos,
                                           current_pos)
                             break
+
+                    if time.time() > expected_end_time:
+                        logging.warning("Stage position after move + %s s is moved to %s instead of target pos: %s. "
+                                        "Giving up waiting", current_pos, timeout, target_pos)
+                        break
+
+                    time.sleep(wait_duration)
 
             except Exception:
                 if future._must_stop.is_set():
